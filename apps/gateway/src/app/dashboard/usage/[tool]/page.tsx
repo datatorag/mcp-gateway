@@ -62,8 +62,8 @@ export default async function ToolDetailPage({
           label="User errors"
           value={agg?.errors.toLocaleString() ?? "0"}
         />
-        <Card label="p50" value={`${agg?.p50 ?? 0} ms`} />
-        <Card label="p95" value={`${agg?.p95 ?? 0} ms`} />
+        <Card label="Median latency" value={`${agg?.p50 ?? 0} ms`} />
+        <Card label="Slow-end latency" value={`${agg?.p95 ?? 0} ms`} />
       </div>
 
       <h2 className="mt-10 font-display text-base font-bold text-foreground">

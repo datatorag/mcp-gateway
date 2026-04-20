@@ -84,23 +84,41 @@ function SummaryCards({ range }: { range: Range }) {
 
   return (
     <div className="mt-6 grid gap-4 sm:grid-cols-3">
-      <Card label="Total calls (MTD)" value={data.totalCalls.toLocaleString()} />
+      <Card
+        label="Total calls (this month)"
+        value={data.totalCalls.toLocaleString()}
+      />
       <Card
         label="Success rate"
         value={`${(data.successRate * 100).toFixed(1)}%`}
       />
-      <Card label="p95 latency" value={`${data.p95LatencyMs} ms`} />
+      <Card
+        label="Slow-end latency"
+        value={`${data.p95LatencyMs} ms`}
+        hint="95th percentile — 95% of calls are faster than this"
+      />
     </div>
   );
 }
 
-function Card({ label, value }: { label: string; value: string }) {
+function Card({
+  label,
+  value,
+  hint,
+}: {
+  label: string;
+  value: string;
+  hint?: string;
+}) {
   return (
     <div className="rounded-xl border border-border p-5">
       <p className="text-xs text-muted-foreground">{label}</p>
       <p className="mt-1 font-display text-2xl font-bold text-foreground">
         {value}
       </p>
+      {hint && (
+        <p className="mt-1 text-[10px] text-muted-foreground/70">{hint}</p>
+      )}
     </div>
   );
 }
@@ -122,23 +140,35 @@ function TimeseriesChart({ range }: { range: Range }) {
         Call volume
       </h2>
       <div className="mt-4 h-64">
-        <ResponsiveContainer width="100%" height="100%">
-          <LineChart data={data}>
-            <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
-            <XAxis dataKey="bucket" tick={{ fontSize: 11 }} />
-            <YAxis tick={{ fontSize: 11 }} allowDecimals={false} />
-            <Tooltip />
-            <Line
-              type="monotone"
-              dataKey="calls"
-              stroke="#3b82f6"
-              strokeWidth={2}
-              dot={false}
-            />
-          </LineChart>
-        </ResponsiveContainer>
+        {data.length === 0 ? (
+          <EmptyChart label="No calls in this range yet." />
+        ) : (
+          <ResponsiveContainer width="100%" height="100%">
+            <LineChart data={data}>
+              <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
+              <XAxis dataKey="bucket" tick={{ fontSize: 11 }} />
+              <YAxis tick={{ fontSize: 11 }} allowDecimals={false} />
+              <Tooltip />
+              <Line
+                type="monotone"
+                dataKey="calls"
+                stroke="#3b82f6"
+                strokeWidth={2}
+                dot={{ fill: "#3b82f6", r: 3 }}
+              />
+            </LineChart>
+          </ResponsiveContainer>
+        )}
       </div>
     </section>
+  );
+}
+
+function EmptyChart({ label }: { label: string }) {
+  return (
+    <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
+      {label}
+    </div>
   );
 }
 
@@ -181,19 +211,23 @@ function ToolBreakdown({ range }: { range: Range }) {
           Top 10 tools
         </h2>
         <div className="mt-4 h-64">
-          <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={tools} layout="vertical">
-              <XAxis type="number" tick={{ fontSize: 11 }} />
-              <YAxis
-                dataKey="toolName"
-                type="category"
-                tick={{ fontSize: 11 }}
-                width={140}
-              />
-              <Tooltip />
-              <Bar dataKey="calls" fill="#3b82f6" />
-            </BarChart>
-          </ResponsiveContainer>
+          {tools.length === 0 ? (
+            <EmptyChart label="No tool calls in this range yet." />
+          ) : (
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={tools} layout="vertical">
+                <XAxis type="number" tick={{ fontSize: 11 }} />
+                <YAxis
+                  dataKey="toolName"
+                  type="category"
+                  tick={{ fontSize: 11 }}
+                  width={140}
+                />
+                <Tooltip />
+                <Bar dataKey="calls" fill="#3b82f6" />
+              </BarChart>
+            </ResponsiveContainer>
+          )}
         </div>
       </div>
 
@@ -202,23 +236,27 @@ function ToolBreakdown({ range }: { range: Range }) {
           By connector
         </h2>
         <div className="mt-4 h-64">
-          <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={byConnector}>
-              <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
-              <XAxis dataKey="bucket" tick={{ fontSize: 11 }} />
-              <YAxis tick={{ fontSize: 11 }} />
-              <Tooltip />
-              <Legend />
-              {connectors.map((c, i) => (
-                <Bar
-                  key={c}
-                  dataKey={c}
-                  stackId="a"
-                  fill={`hsl(${(i * 137) % 360}, 65%, 55%)`}
-                />
-              ))}
-            </BarChart>
-          </ResponsiveContainer>
+          {byConnector.length === 0 ? (
+            <EmptyChart label="No tool calls in this range yet." />
+          ) : (
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={byConnector}>
+                <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
+                <XAxis dataKey="bucket" tick={{ fontSize: 11 }} />
+                <YAxis tick={{ fontSize: 11 }} />
+                <Tooltip />
+                <Legend />
+                {connectors.map((c, i) => (
+                  <Bar
+                    key={c}
+                    dataKey={c}
+                    stackId="a"
+                    fill={`hsl(${(i * 137) % 360}, 65%, 55%)`}
+                  />
+                ))}
+              </BarChart>
+            </ResponsiveContainer>
+          )}
         </div>
       </div>
     </section>
@@ -266,12 +304,18 @@ function ToolsTable({ range }: { range: Range }) {
                 Calls
               </th>
               <th className="px-4 py-2 text-right">Success %</th>
-              <th className="px-4 py-2 text-right">p50</th>
+              <th
+                className="px-4 py-2 text-right"
+                title="Median latency — half of calls are faster, half slower"
+              >
+                Median ms
+              </th>
               <th
                 onClick={() => setSort("p95")}
                 className="cursor-pointer px-4 py-2 text-right"
+                title="Slow-end latency (95th percentile) — 95% of calls are faster than this"
               >
-                p95
+                Slow ms
               </th>
               <th className="px-4 py-2 text-right">Avg size</th>
             </tr>
