@@ -14,16 +14,21 @@ export const GET = withRateLimit(async (userId, req) => {
   const start = new Date(Date.now() - days * 24 * 3600_000);
   const bucket = days <= 1 ? "hour" : "day";
 
+  const truncExpr =
+    bucket === "hour"
+      ? sql`date_trunc('hour', ${usageEvents.createdAt})`
+      : sql`date_trunc('day', ${usageEvents.createdAt})`;
+
   const rows = await db
     .select({
-      bucket: sql<string>`date_trunc(${bucket}, ${usageEvents.createdAt})::text`,
+      bucket: sql<string>`${truncExpr}::text`,
       connector: usageEvents.connector,
       calls: sql<number>`count(*)::int`,
     })
     .from(usageEvents)
     .where(and(eq(usageEvents.userId, userId), gte(usageEvents.createdAt, start)))
-    .groupBy(sql`date_trunc(${bucket}, ${usageEvents.createdAt})`, usageEvents.connector)
-    .orderBy(sql`date_trunc(${bucket}, ${usageEvents.createdAt})`);
+    .groupBy(truncExpr, usageEvents.connector)
+    .orderBy(truncExpr);
 
   return NextResponse.json({ range, bucket, points: rows });
 });
