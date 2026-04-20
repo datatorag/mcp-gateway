@@ -1,6 +1,9 @@
 import { PostHog } from "posthog-node";
 import { getEnv } from "@datatorag-mcp/config";
+import type { Database } from "@datatorag-mcp/db";
 import { EVENTS, type ProviderId } from "../lib/analytics.js";
+import { writeUsageEvent } from "./usage/write.js";
+import type { OutcomeStatus } from "./usage/classify.js";
 
 const POSTHOG_HOST = "https://us.i.posthog.com";
 
@@ -26,31 +29,55 @@ export async function shutdownPosthog(): Promise<void> {
   }
 }
 
-export function trackToolCall(props: {
-  userId: string;
-  toolName: string;
-  connectorType: string | null;
-  accountEmail: string | undefined;
-  status: "success" | "error";
-  latencyMs: number;
-  responseSizeBytes: number | null;
-  errorMessage: string | null;
-}): void {
+export async function trackToolCall(
+  db: Database,
+  props: {
+    userId: string;
+    toolName: string;
+    connectorType: string | null;
+    accountEmail: string | undefined;
+    status: OutcomeStatus;
+    latencyMs: number;
+    responseSizeBytes: number | null;
+    errorMessage: string | null;
+    meter: boolean;
+  }
+): Promise<void> {
   const c = getClient();
-  if (!c) return;
-  c.capture({
-    distinctId: props.userId,
-    event: EVENTS.TOOL_CALL,
-    properties: {
-      tool_name: props.toolName,
-      connector_type: props.connectorType,
-      account_email: props.accountEmail ?? null,
-      status: props.status,
-      latency_ms: props.latencyMs,
-      response_size_bytes: props.responseSizeBytes,
-      error_message: props.errorMessage,
-    },
+  if (c) {
+    c.capture({
+      distinctId: props.userId,
+      event: EVENTS.TOOL_CALL,
+      properties: {
+        tool_name: props.toolName,
+        connector_type: props.connectorType,
+        account_email: props.accountEmail ?? null,
+        status: props.status,
+        latency_ms: props.latencyMs,
+        response_size_bytes: props.responseSizeBytes,
+        error_message: props.errorMessage,
+        metered: props.meter,
+      },
+    });
+  }
+
+  if (!props.meter) return;
+
+  const result = await writeUsageEvent(db, {
+    userId: props.userId,
+    toolName: props.toolName,
+    connector: props.connectorType,
+    accountEmail: props.accountEmail ?? null,
+    status: props.status,
+    latencyMs: props.latencyMs,
+    responseSizeBytes: props.responseSizeBytes,
+    errorMessage: props.errorMessage,
   });
+  if (!result.ok) {
+    console.warn(
+      `[usage] write failed (${result.reason}) for user=${props.userId} tool=${props.toolName}`
+    );
+  }
 }
 
 export function trackSignup(

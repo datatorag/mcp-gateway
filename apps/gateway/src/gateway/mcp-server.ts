@@ -19,6 +19,7 @@ import { NAMESPACE_SEPARATOR } from "./plugin-manager.js";
 import { PLUGIN_SERVICE_MAP, getServiceToken } from "./service-token.js";
 import { listConnectedAccounts } from "./connected-accounts.js";
 import { trackToolCall } from "./track.js";
+import { classifyOutcome } from "./usage/classify.js";
 
 const ACCOUNT_PARAM_SCHEMA = {
   type: "string",
@@ -320,20 +321,29 @@ export function createMcpServer(
       const responseText = JSON.stringify(result);
       const isError = !!(result as { isError?: boolean }).isError;
       const content = (result as { content?: Array<{ type: string; text?: string }> }).content;
-      trackToolCall({
+      const errorMessage = isError
+        ? content
+            ?.filter((c) => c.type === "text")
+            .map((c) => c.text)
+            .join(" ") ?? null
+        : null;
+      const classification = classifyOutcome({
+        thrown: false,
+        isError,
+        errorMessage,
+        source: "mcp",
+        toolName: name,
+      });
+      await trackToolCall(db, {
         userId,
         toolName: name,
         connectorType: requiredService ?? null,
         accountEmail,
-        status: isError ? "error" : "success",
+        status: classification.status,
         latencyMs: Date.now() - startTime,
         responseSizeBytes: responseText.length,
-        errorMessage: isError
-          ? content
-              ?.filter((c) => c.type === "text")
-              .map((c) => c.text)
-              .join(" ") ?? null
-          : null,
+        errorMessage,
+        meter: classification.meter,
       });
 
       return result;
@@ -345,15 +355,22 @@ export function createMcpServer(
         message
       );
 
-      trackToolCall({
+      const classification = classifyOutcome({
+        thrown: true,
+        errorMessage: message,
+        source: "mcp",
+        toolName: name,
+      });
+      await trackToolCall(db, {
         userId,
         toolName: name,
         connectorType: requiredService ?? null,
         accountEmail,
-        status: "error",
+        status: classification.status,
         latencyMs: Date.now() - startTime,
         responseSizeBytes: null,
         errorMessage: message,
+        meter: classification.meter,
       });
 
       return {
