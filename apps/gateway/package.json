@@ -6,7 +6,9 @@
   "scripts": {
     "build": "next build --webpack && tsup",
     "dev": "node --env-file=../../.env --import tsx/esm server.ts",
-    "start": "node dist/server.js"
+    "start": "node dist/server.js",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "dependencies": {
     "@datatorag-mcp/config": "workspace:*",
@@ -34,9 +36,11 @@
     "@types/node": "^22.0.0",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "@vitest/ui": "^4.1.4",
     "tailwindcss": "^4",
     "tsup": "^8.3.0",
     "tsx": "^4.19.0",
-    "typescript": "^5.7.0"
+    "typescript": "^5.7.0",
+    "vitest": "^4.1.4"
   }
 }
