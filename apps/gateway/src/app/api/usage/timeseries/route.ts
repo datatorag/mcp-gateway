@@ -1,0 +1,36 @@
+import { NextResponse } from "next/server";
+import { and, eq, gte, sql } from "drizzle-orm";
+import { db } from "@/lib/db";
+import { usageEvents } from "@datatorag-mcp/db";
+import { withRateLimit } from "@/lib/with-rate-limit";
+
+export const dynamic = "force-dynamic";
+
+const RANGES = { "24h": 1, "7d": 7, "30d": 30, "90d": 90 } as const;
+type RangeKey = keyof typeof RANGES;
+
+export const GET = withRateLimit(async (userId, req) => {
+  const url = new URL(req.url);
+  const rangeParam = (url.searchParams.get("range") ?? "7d") as RangeKey;
+  const days = RANGES[rangeParam] ?? 7;
+  const start = new Date(Date.now() - days * 24 * 3600_000);
+  const bucket = days <= 1 ? "hour" : "day";
+
+  const rows = await db
+    .select({
+      bucket: sql<string>`date_trunc(${bucket}, ${usageEvents.createdAt})::text`,
+      calls: sql<number>`count(*)::int`,
+      errors: sql<number>`count(*) filter (where ${usageEvents.status} = 'user_error')::int`,
+    })
+    .from(usageEvents)
+    .where(
+      and(
+        eq(usageEvents.userId, userId),
+        gte(usageEvents.createdAt, start)
+      )
+    )
+    .groupBy(sql`date_trunc(${bucket}, ${usageEvents.createdAt})`)
+    .orderBy(sql`date_trunc(${bucket}, ${usageEvents.createdAt})`);
+
+  return NextResponse.json({ range: rangeParam, bucket, points: rows });
+});
