@@ -15,6 +15,8 @@ import { createTokenRouter } from "./src/gateway/oauth/token.js";
 import { createAuthRouter } from "./src/gateway/auth.js";
 import { getPluginManager } from "./src/lib/plugin-manager.js";
 import { shutdownPosthog } from "./src/gateway/track.js";
+import cron from "node-cron";
+import { runDailyRollup } from "./src/gateway/usage/rollup.js";
 
 const dev = process.env.NODE_ENV !== "production";
 
@@ -32,8 +34,19 @@ async function main() {
   const pluginManager = getPluginManager(db, pool);
   await pluginManager.startAll();
 
+  const rollupJob = cron.schedule(
+    "0 2 * * *",
+    () => {
+      runDailyRollup(db).catch((err) =>
+        console.error("[rollup] failed", err)
+      );
+    },
+    { timezone: "UTC" }
+  );
+
   const shutdown = async () => {
     console.log("Shutting down...");
+    rollupJob.stop();
     await pluginManager.stopAll();
     await pool.drain();
     await shutdownPosthog();
