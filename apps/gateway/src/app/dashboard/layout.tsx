@@ -7,6 +7,7 @@ import { useCurrentUser, type CurrentUser } from "@/lib/use-current-user";
 
 const navItems = [
   { href: "/dashboard", label: "Dashboard" },
+  { href: "/dashboard/usage", label: "Usage" },
   { href: "/docs", label: "Docs" },
 ];
 
