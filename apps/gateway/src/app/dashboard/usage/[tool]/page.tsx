@@ -4,6 +4,7 @@ import { and, desc, eq, sql } from "drizzle-orm";
 import { getSessionUserId } from "@/lib/session";
 import { db } from "@/lib/db";
 import { usageEvents } from "@datatorag-mcp/db";
+import { StatCard } from "@/components/stat-card";
 
 export const dynamic = "force-dynamic";
 
@@ -54,16 +55,26 @@ export default async function ToolDetailPage({
       </h1>
 
       <div className="mt-6 grid gap-4 sm:grid-cols-4">
-        <Card
+        <StatCard
           label="Total calls"
           value={agg?.calls.toLocaleString() ?? "0"}
+          size="sm"
         />
-        <Card
+        <StatCard
           label="User errors"
           value={agg?.errors.toLocaleString() ?? "0"}
+          size="sm"
         />
-        <Card label="Median latency" value={`${agg?.p50 ?? 0} ms`} />
-        <Card label="Slow-end latency" value={`${agg?.p95 ?? 0} ms`} />
+        <StatCard
+          label="Median latency"
+          value={`${agg?.p50 ?? 0} ms`}
+          size="sm"
+        />
+        <StatCard
+          label="Slow-end latency"
+          value={`${agg?.p95 ?? 0} ms`}
+          size="sm"
+        />
       </div>
 
       <h2 className="mt-10 font-display text-base font-bold text-foreground">
@@ -111,13 +122,3 @@ export default async function ToolDetailPage({
   );
 }
 
-function Card({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="rounded-xl border border-border p-5">
-      <p className="text-xs text-muted-foreground">{label}</p>
-      <p className="mt-1 font-display text-xl font-bold text-foreground">
-        {value}
-      </p>
-    </div>
-  );
-}

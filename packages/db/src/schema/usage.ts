@@ -37,7 +37,11 @@ export const usageEvents = pgTable(
       table.userId,
       table.createdAt.desc()
     ),
-    index("idx_usage_events_user_tool").on(table.userId, table.toolName),
+    index("idx_usage_events_user_tool_created").on(
+      table.userId,
+      table.toolName,
+      table.createdAt.desc()
+    ),
   ]
 );
 

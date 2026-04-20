@@ -19,7 +19,6 @@ import { NAMESPACE_SEPARATOR } from "./plugin-manager.js";
 import { PLUGIN_SERVICE_MAP, getServiceToken } from "./service-token.js";
 import { listConnectedAccounts } from "./connected-accounts.js";
 import { trackToolCall } from "./track.js";
-import { classifyOutcome } from "./usage/classify.js";
 
 const ACCOUNT_PARAM_SCHEMA = {
   type: "string",
@@ -327,23 +326,15 @@ export function createMcpServer(
             .map((c) => c.text)
             .join(" ") ?? null
         : null;
-      const classification = classifyOutcome({
-        thrown: false,
-        isError,
-        errorMessage,
-        source: "mcp",
-        toolName: name,
-      });
       await trackToolCall(db, {
         userId,
         toolName: name,
         connectorType: requiredService ?? null,
         accountEmail,
-        status: classification.status,
         latencyMs: Date.now() - startTime,
         responseSizeBytes: responseText.length,
         errorMessage,
-        meter: classification.meter,
+        outcome: { thrown: false, isError, errorMessage, source: "mcp", toolName: name },
       });
 
       return result;
@@ -355,22 +346,15 @@ export function createMcpServer(
         message
       );
 
-      const classification = classifyOutcome({
-        thrown: true,
-        errorMessage: message,
-        source: "mcp",
-        toolName: name,
-      });
       await trackToolCall(db, {
         userId,
         toolName: name,
         connectorType: requiredService ?? null,
         accountEmail,
-        status: classification.status,
         latencyMs: Date.now() - startTime,
         responseSizeBytes: null,
         errorMessage: message,
-        meter: classification.meter,
+        outcome: { thrown: true, errorMessage: message, source: "mcp", toolName: name },
       });
 
       return {

@@ -3,7 +3,7 @@ import { getEnv } from "@datatorag-mcp/config";
 import type { Database } from "@datatorag-mcp/db";
 import { EVENTS, type ProviderId } from "../lib/analytics.js";
 import { writeUsageEvent } from "./usage/write.js";
-import type { OutcomeStatus } from "./usage/classify.js";
+import { classifyOutcome, type ClassifyInput } from "./usage/classify.js";
 
 const POSTHOG_HOST = "https://us.i.posthog.com";
 
@@ -36,13 +36,13 @@ export async function trackToolCall(
     toolName: string;
     connectorType: string | null;
     accountEmail: string | undefined;
-    status: OutcomeStatus;
     latencyMs: number;
     responseSizeBytes: number | null;
     errorMessage: string | null;
-    meter: boolean;
+    outcome: ClassifyInput;
   }
 ): Promise<void> {
+  const { status, meter } = classifyOutcome(props.outcome);
   const c = getClient();
   if (c) {
     c.capture({
@@ -52,23 +52,23 @@ export async function trackToolCall(
         tool_name: props.toolName,
         connector_type: props.connectorType,
         account_email: props.accountEmail ?? null,
-        status: props.status,
+        status,
         latency_ms: props.latencyMs,
         response_size_bytes: props.responseSizeBytes,
         error_message: props.errorMessage,
-        metered: props.meter,
+        metered: meter,
       },
     });
   }
 
-  if (!props.meter) return;
+  if (!meter) return;
 
   const result = await writeUsageEvent(db, {
     userId: props.userId,
     toolName: props.toolName,
     connector: props.connectorType,
     accountEmail: props.accountEmail ?? null,
-    status: props.status,
+    status,
     latencyMs: props.latencyMs,
     responseSizeBytes: props.responseSizeBytes,
     errorMessage: props.errorMessage,

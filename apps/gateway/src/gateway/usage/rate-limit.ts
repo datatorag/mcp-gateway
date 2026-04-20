@@ -11,11 +11,21 @@ export interface RateLimitResult {
 
 export interface RateLimiter {
   check(userId: string): RateLimitResult;
+  sweep(): void;
 }
 
 export function createRateLimiter(opts: RateLimiterOpts): RateLimiter {
   const clock = opts.clock ?? (() => Date.now());
   const buckets = new Map<string, number[]>();
+
+  function sweep(): void {
+    const cutoff = clock() - opts.windowMs;
+    for (const [userId, arr] of buckets) {
+      const pruned = arr.filter((t) => t > cutoff);
+      if (pruned.length === 0) buckets.delete(userId);
+      else if (pruned.length !== arr.length) buckets.set(userId, pruned);
+    }
+  }
 
   return {
     check(userId: string): RateLimitResult {
@@ -33,6 +43,7 @@ export function createRateLimiter(opts: RateLimiterOpts): RateLimiter {
       buckets.set(userId, pruned);
       return { ok: true, retryAfterMs: 0 };
     },
+    sweep,
   };
 }
 
@@ -40,3 +51,8 @@ export const dashboardApiLimiter = createRateLimiter({
   limit: 120,
   windowMs: 60_000,
 });
+
+// Evict idle users so the Map doesn't accumulate entries indefinitely.
+if (typeof setInterval !== "undefined") {
+  setInterval(() => dashboardApiLimiter.sweep(), 5 * 60_000).unref?.();
+}

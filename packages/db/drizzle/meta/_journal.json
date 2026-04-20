@@ -8,6 +8,13 @@
       "when": 1776712446353,
       "tag": "0000_woozy_pyro",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1776719260486,
+      "tag": "0001_icy_venus",
+      "breakpoints": true
     }
   ]
 }

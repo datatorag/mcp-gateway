@@ -14,11 +14,30 @@ import {
   Legend,
   ResponsiveContainer,
 } from "recharts";
+import { StatCard } from "@/components/stat-card";
 
 type Range = "24h" | "7d" | "30d" | "90d";
 
+interface ToolRow {
+  toolName: string;
+  connector: string | null;
+  calls: number;
+  errors: number;
+  p50: number;
+  p95: number;
+  avgSize: number;
+}
+
 export function UsageClient() {
   const [range, setRange] = useState<Range>("7d");
+  const [tools, setTools] = useState<ToolRow[]>([]);
+
+  useEffect(() => {
+    fetch(`/api/usage/by-tool?range=${range}`)
+      .then((r) => (r.ok ? r.json() : { tools: [] }))
+      .then((j) => setTools(j.tools ?? []));
+  }, [range]);
+
   return (
     <div>
       <h1 className="font-display text-2xl font-bold text-foreground">Usage</h1>
@@ -27,10 +46,10 @@ export function UsageClient() {
       </p>
 
       <RangeToggle value={range} onChange={setRange} />
-      <SummaryCards range={range} />
+      <SummaryCards />
       <TimeseriesChart range={range} />
-      <ToolBreakdown range={range} />
-      <ToolsTable range={range} />
+      <ToolBreakdown range={range} tools={tools} />
+      <ToolsTable tools={tools} />
       <RecentActivity />
     </div>
   );
@@ -63,7 +82,7 @@ function RangeToggle({
   );
 }
 
-function SummaryCards({ range }: { range: Range }) {
+function SummaryCards() {
   const [data, setData] = useState<{
     totalCalls: number;
     successRate: number;
@@ -74,7 +93,7 @@ function SummaryCards({ range }: { range: Range }) {
     fetch("/api/usage/summary")
       .then((r) => (r.ok ? r.json() : null))
       .then(setData);
-  }, [range]);
+  }, []);
 
   if (!data) {
     return (
@@ -84,41 +103,19 @@ function SummaryCards({ range }: { range: Range }) {
 
   return (
     <div className="mt-6 grid gap-4 sm:grid-cols-3">
-      <Card
+      <StatCard
         label="Total calls (this month)"
         value={data.totalCalls.toLocaleString()}
       />
-      <Card
+      <StatCard
         label="Success rate"
         value={`${(data.successRate * 100).toFixed(1)}%`}
       />
-      <Card
+      <StatCard
         label="Slow-end latency"
         value={`${data.p95LatencyMs} ms`}
         hint="95th percentile — 95% of calls are faster than this"
       />
-    </div>
-  );
-}
-
-function Card({
-  label,
-  value,
-  hint,
-}: {
-  label: string;
-  value: string;
-  hint?: string;
-}) {
-  return (
-    <div className="rounded-xl border border-border p-5">
-      <p className="text-xs text-muted-foreground">{label}</p>
-      <p className="mt-1 font-display text-2xl font-bold text-foreground">
-        {value}
-      </p>
-      {hint && (
-        <p className="mt-1 text-[10px] text-muted-foreground/70">{hint}</p>
-      )}
     </div>
   );
 }
@@ -135,31 +132,43 @@ function TimeseriesChart({ range }: { range: Range }) {
   }, [range]);
 
   return (
+    <ChartPanel title="Call volume">
+      {data.length === 0 ? (
+        <EmptyChart label="No calls in this range yet." />
+      ) : (
+        <ResponsiveContainer width="100%" height="100%">
+          <LineChart data={data}>
+            <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
+            <XAxis dataKey="bucket" tick={{ fontSize: 11 }} />
+            <YAxis tick={{ fontSize: 11 }} allowDecimals={false} />
+            <Tooltip />
+            <Line
+              type="monotone"
+              dataKey="calls"
+              stroke="#3b82f6"
+              strokeWidth={2}
+              dot={{ fill: "#3b82f6", r: 3 }}
+            />
+          </LineChart>
+        </ResponsiveContainer>
+      )}
+    </ChartPanel>
+  );
+}
+
+function ChartPanel({
+  title,
+  children,
+}: {
+  title: string;
+  children: React.ReactNode;
+}) {
+  return (
     <section className="mt-10 rounded-xl border border-border p-5">
       <h2 className="font-display text-base font-bold text-foreground">
-        Call volume
+        {title}
       </h2>
-      <div className="mt-4 h-64">
-        {data.length === 0 ? (
-          <EmptyChart label="No calls in this range yet." />
-        ) : (
-          <ResponsiveContainer width="100%" height="100%">
-            <LineChart data={data}>
-              <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
-              <XAxis dataKey="bucket" tick={{ fontSize: 11 }} />
-              <YAxis tick={{ fontSize: 11 }} allowDecimals={false} />
-              <Tooltip />
-              <Line
-                type="monotone"
-                dataKey="calls"
-                stroke="#3b82f6"
-                strokeWidth={2}
-                dot={{ fill: "#3b82f6", r: 3 }}
-              />
-            </LineChart>
-          </ResponsiveContainer>
-        )}
-      </div>
+      <div className="mt-4 h-64">{children}</div>
     </section>
   );
 }
@@ -172,17 +181,17 @@ function EmptyChart({ label }: { label: string }) {
   );
 }
 
-function ToolBreakdown({ range }: { range: Range }) {
-  const [tools, setTools] = useState<
-    { toolName: string; calls: number }[]
-  >([]);
+function ToolBreakdown({
+  range,
+  tools,
+}: {
+  range: Range;
+  tools: ToolRow[];
+}) {
   type ConnectorRow = Record<string, number | string>;
   const [byConnector, setByConnector] = useState<ConnectorRow[]>([]);
 
   useEffect(() => {
-    fetch(`/api/usage/by-tool?range=${range}`)
-      .then((r) => (r.ok ? r.json() : { tools: [] }))
-      .then((j) => setTools((j.tools ?? []).slice(0, 10)));
     fetch(`/api/usage/by-connector?range=${range}`)
       .then((r) => (r.ok ? r.json() : { points: [] }))
       .then((j) => {
@@ -198,6 +207,7 @@ function ToolBreakdown({ range }: { range: Range }) {
       });
   }, [range]);
 
+  const top10 = tools.slice(0, 10);
   const connectors = Array.from(
     new Set(
       byConnector.flatMap((r) => Object.keys(r).filter((k) => k !== "bucket"))
@@ -206,83 +216,57 @@ function ToolBreakdown({ range }: { range: Range }) {
 
   return (
     <section className="mt-10 grid gap-5 lg:grid-cols-2">
-      <div className="rounded-xl border border-border p-5">
-        <h2 className="font-display text-base font-bold text-foreground">
-          Top 10 tools
-        </h2>
-        <div className="mt-4 h-64">
-          {tools.length === 0 ? (
-            <EmptyChart label="No tool calls in this range yet." />
-          ) : (
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={tools} layout="vertical">
-                <XAxis type="number" tick={{ fontSize: 11 }} />
-                <YAxis
-                  dataKey="toolName"
-                  type="category"
-                  tick={{ fontSize: 11 }}
-                  width={140}
-                />
-                <Tooltip />
-                <Bar dataKey="calls" fill="#3b82f6" />
-              </BarChart>
-            </ResponsiveContainer>
-          )}
-        </div>
-      </div>
+      <ChartPanel title="Top 10 tools">
+        {top10.length === 0 ? (
+          <EmptyChart label="No tool calls in this range yet." />
+        ) : (
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart data={top10} layout="vertical">
+              <XAxis type="number" tick={{ fontSize: 11 }} />
+              <YAxis
+                dataKey="toolName"
+                type="category"
+                tick={{ fontSize: 11 }}
+                width={140}
+              />
+              <Tooltip />
+              <Bar dataKey="calls" fill="#3b82f6" />
+            </BarChart>
+          </ResponsiveContainer>
+        )}
+      </ChartPanel>
 
-      <div className="rounded-xl border border-border p-5">
-        <h2 className="font-display text-base font-bold text-foreground">
-          By connector
-        </h2>
-        <div className="mt-4 h-64">
-          {byConnector.length === 0 ? (
-            <EmptyChart label="No tool calls in this range yet." />
-          ) : (
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={byConnector}>
-                <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
-                <XAxis dataKey="bucket" tick={{ fontSize: 11 }} />
-                <YAxis tick={{ fontSize: 11 }} />
-                <Tooltip />
-                <Legend />
-                {connectors.map((c, i) => (
-                  <Bar
-                    key={c}
-                    dataKey={c}
-                    stackId="a"
-                    fill={`hsl(${(i * 137) % 360}, 65%, 55%)`}
-                  />
-                ))}
-              </BarChart>
-            </ResponsiveContainer>
-          )}
-        </div>
-      </div>
+      <ChartPanel title="By connector">
+        {byConnector.length === 0 ? (
+          <EmptyChart label="No tool calls in this range yet." />
+        ) : (
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart data={byConnector}>
+              <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
+              <XAxis dataKey="bucket" tick={{ fontSize: 11 }} />
+              <YAxis tick={{ fontSize: 11 }} />
+              <Tooltip />
+              <Legend />
+              {connectors.map((c, i) => (
+                <Bar
+                  key={c}
+                  dataKey={c}
+                  stackId="a"
+                  fill={`hsl(${(i * 137) % 360}, 65%, 55%)`}
+                />
+              ))}
+            </BarChart>
+          </ResponsiveContainer>
+        )}
+      </ChartPanel>
     </section>
   );
 }
 
-function ToolsTable({ range }: { range: Range }) {
-  type Row = {
-    toolName: string;
-    connector: string | null;
-    calls: number;
-    errors: number;
-    p50: number;
-    p95: number;
-    avgSize: number;
-  };
-  const [rows, setRows] = useState<Row[]>([]);
-  const [sort, setSort] = useState<"calls" | "errors" | "p95">("calls");
+function ToolsTable({ tools }: { tools: ToolRow[] }) {
+  const [sort, setSort] = useState<"calls" | "p95">("calls");
 
-  useEffect(() => {
-    fetch(`/api/usage/by-tool?range=${range}`)
-      .then((r) => (r.ok ? r.json() : { tools: [] }))
-      .then((j) => setRows(j.tools ?? []));
-  }, [range]);
-
-  const sorted = [...rows].sort(
+  const sorted = [...tools].sort(
     (a, b) => (b[sort] as number) - (a[sort] as number)
   );
 
