@@ -62,7 +62,7 @@ export default function BlogListingPage() {
     <>
       <Navbar />
       <main className="flex-1">
-        <div className="mx-auto max-w-3xl px-6 pb-16 pt-32 sm:pb-20 sm:pt-36">
+        <div className="mx-auto max-w-6xl px-6 pb-16 pt-32 sm:pb-20 sm:pt-36">
           <div className="animate-fade-in-up">
             <h1 className="font-display text-3xl font-bold tracking-tight text-foreground sm:text-4xl">
               Blog
@@ -77,7 +77,7 @@ export default function BlogListingPage() {
               Articles coming soon.
             </p>
           ) : (
-            <div className="mt-12 space-y-6">
+            <div className="mt-12 grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
               {posts.map((post, i) => (
                 <Link
                   key={post.slug}
