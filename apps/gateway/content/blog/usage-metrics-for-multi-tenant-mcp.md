@@ -8,8 +8,6 @@ coverImage: "/blog/usage-dashboard.png"
 tags: ["mcp", "observability", "privacy", "architecture"]
 ---
 
-![Usage dashboard: summary cards, call volume, by connector, per-tool table](/blog/usage-dashboard.png)
-
 Users kept asking the same thing. "Is it actually doing anything?" They'd wire their AI assistant up to DataToRAG, kick off a workflow, and have no way to see what happened. Did Gmail even get called? Did a search fail silently? Was the slow response our fault or Anthropic's?
 
 We needed a usage dashboard. But DataToRAG is a multi-tenant MCP gateway. Every user's data flows through the same pipes on its way to Google or Atlassian, so the last thing anyone wants is a "helpful" dashboard that logs their Gmail search terms or the contents of a Jira comment they just drafted.
