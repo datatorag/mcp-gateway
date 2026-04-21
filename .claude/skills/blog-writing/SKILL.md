@@ -65,6 +65,38 @@ The audience is technical decision-makers at mid-size companies — VPs of Engin
 
 **The bar:** Would this get upvoted on Hacker News, or would the top comment be "this reads like AI slop"?
 
+## Diagrams and Images
+
+A diagram earns its place when prose can't carry the idea efficiently. Skip it when prose already works.
+
+**Include a visual when you have:**
+- A concrete numeric comparison (before/after, raw/optimized, with/without). Bar chart, not a screenshot.
+- A flow or sequence with more than 3 steps (OAuth handoff, tool-call routing, multi-system pipeline)
+- An architecture or data model worth showing spatially (table relationships, component boundaries)
+- A screenshot of the actual product when the post is about a specific UI feature
+
+**Skip the visual when:**
+- The prose already says it clearly
+- It's decorative stock imagery meant to "break up the page"
+- It's a diagram of something obvious (a box labeled "User" pointing to a box labeled "Server")
+- The only reason you're including it is because other posts have images
+
+**Conventions used in DataToRAG posts:**
+- Every post has a `coverImage` in frontmatter, path `/blog/<descriptive-name>.png`
+- Inline images use standard markdown: `![Descriptive alt text](/blog/specific-chart-name.png)`
+- Place inline diagrams after the section that introduces the concept they illustrate, not before
+- Alt text describes the content, not the file ("API Response Size: Raw vs Optimized", not "chart showing sizes")
+- Images live at `apps/gateway/public/blog/` so they're served at `/blog/<name>.png`
+
+**Tooling:**
+- **Diagrams and charts:** Excalidraw. Hand-drawn style reads as authentic and matches the DataToRAG voice better than polished vector art. Use the Excalidraw MCP tools to create and export views when generating diagrams from this repo.
+- **Screenshots:** Chrome DevTools MCP (`take_screenshot`) against the running dev server or production site. Take full-page screenshots when showing a whole UI surface; element-level when isolating a single card, toggle, or table. Crop after the fact rather than trying to frame perfectly in-browser.
+- **File format:** PNG. Keep file size reasonable (typically under 300KB per image) so posts stay snappy.
+
+**One diagram per post is usually right.** Two if the post is long and they serve different purposes (one architecture diagram, one results chart). Three is almost always too many for a DataToRAG-length post.
+
+When drafting, if you find yourself saying "there's a bar chart that would help here" or "I'd draw this as a sequence of three arrows," call it out in the draft with a placeholder like `[DIAGRAM: raw vs optimized JSON sizes for docs/sheets/slides]` so the author or designer can produce it. Don't invent image paths that don't exist yet.
+
 ## Pre-Publish Checklist
 
 1. Ctrl+F for every word in the banned list
@@ -74,3 +106,4 @@ The audience is technical decision-makers at mid-size companies — VPs of Engin
 5. Find one place you stated an opinion and one place you used a specific number or name
 6. Read the first and last paragraphs — do they sound like a person or a press release?
 7. Read the whole thing aloud — mark anything you'd never say in conversation
+8. Check the diagram rule: either a diagram earns its place, or no diagram

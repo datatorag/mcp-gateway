@@ -52,3 +52,7 @@ DataToRAG currently supports these services:
 - **Confluence** — Search with CQL, read and edit pages, manage comments and attachments
 
 Each connector is documented on its own page with available operations, required scopes, and example prompts.
+
+## Seeing what your assistant is doing
+
+Every tool call shows up in your personal usage dashboard at [datatorag.com/dashboard/usage](https://datatorag.com/dashboard/usage) — call volume, latency, error rates, and a per-tool breakdown. See the [Usage docs](/docs/usage) for what gets tracked and how retention works.

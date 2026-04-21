@@ -38,30 +38,29 @@ export default async function HomePage() {
       <main className="flex-1 overflow-x-hidden">
         {/* Hero */}
         <ShaderBackground>
-          <div className="relative mx-auto flex min-h-[calc(100vh-4rem)] max-w-4xl flex-col items-center justify-center px-6 py-20">
+          <div className="relative mx-auto flex min-h-[calc(100vh-4rem)] max-w-5xl flex-col items-center justify-start px-6 pb-20 pt-32">
             {/* Copy */}
             <div className="text-center">
               <div className="animate-fade-in-up inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/10 px-4 py-1.5 backdrop-blur-sm">
                 <span className="text-xs font-medium text-white/90">
-                  MCP Gateway · Flagship: Google Workspace
+                  Google Workspace for Claude · Read and Write
                 </span>
               </div>
               <h1
-                className="animate-fade-in-up mt-6 font-display text-5xl font-extrabold leading-[1.05] tracking-tight text-white sm:text-6xl lg:text-7xl"
+                className="animate-fade-in-up mt-6 font-display text-4xl font-extrabold leading-[1.1] tracking-tight text-white sm:text-5xl lg:text-6xl"
                 style={{ animationDelay: "0.06s" }}
               >
-                Get your data
-                <br />
-                <span className="text-blue-200">AI-ready.</span>
+                Stop pasting Claude&apos;s drafts into your{" "}
+                <span className="text-blue-200">Google Docs.</span>
               </h1>
               <p
                 className="animate-fade-in-up mx-auto mt-6 max-w-2xl text-base leading-relaxed text-white/60 sm:text-lg"
                 style={{ animationDelay: "0.12s" }}
               >
-                DataToRAG connects your data to AI assistants through the Model
-                Context Protocol. Our flagship Google Workspace integration brings
-                Gmail, Drive, Calendar, Docs, Sheets, and Slides into Claude —
-                with multi-account support and token-efficient tools.
+                DataToRAG gives Claude write access to your Docs, Sheets, and
+                Slides. Plus Gmail, Calendar, Drive, Contacts, and Tasks. The
+                draft it just generated actually lands in the doc. No more
+                copy, switch tab, paste, format.
               </p>
               <div
                 className="animate-fade-in-up mt-8 flex flex-wrap items-center justify-center gap-3"
