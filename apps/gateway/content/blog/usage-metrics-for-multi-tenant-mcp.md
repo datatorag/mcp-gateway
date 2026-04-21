@@ -4,8 +4,11 @@ excerpt: "How we show users exactly what their AI assistant is doing (calls, lat
 date: "2026-04-20"
 author: "Manuel Yang"
 category: "Engineering"
+coverImage: "/blog/usage-dashboard.png"
 tags: ["mcp", "observability", "privacy", "architecture"]
 ---
+
+![Usage dashboard: summary cards, call volume, by connector, per-tool table](/blog/usage-dashboard.png)
 
 Users kept asking the same thing. "Is it actually doing anything?" They'd wire their AI assistant up to DataToRAG, kick off a workflow, and have no way to see what happened. Did Gmail even get called? Did a search fail silently? Was the slow response our fault or Anthropic's?
 
@@ -101,6 +104,8 @@ Two choices worth naming.
 **"Median" and "slow-end" instead of "P50" and "P95."** Users aren't SREs. "Slow-end latency" tells them "this is the speed you get on a bad day" without requiring them to know what a percentile is. I went back and forth on this one. The instinct when you work on infrastructure is to use the precise term. The instinct is wrong when you're writing UI for people who have better things to do than learn percentiles.
 
 **Click a tool row to drill down.** The table lists every tool the user has called. Clicking one navigates to `/dashboard/usage/[tool]` with the last 50 calls and per-tool aggregates. The drill-down is the answer to "what actually broke?" It's where the redacted error messages live.
+
+![Per-tool drill-down: aggregates plus the last 50 calls with status and latency](/blog/usage-drilldown.png)
 
 ## What it's worth
 
