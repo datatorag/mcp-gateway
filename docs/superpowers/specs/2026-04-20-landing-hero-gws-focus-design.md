@@ -1,7 +1,7 @@
 # Landing Hero — Google Workspace Focus
 
 **Date:** 2026-04-20
-**Status:** Approved, ready for implementation plan
+**Status:** Shipped 2026-04-20 (commit `5b201be`). Live at https://datatorag.com.
 **File touched:** `apps/gateway/src/app/page.tsx` (hero section only)
 
 ## Goal
@@ -70,17 +70,28 @@ Unchanged:
 - Single file touched: `apps/gateway/src/app/page.tsx`.
 - Three string replacements in the hero section (eyebrow, headline, subhead).
 - Subhead is a **single continuous string** in the JSX — the line breaks shown in the "New hero copy" section above are spec-formatting only. Text wraps naturally via CSS.
-- Em-dash (—) and middle-dot (·) characters in the spec are the literal characters used in the page; they match the style already in use (e.g., current eyebrow uses ·).
-- No new components, no new styles, no dependency changes.
+- Middle-dot (·) characters in the spec are the literal characters used in the page; they match the style already in use (e.g., current eyebrow uses ·).
+- The spec originally used an em-dash (—) in the subhead; it was swapped to a period at implementation time to stay consistent with the blog-writing skill's anti-em-dash rule, applied to user-facing copy generally.
+- No new components, no new dependency changes.
 - No schema, migration, env var, or config change.
+
+### Layout adjustments made at implementation time
+
+The original spec said "no layout shift vs. current hero," but the new headline (47 chars vs. the old 20) forced three layout tweaks to avoid awkward wrapping:
+
+1. Hero container widened: `max-w-4xl` → `max-w-5xl`.
+2. Headline font scale dropped one step: `text-5xl sm:text-6xl lg:text-7xl` → `text-4xl sm:text-5xl lg:text-6xl`, with `leading-[1.05]` → `leading-[1.1]`.
+3. Flex layout switched from `justify-center py-20` to `justify-start pb-20 pt-32`. The old centered flex was pushing the eyebrow up against the navbar at any viewport where the content stack (eyebrow + headline + subhead + CTAs + video) exceeded the available height. `justify-start` with explicit `pt-32` gives predictable navbar-to-eyebrow breathing room.
+
+All three changes keep the original visual language (same fonts, shader background, animation delays, CTA styling) — only the sizing/positioning needed to change to accommodate the longer copy.
 
 ## Acceptance criteria
 
 1. Landing page at `/` renders with the new eyebrow, headline, and subhead.
-2. Visual layout identical to current (same font, sizing, spacing, animation delays, shader background).
-3. CTAs still navigate to `/auth/login` and `#services` respectively.
-4. Mobile render: headline wraps gracefully at narrow widths (test at 375px, 390px).
-5. No console errors, no layout shift vs. current hero.
+2. CTAs still navigate to `/auth/login` and `#services` respectively.
+3. Headline wraps to 2 lines at desktop widths ("Stop pasting Claude's drafts" / "into your Google Docs.") and stays readable down to 375px mobile.
+4. Eyebrow has visible breathing room below the navbar at all viewport heights.
+5. No console errors.
 
 ## Rollback
 
