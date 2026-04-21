@@ -42,8 +42,6 @@ Under the hood, the assistant runs:
 
 I don't write JQL. I don't write CQL. I describe the outcome. The assistant figures out which query languages to use, runs them in parallel where it can, and hands back the one thing I wanted: three bullets for standup.
 
-![One prompt, parallel tool calls across Jira and Confluence](/blog/atlassian-fanout.png)
-
 ## The ticket-from-context workflow
 
 A customer sends a long email describing a bug. You want a Jira ticket.
