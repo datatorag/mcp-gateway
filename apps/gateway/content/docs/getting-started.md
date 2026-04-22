@@ -7,6 +7,8 @@ section: "general"
 
 DataToRAG gives your AI assistant access to Google Workspace (Gmail, Drive, Calendar, Docs, Sheets, Slides, Contacts, Tasks) and Atlassian (Jira, Confluence) through a single MCP server.
 
+![DataToRAG dashboard showing connected Google Workspace accounts and Atlassian, with example prompts](/blog/dashboard-home.png)
+
 ## Quick setup
 
 Add this to your MCP client config (Claude Desktop, Cursor, or any MCP-compatible client):

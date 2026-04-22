@@ -18,6 +18,8 @@ Claude's Google Workspace connector authenticates to a single Google account per
 
 That sounds niche. It isn't. Anyone who does freelance work while employed, anyone who runs a side project, anyone whose life is partitioned along work boundaries has two calendars. When they say "find a time next Tuesday," the correct answer is the one that considers both.
 
+![DataToRAG dashboard: one user with five Google accounts connected at once](/blog/dashboard-home.png)
+
 ## Feature comparison
 
 | Capability | Claude native Google Calendar | DataToRAG Google Calendar |

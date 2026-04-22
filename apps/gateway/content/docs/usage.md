@@ -7,6 +7,8 @@ section: "general"
 
 Every tool call your AI assistant makes through DataToRAG is logged to your personal usage dashboard at [datatorag.com/dashboard/usage](https://datatorag.com/dashboard/usage). You can see what ran, how fast it was, and where errors are happening.
 
+![Usage dashboard showing summary cards, call volume, by-connector breakdown, and the per-tool table](/blog/usage-dashboard.png)
+
 ## What you see
 
 The dashboard shows four things:

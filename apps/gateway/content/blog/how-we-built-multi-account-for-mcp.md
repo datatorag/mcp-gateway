@@ -10,6 +10,8 @@ tags: ["multi-account", "mcp", "oauth", "architecture", "google-workspace"]
 
 People kept asking for it. "I have a work Google account and a personal one. Can I search both?" The answer was no, because our entire auth model assumed one account per service per user. Fixing that touched every layer of the stack: database schema, token resolution, tool schemas, and the OAuth callback flow. Here's how we did it.
 
+![The dashboard today: five Google accounts connected under one user, with an Atlassian account alongside](/blog/dashboard-home.png)
+
 ## The old model and why it broke
 
 Our `service_connections` table stored OAuth tokens with a unique constraint on `(user_id, service)`. One user, one Google connection. That's it. The table was pure auth: refresh tokens, access tokens, expiry timestamps.
