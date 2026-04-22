@@ -1,25 +1,66 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
+import { useCurrentUser } from "@/lib/use-current-user";
 
-const navLinks = [
-  { href: "#platform", label: "Platform" },
-  { href: "#services", label: "Services" },
-  { href: "#integrations", label: "Integrations" },
+interface NavLink {
+  href: string;
+  label: string;
+  isRoute?: boolean;
+}
+
+const productItems: NavLink[] = [
+  { href: "/#platform", label: "Platform" },
+  { href: "/#services", label: "Services" },
+  { href: "/#integrations", label: "Integrations" },
+];
+
+const flatItems: NavLink[] = [
+  { href: "/docs", label: "Docs", isRoute: true },
   { href: "/blog", label: "Blog", isRoute: true },
-  { href: "/dashboard", label: "Dashboard", isRoute: true },
 ];
 
 export function Navbar() {
-  const [open, setOpen] = useState(false);
+  const [mobileOpen, setMobileOpen] = useState(false);
+  const [productOpen, setProductOpen] = useState(false);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+  const user = useCurrentUser();
+  const ctaHref = user ? "/dashboard" : "/auth/login";
+  const ctaLabel = user ? "Dashboard" : "Get Started";
+
+  useEffect(() => {
+    if (!productOpen) return;
+    function handlePointer(e: MouseEvent) {
+      if (
+        dropdownRef.current &&
+        !dropdownRef.current.contains(e.target as Node)
+      ) {
+        setProductOpen(false);
+      }
+    }
+    function handleKey(e: KeyboardEvent) {
+      if (e.key === "Escape") setProductOpen(false);
+    }
+    document.addEventListener("mousedown", handlePointer);
+    document.addEventListener("keydown", handleKey);
+    return () => {
+      document.removeEventListener("mousedown", handlePointer);
+      document.removeEventListener("keydown", handleKey);
+    };
+  }, [productOpen]);
+
+  const closeAll = () => {
+    setMobileOpen(false);
+    setProductOpen(false);
+  };
 
   return (
     <header className="fixed top-0 left-0 right-0 z-50 px-4 pt-4">
       <div className="mx-auto max-w-6xl rounded-2xl border border-white/10 bg-black/40 backdrop-blur-xl">
         <div className="flex h-14 items-center justify-between px-5">
-          <Link href="/" className="flex items-center gap-3">
+          <Link href="/" className="flex items-center gap-3" onClick={closeAll}>
             <Image
               src="/datatorag-logo-256.png"
               alt="DataToRAG"
@@ -33,25 +74,60 @@ export function Navbar() {
 
           {/* Desktop nav */}
           <nav className="hidden items-center gap-1 md:flex">
-            {navLinks.map((link) =>
-              link.isRoute ? (
-                <Link
-                  key={link.href}
-                  href={link.href}
-                  className="rounded-lg px-3 py-2 text-sm text-white/70 transition-colors hover:text-white"
+            <div ref={dropdownRef} className="relative">
+              <button
+                type="button"
+                onClick={() => setProductOpen((v) => !v)}
+                aria-haspopup="menu"
+                aria-expanded={productOpen}
+                className="flex items-center gap-1 rounded-lg px-3 py-2 text-sm text-white/70 transition-colors hover:text-white"
+              >
+                Product
+                <svg
+                  width="10"
+                  height="10"
+                  viewBox="0 0 10 10"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.5"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  className={`transition-transform ${productOpen ? "rotate-180" : ""}`}
+                  aria-hidden="true"
                 >
-                  {link.label}
-                </Link>
-              ) : (
-                <a
-                  key={link.href}
-                  href={link.href}
-                  className="rounded-lg px-3 py-2 text-sm text-white/70 transition-colors hover:text-white"
+                  <path d="M2 4l3 3 3-3" />
+                </svg>
+              </button>
+              {productOpen && (
+                <div
+                  role="menu"
+                  className="absolute left-0 top-full mt-2 w-52 overflow-hidden rounded-xl border border-white/10 bg-black/90 shadow-xl backdrop-blur-xl"
                 >
-                  {link.label}
-                </a>
-              )
-            )}
+                  {productItems.map((item) => (
+                    <a
+                      key={item.href}
+                      href={item.href}
+                      role="menuitem"
+                      onClick={() => setProductOpen(false)}
+                      className="block px-4 py-2.5 text-sm text-white/80 transition-colors hover:bg-white/10 hover:text-white"
+                    >
+                      {item.label}
+                    </a>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {flatItems.map((item) => (
+              <Link
+                key={item.href}
+                href={item.href}
+                className="rounded-lg px-3 py-2 text-sm text-white/70 transition-colors hover:text-white"
+              >
+                {item.label}
+              </Link>
+            ))}
+
             <a
               href="https://github.com/datatorag/mcp-gateway"
               target="_blank"
@@ -70,20 +146,20 @@ export function Navbar() {
               </svg>
             </a>
             <Link
-              href="/auth/login"
+              href={ctaHref}
               className="ml-2 rounded-xl bg-white px-4 py-2 text-sm font-medium text-[#1a3a8f] transition-all hover:bg-white/90"
             >
-              Get Started
+              {ctaLabel}
             </Link>
           </nav>
 
           {/* Mobile hamburger */}
           <button
             type="button"
-            onClick={() => setOpen(!open)}
+            onClick={() => setMobileOpen(!mobileOpen)}
             className="flex h-9 w-9 items-center justify-center rounded-lg text-white/70 transition-colors hover:text-white md:hidden"
             aria-label="Toggle menu"
-            aria-expanded={open}
+            aria-expanded={mobileOpen}
           >
             <svg
               width="20"
@@ -94,7 +170,7 @@ export function Navbar() {
               strokeWidth="1.5"
               strokeLinecap="round"
             >
-              {open ? (
+              {mobileOpen ? (
                 <>
                   <path d="M5 5l10 10" />
                   <path d="M15 5L5 15" />
@@ -111,44 +187,49 @@ export function Navbar() {
         </div>
 
         {/* Mobile menu */}
-        {open && (
-          <nav className="border-t border-white/10 px-5 pb-4 pt-2">
-            {navLinks.map((link) =>
-              link.isRoute ? (
-                <Link
-                  key={link.href}
-                  href={link.href}
-                  onClick={() => setOpen(false)}
-                  className="block rounded-lg px-3 py-2.5 text-sm text-white/70 transition-colors hover:text-white"
-                >
-                  {link.label}
-                </Link>
-              ) : (
-                <a
-                  key={link.href}
-                  href={link.href}
-                  onClick={() => setOpen(false)}
-                  className="block rounded-lg px-3 py-2.5 text-sm text-white/70 transition-colors hover:text-white"
-                >
-                  {link.label}
-                </a>
-              )
-            )}
+        {mobileOpen && (
+          <nav className="border-t border-white/10 px-5 pb-4 pt-3">
+            <div className="px-3 pb-1 text-[10px] font-semibold uppercase tracking-wider text-white/40">
+              Product
+            </div>
+            {productItems.map((item) => (
+              <a
+                key={item.href}
+                href={item.href}
+                onClick={() => setMobileOpen(false)}
+                className="block rounded-lg px-3 py-2.5 text-sm text-white/70 transition-colors hover:text-white"
+              >
+                {item.label}
+              </a>
+            ))}
+
+            <div className="my-2 h-px bg-white/10" />
+
+            {flatItems.map((item) => (
+              <Link
+                key={item.href}
+                href={item.href}
+                onClick={() => setMobileOpen(false)}
+                className="block rounded-lg px-3 py-2.5 text-sm text-white/70 transition-colors hover:text-white"
+              >
+                {item.label}
+              </Link>
+            ))}
             <a
               href="https://github.com/datatorag/mcp-gateway"
               target="_blank"
               rel="noopener noreferrer"
-              onClick={() => setOpen(false)}
+              onClick={() => setMobileOpen(false)}
               className="block rounded-lg px-3 py-2.5 text-sm text-white/70 transition-colors hover:text-white"
             >
               GitHub
             </a>
             <Link
-              href="/auth/login"
-              onClick={() => setOpen(false)}
+              href={ctaHref}
+              onClick={() => setMobileOpen(false)}
               className="mt-2 block rounded-xl bg-white px-4 py-2.5 text-center text-sm font-medium text-[#1a3a8f] transition-all hover:bg-white/90"
             >
-              Get Started
+              {ctaLabel}
             </Link>
           </nav>
         )}

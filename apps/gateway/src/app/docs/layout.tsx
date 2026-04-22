@@ -25,29 +25,36 @@ export default function DocsLayout({
     <div className="flex min-h-screen flex-col md:flex-row">
       {/* Mobile header */}
       <div className="flex h-14 items-center justify-between border-b border-border px-4 md:hidden">
-        <Link href="/docs" className="flex items-center gap-3">
-          <Image
-            src="/datatorag-logo-256.png"
-            alt="DataToRAG"
-            width={24}
-            height={24}
-          />
-          <span className="font-display text-sm font-bold text-foreground">
+        <div className="flex items-center gap-3">
+          <Link href="/" aria-label="DataToRAG home">
+            <Image
+              src="/datatorag-logo-256.png"
+              alt="DataToRAG"
+              width={24}
+              height={24}
+            />
+          </Link>
+          <Link
+            href="/docs"
+            className="font-display text-sm font-bold text-foreground"
+          >
             Docs
-          </span>
-        </Link>
+          </Link>
+        </div>
         <DocsNavClient topLevel={topLevel} groups={groups} />
       </div>
 
       {/* Desktop sidebar */}
       <aside className="hidden w-60 shrink-0 flex-col border-r border-border md:flex">
         <div className="flex h-16 items-center gap-3 border-b border-border px-5">
-          <Image
-            src="/datatorag-logo-256.png"
-            alt="DataToRAG"
-            width={26}
-            height={26}
-          />
+          <Link href="/" aria-label="DataToRAG home">
+            <Image
+              src="/datatorag-logo-256.png"
+              alt="DataToRAG"
+              width={26}
+              height={26}
+            />
+          </Link>
           <Link
             href="/docs"
             className="font-display text-sm font-bold text-foreground"
