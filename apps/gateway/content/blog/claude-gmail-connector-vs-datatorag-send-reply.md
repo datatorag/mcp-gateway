@@ -14,6 +14,20 @@ That's not a bug. It's the design intent of Claude's native Gmail connector. The
 
 The design goal is safety: you review every outbound action. The result is that every email workflow ends with Claude handing you a sticky note saying "the draft is waiting in Gmail."
 
+## Feature comparison
+
+| Capability | Claude native Gmail | DataToRAG Gmail |
+|---|---|---|
+| Search and read messages | Yes | Yes |
+| Create a draft in Drafts folder | Yes | Yes |
+| Send a new message | No | Yes |
+| Reply within a thread | No | Yes |
+| Forward a message | No | Yes |
+| Mark messages read or unread | No | Yes |
+| Label or archive threads | No | Yes |
+| Save attachment to Drive server-side | No | Yes |
+| Multi-account (work + personal Gmail) | No | Yes |
+
 ## What DataToRAG's Gmail connector adds
 
 DataToRAG ships the full set of Gmail verbs:

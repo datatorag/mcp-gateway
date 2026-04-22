@@ -16,6 +16,21 @@ The [specifics](https://support.claude.com/en/articles/10166901-use-google-works
 
 DataToRAG's connector reads the same surfaces and writes back to every one of them.
 
+## Feature comparison
+
+| Capability | Claude native Google Drive | DataToRAG Google Workspace |
+|---|---|---|
+| Search and read Google Docs, Sheets, Slides | Yes | Yes |
+| Edit an existing Google Doc in place | No | Yes |
+| Update Sheet cells or append rows | No | Yes |
+| Edit an existing Slides deck | No | Yes |
+| Create a new Doc, Sheet, or Slide | Only via code execution | Yes |
+| Create folders in Drive | No | Yes |
+| Add comments to files | No | No |
+| Real-time sync of Docs in Claude Projects | Yes | No |
+| Drive Cataloging / RAG indexing (Enterprise) | Yes | No |
+| Multi-account (work + personal Google) | No | Yes |
+
 ## The write side of the connector
 
 - `docs_write`: create new Google Docs with structured content.

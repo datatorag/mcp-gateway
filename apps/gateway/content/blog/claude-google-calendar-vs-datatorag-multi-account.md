@@ -18,6 +18,23 @@ Claude's Google Workspace connector authenticates to a single Google account per
 
 That sounds niche. It isn't. Anyone who does freelance work while employed, anyone who runs a side project, anyone whose life is partitioned along work boundaries has two calendars. When they say "find a time next Tuesday," the correct answer is the one that considers both.
 
+## Feature comparison
+
+| Capability | Claude native Google Calendar | DataToRAG Google Calendar |
+|---|---|---|
+| List events | Yes | Yes |
+| Create events | Yes | Yes |
+| Update events | Yes | Yes |
+| Delete events (with cancellation notice) | Yes | Yes |
+| Free / busy lookup | Yes | Yes |
+| Book conference rooms | Yes | Yes |
+| RSVP to invitations | Yes | Yes |
+| Add Google Meet links | Yes | Yes |
+| Multi-account free/busy across work + personal | No | Yes |
+| Create an event on a specific account | No | Yes |
+| Default account with per-call override | No | Yes |
+| Works inside Claude Code | Yes (v2.1.46+) | Yes |
+
 ## What multi-account support looks like
 
 DataToRAG's Calendar connector has the same surface as Claude's:
