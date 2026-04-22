@@ -1,14 +1,14 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { useCurrentUser } from "@/lib/use-current-user";
+import { useDismissable } from "@/lib/use-dismissable";
 
 interface NavLink {
   href: string;
   label: string;
-  isRoute?: boolean;
 }
 
 const productItems: NavLink[] = [
@@ -18,9 +18,14 @@ const productItems: NavLink[] = [
 ];
 
 const flatItems: NavLink[] = [
-  { href: "/docs", label: "Docs", isRoute: true },
-  { href: "/blog", label: "Blog", isRoute: true },
+  { href: "/docs", label: "Docs" },
+  { href: "/blog", label: "Blog" },
 ];
+
+const navItemClass =
+  "rounded-lg px-3 py-2 text-sm text-white/70 transition-colors hover:text-white";
+const navItemMobileClass =
+  "block rounded-lg px-3 py-2.5 text-sm text-white/70 transition-colors hover:text-white";
 
 export function Navbar() {
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -30,37 +35,16 @@ export function Navbar() {
   const ctaHref = user ? "/dashboard" : "/auth/login";
   const ctaLabel = user ? "Dashboard" : "Get Started";
 
-  useEffect(() => {
-    if (!productOpen) return;
-    function handlePointer(e: MouseEvent) {
-      if (
-        dropdownRef.current &&
-        !dropdownRef.current.contains(e.target as Node)
-      ) {
-        setProductOpen(false);
-      }
-    }
-    function handleKey(e: KeyboardEvent) {
-      if (e.key === "Escape") setProductOpen(false);
-    }
-    document.addEventListener("mousedown", handlePointer);
-    document.addEventListener("keydown", handleKey);
-    return () => {
-      document.removeEventListener("mousedown", handlePointer);
-      document.removeEventListener("keydown", handleKey);
-    };
-  }, [productOpen]);
+  const closeProduct = useCallback(() => setProductOpen(false), []);
+  useDismissable(dropdownRef, productOpen, closeProduct);
 
-  const closeAll = () => {
-    setMobileOpen(false);
-    setProductOpen(false);
-  };
+  const closeMobile = () => setMobileOpen(false);
 
   return (
     <header className="fixed top-0 left-0 right-0 z-50 px-4 pt-4">
       <div className="mx-auto max-w-6xl rounded-2xl border border-white/10 bg-black/40 backdrop-blur-xl">
         <div className="flex h-14 items-center justify-between px-5">
-          <Link href="/" className="flex items-center gap-3" onClick={closeAll}>
+          <Link href="/" className="flex items-center gap-3">
             <Image
               src="/datatorag-logo-256.png"
               alt="DataToRAG"
@@ -72,15 +56,13 @@ export function Navbar() {
             </span>
           </Link>
 
-          {/* Desktop nav */}
           <nav className="hidden items-center gap-1 md:flex">
             <div ref={dropdownRef} className="relative">
               <button
                 type="button"
                 onClick={() => setProductOpen((v) => !v)}
-                aria-haspopup="menu"
                 aria-expanded={productOpen}
-                className="flex items-center gap-1 rounded-lg px-3 py-2 text-sm text-white/70 transition-colors hover:text-white"
+                className={`${navItemClass} flex items-center gap-1`}
               >
                 Product
                 <svg
@@ -99,16 +81,12 @@ export function Navbar() {
                 </svg>
               </button>
               {productOpen && (
-                <div
-                  role="menu"
-                  className="absolute left-0 top-full mt-2 w-52 overflow-hidden rounded-xl border border-white/10 bg-black/90 shadow-xl backdrop-blur-xl"
-                >
+                <div className="absolute left-0 top-full mt-2 w-52 overflow-hidden rounded-xl border border-white/10 bg-black/90 shadow-xl backdrop-blur-xl">
                   {productItems.map((item) => (
                     <a
                       key={item.href}
                       href={item.href}
-                      role="menuitem"
-                      onClick={() => setProductOpen(false)}
+                      onClick={closeProduct}
                       className="block px-4 py-2.5 text-sm text-white/80 transition-colors hover:bg-white/10 hover:text-white"
                     >
                       {item.label}
@@ -119,11 +97,7 @@ export function Navbar() {
             </div>
 
             {flatItems.map((item) => (
-              <Link
-                key={item.href}
-                href={item.href}
-                className="rounded-lg px-3 py-2 text-sm text-white/70 transition-colors hover:text-white"
-              >
+              <Link key={item.href} href={item.href} className={navItemClass}>
                 {item.label}
               </Link>
             ))}
@@ -153,7 +127,6 @@ export function Navbar() {
             </Link>
           </nav>
 
-          {/* Mobile hamburger */}
           <button
             type="button"
             onClick={() => setMobileOpen(!mobileOpen)}
@@ -186,7 +159,6 @@ export function Navbar() {
           </button>
         </div>
 
-        {/* Mobile menu */}
         {mobileOpen && (
           <nav className="border-t border-white/10 px-5 pb-4 pt-3">
             <div className="px-3 pb-1 text-[10px] font-semibold uppercase tracking-wider text-white/40">
@@ -196,8 +168,8 @@ export function Navbar() {
               <a
                 key={item.href}
                 href={item.href}
-                onClick={() => setMobileOpen(false)}
-                className="block rounded-lg px-3 py-2.5 text-sm text-white/70 transition-colors hover:text-white"
+                onClick={closeMobile}
+                className={navItemMobileClass}
               >
                 {item.label}
               </a>
@@ -209,8 +181,8 @@ export function Navbar() {
               <Link
                 key={item.href}
                 href={item.href}
-                onClick={() => setMobileOpen(false)}
-                className="block rounded-lg px-3 py-2.5 text-sm text-white/70 transition-colors hover:text-white"
+                onClick={closeMobile}
+                className={navItemMobileClass}
               >
                 {item.label}
               </Link>
@@ -219,14 +191,14 @@ export function Navbar() {
               href="https://github.com/datatorag/mcp-gateway"
               target="_blank"
               rel="noopener noreferrer"
-              onClick={() => setMobileOpen(false)}
-              className="block rounded-lg px-3 py-2.5 text-sm text-white/70 transition-colors hover:text-white"
+              onClick={closeMobile}
+              className={navItemMobileClass}
             >
               GitHub
             </a>
             <Link
               href={ctaHref}
-              onClick={() => setMobileOpen(false)}
+              onClick={closeMobile}
               className="mt-2 block rounded-xl bg-white px-4 py-2.5 text-center text-sm font-medium text-[#1a3a8f] transition-all hover:bg-white/90"
             >
               {ctaLabel}

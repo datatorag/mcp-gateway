@@ -1,9 +1,10 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useCallback, useState, useRef } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { useCurrentUser, type CurrentUser } from "@/lib/use-current-user";
+import { useDismissable } from "@/lib/use-dismissable";
 
 const navItems = [
   { href: "/dashboard", label: "Dashboard" },
@@ -14,16 +15,8 @@ const navItems = [
 function UserMenu({ user }: { user: CurrentUser }) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    function handleClick(e: MouseEvent) {
-      if (ref.current && !ref.current.contains(e.target as Node)) {
-        setOpen(false);
-      }
-    }
-    document.addEventListener("mousedown", handleClick);
-    return () => document.removeEventListener("mousedown", handleClick);
-  }, []);
+  const close = useCallback(() => setOpen(false), []);
+  useDismissable(ref, open, close);
 
   const initials = (user.name ?? user.email)
     .split(/[\s@]/)
