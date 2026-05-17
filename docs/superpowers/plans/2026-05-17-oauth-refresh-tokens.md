@@ -16,6 +16,8 @@
 
 **Modified:**
 - `apps/gateway/package.json` — add `@testcontainers/postgresql` devDep (Task 0)
+- `apps/gateway/vitest.config.ts` — `pool: "forks", poolOptions.forks.singleFork: true` so the testcontainer singleton actually amortizes
+- `apps/gateway/src/gateway/track.ts` — switch to shared `posthog-server.ts` helper
 - `packages/db/src/schema/oauth.ts` — add `oauthRefreshTokens` table export
 - `packages/db/src/schema/index.ts` — re-export `oauthRefreshTokens`
 - `apps/gateway/src/gateway/oauth/token.ts` — issue refresh token in authorization_code branch; add new refresh_token branch
@@ -26,11 +28,15 @@
 
 **Created:**
 - `packages/db/drizzle/0002_*.sql` — auto-generated migration adding `oauth_refresh_tokens`
+- `apps/gateway/src/lib/posthog-server.ts` — single PostHog client singleton consumed by token.ts, revoke.ts, and track.ts (Task 0.5)
 - `apps/gateway/src/test-utils/db.ts` — `getTestDb()` / `insertTestUser()` via testcontainers (Task 0)
 - `apps/gateway/src/gateway/oauth/__tests__/token-issuance.test.ts` — Task 2
 - `apps/gateway/src/gateway/oauth/__tests__/token-refresh.test.ts` — Task 4
 - `apps/gateway/src/gateway/oauth/revoke.ts` — Task 5
 - `apps/gateway/src/gateway/oauth/__tests__/revoke.test.ts` — Task 5
+
+**Reused (not re-implemented):**
+- `hashApiKey()` from `packages/auth/src/index.ts` — sha256 hex of a credential. Identical operation; OAuth code imports and reuses it.
 
 ---
 
@@ -51,45 +57,50 @@ pnpm --filter @datatorag-mcp/gateway add -D @testcontainers/postgresql testconta
 
 Expected: `@testcontainers/postgresql` and `testcontainers` appear under `devDependencies` in `apps/gateway/package.json`.
 
-- [ ] **Step 2: Set vitest test timeout to allow container startup**
+- [ ] **Step 2: Configure vitest for single-fork pool + longer timeouts**
 
-If `apps/gateway/vitest.config.ts` exists, add `test.testTimeout: 30_000` and `test.hookTimeout: 60_000`. If it does not exist, create it:
+If `apps/gateway/vitest.config.ts` exists, merge the values below into the `test` block. If it does not exist, create it:
 
 ```typescript
 import { defineConfig } from "vitest/config";
 
 export default defineConfig({
   test: {
+    pool: "forks",
+    poolOptions: {
+      forks: { singleFork: true },
+    },
     testTimeout: 30_000,
     hookTimeout: 60_000,
   },
 });
 ```
 
+`singleFork: true` is critical: without it vitest spawns one worker per test file, each with its own testcontainer (~3s startup × N files). With it, the harness's module-level singleton actually amortizes across the whole test run.
+
 - [ ] **Step 3: Create the test harness**
+
+The project uses the `postgres-js` Drizzle driver (see `packages/db/src/index.ts`), not `node-postgres`. The harness must match.
 
 Create `apps/gateway/src/test-utils/db.ts`:
 
 ```typescript
-import { PostgreSqlContainer, StartedPostgreSqlContainer } from "@testcontainers/postgresql";
-import { drizzle, type NodePgDatabase } from "drizzle-orm/node-postgres";
-import { migrate } from "drizzle-orm/node-postgres/migrator";
-import { Pool } from "pg";
+import {
+  PostgreSqlContainer,
+  StartedPostgreSqlContainer,
+} from "@testcontainers/postgresql";
+import { drizzle } from "drizzle-orm/postgres-js";
+import { migrate } from "drizzle-orm/postgres-js/migrator";
+import postgres from "postgres";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
-import * as schema from "@datatorag-mcp/db";
-
-type TestDb = NodePgDatabase<typeof schema>;
+import { users, type Database } from "@datatorag-mcp/db";
 
 let container: StartedPostgreSqlContainer | null = null;
-let pool: Pool | null = null;
-let db: TestDb | null = null;
+let client: ReturnType<typeof postgres> | null = null;
+let db: Database | null = null;
 
-/**
- * Start a Postgres container (cached across tests in the same vitest worker),
- * run all Drizzle migrations, and return a Drizzle client.
- */
-export async function getTestDb(): Promise<TestDb> {
+export async function getTestDb(): Promise<Database> {
   if (db) return db;
 
   container = await new PostgreSqlContainer("postgres:16-alpine")
@@ -98,15 +109,8 @@ export async function getTestDb(): Promise<TestDb> {
     .withPassword("test")
     .start();
 
-  pool = new Pool({
-    host: container.getHost(),
-    port: container.getPort(),
-    database: container.getDatabase(),
-    user: container.getUsername(),
-    password: container.getPassword(),
-  });
-
-  db = drizzle(pool, { schema });
+  client = postgres(container.getConnectionUri());
+  db = drizzle(client) as Database;
 
   const migrationsFolder = path.resolve(
     __dirname,
@@ -118,9 +122,9 @@ export async function getTestDb(): Promise<TestDb> {
 }
 
 export async function stopTestDb(): Promise<void> {
-  if (pool) {
-    await pool.end();
-    pool = null;
+  if (client) {
+    await client.end();
+    client = null;
   }
   if (container) {
     await container.stop();
@@ -129,12 +133,9 @@ export async function stopTestDb(): Promise<void> {
   db = null;
 }
 
-/**
- * Insert a fresh test user and return its id. Each call yields a unique user.
- */
-export async function insertTestUser(testDb: TestDb): Promise<string> {
+export async function insertTestUser(testDb: Database): Promise<string> {
   const id = randomUUID();
-  await testDb.insert(schema.users).values({
+  await testDb.insert(users).values({
     id,
     email: `test-${id}@example.com`,
     emailVerified: true,
@@ -143,7 +144,7 @@ export async function insertTestUser(testDb: TestDb): Promise<string> {
 }
 ```
 
-If the project does not yet export `users` from `@datatorag-mcp/db`, verify the actual schema entry-point and adjust the import accordingly.
+Verified: `Database` and `users` are both re-exported from `@datatorag-mcp/db` (see `packages/db/src/index.ts:10,12`).
 
 - [ ] **Step 4: Smoke test the harness**
 
@@ -191,6 +192,82 @@ git commit -m "Add Postgres integration test harness via testcontainers"
 
 ---
 
+## Task 0.5: Extract shared PostHog server helper (PR1)
+
+`apps/gateway/src/gateway/track.ts:8-23` already has the `getClient()` singleton pattern. PR2 will need the same in both `token.ts` and `revoke.ts`. Rather than triplicating it (three `let posthogClient` module-level variables = three flush timers, three un-flushed buffers on SIGTERM), extract once now.
+
+**Files:**
+- Create: `apps/gateway/src/lib/posthog-server.ts`
+- Modify: `apps/gateway/src/gateway/track.ts` (drop local `getClient` / `shutdownPosthog`; import from the new module)
+- Modify: `apps/gateway/server.ts` (the `shutdownPosthog` import path may change; verify)
+
+- [ ] **Step 1: Create the shared helper**
+
+Create `apps/gateway/src/lib/posthog-server.ts`:
+
+```typescript
+import { PostHog } from "posthog-node";
+import { getEnv } from "@datatorag-mcp/config";
+
+const POSTHOG_HOST = "https://us.i.posthog.com";
+
+let client: PostHog | null = null;
+
+export function getPosthog(): PostHog | null {
+  const apiKey = getEnv().POSTHOG_API_KEY;
+  if (!apiKey) return null;
+  if (!client) {
+    client = new PostHog(apiKey, {
+      host: POSTHOG_HOST,
+      flushAt: 20,
+      flushInterval: 10_000,
+    });
+  }
+  return client;
+}
+
+export async function shutdownPosthog(): Promise<void> {
+  if (client) {
+    await client.shutdown();
+    client = null;
+  }
+}
+```
+
+- [ ] **Step 2: Refactor `track.ts` to consume it**
+
+In `apps/gateway/src/gateway/track.ts`:
+
+- Delete the local `POSTHOG_HOST`, `client`, `getClient()`, and `shutdownPosthog()` (lines 8-30).
+- Replace internal `getClient()` call sites with `getPosthog()`.
+- Add `import { getPosthog, shutdownPosthog } from "../lib/posthog-server.js";` at the top.
+- Re-export `shutdownPosthog` if other files import it from `track.ts` today.
+
+Grep first to find current `shutdownPosthog` importers:
+
+```bash
+grep -rn "shutdownPosthog" apps/gateway/src apps/gateway/server.ts
+```
+
+Update those import paths to point at `lib/posthog-server.js` directly, or keep a re-export from `track.ts` for compatibility — engineer's judgment.
+
+- [ ] **Step 3: Build check**
+
+```bash
+pnpm --filter @datatorag-mcp/gateway build
+```
+
+Expected: clean.
+
+- [ ] **Step 4: Commit**
+
+```bash
+git add apps/gateway/src/lib/posthog-server.ts apps/gateway/src/gateway/track.ts apps/gateway/server.ts
+git commit -m "Extract shared PostHog server-side client to lib/posthog-server.ts"
+```
+
+---
+
 ## PR 1 — Schema and Issuance
 
 After PR1 is live on prod, every new authorization-code grant returns a refresh token, but clients still cannot use it (no refresh branch yet). Metadata is **not** updated in PR1 — clients see no advertised refresh_token grant. PR1 is invisible to clients.
@@ -204,18 +281,16 @@ After PR1 is live on prod, every new authorization-code grant returns a refresh 
 
 - [ ] **Step 1: Append schema definition to `oauth.ts`**
 
-In `packages/db/src/schema/oauth.ts`, update the top-level drizzle import to include `index`:
+In `packages/db/src/schema/oauth.ts`, update the top-level drizzle import to include `index`, and add a `sql` import:
 
 ```typescript
 import { pgTable, text, timestamp, uuid, jsonb, index } from "drizzle-orm/pg-core";
+import { sql } from "drizzle-orm";
 ```
 
 Then append after the existing `oauthAccessTokens` table:
 
 ```typescript
-// Refresh tokens (RFC 6749 + OAuth 2.1)
-// Stored as sha256(rawToken). One-time-use with rotation; presenting a revoked
-// token revokes the entire familyId.
 export const oauthRefreshTokens = pgTable(
   "oauth_refresh_tokens",
   {
@@ -237,6 +312,10 @@ export const oauthRefreshTokens = pgTable(
   (table) => [
     index("idx_oauth_refresh_tokens_user").on(table.userId),
     index("idx_oauth_refresh_tokens_family").on(table.familyId),
+    // Partial index for replay-revoke and family-revoke hot paths.
+    index("idx_oauth_refresh_tokens_family_live")
+      .on(table.familyId)
+      .where(sql`revoked_at IS NULL`),
   ]
 );
 ```
@@ -300,6 +379,7 @@ import { eq } from "drizzle-orm";
 import { createTokenRouter } from "../token";
 import { getTestDb, insertTestUser, stopTestDb } from "../../../test-utils/db";
 import { oauthAuthorizationCodes, oauthRefreshTokens } from "@datatorag-mcp/db";
+import { hashApiKey } from "@datatorag-mcp/auth";
 
 afterAll(async () => {
   await stopTestDb();
@@ -348,11 +428,10 @@ describe("POST /oauth/token (authorization_code grant)", () => {
     expect(res.body.access_token).toMatch(/^[A-Za-z0-9_-]+$/);
     expect(res.body.refresh_token).toMatch(/^[A-Za-z0-9_-]+$/);
     expect(res.body.token_type).toBe("Bearer");
-    expect(res.body.expires_in).toBe(86400); // PR1 still 24h; PR3 drops to 3600
+    // PR1 still 24h; PR3 drops to 3600.
+    expect(res.body.expires_in).toBe(86400);
 
-    const expectedHash = createHash("sha256")
-      .update(res.body.refresh_token)
-      .digest("hex");
+    const expectedHash = hashApiKey(res.body.refresh_token);
 
     const [row] = await db
       .select()
@@ -402,9 +481,8 @@ describe("POST /oauth/token (authorization_code grant)", () => {
       .select()
       .from(oauthRefreshTokens)
       .where(eq(oauthRefreshTokens.userId, userId));
-    // The stored hash must never equal the raw token.
     expect(row.tokenHash).not.toBe(res.body.refresh_token);
-    expect(row.tokenHash).toHaveLength(64); // sha256 hex
+    expect(row.tokenHash).toHaveLength(64);
   });
 });
 ```
@@ -439,6 +517,7 @@ to:
 ```typescript
 import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { Router } from "express";
+import type { Request, Response } from "express";
 import { eq, and, isNull } from "drizzle-orm";
 import type { Database } from "@datatorag-mcp/db";
 import {
@@ -446,25 +525,22 @@ import {
   oauthAccessTokens,
   oauthRefreshTokens,
 } from "@datatorag-mcp/db";
+import { hashApiKey } from "@datatorag-mcp/auth";
 
-const ACCESS_TOKEN_TTL_MS = 24 * 60 * 60 * 1000; // PR3 drops this to 1h (60*60*1000)
-const REFRESH_TOKEN_TTL_MS = 60 * 24 * 60 * 60 * 1000; // 60 days
-
-function sha256Hex(input: string): string {
-  return createHash("sha256").update(input).digest("hex");
-}
+// PR3 drops ACCESS_TOKEN_TTL_MS to 60*60*1000 (1h) once refresh path proves stable.
+const ACCESS_TOKEN_TTL_MS = 24 * 60 * 60 * 1000;
+const REFRESH_TOKEN_TTL_MS = 60 * 24 * 60 * 60 * 1000;
 ```
+
+`hashApiKey` from `@datatorag-mcp/auth/src/index.ts:15-17` is `sha256(input).hex` — identical to what we need for refresh-token storage. Reusing instead of redefining a local `sha256Hex`.
 
 Replace the entire access-token issuance block (the `// Issue access token` comment through the `res.json({...})` call) with:
 
 ```typescript
-    // Issue access + refresh tokens
     const accessToken = randomBytes(32).toString("base64url");
     const refreshToken = randomBytes(32).toString("base64url");
-    const refreshTokenHash = sha256Hex(refreshToken);
+    const refreshTokenHash = hashApiKey(refreshToken);
     const now = Date.now();
-    const accessTokenExpiresAt = new Date(now + ACCESS_TOKEN_TTL_MS);
-    const refreshTokenExpiresAt = new Date(now + REFRESH_TOKEN_TTL_MS);
     const familyId = randomUUID();
 
     await db.transaction(async (tx) => {
@@ -473,14 +549,14 @@ Replace the entire access-token issuance block (the `// Issue access token` comm
         clientId: client_id,
         userId: authCode.userId,
         scope: authCode.scope,
-        expiresAt: accessTokenExpiresAt,
+        expiresAt: new Date(now + ACCESS_TOKEN_TTL_MS),
       });
       await tx.insert(oauthRefreshTokens).values({
         tokenHash: refreshTokenHash,
         clientId: client_id,
         userId: authCode.userId,
         scope: authCode.scope,
-        expiresAt: refreshTokenExpiresAt,
+        expiresAt: new Date(now + REFRESH_TOKEN_TTL_MS),
         familyId,
       });
     });
@@ -586,11 +662,12 @@ Create `apps/gateway/src/gateway/oauth/__tests__/token-refresh.test.ts`:
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
 import request from "supertest";
 import express from "express";
-import { createHash, randomBytes, randomUUID } from "node:crypto";
+import { randomBytes, randomUUID } from "node:crypto";
 import { eq } from "drizzle-orm";
 import { createTokenRouter } from "../token";
 import { getTestDb, insertTestUser, stopTestDb } from "../../../test-utils/db";
 import { oauthRefreshTokens } from "@datatorag-mcp/db";
+import { hashApiKey } from "@datatorag-mcp/auth";
 
 afterAll(async () => {
   await stopTestDb();
@@ -600,22 +677,21 @@ async function seedRefreshToken(opts: {
   userId: string;
   clientId?: string;
   expiresInMs?: number;
-}): Promise<{ rawToken: string; familyId: string; clientId: string }> {
+}): Promise<{ rawToken: string; familyId: string }> {
   const db = await getTestDb();
   const rawToken = randomBytes(32).toString("base64url");
-  const tokenHash = createHash("sha256").update(rawToken).digest("hex");
   const familyId = randomUUID();
   const clientId = opts.clientId ?? "test-client";
   const expiresInMs = opts.expiresInMs ?? 60 * 24 * 60 * 60 * 1000;
   await db.insert(oauthRefreshTokens).values({
-    tokenHash,
+    tokenHash: hashApiKey(rawToken),
     clientId,
     userId: opts.userId,
     scope: "mcp:tools",
     expiresAt: new Date(Date.now() + expiresInMs),
     familyId,
   });
-  return { rawToken, familyId, clientId };
+  return { rawToken, familyId };
 }
 
 describe("POST /oauth/token (refresh_token grant)", () => {
@@ -632,7 +708,7 @@ describe("POST /oauth/token (refresh_token grant)", () => {
     const db = await getTestDb();
     const userId = await insertTestUser(db);
     const { rawToken: oldRt } = await seedRefreshToken({ userId });
-    const oldHash = createHash("sha256").update(oldRt).digest("hex");
+    const oldHash = hashApiKey(oldRt);
 
     const res = await request(app)
       .post("/oauth/token")
@@ -669,7 +745,7 @@ describe("POST /oauth/token (refresh_token grant)", () => {
       })
       .expect(200);
     const rt2 = okRes.body.refresh_token;
-    const rt2Hash = createHash("sha256").update(rt2).digest("hex");
+    const rt2Hash = hashApiKey(rt2);
 
     // Attacker replays rt1
     await request(app)
@@ -800,32 +876,12 @@ Expected: FAIL — `grant_type=refresh_token` currently returns `unsupported_gra
 
 - [ ] **Step 4: Implement the refresh-grant branch**
 
-Edit `apps/gateway/src/gateway/oauth/token.ts`. Inline the PostHog client setup matching the existing pattern in `apps/gateway/src/gateway/track.ts` — do **not** introduce a new `analytics-server.ts` lib file. The local pattern is the established convention.
-
-At the top of the file, add:
+Edit `apps/gateway/src/gateway/oauth/token.ts`. Import the shared PostHog helper from Task 0.5 and the analytics constants:
 
 ```typescript
-import { PostHog } from "posthog-node";
-import { getEnv } from "@datatorag-mcp/config";
+import { getPosthog } from "../../lib/posthog-server.js";
 import { EVENTS } from "../../lib/analytics.js";
-
-const POSTHOG_HOST = "https://us.i.posthog.com";
-let posthogClient: PostHog | null = null;
-function getPosthog(): PostHog | null {
-  const apiKey = getEnv().POSTHOG_API_KEY;
-  if (!apiKey) return null;
-  if (!posthogClient) {
-    posthogClient = new PostHog(apiKey, {
-      host: POSTHOG_HOST,
-      flushAt: 20,
-      flushInterval: 10_000,
-    });
-  }
-  return posthogClient;
-}
 ```
-
-(Verify these imports match `track.ts:1-2`. The pattern is intentionally duplicated to keep this file self-contained — the PostHog client is process-wide singleton so the second `new PostHog(...)` would be redundant in practice anyway.)
 
 Then change the early grant-type rejection (currently lines 28-34):
 
@@ -859,10 +915,22 @@ to:
 Add the `handleRefreshGrant` function. Place it as a file-level function (outside `createTokenRouter`) so it stays testable in isolation:
 
 ```typescript
+type RefreshResult =
+  | { kind: "invalid" }
+  | { kind: "expired"; row: typeof oauthRefreshTokens.$inferSelect }
+  | { kind: "replay"; row: typeof oauthRefreshTokens.$inferSelect }
+  | {
+      kind: "ok";
+      row: typeof oauthRefreshTokens.$inferSelect;
+      newAccessToken: string;
+      newRefreshToken: string;
+      newRefreshId: string;
+    };
+
 async function handleRefreshGrant(
   db: Database,
-  req: import("express").Request,
-  res: import("express").Response
+  req: Request,
+  res: Response
 ): Promise<void> {
   const { refresh_token, client_id } = req.body ?? {};
 
@@ -874,11 +942,10 @@ async function handleRefreshGrant(
     return;
   }
 
-  const hash = sha256Hex(refresh_token);
+  const hash = hashApiKey(refresh_token);
 
   try {
-    const result = await db.transaction(async (tx) => {
-      // SELECT ... FOR UPDATE — serialize parallel refreshes on the same token.
+    const result: RefreshResult = await db.transaction(async (tx) => {
       const [row] = await tx
         .select()
         .from(oauthRefreshTokens)
@@ -886,17 +953,13 @@ async function handleRefreshGrant(
         .for("update")
         .limit(1);
 
-      if (!row) {
-        return { kind: "unknown" as const };
-      }
-      if (row.clientId !== client_id) {
-        return { kind: "client_mismatch" as const, row };
+      if (!row || row.clientId !== client_id) {
+        return { kind: "invalid" };
       }
       if (row.expiresAt < new Date()) {
-        return { kind: "expired" as const, row };
+        return { kind: "expired", row };
       }
       if (row.revokedAt) {
-        // Replay — revoke the entire live family.
         await tx
           .update(oauthRefreshTokens)
           .set({ revokedAt: new Date() })
@@ -906,12 +969,11 @@ async function handleRefreshGrant(
               isNull(oauthRefreshTokens.revokedAt)
             )
           );
-        return { kind: "replay" as const, row };
+        return { kind: "replay", row };
       }
 
       const newAccessToken = randomBytes(32).toString("base64url");
       const newRefreshToken = randomBytes(32).toString("base64url");
-      const newRefreshHash = sha256Hex(newRefreshToken);
       const now = Date.now();
 
       await tx.insert(oauthAccessTokens).values({
@@ -924,7 +986,7 @@ async function handleRefreshGrant(
       const [inserted] = await tx
         .insert(oauthRefreshTokens)
         .values({
-          tokenHash: newRefreshHash,
+          tokenHash: hashApiKey(newRefreshToken),
           clientId: row.clientId,
           userId: row.userId,
           scope: row.scope,
@@ -938,7 +1000,7 @@ async function handleRefreshGrant(
         .where(eq(oauthRefreshTokens.id, row.id));
 
       return {
-        kind: "ok" as const,
+        kind: "ok",
         row,
         newAccessToken,
         newRefreshToken,
@@ -949,8 +1011,7 @@ async function handleRefreshGrant(
     const ph = getPosthog();
 
     switch (result.kind) {
-      case "unknown":
-      case "client_mismatch":
+      case "invalid":
         res.status(400).json({
           error: "invalid_grant",
           error_description: "Unknown or mismatched refresh token",
@@ -1008,7 +1069,7 @@ async function handleRefreshGrant(
 }
 ```
 
-Note: `db.transaction(...).for("update")` syntax in Drizzle node-postgres is `.for("update")` after the `.where()`. If the project's Drizzle version returns `.for()` as a no-op, verify in repl. (Drizzle ORM ≥0.29 supports it; project is on drizzle-kit ^0.30, which is paired with drizzle-orm in the same major.)
+Verified: `drizzle-orm@0.39.3` exports `.for(strength, config?)` in `pg-core/query-builders/select.d.cts:517`. The `.for("update")` call site above will type-check.
 
 - [ ] **Step 5: Run the tests to verify they pass**
 
@@ -1050,11 +1111,12 @@ Create `apps/gateway/src/gateway/oauth/__tests__/revoke.test.ts`:
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
 import request from "supertest";
 import express from "express";
-import { createHash, randomBytes, randomUUID } from "node:crypto";
+import { randomBytes, randomUUID } from "node:crypto";
 import { eq } from "drizzle-orm";
 import { createRevokeRouter } from "../revoke";
 import { getTestDb, insertTestUser, stopTestDb } from "../../../test-utils/db";
 import { oauthRefreshTokens } from "@datatorag-mcp/db";
+import { hashApiKey } from "@datatorag-mcp/auth";
 
 afterAll(async () => {
   await stopTestDb();
@@ -1077,7 +1139,7 @@ describe("POST /oauth/revoke", () => {
     const tokens = [randomBytes(32).toString("base64url"), randomBytes(32).toString("base64url")];
     for (const t of tokens) {
       await db.insert(oauthRefreshTokens).values({
-        tokenHash: createHash("sha256").update(t).digest("hex"),
+        tokenHash: hashApiKey(t),
         clientId: "test-client",
         userId,
         scope: "mcp:tools",
@@ -1110,7 +1172,7 @@ describe("POST /oauth/revoke", () => {
     const userId = await insertTestUser(db);
     const raw = randomBytes(32).toString("base64url");
     await db.insert(oauthRefreshTokens).values({
-      tokenHash: createHash("sha256").update(raw).digest("hex"),
+      tokenHash: hashApiKey(raw),
       clientId: "client-a",
       userId,
       scope: "mcp:tools",
@@ -1126,12 +1188,7 @@ describe("POST /oauth/revoke", () => {
     const [row] = await db
       .select()
       .from(oauthRefreshTokens)
-      .where(
-        eq(
-          oauthRefreshTokens.tokenHash,
-          createHash("sha256").update(raw).digest("hex")
-        )
-      );
+      .where(eq(oauthRefreshTokens.tokenHash, hashApiKey(raw)));
     expect(row.revokedAt).toBeNull();
   });
 });
@@ -1139,32 +1196,16 @@ describe("POST /oauth/revoke", () => {
 
 - [ ] **Step 2: Implement the revoke router**
 
-Create `apps/gateway/src/gateway/oauth/revoke.ts`:
+Create `apps/gateway/src/gateway/oauth/revoke.ts`. Reuses the shared `getPosthog` helper from Task 0.5 and `hashApiKey` from `@datatorag-mcp/auth`:
 
 ```typescript
-import { createHash } from "node:crypto";
 import { Router } from "express";
 import { and, eq, isNull } from "drizzle-orm";
 import type { Database } from "@datatorag-mcp/db";
 import { oauthRefreshTokens } from "@datatorag-mcp/db";
-import { PostHog } from "posthog-node";
-import { getEnv } from "@datatorag-mcp/config";
+import { hashApiKey } from "@datatorag-mcp/auth";
+import { getPosthog } from "../../lib/posthog-server.js";
 import { EVENTS } from "../../lib/analytics.js";
-
-const POSTHOG_HOST = "https://us.i.posthog.com";
-let posthogClient: PostHog | null = null;
-function getPosthog(): PostHog | null {
-  const apiKey = getEnv().POSTHOG_API_KEY;
-  if (!apiKey) return null;
-  if (!posthogClient) {
-    posthogClient = new PostHog(apiKey, {
-      host: POSTHOG_HOST,
-      flushAt: 20,
-      flushInterval: 10_000,
-    });
-  }
-  return posthogClient;
-}
 
 /**
  * RFC 7009 — OAuth 2.0 Token Revocation
@@ -1182,7 +1223,7 @@ export function createRevokeRouter(db: Database): Router {
       return;
     }
 
-    const hash = createHash("sha256").update(token).digest("hex");
+    const hash = hashApiKey(token);
 
     await db.transaction(async (tx) => {
       const [row] = await tx
@@ -1192,8 +1233,7 @@ export function createRevokeRouter(db: Database): Router {
         .for("update")
         .limit(1);
 
-      if (!row) return;
-      if (row.clientId !== client_id) return;
+      if (!row || row.clientId !== client_id) return;
 
       await tx
         .update(oauthRefreshTokens)
@@ -1221,15 +1261,17 @@ export function createRevokeRouter(db: Database): Router {
 
 - [ ] **Step 3: Mount the router in `server.ts`**
 
-In `apps/gateway/server.ts`, near the other oauth router mounts (look for `createTokenRouter`):
+Add an import alongside the other oauth routers at `apps/gateway/server.ts:11-14`:
 
 ```typescript
-import { createRevokeRouter } from "./src/gateway/oauth/revoke";
-// ... existing mounts ...
-app.use(createRevokeRouter(db));
+import { createRevokeRouter } from "./src/gateway/oauth/revoke.js";
 ```
 
-Verify the import path matches the file's relative location in `server.ts`.
+Add the `app.use(...)` call right after `app.use(createTokenRouter(db));` at `apps/gateway/server.ts:88`:
+
+```typescript
+app.use(createRevokeRouter(db));
+```
 
 - [ ] **Step 4: Run the tests**
 

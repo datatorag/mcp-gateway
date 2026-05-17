@@ -74,6 +74,11 @@ export const oauthRefreshTokens = pgTable(
   (table) => [
     index("idx_oauth_refresh_tokens_user").on(table.userId),
     index("idx_oauth_refresh_tokens_family").on(table.familyId),
+    // Partial index for replay-revoke and family-revoke hot paths
+    // (WHERE family_id = ? AND revoked_at IS NULL).
+    index("idx_oauth_refresh_tokens_family_live")
+      .on(table.familyId)
+      .where(sql`revoked_at IS NULL`),
   ]
 );
 ```
@@ -215,11 +220,12 @@ Three sequential PRs. PR1 is invisible to clients (issues refresh tokens but can
 - Add `grant_type=refresh_token` branch to `token.ts`. SELECT FOR UPDATE inside tx.
 - Add `POST /oauth/revoke` endpoint.
 - Update `metadata.ts`: advertise `refresh_token` in `grant_types_supported`; add `revocation_endpoint`.
-- Add inline PostHog `getClient()` pattern matching `track.ts` for these three events:
+- Extract the existing `track.ts:getClient()` PostHog setup to a shared `apps/gateway/src/lib/posthog-server.ts` so token.ts, revoke.ts, and the existing track.ts all consume one singleton. Emit these four events:
   - `oauth_refresh_succeeded`
   - `oauth_refresh_replay`
   - `oauth_refresh_expired`
   - `oauth_token_revoked`
+- Reuse the existing `hashApiKey()` from `packages/auth/src/index.ts` for sha256-hex token hashing. Identical operation; no new helper needed.
 - Access TTL still at 24h.
 
 **PR3 — Drop access TTL to 1h:**
