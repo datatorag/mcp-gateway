@@ -4,9 +4,7 @@ excerpt: "DataToRAG MCP now issues OAuth refresh tokens. Your client refreshes s
 date: "2026-05-18"
 author: "Manuel Yang"
 category: "Engineering"
-coverImage: "/blog/oauth-refresh-tokens.png"
 tags: ["oauth", "mcp", "security", "engineering"]
-draft: true
 ---
 
 If you've been using DataToRAG MCP for more than a day, you've seen this: you sit down to work, Claude tries to call a tool, and you get bounced into a browser to re-authorize Google. Same dance, every 24 hours. It's the kind of papercut that quietly trains you to use the product less.
