@@ -17,6 +17,9 @@ importers:
 
   apps/gateway:
     dependencies:
+      '@datatorag-mcp/auth':
+        specifier: workspace:^
+        version: link:../../packages/auth
       '@datatorag-mcp/config':
         specifier: workspace:*
         version: link:../../packages/config

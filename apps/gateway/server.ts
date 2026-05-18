@@ -12,6 +12,7 @@ import { createMetadataRouter } from "./src/gateway/oauth/metadata.js";
 import { createRegisterRouter } from "./src/gateway/oauth/register.js";
 import { createAuthorizeRouter } from "./src/gateway/oauth/authorize.js";
 import { createTokenRouter } from "./src/gateway/oauth/token.js";
+import { createRevokeRouter } from "./src/gateway/oauth/revoke.js";
 import { createAuthRouter } from "./src/gateway/auth.js";
 import { getPluginManager } from "./src/lib/plugin-manager.js";
 import { shutdownPosthog } from "./src/gateway/track.js";
@@ -86,6 +87,7 @@ async function main() {
     })
   );
   app.use(createTokenRouter(db));
+  app.use(createRevokeRouter(db));
 
   // Session store
   const sessions = new Map<

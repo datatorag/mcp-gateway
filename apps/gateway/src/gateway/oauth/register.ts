@@ -14,7 +14,7 @@ export function createRegisterRouter(db: Database): Router {
     const {
       redirect_uris,
       client_name,
-      grant_types = ["authorization_code"],
+      grant_types = ["authorization_code", "refresh_token"],
       response_types = ["code"],
       token_endpoint_auth_method = "none",
     } = req.body ?? {};

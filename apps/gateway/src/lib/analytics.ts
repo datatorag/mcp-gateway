@@ -7,6 +7,10 @@ export const EVENTS = {
   CONNECTOR_REMOVED: "connector_removed",
   COPY_MCP_CONFIG: "copy_mcp_config",
   DOCS_VIEWED: "docs_viewed",
+  OAUTH_REFRESH_SUCCEEDED: "oauth_refresh_succeeded",
+  OAUTH_REFRESH_REPLAY: "oauth_refresh_replay",
+  OAUTH_REFRESH_EXPIRED: "oauth_refresh_expired",
+  OAUTH_TOKEN_REVOKED: "oauth_token_revoked",
 } as const;
 
 export const PROVIDERS = {
