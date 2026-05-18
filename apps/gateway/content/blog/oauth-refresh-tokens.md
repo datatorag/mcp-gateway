@@ -4,6 +4,7 @@ excerpt: "DataToRAG MCP now issues OAuth refresh tokens. Your client refreshes s
 date: "2026-05-18"
 author: "Manuel Yang"
 category: "Engineering"
+coverImage: "/blog/oauth-refresh-tokens.png"
 tags: ["oauth", "mcp", "security", "engineering"]
 ---
 
