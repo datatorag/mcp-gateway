@@ -53,13 +53,6 @@ services:
     networks:
       - dtrmcp
 
-  dtrmcp-server-math-tools:
-    build:
-      context: ../samples/math-tools
-    networks:
-      - dtrmcp
-    # Gateway reaches it as http://dtrmcp-server-math-tools:3000/mcp
-
 networks:
   dtrmcp:
     name: datatorag-mcp-network

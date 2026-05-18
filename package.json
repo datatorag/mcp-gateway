@@ -4,7 +4,7 @@
   "scripts": {
     "build": "turbo run build",
     "dev": "turbo run dev",
-    "dev:infra": "docker compose -f docker/docker-compose.dev.yml up postgres db-init dtrmcp-server-math-tools -d",
+    "dev:infra": "docker compose -f docker/docker-compose.dev.yml up postgres db-init -d",
     "dev:gateway": "pnpm run dev:infra && turbo run dev --filter=@datatorag-mcp/gateway",
     "lint": "turbo run lint",
     "test": "turbo run test",
