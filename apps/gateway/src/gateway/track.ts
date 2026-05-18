@@ -1,33 +1,10 @@
-import { PostHog } from "posthog-node";
-import { getEnv } from "@datatorag-mcp/config";
 import type { Database } from "@datatorag-mcp/db";
 import { EVENTS, type ProviderId } from "../lib/analytics.js";
+import { getPosthog, shutdownPosthog } from "../lib/posthog-server.js";
 import { writeUsageEvent } from "./usage/write.js";
 import { classifyOutcome, type ClassifyInput } from "./usage/classify.js";
 
-const POSTHOG_HOST = "https://us.i.posthog.com";
-
-let client: PostHog | null = null;
-
-function getClient(): PostHog | null {
-  const apiKey = getEnv().POSTHOG_API_KEY;
-  if (!apiKey) return null;
-  if (!client) {
-    client = new PostHog(apiKey, {
-      host: POSTHOG_HOST,
-      flushAt: 20,
-      flushInterval: 10_000,
-    });
-  }
-  return client;
-}
-
-export async function shutdownPosthog(): Promise<void> {
-  if (client) {
-    await client.shutdown();
-    client = null;
-  }
-}
+export { shutdownPosthog };
 
 export async function trackToolCall(
   db: Database,
@@ -43,7 +20,7 @@ export async function trackToolCall(
   }
 ): Promise<void> {
   const { status, meter } = classifyOutcome(props.outcome);
-  const c = getClient();
+  const c = getPosthog();
   if (c) {
     c.capture({
       distinctId: props.userId,
@@ -85,7 +62,7 @@ export function trackSignup(
   email: string,
   name: string | null
 ): void {
-  const c = getClient();
+  const c = getPosthog();
   if (!c) return;
   c.identify({
     distinctId: userId,
@@ -99,7 +76,7 @@ export function trackSignup(
 }
 
 export function trackLogin(userId: string): void {
-  const c = getClient();
+  const c = getPosthog();
   if (!c) return;
   c.capture({
     distinctId: userId,
@@ -112,7 +89,7 @@ export function trackOAuthCompleted(
   provider: ProviderId,
   accountEmail: string
 ): void {
-  const c = getClient();
+  const c = getPosthog();
   if (!c) return;
   c.capture({
     distinctId: userId,
