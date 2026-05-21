@@ -38,9 +38,9 @@ export default async function HomePage() {
       <main className="flex-1 overflow-x-hidden">
         {/* Hero */}
         <ShaderBackground>
-          <div className="relative mx-auto flex min-h-[calc(100vh-4rem)] max-w-5xl flex-col items-center justify-start px-6 pb-20 pt-32">
+          <div className="relative mx-auto flex min-h-[calc(100vh-4rem)] max-w-6xl flex-col items-center justify-center gap-12 px-6 pb-20 pt-24 lg:flex-row lg:gap-16 lg:pt-32">
             {/* Copy */}
-            <div className="text-center">
+            <div className="flex-1 text-center lg:text-left">
               <div className="animate-fade-in-up inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/10 px-4 py-1.5 backdrop-blur-sm">
                 <span className="text-xs font-medium text-white/90">
                   Google Workspace for Claude · Read and Write
@@ -54,7 +54,7 @@ export default async function HomePage() {
                 <span className="text-blue-200">Google Docs.</span>
               </h1>
               <p
-                className="animate-fade-in-up mx-auto mt-6 max-w-2xl text-base leading-relaxed text-white/60 sm:text-lg"
+                className="animate-fade-in-up mx-auto mt-6 max-w-2xl text-base leading-relaxed text-white/60 sm:text-lg lg:mx-0"
                 style={{ animationDelay: "0.12s" }}
               >
                 DataToRAG gives Claude write access to your Docs, Sheets, and
@@ -63,7 +63,7 @@ export default async function HomePage() {
                 copy, switch tab, paste, format.
               </p>
               <div
-                className="animate-fade-in-up mt-8 flex flex-wrap items-center justify-center gap-3"
+                className="animate-fade-in-up mt-8 flex flex-wrap items-center justify-center gap-3 lg:justify-start"
                 style={{ animationDelay: "0.18s" }}
               >
                 <Link
@@ -80,7 +80,7 @@ export default async function HomePage() {
                 </a>
               </div>
               <p
-                className="animate-fade-in-up mx-auto mt-6 max-w-xl text-xs text-white/50"
+                className="animate-fade-in-up mx-auto mt-6 max-w-xl text-xs text-white/50 lg:mx-0"
                 style={{ animationDelay: "0.22s" }}
               >
                 Undergoing Google CASA Tier 2 security assessment. Target completion: August 2026.{" "}
@@ -93,25 +93,55 @@ export default async function HomePage() {
               </p>
             </div>
 
-            {/* Demo video — full width below */}
+            {/* Demo video — vertical, to the right on desktop */}
             <div
-              className="animate-fade-in-up mt-12 w-full"
+              className="animate-fade-in-up flex w-full flex-shrink-0 justify-center lg:w-auto"
               style={{ animationDelay: "0.28s" }}
             >
               <div
                 id="demo-video"
-                className="aspect-video w-full overflow-hidden rounded-2xl border border-white/10 bg-white/5 backdrop-blur-sm"
+                className="aspect-[9/16] w-full max-w-[340px] overflow-hidden rounded-3xl border border-white/10 bg-white/5 shadow-2xl backdrop-blur-sm lg:w-[340px]"
               >
-                <iframe
-                  src="https://www.youtube.com/embed/2UQvZJcuRy0"
-                  className="h-full w-full"
-                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                  allowFullScreen
+                <video
+                  src="/explainer-2026-05.mp4"
+                  poster="/explainer-2026-05-poster.jpg"
+                  autoPlay
+                  muted
+                  loop
+                  playsInline
+                  controls
+                  className="h-full w-full object-cover"
                 />
               </div>
             </div>
           </div>
         </ShaderBackground>
+
+        {/* Setup walkthrough — YouTube tutorial */}
+        <section id="walkthrough" className="border-b border-border bg-background">
+          <div className="mx-auto max-w-5xl px-6 py-20">
+            <div className="text-center">
+              <p className="text-sm font-semibold uppercase tracking-widest text-primary">
+                Setup walkthrough
+              </p>
+              <h2 className="mt-3 font-display text-2xl font-bold text-foreground sm:text-3xl">
+                Connect your accounts in two minutes
+              </h2>
+              <p className="mx-auto mt-3 max-w-lg text-sm text-muted-foreground">
+                A short tutorial that walks through the sign-in flow, account
+                connection, and your first prompt against Workspace.
+              </p>
+            </div>
+            <div className="mt-10 aspect-video w-full overflow-hidden rounded-2xl border border-border bg-secondary/30">
+              <iframe
+                src="https://www.youtube.com/embed/2UQvZJcuRy0"
+                className="h-full w-full"
+                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                allowFullScreen
+              />
+            </div>
+          </div>
+        </section>
 
         {/* Platform — three pillars */}
         <section id="platform" className="border-y border-border bg-secondary/50">
