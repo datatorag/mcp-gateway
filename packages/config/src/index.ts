@@ -18,6 +18,21 @@ const envSchema = z.object({
   ATLASSIAN_CLIENT_SECRET: z.string().default(""),
   // PostHog
   POSTHOG_API_KEY: z.string().default(""),
+  // Stripe
+  STRIPE_API_KEY: z.string().default(""),
+  STRIPE_WEBHOOK_SECRET: z.string().default(""),
+  STRIPE_PRO_MONTHLY_PRICE_ID: z.string().default(""),
+  STRIPE_PRO_YEARLY_PRICE_ID: z.string().default(""),
+  STRIPE_PAYG_PRICE_ID: z.string().default(""),
+  STRIPE_METER_ID: z.string().default(""),
+  STRIPE_METER_EVENT_NAME: z.string().default("tool_calls"),
+  // Email (Resend)
+  RESEND_API_KEY: z.string().default(""),
+  EMAIL_FROM: z.string().default("DataToRAG <billing@datatorag.com>"),
+  // Cron auth — Bearer token required to hit /api/cron/* externally
+  CRON_SECRET: z.string().default(""),
+  // Public URLs for Checkout return
+  PUBLIC_APP_URL: z.string().default("http://localhost:8285"),
 });
 
 export type Env = z.infer<typeof envSchema>;
