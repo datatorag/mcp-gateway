@@ -57,34 +57,36 @@ console.log(`Product: ${product.id} (${product.name})`);
 const meter = await findOrCreateMeter();
 console.log(`Meter:   ${meter.id} (${meter.event_name})`);
 
-const proMonthly = await findOrCreatePrice({
-  product: product.id,
-  lookup_key: "pro_monthly_v1",
-  params: { unit_amount: 2000, recurring: { interval: "month" } },
-});
-const proYearly = await findOrCreatePrice({
-  product: product.id,
-  lookup_key: "pro_yearly_v1",
-  params: { unit_amount: 20000, recurring: { interval: "year" } },
-});
-const proOverage = await findOrCreatePrice({
-  product: product.id,
-  lookup_key: "pro_overage_v1",
-  params: {
-    billing_scheme: "per_unit",
-    unit_amount_decimal: "1", // $0.01 per call
-    recurring: { interval: "month", usage_type: "metered", meter: meter.id },
-  },
-});
-const payg = await findOrCreatePrice({
-  product: product.id,
-  lookup_key: "payg_v1",
-  params: {
-    billing_scheme: "per_unit",
-    unit_amount_decimal: "2", // $0.02 per call
-    recurring: { interval: "month", usage_type: "metered", meter: meter.id },
-  },
-});
+const [proMonthly, proYearly, proOverage, payg] = await Promise.all([
+  findOrCreatePrice({
+    product: product.id,
+    lookup_key: "pro_monthly_v1",
+    params: { unit_amount: 2000, recurring: { interval: "month" } },
+  }),
+  findOrCreatePrice({
+    product: product.id,
+    lookup_key: "pro_yearly_v1",
+    params: { unit_amount: 20000, recurring: { interval: "year" } },
+  }),
+  findOrCreatePrice({
+    product: product.id,
+    lookup_key: "pro_overage_v1",
+    params: {
+      billing_scheme: "per_unit",
+      unit_amount_decimal: "1", // $0.01 per call
+      recurring: { interval: "month", usage_type: "metered", meter: meter.id },
+    },
+  }),
+  findOrCreatePrice({
+    product: product.id,
+    lookup_key: "payg_v1",
+    params: {
+      billing_scheme: "per_unit",
+      unit_amount_decimal: "2", // $0.02 per call
+      recurring: { interval: "month", usage_type: "metered", meter: meter.id },
+    },
+  }),
+]);
 
 console.log("\nAdd to your .env:\n");
 console.log(`STRIPE_PRO_MONTHLY_PRICE_ID=${proMonthly.id}`);

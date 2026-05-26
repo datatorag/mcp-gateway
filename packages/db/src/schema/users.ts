@@ -10,6 +10,9 @@ export const users = pgTable("users", {
   emailVerified: boolean("email_verified").notNull().default(false),
   avatarUrl: text("avatar_url"),
   stripeCustomerId: text("stripe_customer_id").unique(),
+  // Denormalized from subscriptions.status for hot-path reads — every tool call
+  // checks plan in the tier gate, and joining to subscriptions per call is too
+  // expensive. Kept in sync by the Stripe webhook handlers (see billing/webhook-handlers.ts).
   plan: text("plan").$type<Plan>().notNull().default("pro_trial"),
   trialEndsAt: timestamp("trial_ends_at", { withTimezone: true }),
   currentPeriodCalls: integer("current_period_calls").notNull().default(0),
