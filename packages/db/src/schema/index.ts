@@ -17,3 +17,4 @@ export { usageEvents, usageEventsDaily } from "./usage";
 export { subscriptions, SUBSCRIPTION_STATUS, type SubscriptionStatus } from "./subscriptions";
 export { alertSends } from "./alert-sends";
 export { PLAN_VALUES, type Plan } from "./users";
+export { leads, TEAM_SIZE_VALUES, type TeamSize } from "./leads";

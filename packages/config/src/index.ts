@@ -33,6 +33,8 @@ const envSchema = z.object({
   CRON_SECRET: z.string().default(""),
   // Public URLs for Checkout return
   PUBLIC_APP_URL: z.string().default("http://localhost:8285"),
+  // Salt for hashing visitor IPs in the leads table — avoids storing raw PII
+  LEADS_IP_SALT: z.string().default(""),
 });
 
 export type Env = z.infer<typeof envSchema>;

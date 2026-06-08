@@ -72,12 +72,12 @@ export default async function HomePage() {
                 >
                   Get Started
                 </Link>
-                <a
-                  href="#services"
+                <Link
+                  href="/demo"
                   className="rounded-full border border-white/30 px-7 py-3 text-sm font-medium text-white transition-all hover:border-white/50 hover:bg-white/10"
                 >
                   Talk to Us
-                </a>
+                </Link>
               </div>
               <p
                 className="animate-fade-in-up mx-auto mt-6 max-w-xl text-xs text-white/50 lg:mx-0"
@@ -404,12 +404,12 @@ export default async function HomePage() {
                 systems: databases, internal APIs, ERP platforms, data
                 warehouses, and more.
               </p>
-              <a
-                href="mailto:support@datatorag.com"
+              <Link
+                href="/demo"
                 className="mt-6 inline-block rounded-[var(--radius)] bg-primary px-6 py-3 text-sm font-medium text-primary-foreground transition-all hover:bg-primary/90"
               >
                 Contact Us
-              </a>
+              </Link>
             </div>
 
             <div
@@ -586,12 +586,12 @@ export default async function HomePage() {
               >
                 Start Free
               </Link>
-              <a
-                href="mailto:support@datatorag.com"
+              <Link
+                href="/demo"
                 className="rounded-[var(--radius)] border border-white/20 px-6 py-3 text-sm font-medium text-white transition-all hover:border-white/40 hover:bg-white/5"
               >
                 Contact Sales
-              </a>
+              </Link>
             </div>
           </div>
         </section>
