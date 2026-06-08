@@ -5,9 +5,9 @@ import { ContactForm } from "./contact-form";
 export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
-  title: "Request a Demo | DataToRAG",
+  title: "Get in touch | DataToRAG",
   description:
-    "See how DataToRAG connects Google Workspace, Atlassian, and your other data sources to Claude. Get a walkthrough tailored to your team.",
+    "Tell us what you're trying to build with AI. We'll figure out whether DataToRAG fits, and if it does, the shortest path to a working setup against your data.",
 };
 
 type SearchParams = Promise<{
@@ -38,45 +38,47 @@ export default async function DemoPage({
       <main className="mx-auto grid max-w-6xl gap-12 px-6 py-16 lg:grid-cols-2 lg:py-24">
         <div>
           <p className="text-sm font-semibold uppercase tracking-widest text-primary">
-            Request a demo
+            Get in touch
           </p>
           <h1 className="mt-3 font-display text-3xl font-bold tracking-tight text-foreground sm:text-4xl">
-            See DataToRAG running against
+            What are you trying
             <br />
-            your own data.
+            to build with AI?
           </h1>
           <p className="mt-5 text-base leading-relaxed text-muted-foreground">
-            Tell us about your team and what you&apos;d like Claude to reach. We&apos;ll
-            set up a 30-minute walkthrough against a workspace that mirrors your
-            setup — Google Workspace, Atlassian, or a custom connector.
+            We&apos;re building DataToRAG for teams that want their assistants to
+            actually do things with their data. Read inboxes, update sheets, draft
+            docs against the real source. If that&apos;s what you&apos;re after, tell
+            us a bit about your setup and we&apos;ll reach out.
           </p>
 
           <ul className="mt-8 space-y-4 text-sm text-muted-foreground">
             <li className="flex gap-3">
               <span className="mt-1 inline-block h-1.5 w-1.5 shrink-0 rounded-full bg-primary" />
-              Tailored to your stack — we map the demo to the tools your team
-              already uses.
+              No pitch deck. We want to hear what your team does day-to-day and
+              where AI is or isn&apos;t helping.
             </li>
             <li className="flex gap-3">
               <span className="mt-1 inline-block h-1.5 w-1.5 shrink-0 rounded-full bg-primary" />
-              Real prompts, real answers — bring the questions you wish your
-              assistant could already handle.
+              Straight answers. If DataToRAG isn&apos;t the right fit, we&apos;ll
+              say so.
             </li>
             <li className="flex gap-3">
               <span className="mt-1 inline-block h-1.5 w-1.5 shrink-0 rounded-full bg-primary" />
-              No commitment. Self-serve and paid tiers both available after.
+              If it is a fit, we work out the shortest path to a working setup
+              against your data.
             </li>
           </ul>
 
           <p className="mt-10 text-xs text-muted-foreground">
-            Already on a self-serve plan?{" "}
+            Already a user? Reach the team at{" "}
             <a
               href="mailto:support@datatorag.com"
               className="underline hover:text-foreground"
             >
               support@datatorag.com
-            </a>{" "}
-            reaches the team directly.
+            </a>
+            .
           </p>
         </div>
 

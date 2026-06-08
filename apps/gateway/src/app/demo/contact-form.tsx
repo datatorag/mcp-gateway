@@ -74,15 +74,14 @@ export function ContactForm({ utm }: Props) {
   if (status === "success") {
     return (
       <div className="rounded-2xl border border-border bg-secondary/30 p-8">
-        <h2 className="font-display text-xl font-semibold text-foreground">Thanks — we&apos;ll be in touch.</h2>
+        <h2 className="font-display text-xl font-semibold text-foreground">Thanks. We&apos;ll be in touch soon.</h2>
         <p className="mt-3 text-sm leading-relaxed text-muted-foreground">
-          A member of the team will reach out within 1 business day to schedule the
-          walkthrough. If you need to share anything urgent in the meantime,
-          email{" "}
+          One of us will reach out within a business day to learn more about
+          what you&apos;re working on. If you&apos;d rather email,{" "}
           <a href="mailto:support@datatorag.com" className="underline hover:text-foreground">
             support@datatorag.com
-          </a>
-          .
+          </a>{" "}
+          gets to the team directly.
         </p>
       </div>
     );
@@ -159,7 +158,7 @@ export function ContactForm({ utm }: Props) {
 
       <div>
         <label htmlFor="useCase" className="text-sm font-medium text-foreground">
-          What would you connect first? <span className="text-muted-foreground">(optional)</span>
+          What are you trying to do? <span className="text-muted-foreground">(optional)</span>
         </label>
         <textarea
           id="useCase"
@@ -168,7 +167,7 @@ export function ContactForm({ utm }: Props) {
           value={useCase}
           onChange={(e) => setUseCase(e.target.value)}
           className={`mt-1.5 ${inputClass}`}
-          placeholder="e.g., Gmail + Calendar for our SDR team"
+          placeholder="e.g., Our SDRs are drowning in inbox triage and we want AI to draft replies against our CRM..."
         />
       </div>
 
@@ -196,7 +195,7 @@ export function ContactForm({ utm }: Props) {
         disabled={status === "submitting"}
         className="w-full rounded-[var(--radius)] bg-primary px-6 py-3 text-sm font-medium text-primary-foreground transition-all hover:bg-primary/90 disabled:opacity-60"
       >
-        {status === "submitting" ? "Sending…" : "Request demo"}
+        {status === "submitting" ? "Sending…" : "Get in touch"}
       </button>
 
       <p className="text-xs text-muted-foreground">
