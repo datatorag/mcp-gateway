@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { TEAM_SIZE_VALUES, type TeamSize } from "@datatorag-mcp/db/schema";
+import { reportLeadConversion } from "@/components/google-ads";
 
 interface Utm {
   source?: string;
@@ -53,6 +54,7 @@ export function ContactForm({ utm }: Props) {
       });
 
       if (res.ok) {
+        reportLeadConversion();
         setStatus("success");
         return;
       }

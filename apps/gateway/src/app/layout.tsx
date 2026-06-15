@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Montserrat, Inter, PT_Mono } from "next/font/google";
 import { PostHogProvider } from "@/components/posthog-provider";
+import { GoogleAds } from "@/components/google-ads";
 import "./globals.css";
 
 const montserrat = Montserrat({
@@ -38,6 +39,7 @@ export default function RootLayout({
       className={`${montserrat.variable} ${inter.variable} ${ptMono.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col font-sans overflow-x-hidden">
+        <GoogleAds />
         <PostHogProvider>{children}</PostHogProvider>
       </body>
     </html>
