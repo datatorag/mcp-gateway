@@ -31,6 +31,8 @@ ENV DATABASE_URL=postgresql://placeholder:placeholder@placeholder:5432/placehold
 # Pass the value via `docker build --build-arg NEXT_PUBLIC_POSTHOG_KEY=...` or docker-compose build.args.
 ARG NEXT_PUBLIC_POSTHOG_KEY=""
 ENV NEXT_PUBLIC_POSTHOG_KEY=$NEXT_PUBLIC_POSTHOG_KEY
+ARG NEXT_PUBLIC_GOOGLE_ADS_CONVERSION_LABEL=""
+ENV NEXT_PUBLIC_GOOGLE_ADS_CONVERSION_LABEL=$NEXT_PUBLIC_GOOGLE_ADS_CONVERSION_LABEL
 
 RUN pnpm run build --filter=@datatorag-mcp/gateway
 

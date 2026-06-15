@@ -35,6 +35,7 @@ services:
       dockerfile: apps/gateway/Dockerfile
       args:
         NEXT_PUBLIC_POSTHOG_KEY: ${NEXT_PUBLIC_POSTHOG_KEY:-}
+        NEXT_PUBLIC_GOOGLE_ADS_CONVERSION_LABEL: ${NEXT_PUBLIC_GOOGLE_ADS_CONVERSION_LABEL:-}
     ports:
       - "80:80"
     environment:
