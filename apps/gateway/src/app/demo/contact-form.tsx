@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import posthog from "posthog-js";
 import { TEAM_SIZE_VALUES, type TeamSize } from "@datatorag-mcp/db/schema";
 import { reportLeadConversion } from "@/components/google-ads";
 
@@ -54,6 +55,17 @@ export function ContactForm({ utm }: Props) {
       });
 
       if (res.ok) {
+        // Funnel analytics: ties to the same anonymous person as the /demo
+        // $pageview so view→lead is measurable. No PII — UTMs + team size only.
+        posthog.capture("lead_submitted", {
+          utm_source: utm.source,
+          utm_medium: utm.medium,
+          utm_campaign: utm.campaign,
+          utm_term: utm.term,
+          utm_content: utm.content,
+          team_size: teamSize || undefined,
+          has_use_case: useCase.trim().length > 0,
+        });
         reportLeadConversion();
         setStatus("success");
         return;
