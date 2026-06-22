@@ -3,6 +3,7 @@ import { Router } from "express";
 import { eq } from "drizzle-orm";
 import type { Database } from "@datatorag-mcp/db";
 import { oauthClients, oauthAuthorizationCodes, users } from "@datatorag-mcp/db";
+import { safeStringEqual } from "@datatorag-mcp/auth";
 
 /**
  * OAuth2 Authorization Endpoint (MCP clients only)
@@ -64,7 +65,10 @@ export function createAuthorizeRouter(
     }
 
     const registeredUris = client.redirectUris as string[];
-    if (!registeredUris.includes(redirect_uri)) {
+    const redirectRegistered = registeredUris.some((uri) =>
+      safeStringEqual(uri, redirect_uri)
+    );
+    if (!redirectRegistered) {
       res.status(400).json({
         error: "invalid_request",
         error_description: "redirect_uri not registered for this client",

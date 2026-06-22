@@ -8,7 +8,7 @@ import {
   oauthAccessTokens,
   oauthRefreshTokens,
 } from "@datatorag-mcp/db";
-import { hashApiKey } from "@datatorag-mcp/auth";
+import { hashApiKey, safeStringEqual } from "@datatorag-mcp/auth";
 import { getPosthog } from "../../lib/posthog-server.js";
 import { EVENTS } from "../../lib/analytics.js";
 
@@ -95,7 +95,9 @@ export function createTokenRouter(db: Database): Router {
       return;
     }
 
-    if (authCode.clientId !== client_id || authCode.redirectUri !== redirect_uri) {
+    const clientMatches = safeStringEqual(authCode.clientId, client_id);
+    const redirectMatches = safeStringEqual(authCode.redirectUri, redirect_uri);
+    if (!clientMatches || !redirectMatches) {
       res.status(400).json({
         error: "invalid_grant",
         error_description: "client_id or redirect_uri mismatch",
@@ -107,7 +109,7 @@ export function createTokenRouter(db: Database): Router {
       .update(code_verifier)
       .digest("base64url");
 
-    if (computedChallenge !== authCode.codeChallenge) {
+    if (!safeStringEqual(computedChallenge, authCode.codeChallenge ?? "")) {
       res.status(400).json({
         error: "invalid_grant",
         error_description: "PKCE code_verifier does not match code_challenge",
@@ -182,7 +184,7 @@ async function handleRefreshGrant(
         .for("update")
         .limit(1);
 
-      if (!row || row.clientId !== client_id) {
+      if (!row || !safeStringEqual(row.clientId, client_id)) {
         return { kind: "invalid" };
       }
       if (row.expiresAt < new Date()) {

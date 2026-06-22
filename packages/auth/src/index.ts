@@ -16,6 +16,19 @@ export function hashApiKey(rawKey: string): string {
   return crypto.createHash("sha256").update(rawKey).digest("hex");
 }
 
+/**
+ * Constant-time string comparison for secrets (PKCE challenges, OAuth
+ * client_id / redirect_uri, tokens). Both inputs are hashed to fixed-length
+ * SHA-256 digests first, so the comparison never throws on a length mismatch
+ * and leaks no length information, then compared with timingSafeEqual (no
+ * short-circuit / early return).
+ */
+export function safeStringEqual(a: string, b: string): boolean {
+  const ha = crypto.createHash("sha256").update(a).digest();
+  const hb = crypto.createHash("sha256").update(b).digest();
+  return crypto.timingSafeEqual(ha, hb);
+}
+
 export function generateApiKey(): string {
   const bytes = crypto.randomBytes(32);
   return `${API_KEY_PREFIX}${bytes.toString("base64url")}`;
