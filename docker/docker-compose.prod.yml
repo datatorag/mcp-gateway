@@ -39,7 +39,7 @@ services:
     ports:
       - "80:80"
     environment:
-      DATABASE_URL: postgresql://datatoragmcp:${POSTGRES_PASSWORD}@postgres:5432/datatoragmcp
+      DATABASE_URL: ${DATABASE_URL}
       GATEWAY_PORT: "80"
       GATEWAY_BASE_URL: ${GATEWAY_BASE_URL:-http://localhost}
       GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
@@ -59,9 +59,6 @@ services:
       start_period: 15s
     volumes:
       - plugins-data:/root/.datatorag/plugins
-    depends_on:
-      db-init:
-        condition: service_completed_successfully
     deploy:
       resources:
         limits:
