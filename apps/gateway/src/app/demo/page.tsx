@@ -35,56 +35,103 @@ export default async function DemoPage({
   return (
     <>
       <Navbar />
-      <main className="mx-auto grid max-w-6xl gap-12 px-6 py-16 lg:grid-cols-2 lg:py-24">
-        <div>
-          <p className="text-sm font-semibold uppercase tracking-widest text-primary">
-            Get in touch
-          </p>
-          <h1 className="mt-3 font-display text-3xl font-bold tracking-tight text-foreground sm:text-4xl">
-            What are you trying
-            <br />
-            to build with AI?
-          </h1>
-          <p className="mt-5 text-base leading-relaxed text-muted-foreground">
-            We&apos;re building DataToRAG for teams that want their assistants to
-            actually do things with their data. Read inboxes, update sheets, draft
-            docs against the real source. If that&apos;s what you&apos;re after, tell
-            us a bit about your setup and we&apos;ll reach out.
-          </p>
+      <main>
+        <div className="mx-auto grid max-w-6xl gap-12 px-6 py-16 lg:grid-cols-2 lg:py-24">
+          <div>
+            <p className="text-sm font-semibold uppercase tracking-widest text-primary">
+              Google Workspace for Claude
+            </p>
+            <h1 className="mt-3 font-display text-3xl font-bold tracking-tight text-foreground sm:text-4xl">
+              Stop pasting Claude&apos;s drafts
+              <br />
+              into your Google Docs.
+            </h1>
+            <p className="mt-5 text-base leading-relaxed text-muted-foreground">
+              DataToRAG gives Claude write access to your Docs, Sheets, and
+              Slides, plus Gmail, Calendar, Drive, Contacts, and Tasks. Tell us
+              what you&apos;re trying to build and we&apos;ll show you the
+              shortest path to a working setup against your data.
+            </p>
 
-          <ul className="mt-8 space-y-4 text-sm text-muted-foreground">
-            <li className="flex gap-3">
-              <span className="mt-1 inline-block h-1.5 w-1.5 shrink-0 rounded-full bg-primary" />
-              No pitch deck. We want to hear what your team does day-to-day and
-              where AI is or isn&apos;t helping.
-            </li>
-            <li className="flex gap-3">
-              <span className="mt-1 inline-block h-1.5 w-1.5 shrink-0 rounded-full bg-primary" />
-              Straight answers. If DataToRAG isn&apos;t the right fit, we&apos;ll
-              say so.
-            </li>
-            <li className="flex gap-3">
-              <span className="mt-1 inline-block h-1.5 w-1.5 shrink-0 rounded-full bg-primary" />
-              If it is a fit, we work out the shortest path to a working setup
-              against your data.
-            </li>
-          </ul>
+            <div className="mt-6 flex flex-wrap gap-2">
+              {[
+                "48 tools · 8 Google services",
+                "Multi-account",
+                "CASA Tier 2 in progress",
+              ].map((badge) => (
+                <span
+                  key={badge}
+                  className="rounded-full border border-border bg-background px-3 py-1.5 text-xs font-medium text-muted-foreground"
+                >
+                  {badge}
+                </span>
+              ))}
+            </div>
 
-          <p className="mt-10 text-xs text-muted-foreground">
-            Already a user? Reach the team at{" "}
-            <a
-              href="mailto:support@datatorag.com"
-              className="underline hover:text-foreground"
-            >
-              support@datatorag.com
-            </a>
-            .
-          </p>
+            <ul className="mt-8 space-y-4 text-sm text-muted-foreground">
+              <li className="flex gap-3">
+                <span className="mt-1 inline-block h-1.5 w-1.5 shrink-0 rounded-full bg-primary" />
+                No pitch deck. We want to hear what your team does day-to-day and
+                where AI is or isn&apos;t helping.
+              </li>
+              <li className="flex gap-3">
+                <span className="mt-1 inline-block h-1.5 w-1.5 shrink-0 rounded-full bg-primary" />
+                Straight answers. If DataToRAG isn&apos;t the right fit, we&apos;ll
+                say so.
+              </li>
+              <li className="flex gap-3">
+                <span className="mt-1 inline-block h-1.5 w-1.5 shrink-0 rounded-full bg-primary" />
+                If it is a fit, we work out the shortest path to a working setup
+                against your data.
+              </li>
+            </ul>
+
+            <p className="mt-10 text-xs text-muted-foreground">
+              Already a user? Reach the team at{" "}
+              <a
+                href="mailto:support@datatorag.com"
+                className="underline hover:text-foreground"
+              >
+                support@datatorag.com
+              </a>
+              .
+            </p>
+          </div>
+
+          <div>
+            <ContactForm utm={utm} />
+          </div>
         </div>
 
-        <div>
-          <ContactForm utm={utm} />
-        </div>
+        {/* See it in action — explainer video */}
+        <section className="border-t border-border bg-secondary/30">
+          <div className="mx-auto max-w-3xl px-6 py-16 text-center">
+            <p className="text-sm font-semibold uppercase tracking-widest text-primary">
+              See it in action
+            </p>
+            <h2 className="mt-3 font-display text-2xl font-bold text-foreground sm:text-3xl">
+              Watch Claude work inside Google Workspace
+            </h2>
+            <p className="mx-auto mt-3 max-w-lg text-sm text-muted-foreground">
+              A short walkthrough of Claude reading and writing real Docs,
+              Sheets, and Gmail through DataToRAG.
+            </p>
+            <div className="mt-10 flex justify-center">
+              <div className="aspect-[9/16] w-full max-w-[320px] overflow-hidden rounded-3xl border border-border bg-secondary/30 shadow-xl">
+                <video
+                  src="/explainer-2026-05.mp4"
+                  poster="/explainer-2026-05-poster.jpg"
+                  autoPlay
+                  muted
+                  loop
+                  playsInline
+                  controls
+                  className="h-full w-full object-cover"
+                />
+              </div>
+            </div>
+          </div>
+        </section>
       </main>
     </>
   );
