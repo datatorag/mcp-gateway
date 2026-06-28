@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import { Navbar } from "@/components/navbar";
 import { ContactForm } from "./contact-form";
 
@@ -100,6 +101,30 @@ export default async function DemoPage({
 
           <div>
             <ContactForm utm={utm} />
+
+            <div className="mt-5 text-center">
+              <p className="text-sm text-muted-foreground">
+                Not ready to talk? Start using DataToRAG now, no call required.
+              </p>
+              <Link
+                href="/auth/login"
+                className="mt-3 inline-flex items-center gap-1.5 rounded-[var(--radius)] border border-border px-6 py-2.5 text-sm font-medium text-foreground transition-colors hover:border-primary/40 hover:bg-secondary/50"
+              >
+                Start free
+                <svg
+                  width="14"
+                  height="14"
+                  viewBox="0 0 16 16"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.5"
+                  strokeLinecap="round"
+                  aria-hidden="true"
+                >
+                  <path d="M6 4l4 4-4 4" />
+                </svg>
+              </Link>
+            </div>
           </div>
         </div>
 

@@ -194,6 +194,31 @@ export default async function BlogArticlePage({ params }: Props) {
             </div>
           )}
 
+          {/* CTA — appears on every post */}
+          <div className="mt-12 rounded-2xl border border-border bg-secondary/30 p-8 text-center">
+            <h2 className="font-display text-xl font-bold text-foreground">
+              Ready to connect your data to AI?
+            </h2>
+            <p className="mx-auto mt-2 max-w-md text-sm text-muted-foreground">
+              Give Claude write access to your Google Workspace. Start free, or
+              talk to us about your setup.
+            </p>
+            <div className="mt-6 flex flex-wrap justify-center gap-3">
+              <Link
+                href="/auth/login"
+                className="rounded-[var(--radius)] bg-primary px-6 py-3 text-sm font-medium text-primary-foreground transition-all hover:bg-primary/90"
+              >
+                Start free
+              </Link>
+              <Link
+                href="/demo"
+                className="rounded-[var(--radius)] border border-border px-6 py-3 text-sm font-medium text-foreground transition-colors hover:border-primary/40 hover:bg-secondary/50"
+              >
+                Contact us
+              </Link>
+            </div>
+          </div>
+
           {(() => {
             const related = getRelatedPosts(slug);
             if (related.length === 0) return null;
