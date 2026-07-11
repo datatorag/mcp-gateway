@@ -8,6 +8,8 @@ coverImage: "/blog/casa-tier-2-cover.png"
 tags: ["security", "casa", "oauth", "google-workspace", "trust"]
 ---
 
+> **Update (July 2026): we passed.** Google verified DataToRAG on June 29, 2026, and the "unverified app" warning described below is gone for new connections. I'm keeping this post up for the record. Here's [how the review went](/blog/casa-tier-2-verified).
+
 If you've signed up for DataToRAG and clicked **Connect Google Workspace**, you've seen this screen:
 
 > Google hasn't verified this app. The app is requesting access to sensitive info in your Google Account.

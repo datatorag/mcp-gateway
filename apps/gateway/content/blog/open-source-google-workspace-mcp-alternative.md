@@ -35,7 +35,7 @@ That's where it stops being a checklist and starts being a process.
 
 The scopes a useful Workspace MCP needs are the sensitive and restricted ones. `gmail.modify` to send and label mail. Full Drive and Docs access to edit files. Google treats those as restricted, which means your consent screen sits in "Testing" mode until you do something about it. In testing mode you can add yourself and a handful of test users, and it works fine for them. For everyone else, and eventually for you, Google throws up the "unverified app" warning, the screen that says this app hasn't been reviewed and might be risky. I wrote a whole piece on [what that warning means and why it shows up](/blog/unverified-app-warning-and-casa-tier-2), because we hit it too.
 
-To clear the warning you submit your app for verification. Google wants a written justification for each restricted scope, and for some apps a demo video of the OAuth flow. For restricted scopes it also includes a security assessment called CASA. That part is not a weekend. It's a security questionnaire, a scan of your deployment, and back-and-forth with an assessor. We're going through CASA Tier 2 right now, targeting completion in August 2026, and I've been [documenting the steps as we clear them](/blog/casa-tier-2-progress-update). When you self-host an OSS server, that work is yours, on your Cloud project, under your company's name.
+To clear the warning you submit your app for verification. Google wants a written justification for each restricted scope, and for some apps a demo video of the OAuth flow. For restricted scopes it also includes a security assessment called CASA. That part is not a weekend. It's a security questionnaire, a scan of your deployment, and back-and-forth with an assessor. We went through CASA Tier 2 and Google verified our app in June 2026, and I [documented the whole path](/blog/casa-tier-2-verified). When you self-host an OSS server, that work is yours, on your Cloud project, under your company's name.
 
 Here's a data point that makes the difficulty concrete. ACI.dev, a funded integration platform, reportedly had its Gmail and Calendar OAuth blocked by Google as of mid-2026, with no workaround at the time. These are people whose full-time job is integrations, and verified Google OAuth still bit them. The verification is the hard part. The tools were never the hard part.
 
@@ -58,7 +58,7 @@ This isn't open versus closed, and I want to be straight about that. We open-sou
 | Google Workspace tools | Broad: 70+ across 12 services | 48 across 8 services | 48 across 8 services |
 | Atlassian (Jira + Confluence) | No | Yes (22 tools) | Yes (22 tools) |
 | You run a Google Cloud project | Yes | No | Yes |
-| OAuth consent and verification on you | Yes | No, we handle it (CASA Tier 2 in progress) | Yes |
+| OAuth consent and verification on you | Yes | No, we handle it (Google-verified, CASA Tier 2) | Yes |
 | Multi-account under one endpoint | Yes, you wire it up | Yes | Yes |
 | Token storage and rotation on you | Yes | No | Yes, on your infra |
 | Hosting and uptime on you | Yes | No | Yes |

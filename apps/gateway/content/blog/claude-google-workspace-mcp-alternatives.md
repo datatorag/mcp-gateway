@@ -55,7 +55,7 @@ Which brings me to the thing I build. DataToRAG is one MCP gateway that gives Cl
 
 Deep means the real verbs. 48 Google tools across all eight services: Gmail with `gmail_send`, `gmail_reply`, `gmail_forward`, and labels; Docs with `docs_batch_update` for in-place editing; Sheets; Slides with `slides_batch_update`; Drive; Calendar; Contacts (`contacts_*`); and Tasks (`tasks_*`). Then 22 more tools for Jira and Confluence, so "file the bug and update the Confluence page" happens in one prompt. Multi-account is built in: connect work, personal, and shared accounts under one endpoint, then target one or search across all of them in a single prompt.
 
-We don't store your data. Every call is a pass-through to Google or Atlassian on your behalf. We're in Google's CASA Tier 2 assessment now, targeting August 2026. And because the whole gateway is MIT-licensed, you get the choice the OSS route forces on you and the vendor route denies you: use our hosted version and skip the setup, or self-host the same code if you'd rather own the infrastructure. We did the OAuth and verification work so you don't have to, without locking you in for doing it.
+We don't store your data. Every call is a pass-through to Google or Atlassian on your behalf. We passed Google's CASA Tier 2 assessment, and the app is Google-verified as of June 2026. And because the whole gateway is MIT-licensed, you get the choice the OSS route forces on you and the vendor route denies you: use our hosted version and skip the setup, or self-host the same code if you'd rather own the infrastructure. We did the OAuth and verification work so you don't have to, without locking you in for doing it.
 
 ## The whole picture in one table
 

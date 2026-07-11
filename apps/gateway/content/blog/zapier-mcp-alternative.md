@@ -63,7 +63,7 @@ Zero-config auth. Zapier already holds your app connections, so there's nothing 
 
 No separate MCP bill. It rides on a plan you might already pay for.
 
-And a serious compliance track record: SOC 2 Type II, years of security work, a real trust program. That's ahead of where we are. Our CASA Tier 2 assessment is still in progress, targeting August 2026, and I'm not going to pretend otherwise.
+And a serious compliance track record: SOC 2 Type II, years of security work, a real trust program. On general-purpose attestations they're ahead of us, and I'm not going to pretend otherwise. Where we've caught up is the Google-specific bar: we passed CASA Tier 2 and Google verified the app in June 2026.
 
 If breadth across the long tail of SaaS is your problem, Zapier MCP is the answer, and I'd point you straight at it.
 

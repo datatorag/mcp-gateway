@@ -8,6 +8,8 @@ coverImage: "/blog/casa-tier-2-progress-tac-dashboard.png"
 tags: ["security", "casa", "oauth", "google-workspace", "trust"]
 ---
 
+> **Update (July 2026): the review is complete.** We cleared all six steps and Google verified DataToRAG on June 29, 2026. This was step 1 of 6 at the time of writing. Here's [the wrap-up](/blog/casa-tier-2-verified).
+
 Earlier this month we wrote about why DataToRAG shows Google's "unverified app" warning and what we were doing about it ([read that first](/blog/unverified-app-warning-and-casa-tier-2) if you missed it). This is a short progress update.
 
 Application intake with TAC Security, the CASA-authorized lab we engaged for the Tier 2 assessment, is complete. Step 1 of 6 is cleared in their dashboard. The lab scan starts next.

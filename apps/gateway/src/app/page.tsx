@@ -83,9 +83,9 @@ export default async function HomePage() {
                 className="animate-fade-in-up mx-auto mt-6 max-w-xl text-xs text-white/50 lg:mx-0"
                 style={{ animationDelay: "0.22s" }}
               >
-                Undergoing Google CASA Tier 2 security assessment. Target completion: August 2026.{" "}
+                Google-verified app. Passed the CASA Tier 2 security assessment (June 2026).{" "}
                 <Link
-                  href="/blog/unverified-app-warning-and-casa-tier-2"
+                  href="/blog/casa-tier-2-verified"
                   className="underline transition-colors hover:text-white/80"
                 >
                   Read more
@@ -601,10 +601,10 @@ export default async function HomePage() {
         <p>DataToRAG &middot; MCP Gateway &amp; Integration Services</p>
         <p className="mt-2">
           <Link
-            href="/blog/unverified-app-warning-and-casa-tier-2"
+            href="/blog/casa-tier-2-verified"
             className="underline hover:text-foreground"
           >
-            Security: CASA Tier 2 in progress
+            Security: Google-verified (CASA Tier 2)
           </Link>
           {" "}&middot;{" "}
           <a href="/privacy" className="underline hover:text-foreground">Privacy Policy</a>

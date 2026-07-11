@@ -35,9 +35,9 @@ If you're a founder building an AI assistant for your customers, Composio's shap
 | Self-host on an open-source core | Enterprise plans only, closed core | Yes, MIT, Docker Compose |
 | Where credentials live on self-serve plans | Composio's cloud | Pass-through, never stored |
 | Total integration count | 1,000+ toolkits | 8 Google services + Jira and Confluence, built deep |
-| Formal attestations | SOC 2 Type II, ISO 27001 | CASA Tier 2 in progress, target August 2026 |
+| Formal attestations | SOC 2 Type II, ISO 27001 | CASA Tier 2 passed, Google-verified (June 2026) |
 
-A note on that last row, because I want to be straight about it: Composio is ahead of us on formal security attestations today. They're SOC 2 Type II and ISO 27001 certified. We're partway through Google's CASA Tier 2 assessment. Those aren't the same thing (CASA is the Google-specific verification for restricted Gmail and Drive scopes), but on the general-purpose compliance checkbox, they've shipped and we're in progress.
+A note on that last row, because I want to be straight about it: Composio is ahead of us on general-purpose security attestations. They're SOC 2 Type II and ISO 27001 certified, and we're not there yet. What we did finish is CASA Tier 2, the Google-specific verification for restricted Gmail and Drive scopes. We passed it, and Google verified the app in June 2026. Different credential, different scope. If your bar is SOC 2 and ISO 27001, they've shipped and we haven't. If it's verified Google access, we're both there.
 
 ## What DataToRAG adds
 

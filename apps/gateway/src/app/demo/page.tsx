@@ -58,7 +58,7 @@ export default async function DemoPage({
               {[
                 "48 tools · 8 Google services",
                 "Multi-account",
-                "CASA Tier 2 in progress",
+                "Google-verified · CASA Tier 2",
               ].map((badge) => (
                 <span
                   key={badge}
