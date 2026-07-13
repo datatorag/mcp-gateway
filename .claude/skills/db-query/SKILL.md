@@ -97,8 +97,8 @@ mcp__plugin_neon_neon__get_connection_string { "projectId": "<id>" }
 For local dev, destructive ops are fine without re-confirmation as long as the user's request implies it.
 
 **Mask sensitive output before showing the user.** When a query returns:
-- Email addresses → replace with first letter + asterisks if the result will be quoted in conversation
 - OAuth tokens, refresh tokens, API keys, passwords → never quote in conversation, show `<redacted>`
+- Email addresses → ok to show (these are the team's own users/leads; no masking needed)
 - Stripe IDs, customer IDs → ok to show
 - User IDs (UUIDs) → ok to show
 
