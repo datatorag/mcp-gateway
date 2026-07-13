@@ -8,10 +8,6 @@ dist/
 *.tsbuildinfo
 
 # Internal planning / strategy docs + local scratch — keep OUT of this public repo
-docs/superpowers/plans/2026-05-09-value-validation-funnel.md
-docs/superpowers/plans/2026-05-10-reddit-content-engine.md
-docs/superpowers/plans/2026-05-26-paid-tiers.md
-docs/superpowers/specs/2026-04-20-paid-tiers-design.md
-docs/superpowers/specs/2026-05-04-marketing-strategy-design.md
+docs/superpowers/
 docs/architecture/2026-06-22-security-architecture.pdf
 docs/explainer-video/
