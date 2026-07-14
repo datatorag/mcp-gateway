@@ -52,9 +52,18 @@ user_invocable: true
    cd ~/datatorag-mcp/docker && docker compose -f docker-compose.prod.yml --env-file ../.env restart gateway
 
    # If tools changed: re-discover tools by connecting to plugin MCP endpoint,
-   # then update the tools table via psql. See reference_plugin_registry memory for details.
+   # then update the tools table. See reference_plugin_registry memory for details.
    ```
-   Check status via `GET /api/servers` — verify tool count and status `active`.
+
+   **Verify the deploy** (as of 2026-07-13, `GET /api/servers` requires auth and returns
+   `{"error":"Unauthorized"}` to anonymous requests — don't use it for status checks):
+   - Compare the plugin's live tool list against the `tools` table in the production DB
+     (Neon — see the db-query skill; do NOT psql the docker postgres, that's dev-only).
+   - Get the live list via Streamable HTTP from inside the gateway container
+     (gws-mcp listens on port 40000): POST an `initialize` request to
+     `http://localhost:40000/mcp`, capture the `mcp-session-id` response header, then
+     POST `tools/list` with that header and extract the tool names.
+   - If the sets match and `mcp_servers.status` is `active`, no tools-table update is needed.
 
 6. **Clean up**
    - Remove temp SSH key files after deploy
@@ -70,7 +79,8 @@ ssh -i <key> ubuntu@<ip> "docker logs <gateway-container> --since 30m 2>&1"
 ssh -i <key> ubuntu@<ip> \
   "cd ~/datatorag-mcp/docker && docker compose -f docker-compose.prod.yml --env-file ../.env logs --tail 100 gateway"
 
-# Database queries (find DB user/name from container env vars)
+# Database queries — NOTE: production data lives in Neon (use the db-query skill),
+# NOT in the docker postgres on this host. Only psql the container for local/dev-era data.
 ssh -i <key> ubuntu@<ip> "docker exec <postgres-container> env | grep POSTGRES"
 ssh -i <key> ubuntu@<ip> \
   "docker exec <postgres-container> psql -U <db-user> -d <db-name> -c '<query>'"
@@ -85,7 +95,7 @@ ssh -i <key> ubuntu@<ip> \
 ## Troubleshooting
 
 - **db-init fails**: Usually missing `POSTGRES_PASSWORD`. Ensure `--env-file ../.env` is passed.
-- **Plugin build fails**: Check `buildError` field in `GET /api/servers`. Common issues: missing system deps in Dockerfile, missing binaries.
+- **Plugin build fails**: Check the `build_error` column in the `mcp_servers` table (`GET /api/servers` used to expose this as `buildError`, but the endpoint now requires auth). Common issues: missing system deps in Dockerfile, missing binaries.
 - **Gateway won't start**: Check container logs for errors.
 - **GWS MCP tools load but all API calls fail**: Users must separately connect their Google Workspace account via the DataToRAG web UI. The gateway stores per-user Google OAuth tokens in the `service_connections` table and forwards them to the GWS plugin via `X-User-Token` header. If no row exists for the user, or the token is expired and refresh fails, all tool calls return generic "Error occurred during tool execution" with no detail. Check the `service_connections` table for `token_expires_at` and `updated_at` to diagnose.
 - **GWS binary not found (ENOENT)**: The Dockerfile needs `curl unzip` in apt-get install, and the gws-mcp `build` script must run `download-binaries.sh` before `tsc`.
