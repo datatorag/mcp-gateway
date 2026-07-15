@@ -24,6 +24,16 @@ user_invocable: true
    ssh -i <key> ubuntu@<ip> "cd ~/datatorag-mcp && git pull origin main"
    ```
 
+2b. **Render `.env` from SSM (secrets source of truth)**
+   ```bash
+   ssh -i <key> ubuntu@<ip> \
+     "cd ~/datatorag-mcp && AWS_PROFILE=ssm-read bash scripts/render-env.sh /datatorag-mcp/prd .env"
+   ```
+   - Secrets live in SSM Parameter Store under `/datatorag-mcp/prd/*` (us-west-2). Hand-editing `.env` on the server is retired — edit the parameter (`aws ssm put-parameter ... --overwrite` with the datatorag profile) and re-render.
+   - The server reads via the `ssm-read` AWS profile (read-only IAM user `datatorag-mcp-server`).
+   - The server runs AWS CLI v2 (installed via the official installer — the apt `awscli` package no longer exists on Ubuntu 24.04).
+   - Safe to skip only when no secrets changed since the last render.
+
 3. **Rebuild and restart the gateway**
    ```bash
    ssh -i <key> ubuntu@<ip> "cd ~/datatorag-mcp/docker && docker compose --env-file ../.env -f docker-compose.prod.yml up -d --build gateway"
