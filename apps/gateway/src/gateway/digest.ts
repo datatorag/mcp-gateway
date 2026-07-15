@@ -155,7 +155,7 @@ async function runSource(
     return await fn();
   } catch (err) {
     console.error(`[digest] ${name} collector failed`, err);
-    void sendSlack("alerts", {
+    await sendSlack("alerts", {
       text: `🟠 Digest source "${name}" failed: ${(err as Error).message}`,
     });
     return null;

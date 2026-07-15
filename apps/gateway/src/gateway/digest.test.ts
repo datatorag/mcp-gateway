@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
 vi.mock("../lib/slack.js", () => ({ sendSlack: vi.fn().mockResolvedValue(undefined) }));
 vi.mock("../lib/stripe.js", () => ({ getStripe: vi.fn() }));
@@ -6,7 +6,7 @@ vi.mock("@datatorag-mcp/config", () => ({
   getEnv: () => ({ STRIPE_API_KEY: "", POSTHOG_PERSONAL_API_KEY: "", POSTHOG_PROJECT_ID: "" }),
 }));
 
-import { formatDigest, runDailyDigest } from "./digest.js";
+import { formatDigest, runDailyDigest, collectStripe, collectPosthog } from "./digest.js";
 import { sendSlack } from "../lib/slack.js";
 
 const fakeDb = {} as never; // collectors are injected in these tests; db is never touched
@@ -69,5 +69,30 @@ describe("runDailyDigest", () => {
     });
     expect(msg.blocks).toBeDefined();
     expect(sendSlack).not.toHaveBeenCalled();
+  });
+});
+
+describe("collectStripe / collectPosthog — not configured", () => {
+  const fetchMock = vi.fn();
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.stubGlobal("fetch", fetchMock);
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("collectStripe resolves to '_not configured — skipped_' without throwing, and makes no network/alert noise", async () => {
+    await expect(collectStripe(new Date())).resolves.toEqual(["_not configured — skipped_"]);
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(sendSlack).not.toHaveBeenCalledWith("alerts", expect.anything());
+  });
+
+  it("collectPosthog resolves to '_not configured — skipped_' without throwing, and makes no network/alert noise", async () => {
+    await expect(collectPosthog(new Date())).resolves.toEqual(["_not configured — skipped_"]);
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(sendSlack).not.toHaveBeenCalledWith("alerts", expect.anything());
   });
 });
