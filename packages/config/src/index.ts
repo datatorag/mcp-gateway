@@ -35,6 +35,13 @@ const envSchema = z.object({
   PUBLIC_APP_URL: z.string().default("http://localhost:8285"),
   // Salt for hashing visitor IPs in the leads table — avoids storing raw PII
   LEADS_IP_SALT: z.string().default(""),
+  // Slack notifications (incoming webhook URLs; empty = disabled)
+  SLACK_WEBHOOK_LEADS: z.string().default(""),
+  SLACK_WEBHOOK_DIGEST: z.string().default(""),
+  SLACK_WEBHOOK_ALERTS: z.string().default(""),
+  // PostHog Query API (daily digest) — personal API key (NOT the ingestion key)
+  POSTHOG_PERSONAL_API_KEY: z.string().default(""),
+  POSTHOG_PROJECT_ID: z.string().default(""),
 });
 
 export type Env = z.infer<typeof envSchema>;
