@@ -18,6 +18,7 @@ import { getPluginManager } from "./src/lib/plugin-manager.js";
 import { shutdownPosthog } from "./src/gateway/track.js";
 import cron from "node-cron";
 import { runDailyRollup } from "./src/gateway/usage/rollup.js";
+import { runDailyDigest } from "./src/gateway/digest.js";
 
 const dev = process.env.NODE_ENV !== "production";
 
@@ -45,9 +46,21 @@ async function main() {
     { timezone: "UTC" }
   );
 
+  // Daily business digest to Slack — 8:52am Pacific, pinned (survives DST)
+  const digestJob = cron.schedule(
+    "52 8 * * *",
+    () => {
+      runDailyDigest(db).catch((err) =>
+        console.error("[digest] failed", err)
+      );
+    },
+    { timezone: "America/Los_Angeles" }
+  );
+
   const shutdown = async () => {
     console.log("Shutting down...");
     rollupJob.stop();
+    digestJob.stop();
     await pluginManager.stopAll();
     await pool.drain();
     await shutdownPosthog();
