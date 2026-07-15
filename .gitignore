@@ -11,3 +11,6 @@ dist/
 docs/superpowers/
 docs/architecture/2026-06-22-security-architecture.pdf
 docs/explainer-video/
+
+# SDD scratch (task briefs/reports — never commit)
+.superpowers/
