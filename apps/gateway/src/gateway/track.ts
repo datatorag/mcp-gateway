@@ -1,6 +1,7 @@
 import type { Database } from "@datatorag-mcp/db";
 import { EVENTS, type ProviderId } from "../lib/analytics.js";
 import { getPosthog, shutdownPosthog } from "../lib/posthog-server.js";
+import { sendSlack } from "../lib/slack.js";
 import { writeUsageEvent } from "./usage/write.js";
 import { classifyOutcome, type ClassifyInput } from "./usage/classify.js";
 
@@ -62,6 +63,9 @@ export function trackSignup(
   email: string,
   name: string | null
 ): void {
+  void sendSlack("leads", {
+    text: `👤 New signup: ${email}${name ? ` (${name})` : ""} — via Google OAuth`,
+  });
   const c = getPosthog();
   if (!c) return;
   c.identify({

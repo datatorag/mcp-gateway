@@ -14,6 +14,7 @@ import {
 } from "@datatorag-mcp/db";
 import type { McpGatewayManifest } from "@datatorag-mcp/types";
 import type { ConnectionPool } from "./pool.js";
+import { sendSlack } from "../lib/slack.js";
 
 const PLUGINS_DIR = join(homedir(), ".datatorag", "plugins");
 const BASE_PORT = 40000;
@@ -275,6 +276,10 @@ export class PluginManager {
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       console.error(`[plugin-manager] install error for ${slug}:`, message);
+
+      void sendSlack("alerts", {
+        text: `🔴 Plugin build FAILED: ${slug}\n${message}`,
+      });
 
       await this.db
         .update(mcpServers)
