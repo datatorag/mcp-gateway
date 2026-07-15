@@ -5,6 +5,7 @@ import { db } from "@/lib/db";
 import { leads, TEAM_SIZE_VALUES } from "@datatorag-mcp/db";
 import { getEnv } from "@datatorag-mcp/config";
 import { leadsMinuteLimiter, leadsHourLimiter } from "@/gateway/leads/limiter";
+import { sendSlack } from "@/lib/slack";
 
 export const dynamic = "force-dynamic";
 
@@ -90,9 +91,26 @@ export async function POST(req: NextRequest) {
       ipHash,
       userAgent: req.headers.get("user-agent") ?? null,
     });
+    const utmBits = [data.utm?.source, data.utm?.medium, data.utm?.campaign]
+      .filter(Boolean)
+      .join(" / ");
+    void sendSlack("leads", {
+      text:
+        `🟢 New lead: ${data.name} <${data.email}> — ${data.company}` +
+        (data.teamSize ? ` · team ${data.teamSize}` : "") +
+        (utmBits ? `\nUTM: ${utmBits}` : "") +
+        (data.referrer ? `\nReferrer: ${data.referrer}` : "") +
+        (data.useCase ? `\nUse case: ${data.useCase}` : ""),
+    });
     return NextResponse.json({ ok: true });
   } catch (err) {
     console.error("[leads] insert failed", { message: (err as Error).message });
+    void sendSlack("alerts", {
+      text:
+        `🔴 Lead insert FAILED — contact is recoverable from this message:\n` +
+        `${data.name} <${data.email}> — ${data.company}\n` +
+        `Error: ${(err as Error).message}`,
+    });
     return NextResponse.json({ error: "internal" }, { status: 500 });
   }
 }
