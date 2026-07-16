@@ -75,6 +75,8 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: true });
   }
 
+  const contactLine = `${data.name} <${data.email}> — ${data.company}`;
+
   try {
     await db.insert(leads).values({
       name: data.name,
@@ -96,7 +98,7 @@ export async function POST(req: NextRequest) {
       .join(" / ");
     void sendSlack("leads", {
       text:
-        `🟢 New lead: ${data.name} <${data.email}> — ${data.company}` +
+        `🟢 New lead: ${contactLine}` +
         (data.teamSize ? ` · team ${data.teamSize}` : "") +
         (utmBits ? `\nUTM: ${utmBits}` : "") +
         (data.referrer ? `\nReferrer: ${data.referrer}` : "") +
@@ -108,7 +110,7 @@ export async function POST(req: NextRequest) {
     void sendSlack("alerts", {
       text:
         `🔴 Lead insert FAILED — contact is recoverable from this message:\n` +
-        `${data.name} <${data.email}> — ${data.company}\n` +
+        `${contactLine}\n` +
         `Error: ${(err as Error).message}`,
     });
     return NextResponse.json({ error: "internal" }, { status: 500 });

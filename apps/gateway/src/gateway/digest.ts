@@ -18,6 +18,7 @@ export type Collectors = {
 };
 
 const MAX_LEAD_LINES = 10; // Slack caps messages at 50 blocks; keep lists bounded
+const NOT_CONFIGURED = ["_not configured — skipped_"]; // rendered for credential-less sources; asserted verbatim in tests
 
 export async function collectNeon(db: Database, since: Date): Promise<string[]> {
   const lines: string[] = [];
@@ -61,7 +62,7 @@ export async function collectNeon(db: Database, since: Date): Promise<string[]> 
 }
 
 export async function collectStripe(since: Date): Promise<string[]> {
-  if (!getEnv().STRIPE_API_KEY) return ["_not configured — skipped_"];
+  if (!getEnv().STRIPE_API_KEY) return NOT_CONFIGURED;
   const stripe = getStripe();
   const events = await stripe.events.list({
     created: { gte: Math.floor(since.getTime() / 1000) },
@@ -83,7 +84,7 @@ export async function collectStripe(since: Date): Promise<string[]> {
 
 export async function collectPosthog(since: Date): Promise<string[]> {
   const { POSTHOG_PERSONAL_API_KEY, POSTHOG_PROJECT_ID } = getEnv();
-  if (!POSTHOG_PERSONAL_API_KEY || !POSTHOG_PROJECT_ID) return ["_not configured — skipped_"];
+  if (!POSTHOG_PERSONAL_API_KEY || !POSTHOG_PROJECT_ID) return NOT_CONFIGURED;
   const hogql =
     "SELECT event, count() AS n FROM events " +
     "WHERE timestamp >= now() - INTERVAL 1 DAY " +
@@ -167,8 +168,9 @@ export async function runDailyDigest(
   opts?: { dryRun?: boolean; collectors?: Partial<Collectors> }
 ): Promise<SlackMessage> {
   const c = { ...defaultCollectors, ...opts?.collectors };
-  const since = new Date(Date.now() - 24 * 60 * 60 * 1000);
-  const dateLabel = new Date().toLocaleDateString("en-US", {
+  const now = new Date();
+  const since = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+  const dateLabel = now.toLocaleDateString("en-US", {
     weekday: "short",
     month: "short",
     day: "numeric",
