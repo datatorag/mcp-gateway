@@ -3,6 +3,7 @@ dist/
 .turbo/
 .next/
 .env
+.env.pre-ssm
 .env.local
 .envrc
 *.tsbuildinfo
