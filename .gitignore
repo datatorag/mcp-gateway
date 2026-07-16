@@ -15,3 +15,5 @@ docs/explainer-video/
 
 # SDD scratch (task briefs/reports — never commit)
 .superpowers/
+docs/casa/
+docs/architecture/2026-06-22-security-architecture.md
