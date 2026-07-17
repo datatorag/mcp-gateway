@@ -1,4 +1,6 @@
+import { and, eq, isNull } from "drizzle-orm";
 import type { Database } from "@datatorag-mcp/db";
+import { users } from "@datatorag-mcp/db";
 import { EVENTS, type ProviderId } from "../lib/analytics.js";
 import { getPosthog, shutdownPosthog } from "../lib/posthog-server.js";
 import { sendSlack } from "../lib/slack.js";
@@ -39,6 +41,12 @@ export async function trackToolCall(
     });
   }
 
+  // Activation milestone: only real MCP traffic counts — a playground call
+  // from the dashboard doesn't prove the user's agent can reach the gateway.
+  if (status === "success" && props.outcome.source === "mcp") {
+    await trackFirstToolCall(db, props.userId, props.toolName, props.connectorType);
+  }
+
   if (!meter) return;
 
   const result = await writeUsageEvent(db, {
@@ -54,6 +62,41 @@ export async function trackToolCall(
   if (!result.ok) {
     console.warn(
       `[usage] write failed (${result.reason}) for user=${props.userId} tool=${props.toolName}`
+    );
+  }
+}
+
+/**
+ * Claim the user's first-successful-tool-call milestone. The UPDATE ... WHERE
+ * first_tool_call_at IS NULL is the idempotency guard: exactly one call ever
+ * gets a row back, so the first_tool_call event fires once per user even
+ * under concurrent tool calls. Never throws — the milestone must not break
+ * the tool-call path.
+ */
+async function trackFirstToolCall(
+  db: Database,
+  userId: string,
+  toolName: string,
+  connectorType: string | null
+): Promise<void> {
+  try {
+    const claimed = await db
+      .update(users)
+      .set({ firstToolCallAt: new Date() })
+      .where(and(eq(users.id, userId), isNull(users.firstToolCallAt)))
+      .returning({ id: users.id });
+    if (claimed.length === 0) return;
+    const c = getPosthog();
+    if (!c) return;
+    c.capture({
+      distinctId: userId,
+      event: EVENTS.FIRST_TOOL_CALL,
+      properties: { tool_name: toolName, connector_type: connectorType },
+    });
+  } catch (err) {
+    console.warn(
+      `[track] first_tool_call milestone failed for user=${userId}`,
+      err
     );
   }
 }

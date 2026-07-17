@@ -1,5 +1,6 @@
 export const EVENTS = {
   TOOL_CALL: "tool_call",
+  FIRST_TOOL_CALL: "first_tool_call",
   USER_SIGNED_UP: "user_signed_up",
   USER_LOGGED_IN: "user_logged_in",
   ACCOUNT_CONNECTED: "account_connected",

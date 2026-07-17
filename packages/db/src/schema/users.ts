@@ -19,6 +19,9 @@ export const users = pgTable("users", {
   currentPeriodStart: timestamp("current_period_start", { withTimezone: true })
     .notNull()
     .defaultNow(),
+  // Activation milestone: set once on the user's first successful tool call
+  // (see trackToolCall) so the funnel has a durable first_tool_call marker.
+  firstToolCallAt: timestamp("first_tool_call_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true })
     .notNull()
     .defaultNow(),
