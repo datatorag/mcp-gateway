@@ -5,6 +5,7 @@ import Link from "next/link";
 import posthog from "posthog-js";
 import { EVENTS } from "@/lib/analytics";
 import { SERVICES } from "./connections/services";
+import { ConnectionTester } from "./connection-tester";
 import type { ConnectedAccount, LegacyConnection } from "./connections/types";
 
 const EXAMPLE_PROMPTS = [
@@ -259,6 +260,9 @@ export function DashboardClient() {
         )}
       </div>
 
+      {/* Agent setup + live connection tester */}
+      <ConnectionTester />
+
       {/* What can I do? */}
       <div className="mt-10">
         <h2 className="font-display text-base font-bold text-foreground">
@@ -311,29 +315,6 @@ export function DashboardClient() {
         </div>
       </div>
 
-      {/* Quick Start */}
-      <div className="mt-10">
-        <h2 className="font-display text-base font-bold text-foreground">
-          Quick Start
-        </h2>
-        <p className="mt-0.5 text-xs text-muted-foreground">
-          Add this to your MCP client config to connect.
-        </p>
-        <pre
-          onCopy={() =>
-            posthog.capture(EVENTS.COPY_MCP_CONFIG, { source: "dashboard" })
-          }
-          className="mt-3 overflow-x-auto rounded-xl border border-border bg-[#1C1917] p-4 font-mono text-xs leading-relaxed text-[#E7E5E4]"
-        >
-          {`{
-  "mcpServers": {
-    "datatorag": {
-      "url": "https://datatorag.com/mcp"
-    }
-  }
-}`}
-        </pre>
-      </div>
     </div>
   );
 }

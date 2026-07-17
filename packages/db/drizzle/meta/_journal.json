@@ -29,6 +29,13 @@
       "when": 1779836104250,
       "tag": "0003_paid_tiers",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1784271373103,
+      "tag": "0004_smiling_hercules",
+      "breakpoints": true
     }
   ]
 }
