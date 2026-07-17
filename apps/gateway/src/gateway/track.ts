@@ -6,6 +6,7 @@ import { getPosthog, shutdownPosthog } from "../lib/posthog-server.js";
 import { sendSlack } from "../lib/slack.js";
 import { writeUsageEvent } from "./usage/write.js";
 import { classifyOutcome, type ClassifyInput } from "./usage/classify.js";
+import { resolveUserEmail, identityProps } from "./user-email.js";
 
 export { shutdownPosthog };
 
@@ -24,6 +25,7 @@ export async function trackToolCall(
 ): Promise<void> {
   const { status, meter } = classifyOutcome(props.outcome);
   const c = getPosthog();
+  const userEmail = c ? await resolveUserEmail(db, props.userId) : null;
   if (c) {
     c.capture({
       distinctId: props.userId,
@@ -37,6 +39,7 @@ export async function trackToolCall(
         response_size_bytes: props.responseSizeBytes,
         error_message: props.errorMessage,
         metered: meter,
+        ...identityProps(userEmail),
       },
     });
   }
@@ -44,7 +47,13 @@ export async function trackToolCall(
   // Activation milestone: only real MCP traffic counts — a playground call
   // from the dashboard doesn't prove the user's agent can reach the gateway.
   if (status === "success" && props.outcome.source === "mcp") {
-    await trackFirstToolCall(db, props.userId, props.toolName, props.connectorType);
+    await trackFirstToolCall(
+      db,
+      props.userId,
+      props.toolName,
+      props.connectorType,
+      userEmail
+    );
   }
 
   if (!meter) return;
@@ -77,7 +86,8 @@ async function trackFirstToolCall(
   db: Database,
   userId: string,
   toolName: string,
-  connectorType: string | null
+  connectorType: string | null,
+  userEmail: string | null
 ): Promise<void> {
   try {
     const claimed = await db
@@ -91,7 +101,11 @@ async function trackFirstToolCall(
     c.capture({
       distinctId: userId,
       event: EVENTS.FIRST_TOOL_CALL,
-      properties: { tool_name: toolName, connector_type: connectorType },
+      properties: {
+        tool_name: toolName,
+        connector_type: connectorType,
+        ...identityProps(userEmail),
+      },
     });
   } catch (err) {
     console.warn(
@@ -118,29 +132,36 @@ export function trackSignup(
   c.capture({
     distinctId: userId,
     event: EVENTS.USER_SIGNED_UP,
-    properties: { email },
+    properties: { email, ...identityProps(email) },
   });
 }
 
-export function trackLogin(userId: string): void {
+export function trackLogin(userId: string, email: string): void {
   const c = getPosthog();
   if (!c) return;
   c.capture({
     distinctId: userId,
     event: EVENTS.USER_LOGGED_IN,
+    properties: identityProps(email),
   });
 }
 
-export function trackOAuthCompleted(
+export async function trackOAuthCompleted(
+  db: Database,
   userId: string,
   provider: ProviderId,
   accountEmail: string
-): void {
+): Promise<void> {
   const c = getPosthog();
   if (!c) return;
+  const email = await resolveUserEmail(db, userId);
   c.capture({
     distinctId: userId,
     event: EVENTS.ACCOUNT_CONNECTED,
-    properties: { provider, account_email: accountEmail },
+    properties: {
+      provider,
+      account_email: accountEmail,
+      ...identityProps(email),
+    },
   });
 }

@@ -11,6 +11,7 @@ import {
 import { hashApiKey, safeStringEqual } from "@datatorag-mcp/auth";
 import { getPosthog } from "../../lib/posthog-server.js";
 import { EVENTS } from "../../lib/analytics.js";
+import { resolveUserEmail, identityProps } from "../user-email.js";
 
 // PR3 drops ACCESS_TOKEN_TTL_MS to 60*60*1000 (1h) once refresh path is stable.
 const ACCESS_TOKEN_TTL_MS = 24 * 60 * 60 * 1000;
@@ -240,6 +241,10 @@ async function handleRefreshGrant(
     });
 
     const ph = getPosthog();
+    const userEmail =
+      ph && result.kind !== "invalid"
+        ? await resolveUserEmail(db, result.row.userId)
+        : null;
 
     switch (result.kind) {
       case "invalid":
@@ -252,7 +257,10 @@ async function handleRefreshGrant(
         ph?.capture({
           distinctId: result.row.userId,
           event: EVENTS.OAUTH_REFRESH_EXPIRED,
-          properties: { clientId: result.row.clientId },
+          properties: {
+            clientId: result.row.clientId,
+            ...identityProps(userEmail),
+          },
         });
         res.status(400).json({
           error: "invalid_grant",
@@ -266,6 +274,7 @@ async function handleRefreshGrant(
           properties: {
             clientId: result.row.clientId,
             familyId: result.row.familyId,
+            ...identityProps(userEmail),
           },
         });
         res.status(400).json({
@@ -281,6 +290,7 @@ async function handleRefreshGrant(
             clientId: result.row.clientId,
             familyId: result.row.familyId,
             newRefreshId: result.newRefreshId,
+            ...identityProps(userEmail),
           },
         });
         res.json({

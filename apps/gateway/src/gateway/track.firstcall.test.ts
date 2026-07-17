@@ -14,10 +14,12 @@ import { trackToolCall } from "./track.js";
 
 const returning = vi.fn();
 const insertValues = vi.fn();
+const selectLimit = vi.fn();
 const update = vi.fn(() => ({ set: () => ({ where: () => ({ returning }) }) }));
 const dbMock = {
   update,
   insert: () => ({ values: insertValues }),
+  select: () => ({ from: () => ({ where: () => ({ limit: selectLimit }) }) }),
 } as unknown as Database;
 
 function callProps(overrides: Partial<Parameters<typeof trackToolCall>[1]> = {}) {
@@ -39,6 +41,7 @@ describe("first_tool_call milestone", () => {
     vi.clearAllMocks();
     insertValues.mockResolvedValue(undefined);
     returning.mockResolvedValue([]);
+    selectLimit.mockResolvedValue([{ email: "user-1@example.com" }]);
   });
 
   it("fires first_tool_call when the milestone is newly claimed", async () => {
@@ -48,7 +51,24 @@ describe("first_tool_call milestone", () => {
       expect.objectContaining({
         event: "first_tool_call",
         distinctId: "user-1",
-        properties: expect.objectContaining({ tool_name: "gmail_search" }),
+        properties: expect.objectContaining({
+          tool_name: "gmail_search",
+          user_email: "user-1@example.com",
+          $set: { email: "user-1@example.com" },
+        }),
+      })
+    );
+  });
+
+  it("stamps user_email + $set identity on tool_call", async () => {
+    await trackToolCall(dbMock, callProps());
+    expect(capture).toHaveBeenCalledWith(
+      expect.objectContaining({
+        event: "tool_call",
+        properties: expect.objectContaining({
+          user_email: "user-1@example.com",
+          $set: { email: "user-1@example.com" },
+        }),
       })
     );
   });

@@ -135,7 +135,7 @@ export function createAuthRouter(
     if (isNewUser) {
       trackSignup(user.id, user.email, user.name);
     } else {
-      trackLogin(user.id);
+      trackLogin(user.id, user.email);
     }
 
     const token = randomBytes(32).toString("base64url");
@@ -289,7 +289,7 @@ export function createAuthRouter(
       expiresAt
     );
 
-    trackOAuthCompleted(session.userId, PROVIDERS.GOOGLE_WORKSPACE, accountEmail);
+    await trackOAuthCompleted(db, session.userId, PROVIDERS.GOOGLE_WORKSPACE, accountEmail);
 
     res.redirect(`/dashboard/connections?connected=${PROVIDERS.GOOGLE_WORKSPACE}`);
   });
@@ -420,7 +420,7 @@ export function createAuthRouter(
       expiresAt
     );
 
-    trackOAuthCompleted(session.userId, PROVIDERS.ATLASSIAN, accountEmail);
+    await trackOAuthCompleted(db, session.userId, PROVIDERS.ATLASSIAN, accountEmail);
 
     res.redirect(`/dashboard/connections?connected=${PROVIDERS.ATLASSIAN}`);
   });

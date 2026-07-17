@@ -5,6 +5,7 @@ import { oauthRefreshTokens } from "@datatorag-mcp/db";
 import { hashApiKey } from "@datatorag-mcp/auth";
 import { getPosthog } from "../../lib/posthog-server.js";
 import { EVENTS } from "../../lib/analytics.js";
+import { resolveUserEmail, identityProps } from "../user-email.js";
 
 /**
  * RFC 7009 — OAuth 2.0 Token Revocation
@@ -44,11 +45,19 @@ export function createRevokeRouter(db: Database): Router {
           )
         );
 
-      getPosthog()?.capture({
-        distinctId: row.userId,
-        event: EVENTS.OAUTH_TOKEN_REVOKED,
-        properties: { clientId: row.clientId, familyId: row.familyId },
-      });
+      const ph = getPosthog();
+      if (ph) {
+        const email = await resolveUserEmail(db, row.userId);
+        ph.capture({
+          distinctId: row.userId,
+          event: EVENTS.OAUTH_TOKEN_REVOKED,
+          properties: {
+            clientId: row.clientId,
+            familyId: row.familyId,
+            ...identityProps(email),
+          },
+        });
+      }
     });
 
     res.status(200).send();
