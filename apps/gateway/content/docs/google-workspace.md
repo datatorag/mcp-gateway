@@ -28,4 +28,4 @@ You can connect multiple Google accounts — personal, work, shared inboxes — 
 
 ## Tool count
 
-48 tools across the eight services. Each service's page lists its operations, required scopes, and example prompts.
+50 tools across the eight services. Each service's page lists its operations, required scopes, and example prompts.

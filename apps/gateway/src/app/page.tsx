@@ -224,7 +224,7 @@ export default async function HomePage() {
               native in Claude.
             </h2>
             <p className="mt-4 max-w-xl text-sm leading-relaxed text-muted-foreground">
-              48 tools across 8 Google services. Connect once, use everywhere —
+              50 tools across 8 Google services. Connect once, use everywhere —
               inbox triage, calendar coordination, doc drafting, sheet analysis —
               from any MCP-compatible client.
             </p>

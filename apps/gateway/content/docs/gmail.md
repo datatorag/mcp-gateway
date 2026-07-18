@@ -12,14 +12,16 @@ The Gmail connector gives your AI assistant full access to your inbox — search
 
 | Tool | Description |
 |------|-------------|
-| `gmail_search` | Search emails using Gmail query syntax (e.g., `from:boss subject:Q2 has:attachment`) |
-| `gmail_list` | List recent messages from your inbox |
-| `gmail_read` | Read a full email by message ID, including headers, body, and attachment metadata |
+| `gmail_search` | Search emails using Gmail query syntax (e.g., `from:boss subject:Q2 has:attachment`). Results include flattened from/to/subject/date plus snippet and labels |
+| `gmail_list` | List recent messages from your inbox with flattened from/to/subject/date fields |
+| `gmail_read` | Read a full email by message ID. `text_only` returns a compact view (flattened headers, decoded text body, attachment metadata); `max_body_chars` truncates long bodies |
 | `gmail_send` | Send a new email |
 | `gmail_reply` | Reply to an existing thread |
 | `gmail_forward` | Forward a message to another recipient |
 | `gmail_create_draft` | Create a draft without sending |
 | `gmail_update_draft` | Update an existing draft |
+| `gmail_send_draft` | Send an existing draft |
+| `gmail_delete_draft` | Delete a draft |
 | `gmail_mark_read` | Mark a message as read |
 | `gmail_save_attachment_to_drive` | Save an email attachment directly to Google Drive |
 
@@ -34,3 +36,4 @@ The Gmail connector gives your AI assistant full access to your inbox — search
 - "Draft a reply to the latest email from Sarah declining the meeting politely"
 - "Find all unread emails with attachments and save the attachments to my Reports folder in Drive"
 - "Forward the Q2 report email to the marketing team with a note"
+- "Draft replies to every unanswered client email from this week, then send the drafts I approve"

@@ -12,7 +12,7 @@ The Docs connector gives your AI assistant the ability to read and write Google 
 
 | Tool | Description |
 |------|-------------|
-| `docs_get` | Read the full content of a Google Doc |
+| `docs_get` | Read the full content of a Google Doc, including inline image metadata |
 | `docs_create` | Create a new Google Doc with a title and optional initial content |
 | `docs_write` | Write or replace content in a document |
 | `docs_batch_update` | Apply multiple updates in a single request (insert text, add formatting, replace content) |
