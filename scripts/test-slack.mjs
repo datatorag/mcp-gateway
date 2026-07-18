@@ -1,21 +1,33 @@
 #!/usr/bin/env node
-// Sends a test message to each configured Slack webhook.
-// Usage: SLACK_WEBHOOK_LEADS=... SLACK_WEBHOOK_DIGEST=... SLACK_WEBHOOK_ALERTS=... node scripts/test-slack.mjs
+// Sends a test message to each configured Slack channel as the Dara bot.
+// Usage: SLACK_BOT_TOKEN=... SLACK_CHANNEL_LEADS=... SLACK_CHANNEL_DIGEST=... SLACK_CHANNEL_ALERTS=... node scripts/test-slack.mjs
+const token = process.env.SLACK_BOT_TOKEN;
+if (!token) {
+  console.log("SLACK_BOT_TOKEN unset — nothing to test");
+  process.exit(1);
+}
 const channels = [
-  ["SLACK_WEBHOOK_LEADS", "#leads"],
-  ["SLACK_WEBHOOK_DIGEST", "#daily-digest"],
-  ["SLACK_WEBHOOK_ALERTS", "#ops-alerts"],
+  ["SLACK_CHANNEL_LEADS", "#leads"],
+  ["SLACK_CHANNEL_DIGEST", "#daily-digest"],
+  ["SLACK_CHANNEL_ALERTS", "#ops-alerts"],
 ];
 for (const [envKey, label] of channels) {
-  const url = process.env[envKey];
-  if (!url) {
+  const channel = process.env[envKey];
+  if (!channel) {
     console.log(`skip ${label} (${envKey} unset)`);
     continue;
   }
-  const res = await fetch(url, {
+  const res = await fetch("https://slack.com/api/chat.postMessage", {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ text: `✅ test message from datatorag-mcp (${label})` }),
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json; charset=utf-8",
+    },
+    body: JSON.stringify({
+      channel,
+      text: `✅ test message from datatorag-mcp (${label})`,
+    }),
   });
-  console.log(`${label}: HTTP ${res.status}`);
+  const data = await res.json().catch(() => null);
+  console.log(`${label}: ${data?.ok ? "ok" : `FAILED ${data?.error ?? res.status}`}`);
 }
