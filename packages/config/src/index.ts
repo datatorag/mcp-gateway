@@ -26,9 +26,6 @@ const envSchema = z.object({
   STRIPE_PAYG_PRICE_ID: z.string().default(""),
   STRIPE_METER_ID: z.string().default(""),
   STRIPE_METER_EVENT_NAME: z.string().default("tool_calls"),
-  // Email (Resend)
-  RESEND_API_KEY: z.string().default(""),
-  EMAIL_FROM: z.string().default("DataToRAG <billing@datatorag.com>"),
   // Cron auth — Bearer token required to hit /api/cron/* externally
   CRON_SECRET: z.string().default(""),
   // Public URLs for Checkout return
