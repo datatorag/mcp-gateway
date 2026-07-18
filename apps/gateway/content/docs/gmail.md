@@ -22,7 +22,7 @@ The Gmail connector gives your AI assistant full access to your inbox — search
 | `gmail_update_draft` | Update an existing draft |
 | `gmail_send_draft` | Send an existing draft |
 | `gmail_delete_draft` | Delete a draft |
-| `gmail_mark_read` | Mark a message as read |
+| `gmail_mark_read` | Mark messages as read and modify labels, for a single message or a batch of up to 1,000 IDs |
 | `gmail_save_attachment_to_drive` | Save an email attachment directly to Google Drive |
 
 ## Required scopes
