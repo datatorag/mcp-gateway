@@ -15,6 +15,10 @@ if (typeof window !== "undefined") {
     posthog.init(key, {
       api_host: "https://us.i.posthog.com",
       capture_pageview: false,
+      // Off by default when auto-pageviews are disabled — needed for bounce
+      // rate / session duration and Core Web Vitals in Web Analytics.
+      capture_pageleave: true,
+      capture_performance: { web_vitals: true },
       autocapture: true,
       person_profiles: "identified_only",
     });
