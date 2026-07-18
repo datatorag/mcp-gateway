@@ -1,0 +1,1 @@
+ALTER TABLE "users" ADD COLUMN "no_activation_followup_sent_at" timestamp with time zone;

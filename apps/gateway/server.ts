@@ -19,6 +19,7 @@ import { shutdownPosthog } from "./src/gateway/track.js";
 import cron from "node-cron";
 import { runDailyRollup } from "./src/gateway/usage/rollup.js";
 import { runDailyDigest } from "./src/gateway/digest.js";
+import { runNoActivationFollowup } from "./src/gateway/lifecycle.js";
 
 const dev = process.env.NODE_ENV !== "production";
 
@@ -57,10 +58,23 @@ async function main() {
     { timezone: "America/Los_Angeles" }
   );
 
+  // No-activation follow-up email — 9:15am Pacific (a normal send hour,
+  // after the 8:52 digest so ops sees the day's numbers first)
+  const followupJob = cron.schedule(
+    "15 9 * * *",
+    () => {
+      runNoActivationFollowup(db).catch((err) =>
+        console.error("[lifecycle] follow-up run failed", err)
+      );
+    },
+    { timezone: "America/Los_Angeles" }
+  );
+
   const shutdown = async () => {
     console.log("Shutting down...");
     rollupJob.stop();
     digestJob.stop();
+    followupJob.stop();
     await pluginManager.stopAll();
     await pool.drain();
     await shutdownPosthog();

@@ -42,6 +42,8 @@ const envSchema = z.object({
   // PostHog Query API (daily digest) — personal API key (NOT the ingestion key)
   POSTHOG_PERSONAL_API_KEY: z.string().default(""),
   POSTHOG_PROJECT_ID: z.string().default(""),
+  // Brevo (lifecycle emails: welcome + no-activation follow-up); empty = disabled
+  BREVO_API_KEY: z.string().default(""),
 });
 
 export type Env = z.infer<typeof envSchema>;

@@ -55,6 +55,7 @@ services:
       SLACK_WEBHOOK_ALERTS: ${SLACK_WEBHOOK_ALERTS:-}
       POSTHOG_PERSONAL_API_KEY: ${POSTHOG_PERSONAL_API_KEY:-}
       POSTHOG_PROJECT_ID: ${POSTHOG_PROJECT_ID:-}
+      BREVO_API_KEY: ${BREVO_API_KEY:-}
       NODE_ENV: production
     healthcheck:
       test: ["CMD", "node", "-e", "fetch('http://localhost/health').then(r=>{if(!r.ok)throw r.status;process.exit(0)}).catch(()=>process.exit(1))"]
