@@ -11,6 +11,7 @@ vi.mock("../lib/slack.js", () => ({
 }));
 
 import { trackToolCall } from "./track.js";
+import { clearUserIdentityCache } from "./user-email.js";
 
 const returning = vi.fn();
 const insertValues = vi.fn();
@@ -39,9 +40,12 @@ function callProps(overrides: Partial<Parameters<typeof trackToolCall>[1]> = {})
 describe("first_tool_call milestone", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    clearUserIdentityCache();
     insertValues.mockResolvedValue(undefined);
     returning.mockResolvedValue([]);
-    selectLimit.mockResolvedValue([{ email: "user-1@example.com" }]);
+    selectLimit.mockResolvedValue([
+      { email: "user-1@example.com", firstToolCallAt: null },
+    ]);
   });
 
   it("fires first_tool_call when the milestone is newly claimed", async () => {
@@ -79,6 +83,26 @@ describe("first_tool_call milestone", () => {
     const events = capture.mock.calls.map((c) => c[0].event);
     expect(events).toContain("tool_call");
     expect(events).not.toContain("first_tool_call");
+  });
+
+  it("skips the claim UPDATE entirely once activation is cached", async () => {
+    returning.mockResolvedValue([{ id: "user-1" }]);
+    await trackToolCall(dbMock, callProps()); // claims + caches activation
+    await trackToolCall(dbMock, callProps());
+    await trackToolCall(dbMock, callProps());
+    expect(update).toHaveBeenCalledTimes(1);
+    const firstCalls = capture.mock.calls.filter(
+      (c) => c[0].event === "first_tool_call"
+    );
+    expect(firstCalls).toHaveLength(1);
+  });
+
+  it("skips the claim UPDATE for users already activated in the db", async () => {
+    selectLimit.mockResolvedValue([
+      { email: "user-1@example.com", firstToolCallAt: new Date() },
+    ]);
+    await trackToolCall(dbMock, callProps());
+    expect(update).not.toHaveBeenCalled();
   });
 
   it("ignores playground calls", async () => {

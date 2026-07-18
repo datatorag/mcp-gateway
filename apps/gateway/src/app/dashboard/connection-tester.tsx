@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import posthog from "posthog-js";
 import { EVENTS } from "@/lib/analytics";
+import { useCopyToClipboard } from "@/lib/use-copy-to-clipboard";
 
 const MCP_CONFIG = `{
   "mcpServers": {
@@ -45,11 +46,9 @@ function StepIcon({ done, active }: { done: boolean; active: boolean }) {
   return (
     <span className="flex h-5 w-5 shrink-0 items-center justify-center">
       <span
-        className={
-          active
-            ? "h-2.5 w-2.5 animate-pulse rounded-full bg-amber-500"
-            : "h-2.5 w-2.5 rounded-full bg-muted-foreground/25"
-        }
+        className={`h-2.5 w-2.5 rounded-full ${
+          active ? "animate-pulse bg-amber-500" : "bg-muted-foreground/25"
+        }`}
       />
     </span>
   );
@@ -57,7 +56,7 @@ function StepIcon({ done, active }: { done: boolean; active: boolean }) {
 
 export function ConnectionTester() {
   const [status, setStatus] = useState<SetupStatus | null>(null);
-  const [copied, setCopied] = useState(false);
+  const { copied, copy } = useCopyToClipboard<boolean>();
 
   const fetchStatus = useCallback(async () => {
     try {
@@ -85,9 +84,7 @@ export function ConnectionTester() {
   }, [complete, fetchStatus]);
 
   function copyConfig() {
-    navigator.clipboard.writeText(MCP_CONFIG);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+    copy(MCP_CONFIG, true);
     posthog.capture(EVENTS.COPY_MCP_CONFIG, { source: "dashboard_button" });
   }
 
@@ -160,11 +157,9 @@ export function ConnectionTester() {
               <StepIcon done={step.done} active={i === activeIndex} />
               <div className="min-w-0">
                 <p
-                  className={
-                    step.done
-                      ? "text-xs font-medium text-foreground"
-                      : "text-xs font-medium text-muted-foreground"
-                  }
+                  className={`text-xs font-medium ${
+                    step.done ? "text-foreground" : "text-muted-foreground"
+                  }`}
                 >
                   {step.label}
                 </p>

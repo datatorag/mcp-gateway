@@ -6,7 +6,12 @@ import { getPosthog, shutdownPosthog } from "../lib/posthog-server.js";
 import { sendSlack } from "../lib/slack.js";
 import { writeUsageEvent } from "./usage/write.js";
 import { classifyOutcome, type ClassifyInput } from "./usage/classify.js";
-import { resolveUserEmail, identityProps } from "./user-email.js";
+import {
+  resolveUserIdentity,
+  resolveUserEmail,
+  markUserActivated,
+  identityProps,
+} from "./user-email.js";
 
 export { shutdownPosthog };
 
@@ -25,7 +30,8 @@ export async function trackToolCall(
 ): Promise<void> {
   const { status, meter } = classifyOutcome(props.outcome);
   const c = getPosthog();
-  const userEmail = c ? await resolveUserEmail(db, props.userId) : null;
+  const identity = await resolveUserIdentity(db, props.userId);
+  const userEmail = identity?.email ?? null;
   if (c) {
     c.capture({
       distinctId: props.userId,
@@ -46,7 +52,9 @@ export async function trackToolCall(
 
   // Activation milestone: only real MCP traffic counts — a playground call
   // from the dashboard doesn't prove the user's agent can reach the gateway.
-  if (status === "success" && props.outcome.source === "mcp") {
+  // Skipped once the cache knows the user is activated, so the per-call
+  // claim UPDATE runs at most once per user per process.
+  if (status === "success" && props.outcome.source === "mcp" && !identity?.activated) {
     await trackFirstToolCall(
       db,
       props.userId,
@@ -95,6 +103,8 @@ async function trackFirstToolCall(
       .set({ firstToolCallAt: new Date() })
       .where(and(eq(users.id, userId), isNull(users.firstToolCallAt)))
       .returning({ id: users.id });
+    // The claim ran, so first_tool_call_at is now non-null either way.
+    markUserActivated(userId);
     if (claimed.length === 0) return;
     const c = getPosthog();
     if (!c) return;

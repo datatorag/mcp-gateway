@@ -6,6 +6,7 @@ import posthog from "posthog-js";
 import { EVENTS } from "@/lib/analytics";
 import { SERVICES } from "./connections/services";
 import { ConnectionTester } from "./connection-tester";
+import { useCopyToClipboard } from "@/lib/use-copy-to-clipboard";
 import type { ConnectedAccount, LegacyConnection } from "./connections/types";
 
 const EXAMPLE_PROMPTS = [
@@ -24,7 +25,7 @@ export function DashboardClient() {
   >([]);
   const [loading, setLoading] = useState(true);
   const [disconnecting, setDisconnecting] = useState<string | null>(null);
-  const [copied, setCopied] = useState<number | null>(null);
+  const { copied, copy } = useCopyToClipboard<number>();
 
   const fetchConnections = useCallback(async () => {
     const res = await fetch("/api/connections");
@@ -62,12 +63,6 @@ export function DashboardClient() {
     setLegacyConnections((prev) => prev.filter((c) => c.service !== service));
     setDisconnecting(null);
     posthog.capture(EVENTS.CONNECTOR_REMOVED, { connector: service });
-  }
-
-  function copyPrompt(index: number, text: string) {
-    navigator.clipboard.writeText(text);
-    setCopied(index);
-    setTimeout(() => setCopied(null), 2000);
   }
 
   return (
@@ -275,7 +270,7 @@ export function DashboardClient() {
           {EXAMPLE_PROMPTS.map((prompt, i) => (
             <button
               key={i}
-              onClick={() => copyPrompt(i, prompt)}
+              onClick={() => copy(prompt, i)}
               className="group relative rounded-lg border border-border px-3 py-2.5 text-left text-xs leading-relaxed text-foreground transition-colors hover:border-primary/30 hover:bg-secondary/50"
             >
               <span className="pr-5">{prompt}</span>

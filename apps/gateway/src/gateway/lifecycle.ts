@@ -78,10 +78,7 @@ export type FollowupResult = {
  */
 export async function runNoActivationFollowup(
   db: Database,
-  opts?: {
-    now?: Date;
-    send?: (email: string, firstName: string) => Promise<boolean>;
-  }
+  opts?: { now?: Date }
 ): Promise<FollowupResult> {
   const result: FollowupResult = { eligible: 0, sent: 0, failed: 0 };
   if (!hasBrevoKey()) {
@@ -91,12 +88,6 @@ export async function runNoActivationFollowup(
     return result;
   }
   const now = opts?.now ?? new Date();
-  const send =
-    opts?.send ??
-    ((email: string, firstName: string) =>
-      sendBrevoTemplate(BREVO_TEMPLATE_NO_ACTIVATION, email, {
-        FIRSTNAME: firstName,
-      }));
   const cutoff = new Date(now.getTime() - FOLLOWUP_DELAY_MS);
 
   const candidates = await db
@@ -124,7 +115,9 @@ export async function runNoActivationFollowup(
       .returning({ id: users.id });
     if (claimed.length === 0) continue; // raced with another run
 
-    const ok = await send(user.email, firstNameOf(user.name));
+    const ok = await sendBrevoTemplate(BREVO_TEMPLATE_NO_ACTIVATION, user.email, {
+      FIRSTNAME: firstNameOf(user.name),
+    });
     if (ok) {
       result.sent++;
     } else {
