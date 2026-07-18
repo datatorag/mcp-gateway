@@ -36,6 +36,13 @@
       "when": 1784271373103,
       "tag": "0004_smiling_hercules",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1784355972614,
+      "tag": "0005_faulty_legion",
+      "breakpoints": true
     }
   ]
 }

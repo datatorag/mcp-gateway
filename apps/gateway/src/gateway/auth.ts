@@ -10,6 +10,7 @@ import {
   trackOAuthCompleted,
   trackSignup,
 } from "./track.js";
+import { sendWelcomeEmail } from "./lifecycle.js";
 
 const GWS_SCOPES = [
   "openid",
@@ -134,6 +135,12 @@ export function createAuthRouter(
 
     if (isNewUser) {
       trackSignup(user.id, user.email, user.name);
+      void sendWelcomeEmail({
+        email: user.email,
+        name: user.name,
+        createdAt: user.createdAt,
+        plan: user.plan,
+      });
     } else {
       trackLogin(user.id, user.email);
     }

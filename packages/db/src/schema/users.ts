@@ -22,6 +22,11 @@ export const users = pgTable("users", {
   // Activation milestone: set once on the user's first successful tool call
   // (see trackToolCall) so the funnel has a durable first_tool_call marker.
   firstToolCallAt: timestamp("first_tool_call_at", { withTimezone: true }),
+  // Set when the no-activation follow-up email is claimed for sending
+  // (see lifecycle.ts) — the IS NULL guard makes double-sends impossible.
+  noActivationFollowupSentAt: timestamp("no_activation_followup_sent_at", {
+    withTimezone: true,
+  }),
   createdAt: timestamp("created_at", { withTimezone: true })
     .notNull()
     .defaultNow(),
