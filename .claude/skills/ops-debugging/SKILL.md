@@ -43,11 +43,11 @@ won't fix the `tools` table, run the full re-discovery recipe. Proven in prod
    and the `postgres` driver fails from `/tmp` or other paths):
 
    ```bash
-   docker exec <gateway-container> bash -c \
-     'cd /app/apps/gateway && node /tmp/rediscover.mjs'
-   # ^ script itself must live/run from /app/apps/gateway's node_modules resolution;
-   #   copy it in under that dir if it isn't already, don't just cwd there.
+   docker exec -i <gateway-container> bash -c \
+     'cat > /app/apps/gateway/rediscover.mjs && cd /app/apps/gateway && node rediscover.mjs; rm -f /app/apps/gateway/rediscover.mjs' < rediscover.mjs
    ```
+
+   The script file must live under `/app/apps/gateway` — Node ESM resolves imports from the script's own path, so `/tmp` fails even with `cwd` set. The script is piped in from your local copy and removed after.
 
    Script skeleton (fill in `<placeholders>`):
 
