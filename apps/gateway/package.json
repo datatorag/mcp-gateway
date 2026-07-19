@@ -9,6 +9,7 @@
     "start": "node dist/server.js",
     "test": "vitest run",
     "test:watch": "vitest",
+    "test:e2e": "vitest run e2e/",
     "setup:stripe": "node scripts/setup-stripe.mjs"
   },
   "dependencies": {
