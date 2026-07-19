@@ -30,3 +30,23 @@ Before every `git push` and before every production deploy:
   typecheck: `pnpm exec tsc --noEmit`; production build: `pnpm build`.
 - Before pushing, verify the active GitHub account is the org account
   (`gh auth status`), not a personal one.
+
+## Skills & agents
+
+Codebase knowledge lives in `.claude/skills/` — load these instead of
+re-reading the source:
+
+- `codebase-map` — architecture, flows, decisions, where-things-live. Load first.
+- `gateway-dev` — recipes for gateway changes + test patterns + ship ritual.
+- `site-content` — blog/changelog/docs systems and page conventions.
+- `services-integrations` — Brevo/Slack/Stripe/PostHog/event-pipeline patterns.
+- `ops-debugging` — prod runbook (placeholder form; live values in memory).
+- `gws-mcp-dev` — developing the gws-mcp plugin repo + its ship tail.
+- Plus: `blog-writing`, `db-query`, `deploy`, `humanizer` (pre-existing).
+
+Agents in `.claude/agents/`: `engineer` implements, `qa-engineer` verifies,
+`content-marketer` keeps changelog/blog covering what shipped,
+`security-reviewer` gates every push/deploy.
+
+**Freshness rule:** any change that alters a pattern documented in a
+`.claude/skills/` skill updates that skill in the same commit/PR.
