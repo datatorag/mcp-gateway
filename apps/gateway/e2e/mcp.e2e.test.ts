@@ -8,8 +8,7 @@
 // picks this file up at all because it lives outside vitest.config.ts's
 // `include: ["src/**/*.test.ts"]` glob.
 //
-// Reality check performed before writing this file (see
-// .superpowers/sdd/task-7b-report.md for the full trace):
+// Reality check performed before writing this file:
 // - Auth is `Authorization: Bearer <oauth_access_tokens.token>` — confirmed
 //   in apps/gateway/server.ts's `validateBearer` and by a live curl probe.
 // - Tool names are namespaced as `${serverSlug}__${toolName}` via
