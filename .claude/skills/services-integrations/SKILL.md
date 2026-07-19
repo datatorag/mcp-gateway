@@ -1,0 +1,91 @@
+---
+name: services-integrations
+description: Use when touching datatorag-mcp's third-party integrations — Brevo email lifecycle, Slack (Dara bot), Stripe, PostHog analytics, or the track/digest event pipeline. Patterns, event flows, and masking rules per service.
+---
+
+# Services & Integrations
+
+Third-party service clients for the gateway app. See `codebase-map` for how these fit into the overall gateway request flow — this skill is the per-service detail.
+
+**The shared shape, once, so each service section below can just say "follows the pattern":** every side-channel client (Brevo, Slack) is a never-throw HTTP wrapper —
+
+```ts
+async function callThing(...): Promise<boolean> {
+  const key = getEnv().THING_API_KEY;
+  if (!key) { console.warn("[thing] THING_API_KEY not set — skipping"); return false; }
+  try {
+    const res = await fetch(url, { ... , signal: AbortSignal.timeout(N) });
+    if (!res.ok) { console.warn(`[thing] failed: ${res.status} ${(await res.text()).slice(0, 300)}`); return false; }
+    return true;
+  } catch (err) { console.warn("[thing] error", err); return false; }
+}
+```
+
+No env var/token → warned no-op, not a throw. Non-2xx or a network error → warned `false`, not a throw. Error bodies are truncated to 300 chars in the warn log — don't expect full payloads there. New integrations should copy this shape rather than inventing a new failure contract.
+
+## Per-service patterns
+
+### Brevo (transactional email)
+
+Entry file: `apps/gateway/src/lib/brevo.ts`. Single internal `brevoPost()` helper (follows the shape above) wraps all HTTP calls; two public functions call it: `upsertBrevoContact()` (`POST /contacts`) and `sendBrevoTemplate()` (`POST /smtp/email`).
+
+- List/template IDs (`BREVO_LIST_PRODUCT_USERS`, `BREVO_TEMPLATE_WELCOME`, `BREVO_TEMPLATE_NO_ACTIVATION`) are hardcoded constants, not env vars — they're managed in the Brevo console.
+- `isInternalEmail()` checks a hardcoded founder-email `Set` plus the `@datatorag.com` domain; lifecycle emails must skip these.
+- `hasBrevoKey()` lets callers check availability before doing other work (see Lifecycle below, which checks this *before* claiming a DB row).
+- Env var: `BREVO_API_KEY`.
+
+### Slack (Dara bot)
+
+Entry file: `apps/gateway/src/lib/slack.ts`. `sendSlack(channel, message)` (follows the shape above, plus one extra check — see below) posts to `https://slack.com/api/chat.postMessage` with `Authorization: Bearer <SLACK_BOT_TOKEN>`.
+
+- `channel` is a logical name (`"leads" | "digest" | "alerts"`) resolved through the `CHANNEL_ENV` lookup table to one of `SLACK_CHANNEL_LEADS`, `SLACK_CHANNEL_DIGEST`, `SLACK_CHANNEL_ALERTS`. To add a new logical channel: extend the `SlackChannel` union, add a row to `CHANNEL_ENV`, add the var to `.env.example` — don't hardcode a channel ID at the call site.
+- Slack's Web API returns HTTP 200 even for API-level errors, so `sendSlack` checks both `res.ok` and the parsed body's `data?.ok` before treating a send as successful — this is the one place the shared wrapper shape isn't enough on its own.
+- This replaced a webhook-based implementation (commit `a426a0a`, preceded by `8dad409`) so the existing "Dara" Slack app's bot token could be reused instead of provisioning three separate webhook URLs.
+- Call sites use `void sendSlack(...)` (fire-and-forget) so a Slack outage never blocks the request path — see `track.ts`, `route.ts`, `lifecycle.ts`, `digest.ts`.
+- Env var: `SLACK_BOT_TOKEN` (plus the three channel vars above).
+
+### Stripe
+
+Entry file: `apps/gateway/src/lib/stripe.ts`. `getStripe()` is a lazy singleton that **throws** if `STRIPE_API_KEY` is unset — unlike Brevo/Slack, Stripe is load-bearing wherever it's called, not a best-effort side channel; there's no warned-no-op path to copy here. `ensureStripeCustomer()` lazily creates a Stripe Customer only when `existingId` is absent, tagging it with `metadata: { user_id }`. Env vars: `STRIPE_API_KEY`, `STRIPE_WEBHOOK_SECRET`.
+
+### PostHog (server / Node)
+
+Entry file: `apps/gateway/src/lib/posthog-server.ts`. `getPosthog()` is a lazy singleton that returns `null` (not throw, not warn) when `POSTHOG_API_KEY` is unset — every caller must null-check (`const c = getPosthog(); if (!c) return;`) rather than relying on a warn log. `flushAt: 20`, `flushInterval: 10_000`. Host is hardcoded (`https://us.i.posthog.com`), not env-driven. `shutdownPosthog()` resets the client for clean process exit — call it on graceful shutdown so buffered events flush. Env var: `POSTHOG_API_KEY`.
+
+### PostHog (client / browser)
+
+Entry file: `apps/gateway/src/components/posthog-provider.tsx`. Module-scope `posthog.init()` gated on `NEXT_PUBLIC_POSTHOG_KEY`, with `capture_pageview: false` plus a manual `PageviewTracker` that fires `$pageview` on route change, and an `IdentifyUser` component that calls `posthog.identify()` off the current user. `capture_pageleave` and `capture_performance.web_vitals` are on. Env var: `NEXT_PUBLIC_POSTHOG_KEY`.
+
+Note: `digest.ts`'s `collectPosthog()` uses a *different* credential pair — `POSTHOG_PERSONAL_API_KEY` + `POSTHOG_PROJECT_ID` (personal API key against PostHog's own HogQL query endpoint) — from the ingestion client above (`POSTHOG_API_KEY`, project API key). These are not interchangeable; don't reuse one for the other.
+
+## Event pipeline
+
+`apps/gateway/src/gateway/track.ts` fires PostHog events and gates the activation milestone:
+
+- `trackToolCall()` — fires PostHog `tool_call` on every classified call, then (only when `status === "success"`, `props.outcome.source === "mcp"`, and the user isn't already activated) claims the `first_tool_call` milestone via `trackFirstToolCall()`, then writes a metering usage row via `writeUsageEvent`.
+- `trackFirstToolCall()` uses an atomic `UPDATE users SET first_tool_call_at = ... WHERE first_tool_call_at IS NULL RETURNING id` — checking `.length === 0` to detect a lost race — rather than SELECT-then-UPDATE. This is the pattern for any other exactly-once side effect.
+- `trackSignup()` fires `sendSlack("leads", ...)` plus a PostHog `identify` + `user_signed_up` capture.
+- `trackOAuthCompleted()` fires `account_connected`.
+
+`apps/gateway/src/gateway/digest.ts` runs the daily Slack digest: `runDailyDigest()` runs three collectors in parallel via `Promise.all` — `collectNeon` (DB queries for leads/signups/tool-calls/connections), `collectStripe` (Stripe Events API), `collectPosthog` (HogQL query over PostHog's own query API). Each is wrapped by `runSource()`, which catches a collector failure, alerts `#alerts` via Slack, and returns `null` so the digest still renders that section as unavailable rather than failing outright. The final message posts via `sendSlack("digest", ...)`. `MAX_LEAD_LINES = 10` caps the lead list (Slack caps messages at 50 blocks).
+
+`apps/gateway/src/gateway/lifecycle.ts` is the Brevo side of this pipeline: `sendWelcomeEmail()` fires on signup (skips internal emails and no-key state); `runNoActivationFollowup()` is a daily job that selects users older than 3 days with no `firstToolCallAt`, atomically claims each one (same `UPDATE ... WHERE ... IS NULL RETURNING id` pattern) **before** sending, then sends the follow-up template and alerts `#alerts` on send failure. It checks `hasBrevoKey()` before claiming anything — claiming without being able to send would permanently burn the user's one-shot eligibility. `LIFECYCLE_LAUNCH` is a hardcoded cutoff constant so pre-existing users (who got a manual one-off campaign) don't also get the automated flow.
+
+`apps/gateway/src/gateway/user-email.ts` provides `identityProps(email)` — the shared `{ user_email, $set: { email } }` shape spread into every server-side PostHog capture — plus a per-process `Map` cache (`resolveUserIdentity()`) so the tool-call hot path isn't a DB round trip every time.
+
+## Leads & privacy
+
+Leads route: `apps/gateway/src/app/api/leads/route.ts`. Client IP is hashed via `hashIp()` (`sha256(LEADS_IP_SALT:ip)`, env var name only — value lives in SSM) before rate-limiting and storage; only the hash is ever persisted, never the raw IP. Rate limiting (`apps/gateway/src/gateway/leads/limiter.ts`) composes a 3/min and a 10/hour limiter, both keyed by the IP hash. A honeypot field (`website`) is silently accepted without an insert.
+
+**Masking rule is context-dependent, not contradictory:** mask emails when quoting user data into chat/UI-facing output generally. But Slack lead/signup notifications deliberately show the **full** email — this is a founder preference for the team's own users/leads (see `route.ts`'s Slack message construction and `track.ts`'s `trackSignup()`), not an oversight. There is no masking helper anywhere in `apps/gateway/src/gateway/leads/` or `apps/gateway/src/lib/` — that absence is intentional, confirmed by the same policy applying to `db-query`'s output rules. Don't add masking to these call sites without confirming the policy changed.
+
+## Testing
+
+Copy the HTTP-mock pattern from `apps/gateway/src/lib/brevo.test.ts` and `apps/gateway/src/lib/slack.test.ts` for any new integration:
+
+1. `vi.mock("@datatorag-mcp/config", () => ({ getEnv: () => env }))` with a mutable `env` object declared above the mock, so individual tests can flip keys on/off.
+2. `vi.stubGlobal("fetch", fetchMock)` with a `vi.fn()`, reset per test (`vi.clearAllMocks()` / `vi.restoreAllMocks()` in `beforeEach`).
+3. Assert on `fetchMock.mock.calls[0]` — destructure `[url, init]`, check `url`, `init.headers`, and `JSON.parse(init.body)`.
+4. Always test the no-op branch (missing key/token/channel → `fetch` never called) and the never-throws branch (non-2xx response, and a rejected fetch) explicitly.
+
+Run just this domain's tests: `cd apps/gateway && pnpm vitest run src/lib/brevo.test.ts src/lib/slack.test.ts src/gateway/track.slack.test.ts src/gateway/track.firstcall.test.ts src/gateway/digest.test.ts src/gateway/lifecycle.test.ts src/app/api/leads/route.slack.test.ts`
