@@ -39,6 +39,9 @@ export default function RootLayout({
       className={`${montserrat.variable} ${inter.variable} ${ptMono.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col font-sans overflow-x-hidden">
+        {/* Must stay before {children}: effects flush in tree order, so the
+            gtag stub exists before page effects (e.g. the dashboard's signup
+            conversion) run. */}
         <GoogleAds />
         <PostHogProvider>{children}</PostHogProvider>
       </body>

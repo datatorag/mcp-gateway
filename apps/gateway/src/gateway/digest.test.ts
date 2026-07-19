@@ -2,11 +2,22 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
 vi.mock("../lib/slack.js", () => ({ sendSlack: vi.fn().mockResolvedValue(undefined) }));
 vi.mock("../lib/stripe.js", () => ({ getStripe: vi.fn() }));
-vi.mock("@datatorag-mcp/config", () => ({
-  getEnv: () => ({ STRIPE_API_KEY: "", POSTHOG_PERSONAL_API_KEY: "", POSTHOG_PROJECT_ID: "" }),
+const envState = vi.hoisted(() => ({
+  STRIPE_API_KEY: "",
+  POSTHOG_PERSONAL_API_KEY: "",
+  POSTHOG_PROJECT_ID: "",
+  INTERNAL_EXCLUDE_EMAILS: "",
+  INTERNAL_EXCLUDE_IDS: "",
 }));
+vi.mock("@datatorag-mcp/config", () => ({ getEnv: () => envState }));
 
-import { formatDigest, runDailyDigest, collectStripe, collectPosthog } from "./digest.js";
+import {
+  formatDigest,
+  runDailyDigest,
+  collectStripe,
+  collectPosthog,
+  posthogInternalFilterSql,
+} from "./digest.js";
 import { sendSlack } from "../lib/slack.js";
 
 const fakeDb = {} as never; // collectors are injected in these tests; db is never touched
@@ -94,5 +105,57 @@ describe("collectStripe / collectPosthog — not configured", () => {
     await expect(collectPosthog(new Date())).resolves.toEqual(["_not configured — skipped_"]);
     expect(fetchMock).not.toHaveBeenCalled();
     expect(sendSlack).not.toHaveBeenCalledWith("alerts", expect.anything());
+  });
+});
+
+describe("internal-traffic exclusion", () => {
+  const fetchMock = vi.fn();
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.stubGlobal("fetch", fetchMock);
+    envState.POSTHOG_PERSONAL_API_KEY = "";
+    envState.POSTHOG_PROJECT_ID = "";
+    envState.INTERNAL_EXCLUDE_EMAILS = "";
+    envState.INTERNAL_EXCLUDE_IDS = "";
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    envState.POSTHOG_PERSONAL_API_KEY = "";
+    envState.POSTHOG_PROJECT_ID = "";
+    envState.INTERNAL_EXCLUDE_EMAILS = "";
+    envState.INTERNAL_EXCLUDE_IDS = "";
+  });
+
+  it("always excludes the company domain even with no env lists", () => {
+    expect(posthogInternalFilterSql()).toBe(
+      "AND coalesce(person.properties.email, '') NOT ILIKE '%@datatorag.com'"
+    );
+  });
+
+  it("adds trimmed, lowercased email and case-preserved distinct_id exclusions from env", () => {
+    envState.INTERNAL_EXCLUDE_EMAILS = " Founder@Example.com ,test2@example.com,";
+    // distinct_id comparison is case-sensitive in HogQL — case must survive.
+    envState.INTERNAL_EXCLUDE_IDS = "Abc-123";
+    const filter = posthogInternalFilterSql();
+    expect(filter).toContain(
+      "lower(coalesce(person.properties.email, '')) NOT IN ('founder@example.com', 'test2@example.com')"
+    );
+    expect(filter).toContain("AND distinct_id NOT IN ('Abc-123')");
+  });
+
+  it("collectPosthog embeds the exclusion filter in the HogQL it sends", async () => {
+    envState.POSTHOG_PERSONAL_API_KEY = "phx_test";
+    envState.POSTHOG_PROJECT_ID = "123";
+    envState.INTERNAL_EXCLUDE_IDS = "abc-123";
+    fetchMock.mockResolvedValue({ ok: true, json: async () => ({ results: [] }) });
+    await collectPosthog(new Date());
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const body = JSON.parse(fetchMock.mock.calls[0][1].body as string);
+    expect(body.query.query).toContain("NOT ILIKE '%@datatorag.com'");
+    expect(body.query.query).toContain("distinct_id NOT IN ('abc-123')");
+    // The filter must sit between WHERE and GROUP BY, not dangle at the end.
+    expect(body.query.query).toMatch(/NOT ILIKE '%@datatorag\.com'.*GROUP BY event/);
   });
 });

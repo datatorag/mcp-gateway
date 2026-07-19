@@ -42,6 +42,11 @@ const envSchema = z.object({
   POSTHOG_PROJECT_ID: z.string().default(""),
   // Brevo (lifecycle emails: welcome + no-activation follow-up); empty = disabled
   BREVO_API_KEY: z.string().default(""),
+  // Internal/test traffic excluded from analytics queries (daily digest).
+  // Comma-separated; values live in env/SSM only — never in this public repo.
+  // Keep mirrored with the PostHog "Internal / Test users" cohort.
+  INTERNAL_EXCLUDE_EMAILS: z.string().default(""),
+  INTERNAL_EXCLUDE_IDS: z.string().default(""),
 });
 
 export type Env = z.infer<typeof envSchema>;

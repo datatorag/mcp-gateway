@@ -1,6 +1,7 @@
-import { gte, sql } from "drizzle-orm";
+import { and, gte, inArray, notInArray, sql, type SQL } from "drizzle-orm";
 import type { Database } from "@datatorag-mcp/db";
 import { leads, users, usageEvents, serviceConnections } from "@datatorag-mcp/db";
+import type { PgColumn } from "drizzle-orm/pg-core";
 import { getEnv } from "@datatorag-mcp/config";
 import { getStripe } from "../lib/stripe.js";
 import { sendSlack, type SlackMessage } from "../lib/slack.js";
@@ -20,13 +21,89 @@ export type Collectors = {
 const MAX_LEAD_LINES = 10; // Slack caps messages at 50 blocks; keep lists bounded
 const NOT_CONFIGURED = ["_not configured — skipped_"]; // rendered for credential-less sources; asserted verbatim in tests
 
+// ── Internal-traffic exclusion ────────────────────────────────────────
+// Raw HogQL/API queries do NOT inherit PostHog's insight-level test-account
+// filters, and DB counts see every row — so the digest must exclude internal
+// traffic itself or dogfooding shows up as customer activity. The @datatorag.com
+// domain is excluded unconditionally; the specific email/id lists live in env
+// (INTERNAL_EXCLUDE_EMAILS / INTERNAL_EXCLUDE_IDS, comma-separated), NOT in
+// this public repo. Keep those env values mirrored with the PostHog
+// "Internal / Test users" cohort.
+
+function csv(v: string | undefined): string[] {
+  return (v ?? "")
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
+}
+
+export function internalExclusion(): { emails: string[]; ids: string[] } {
+  const env = getEnv();
+  return {
+    // Emails are matched lowercased on both sides; ids keep their case —
+    // distinct_id comparison is case-sensitive in HogQL.
+    emails: csv(env.INTERNAL_EXCLUDE_EMAILS).map((e) => e.toLowerCase()),
+    ids: csv(env.INTERNAL_EXCLUDE_IDS),
+  };
+}
+
+// HogQL string literal — single quotes escaped ClickHouse-style.
+const hogqlStr = (s: string) => `'${s.replace(/'/g, "\\'")}'`;
+
+/**
+ * WHERE-clause fragment (leading `AND ...`) excluding internal traffic from a
+ * HogQL events query. Uses coalesce() because a NULL email would make
+ * `NOT IN` evaluate to NULL and silently drop every anonymous event.
+ */
+export function posthogInternalFilterSql(): string {
+  const { emails, ids } = internalExclusion();
+  const clauses = [
+    "coalesce(person.properties.email, '') NOT ILIKE '%@datatorag.com'",
+  ];
+  if (emails.length > 0) {
+    clauses.push(
+      `lower(coalesce(person.properties.email, '')) NOT IN (${emails.map(hogqlStr).join(", ")})`
+    );
+  }
+  if (ids.length > 0) {
+    clauses.push(`distinct_id NOT IN (${ids.map(hogqlStr).join(", ")})`);
+  }
+  return clauses.map((c) => `AND ${c}`).join(" ");
+}
+
+// SQL condition: this email column belongs to an internal/test account.
+function isInternalEmail(emailCol: PgColumn): SQL {
+  const { emails } = internalExclusion();
+  const domainMatch = sql`${emailCol} ILIKE '%@datatorag.com'`;
+  if (emails.length === 0) return domainMatch;
+  return sql`(${domainMatch} OR ${inArray(sql`lower(${emailCol})`, emails)})`;
+}
+
+const UUID_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+// Conditions excluding internal users from a table keyed by user id.
+// Only UUID-shaped ids can bind against uuid columns — a PostHog-only
+// distinct_id in the env list would make Postgres throw 22P02 and take the
+// whole Neon section down. Non-UUID ids still apply in the HogQL filter.
+function notInternalUserId(db: Database, userIdCol: PgColumn): SQL[] {
+  const ids = internalExclusion().ids.filter((id) => UUID_RE.test(id));
+  const internalUsers = db
+    .select({ id: users.id })
+    .from(users)
+    .where(isInternalEmail(users.email));
+  const conds: SQL[] = [notInArray(userIdCol, internalUsers)];
+  if (ids.length > 0) conds.push(notInArray(userIdCol, ids));
+  return conds;
+}
+
 export async function collectNeon(db: Database, since: Date): Promise<string[]> {
   const lines: string[] = [];
 
   const newLeads = await db
     .select({ name: leads.name, email: leads.email, company: leads.company })
     .from(leads)
-    .where(gte(leads.createdAt, since));
+    .where(and(gte(leads.createdAt, since), sql`NOT ${isInternalEmail(leads.email)}`));
   if (newLeads.length > 0) {
     lines.push(`*${newLeads.length} new lead${newLeads.length === 1 ? "" : "s"}:*`);
     for (const l of newLeads.slice(0, MAX_LEAD_LINES)) {
@@ -40,7 +117,7 @@ export async function collectNeon(db: Database, since: Date): Promise<string[]> 
   const [signups] = await db
     .select({ n: sql<number>`count(*)::int` })
     .from(users)
-    .where(gte(users.createdAt, since));
+    .where(and(gte(users.createdAt, since), sql`NOT ${isInternalEmail(users.email)}`));
   lines.push(`Signups: ${signups.n}`);
 
   const [usage] = await db
@@ -49,13 +126,20 @@ export async function collectNeon(db: Database, since: Date): Promise<string[]> 
       activeUsers: sql<number>`count(distinct ${usageEvents.userId})::int`,
     })
     .from(usageEvents)
-    .where(gte(usageEvents.createdAt, since));
+    .where(
+      and(gte(usageEvents.createdAt, since), ...notInternalUserId(db, usageEvents.userId))
+    );
   lines.push(`Tool calls: ${usage.calls} (${usage.activeUsers} active user${usage.activeUsers === 1 ? "" : "s"})`);
 
   const [conns] = await db
     .select({ n: sql<number>`count(*)::int` })
     .from(serviceConnections)
-    .where(gte(serviceConnections.connectedAt, since));
+    .where(
+      and(
+        gte(serviceConnections.connectedAt, since),
+        ...notInternalUserId(db, serviceConnections.userId)
+      )
+    );
   lines.push(`New service connections: ${conns.n}`);
 
   return lines;
@@ -89,6 +173,7 @@ export async function collectPosthog(since: Date): Promise<string[]> {
     "SELECT event, count() AS n FROM events " +
     "WHERE timestamp >= now() - INTERVAL 1 DAY " +
     "AND event IN ('$pageview', 'lead_submitted', 'copy_mcp_config', 'connector_added') " +
+    `${posthogInternalFilterSql()} ` +
     "GROUP BY event ORDER BY event";
   const res = await fetch(
     `https://us.posthog.com/api/projects/${POSTHOG_PROJECT_ID}/query/`,

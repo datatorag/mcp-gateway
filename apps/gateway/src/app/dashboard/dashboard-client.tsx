@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import posthog from "posthog-js";
 import { EVENTS } from "@/lib/analytics";
+import { reportSignupConversion } from "@/components/google-ads";
 import { SERVICES } from "./connections/services";
 import { ConnectionTester } from "./connection-tester";
 import { useCopyToClipboard } from "@/lib/use-copy-to-clipboard";
@@ -40,6 +41,17 @@ export function DashboardClient() {
   useEffect(() => {
     fetchConnections();
   }, [fetchConnections]);
+
+  // The OAuth callback redirects first-time users to /dashboard?signup=1.
+  // Fire the Google Ads signup conversion once, then strip the param so a
+  // refresh (or a shared URL) can't re-fire it.
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("signup") === "1") {
+      reportSignupConversion();
+      window.history.replaceState(null, "", window.location.pathname);
+    }
+  }, []);
 
   async function disconnectAccount(e: React.MouseEvent, account: ConnectedAccount) {
     e.preventDefault();
