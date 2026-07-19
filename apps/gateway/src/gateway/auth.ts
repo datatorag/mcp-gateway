@@ -164,7 +164,9 @@ export function createAuthRouter(
       expires: expiresAt,
     });
 
-    res.redirect("/dashboard");
+    // ?signup=1 lets the dashboard fire the Google Ads signup conversion
+    // client-side (gtag lives in the browser, not this server callback).
+    res.redirect(isNewUser ? "/dashboard?signup=1" : "/dashboard");
   });
 
   // --- Logout ---

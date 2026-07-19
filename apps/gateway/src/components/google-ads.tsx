@@ -3,15 +3,26 @@ import Script from "next/script";
 // Google Ads global site tag (gtag.js). Public client-side ID — safe to ship.
 const GOOGLE_ADS_ID = "AW-18240284968";
 
-// Conversion label from the Google Ads conversion action
+// Conversion labels from the Google Ads conversion actions
 // (Goals → Conversions → the action's tag setup, e.g. "AbC-dEfG12345").
-// Set NEXT_PUBLIC_GOOGLE_ADS_CONVERSION_LABEL in prod once the action exists.
-const CONVERSION_LABEL = process.env.NEXT_PUBLIC_GOOGLE_ADS_CONVERSION_LABEL;
+// Set the NEXT_PUBLIC_* vars in prod once each action exists.
+const LEAD_CONVERSION_LABEL = process.env.NEXT_PUBLIC_GOOGLE_ADS_CONVERSION_LABEL;
+const SIGNUP_CONVERSION_LABEL =
+  process.env.NEXT_PUBLIC_GOOGLE_ADS_SIGNUP_CONVERSION_LABEL;
 
 declare global {
   interface Window {
     gtag?: (...args: unknown[]) => void;
   }
+}
+
+function reportConversion(label: string | undefined) {
+  if (typeof window === "undefined") return;
+  if (!label) return;
+  if (typeof window.gtag !== "function") return;
+  window.gtag("event", "conversion", {
+    send_to: `${GOOGLE_ADS_ID}/${label}`,
+  });
 }
 
 /**
@@ -20,12 +31,16 @@ declare global {
  * label isn't configured yet.
  */
 export function reportLeadConversion() {
-  if (typeof window === "undefined") return;
-  if (!CONVERSION_LABEL) return;
-  if (typeof window.gtag !== "function") return;
-  window.gtag("event", "conversion", {
-    send_to: `${GOOGLE_ADS_ID}/${CONVERSION_LABEL}`,
-  });
+  reportConversion(LEAD_CONVERSION_LABEL);
+}
+
+/**
+ * Fires a Google Ads conversion for a new account signup. Called from the
+ * dashboard when it loads with ?signup=1 (set by the OAuth callback for
+ * first-time users). Same no-op guards as the lead conversion.
+ */
+export function reportSignupConversion() {
+  reportConversion(SIGNUP_CONVERSION_LABEL);
 }
 
 /**
