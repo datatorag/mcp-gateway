@@ -18,8 +18,10 @@ release cycle from `datatorag-mcp`. It wraps the `gws` CLI binary
   (shared response helpers). `src/tools/index.ts` aggregates every module's
   tool array into `allTools` and builds the `toolHandlers` dispatch map.
 - `src/gws-client.ts` — the `GwsClient` wrapper. `src/create-server.ts` /
-  `src/extension.ts` (stdio, Claude Desktop `.mcpb`) / `src/index.ts` (HTTP,
-  port 39147) are the two entry points.
+  `src/extension.ts` (stdio, Claude Desktop `.mcpb`) / `src/index.ts`
+  (HTTP; defaults to port 39147 standalone — under the gateway the
+  plugin-manager overrides it via `PORT` env to 40000+) are the two
+  entry points.
 - `datatorag.json` — the plugin manifest the gateway reads: `name`,
   `description`, and an `oauth` block (`scopes`, `authorizeUrl`/`tokenUrl`,
   `clientIdEnv`/`clientSecretEnv` — env var *names*, no secret values).

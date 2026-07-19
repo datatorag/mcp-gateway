@@ -20,8 +20,9 @@ for the range rather than guessing.
 - This repo: `git log --oneline <range>`, then read the commits that
   look user-visible to understand what actually changed for users.
 - Plugin repo, when named: merged PRs count as shipped changes —
-  `gh pr list --repo DataToRag/gws-mcp --state merged` (filter to the
-  window that matches the range).
+  `gh pr list --repo <owner>/<repo> --state merged` (e.g.
+  `DataToRag/gws-mcp`; the deploy skill's Plugin Repos table maps
+  plugin slugs to repos) (filter to the window that matches the range).
 
 Classify each change: user-visible behavior, breaking, or internal-only.
 Internal-only changes (refactors, CI, tooling) need no content.

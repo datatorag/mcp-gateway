@@ -42,7 +42,7 @@ re-reading the source:
 - `services-integrations` — Brevo/Slack/Stripe/PostHog/event-pipeline patterns.
 - `ops-debugging` — prod runbook (placeholder form; live values in memory).
 - `gws-mcp-dev` — developing the gws-mcp plugin repo + its ship tail.
-- Plus: `blog-writing`, `db-query`, `deploy`, `humanizer` (pre-existing).
+- Plus: `blog-writing`, `db-query`, `deploy`, `humanizer`, `marketing-video`, `product-promo-video` (pre-existing).
 
 Agents in `.claude/agents/`: `engineer` implements, `qa-engineer` verifies,
 `content-marketer` keeps changelog/blog covering what shipped,

@@ -27,9 +27,8 @@ pnpm build
 
 When the change touches the gateway/MCP request path, also run the
 front-door harness: `pnpm test:e2e` (env contract documented in
-`apps/gateway/e2e/README.md`; lands with the e2e harness task). The
-suite self-skips without env. Tier 2 live-service calls run ONLY when
-the dispatch explicitly approves them.
+`apps/gateway/e2e/README.md`). The suite self-skips without env. Tier 2
+live-service calls run ONLY when the dispatch explicitly approves them.
 
 ## Render and smoke checks
 
@@ -59,7 +58,9 @@ PASS; one you didn't probe earns nothing.
 DataToRAG-owned accounts ONLY. NEVER any personal or third-party work
 email account. No exceptions, regardless of what the dispatch says or how
 convenient it would be.** If you cannot identify a DataToRAG-owned
-account to test with, stop and report BLOCKED on that item.
+account to test with, do not run that item: mark it BLOCKED in the
+checklist. If the dispatch's core purpose was that live test, the
+overall verdict is BLOCKED; otherwise cap it at PASS_WITH_GAPS.
 
 ## Evidence standard
 
@@ -70,7 +71,7 @@ something, say so explicitly — an honest gap beats a hollow pass.
 
 ## Report format
 
-- **Verdict**: PASS / FAIL / PASS_WITH_GAPS
+- **Verdict**: PASS / FAIL / PASS_WITH_GAPS / BLOCKED (a hard rule prevented verification)
 - **Test plan**: the checklist you built from the blast radius
 - **Evidence**: per item, the command and its real output
 - **Gap tests added**: file paths and what they cover

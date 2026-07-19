@@ -89,9 +89,9 @@ won't fix the `tools` table, run the full re-discovery recipe. Proven in prod
 
 | Symptom | Cause | Fix |
 |---|---|---|
-| GWS tool calls fail with generic "Error occurred during tool execution" | User's row in `service_connections` is missing, or the OAuth token is expired and refresh failed | Query `service_connections` for that user (`token_expires_at`, `updated_at` — see db-query skill); if expired/missing, user must reconnect via the web UI |
-| Plugin fails to start, `ENOENT` for a binary | Dockerfile missing `curl unzip`, or the plugin's build script didn't run its binary-download step before `tsc` | Confirm Dockerfile installs `curl unzip`; confirm build order downloads binaries before compiling |
-| `db-init` container exits with a Postgres auth error | `--env-file ../.env` wasn't passed to `docker compose`, so `POSTGRES_PASSWORD` resolved to its empty default | Re-run compose with `--env-file ../.env` from `docker/` |
+| GWS tool calls fail with generic "Error occurred during tool execution" | User's `service_connections` row missing, or token expired and refresh failed | → deploy skill Troubleshooting ("GWS MCP tools load but all API calls fail"); run the check via the db-query skill's service-connection recipe |
+| Plugin fails to start, `ENOENT` for a binary | Binary-download step missing from the image or build chain | → deploy skill Troubleshooting ("GWS binary not found") + the gws-mcp-dev skill's build-chain gotcha |
+| `db-init` container exits with a Postgres auth error | `--env-file ../.env` not passed to prod compose (`POSTGRES_PASSWORD` resolves empty; dev compose hardcodes a local password, so this is prod-only) | → deploy skill Troubleshooting ("db-init fails") |
 | MCP tool calls fail right after a gateway restart/deploy | Sessions are in-memory only; restart drops all live MCP sessions | Expected — instruct the client to re-initialize; user re-auths on next use, no data lost |
 | Gateway container up but requests fail / healthcheck red | Boot-time `getEnv()` Zod validation can exit the process before the listener opens (commonly a malformed `DATABASE_URL`), or Postgres wasn't ready when a decoupled `gateway` service started | Check container logs first (see deploy skill); look for a Zod validation dump near the top of the log, not just the latest lines |
 | `GET /api/servers` returns `{"error":"Unauthorized"}` | Public plugin-management endpoints were removed (commit `7fb0356`) | Don't use it for status checks — query `mcp_servers`/`tools` directly via the db-query skill instead |

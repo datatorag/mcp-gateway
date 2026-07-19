@@ -1,6 +1,6 @@
 ---
 name: gateway-dev
-description: Use when adding or changing gateway functionality in datatorag-mcp — API routes, gateway capabilities, usage/billing events, DB schema. Recipes with file paths and wiring steps, plus test patterns and the ship ritual.
+description: Use when adding or changing gateway functionality in datatorag-mcp — API routes, dashboard pages, gateway capabilities, usage/billing events, DB schema. Recipes with file paths and wiring steps, plus test patterns and the ship ritual.
 ---
 
 # Gateway Dev
