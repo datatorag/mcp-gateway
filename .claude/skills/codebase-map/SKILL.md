@@ -18,7 +18,8 @@ pnpm workspace (`pnpm-workspace.yaml`: `apps/*` + `packages/*`), turbo topologic
 | `packages/config` | Single zod env schema; `getEnv()` memoized, `process.exit(1)` on invalid. `DATABASE_URL` is the only var without a default | none |
 | `packages/auth` | `hashApiKey`, `safeStringEqual` (constant-time SHA-256 compare), `ApiKeyValidator` (LRU-cached). Consumed only by the OAuth routes | db |
 | `packages/types` | zod status enums + `McpGatewayManifest` (the `datatorag.json` plugin manifest shape) | none |
-| `packages/docker-manager` | **Dead code** — never imported anywhere. Plugins do NOT run in Docker (see decisions) | none |
+
+(`packages/docker-manager` used to exist as dead code from the abandoned container-per-plugin design — it was deleted; see decisions.)
 
 ## Gateway request flow
 
@@ -70,7 +71,7 @@ Three distinct flows — don't conflate them:
 |---|---|---|
 | File-based markdown content (blog/changelog/docs) vs DB; `/tools` pages DB-driven | Content is static at deploy time — parse once, cache in-process; tool pages must reflect live plugin registry | `apps/gateway/src/lib/blog.ts` cache comments; commits `5c7f04f`, `f67a24d` |
 | Neon serverless Postgres for prod, not docker postgres on the host | Managed DB; prod gateway decoupled from `db-init` so migrations can't block startup; `prepare: false` required for Neon's PgBouncer pooling | commit `a4e56b3`; `packages/db/src/index.ts` |
-| Plugins run as host child processes (`spawn`), NOT Docker containers | Simpler than the original container-per-plugin design; `packages/docker-manager` and the `containerPort` column name are vestiges of the abandoned model | commit `c9b77f3`; `apps/gateway/src/gateway/plugin-manager.ts` |
+| Plugins run as host child processes (`spawn`), NOT Docker containers | Simpler than the original container-per-plugin design; the never-imported `packages/docker-manager` vestige was deleted, but the `containerPort` column name still reflects the abandoned model | commit `c9b77f3`; `apps/gateway/src/gateway/plugin-manager.ts` |
 | Meta-tool gateway migration: decided direction, **deliberately not executed yet** | Direct tool exposure (~60 tools) is faster/simpler; migrate when catalog crosses ~100 tools. Meanwhile: self-contained tool descriptions, no runtime dependence on the `__` prefix | `docs/architecture/2026-04-22-meta-tool-migration.md` |
 | Public POST/DELETE `/api/servers` endpoints removed; plugin installs now via SSH on the host | Unauthenticated plugin management on a public gateway was a security hole | commits `7fb0356`, `f8a6c4f` |
 | Per-user-token plugin calls bypass the pool with a one-shot client | Avoids per-user pooling complexity while guaranteeing the right `X-User-Token`; pool stays credential-free | commit `fe083e2`; `mcp-server.ts` |
