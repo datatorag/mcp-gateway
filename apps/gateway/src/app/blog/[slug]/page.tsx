@@ -151,7 +151,7 @@ export default async function BlogArticlePage({ params }: Props) {
                   dateTime={post.date}
                   className="text-muted-foreground"
                 >
-                  {new Date(post.date).toLocaleDateString("en-US", {
+                  {new Date(`${post.date}T00:00:00`).toLocaleDateString("en-US", {
                     year: "numeric",
                     month: "long",
                     day: "numeric",

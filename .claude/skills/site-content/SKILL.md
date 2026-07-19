@@ -89,11 +89,11 @@ don't add a connector prefix to a doc's own slug/filename.
   keep both in sync if you touch code-block styling.
 - **Date formatting — always parse with a `T00:00:00` suffix.** `new Date(rawDate)` on a
   bare `YYYY-MM-DD` string parses as UTC midnight, which renders as the *previous* day in
-  any browser west of UTC. `app/changelog/page.tsx`'s `formatDate()` does this correctly:
-  `` new Date(`${date}T00:00:00`).toLocaleDateString(...) ``. `app/blog/page.tsx` and
-  `app/blog/[slug]/page.tsx` do **not** — they call `new Date(post.date).toLocaleDateString(...)`
-  directly, a live, uncorrected TZ bug. If you're writing a new date-rendering page, copy
-  changelog's `T00:00:00` pattern, not the blog's — do not propagate the bug to more pages.
+  any browser west of UTC. The correct pattern is
+  `` new Date(`${date}T00:00:00`).toLocaleDateString(...) `` — `app/changelog/page.tsx`'s
+  `formatDate()`, `app/blog/page.tsx`, and `app/blog/[slug]/page.tsx` all do this now
+  (blog inlines it; changelog wraps it in a local helper). Any new date-rendering page
+  must use the same `T00:00:00` pattern — never a bare `new Date(date)`.
 - **Anchor + `scroll-mt-28` pattern**: give a linkable block both `id={slug}` and
   `className="... scroll-mt-28"` on the wrapping element (so a fixed navbar doesn't
   cover the heading when jumped to), plus a self-link `<a href="#${slug}">` on the

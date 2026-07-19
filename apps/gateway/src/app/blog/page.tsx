@@ -124,7 +124,7 @@ export default function BlogListingPage() {
                         </span>
                         <span className="text-border">·</span>
                         <time dateTime={post.date}>
-                          {new Date(post.date).toLocaleDateString("en-US", {
+                          {new Date(`${post.date}T00:00:00`).toLocaleDateString("en-US", {
                             month: "short",
                             day: "numeric",
                             year: "numeric",
