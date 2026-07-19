@@ -198,7 +198,6 @@ packages/
   db/                  Drizzle ORM schema + database client
   types/               Shared TypeScript types
   auth/                OAuth helpers
-  docker-manager/      Docker lifecycle helpers for plugin containers
 docker/
   docker-compose.dev.yml    Local development stack
   docker-compose.prod.yml   Production (Lightsail)

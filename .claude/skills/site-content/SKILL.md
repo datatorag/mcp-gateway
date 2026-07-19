@@ -89,18 +89,19 @@ don't add a connector prefix to a doc's own slug/filename.
   keep both in sync if you touch code-block styling.
 - **Date formatting — always parse with a `T00:00:00` suffix.** `new Date(rawDate)` on a
   bare `YYYY-MM-DD` string parses as UTC midnight, which renders as the *previous* day in
-  any browser west of UTC. `app/changelog/page.tsx`'s `formatDate()` does this correctly:
-  `` new Date(`${date}T00:00:00`).toLocaleDateString(...) ``. `app/blog/page.tsx` and
-  `app/blog/[slug]/page.tsx` do **not** — they call `new Date(post.date).toLocaleDateString(...)`
-  directly, a live, uncorrected TZ bug. If you're writing a new date-rendering page, copy
-  changelog's `T00:00:00` pattern, not the blog's — do not propagate the bug to more pages.
+  any browser west of UTC. The correct pattern is
+  `` new Date(`${date}T00:00:00`).toLocaleDateString(...) `` — `app/changelog/page.tsx`'s
+  `formatDate()`, `app/blog/page.tsx`, and `app/blog/[slug]/page.tsx` all do this now
+  (blog inlines it; changelog wraps it in a local helper). Any new date-rendering page
+  must use the same `T00:00:00` pattern — never a bare `new Date(date)`.
 - **Anchor + `scroll-mt-28` pattern**: give a linkable block both `id={slug}` and
   `className="... scroll-mt-28"` on the wrapping element (so a fixed navbar doesn't
   cover the heading when jumped to), plus a self-link `<a href="#${slug}">` on the
-  heading itself. Currently used only by changelog entries (`app/changelog/page.tsx`);
-  the home page's in-page sections (`id="platform"`, `id="integrations"`, etc. in
-  `app/page.tsx`, linked from navbar `/#platform`-style hrefs) lack it, causing hash-link
-  targets to land covered by the navbar — a known gap, add scroll-mt-28 if you edit those sections.
+  heading itself (changelog entries do; home-page sections don't need one). Used by
+  changelog entries (`app/changelog/page.tsx`) and the home page's hash-targeted
+  sections (`id="platform"`, `id="services"`, `id="integrations"` in `app/page.tsx`,
+  linked from navbar `/#platform`-style hrefs) — all carry `scroll-mt-28`. Any new
+  hash-link target must get `scroll-mt-28` too.
 - **Metadata/OG shape**: export `metadata: Metadata` (static pages, e.g. changelog) or
   `generateMetadata()` (dynamic, e.g. blog `[slug]`) with `title` (suffixed
   `" | DataToRAG"`), `description`, and an `openGraph` block mirroring title/description

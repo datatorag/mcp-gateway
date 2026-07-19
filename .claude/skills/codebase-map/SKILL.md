@@ -18,7 +18,8 @@ pnpm workspace (`pnpm-workspace.yaml`: `apps/*` + `packages/*`), turbo topologic
 | `packages/config` | Single zod env schema; `getEnv()` memoized, `process.exit(1)` on invalid. `DATABASE_URL` is the only var without a default | none |
 | `packages/auth` | `hashApiKey`, `safeStringEqual` (constant-time SHA-256 compare), `ApiKeyValidator` (LRU-cached). Consumed only by the OAuth routes | db |
 | `packages/types` | zod status enums + `McpGatewayManifest` (the `datatorag.json` plugin manifest shape) | none |
-| `packages/docker-manager` | **Dead code** — never imported anywhere. Plugins do NOT run in Docker (see decisions) | none |
+
+(`packages/docker-manager` used to exist as dead code from the abandoned container-per-plugin design — it was deleted; see decisions.)
 
 ## Gateway request flow
 
@@ -70,7 +71,7 @@ Three distinct flows — don't conflate them:
 |---|---|---|
 | File-based markdown content (blog/changelog/docs) vs DB; `/tools` pages DB-driven | Content is static at deploy time — parse once, cache in-process; tool pages must reflect live plugin registry | `apps/gateway/src/lib/blog.ts` cache comments; commits `5c7f04f`, `f67a24d` |
 | Neon serverless Postgres for prod, not docker postgres on the host | Managed DB; prod gateway decoupled from `db-init` so migrations can't block startup; `prepare: false` required for Neon's PgBouncer pooling | commit `a4e56b3`; `packages/db/src/index.ts` |
-| Plugins run as host child processes (`spawn`), NOT Docker containers | Simpler than the original container-per-plugin design; `packages/docker-manager` and the `containerPort` column name are vestiges of the abandoned model | commit `c9b77f3`; `apps/gateway/src/gateway/plugin-manager.ts` |
+| Plugins run as host child processes (`spawn`), NOT Docker containers | Simpler than the original container-per-plugin design; the never-imported `packages/docker-manager` vestige was deleted, but the `containerPort` column name still reflects the abandoned model | commit `c9b77f3`; `apps/gateway/src/gateway/plugin-manager.ts` |
 | Meta-tool gateway migration: decided direction, **deliberately not executed yet** | Direct tool exposure (~60 tools) is faster/simpler; migrate when catalog crosses ~100 tools. Meanwhile: self-contained tool descriptions, no runtime dependence on the `__` prefix | `docs/architecture/2026-04-22-meta-tool-migration.md` |
 | Public POST/DELETE `/api/servers` endpoints removed; plugin installs now via SSH on the host | Unauthenticated plugin management on a public gateway was a security hole | commits `7fb0356`, `f8a6c4f` |
 | Per-user-token plugin calls bypass the pool with a one-shot client | Avoids per-user pooling complexity while guaranteeing the right `X-User-Token`; pool stays credential-free | commit `fe083e2`; `mcp-server.ts` |
@@ -89,7 +90,7 @@ Three distinct flows — don't conflate them:
 - **Billing caps are defined but unenforced** — `billing/plans.ts` is referenced only by its own test. Don't assume free-tier limits gate traffic.
 - **MCP sessions are in-memory only** — every deploy/restart drops all live client sessions.
 - **`ConnectionPool` is per-server, shared across all users** — it must never carry a per-user credential; that's the whole reason for the one-shot-client bypass. Preserve this split when touching plugin call paths.
-- **Blog date formatting has a latent TZ bug**: changelog parses dates as `new Date(\`${date}T00:00:00\`)` to avoid the UTC-midnight day-shift; `app/blog/page.tsx` and `app/blog/[slug]/page.tsx` do `new Date(post.date)` directly — west-of-UTC browsers can show the previous day. Don't copy the blog pattern; copy changelog's.
+- **Date rendering convention**: always parse `YYYY-MM-DD` frontmatter dates as `new Date(\`${date}T00:00:00\`)` (never bare `new Date(date)`, which is UTC midnight and shows the previous day west of UTC). Changelog, blog listing, and blog post pages all follow this now — keep any new date-rendering page consistent.
 - **Migration `0004` numbering collision** in `packages/db/drizzle/`: hand-written `0004_leads.sql` (outside drizzle's journal) coexists with drizzle-generated `0004_smiling_hercules.sql` (in the journal). The only documentation is a SQL comment at the top of `0004_smiling_hercules.sql`. Be careful interpreting `drizzle-kit generate` diffs around the `leads` table.
 - **`getEnv()` hard-exits on invalid env** (`process.exit(1)`), at first call — not import — so a bad `DATABASE_URL` can kill the process mid-request-path rather than at boot.
 - **Dev compose doesn't forward Slack/Brevo/PostHog-server vars** into the container (prod compose does) — those features silently no-op in dev even with the var in `.env`. Empty `SLACK_BOT_TOKEN`/`BREVO_API_KEY` = intentional logged no-op, not a bug. Stripe is the exception: `getStripe()` throws on a missing key.

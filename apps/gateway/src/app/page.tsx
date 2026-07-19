@@ -144,7 +144,10 @@ export default async function HomePage() {
         </section>
 
         {/* Platform — three pillars */}
-        <section id="platform" className="border-y border-border bg-secondary/50">
+        <section
+          id="platform"
+          className="scroll-mt-28 border-y border-border bg-secondary/50"
+        >
           <div className="mx-auto max-w-6xl px-6 py-20">
             <div className="animate-fade-in-up text-center">
               <p className="text-sm font-semibold uppercase tracking-widest text-primary">
@@ -386,7 +389,10 @@ export default async function HomePage() {
         </section>
 
         {/* Custom Integration Services */}
-        <section id="services" className="mx-auto max-w-6xl px-6 py-20">
+        <section
+          id="services"
+          className="scroll-mt-28 mx-auto max-w-6xl px-6 py-20"
+        >
           <div className="grid gap-12 sm:grid-cols-2 sm:items-center">
             <div className="animate-fade-in-up">
               <p className="text-sm font-semibold uppercase tracking-widest text-primary">
@@ -458,7 +464,7 @@ export default async function HomePage() {
         {/* Available integrations */}
         <section
           id="integrations"
-          className="border-y border-border bg-secondary/50"
+          className="scroll-mt-28 border-y border-border bg-secondary/50"
         >
           <div className="mx-auto max-w-6xl px-6 py-20">
             <div className="animate-fade-in-up">
