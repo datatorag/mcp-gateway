@@ -97,9 +97,10 @@ don't add a connector prefix to a doc's own slug/filename.
 - **Anchor + `scroll-mt-28` pattern**: give a linkable block both `id={slug}` and
   `className="... scroll-mt-28"` on the wrapping element (so a fixed navbar doesn't
   cover the heading when jumped to), plus a self-link `<a href="#${slug}">` on the
-  heading itself. Used by changelog entries (`app/changelog/page.tsx`) and by the home
-  page's in-page sections (`id="platform"`, `id="integrations"`, etc. in `app/page.tsx`,
-  linked from the navbar's Product dropdown via `/#platform`-style hrefs).
+  heading itself. Currently used only by changelog entries (`app/changelog/page.tsx`);
+  the home page's in-page sections (`id="platform"`, `id="integrations"`, etc. in
+  `app/page.tsx`, linked from navbar `/#platform`-style hrefs) lack it, causing hash-link
+  targets to land covered by the navbar — a known gap, add scroll-mt-28 if you edit those sections.
 - **Metadata/OG shape**: export `metadata: Metadata` (static pages, e.g. changelog) or
   `generateMetadata()` (dynamic, e.g. blog `[slug]`) with `title` (suffixed
   `" | DataToRAG"`), `description`, and an `openGraph` block mirroring title/description
