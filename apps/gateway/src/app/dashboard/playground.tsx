@@ -6,6 +6,7 @@ import {
   useImperativeHandle,
   useRef,
   useState,
+  type ReactNode,
 } from "react";
 import type { EngineEvent } from "@/gateway/playground/engine";
 
@@ -51,6 +52,29 @@ interface PlaygroundProps {
   prompts: string[];
   /** Whether the user has at least one connected account (any service). */
   hasConnectedAccount: boolean;
+}
+
+// Render assistant text with bare http(s) URLs turned into clickable links,
+// so the confirmation links the assistant includes (e.g. a created Google
+// Doc) are one click to verify. React escapes the text nodes; only
+// regex-matched http/https URLs become anchors.
+const URL_RE = /(https?:\/\/[^\s<>()]+[^\s<>().,;:!?'"])/g;
+function linkifiedText(text: string): ReactNode[] {
+  return text.split(URL_RE).map((part, i) =>
+    part.match(/^https?:\/\//) ? (
+      <a
+        key={i}
+        href={part}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="text-primary underline underline-offset-2 hover:opacity-80"
+      >
+        {part}
+      </a>
+    ) : (
+      part
+    )
+  );
 }
 
 // Builds the {role, content}[] payload the SSE contract expects from prior
@@ -366,7 +390,7 @@ export const Playground = forwardRef<PlaygroundHandle, PlaygroundProps>(
 
                     {turn.text && (
                       <div className="whitespace-pre-wrap rounded-2xl border border-border bg-secondary/40 px-3 py-2 text-xs text-foreground">
-                        {turn.text}
+                        {linkifiedText(turn.text)}
                       </div>
                     )}
 
