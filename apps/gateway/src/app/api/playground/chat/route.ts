@@ -56,8 +56,23 @@ export async function POST(request: NextRequest) {
   const encoder = new TextEncoder();
   const stream = new ReadableStream({
     async start(controller) {
+      // clientGone: the client aborted (unmount / superseded send) and the
+      // controller can no longer be enqueued to. workStarted: at least one
+      // event was actually delivered to the client. Both gate the refund
+      // below — once the client has gone away or work has been delivered,
+      // a later throw (enqueue-on-closed-controller, most commonly) must
+      // NOT refund, or aborting mid-stream becomes a free, uncapped turn.
+      let clientGone = false;
+      let workStarted = false;
       const emit = (e: EngineEvent) => {
-        controller.enqueue(encoder.encode(`data: ${JSON.stringify(e)}\n\n`));
+        try {
+          controller.enqueue(encoder.encode(`data: ${JSON.stringify(e)}\n\n`));
+          workStarted = true;
+        } catch {
+          // Controller already closed/errored — the client went away.
+          // Never let this propagate into the engine loop.
+          clientGone = true;
+        }
       };
       try {
         await runPlaygroundTurn({
@@ -72,13 +87,22 @@ export async function POST(request: NextRequest) {
           emit,
         });
       } catch (err) {
-        // Engine-level failure (e.g. Anthropic outage): refund the claimed
-        // message so a provider-side error never burns the user's cap.
-        await refundPlaygroundMessage(db, userId);
+        // Engine/provider-level failure (e.g. Anthropic outage) with no work
+        // delivered yet: refund the claimed message so a provider-side error
+        // never burns the user's cap. Do NOT refund if the client already
+        // went away or any event was already delivered — that work (and any
+        // tokens spent producing it) is real, not something to undo.
+        if (!clientGone && !workStarted) {
+          await refundPlaygroundMessage(db, userId);
+        }
         const message = err instanceof Error ? err.message : "Unknown error";
         emit({ type: "done", stopReason: `error: ${message}` });
       } finally {
-        controller.close();
+        try {
+          controller.close();
+        } catch {
+          // Already closed/errored (client gone) — nothing to do.
+        }
       }
     },
   });

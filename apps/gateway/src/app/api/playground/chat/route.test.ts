@@ -143,12 +143,57 @@ describe("POST /api/playground/chat", () => {
     expect(refundPlaygroundMessage).toHaveBeenCalledWith({}, "user-1");
   });
 
-  it("refunds the claim on engine-level failure during streaming", async () => {
+  it("refunds the claim on engine-level failure during streaming (no work delivered)", async () => {
+    // Provider fails before a single event reaches the client — the outage
+    // case the refund exists for.
     runPlaygroundTurn.mockRejectedValue(new Error("anthropic outage"));
     const res = await POST(chatRequest(validBody));
     expect(res.status).toBe(200);
     const text = await res.text();
     expect(text).toContain("error: anthropic outage");
     expect(refundPlaygroundMessage).toHaveBeenCalledWith({}, "user-1");
+  });
+
+  it("does NOT refund when the engine throws after work was already delivered", async () => {
+    // e.g. Anthropic tokens were spent and text was already streamed before
+    // a later failure (including a client abort surfacing as a throw).
+    runPlaygroundTurn.mockImplementation(async ({ emit }) => {
+      emit({ type: "text", text: "partial answer" });
+      throw new Error("stream interrupted");
+    });
+    const res = await POST(chatRequest(validBody));
+    expect(res.status).toBe(200);
+    const text = await res.text();
+    expect(text).toContain('"type":"text"');
+    expect(refundPlaygroundMessage).not.toHaveBeenCalled();
+  });
+
+  it("does NOT refund when the client aborts mid-stream (enqueue throws on a closed controller)", async () => {
+    let releaseEngine!: () => void;
+    const engineReleased = new Promise<void>((resolve) => {
+      releaseEngine = resolve;
+    });
+
+    runPlaygroundTurn.mockImplementation(async ({ emit }) => {
+      emit({ type: "text", text: "first" }); // succeeds — client still attached
+      await engineReleased;
+      // By now the client has aborted; this enqueue throws on the closed
+      // controller. The route's emit() wrapper must swallow it (clientGone)
+      // rather than letting it propagate as the "genuine failure" path.
+      emit({ type: "text", text: "second" });
+      throw new Error("should not cause a refund");
+    });
+
+    const res = await POST(chatRequest(validBody));
+    const reader = res.body!.getReader();
+    await reader.read(); // consume the "first" event
+    await reader.cancel(); // simulate AbortController.abort() from the client
+
+    releaseEngine();
+    // Let the route's async start()/catch finish running.
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(refundPlaygroundMessage).not.toHaveBeenCalled();
   });
 });
