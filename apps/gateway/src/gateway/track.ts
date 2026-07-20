@@ -216,6 +216,48 @@ export async function trackPlaygroundCapHit(
   }
 }
 
+/**
+ * Playground thumbs up/down feedback — PostHog capture for analytics plus a
+ * Slack ping to #feedback so a human sees it right away. The Slack post is
+ * fire-and-forget (never awaited) so a slow/unreachable Slack API never
+ * delays the response; the PostHog capture is best-effort and never throws.
+ */
+export async function trackPlaygroundFeedback(
+  db: Database,
+  userId: string,
+  rating: "up" | "down",
+  comment?: string,
+  prompt?: string
+): Promise<void> {
+  const identity = await resolveUserIdentity(db, userId);
+  const email = identity?.email ?? null;
+
+  try {
+    const c = getPosthog();
+    if (c) {
+      c.capture({
+        distinctId: userId,
+        event: EVENTS.PLAYGROUND_FEEDBACK,
+        properties: {
+          rating,
+          comment: comment ?? null,
+          prompt: prompt ?? null,
+          ...identityProps(email),
+        },
+      });
+    }
+  } catch (err) {
+    console.warn(`[track] playground_feedback capture failed for user=${userId}`, err);
+  }
+
+  const emoji = rating === "up" ? "👍" : "👎";
+  const commentText = comment && comment.length > 0 ? comment : "(no comment)";
+  const promptSuffix = prompt ? ` — prompt: ${prompt.slice(0, 200)}` : "";
+  void sendSlack("feedback", {
+    text: `${emoji} Playground feedback from ${email ?? "unknown"}: ${commentText}${promptSuffix}`,
+  });
+}
+
 export async function trackOAuthCompleted(
   db: Database,
   userId: string,
