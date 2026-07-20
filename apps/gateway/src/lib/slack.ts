@@ -1,6 +1,6 @@
 import { getEnv } from "@datatorag-mcp/config";
 
-export type SlackChannel = "leads" | "digest" | "alerts";
+export type SlackChannel = "leads" | "digest" | "alerts" | "feedback";
 
 export interface SlackMessage {
   text: string; // fallback + notification line
@@ -9,11 +9,12 @@ export interface SlackMessage {
 
 const CHANNEL_ENV: Record<
   SlackChannel,
-  "SLACK_CHANNEL_LEADS" | "SLACK_CHANNEL_DIGEST" | "SLACK_CHANNEL_ALERTS"
+  "SLACK_CHANNEL_LEADS" | "SLACK_CHANNEL_DIGEST" | "SLACK_CHANNEL_ALERTS" | "SLACK_CHANNEL_FEEDBACK"
 > = {
   leads: "SLACK_CHANNEL_LEADS",
   digest: "SLACK_CHANNEL_DIGEST",
   alerts: "SLACK_CHANNEL_ALERTS",
+  feedback: "SLACK_CHANNEL_FEEDBACK",
 };
 
 /**
