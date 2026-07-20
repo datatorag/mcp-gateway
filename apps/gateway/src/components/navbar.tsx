@@ -13,6 +13,7 @@ interface NavLink {
 
 const productItems: NavLink[] = [
   { href: "/#platform", label: "Platform" },
+  { href: "/#custom-hosted-llms", label: "Custom Hosted LLMs" },
   { href: "/#services", label: "Services" },
   { href: "/#integrations", label: "Integrations" },
 ];
@@ -64,7 +65,7 @@ export function Navbar() {
                 type="button"
                 onClick={() => setProductOpen((v) => !v)}
                 aria-expanded={productOpen}
-                className={`${navItemClass} flex items-center gap-1`}
+                className={`${navItemClass} flex cursor-pointer items-center gap-1`}
               >
                 Product
                 <svg

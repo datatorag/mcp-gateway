@@ -40,18 +40,18 @@ export default async function DemoPage({
         <div className="mx-auto grid max-w-6xl gap-12 px-6 py-16 lg:grid-cols-2 lg:py-24">
           <div>
             <p className="text-sm font-semibold uppercase tracking-widest text-primary">
-              Google Workspace for Claude
+              Contact Us
             </p>
             <h1 className="mt-3 font-display text-3xl font-bold tracking-tight text-foreground sm:text-4xl">
-              Stop pasting Claude&apos;s drafts
-              <br />
-              into your Google Docs.
+              Let's Connect!
             </h1>
             <p className="mt-5 text-base leading-relaxed text-muted-foreground">
-              DataToRAG gives Claude write access to your Docs, Sheets, and
-              Slides, plus Gmail, Calendar, Drive, Contacts, and Tasks. Tell us
-              what you&apos;re trying to build and we&apos;ll show you the
-              shortest path to a working setup against your data.
+              DataToRAG offers a secure and seamless unified AI Platform to transfrom your business.
+              Integrate Claude direclty with your Google Workspace or
+              discover how our hosted LLMs can reduce your token costs without compromising quality.
+              Tell us
+              what you&apos;re trying to achieve and we&apos;ll show you the
+              shortest path to a working solution.
             </p>
 
             <div className="mt-6 flex flex-wrap gap-2">
@@ -72,18 +72,11 @@ export default async function DemoPage({
             <ul className="mt-8 space-y-4 text-sm text-muted-foreground">
               <li className="flex gap-3">
                 <span className="mt-1 inline-block h-1.5 w-1.5 shrink-0 rounded-full bg-primary" />
-                No pitch deck. We want to hear what your team does day-to-day and
-                where AI is or isn&apos;t helping.
+                No pitch deck. We want to solution with you and remove roadblocks.
               </li>
               <li className="flex gap-3">
                 <span className="mt-1 inline-block h-1.5 w-1.5 shrink-0 rounded-full bg-primary" />
-                Straight answers. If DataToRAG isn&apos;t the right fit, we&apos;ll
-                say so.
-              </li>
-              <li className="flex gap-3">
-                <span className="mt-1 inline-block h-1.5 w-1.5 shrink-0 rounded-full bg-primary" />
-                If it is a fit, we work out the shortest path to a working setup
-                against your data.
+                Straight answers. Your time is valuable. Find out if DataToRAG is right for you and your company.
               </li>
             </ul>
 
