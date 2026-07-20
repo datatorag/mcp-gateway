@@ -29,6 +29,9 @@ MCP client
   ▼
 apps/gateway/server.ts          validateBearer → oauthAccessTokens (not revoked/expired)
   │                             sessions: in-memory Map keyed by mcp-session-id
+  │                             (wiped on every deploy — an unknown session id gets a
+  │                             spec-compliant 404 via classifyMcpRequest (mcp-session.ts),
+  │                             and clients silently re-initialize on the same bearer; SCRUM-23)
   ▼ new session → createMcpServer(userId, db, pool)
 apps/gateway/src/gateway/mcp-server.ts
   │ ListTools: enabled tools ⋈ active mcpServers, filtered to the user's

@@ -10,6 +10,7 @@ import { createDb, oauthAccessTokens } from "@datatorag-mcp/db";
 import { getEnv } from "@datatorag-mcp/config";
 import { createMetadataRouter } from "./src/gateway/oauth/metadata";
 import { createProtectedResourceRouter } from "./src/gateway/oauth/protected-resource";
+import { classifyMcpRequest } from "./src/gateway/mcp-session";
 import { createRegisterRouter } from "./src/gateway/oauth/register";
 import { createAuthorizeRouter } from "./src/gateway/oauth/authorize";
 import { createTokenRouter } from "./src/gateway/oauth/token";
@@ -126,12 +127,16 @@ async function main() {
   app.use(createTokenRouter(db));
   app.use(createRevokeRouter(db));
 
-  // Session store
+  // Session store. userId binds each session to the bearer that initialized
+  // it — a session id presented with a different user's (valid) bearer is
+  // treated as unknown (404), so a leaked session UUID can't route into
+  // another user's McpServer.
   const sessions = new Map<
     string,
     {
       server: ReturnType<typeof createMcpServer>;
       transport: StreamableHTTPServerTransport;
+      userId: string;
     }
   >();
 
@@ -191,20 +196,39 @@ async function main() {
     }
 
     const sessionId = req.headers["mcp-session-id"] as string | undefined;
+    // "known" requires ownership: a session initialized by another user's
+    // bearer classifies as unknown_session (404), same as a stale id.
+    const known =
+      sessionId !== undefined &&
+      sessions.get(sessionId)?.userId === auth.userId;
+    const action = classifyMcpRequest({
+      method: req.method,
+      sessionId,
+      known,
+    });
 
     // Existing session — route GET/DELETE/POST to the stored transport
-    if (sessionId && sessions.has(sessionId)) {
-      const session = sessions.get(sessionId)!;
+    if (action === "route") {
+      const session = sessions.get(sessionId!)!;
       await session.transport.handleRequest(req, res, req.body);
       return;
     }
 
+    // Stale session id (e.g. the map was wiped by a deploy/restart) — per the
+    // MCP Streamable HTTP spec this is a 404, and the client transparently
+    // re-initializes with the same (still-valid, Postgres-backed) bearer.
+    // SCRUM-23: anything else here makes clients surface "session expired".
+    if (action === "unknown_session") {
+      res.status(404).json({ error: "session_not_found" });
+      return;
+    }
+
     // New session — only POST can initialize
-    if (req.method === "POST") {
+    if (action === "initialize") {
       const transport = new StreamableHTTPServerTransport({
         sessionIdGenerator: () => randomUUID(),
         onsessioninitialized: (id) => {
-          sessions.set(id, { server, transport });
+          sessions.set(id, { server, transport, userId: auth.userId });
         },
       });
 
