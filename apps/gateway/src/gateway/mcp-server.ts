@@ -269,7 +269,10 @@ export function createMcpServer(
             .map((c) => c.text)
             .join(" ") ?? null
         : null;
-      await trackToolCall(db, {
+      // Fire-and-forget: metering must never slow the tool response. Latency
+      // and sizes are already captured into the props here; trackToolCall is
+      // self-contained (never throws) so the floating promise is safe.
+      void trackToolCall(db, {
         userId,
         toolName: name,
         connectorType: requiredService ?? null,
@@ -289,7 +292,9 @@ export function createMcpServer(
         message
       );
 
-      await trackToolCall(db, {
+      // Fire-and-forget (see the success path above): metering off the response
+      // path, self-contained and never throwing.
+      void trackToolCall(db, {
         userId,
         toolName: name,
         connectorType: requiredService ?? null,

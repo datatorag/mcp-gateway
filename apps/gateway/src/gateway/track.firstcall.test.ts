@@ -130,4 +130,17 @@ describe("first_tool_call milestone", () => {
     expect(insertValues).toHaveBeenCalled(); // usage metering still ran
     warnSpy.mockRestore();
   });
+
+  // FIX-1: trackToolCall runs fire-and-forget off the tool-response path, so it
+  // must never reject — a floating rejection would surface as an unhandled
+  // rejection. A failure in any sink (here: PostHog capture) is swallowed.
+  it("never throws when a sink fails, so it is safe to fire-and-forget", async () => {
+    capture.mockImplementation(() => {
+      throw new Error("posthog boom");
+    });
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+    await expect(trackToolCall(dbMock, callProps())).resolves.toBeUndefined();
+    expect(warnSpy).toHaveBeenCalled();
+    warnSpy.mockRestore();
+  });
 });

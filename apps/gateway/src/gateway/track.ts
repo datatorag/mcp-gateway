@@ -29,61 +29,73 @@ export async function trackToolCall(
     outcome: ClassifyInput;
   }
 ): Promise<void> {
-  const { status, meter } = classifyOutcome(props.outcome);
-  // Redact once, up front, so the SAME scrubbed value reaches every sink —
-  // PostHog (a third-party US vendor) and our own Postgres alike. The redactor
-  // is idempotent, so writeUsageEvent re-scrubbing below is a harmless no-op.
-  const errorMessage = redactErrorMessage(props.errorMessage);
-  const c = getPosthog();
-  const identity = await resolveUserIdentity(db, props.userId);
-  const userEmail = identity?.email ?? null;
-  if (c) {
-    c.capture({
-      distinctId: props.userId,
-      event: EVENTS.TOOL_CALL,
-      properties: {
-        tool_name: props.toolName,
-        connector_type: props.connectorType,
-        account_email: props.accountEmail ?? null,
-        status,
-        latency_ms: props.latencyMs,
-        response_size_bytes: props.responseSizeBytes,
-        error_message: errorMessage,
-        metered: meter,
-        ...identityProps(userEmail),
-      },
+  // Metering + analytics run fire-and-forget off the tool-response path (see the
+  // call sites in mcp-server.ts) so the identity lookup and sinks never add
+  // latency to the tool call. Because it's not awaited, this must never reject —
+  // a floating rejection would surface as an unhandled rejection. Everything is
+  // best-effort: on any failure we log and move on.
+  try {
+    const { status, meter } = classifyOutcome(props.outcome);
+    // Redact once, up front, so the SAME scrubbed value reaches every sink —
+    // PostHog (a third-party US vendor) and our own Postgres alike. The redactor
+    // is idempotent, so writeUsageEvent re-scrubbing below is a harmless no-op.
+    const errorMessage = redactErrorMessage(props.errorMessage);
+    const c = getPosthog();
+    const identity = await resolveUserIdentity(db, props.userId);
+    const userEmail = identity?.email ?? null;
+    if (c) {
+      c.capture({
+        distinctId: props.userId,
+        event: EVENTS.TOOL_CALL,
+        properties: {
+          tool_name: props.toolName,
+          connector_type: props.connectorType,
+          account_email: props.accountEmail ?? null,
+          status,
+          latency_ms: props.latencyMs,
+          response_size_bytes: props.responseSizeBytes,
+          error_message: errorMessage,
+          metered: meter,
+          ...identityProps(userEmail),
+        },
+      });
+    }
+
+    // Activation milestone: only real MCP traffic counts — a playground call
+    // from the dashboard doesn't prove the user's agent can reach the gateway.
+    // Skipped once the cache knows the user is activated, so the per-call
+    // claim UPDATE runs at most once per user per process.
+    if (status === "success" && props.outcome.source === "mcp" && !identity?.activated) {
+      await trackFirstToolCall(
+        db,
+        props.userId,
+        props.toolName,
+        props.connectorType,
+        userEmail
+      );
+    }
+
+    if (!meter) return;
+
+    const result = await writeUsageEvent(db, {
+      userId: props.userId,
+      toolName: props.toolName,
+      connector: props.connectorType,
+      accountEmail: props.accountEmail ?? null,
+      status,
+      latencyMs: props.latencyMs,
+      responseSizeBytes: props.responseSizeBytes,
+      errorMessage,
     });
-  }
-
-  // Activation milestone: only real MCP traffic counts — a playground call
-  // from the dashboard doesn't prove the user's agent can reach the gateway.
-  // Skipped once the cache knows the user is activated, so the per-call
-  // claim UPDATE runs at most once per user per process.
-  if (status === "success" && props.outcome.source === "mcp" && !identity?.activated) {
-    await trackFirstToolCall(
-      db,
-      props.userId,
-      props.toolName,
-      props.connectorType,
-      userEmail
-    );
-  }
-
-  if (!meter) return;
-
-  const result = await writeUsageEvent(db, {
-    userId: props.userId,
-    toolName: props.toolName,
-    connector: props.connectorType,
-    accountEmail: props.accountEmail ?? null,
-    status,
-    latencyMs: props.latencyMs,
-    responseSizeBytes: props.responseSizeBytes,
-    errorMessage,
-  });
-  if (!result.ok) {
+    if (!result.ok) {
+      console.warn(
+        `[usage] write failed (${result.reason}) for user=${props.userId} tool=${props.toolName}`
+      );
+    }
+  } catch (err) {
     console.warn(
-      `[usage] write failed (${result.reason}) for user=${props.userId} tool=${props.toolName}`
+      `[track] tool_call tracking failed for user=${props.userId} tool=${props.toolName}`,
+      err
     );
   }
 }
