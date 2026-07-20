@@ -164,12 +164,18 @@ describe("POST /api/playground/chat", () => {
     // Provider fails before a single event reaches the client — the outage
     // case the refund exists for.
     runPlaygroundTurn.mockRejectedValue(new Error("anthropic outage"));
+    const errSpy = vi.spyOn(console, "error").mockImplementation(() => {});
     const res = await POST(chatRequest(validBody));
     expect(res.status).toBe(200);
     const text = await res.text();
     expect(text).toContain('"type":"error"');
-    expect(text).toContain("anthropic outage");
+    // The raw provider message must never reach the client (SEC-7) — it's
+    // logged server-side and replaced with a generic message.
+    expect(text).not.toContain("anthropic outage");
+    expect(text).toContain("Something went wrong");
+    expect(errSpy).toHaveBeenCalled();
     expect(refundPlaygroundMessage).toHaveBeenCalledWith({}, "user-1");
+    errSpy.mockRestore();
   });
 
   it("does NOT refund when the engine throws after work was already delivered", async () => {

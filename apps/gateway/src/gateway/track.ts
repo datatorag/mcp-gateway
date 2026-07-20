@@ -5,6 +5,7 @@ import { EVENTS, type ProviderId } from "../lib/analytics";
 import { getPosthog, shutdownPosthog } from "../lib/posthog-server";
 import { sendSlack } from "../lib/slack";
 import { writeUsageEvent } from "./usage/write";
+import { redactErrorMessage } from "./usage/redact";
 import { classifyOutcome, type ClassifyInput } from "./usage/classify";
 import {
   resolveUserIdentity,
@@ -29,6 +30,10 @@ export async function trackToolCall(
   }
 ): Promise<void> {
   const { status, meter } = classifyOutcome(props.outcome);
+  // Redact once, up front, so the SAME scrubbed value reaches every sink —
+  // PostHog (a third-party US vendor) and our own Postgres alike. The redactor
+  // is idempotent, so writeUsageEvent re-scrubbing below is a harmless no-op.
+  const errorMessage = redactErrorMessage(props.errorMessage);
   const c = getPosthog();
   const identity = await resolveUserIdentity(db, props.userId);
   const userEmail = identity?.email ?? null;
@@ -43,7 +48,7 @@ export async function trackToolCall(
         status,
         latency_ms: props.latencyMs,
         response_size_bytes: props.responseSizeBytes,
-        error_message: props.errorMessage,
+        error_message: errorMessage,
         metered: meter,
         ...identityProps(userEmail),
       },
@@ -74,7 +79,7 @@ export async function trackToolCall(
     status,
     latencyMs: props.latencyMs,
     responseSizeBytes: props.responseSizeBytes,
-    errorMessage: props.errorMessage,
+    errorMessage,
   });
   if (!result.ok) {
     console.warn(

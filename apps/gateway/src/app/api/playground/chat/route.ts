@@ -21,6 +21,7 @@ import {
   trackPlaygroundCapHit,
   trackPlaygroundConfirm,
 } from "@/gateway/track";
+import { logAndGenericError } from "../errors";
 
 type ChatMessage = { role: string; content: string };
 
@@ -159,8 +160,10 @@ export async function POST(request: NextRequest) {
     // Pre-stream failure after the claim landed — refund so this doesn't burn
     // one of the user's lifetime playground messages.
     await refundPlaygroundMessage(db, userId);
-    const message = err instanceof Error ? err.message : "Unknown error";
-    return NextResponse.json({ error: message }, { status: 500 });
+    return NextResponse.json(
+      { error: logAndGenericError("[playground] tool listing failed", err) },
+      { status: 500 }
+    );
   }
 
   return streamResponse(async ({ emit, clientGone, workStarted, shouldStop }) => {
@@ -181,8 +184,10 @@ export async function POST(request: NextRequest) {
       if (!clientGone() && !workStarted()) {
         await refundPlaygroundMessage(db, userId);
       }
-      const message = err instanceof Error ? err.message : "Unknown error";
-      emit({ type: "error", message });
+      emit({
+        type: "error",
+        message: logAndGenericError("[playground] turn failed", err),
+      });
     }
   }, request.signal);
 }
@@ -232,8 +237,10 @@ async function handleResume(
       handleTurnResult(userId, result, emit);
     } catch (err) {
       // No cap was claimed on resume, so nothing to refund.
-      const message = err instanceof Error ? err.message : "Unknown error";
-      emit({ type: "error", message });
+      emit({
+        type: "error",
+        message: logAndGenericError("[playground] resume failed", err),
+      });
     }
   }, request.signal);
 }

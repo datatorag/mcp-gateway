@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { getSessionUserId } from "@/lib/session";
 import { executeUserTool, ToolCallError } from "@/gateway/playground/tools";
+import { logAndGenericError } from "../errors";
 
 // POST /api/playground/call
 export async function POST(request: NextRequest) {
@@ -38,12 +39,16 @@ export async function POST(request: NextRequest) {
     });
   } catch (error) {
     if (error instanceof ToolCallError) {
+      // ToolCallError carries a deliberately client-safe message + status.
       return NextResponse.json(
         { error: error.message },
         { status: error.status }
       );
     }
-    const message = error instanceof Error ? error.message : "Unknown error";
-    return NextResponse.json({ error: message }, { status: 500 });
+    // Unknown failure — log the real error, never leak internals to the client.
+    return NextResponse.json(
+      { error: logAndGenericError("[playground] tool call failed", error) },
+      { status: 500 }
+    );
   }
 }

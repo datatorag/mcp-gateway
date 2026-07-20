@@ -3,6 +3,7 @@ import { Router } from "express";
 import { eq, and } from "drizzle-orm";
 import type { Database } from "@datatorag-mcp/db";
 import { oauthAccessTokens, users } from "@datatorag-mcp/db";
+import { nonceMatches, OAUTH_STATE_TTL_MS } from "./oauth/csrf";
 import { upsertServiceAccount } from "./connected-accounts";
 import { PROVIDERS } from "../lib/analytics";
 import {
@@ -326,6 +327,18 @@ export function createAuthRouter(
       return;
     }
 
+    // CSRF: use a random nonce as `state` (never the session token — that would
+    // leak a live bearer credential into the URL, referrer, and Atlassian's
+    // logs). The nonce is echoed back and matched against an httpOnly cookie.
+    const nonce = randomBytes(16).toString("base64url");
+    res.cookie("atl_connect_nonce", nonce, {
+      httpOnly: true,
+      secure: config.baseUrl.startsWith("https"),
+      sameSite: "lax",
+      path: "/",
+      maxAge: OAUTH_STATE_TTL_MS,
+    });
+
     const url = new URL("https://auth.atlassian.com/authorize");
     url.searchParams.set("audience", "api.atlassian.com");
     url.searchParams.set("client_id", config.atlassianClientId);
@@ -336,7 +349,7 @@ export function createAuthRouter(
     url.searchParams.set("scope", ATLASSIAN_SCOPES);
     url.searchParams.set("response_type", "code");
     url.searchParams.set("prompt", "consent");
-    url.searchParams.set("state", sessionToken);
+    url.searchParams.set("state", nonce);
 
     res.redirect(url.toString());
   });
@@ -344,10 +357,19 @@ export function createAuthRouter(
   router.get("/auth/atlassian/connect/callback", async (req, res) => {
     const code = req.query.code as string | undefined;
     const state = req.query.state as string | undefined;
-    const sessionToken = state ?? req.cookies?.dtrmcp_session;
+    // Identity comes from the session cookie only — never from `state`.
+    const sessionToken = req.cookies?.dtrmcp_session as string | undefined;
+    const cookieNonce = req.cookies?.atl_connect_nonce as string | undefined;
+    res.clearCookie("atl_connect_nonce", { path: "/" });
 
     if (!sessionToken) {
       res.redirect("/auth/login");
+      return;
+    }
+
+    // CSRF: the echoed state must match the nonce cookie from initiation.
+    if (!nonceMatches(cookieNonce, state)) {
+      res.redirect("/dashboard/connections?error=invalid_state");
       return;
     }
 

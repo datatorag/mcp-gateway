@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
+import { randomBytes } from "node:crypto";
 import { eq } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { getSessionUserId } from "@/lib/session";
+import { OAUTH_STATE_TTL_SECONDS } from "@/gateway/oauth/csrf";
 import { mcpServers } from "@datatorag-mcp/db";
 import type { McpGatewayManifest } from "@datatorag-mcp/types";
 
@@ -53,17 +55,19 @@ export async function GET(_request: NextRequest, { params }: Props) {
   const baseUrl = process.env.GATEWAY_BASE_URL ?? "http://localhost:8285";
   const redirectUri = `${baseUrl}/api/servers/${slug}/connect/callback`;
 
-  // Encode state with userId + slug for the callback
-  const state = Buffer.from(
-    JSON.stringify({ userId, slug, serverId: server.id })
-  ).toString("base64url");
+  // CSRF: bind this connect flow to the initiating browser. A random nonce goes
+  // into both an httpOnly cookie and the OAuth `state` (opaque + single-use);
+  // the callback requires the two to match. The connected user is resolved from
+  // the session cookie at callback time — never from `state` — so a forged
+  // state can't attach an OAuth grant to another user's account.
+  const nonce = randomBytes(16).toString("base64url");
 
   const authorizeUrl = new URL(oauth.authorizeUrl);
   authorizeUrl.searchParams.set("client_id", clientId);
   authorizeUrl.searchParams.set("redirect_uri", redirectUri);
   authorizeUrl.searchParams.set("response_type", "code");
   authorizeUrl.searchParams.set("scope", oauth.scopes.join(" "));
-  authorizeUrl.searchParams.set("state", state);
+  authorizeUrl.searchParams.set("state", nonce);
 
   // Forward extra authorize params from the manifest (e.g. access_type, prompt)
   const knownKeys = new Set(["provider", "authorizeUrl", "tokenUrl", "clientIdEnv", "clientSecretEnv", "scopes"]);
@@ -73,5 +77,13 @@ export async function GET(_request: NextRequest, { params }: Props) {
     }
   }
 
-  return NextResponse.redirect(authorizeUrl.toString());
+  const res = NextResponse.redirect(authorizeUrl.toString());
+  res.cookies.set("dtr_connect_nonce", nonce, {
+    httpOnly: true,
+    secure: baseUrl.startsWith("https"),
+    sameSite: "lax",
+    path: "/",
+    maxAge: OAUTH_STATE_TTL_SECONDS,
+  });
+  return res;
 }

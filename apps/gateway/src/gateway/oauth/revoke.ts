@@ -6,6 +6,7 @@ import { hashApiKey } from "@datatorag-mcp/auth";
 import { getPosthog } from "../../lib/posthog-server";
 import { EVENTS } from "../../lib/analytics";
 import { resolveUserEmail, identityProps } from "../user-email";
+import { revokeAccessTokensForClient } from "./grants";
 
 /**
  * RFC 7009 — OAuth 2.0 Token Revocation
@@ -44,6 +45,11 @@ export function createRevokeRouter(db: Database): Router {
             isNull(oauthRefreshTokens.revokedAt)
           )
         );
+
+      // Revoking the grant must also kill any live access tokens for this
+      // client — otherwise an already-issued bearer keeps working for up to its
+      // full TTL after the client was revoked.
+      await revokeAccessTokensForClient(tx, row.userId, row.clientId);
 
       const ph = getPosthog();
       if (ph) {

@@ -12,6 +12,7 @@ import { hashApiKey, safeStringEqual } from "@datatorag-mcp/auth";
 import { getPosthog } from "../../lib/posthog-server";
 import { EVENTS } from "../../lib/analytics";
 import { resolveUserEmail, identityProps } from "../user-email";
+import { revokeAccessTokensForClient } from "./grants";
 
 // PR3 drops ACCESS_TOKEN_TTL_MS to 60*60*1000 (1h) once refresh path is stable.
 const ACCESS_TOKEN_TTL_MS = 24 * 60 * 60 * 1000;
@@ -201,6 +202,10 @@ async function handleRefreshGrant(
               isNull(oauthRefreshTokens.revokedAt)
             )
           );
+        // A replayed (already-revoked) refresh token means the family is
+        // compromised — also revoke any live access tokens for this client so a
+        // stolen bearer can't outlive the family.
+        await revokeAccessTokensForClient(tx, row.userId, row.clientId);
         return { kind: "replay", row };
       }
 
