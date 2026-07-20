@@ -34,9 +34,19 @@ export async function runPlaygroundTurn(opts: {
   messages: unknown[]; // Anthropic MessageParam[] shape, built by the route
   executeTool: (name: string, args: Record<string, unknown>) => Promise<{ text: string; isError: boolean }>;
   emit: (e: EngineEvent) => void;
+  /** Polled at the top of each loop iteration and immediately before each
+   * tool execution. When it returns true, the loop stops right away without
+   * running any pending/remaining tools — used so a client abort can't leave
+   * the engine executing real (possibly side-effecting) tool calls nobody
+   * will see. */
+  shouldStop?: () => boolean;
 }): Promise<void> {
   const messages = [...opts.messages];
   for (let i = 0; i < MAX_TOOL_ITERATIONS; i++) {
+    if (opts.shouldStop?.()) {
+      opts.emit({ type: "done", stopReason: "aborted" });
+      return;
+    }
     // Prompt caching: the tool schemas (~15k tokens for a GWS user) and the
     // system prompt are identical across loop iterations and messages —
     // cache_control on the LAST tool block + the system block makes every
@@ -67,6 +77,10 @@ export async function runPlaygroundTurn(opts: {
 
     const results = [];
     for (const tu of toolUses) {
+      if (opts.shouldStop?.()) {
+        opts.emit({ type: "done", stopReason: "aborted" });
+        return;
+      }
       opts.emit({ type: "tool_start", name: tu.name });
       let text = "";
       let isError = false;

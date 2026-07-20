@@ -85,6 +85,13 @@ export async function POST(request: NextRequest) {
             return executeUserTool(db, userId, name, args);
           },
           emit,
+          // Stops the engine loop (and any pending tool execution) as soon as
+          // the client is gone — otherwise a client abort no longer halts the
+          // loop (that used to happen by accident via the enqueue-on-closed-
+          // controller throw) and it runs to MAX_TOOL_ITERATIONS against a
+          // dead stream, executing real, possibly side-effecting tool calls
+          // nobody will see.
+          shouldStop: () => clientGone || request.signal?.aborted === true,
         });
       } catch (err) {
         // Engine/provider-level failure (e.g. Anthropic outage) with no work

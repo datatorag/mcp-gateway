@@ -173,8 +173,10 @@ describe("POST /api/playground/chat", () => {
     const engineReleased = new Promise<void>((resolve) => {
       releaseEngine = resolve;
     });
+    let capturedShouldStop: (() => boolean) | undefined;
 
-    runPlaygroundTurn.mockImplementation(async ({ emit }) => {
+    runPlaygroundTurn.mockImplementation(async ({ emit, shouldStop }) => {
+      capturedShouldStop = shouldStop;
       emit({ type: "text", text: "first" }); // succeeds — client still attached
       await engineReleased;
       // By now the client has aborted; this enqueue throws on the closed
@@ -195,5 +197,14 @@ describe("POST /api/playground/chat", () => {
     await new Promise((resolve) => setTimeout(resolve, 0));
 
     expect(refundPlaygroundMessage).not.toHaveBeenCalled();
+
+    // The route must wire a shouldStop callback into the engine so the loop
+    // (and any pending tool execution) actually halts on abort — not just
+    // the refund gate. We can't observe the real engine loop through this
+    // mock, but we can prove the route passes a working predicate and that
+    // it reports "stopped" once the client has gone away (clientGone was
+    // set by the failed enqueue of "second" above).
+    expect(typeof capturedShouldStop).toBe("function");
+    expect(capturedShouldStop!()).toBe(true);
   });
 });

@@ -201,4 +201,53 @@ describe("runPlaygroundTurn", () => {
     expect(assistantMessage.role).toBe("assistant");
     expect(assistantMessage.content).toEqual(parallelToolMsg.content);
   });
+
+  it("stops before the next iteration when shouldStop flips true (client abort)", async () => {
+    const emit = vi.fn();
+    // Iteration 1: create() -> toolMsg, shouldStop checked at top of iter 1
+    // (false) and before the single tool executes (false); loop then goes to
+    // check shouldStop at the top of iteration 2, which returns true.
+    const shouldStop = vi
+      .fn()
+      .mockReturnValueOnce(false) // top of iteration 1
+      .mockReturnValueOnce(false) // before tool execution in iteration 1
+      .mockReturnValue(true); // top of iteration 2 -> stop
+    const llm = scriptedLlm([toolMsg, textMsg]);
+    const executeTool = vi.fn(async () => ({ text: "3 emails", isError: false }));
+    const opts = baseOpts({ llm: llm as any, executeTool, emit, shouldStop });
+    await runPlaygroundTurn(opts as any);
+
+    expect(llm.messages.create).toHaveBeenCalledTimes(1);
+    expect(executeTool).toHaveBeenCalledTimes(1);
+    const lastEvent = emit.mock.calls[emit.mock.calls.length - 1][0];
+    expect(lastEvent).toEqual({ type: "done", stopReason: "aborted" });
+  });
+
+  it("stops before executing a remaining tool in the same response when shouldStop flips true mid-batch", async () => {
+    const emit = vi.fn();
+    const parallelToolMsg = {
+      stop_reason: "tool_use",
+      content: [
+        { type: "tool_use", id: "tu_1", name: "gws-mcp__gmail_search", input: { query: "is:unread" } },
+        { type: "tool_use", id: "tu_2", name: "tools-b", input: { param: "value" } },
+      ],
+    };
+    // shouldStop is false at the top of the (only) iteration and before the
+    // first tool, then flips true right before the second tool would run.
+    const shouldStop = vi
+      .fn()
+      .mockReturnValueOnce(false) // top of iteration
+      .mockReturnValueOnce(false) // before tool 1
+      .mockReturnValue(true); // before tool 2 -> stop
+    const llm = scriptedLlm([parallelToolMsg]);
+    const executeTool = vi.fn(async () => ({ text: "ok", isError: false }));
+    const opts = baseOpts({ llm: llm as any, executeTool, emit, shouldStop });
+    await runPlaygroundTurn(opts as any);
+
+    expect(executeTool).toHaveBeenCalledTimes(1);
+    expect(executeTool).toHaveBeenCalledWith("gws-mcp__gmail_search", { query: "is:unread" });
+    expect(llm.messages.create).toHaveBeenCalledTimes(1);
+    const lastEvent = emit.mock.calls[emit.mock.calls.length - 1][0];
+    expect(lastEvent).toEqual({ type: "done", stopReason: "aborted" });
+  });
 });
