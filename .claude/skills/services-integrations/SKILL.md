@@ -41,7 +41,7 @@ Entry file: `apps/gateway/src/lib/slack.ts`. `sendSlack(channel, message)` (foll
 - `channel` is a logical name (`"leads" | "digest" | "alerts" | "feedback"`) resolved through the `CHANNEL_ENV` lookup table to one of `SLACK_CHANNEL_LEADS`, `SLACK_CHANNEL_DIGEST`, `SLACK_CHANNEL_ALERTS`, `SLACK_CHANNEL_FEEDBACK`. To add a new logical channel: extend the `SlackChannel` union, add a row to `CHANNEL_ENV`, add the var to `.env.example` (+ `docker/docker-compose.prod.yml` env forwarding) — don't hardcode a channel ID at the call site. `"feedback"` receives playground thumbs up/down (see the Playground section below).
 - Slack's Web API returns HTTP 200 even for API-level errors, so `sendSlack` checks both `res.ok` and the parsed body's `data?.ok` before treating a send as successful — this is the one place the shared wrapper shape isn't enough on its own.
 - This replaced a webhook-based implementation (commit `a426a0a`, preceded by `8dad409`) so the existing "Dara" Slack app's bot token could be reused instead of provisioning three separate webhook URLs.
-- Call sites use `void sendSlack(...)` (fire-and-forget) so a Slack outage never blocks the request path — see `track.ts`, `route.ts`, `lifecycle.ts`, `digest.ts`.
+- Call sites use `void sendSlack(...)` (fire-and-forget) so a Slack outage never blocks the request path — see `track.ts`, `route.ts`, `lifecycle.ts`, `digest.ts`, `signup-alert.ts`.
 - Env var: `SLACK_BOT_TOKEN` (plus the four channel vars above).
 
 ### Stripe
@@ -64,7 +64,7 @@ Note: `digest.ts`'s `collectPosthog()` uses a *different* credential pair — `P
 
 - `trackToolCall()` — fires PostHog `tool_call` on every classified call, then (only when `status === "success"`, `props.outcome.source === "mcp"`, and the user isn't already activated) claims the `first_tool_call` milestone via `trackFirstToolCall()`, then writes a metering usage row via `writeUsageEvent`.
 - `trackFirstToolCall()` uses an atomic `UPDATE users SET first_tool_call_at = ... WHERE first_tool_call_at IS NULL RETURNING id` — checking `.length === 0` to detect a lost race — rather than SELECT-then-UPDATE. This is the pattern for any other exactly-once side effect.
-- `trackSignup()` fires `sendSlack("leads", ...)` plus a PostHog `identify` + `user_signed_up` capture.
+- `trackSignup()` is PostHog-only (`identify` + `user_signed_up` capture). The #leads Slack post for signups lives in `apps/gateway/src/gateway/signup-alert.ts` `notifySignup(db, user)` (SCRUM-26), called from the same `isNewUser` branch in `auth.ts`: it skips internal accounts via `isInternalEmail` (the SCRUM-6 lesson — `trackSignup`'s old inline Slack line didn't), looks up the newest `leads` row by email to label the post "Lead → signup conversion" vs "Direct signup", and includes the lead's UTM attribution. Never-throw, `void`-called.
 - `trackOAuthCompleted()` fires `account_connected`.
 
 **Playground (LLM loop):** the dashboard playground (`apps/gateway/src/gateway/playground/`, streamed by `POST /api/playground/chat`) has its own analytics track, deliberately separate from `trackToolCall`:
@@ -103,4 +103,4 @@ Copy the HTTP-mock pattern from `apps/gateway/src/lib/brevo.test.ts` and `apps/g
 3. Assert on `fetchMock.mock.calls[0]` — destructure `[url, init]`, check `url`, `init.headers`, and `JSON.parse(init.body)`.
 4. Always test the no-op branch (missing key/token/channel → `fetch` never called) and the never-throws branch (non-2xx response, and a rejected fetch) explicitly.
 
-Run just this domain's tests: `cd apps/gateway && pnpm vitest run src/lib/brevo.test.ts src/lib/slack.test.ts src/gateway/track.slack.test.ts src/gateway/track.firstcall.test.ts src/gateway/track.feedback.test.ts src/gateway/digest.test.ts src/gateway/lifecycle.test.ts src/app/api/leads/route.slack.test.ts`
+Run just this domain's tests: `cd apps/gateway && pnpm vitest run src/lib/brevo.test.ts src/lib/slack.test.ts src/gateway/track.slack.test.ts src/gateway/track.firstcall.test.ts src/gateway/track.feedback.test.ts src/gateway/digest.test.ts src/gateway/lifecycle.test.ts src/gateway/signup-alert.test.ts src/app/api/leads/route.slack.test.ts`

@@ -142,14 +142,14 @@ async function trackFirstToolCall(
   }
 }
 
+// The #leads Slack post for signups lives in signup-alert.ts (notifySignup),
+// which adds lead-match + attribution and skips internal accounts — this
+// function is PostHog-only (SCRUM-26 moved the Slack line out).
 export function trackSignup(
   userId: string,
   email: string,
   name: string | null
 ): void {
-  void sendSlack("leads", {
-    text: `👤 New signup: ${email}${name ? ` (${name})` : ""} — via Google OAuth`,
-  });
   const c = getPosthog();
   if (!c) return;
   c.identify({

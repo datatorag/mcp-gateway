@@ -11,15 +11,12 @@ vi.mock("../lib/slack", () => ({ sendSlack: vi.fn().mockResolvedValue(undefined)
 import { trackSignup } from "./track";
 import { sendSlack } from "../lib/slack";
 
-describe("trackSignup slack hook", () => {
+describe("trackSignup", () => {
   beforeEach(() => vi.clearAllMocks());
 
-  it("notifies #leads with the new user's email and name", () => {
+  it("does NOT post to Slack — the #leads signup post lives in notifySignup (SCRUM-26)", () => {
     trackSignup("user-1", "new@user.com", "New User");
-    expect(sendSlack).toHaveBeenCalledWith(
-      "leads",
-      expect.objectContaining({ text: expect.stringContaining("new@user.com") })
-    );
+    expect(sendSlack).not.toHaveBeenCalled();
   });
 
   it("still fires PostHog identify + capture", () => {

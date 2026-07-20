@@ -12,6 +12,7 @@ import {
   trackSignup,
 } from "./track";
 import { sendWelcomeEmail } from "./lifecycle";
+import { notifySignup } from "./signup-alert";
 
 const GWS_SCOPES = [
   "openid",
@@ -141,6 +142,11 @@ export function createAuthRouter(
         name: user.name,
         createdAt: user.createdAt,
         plan: user.plan,
+      });
+      void notifySignup(db, {
+        email: user.email,
+        name: user.name,
+        createdAt: user.createdAt,
       });
     } else {
       trackLogin(user.id, user.email);
