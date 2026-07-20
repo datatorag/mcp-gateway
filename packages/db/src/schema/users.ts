@@ -27,6 +27,9 @@ export const users = pgTable("users", {
   noActivationFollowupSentAt: timestamp("no_activation_followup_sent_at", {
     withTimezone: true,
   }),
+  // Lifetime count of playground chat messages sent (dashboard playground).
+  // Capped by PLAYGROUND_MESSAGE_CAP; deliberately NOT part of billing/credits.
+  playgroundMessagesUsed: integer("playground_messages_used").notNull().default(0),
   createdAt: timestamp("created_at", { withTimezone: true })
     .notNull()
     .defaultNow(),
