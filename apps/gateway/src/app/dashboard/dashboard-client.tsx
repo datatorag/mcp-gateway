@@ -32,6 +32,7 @@ export function DashboardClient() {
   const hasConnectedAccount = accounts.length > 0 || legacyConnections.length > 0;
 
   function runPrompt(prompt: string, i: number) {
+    if (!hasConnectedAccount) return;
     playgroundRef.current?.runPrompt(prompt);
     posthog.capture(EVENTS.PLAYGROUND_PROMPT_RUN, { prompt, index: i });
   }
@@ -291,8 +292,13 @@ export function DashboardClient() {
             >
               <button
                 onClick={() => runPrompt(prompt, i)}
-                title="Run in playground"
-                className="flex flex-1 items-start gap-1.5 text-left text-xs leading-relaxed text-foreground"
+                disabled={!hasConnectedAccount}
+                title={
+                  hasConnectedAccount
+                    ? "Run in playground"
+                    : "Connect an account to run this"
+                }
+                className="flex flex-1 items-start gap-1.5 text-left text-xs leading-relaxed text-foreground disabled:cursor-not-allowed disabled:opacity-50"
               >
                 <svg
                   width="12"

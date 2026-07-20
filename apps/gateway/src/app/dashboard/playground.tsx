@@ -1,7 +1,20 @@
 "use client";
 
-import { forwardRef, useImperativeHandle, useRef, useState } from "react";
+import {
+  forwardRef,
+  useEffect,
+  useImperativeHandle,
+  useRef,
+  useState,
+} from "react";
 import type { EngineEvent } from "@/gateway/playground/engine";
+
+// fetch()/reader.read() reject with this when the request's AbortController
+// fires — treat it as a silent no-op rather than a connection error, since
+// it means the component unmounted or a newer send superseded this one.
+function isAbortError(err: unknown): boolean {
+  return err instanceof Error && err.name === "AbortError";
+}
 
 export interface PlaygroundHandle {
   /** Seed the input with `prompt` and submit it immediately. Used by the
@@ -76,6 +89,16 @@ export const Playground = forwardRef<PlaygroundHandle, PlaygroundProps>(
     // the up-to-date value immediately, including for back-to-back
     // runPrompt calls before a re-render happens).
     const streamingRef = useRef(false);
+    // Aborts the in-flight fetch/stream for the current send, so a
+    // component unmount (or a new send superseding this one) doesn't leave
+    // the request running or write state after the fact.
+    const abortRef = useRef<AbortController | null>(null);
+
+    useEffect(() => {
+      return () => {
+        abortRef.current?.abort();
+      };
+    }, []);
 
     function updateLastAssistant(updater: (t: AssistantTurn) => AssistantTurn) {
       setTurns((prev) => {
@@ -130,6 +153,13 @@ export const Playground = forwardRef<PlaygroundHandle, PlaygroundProps>(
         return;
       }
 
+      // Defensive: cancel any prior in-flight request before starting a new
+      // one. The streamingRef guard above already prevents overlapping
+      // sends, but this keeps a stray in-flight controller from lingering.
+      abortRef.current?.abort();
+      const controller = new AbortController();
+      abortRef.current = controller;
+
       const apiMessages = [
         ...buildApiMessages(turns),
         { role: "user" as const, content: trimmed },
@@ -146,8 +176,12 @@ export const Playground = forwardRef<PlaygroundHandle, PlaygroundProps>(
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ messages: apiMessages }),
+          signal: controller.signal,
         });
-      } catch {
+      } catch (err) {
+        setStreaming(false);
+        streamingRef.current = false;
+        if (isAbortError(err)) return;
         setTurns((prev) => [
           ...prev,
           {
@@ -159,8 +193,6 @@ export const Playground = forwardRef<PlaygroundHandle, PlaygroundProps>(
             errorText: "Connection lost. Please try again.",
           },
         ]);
-        setStreaming(false);
-        streamingRef.current = false;
         return;
       }
 
@@ -203,6 +235,18 @@ export const Playground = forwardRef<PlaygroundHandle, PlaygroundProps>(
         { role: "assistant", text: "", tools: [], complete: false, prompt: trimmed },
       ]);
 
+      function processFrame(part: string) {
+        const line = part.trim();
+        if (!line.startsWith("data:")) return;
+        const jsonStr = line.slice("data:".length).trim();
+        if (!jsonStr) return;
+        try {
+          handleEvent(JSON.parse(jsonStr) as EngineEvent);
+        } catch {
+          // Malformed frame — skip it rather than aborting the stream.
+        }
+      }
+
       try {
         const reader = res.body.getReader();
         const decoder = new TextDecoder();
@@ -216,23 +260,21 @@ export const Playground = forwardRef<PlaygroundHandle, PlaygroundProps>(
           buffer += decoder.decode(value, { stream: true });
           const parts = buffer.split("\n\n");
           buffer = parts.pop() ?? "";
-          for (const part of parts) {
-            const line = part.trim();
-            if (!line.startsWith("data:")) continue;
-            const jsonStr = line.slice("data:".length).trim();
-            if (!jsonStr) continue;
-            try {
-              handleEvent(JSON.parse(jsonStr) as EngineEvent);
-            } catch {
-              // Malformed frame — skip it rather than aborting the stream.
-            }
-          }
+          for (const part of parts) processFrame(part);
         }
-      } catch {
-        updateLastAssistant((t) => ({
-          ...t,
-          errorText: "Connection lost while responding. Please try again.",
-        }));
+        // Flush any bytes the decoder held back for a multi-byte sequence,
+        // then process whatever's left in the buffer — the stream can end
+        // without a trailing `\n\n`, and that final frame shouldn't be
+        // silently dropped.
+        buffer += decoder.decode();
+        for (const part of buffer.split("\n\n")) processFrame(part);
+      } catch (err) {
+        if (!isAbortError(err)) {
+          updateLastAssistant((t) => ({
+            ...t,
+            errorText: "Connection lost while responding. Please try again.",
+          }));
+        }
       } finally {
         setStreaming(false);
         streamingRef.current = false;
