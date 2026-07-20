@@ -12,7 +12,6 @@ import {
 import {
   listUserEngineTools,
   executeUserTool,
-  isWriteTool,
 } from "@/gateway/playground/tools";
 import { claimPlaygroundMessage, refundPlaygroundMessage } from "@/gateway/playground/cap";
 import { putPending, takePending } from "@/gateway/playground/pending";
@@ -25,9 +24,9 @@ import {
 
 type ChatMessage = { role: string; content: string };
 
-// The engine deps shared by both entry points (fresh turn + resume), so the
-// write-gate wiring (`isWrite`) and tool execution can't drift between them.
-// tools/messages/emit/shouldStop differ per path and are supplied at the call.
+// The engine deps common to both entry points (fresh turn + resume). tools,
+// isWrite (both from listUserEngineTools), messages, emit and shouldStop differ
+// per path and are supplied at the call.
 function engineBase(userId: string, llm: NonNullable<ReturnType<typeof getPlaygroundLlm>>) {
   return {
     llm,
@@ -36,7 +35,6 @@ function engineBase(userId: string, llm: NonNullable<ReturnType<typeof getPlaygr
       void trackPlaygroundToolCall(db, userId, name);
       return executeUserTool(db, userId, name, args);
     },
-    isWrite: isWriteTool,
   };
 }
 
@@ -49,7 +47,7 @@ function handleTurnResult(
   emit: (e: EngineEvent) => void
 ): void {
   if (result.status === "awaiting_confirmation") {
-    const token = putPending(userId, result.messages, result.batch);
+    const token = putPending(userId, result.messages, result.batch, result.pending);
     emit({ type: "confirm", resumeToken: token, pending: result.pending });
     void trackPlaygroundConfirm(db, userId, "shown", result.pending.length);
   }
@@ -154,9 +152,9 @@ export async function POST(request: NextRequest) {
   }
   void trackPlaygroundMessage(db, userId);
 
-  let tools;
+  let tools, isWrite;
   try {
-    tools = await listUserEngineTools(db, userId);
+    ({ tools, isWrite } = await listUserEngineTools(db, userId));
   } catch (err) {
     // Pre-stream failure after the claim landed — refund so this doesn't burn
     // one of the user's lifetime playground messages.
@@ -170,6 +168,7 @@ export async function POST(request: NextRequest) {
       const result = await runPlaygroundTurn({
         ...engineBase(userId, llm),
         tools,
+        isWrite,
         messages: messages.map((m) => ({ role: m.role, content: m.content })),
         emit,
         shouldStop,
@@ -207,21 +206,23 @@ async function handleResume(
     }, request.signal);
   }
 
-  const writes = pending.batch.filter((tu) => isWriteTool(tu.name));
-  const anyApproved = writes.some((tu) => decisions[tu.id] === "approve");
+  // The gated writes were classified at pause time and stored — track the
+  // user's decision from them, no re-classification needed.
+  const anyApproved = pending.writes.some((w) => decisions[w.id] === "approve");
   void trackPlaygroundConfirm(
     db,
     userId,
     anyApproved ? "approved" : "denied",
-    writes.length
+    pending.writes.length
   );
 
   return streamResponse(async ({ emit, shouldStop }) => {
     try {
-      const tools = await listUserEngineTools(db, userId);
+      const { tools, isWrite } = await listUserEngineTools(db, userId);
       const result = await resumePlaygroundTurn({
         ...engineBase(userId, llm),
         tools,
+        isWrite,
         messages: pending.messages,
         batch: pending.batch,
         decisions,

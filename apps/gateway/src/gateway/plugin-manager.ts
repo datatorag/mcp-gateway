@@ -431,6 +431,10 @@ export class PluginManager {
             namespacedName: `${slug}${NAMESPACE_SEPARATOR}${t.name}`,
             description: t.description ?? null,
             inputSchemaJson: t.inputSchema ?? null,
+            // MCP annotation: readOnlyHint true = declared read-only, false =
+            // declared mutating, undefined = unannotated (stored as null).
+            // Drives the playground write-confirmation gate.
+            readOnlyHint: t.annotations?.readOnlyHint ?? null,
             creditsPerCall: 1,
           }))
         );

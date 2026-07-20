@@ -31,9 +31,36 @@ import {
   parseNamespacedName,
   flattenToolResult,
   isWriteTool,
+  classifyWrite,
   ToolCallError,
 } from "./tools";
 import { getServiceToken } from "../service-token";
+
+describe("classifyWrite", () => {
+  it("trusts the readOnlyHint annotation over the verb heuristic", () => {
+    // A "search"-named tool the plugin declared mutating → write.
+    expect(
+      classifyWrite({ namespacedName: "x-mcp__weird_search", readOnlyHint: false })
+    ).toBe(true);
+    // A "create"-named tool the plugin declared read-only → read.
+    expect(
+      classifyWrite({ namespacedName: "x-mcp__create_report_view", readOnlyHint: true })
+    ).toBe(false);
+  });
+
+  it("falls back to the verb heuristic when unannotated (null)", () => {
+    expect(
+      classifyWrite({ namespacedName: "gws-mcp__gmail_send", readOnlyHint: null })
+    ).toBe(true);
+    expect(
+      classifyWrite({ namespacedName: "gws-mcp__gmail_search", readOnlyHint: null })
+    ).toBe(false);
+    // Arbitrary-op runner with no other verb — the expanded heuristic gates it.
+    expect(
+      classifyWrite({ namespacedName: "gws-mcp__gws_run", readOnlyHint: null })
+    ).toBe(true);
+  });
+});
 
 describe("isWriteTool", () => {
   it("classifies mutating tools as writes", () => {
@@ -277,7 +304,7 @@ describe("listUserEngineTools", () => {
 
     const result = await listUserEngineTools(db, "user-1");
 
-    expect(result).toEqual([
+    expect(result.tools).toEqual([
       {
         name: "gws-mcp__gmail_search",
         description: "search gmail",
@@ -317,7 +344,7 @@ describe("listUserEngineTools", () => {
 
     const result = await listUserEngineTools(db, "user-1");
 
-    expect(result).toEqual([
+    expect(result.tools).toEqual([
       {
         name: "atlassian-mcp__jira_search",
         description: "search jira",
@@ -352,7 +379,7 @@ describe("listUserEngineTools", () => {
 
     // atlassian tool excluded (only google-workspace connected) and the
     // legacy fallback query must never have been consulted.
-    expect(result).toEqual([]);
+    expect(result.tools).toEqual([]);
     expect(legacyWhere).not.toHaveBeenCalled();
   });
 
@@ -377,12 +404,55 @@ describe("listUserEngineTools", () => {
 
     const result = await listUserEngineTools(db, "user-1");
 
-    expect(result).toEqual([
+    expect(result.tools).toEqual([
       {
         name: "some-slug__do_thing",
         description: "",
         input_schema: { type: "object", properties: {} },
       },
     ]);
+  });
+
+  it("derives isWrite from the readOnlyHint annotation (heuristic fallback when null)", async () => {
+    const toolRows = [
+      {
+        namespacedName: "gws-mcp__gmail_search",
+        description: "search",
+        inputSchemaJson: null,
+        readOnlyHint: null, // unannotated → heuristic → read
+        serverSlug: "gws-mcp",
+      },
+      {
+        namespacedName: "gws-mcp__weird_name",
+        description: "declared mutating",
+        inputSchemaJson: null,
+        readOnlyHint: false, // annotation says write, despite no write verb
+        serverSlug: "gws-mcp",
+      },
+      {
+        namespacedName: "gws-mcp__create_thing",
+        description: "declared read-only",
+        inputSchemaJson: null,
+        readOnlyHint: true, // annotation says read, despite the "create" verb
+        serverSlug: "gws-mcp",
+      },
+    ];
+    const selectDistinct = vi.fn(() => ({
+      from: vi.fn(() => ({ where: vi.fn().mockResolvedValue([{ connectorType: "google-workspace" }]) })),
+    }));
+    const select = vi.fn(() => ({
+      from: vi.fn(() => ({
+        innerJoin: vi.fn(() => ({ where: vi.fn().mockResolvedValue(toolRows) })),
+      })),
+    }));
+    const db = mockDb({ selectDistinct, select });
+
+    const { isWrite } = await listUserEngineTools(db, "user-1");
+
+    expect(isWrite("gws-mcp__gmail_search")).toBe(false);
+    expect(isWrite("gws-mcp__weird_name")).toBe(true);
+    expect(isWrite("gws-mcp__create_thing")).toBe(false);
+    // A tool the user can't see is not classified as a write.
+    expect(isWrite("gws-mcp__unknown")).toBe(false);
   });
 });

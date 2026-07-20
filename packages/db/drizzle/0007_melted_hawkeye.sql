@@ -1,0 +1,1 @@
+ALTER TABLE "tools" ADD COLUMN "read_only_hint" boolean;

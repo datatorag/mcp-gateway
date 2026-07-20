@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import type { ToolUse } from "./engine";
+import type { ToolUse, PendingWrite } from "./engine";
 
 /**
  * Short-lived server-side hold for a playground turn paused at a write,
@@ -17,6 +17,9 @@ export type PendingTurn = {
   userId: string;
   messages: unknown[];
   batch: ToolUse[];
+  /** The writes in `batch` awaiting a decision — the gate set, so the resume
+   * doesn't have to re-classify to know what was pending. */
+  writes: PendingWrite[];
   createdAt: number;
 };
 
@@ -38,11 +41,16 @@ function sweep(now: number): void {
 }
 
 /** Persist a paused turn and return its resume token. */
-export function putPending(userId: string, messages: unknown[], batch: ToolUse[]): string {
+export function putPending(
+  userId: string,
+  messages: unknown[],
+  batch: ToolUse[],
+  writes: PendingWrite[]
+): string {
   const now = Date.now();
   sweep(now);
   const token = randomUUID();
-  store.set(token, { userId, messages, batch, createdAt: now });
+  store.set(token, { userId, messages, batch, writes, createdAt: now });
   return token;
 }
 

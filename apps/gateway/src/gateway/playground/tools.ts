@@ -32,21 +32,25 @@ export class ToolCallError extends Error {
   }
 }
 
-// Verbs (as `_`-delimited tokens in a tool's action name) that indicate the
-// tool MUTATES state — the playground gates these behind an approve/deny
-// confirmation before running. Reads (list/get/search/read/freebusy/…) never
-// match, so they run without a prompt. Matching a token (not a substring)
-// keeps `directory_search` a read while `docs_create` / `gmail_send` /
-// `sheets_append` / `jira_transition_issue` / `slides_batch_update` are writes.
+// Fallback verb heuristic — used ONLY for tools the plugin didn't annotate
+// with an MCP readOnlyHint (see classifyWrite). Verbs (as `_`-delimited
+// tokens in a tool's action name) that indicate the tool MUTATES state.
+// Reads (list/get/search/read/freebusy/…) never match. Matching a token (not
+// a substring) keeps `directory_search` a read while `docs_create` /
+// `gmail_send` / `sheets_append` / `slides_batch_update` are writes. `run`/
+// `exec`/`execute` cover arbitrary-operation runners (e.g. gws_run) that carry
+// no other verb.
 const WRITE_VERBS = new Set([
   "create", "update", "delete", "write", "send", "reply", "forward",
   "append", "add", "insert", "mark", "complete", "save", "transition",
   "respond", "move", "copy", "edit", "remove", "upload", "batch",
+  "run", "exec", "execute", "publish", "share", "grant", "revoke",
+  "archive", "trash", "rename", "submit", "restore", "cancel", "clear",
 ]);
 
-/** Whether a namespaced tool mutates state (and must be user-confirmed in the
- * playground). Classifies by the action segment's verb tokens; a name with no
- * known write verb is treated as a read. */
+/** Heuristic fallback: whether a namespaced tool mutates state, judged by the
+ * action segment's verb tokens. Prefer classifyWrite, which trusts the MCP
+ * readOnlyHint annotation and only falls back to this when unannotated. */
 export function isWriteTool(namespacedName: string): boolean {
   const sep = namespacedName.indexOf(NAMESPACE_SEPARATOR);
   const action = sep === -1 ? namespacedName : namespacedName.slice(sep + NAMESPACE_SEPARATOR.length);
@@ -54,6 +58,18 @@ export function isWriteTool(namespacedName: string): boolean {
     .toLowerCase()
     .split("_")
     .some((token) => WRITE_VERBS.has(token));
+}
+
+/** Whether a tool must be user-confirmed in the playground before it runs.
+ * Trusts the MCP readOnlyHint annotation from the registry when present; falls
+ * back to the verb heuristic only when the plugin didn't annotate the tool. */
+export function classifyWrite(row: {
+  namespacedName: string;
+  readOnlyHint: boolean | null;
+}): boolean {
+  if (row.readOnlyHint === true) return false; // declared read-only
+  if (row.readOnlyHint === false) return true; // declared mutating
+  return isWriteTool(row.namespacedName); // unannotated → heuristic
 }
 
 export function parseNamespacedName(namespacedName: string): {
@@ -89,20 +105,27 @@ export function flattenToolResult(result: {
 
 /**
  * The user's visible tools (shared connected-service policy — see
- * user-tools.ts), shaped for the Anthropic API as EngineTool[].
+ * user-tools.ts), shaped for the Anthropic API as EngineTool[], plus an
+ * `isWrite` predicate derived from each tool's registry annotation (verb
+ * heuristic fallback) — the write-confirmation gate the engine consumes.
  * (/api/playground/tools filters neither status nor enabled — this
  * intentionally does NOT copy that route's query shape.)
  */
 export async function listUserEngineTools(
   db: Database,
   userId: string
-): Promise<EngineTool[]> {
+): Promise<{ tools: EngineTool[]; isWrite: (name: string) => boolean }> {
   const rows = await listUserToolRows(db, userId);
-  return rows.map((r) => ({
-    name: r.namespacedName,
-    description: r.description,
-    input_schema: r.schema,
-  }));
+  const writeNames = new Set<string>();
+  const tools = rows.map((r) => {
+    if (classifyWrite(r)) writeNames.add(r.namespacedName);
+    return {
+      name: r.namespacedName,
+      description: r.description,
+      input_schema: r.schema,
+    };
+  });
+  return { tools, isWrite: (name) => writeNames.has(name) };
 }
 
 /**

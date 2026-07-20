@@ -26,6 +26,9 @@ export type UserToolRow = {
   /** Service the tool needs (from PLUGIN_SERVICE_MAP); undefined for tools
    * whose server has no service mapping — those are visible to everyone. */
   requiredService: string | undefined;
+  /** MCP readOnlyHint annotation: true = read-only, false = mutating, null =
+   * unannotated. Drives the playground write-confirmation gate. */
+  readOnlyHint: boolean | null;
 };
 
 /**
@@ -50,6 +53,7 @@ export async function listUserToolRows(
         namespacedName: tools.namespacedName,
         description: tools.description,
         inputSchemaJson: tools.inputSchemaJson,
+        readOnlyHint: tools.readOnlyHint,
         serverSlug: mcpServers.slug,
       })
       .from(tools)
@@ -85,6 +89,7 @@ export async function listUserToolRows(
         properties: {},
       },
       requiredService,
+      readOnlyHint: t.readOnlyHint,
     });
   }
 

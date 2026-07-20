@@ -76,7 +76,7 @@ describe("POST /api/playground/chat", () => {
     getSessionUserId.mockResolvedValue("user-1");
     getEnv.mockReturnValue({ PLAYGROUND_MESSAGE_CAP: 20, PLAYGROUND_MODEL: "claude-sonnet-5" });
     claimPlaygroundMessage.mockResolvedValue(true);
-    listUserEngineTools.mockResolvedValue([]);
+    listUserEngineTools.mockResolvedValue({ tools: [], isWrite: () => false });
     getPlaygroundLlm.mockReturnValue({ messages: { create: vi.fn() } });
     runPlaygroundTurn.mockImplementation(async ({ emit }) => {
       emit({ type: "done", stopReason: "end_turn" });
@@ -240,7 +240,7 @@ describe("POST /api/playground/chat", () => {
     const res = await POST(chatRequest(validBody));
     const text = await res.text();
 
-    expect(putPending).toHaveBeenCalledWith("user-1", pausedMessages, batch);
+    expect(putPending).toHaveBeenCalledWith("user-1", pausedMessages, batch, pending);
     expect(text).toContain('"type":"confirm"');
     expect(text).toContain("resume-token-abc");
     expect(text).toContain("gws-mcp__gmail_send");
@@ -252,6 +252,7 @@ describe("POST /api/playground/chat", () => {
       userId: "user-1",
       messages: [{ role: "assistant", content: [] }],
       batch: [{ id: "w_1", name: "gws-mcp__gmail_send", input: {} }],
+      writes: [{ id: "w_1", name: "gws-mcp__gmail_send", input: {} }],
       createdAt: 0,
     });
 
