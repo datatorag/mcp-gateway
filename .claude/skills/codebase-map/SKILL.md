@@ -74,7 +74,7 @@ Three distinct flows — don't conflate them:
 | Plugins run as host child processes (`spawn`), NOT Docker containers | Simpler than the original container-per-plugin design; the never-imported `packages/docker-manager` vestige was deleted, but the `containerPort` column name still reflects the abandoned model | commit `c9b77f3`; `apps/gateway/src/gateway/plugin-manager.ts` |
 | Meta-tool gateway migration: decided direction, **deliberately not executed yet** | Direct tool exposure (~60 tools) is faster/simpler; migrate when catalog crosses ~100 tools. Meanwhile: self-contained tool descriptions, no runtime dependence on the `__` prefix | `docs/architecture/2026-04-22-meta-tool-migration.md` |
 | Public POST/DELETE `/api/servers` endpoints removed; plugin installs now via SSH on the host | Unauthenticated plugin management on a public gateway was a security hole | commits `7fb0356`, `f8a6c4f` |
-| Per-user-token plugin calls bypass the pool with a one-shot client | Avoids per-user pooling complexity while guaranteeing the right `X-User-Token`; pool stays credential-free | commit `fe083e2`; `mcp-server.ts` |
+| Per-user-token plugin calls bypass the pool with a one-shot client | Avoids per-user pooling complexity while guaranteeing the right `X-User-Token`; pool stays credential-free | commit `fe083e2`; `user-tools.ts` (`callPluginToolOnce`, consumed by `mcp-server.ts` + playground) |
 | `execFileSync` (never `execSync`) for git clone / installs | Prevents shell injection via malicious `githubRepoUrl` | commit `70cc29a` |
 | Constant-time compares (`safeStringEqual`) for all PKCE/client_id/redirect_uri checks | CASA Tier 2 SAQ item; part of the passed Google CASA evidence trail | commit `0bbfd7f`; `packages/auth/src/index.ts` |
 | Lazy tool loading: ListTools filters by connected services | Keeps the advertised tool list honest about what the user can actually call | commit `d2d45ee` |
@@ -98,6 +98,10 @@ Three distinct flows — don't conflate them:
 - **`__` is the load-bearing tool-name separator** (`NAMESPACE_SEPARATOR`): CallTool splits on the first occurrence. A slug or tool name containing `__` misroutes.
 - **Never-throw convention** for side channels: `sendSlack`, `brevoPost`, all analytics/track functions catch internally and warn with a `[module]` log prefix. Exactly-once side effects use atomic `UPDATE … WHERE <flag> IS NULL RETURNING id` claims (`first_tool_call_at`, follow-up emails).
 - **Content parser caches never invalidate** — editing markdown does nothing on a running prod server; redeploy.
+- **Playground is unmetered by design** — the dashboard playground (`src/gateway/playground/`) never writes `usage_events` and never sets `first_tool_call_at`; activation must keep meaning "a real MCP client called through the gateway". Its lifetime message cap uses a guarded-UPDATE claim/refund on `users.playground_messages_used` (details in the `services-integrations` skill's Playground section).
+- **`connection-tester.tsx` is GONE** — the dashboard's connection tester was absorbed into `src/app/dashboard/setup-wizard.tsx` (which kept its `/api/setup/status` polling). Don't look for it; old references mean the wizard now.
+- **Relative imports in `apps/gateway` are extensionless** (`from "../lib/slack"`, never `"../lib/slack.js"`). tsconfig `moduleResolution: "bundler"` makes extensionless valid for every consumer — tsc, the tsx dev runtime, tsup, Next's webpack prod build, AND Turbopack (`pnpm dev`). `.js`-suffixed relative specifiers were normalized away after they broke the Turbopack dev server for any app route transitively importing `gateway/*.ts` (a webpack-only `extensionAlias` workaround existed briefly and was removed — webpack's hook doesn't apply to Turbopack, so it fixed prod while dev stayed broken). Package-subpath imports keep their extensions (e.g. `@modelcontextprotocol/sdk/client/index.js`). Don't reintroduce `.js` relative specifiers.
+- **The testcontainers harness is live** — `src/test-utils/db.ts` (real Postgres via `@testcontainers/postgresql`, runs drizzle migrations) has a real consumer: `src/app/api/setup/status/route.liveness.test.ts`. Suites using it must gate on `isDockerAvailable()` (`describe.skipIf`, probed synchronously at import time) so `pnpm vitest run` still passes on machines/CI without a Docker daemon — and must never call `getTestDb()` at module-import time, only inside the gated block's `beforeAll`.
 
 ## Where things live
 
@@ -121,6 +125,16 @@ Three distinct flows — don't conflate them:
 | Brevo welcome + no-activation follow-up emails | `apps/gateway/src/gateway/lifecycle.ts` |
 | Slack / Brevo / Stripe / PostHog-server clients | `apps/gateway/src/lib/{slack,brevo,stripe,posthog-server}.ts` |
 | Session cookie → userId | `apps/gateway/src/lib/session.ts` |
+| Playground agentic loop (8-iteration cap, prompt caching, system prompt) | `apps/gateway/src/gateway/playground/engine.ts` |
+| Playground tool listing/execution (thin shaping over shared `user-tools.ts`) | `apps/gateway/src/gateway/playground/tools.ts` |
+| Shared "which tools can this user see" policy + plugin URL + one-shot call | `apps/gateway/src/gateway/user-tools.ts` |
+| Playground message-cap claim/refund (`users.playground_messages_used`) | `apps/gateway/src/gateway/playground/cap.ts` |
+| Playground SSE chat + feedback routes (401/403/429/400 mapping) | `apps/gateway/src/app/api/playground/{chat,feedback}/route.ts` |
+| Playground LLM provider factory (`anthropic` \| `bedrock`) | `apps/gateway/src/lib/llm.ts` |
+| Playground chat UI (`PlaygroundHandle.runPrompt`, feedback controls) | `apps/gateway/src/app/dashboard/playground.tsx` |
+| Setup wizard (client picker, config snippets, live status polling) | `apps/gateway/src/app/dashboard/setup-wizard.tsx` |
+| Setup status API (live non-"web" tokens only — not revoked/expired) | `apps/gateway/src/app/api/setup/status/route.ts` |
+| Testcontainers Postgres helper + `isDockerAvailable()` gate | `apps/gateway/src/test-utils/db.ts` |
 | Leads intake (zod, honeypot, IP hash, own limiters) | `apps/gateway/src/app/api/leads/route.ts`, `apps/gateway/src/gateway/leads/limiter.ts` |
 | Blog / changelog / docs parsers | `apps/gateway/src/lib/{blog,changelog,docs}.ts` |
 | Docs connector grouping registry | `apps/gateway/src/lib/docs-connectors.ts` |

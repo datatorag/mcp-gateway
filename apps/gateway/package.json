@@ -13,6 +13,8 @@
     "setup:stripe": "node scripts/setup-stripe.mjs"
   },
   "dependencies": {
+    "@anthropic-ai/bedrock-sdk": "^0.32.0",
+    "@anthropic-ai/sdk": "^0.112.3",
     "@datatorag-mcp/auth": "workspace:^",
     "@datatorag-mcp/config": "workspace:*",
     "@datatorag-mcp/db": "workspace:*",

@@ -2,14 +2,14 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 
 const capture = vi.fn();
 const identify = vi.fn();
-vi.mock("../lib/posthog-server.js", () => ({
+vi.mock("../lib/posthog-server", () => ({
   getPosthog: () => ({ capture, identify }),
   shutdownPosthog: vi.fn(),
 }));
-vi.mock("../lib/slack.js", () => ({ sendSlack: vi.fn().mockResolvedValue(undefined) }));
+vi.mock("../lib/slack", () => ({ sendSlack: vi.fn().mockResolvedValue(undefined) }));
 
-import { trackSignup } from "./track.js";
-import { sendSlack } from "../lib/slack.js";
+import { trackSignup } from "./track";
+import { sendSlack } from "../lib/slack";
 
 describe("trackSignup slack hook", () => {
   beforeEach(() => vi.clearAllMocks());

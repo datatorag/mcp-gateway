@@ -30,7 +30,7 @@ No env var/token → warned no-op, not a throw. Non-2xx or a network error → w
 Entry file: `apps/gateway/src/lib/brevo.ts`. Single internal `brevoPost()` helper (follows the shape above) wraps all HTTP calls; two public functions call it: `upsertBrevoContact()` (`POST /contacts`) and `sendBrevoTemplate()` (`POST /smtp/email`).
 
 - List/template IDs (`BREVO_LIST_PRODUCT_USERS`, `BREVO_TEMPLATE_WELCOME`, `BREVO_TEMPLATE_NO_ACTIVATION`) are hardcoded constants, not env vars — they're managed in the Brevo console.
-- `isInternalEmail()` checks a hardcoded founder-email `Set` plus the `@datatorag.com` domain; lifecycle emails must skip these.
+- `isInternalEmail()` checks the comma-separated `INTERNAL_EXCLUDE_EMAILS` env var (same env-side list the digest exclusion reads; values live in SSM/prod `.env`, never in source — this repo is public) plus the `@datatorag.com` domain, which is matched unconditionally in code; lifecycle emails must skip these.
 - `hasBrevoKey()` lets callers check availability before doing other work (see Lifecycle below, which checks this *before* claiming a DB row).
 - Env var: `BREVO_API_KEY`.
 
@@ -38,11 +38,11 @@ Entry file: `apps/gateway/src/lib/brevo.ts`. Single internal `brevoPost()` helpe
 
 Entry file: `apps/gateway/src/lib/slack.ts`. `sendSlack(channel, message)` (follows the shape above, plus one extra check — see below) posts to `https://slack.com/api/chat.postMessage` with `Authorization: Bearer <SLACK_BOT_TOKEN>`.
 
-- `channel` is a logical name (`"leads" | "digest" | "alerts"`) resolved through the `CHANNEL_ENV` lookup table to one of `SLACK_CHANNEL_LEADS`, `SLACK_CHANNEL_DIGEST`, `SLACK_CHANNEL_ALERTS`. To add a new logical channel: extend the `SlackChannel` union, add a row to `CHANNEL_ENV`, add the var to `.env.example` — don't hardcode a channel ID at the call site.
+- `channel` is a logical name (`"leads" | "digest" | "alerts" | "feedback"`) resolved through the `CHANNEL_ENV` lookup table to one of `SLACK_CHANNEL_LEADS`, `SLACK_CHANNEL_DIGEST`, `SLACK_CHANNEL_ALERTS`, `SLACK_CHANNEL_FEEDBACK`. To add a new logical channel: extend the `SlackChannel` union, add a row to `CHANNEL_ENV`, add the var to `.env.example` (+ `docker/docker-compose.prod.yml` env forwarding) — don't hardcode a channel ID at the call site. `"feedback"` receives playground thumbs up/down (see the Playground section below).
 - Slack's Web API returns HTTP 200 even for API-level errors, so `sendSlack` checks both `res.ok` and the parsed body's `data?.ok` before treating a send as successful — this is the one place the shared wrapper shape isn't enough on its own.
 - This replaced a webhook-based implementation (commit `a426a0a`, preceded by `8dad409`) so the existing "Dara" Slack app's bot token could be reused instead of provisioning three separate webhook URLs.
 - Call sites use `void sendSlack(...)` (fire-and-forget) so a Slack outage never blocks the request path — see `track.ts`, `route.ts`, `lifecycle.ts`, `digest.ts`.
-- Env var: `SLACK_BOT_TOKEN` (plus the three channel vars above).
+- Env var: `SLACK_BOT_TOKEN` (plus the four channel vars above).
 
 ### Stripe
 
@@ -66,6 +66,15 @@ Note: `digest.ts`'s `collectPosthog()` uses a *different* credential pair — `P
 - `trackFirstToolCall()` uses an atomic `UPDATE users SET first_tool_call_at = ... WHERE first_tool_call_at IS NULL RETURNING id` — checking `.length === 0` to detect a lost race — rather than SELECT-then-UPDATE. This is the pattern for any other exactly-once side effect.
 - `trackSignup()` fires `sendSlack("leads", ...)` plus a PostHog `identify` + `user_signed_up` capture.
 - `trackOAuthCompleted()` fires `account_connected`.
+
+**Playground (LLM loop):** the dashboard playground (`apps/gateway/src/gateway/playground/`, streamed by `POST /api/playground/chat`) has its own analytics track, deliberately separate from `trackToolCall`:
+
+- New server-side events in `track.ts` (names in `src/lib/analytics.ts` `EVENTS`): `playground_message_sent`, `playground_tool_call`, `playground_cap_hit`, `playground_feedback` — all never-throw, all spread `identityProps()`. Client-side (posthog-js, dashboard components): `playground_prompt_run` (a "What can I do?" card's Run button), `wizard_client_selected`, `wizard_step_completed` (setup wizard).
+- **No activation pollution (CRITICAL invariant):** playground calls never write `usage_events` and never set `first_tool_call_at`. The chat route fires `trackPlaygroundToolCall` (PostHog only) — it never goes through `trackToolCall`/`writeUsageEvent` — and `classifyOutcome` returns `meter: false` for `source: "playground"` as backstop. Activation ("first tool call") must keep meaning "a real MCP client called through the gateway", because the no-activation follow-up email and the digest both key off it.
+- **Cap claim/refund:** `playground/cap.ts` gates the per-user lifetime cap (`users.playground_messages_used` vs `PLAYGROUND_MESSAGE_CAP`, default 20) with the same guarded-UPDATE family as `trackFirstToolCall`: `claimPlaygroundMessage` is `UPDATE ... SET used = used + 1 WHERE used < cap RETURNING` (claim = row came back); `refundPlaygroundMessage` is the compensating guarded decrement, called when the claim landed but no real work happened (pre-stream failure or engine/provider error) so an Anthropic outage never burns a lifetime message. Copy this claim/refund pair for any future "capped best-effort" feature.
+- **Prompt caching is required, not optional:** `playground/engine.ts` sets `cache_control: { type: "ephemeral" }` on the system block and the *last* tool block. The tool schemas (~15k tokens for a GWS user) repeat on every loop iteration and every message — without caching each turn re-pays full input price. Preserve this when touching the engine's `messages.create` call.
+- **Feedback:** `trackPlaygroundFeedback` (from `POST /api/playground/feedback`) does a PostHog capture plus `void sendSlack("feedback", ...)` showing the **full** user email (same deliberate no-masking policy as leads/signup notifications).
+- Provider factory: `apps/gateway/src/lib/llm.ts` — `getPlaygroundLlm()` returns an Anthropic or Bedrock (`AnthropicBedrockMantle`, IAM creds) client per `PLAYGROUND_PROVIDER`. Env vars: `ANTHROPIC_API_KEY` (empty = playground disabled unless provider is bedrock), `PLAYGROUND_PROVIDER` (`anthropic` | `bedrock`), `PLAYGROUND_MODEL` (default `claude-sonnet-5`), `PLAYGROUND_MESSAGE_CAP`, `SLACK_CHANNEL_FEEDBACK`.
 
 `apps/gateway/src/gateway/digest.ts` runs the daily Slack digest: `runDailyDigest()` runs three collectors in parallel via `Promise.all` — `collectNeon` (DB queries for leads/signups/tool-calls/connections), `collectStripe` (Stripe Events API), `collectPosthog` (HogQL query over PostHog's own query API). Each is wrapped by `runSource()`, which catches a collector failure, alerts `#alerts` via Slack, and returns `null` so the digest still renders that section as unavailable rather than failing outright. The final message posts via `sendSlack("digest", ...)`. `MAX_LEAD_LINES = 10` caps the lead list (Slack caps messages at 50 blocks).
 
@@ -94,4 +103,4 @@ Copy the HTTP-mock pattern from `apps/gateway/src/lib/brevo.test.ts` and `apps/g
 3. Assert on `fetchMock.mock.calls[0]` — destructure `[url, init]`, check `url`, `init.headers`, and `JSON.parse(init.body)`.
 4. Always test the no-op branch (missing key/token/channel → `fetch` never called) and the never-throws branch (non-2xx response, and a rejected fetch) explicitly.
 
-Run just this domain's tests: `cd apps/gateway && pnpm vitest run src/lib/brevo.test.ts src/lib/slack.test.ts src/gateway/track.slack.test.ts src/gateway/track.firstcall.test.ts src/gateway/digest.test.ts src/gateway/lifecycle.test.ts src/app/api/leads/route.slack.test.ts`
+Run just this domain's tests: `cd apps/gateway && pnpm vitest run src/lib/brevo.test.ts src/lib/slack.test.ts src/gateway/track.slack.test.ts src/gateway/track.firstcall.test.ts src/gateway/track.feedback.test.ts src/gateway/digest.test.ts src/gateway/lifecycle.test.ts src/app/api/leads/route.slack.test.ts`

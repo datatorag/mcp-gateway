@@ -7,11 +7,27 @@ import { migrate } from "drizzle-orm/postgres-js/migrator";
 import postgres from "postgres";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
+import { execSync } from "node:child_process";
 import { users, type Database } from "@datatorag-mcp/db";
 
 let container: StartedPostgreSqlContainer | null = null;
 let client: ReturnType<typeof postgres> | null = null;
 let db: Database | null = null;
+
+// Cheap synchronous check for a reachable Docker daemon, so testcontainers
+// suites can gate themselves (describe.skipIf(!isDockerAvailable())) instead
+// of hard-failing when Docker isn't running — mirrors the env-gating
+// convention used by apps/gateway/e2e/mcp.e2e.test.ts for the e2e harness.
+export function isDockerAvailable(): boolean {
+  try {
+    // timeout: a wedged Docker daemon must read as "unavailable", not hang
+    // the whole test run at collection time.
+    execSync("docker info", { stdio: "ignore", timeout: 2000 });
+    return true;
+  } catch {
+    return false;
+  }
+}
 
 export async function getTestDb(): Promise<Database> {
   if (db) return db;

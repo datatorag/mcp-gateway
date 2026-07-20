@@ -96,4 +96,13 @@ describe("sendSlack", () => {
     await expect(sendSlack("leads", { text: "x" })).resolves.toBeUndefined();
     expect(warn).toHaveBeenCalled();
   });
+
+  it("posts to the feedback channel when SLACK_CHANNEL_FEEDBACK is set", async () => {
+    mockEnv.SLACK_CHANNEL_FEEDBACK = "C123FEED";
+    const fetchSpy = vi.fn().mockResolvedValue(okResponse());
+    vi.stubGlobal("fetch", fetchSpy);
+    await sendSlack("feedback", { text: "👍 playground feedback" });
+    const body = JSON.parse(fetchSpy.mock.calls[0][1].body as string);
+    expect(body.channel).toBe("C123FEED");
+  });
 });

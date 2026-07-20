@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
-vi.mock("../lib/slack.js", () => ({ sendSlack: vi.fn().mockResolvedValue(undefined) }));
-vi.mock("../lib/stripe.js", () => ({ getStripe: vi.fn() }));
+vi.mock("../lib/slack", () => ({ sendSlack: vi.fn().mockResolvedValue(undefined) }));
+vi.mock("../lib/stripe", () => ({ getStripe: vi.fn() }));
 const envState = vi.hoisted(() => ({
   STRIPE_API_KEY: "",
   POSTHOG_PERSONAL_API_KEY: "",
@@ -17,8 +17,8 @@ import {
   collectStripe,
   collectPosthog,
   posthogInternalFilterSql,
-} from "./digest.js";
-import { sendSlack } from "../lib/slack.js";
+} from "./digest";
+import { sendSlack } from "../lib/slack";
 
 const fakeDb = {} as never; // collectors are injected in these tests; db is never touched
 

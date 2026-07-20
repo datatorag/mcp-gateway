@@ -3,14 +3,14 @@ import { Router } from "express";
 import { eq, and } from "drizzle-orm";
 import type { Database } from "@datatorag-mcp/db";
 import { oauthAccessTokens, users } from "@datatorag-mcp/db";
-import { upsertServiceAccount } from "./connected-accounts.js";
-import { PROVIDERS } from "../lib/analytics.js";
+import { upsertServiceAccount } from "./connected-accounts";
+import { PROVIDERS } from "../lib/analytics";
 import {
   trackLogin,
   trackOAuthCompleted,
   trackSignup,
-} from "./track.js";
-import { sendWelcomeEmail } from "./lifecycle.js";
+} from "./track";
+import { sendWelcomeEmail } from "./lifecycle";
 
 const GWS_SCOPES = [
   "openid",

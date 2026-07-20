@@ -7,20 +7,16 @@ export const BREVO_LIST_PRODUCT_USERS = 4;
 export const BREVO_TEMPLATE_WELCOME = 2;
 export const BREVO_TEMPLATE_NO_ACTIVATION = 3;
 
-// Founder/test accounts — mirrors the PostHog test-account filters. Lifecycle
-// emails must never go to these or to anyone @datatorag.com.
-const INTERNAL_EMAILS = new Set([
-  "manuel@datatorag.com",
-  "manuel@clementine.so",
-  "heyitsmanuel@gmail.com",
-  "me@manuelyang.com",
-  "jamieandmanuel@gmail.com",
-  "myang@life360.com",
-]);
-
+// Founder/test accounts come from INTERNAL_EXCLUDE_EMAILS (comma-separated,
+// SSM → server .env — the same env-side list the digest's internal exclusion
+// reads, mirroring the PostHog test-account filters). Anyone @datatorag.com
+// is always internal. Lifecycle emails must never go to internal addresses.
 export function isInternalEmail(email: string): boolean {
   const e = email.trim().toLowerCase();
-  return e.endsWith("@datatorag.com") || INTERNAL_EMAILS.has(e);
+  if (e.endsWith("@datatorag.com")) return true;
+  return getEnv()
+    .INTERNAL_EXCLUDE_EMAILS.split(",")
+    .some((entry) => entry.trim().toLowerCase() === e && entry.trim() !== "");
 }
 
 export function hasBrevoKey(): boolean {

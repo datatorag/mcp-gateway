@@ -12,6 +12,13 @@ export const EVENTS = {
   OAUTH_REFRESH_REPLAY: "oauth_refresh_replay",
   OAUTH_REFRESH_EXPIRED: "oauth_refresh_expired",
   OAUTH_TOKEN_REVOKED: "oauth_token_revoked",
+  PLAYGROUND_MESSAGE_SENT: "playground_message_sent",
+  PLAYGROUND_TOOL_CALL: "playground_tool_call",
+  PLAYGROUND_CAP_HIT: "playground_cap_hit",
+  PLAYGROUND_FEEDBACK: "playground_feedback",
+  PLAYGROUND_PROMPT_RUN: "playground_prompt_run",
+  WIZARD_CLIENT_SELECTED: "wizard_client_selected",
+  WIZARD_STEP_COMPLETED: "wizard_step_completed",
 } as const;
 
 export const PROVIDERS = {

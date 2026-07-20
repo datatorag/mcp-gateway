@@ -3,8 +3,8 @@ import type { Database } from "@datatorag-mcp/db";
 import { leads, users, usageEvents, serviceConnections } from "@datatorag-mcp/db";
 import type { PgColumn } from "drizzle-orm/pg-core";
 import { getEnv } from "@datatorag-mcp/config";
-import { getStripe } from "../lib/stripe.js";
-import { sendSlack, type SlackMessage } from "../lib/slack.js";
+import { getStripe } from "../lib/stripe";
+import { sendSlack, type SlackMessage } from "../lib/slack";
 
 export type DigestSections = {
   neon: string[] | null;

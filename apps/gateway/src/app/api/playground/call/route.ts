@@ -1,15 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
-import { eq } from "drizzle-orm";
-import { Client } from "@modelcontextprotocol/sdk/client/index.js";
-import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 import { db } from "@/lib/db";
 import { getSessionUserId } from "@/lib/session";
-import { mcpServers } from "@datatorag-mcp/db";
-import {
-  PLUGIN_SERVICE_MAP,
-  getServiceToken,
-} from "@/gateway/service-token";
-import { NAMESPACE_SEPARATOR } from "@/gateway/plugin-manager";
+import { executeUserTool, ToolCallError } from "@/gateway/playground/tools";
 
 // POST /api/playground/call
 export async function POST(request: NextRequest) {
@@ -25,10 +17,6 @@ export async function POST(request: NextRequest) {
 
   const { tool: namespacedName, arguments: rawArgs = {} } = body;
 
-  // Extract and strip the optional `account` param
-  const args = { ...rawArgs };
-  const accountEmail = args.account as string | undefined;
-  delete args.account;
   if (!namespacedName) {
     return NextResponse.json(
       { error: "Missing tool parameter" },
@@ -36,80 +24,25 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const sepIdx = namespacedName.indexOf(NAMESPACE_SEPARATOR);
-  if (sepIdx === -1) {
-    return NextResponse.json(
-      { error: `Invalid tool name: ${namespacedName}` },
-      { status: 400 }
-    );
-  }
-
-  const serverSlug = namespacedName.slice(0, sepIdx);
-  const toolName = namespacedName.slice(sepIdx + NAMESPACE_SEPARATOR.length);
-
-  const [mcpServer] = await db
-    .select({
-      id: mcpServers.id,
-      containerPort: mcpServers.containerPort,
-      githubRepoUrl: mcpServers.githubRepoUrl,
-    })
-    .from(mcpServers)
-    .where(eq(mcpServers.slug, serverSlug))
-    .limit(1);
-
-  if (!mcpServer) {
-    return NextResponse.json(
-      { error: `Unknown server: ${serverSlug}` },
-      { status: 400 }
-    );
-  }
-
-  // Resolve user token
-  const requiredService = PLUGIN_SERVICE_MAP[serverSlug];
-  if (!requiredService) {
-    return NextResponse.json(
-      { error: `No service mapping for ${serverSlug}` },
-      { status: 400 }
-    );
-  }
-
-  const userToken = await getServiceToken(db, userId, requiredService, accountEmail);
-  if (!userToken) {
-    return NextResponse.json(
-      {
-        error:
-          "Service not connected. Please connect from the dashboard first.",
-      },
-      { status: 403 }
-    );
-  }
-
-  // Build plugin URL
-  const serverUrl = mcpServer.githubRepoUrl
-    ? `http://localhost:${mcpServer.containerPort}/mcp`
-    : `http://dtrmcp-server-${serverSlug}:${mcpServer.containerPort}/mcp`;
-
   try {
-    const transport = new StreamableHTTPClientTransport(
-      new URL(serverUrl),
-      { requestInit: { headers: { "X-User-Token": userToken } } }
+    // executeUserTool strips any `account` arg — playground always uses the
+    // user's default account for the service (v1 limitation).
+    const { text, isError } = await executeUserTool(
+      db,
+      userId,
+      namespacedName,
+      rawArgs
     );
-    const client = new Client(
-      { name: "datatorag-playground", version: "0.1.0" },
-      { capabilities: {} }
-    );
-
-    try {
-      await client.connect(transport);
-      const result = await client.callTool({
-        name: toolName,
-        arguments: args,
-      });
-      return NextResponse.json({ result });
-    } finally {
-      await client.close();
-    }
+    return NextResponse.json({
+      result: { content: [{ type: "text", text }], isError },
+    });
   } catch (error) {
+    if (error instanceof ToolCallError) {
+      return NextResponse.json(
+        { error: error.message },
+        { status: error.status }
+      );
+    }
     const message = error instanceof Error ? error.message : "Unknown error";
     return NextResponse.json({ error: message }, { status: 500 });
   }

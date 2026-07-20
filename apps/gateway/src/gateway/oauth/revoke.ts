@@ -3,9 +3,9 @@ import { and, eq, isNull } from "drizzle-orm";
 import type { Database } from "@datatorag-mcp/db";
 import { oauthRefreshTokens } from "@datatorag-mcp/db";
 import { hashApiKey } from "@datatorag-mcp/auth";
-import { getPosthog } from "../../lib/posthog-server.js";
-import { EVENTS } from "../../lib/analytics.js";
-import { resolveUserEmail, identityProps } from "../user-email.js";
+import { getPosthog } from "../../lib/posthog-server";
+import { EVENTS } from "../../lib/analytics";
+import { resolveUserEmail, identityProps } from "../user-email";
 
 /**
  * RFC 7009 — OAuth 2.0 Token Revocation

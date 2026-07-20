@@ -1,6 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-const env = { BREVO_API_KEY: "" };
+const env = {
+  BREVO_API_KEY: "",
+  INTERNAL_EXCLUDE_EMAILS: "founder@example.com, Test.Account@Example.org",
+};
 vi.mock("@datatorag-mcp/config", () => ({ getEnv: () => env }));
 
 import {
@@ -15,12 +18,21 @@ const fetchMock = vi.fn();
 vi.stubGlobal("fetch", fetchMock);
 
 describe("isInternalEmail", () => {
-  it("matches the datatorag domain and known founder emails", () => {
-    expect(isInternalEmail("manuel@datatorag.com")).toBe(true);
+  it("matches the datatorag domain and the env-configured internal list", () => {
     expect(isInternalEmail("anyone@datatorag.com")).toBe(true);
-    expect(isInternalEmail("HeyItsManuel@gmail.com")).toBe(true);
-    expect(isInternalEmail("myang@life360.com")).toBe(true);
+    expect(isInternalEmail("founder@example.com")).toBe(true);
+    // case-insensitive on both sides, whitespace-tolerant
+    expect(isInternalEmail("Founder@Example.COM")).toBe(true);
+    expect(isInternalEmail("test.account@example.org")).toBe(true);
     expect(isInternalEmail("realuser@gmail.com")).toBe(false);
+  });
+
+  it("treats an empty INTERNAL_EXCLUDE_EMAILS as matching nothing beyond the domain", () => {
+    const saved = env.INTERNAL_EXCLUDE_EMAILS;
+    env.INTERNAL_EXCLUDE_EMAILS = "";
+    expect(isInternalEmail("realuser@gmail.com")).toBe(false);
+    expect(isInternalEmail("anyone@datatorag.com")).toBe(true);
+    env.INTERNAL_EXCLUDE_EMAILS = saved;
   });
 });
 

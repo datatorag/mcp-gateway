@@ -9,9 +9,9 @@ import {
   oauthRefreshTokens,
 } from "@datatorag-mcp/db";
 import { hashApiKey, safeStringEqual } from "@datatorag-mcp/auth";
-import { getPosthog } from "../../lib/posthog-server.js";
-import { EVENTS } from "../../lib/analytics.js";
-import { resolveUserEmail, identityProps } from "../user-email.js";
+import { getPosthog } from "../../lib/posthog-server";
+import { EVENTS } from "../../lib/analytics";
+import { resolveUserEmail, identityProps } from "../user-email";
 
 // PR3 drops ACCESS_TOKEN_TTL_MS to 60*60*1000 (1h) once refresh path is stable.
 const ACCESS_TOKEN_TTL_MS = 24 * 60 * 60 * 1000;
