@@ -6,7 +6,7 @@ import posthog from "posthog-js";
 import { EVENTS } from "@/lib/analytics";
 import { reportSignupConversion } from "@/components/google-ads";
 import { SERVICES } from "./connections/services";
-import { ConnectionTester } from "./connection-tester";
+import { SetupWizard } from "./setup-wizard";
 import { useCopyToClipboard } from "@/lib/use-copy-to-clipboard";
 import type { ConnectedAccount, LegacyConnection } from "./connections/types";
 
@@ -267,8 +267,8 @@ export function DashboardClient() {
         )}
       </div>
 
-      {/* Agent setup + live connection tester */}
-      <ConnectionTester />
+      {/* Agent setup wizard + live connection status */}
+      <SetupWizard />
 
       {/* What can I do? */}
       <div className="mt-10">
