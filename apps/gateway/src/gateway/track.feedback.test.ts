@@ -2,17 +2,17 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import type { Database } from "@datatorag-mcp/db";
 
 const capture = vi.fn();
-vi.mock("../lib/posthog-server.js", () => ({
+vi.mock("../lib/posthog-server", () => ({
   getPosthog: () => ({ capture, identify: vi.fn() }),
   shutdownPosthog: vi.fn(),
 }));
-vi.mock("../lib/slack.js", () => ({
+vi.mock("../lib/slack", () => ({
   sendSlack: vi.fn().mockResolvedValue(undefined),
 }));
 
-import { trackPlaygroundFeedback } from "./track.js";
-import { sendSlack } from "../lib/slack.js";
-import { clearUserIdentityCache } from "./user-email.js";
+import { trackPlaygroundFeedback } from "./track";
+import { sendSlack } from "../lib/slack";
+import { clearUserIdentityCache } from "./user-email";
 
 const selectLimit = vi.fn();
 const dbMock = {

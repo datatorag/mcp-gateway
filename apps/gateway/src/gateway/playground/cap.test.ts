@@ -5,7 +5,7 @@ const returning = vi.fn();
 const update = vi.fn(() => ({ set: () => ({ where: () => ({ returning }) }) }));
 const dbMock = { update } as unknown as Database;
 
-import { claimPlaygroundMessage, refundPlaygroundMessage } from "./cap.js";
+import { claimPlaygroundMessage, refundPlaygroundMessage } from "./cap";
 
 describe("claimPlaygroundMessage", () => {
   beforeEach(() => {

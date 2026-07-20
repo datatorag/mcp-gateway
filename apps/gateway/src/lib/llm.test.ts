@@ -8,7 +8,7 @@ const envState = vi.hoisted(() => ({
 }));
 vi.mock("@datatorag-mcp/config", () => ({ getEnv: () => envState }));
 
-import { getPlaygroundLlm, isPlaygroundEnabled } from "./llm.js";
+import { getPlaygroundLlm, isPlaygroundEnabled } from "./llm";
 
 describe("getPlaygroundLlm / isPlaygroundEnabled", () => {
   it("returns null when ANTHROPIC_API_KEY is empty and provider is anthropic", () => {

@@ -4,7 +4,7 @@ import {
   MAX_TOOL_ITERATIONS,
   type EngineEvent,
   type EngineTool,
-} from "./engine.js";
+} from "./engine";
 
 function scriptedLlm(responses: object[]) {
   let i = 0;

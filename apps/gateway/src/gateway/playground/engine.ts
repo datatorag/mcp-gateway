@@ -1,4 +1,4 @@
-import type { PlaygroundLlm } from "../../lib/llm.js";
+import type { PlaygroundLlm } from "../../lib/llm";
 
 /** Pure, injectable agentic loop for the playground. Never imports the LLM
  * factory, db, or config — everything it needs is passed in by the caller

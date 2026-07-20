@@ -1,17 +1,17 @@
 import { and, eq, isNull } from "drizzle-orm";
 import type { Database } from "@datatorag-mcp/db";
 import { users } from "@datatorag-mcp/db";
-import { EVENTS, type ProviderId } from "../lib/analytics.js";
-import { getPosthog, shutdownPosthog } from "../lib/posthog-server.js";
-import { sendSlack } from "../lib/slack.js";
-import { writeUsageEvent } from "./usage/write.js";
-import { classifyOutcome, type ClassifyInput } from "./usage/classify.js";
+import { EVENTS, type ProviderId } from "../lib/analytics";
+import { getPosthog, shutdownPosthog } from "../lib/posthog-server";
+import { sendSlack } from "../lib/slack";
+import { writeUsageEvent } from "./usage/write";
+import { classifyOutcome, type ClassifyInput } from "./usage/classify";
 import {
   resolveUserIdentity,
   resolveUserEmail,
   markUserActivated,
   identityProps,
-} from "./user-email.js";
+} from "./user-email";
 
 export { shutdownPosthog };
 

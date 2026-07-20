@@ -1,7 +1,7 @@
 import type { Database } from "@datatorag-mcp/db";
 import { usageEvents } from "@datatorag-mcp/db";
-import { redactErrorMessage } from "./redact.js";
-import type { OutcomeStatus } from "./classify.js";
+import { redactErrorMessage } from "./redact";
+import type { OutcomeStatus } from "./classify";
 
 export interface UsageEventInput {
   userId: string;

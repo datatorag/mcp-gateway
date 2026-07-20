@@ -4,8 +4,8 @@ import type { Database } from "@datatorag-mcp/db";
 const hasKey = vi.fn(() => true);
 const upsert = vi.fn();
 const sendTpl = vi.fn();
-vi.mock("../lib/brevo.js", async (importOriginal) => {
-  const real = await importOriginal<typeof import("../lib/brevo.js")>();
+vi.mock("../lib/brevo", async (importOriginal) => {
+  const real = await importOriginal<typeof import("../lib/brevo")>();
   return {
     ...real,
     hasBrevoKey: () => hasKey(),
@@ -13,7 +13,7 @@ vi.mock("../lib/brevo.js", async (importOriginal) => {
     sendBrevoTemplate: (...args: unknown[]) => sendTpl(...args),
   };
 });
-vi.mock("../lib/slack.js", () => ({
+vi.mock("../lib/slack", () => ({
   sendSlack: vi.fn().mockResolvedValue(undefined),
 }));
 
@@ -22,8 +22,8 @@ import {
   sendWelcomeEmail,
   runNoActivationFollowup,
   LIFECYCLE_LAUNCH,
-} from "./lifecycle.js";
-import { sendSlack } from "../lib/slack.js";
+} from "./lifecycle";
+import { sendSlack } from "../lib/slack";
 
 const selectWhere = vi.fn();
 const returning = vi.fn();

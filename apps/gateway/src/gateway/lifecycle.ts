@@ -1,7 +1,7 @@
 import { and, eq, isNull, lte, gte } from "drizzle-orm";
 import type { Database } from "@datatorag-mcp/db";
 import { users } from "@datatorag-mcp/db";
-import { sendSlack } from "../lib/slack.js";
+import { sendSlack } from "../lib/slack";
 import {
   BREVO_TEMPLATE_WELCOME,
   BREVO_TEMPLATE_NO_ACTIVATION,
@@ -9,7 +9,7 @@ import {
   isInternalEmail,
   sendBrevoTemplate,
   upsertBrevoContact,
-} from "../lib/brevo.js";
+} from "../lib/brevo";
 
 /**
  * Lifecycle emails only apply to users created after this feature shipped —

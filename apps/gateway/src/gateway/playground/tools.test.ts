@@ -15,9 +15,9 @@ vi.mock("@modelcontextprotocol/sdk/client/streamableHttp.js", () => ({
   StreamableHTTPClientTransport: class {},
 }));
 
-vi.mock("../service-token.js", async () => {
-  const actual = await vi.importActual<typeof import("../service-token.js")>(
-    "../service-token.js"
+vi.mock("../service-token", async () => {
+  const actual = await vi.importActual<typeof import("../service-token")>(
+    "../service-token"
   );
   return {
     ...actual,
@@ -31,8 +31,8 @@ import {
   parseNamespacedName,
   flattenToolResult,
   ToolCallError,
-} from "./tools.js";
-import { getServiceToken } from "../service-token.js";
+} from "./tools";
+import { getServiceToken } from "../service-token";
 
 describe("parseNamespacedName", () => {
   it("splits server slug and tool name on the namespace separator", () => {

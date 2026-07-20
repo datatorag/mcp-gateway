@@ -14,11 +14,11 @@ import {
 } from "@datatorag-mcp/db";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
-import type { ConnectionPool } from "./pool.js";
-import { NAMESPACE_SEPARATOR } from "./plugin-manager.js";
-import { PLUGIN_SERVICE_MAP, getServiceToken } from "./service-token.js";
-import { listConnectedAccounts } from "./connected-accounts.js";
-import { trackToolCall } from "./track.js";
+import type { ConnectionPool } from "./pool";
+import { NAMESPACE_SEPARATOR } from "./plugin-manager";
+import { PLUGIN_SERVICE_MAP, getServiceToken } from "./service-token";
+import { listConnectedAccounts } from "./connected-accounts";
+import { trackToolCall } from "./track";
 
 const ACCOUNT_PARAM_SCHEMA = {
   type: "string",

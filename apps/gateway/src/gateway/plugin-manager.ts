@@ -13,7 +13,7 @@ import {
   tools,
 } from "@datatorag-mcp/db";
 import type { McpGatewayManifest } from "@datatorag-mcp/types";
-import type { ConnectionPool } from "./pool.js";
+import type { ConnectionPool } from "./pool";
 import { sendSlack } from "@/lib/slack";
 
 const PLUGINS_DIR = join(homedir(), ".datatorag", "plugins");

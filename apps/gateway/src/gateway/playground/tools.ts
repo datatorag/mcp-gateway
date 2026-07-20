@@ -8,9 +8,9 @@ import {
 } from "@datatorag-mcp/db";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
-import type { EngineTool } from "./engine.js";
-import { NAMESPACE_SEPARATOR } from "../plugin-manager.js";
-import { PLUGIN_SERVICE_MAP, getServiceToken } from "../service-token.js";
+import type { EngineTool } from "./engine";
+import { NAMESPACE_SEPARATOR } from "../plugin-manager";
+import { PLUGIN_SERVICE_MAP, getServiceToken } from "../service-token";
 
 /**
  * Extracted from POST /api/playground/call, which now delegates to
