@@ -98,6 +98,10 @@ Three distinct flows — don't conflate them:
 - **`__` is the load-bearing tool-name separator** (`NAMESPACE_SEPARATOR`): CallTool splits on the first occurrence. A slug or tool name containing `__` misroutes.
 - **Never-throw convention** for side channels: `sendSlack`, `brevoPost`, all analytics/track functions catch internally and warn with a `[module]` log prefix. Exactly-once side effects use atomic `UPDATE … WHERE <flag> IS NULL RETURNING id` claims (`first_tool_call_at`, follow-up emails).
 - **Content parser caches never invalidate** — editing markdown does nothing on a running prod server; redeploy.
+- **Playground is unmetered by design** — the dashboard playground (`src/gateway/playground/`) never writes `usage_events` and never sets `first_tool_call_at`; activation must keep meaning "a real MCP client called through the gateway". Its lifetime message cap uses a guarded-UPDATE claim/refund on `users.playground_messages_used` (details in the `services-integrations` skill's Playground section).
+- **`connection-tester.tsx` is GONE** — the dashboard's connection tester was absorbed into `src/app/dashboard/setup-wizard.tsx` (which kept its `/api/setup/status` polling). Don't look for it; old references mean the wizard now.
+- **`next.config.ts` has a webpack `extensionAlias`** (`".js"` → `[".ts", ".tsx", ".js"]`) because gateway modules use NodeNext-style `.js` specifiers pointing at `.ts` source (e.g. `track.ts`'s `from "../lib/slack.js"`). tsc and tsup resolve these already; Next's webpack build does not — any app route that (transitively) imports a `gateway/*.ts` module needs the alias or webpack 404s on the literal `.js` file. Playground routes were the first to hit this. Don't remove it.
+- **The testcontainers harness is live** — `src/test-utils/db.ts` (real Postgres via `@testcontainers/postgresql`, runs drizzle migrations) has a real consumer: `src/app/api/setup/status/route.liveness.test.ts`. Suites using it must gate on `isDockerAvailable()` (`describe.skipIf`, probed synchronously at import time) so `pnpm vitest run` still passes on machines/CI without a Docker daemon — and must never call `getTestDb()` at module-import time, only inside the gated block's `beforeAll`.
 
 ## Where things live
 
@@ -121,6 +125,15 @@ Three distinct flows — don't conflate them:
 | Brevo welcome + no-activation follow-up emails | `apps/gateway/src/gateway/lifecycle.ts` |
 | Slack / Brevo / Stripe / PostHog-server clients | `apps/gateway/src/lib/{slack,brevo,stripe,posthog-server}.ts` |
 | Session cookie → userId | `apps/gateway/src/lib/session.ts` |
+| Playground agentic loop (8-iteration cap, prompt caching, system prompt) | `apps/gateway/src/gateway/playground/engine.ts` |
+| Playground tool listing (mirrors ListTools semantics) + tool execution | `apps/gateway/src/gateway/playground/tools.ts` |
+| Playground message-cap claim/refund (`users.playground_messages_used`) | `apps/gateway/src/gateway/playground/cap.ts` |
+| Playground SSE chat + feedback routes (401/403/429/400 mapping) | `apps/gateway/src/app/api/playground/{chat,feedback}/route.ts` |
+| Playground LLM provider factory (`anthropic` \| `bedrock`) | `apps/gateway/src/lib/llm.ts` |
+| Playground chat UI (`PlaygroundHandle.runPrompt`, feedback controls) | `apps/gateway/src/app/dashboard/playground.tsx` |
+| Setup wizard (client picker, config snippets, live status polling) | `apps/gateway/src/app/dashboard/setup-wizard.tsx` |
+| Setup status API (live non-"web" tokens only — not revoked/expired) | `apps/gateway/src/app/api/setup/status/route.ts` |
+| Testcontainers Postgres helper + `isDockerAvailable()` gate | `apps/gateway/src/test-utils/db.ts` |
 | Leads intake (zod, honeypot, IP hash, own limiters) | `apps/gateway/src/app/api/leads/route.ts`, `apps/gateway/src/gateway/leads/limiter.ts` |
 | Blog / changelog / docs parsers | `apps/gateway/src/lib/{blog,changelog,docs}.ts` |
 | Docs connector grouping registry | `apps/gateway/src/lib/docs-connectors.ts` |
