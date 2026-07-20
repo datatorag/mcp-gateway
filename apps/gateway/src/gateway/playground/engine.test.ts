@@ -140,4 +140,65 @@ describe("runPlaygroundTurn", () => {
     expect(callArgs.tools[0].cache_control).toBeUndefined();
     expect(callArgs.tools[1].cache_control).toBeUndefined();
   });
+
+  it("handles multiple tool_use blocks in a single LLM response (parallel tool calls)", async () => {
+    const emit = vi.fn();
+    const parallelToolMsg = {
+      stop_reason: "tool_use",
+      content: [
+        { type: "text", text: "Let me check multiple things." },
+        { type: "tool_use", id: "tu_1", name: "gws-mcp__gmail_search", input: { query: "is:unread" } },
+        { type: "tool_use", id: "tu_2", name: "tools-b", input: { param: "value" } },
+      ],
+    };
+    const llm = scriptedLlm([parallelToolMsg, textMsg]);
+    const executeTool = vi.fn(async (name: string) => {
+      if (name === "gws-mcp__gmail_search") return { text: "5 unread emails", isError: false };
+      return { text: "result from tool B", isError: false };
+    });
+    const multiToolConfig = [
+      { name: "gws-mcp__gmail_search", description: "search gmail", input_schema: {} },
+      { name: "tools-b", description: "tool b", input_schema: {} },
+    ];
+    const opts = baseOpts({ llm: llm as any, executeTool, emit, tools: multiToolConfig });
+    await runPlaygroundTurn(opts as any);
+
+    // Verify executeTool called twice, in order
+    expect(executeTool).toHaveBeenCalledTimes(2);
+    expect(executeTool).toHaveBeenNthCalledWith(1, "gws-mcp__gmail_search", { query: "is:unread" });
+    expect(executeTool).toHaveBeenNthCalledWith(2, "tools-b", { param: "value" });
+
+    // Verify emit contains tool_start/tool_done for both tools
+    expect(emit.mock.calls.map((c) => c[0])).toEqual([
+      { type: "text", text: "Let me check multiple things." },
+      { type: "tool_start", name: "gws-mcp__gmail_search" },
+      { type: "tool_done", name: "gws-mcp__gmail_search", isError: false },
+      { type: "tool_start", name: "tools-b" },
+      { type: "tool_done", name: "tools-b", isError: false },
+      { type: "text", text: "hi there" },
+      { type: "done", stopReason: "end_turn" },
+    ] satisfies EngineEvent[]);
+
+    // Verify second create() call's messages end with a user turn containing two tool_result blocks
+    expect(llm.messages.create).toHaveBeenCalledTimes(2);
+    const secondCallArgs = llm.messages.create.mock.calls[1][0];
+    const lastMessage = secondCallArgs.messages[secondCallArgs.messages.length - 1];
+    expect(lastMessage.role).toBe("user");
+    expect(lastMessage.content).toHaveLength(2);
+    expect(lastMessage.content[0]).toEqual({
+      type: "tool_result",
+      tool_use_id: "tu_1",
+      content: "5 unread emails",
+    });
+    expect(lastMessage.content[1]).toEqual({
+      type: "tool_result",
+      tool_use_id: "tu_2",
+      content: "result from tool B",
+    });
+
+    // Verify the assistant turn with parallel tool_use blocks was pushed before the user tool_result turn
+    const assistantMessage = secondCallArgs.messages[secondCallArgs.messages.length - 2];
+    expect(assistantMessage.role).toBe("assistant");
+    expect(assistantMessage.content).toEqual(parallelToolMsg.content);
+  });
 });
