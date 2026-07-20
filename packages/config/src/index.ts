@@ -47,6 +47,13 @@ const envSchema = z.object({
   // Keep mirrored with the PostHog "Internal / Test users" cohort.
   INTERNAL_EXCLUDE_EMAILS: z.string().default(""),
   INTERNAL_EXCLUDE_IDS: z.string().default(""),
+  // Dashboard playground (capped LLM chat). Empty ANTHROPIC_API_KEY = playground disabled.
+  ANTHROPIC_API_KEY: z.string().default(""),
+  PLAYGROUND_PROVIDER: z.enum(["anthropic", "bedrock"]).default("anthropic"),
+  PLAYGROUND_MODEL: z.string().default("claude-sonnet-5"),
+  PLAYGROUND_MESSAGE_CAP: z.coerce.number().default(20),
+  // Slack channel for playground feedback (Dara bot); empty = disabled
+  SLACK_CHANNEL_FEEDBACK: z.string().default(""),
 });
 
 export type Env = z.infer<typeof envSchema>;
