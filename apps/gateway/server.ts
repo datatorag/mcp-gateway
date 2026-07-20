@@ -9,6 +9,7 @@ import { ConnectionPool } from "./src/gateway/pool";
 import { createDb, oauthAccessTokens } from "@datatorag-mcp/db";
 import { getEnv } from "@datatorag-mcp/config";
 import { createMetadataRouter } from "./src/gateway/oauth/metadata";
+import { createProtectedResourceRouter } from "./src/gateway/oauth/protected-resource";
 import { createRegisterRouter } from "./src/gateway/oauth/register";
 import { createAuthorizeRouter } from "./src/gateway/oauth/authorize";
 import { createTokenRouter } from "./src/gateway/oauth/token";
@@ -113,6 +114,7 @@ async function main() {
 
   // OAuth2 authorization server routes (MCP clients only)
   app.use(createMetadataRouter(baseUrl));
+  app.use(createProtectedResourceRouter(baseUrl));
   app.use(createRegisterRouter(db));
   app.use(
     createAuthorizeRouter(db, {
@@ -158,22 +160,33 @@ async function main() {
   }
 
   // MCP endpoint
+  const resourceMetadataUrl = `${baseUrl}/.well-known/oauth-protected-resource`;
   app.all("/mcp", async (req, res) => {
     const authHeader = req.headers.authorization;
 
     if (!authHeader?.startsWith("Bearer ")) {
-      // Per MCP spec: return 401 with resource metadata URL
-      res.status(401).json({
-        error: "unauthorized",
-        resource_metadata: `${baseUrl}/.well-known/oauth-authorization-server`,
-      });
+      // RFC 9728 §5.1 / MCP auth: point the client at the protected-resource
+      // metadata via WWW-Authenticate so it can discover the auth server.
+      res
+        .status(401)
+        .set(
+          "WWW-Authenticate",
+          `Bearer resource_metadata="${resourceMetadataUrl}"`
+        )
+        .json({ error: "unauthorized", resource_metadata: resourceMetadataUrl });
       return;
     }
 
     const rawToken = authHeader.slice(7);
     const auth = await validateBearer(rawToken);
     if (!auth) {
-      res.status(401).json({ error: "Invalid or expired token" });
+      res
+        .status(401)
+        .set(
+          "WWW-Authenticate",
+          `Bearer error="invalid_token", error_description="The access token is invalid or expired", resource_metadata="${resourceMetadataUrl}"`
+        )
+        .json({ error: "invalid_token", resource_metadata: resourceMetadataUrl });
       return;
     }
 
