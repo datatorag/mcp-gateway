@@ -30,9 +30,50 @@ import {
   executeUserTool,
   parseNamespacedName,
   flattenToolResult,
+  isWriteTool,
   ToolCallError,
 } from "./tools";
 import { getServiceToken } from "../service-token";
+
+describe("isWriteTool", () => {
+  it("classifies mutating tools as writes", () => {
+    for (const name of [
+      "gws-mcp__gmail_send",
+      "gws-mcp__docs_create",
+      "gws-mcp__docs_write",
+      "gws-mcp__sheets_append",
+      "gws-mcp__gmail_reply",
+      "gws-mcp__gmail_forward",
+      "gws-mcp__calendar_delete_event",
+      "gws-mcp__calendar_update_event",
+      "gws-mcp__slides_batch_update",
+      "gws-mcp__tasks_complete",
+      "gws-mcp__gmail_mark_read",
+      "atlassian-mcp__jira_create_issue",
+      "atlassian-mcp__jira_transition_issue",
+      "atlassian-mcp__confluence_add_comment",
+    ]) {
+      expect(isWriteTool(name)).toBe(true);
+    }
+  });
+
+  it("classifies read tools as non-writes", () => {
+    for (const name of [
+      "gws-mcp__gmail_search",
+      "gws-mcp__gmail_list",
+      "gws-mcp__gmail_read",
+      "gws-mcp__docs_get",
+      "gws-mcp__drive_search",
+      "gws-mcp__calendar_freebusy",
+      "gws-mcp__contacts_directory_search",
+      "atlassian-mcp__jira_get_issue",
+      "atlassian-mcp__jira_search",
+      "atlassian-mcp__confluence_list_pages",
+    ]) {
+      expect(isWriteTool(name)).toBe(false);
+    }
+  });
+});
 
 describe("parseNamespacedName", () => {
   it("splits server slug and tool name on the namespace separator", () => {

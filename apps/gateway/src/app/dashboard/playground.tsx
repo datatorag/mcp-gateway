@@ -8,7 +8,11 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import type { EngineEvent } from "@/gateway/playground/engine";
+import type {
+  EngineEvent,
+  PendingWrite,
+  Decision,
+} from "@/gateway/playground/engine";
 
 // fetch()/reader.read() reject with this when the request's AbortController
 // fires — treat it as a silent no-op rather than a connection error, since
@@ -41,6 +45,14 @@ interface AssistantTurn {
   /** The user message that produced this turn — sent back as `prompt` on
    * feedback submission. */
   prompt: string;
+  /** Writes the turn paused on, awaiting the user's approve/deny. Present
+   * only while `confirmState === "awaiting"`. */
+  pending?: PendingWrite[];
+  /** Resume token for the paused turn (server-held state). */
+  resumeToken?: string;
+  /** "awaiting" → show the approve/deny card; "resolving" → decision sent,
+   * streaming the continuation. */
+  confirmState?: "awaiting" | "resolving";
 }
 
 type Turn = UserTurn | AssistantTurn;
@@ -75,6 +87,13 @@ function linkifiedText(text: string): ReactNode[] {
       part
     )
   );
+}
+
+// Compact one-line summary of a pending write's arguments, shown on the
+// confirmation card so the user sees what will actually run before approving.
+function summarizeArgs(input: Record<string, unknown>): string {
+  const s = JSON.stringify(input ?? {});
+  return s.length > 160 ? `${s.slice(0, 159)}…` : s;
 }
 
 // Builds the {role, content}[] payload the SSE contract expects from prior
@@ -147,6 +166,13 @@ export const Playground = forwardRef<PlaygroundHandle, PlaygroundProps>(
             ),
           };
         });
+      } else if (event.type === "confirm") {
+        updateLastAssistant((t) => ({
+          ...t,
+          pending: event.pending,
+          resumeToken: event.resumeToken,
+          confirmState: "awaiting",
+        }));
       } else if (event.type === "error") {
         updateLastAssistant((t) => ({
           ...t,
@@ -159,6 +185,41 @@ export const Playground = forwardRef<PlaygroundHandle, PlaygroundProps>(
       }
     }
 
+    // Reads an SSE response body, dispatching each frame to handleEvent.
+    // Shared by the initial send and the confirmation resume — both stream
+    // into the last assistant turn. Throws on a network/read error (the
+    // caller distinguishes an abort from a real failure).
+    async function consumeStream(res: Response) {
+      const reader = res.body!.getReader();
+      const decoder = new TextDecoder();
+      // Buffer partial SSE frames — a `\n\n` boundary can straddle two
+      // chunk-boundary reads, and a single chunk can carry multiple events.
+      let buffer = "";
+      const processFrame = (part: string) => {
+        const line = part.trim();
+        if (!line.startsWith("data:")) return;
+        const jsonStr = line.slice("data:".length).trim();
+        if (!jsonStr) return;
+        try {
+          handleEvent(JSON.parse(jsonStr) as EngineEvent);
+        } catch {
+          // Malformed frame — skip it rather than aborting the stream.
+        }
+      };
+      for (;;) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const parts = buffer.split("\n\n");
+        buffer = parts.pop() ?? "";
+        for (const part of parts) processFrame(part);
+      }
+      // Flush any bytes the decoder held for a multi-byte sequence, then the
+      // final frame (the stream can end without a trailing `\n\n`).
+      buffer += decoder.decode();
+      for (const part of buffer.split("\n\n")) processFrame(part);
+    }
+
     async function send(raw: string) {
       const trimmed = raw.trim();
       if (
@@ -166,7 +227,10 @@ export const Playground = forwardRef<PlaygroundHandle, PlaygroundProps>(
         streamingRef.current ||
         capState ||
         hidden ||
-        !hasConnectedAccount
+        !hasConnectedAccount ||
+        // A pending write-confirmation owns the last turn; block a new send so
+        // the resume still streams into it (and the user resolves the gate).
+        turns.some((t) => t.role === "assistant" && t.confirmState === "awaiting")
       ) {
         return;
       }
@@ -232,39 +296,83 @@ export const Playground = forwardRef<PlaygroundHandle, PlaygroundProps>(
 
         pushAssistantTurn();
 
-        function processFrame(part: string) {
-          const line = part.trim();
-          if (!line.startsWith("data:")) return;
-          const jsonStr = line.slice("data:".length).trim();
-          if (!jsonStr) return;
-          try {
-            handleEvent(JSON.parse(jsonStr) as EngineEvent);
-          } catch {
-            // Malformed frame — skip it rather than aborting the stream.
+        try {
+          await consumeStream(res);
+        } catch (err) {
+          if (!isAbortError(err)) {
+            updateLastAssistant((t) => ({
+              ...t,
+              errorText: "Connection lost while responding. Please try again.",
+            }));
           }
+        }
+      } finally {
+        setStreaming(false);
+        streamingRef.current = false;
+      }
+    }
+
+    // Approve or deny a paused turn's pending writes, then stream the
+    // continuation into that same (last) assistant turn.
+    async function resolveConfirm(idx: number, decision: Decision) {
+      if (streamingRef.current) return;
+      const turn = turns[idx];
+      if (
+        !turn ||
+        turn.role !== "assistant" ||
+        !turn.resumeToken ||
+        !turn.pending
+      ) {
+        return;
+      }
+      const resumeToken = turn.resumeToken;
+      const decisions: Record<string, Decision> = {};
+      for (const w of turn.pending) decisions[w.id] = decision;
+
+      abortRef.current?.abort();
+      const controller = new AbortController();
+      abortRef.current = controller;
+      setStreaming(true);
+      streamingRef.current = true;
+      // Clear the card (buttons vanish) and drop the one-shot token before the
+      // continuation streams in.
+      setTurns((prev) =>
+        prev.map((t, i) =>
+          i === idx && t.role === "assistant"
+            ? { ...t, confirmState: "resolving", pending: undefined, resumeToken: undefined }
+            : t
+        )
+      );
+
+      try {
+        let res: Response;
+        try {
+          res = await fetch("/api/playground/chat", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ resumeToken, decisions }),
+            signal: controller.signal,
+          });
+        } catch (err) {
+          if (!isAbortError(err)) {
+            updateLastAssistant((t) => ({
+              ...t,
+              errorText: "Connection lost. Please try again.",
+            }));
+          }
+          return;
+        }
+
+        if (!res.ok || !res.body) {
+          updateLastAssistant((t) => ({
+            ...t,
+            errorText: "Something went wrong. Please try again.",
+          }));
+          return;
         }
 
         try {
-          const reader = res.body.getReader();
-          const decoder = new TextDecoder();
-          // Buffer partial SSE frames — a `\n\n` boundary can straddle two
-          // chunk-boundary reads, and a single chunk can contain multiple
-          // complete events.
-          let buffer = "";
-          for (;;) {
-            const { done, value } = await reader.read();
-            if (done) break;
-            buffer += decoder.decode(value, { stream: true });
-            const parts = buffer.split("\n\n");
-            buffer = parts.pop() ?? "";
-            for (const part of parts) processFrame(part);
-          }
-          // Flush any bytes the decoder held back for a multi-byte sequence,
-          // then process whatever's left in the buffer — the stream can end
-          // without a trailing `\n\n`, and that final frame shouldn't be
-          // silently dropped.
-          buffer += decoder.decode();
-          for (const part of buffer.split("\n\n")) processFrame(part);
+          await consumeStream(res);
         } catch (err) {
           if (!isAbortError(err)) {
             updateLastAssistant((t) => ({
@@ -314,6 +422,12 @@ export const Playground = forwardRef<PlaygroundHandle, PlaygroundProps>(
     }
 
     if (hidden) return null;
+
+    // A pending write-confirmation owns the conversation until resolved — lock
+    // the composer so the user acts on the card instead of starting a new turn.
+    const awaitingConfirm = turns.some(
+      (t) => t.role === "assistant" && t.confirmState === "awaiting"
+    );
 
     return (
       <div className="mt-8">
@@ -400,6 +514,43 @@ export const Playground = forwardRef<PlaygroundHandle, PlaygroundProps>(
                       </div>
                     )}
 
+                    {turn.confirmState === "awaiting" && turn.pending && (
+                      <div className="rounded-2xl border border-amber-300 bg-amber-50 px-3 py-2.5 text-xs">
+                        <p className="font-medium text-amber-900">
+                          Approve this action before it runs?
+                        </p>
+                        <ul className="mt-1.5 space-y-1">
+                          {turn.pending.map((w) => (
+                            <li key={w.id} className="text-amber-800">
+                              <span className="font-mono font-medium">
+                                {w.name.split("__").pop()}
+                              </span>
+                              <span className="break-all text-amber-700">
+                                {" · "}
+                                {summarizeArgs(w.input)}
+                              </span>
+                            </li>
+                          ))}
+                        </ul>
+                        <div className="mt-2 flex gap-2">
+                          <button
+                            onClick={() => void resolveConfirm(idx, "approve")}
+                            disabled={streaming}
+                            className="rounded-[var(--radius)] bg-primary px-3 py-1.5 text-[11px] font-medium text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-50"
+                          >
+                            Approve &amp; run
+                          </button>
+                          <button
+                            onClick={() => void resolveConfirm(idx, "deny")}
+                            disabled={streaming}
+                            className="rounded-[var(--radius)] border border-amber-300 px-3 py-1.5 text-[11px] font-medium text-amber-900 transition-colors hover:bg-amber-100 disabled:opacity-50"
+                          >
+                            Deny
+                          </button>
+                        </div>
+                      </div>
+                    )}
+
                     {turn.complete && !turn.errorText && (
                       <div className="flex flex-wrap items-center gap-2 pl-1">
                         {feedback[idx] === "thanks" ? (
@@ -481,17 +632,21 @@ export const Playground = forwardRef<PlaygroundHandle, PlaygroundProps>(
                 <input
                   value={input}
                   onChange={(e) => setInput(e.target.value)}
-                  disabled={streaming || !hasConnectedAccount}
+                  disabled={streaming || !hasConnectedAccount || awaitingConfirm}
                   placeholder={
-                    hasConnectedAccount
-                      ? "Ask something…"
-                      : "Connect an account to try the playground"
+                    awaitingConfirm
+                      ? "Approve or deny the action above to continue"
+                      : hasConnectedAccount
+                        ? "Ask something…"
+                        : "Connect an account to try the playground"
                   }
                   className="flex-1 rounded-[var(--radius)] border border-border px-3 py-2 text-xs text-foreground disabled:opacity-60"
                 />
                 <button
                   type="submit"
-                  disabled={streaming || !hasConnectedAccount || !input.trim()}
+                  disabled={
+                    streaming || !hasConnectedAccount || !input.trim() || awaitingConfirm
+                  }
                   className="shrink-0 rounded-[var(--radius)] bg-primary px-3 py-2 text-xs font-medium text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-50"
                 >
                   {streaming ? "…" : "Send"}

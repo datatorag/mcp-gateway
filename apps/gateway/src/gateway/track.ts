@@ -205,6 +205,20 @@ export async function trackPlaygroundCapHit(
   return capturePlaygroundEvent(db, userId, EVENTS.PLAYGROUND_CAP_HIT);
 }
 
+/** Write-confirmation gate: "shown" when a turn pauses for approval,
+ * "approved"/"denied" on the user's decision. `writeCount` = pending writes. */
+export async function trackPlaygroundConfirm(
+  db: Database,
+  userId: string,
+  kind: "shown" | "approved" | "denied",
+  writeCount: number
+): Promise<void> {
+  return capturePlaygroundEvent(db, userId, EVENTS.PLAYGROUND_CONFIRM, {
+    kind,
+    write_count: writeCount,
+  });
+}
+
 /**
  * Playground thumbs up/down feedback — PostHog capture for analytics plus a
  * Slack ping to #feedback so a human sees it right away. The Slack post is

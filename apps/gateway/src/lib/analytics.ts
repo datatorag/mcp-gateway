@@ -15,6 +15,7 @@ export const EVENTS = {
   PLAYGROUND_MESSAGE_SENT: "playground_message_sent",
   PLAYGROUND_TOOL_CALL: "playground_tool_call",
   PLAYGROUND_CAP_HIT: "playground_cap_hit",
+  PLAYGROUND_CONFIRM: "playground_confirm",
   PLAYGROUND_FEEDBACK: "playground_feedback",
   PLAYGROUND_PROMPT_RUN: "playground_prompt_run",
   WIZARD_CLIENT_SELECTED: "wizard_client_selected",

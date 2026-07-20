@@ -1,9 +1,11 @@
 import { describe, it, expect, vi } from "vitest";
 import {
   runPlaygroundTurn,
+  resumePlaygroundTurn,
   MAX_TOOL_ITERATIONS,
   type EngineEvent,
   type EngineTool,
+  type TurnResult,
 } from "./engine";
 
 function scriptedLlm(responses: object[]) {
@@ -32,6 +34,8 @@ function baseOpts(overrides: Partial<Parameters<typeof runPlaygroundTurn>[0]> = 
     messages: [{ role: "user", content: "hi" }],
     executeTool: vi.fn(async () => ({ text: "3 emails", isError: false })),
     emit: vi.fn(),
+    // Default: nothing is a write, so existing tool tests never pause.
+    isWrite: () => false,
     ...overrides,
   };
 }
@@ -249,5 +253,173 @@ describe("runPlaygroundTurn", () => {
     expect(llm.messages.create).toHaveBeenCalledTimes(1);
     const lastEvent = emit.mock.calls[emit.mock.calls.length - 1][0];
     expect(lastEvent).toEqual({ type: "done", stopReason: "aborted" });
+  });
+});
+
+const sendToolMsg = {
+  stop_reason: "tool_use",
+  content: [
+    { type: "text", text: "I'll send that." },
+    { type: "tool_use", id: "w_1", name: "gws-mcp__gmail_send", input: { to: "a@b.com" } },
+  ],
+};
+const isWrite = (name: string) => name.includes("send") || name.includes("create");
+
+describe("write confirmation gate", () => {
+  it("pauses before a write: executes nothing, returns awaiting_confirmation", async () => {
+    const emit = vi.fn();
+    const executeTool = vi.fn(async () => ({ text: "sent", isError: false }));
+    const llm = scriptedLlm([sendToolMsg]);
+    const opts = baseOpts({ llm: llm as any, executeTool, emit, isWrite });
+    const result = (await runPlaygroundTurn(opts as any)) as TurnResult;
+
+    expect(result.status).toBe("awaiting_confirmation");
+    if (result.status !== "awaiting_confirmation") throw new Error("unreachable");
+    expect(result.pending).toEqual([
+      { id: "w_1", name: "gws-mcp__gmail_send", input: { to: "a@b.com" } },
+    ]);
+    // Nothing ran, no tool chips, no done — just the assistant's text.
+    expect(executeTool).not.toHaveBeenCalled();
+    expect(emit.mock.calls.map((c) => c[0])).toEqual([
+      { type: "text", text: "I'll send that." },
+    ] satisfies EngineEvent[]);
+    // The paused batch + messages (incl. the assistant tool_use msg) are returned.
+    expect(result.batch).toHaveLength(1);
+    const lastMsg = result.messages[result.messages.length - 1] as any;
+    expect(lastMsg.role).toBe("assistant");
+    expect(lastMsg.content).toEqual(sendToolMsg.content);
+  });
+
+  it("pauses the whole mixed batch (read + write) before running the read", async () => {
+    const emit = vi.fn();
+    const executeTool = vi.fn(async () => ({ text: "x", isError: false }));
+    const mixed = {
+      stop_reason: "tool_use",
+      content: [
+        { type: "tool_use", id: "r_1", name: "gws-mcp__gmail_search", input: {} },
+        { type: "tool_use", id: "w_1", name: "gws-mcp__gmail_send", input: { to: "a@b.com" } },
+      ],
+    };
+    const opts = baseOpts({ llm: scriptedLlm([mixed]) as any, executeTool, emit, isWrite });
+    const result = (await runPlaygroundTurn(opts as any)) as TurnResult;
+
+    expect(result.status).toBe("awaiting_confirmation");
+    if (result.status !== "awaiting_confirmation") throw new Error("unreachable");
+    // Only the write is pending, but nothing (not even the read) has run.
+    expect(result.pending.map((p) => p.id)).toEqual(["w_1"]);
+    expect(result.batch).toHaveLength(2);
+    expect(executeTool).not.toHaveBeenCalled();
+  });
+
+  it("resume approve: runs the write, then continues to the final answer", async () => {
+    const emit = vi.fn();
+    const executeTool = vi.fn(async () => ({ text: "sent ok", isError: false }));
+    // After the write result feeds back, the model wraps up.
+    const llm = scriptedLlm([textMsg]);
+    const result = (await resumePlaygroundTurn({
+      llm: llm as any,
+      model: "claude-sonnet-5",
+      tools,
+      messages: [{ role: "user", content: "send it" }, { role: "assistant", content: sendToolMsg.content }],
+      batch: [{ id: "w_1", name: "gws-mcp__gmail_send", input: { to: "a@b.com" } }],
+      decisions: { w_1: "approve" },
+      executeTool,
+      emit,
+      isWrite,
+    })) as TurnResult;
+
+    expect(result.status).toBe("complete");
+    expect(executeTool).toHaveBeenCalledWith("gws-mcp__gmail_send", { to: "a@b.com" });
+    expect(emit.mock.calls.map((c) => c[0])).toEqual([
+      { type: "tool_start", name: "gws-mcp__gmail_send" },
+      { type: "tool_done", name: "gws-mcp__gmail_send", isError: false },
+      { type: "text", text: "hi there" },
+      { type: "done", stopReason: "end_turn" },
+    ] satisfies EngineEvent[]);
+    // The approved write's real result is fed back to the model.
+    const contInput = llm.messages.create.mock.calls[0][0];
+    const toolResultMsg = contInput.messages[contInput.messages.length - 1];
+    expect(toolResultMsg.content[0]).toEqual({
+      type: "tool_result",
+      tool_use_id: "w_1",
+      content: "sent ok",
+    });
+  });
+
+  it("resume deny: refuses the write without running it, feeds back a declined result", async () => {
+    const emit = vi.fn();
+    const executeTool = vi.fn(async () => ({ text: "should not run", isError: false }));
+    const llm = scriptedLlm([textMsg]);
+    const result = (await resumePlaygroundTurn({
+      llm: llm as any,
+      model: "claude-sonnet-5",
+      tools,
+      messages: [{ role: "user", content: "send it" }, { role: "assistant", content: sendToolMsg.content }],
+      batch: [{ id: "w_1", name: "gws-mcp__gmail_send", input: { to: "a@b.com" } }],
+      decisions: { w_1: "deny" },
+      executeTool,
+      emit,
+      isWrite,
+    })) as TurnResult;
+
+    expect(result.status).toBe("complete");
+    expect(executeTool).not.toHaveBeenCalled();
+    expect(emit.mock.calls.map((c) => c[0])).toEqual([
+      { type: "tool_start", name: "gws-mcp__gmail_send" },
+      { type: "tool_done", name: "gws-mcp__gmail_send", isError: true },
+      { type: "text", text: "hi there" },
+      { type: "done", stopReason: "end_turn" },
+    ] satisfies EngineEvent[]);
+    const contInput = llm.messages.create.mock.calls[0][0];
+    const toolResultMsg = contInput.messages[contInput.messages.length - 1];
+    expect(toolResultMsg.content[0]).toEqual({
+      type: "tool_result",
+      tool_use_id: "w_1",
+      content: "User declined this action.",
+      is_error: true,
+    });
+  });
+
+  it("resume treats a missing decision as denied (safe default)", async () => {
+    const emit = vi.fn();
+    const executeTool = vi.fn(async () => ({ text: "should not run", isError: false }));
+    const result = (await resumePlaygroundTurn({
+      llm: scriptedLlm([textMsg]) as any,
+      model: "claude-sonnet-5",
+      tools,
+      messages: [{ role: "assistant", content: sendToolMsg.content }],
+      batch: [{ id: "w_1", name: "gws-mcp__gmail_send", input: {} }],
+      decisions: {}, // no decision for w_1
+      executeTool,
+      emit,
+      isWrite,
+    })) as TurnResult;
+
+    expect(result.status).toBe("complete");
+    expect(executeTool).not.toHaveBeenCalled();
+  });
+
+  it("resume runs reads in the paused batch regardless of decisions", async () => {
+    const emit = vi.fn();
+    const executeTool = vi.fn(async () => ({ text: "read result", isError: false }));
+    const batch = [
+      { id: "r_1", name: "gws-mcp__gmail_search", input: { q: "x" } },
+      { id: "w_1", name: "gws-mcp__gmail_send", input: { to: "a@b.com" } },
+    ];
+    await resumePlaygroundTurn({
+      llm: scriptedLlm([textMsg]) as any,
+      model: "claude-sonnet-5",
+      tools,
+      messages: [{ role: "assistant", content: [] }],
+      batch,
+      decisions: { w_1: "deny" },
+      executeTool,
+      emit,
+      isWrite,
+    });
+
+    // The read ran; the denied write did not.
+    expect(executeTool).toHaveBeenCalledTimes(1);
+    expect(executeTool).toHaveBeenCalledWith("gws-mcp__gmail_search", { q: "x" });
   });
 });

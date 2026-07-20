@@ -32,6 +32,30 @@ export class ToolCallError extends Error {
   }
 }
 
+// Verbs (as `_`-delimited tokens in a tool's action name) that indicate the
+// tool MUTATES state — the playground gates these behind an approve/deny
+// confirmation before running. Reads (list/get/search/read/freebusy/…) never
+// match, so they run without a prompt. Matching a token (not a substring)
+// keeps `directory_search` a read while `docs_create` / `gmail_send` /
+// `sheets_append` / `jira_transition_issue` / `slides_batch_update` are writes.
+const WRITE_VERBS = new Set([
+  "create", "update", "delete", "write", "send", "reply", "forward",
+  "append", "add", "insert", "mark", "complete", "save", "transition",
+  "respond", "move", "copy", "edit", "remove", "upload", "batch",
+]);
+
+/** Whether a namespaced tool mutates state (and must be user-confirmed in the
+ * playground). Classifies by the action segment's verb tokens; a name with no
+ * known write verb is treated as a read. */
+export function isWriteTool(namespacedName: string): boolean {
+  const sep = namespacedName.indexOf(NAMESPACE_SEPARATOR);
+  const action = sep === -1 ? namespacedName : namespacedName.slice(sep + NAMESPACE_SEPARATOR.length);
+  return action
+    .toLowerCase()
+    .split("_")
+    .some((token) => WRITE_VERBS.has(token));
+}
+
 export function parseNamespacedName(namespacedName: string): {
   serverSlug: string;
   toolName: string;
