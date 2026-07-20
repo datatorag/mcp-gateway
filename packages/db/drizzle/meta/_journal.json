@@ -57,6 +57,13 @@
       "when": 1784533777275,
       "tag": "0007_melted_hawkeye",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1784580396198,
+      "tag": "0008_fancy_the_initiative",
+      "breakpoints": true
     }
   ]
 }

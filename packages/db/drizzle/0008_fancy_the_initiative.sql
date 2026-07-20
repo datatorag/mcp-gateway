@@ -1,0 +1,1 @@
+CREATE INDEX "idx_service_connections_user_service" ON "service_connections" USING btree ("user_id","service");
