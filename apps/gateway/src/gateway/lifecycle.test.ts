@@ -1,6 +1,13 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import type { Database } from "@datatorag-mcp/db";
 
+// isInternalEmail (used unmocked via importOriginal below) reads
+// INTERNAL_EXCLUDE_EMAILS from env — real getEnv() would exit on missing
+// DATABASE_URL in the test environment.
+vi.mock("@datatorag-mcp/config", () => ({
+  getEnv: () => ({ INTERNAL_EXCLUDE_EMAILS: "founder@example.com" }),
+}));
+
 const hasKey = vi.fn(() => true);
 const upsert = vi.fn();
 const sendTpl = vi.fn();
@@ -51,8 +58,8 @@ describe("sendWelcomeEmail", () => {
   });
 
   it("skips internal accounts entirely", async () => {
-    await sendWelcomeEmail({ email: "manuel@datatorag.com", name: "Manuel" });
-    await sendWelcomeEmail({ email: "heyitsmanuel@gmail.com", name: "Manuel" });
+    await sendWelcomeEmail({ email: "someone@datatorag.com", name: "Someone" });
+    await sendWelcomeEmail({ email: "founder@example.com", name: "Founder" });
     expect(upsert).not.toHaveBeenCalled();
     expect(sendTpl).not.toHaveBeenCalled();
   });
@@ -105,7 +112,7 @@ describe("runNoActivationFollowup", () => {
   it("claims then sends template 3, filtering internal users", async () => {
     selectWhere.mockResolvedValue([
       { id: "u1", email: "real@user.com", name: "Real User" },
-      { id: "u2", email: "manuel@clementine.so", name: "Manuel" },
+      { id: "u2", email: "founder@example.com", name: "Founder" },
     ]);
     const res = await runNoActivationFollowup(dbMock, { now: NOW });
     expect(res).toEqual({ eligible: 1, sent: 1, failed: 0 });

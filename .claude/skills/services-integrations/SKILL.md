@@ -30,7 +30,7 @@ No env var/token → warned no-op, not a throw. Non-2xx or a network error → w
 Entry file: `apps/gateway/src/lib/brevo.ts`. Single internal `brevoPost()` helper (follows the shape above) wraps all HTTP calls; two public functions call it: `upsertBrevoContact()` (`POST /contacts`) and `sendBrevoTemplate()` (`POST /smtp/email`).
 
 - List/template IDs (`BREVO_LIST_PRODUCT_USERS`, `BREVO_TEMPLATE_WELCOME`, `BREVO_TEMPLATE_NO_ACTIVATION`) are hardcoded constants, not env vars — they're managed in the Brevo console.
-- `isInternalEmail()` checks a hardcoded founder-email `Set` plus the `@datatorag.com` domain; lifecycle emails must skip these.
+- `isInternalEmail()` checks the comma-separated `INTERNAL_EXCLUDE_EMAILS` env var (same env-side list the digest exclusion reads; values live in SSM/prod `.env`, never in source — this repo is public) plus the `@datatorag.com` domain, which is matched unconditionally in code; lifecycle emails must skip these.
 - `hasBrevoKey()` lets callers check availability before doing other work (see Lifecycle below, which checks this *before* claiming a DB row).
 - Env var: `BREVO_API_KEY`.
 

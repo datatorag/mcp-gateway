@@ -20,7 +20,7 @@ DataToRAG's MCP will migrate from the current **direct-tool-exposure** model to 
 
 ## Empirical reference point — Barndoor (2026-04-22)
 
-Tested Barndoor's `life360.platform.barndoor.ai/mcp` as a real-world meta-tool gateway.
+Tested a Barndoor-hosted tenant MCP endpoint (`<tenant>.platform.barndoor.ai/mcp`) as a real-world meta-tool gateway.
 
 **Their boundary:** 9 tools. **Downstream services:** 14 (Atlassian, Google Workspace, GitHub, Slack, Stripe, Notion, PagerDuty, Ramp, Langfuse, etc.).
 
