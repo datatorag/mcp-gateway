@@ -12,14 +12,14 @@ import { useCopyToClipboard } from "@/lib/use-copy-to-clipboard";
 // the dashboard keeps its historical `wizard_${client}` copy_mcp_config
 // source values; docs emits `docs_${client}`.
 
-export type ClientId =
+type ClientId =
   | "claude-web"
   | "claude-desktop"
   | "claude-code"
   | "cursor"
   | "chatgpt";
 
-export const CLIENTS: { id: ClientId; label: string }[] = [
+const CLIENTS: { id: ClientId; label: string }[] = [
   { id: "claude-web", label: "Claude web" },
   { id: "claude-desktop", label: "Claude Desktop" },
   { id: "claude-code", label: "Claude Code" },
@@ -125,7 +125,9 @@ export function SetupInstructions({
   sourcePrefix: "wizard" | "docs";
 }) {
   const [selectedClient, setSelectedClient] = useState<ClientId>("claude-web");
-  const [mcpUrl, setMcpUrl] = useState("");
+  // Seed with the production URL so statically generated pages (docs) ship the
+  // endpoint in their HTML; the effect corrects it on non-prod origins.
+  const [mcpUrl, setMcpUrl] = useState("https://datatorag.com/mcp");
 
   useEffect(() => {
     setMcpUrl(`${window.location.origin}/mcp`);

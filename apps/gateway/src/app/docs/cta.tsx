@@ -12,30 +12,24 @@ import { EVENTS } from "@/lib/analytics";
 // PostHog event is what makes docs-sourced signups attributable per-page.
 export function DocsCta({ variant }: { variant: "sidebar" | "mobile" }) {
   const pathname = usePathname();
-
-  function track(cta: "get_started" | "sign_in") {
-    posthog.capture(EVENTS.DOCS_CTA_CLICKED, { cta, page: pathname });
-  }
-
-  if (variant === "mobile") {
-    return (
-      <a
-        href="/auth/login"
-        onClick={() => track("sign_in")}
-        className="rounded-lg bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground transition-opacity hover:opacity-90"
-      >
-        Sign in
-      </a>
-    );
-  }
+  const mobile = variant === "mobile";
 
   return (
     <a
       href="/auth/login"
-      onClick={() => track("get_started")}
-      className="block rounded-lg bg-primary px-3 py-2 text-center text-sm font-medium text-primary-foreground transition-opacity hover:opacity-90"
+      onClick={() =>
+        posthog.capture(EVENTS.DOCS_CTA_CLICKED, {
+          cta: mobile ? "sign_in" : "get_started",
+          page: pathname,
+        })
+      }
+      className={`rounded-lg bg-primary font-medium text-primary-foreground transition-opacity hover:opacity-90 ${
+        mobile
+          ? "px-3 py-1.5 text-xs"
+          : "block px-3 py-2 text-center text-sm"
+      }`}
     >
-      Get started free
+      {mobile ? "Sign in" : "Get started free"}
     </a>
   );
 }

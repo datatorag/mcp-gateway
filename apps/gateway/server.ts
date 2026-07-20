@@ -9,7 +9,10 @@ import { ConnectionPool } from "./src/gateway/pool";
 import { createDb, oauthAccessTokens } from "@datatorag-mcp/db";
 import { getEnv } from "@datatorag-mcp/config";
 import { createMetadataRouter } from "./src/gateway/oauth/metadata";
-import { createProtectedResourceRouter } from "./src/gateway/oauth/protected-resource";
+import {
+  createProtectedResourceRouter,
+  PROTECTED_RESOURCE_PATH,
+} from "./src/gateway/oauth/protected-resource";
 import { classifyMcpRequest } from "./src/gateway/mcp-session";
 import { createRegisterRouter } from "./src/gateway/oauth/register";
 import { createAuthorizeRouter } from "./src/gateway/oauth/authorize";
@@ -165,51 +168,57 @@ async function main() {
   }
 
   // MCP endpoint
-  const resourceMetadataUrl = `${baseUrl}/.well-known/oauth-protected-resource`;
+  const resourceMetadataUrl = `${baseUrl}${PROTECTED_RESOURCE_PATH}`;
+
+  // RFC 9728 §5.1 / MCP auth: every /mcp 401 carries a WWW-Authenticate
+  // challenge pointing at the protected-resource metadata so the client can
+  // discover the auth server. `challengeParams` prepends RFC 6750 error
+  // params (e.g. `error="invalid_token"`) for the expired/invalid case.
+  function send401(
+    res: express.Response,
+    error: string,
+    challengeParams: string[] = []
+  ) {
+    const challenge = [
+      ...challengeParams,
+      `resource_metadata="${resourceMetadataUrl}"`,
+    ].join(", ");
+    res
+      .status(401)
+      .set("WWW-Authenticate", `Bearer ${challenge}`)
+      .json({ error, resource_metadata: resourceMetadataUrl });
+  }
+
   app.all("/mcp", async (req, res) => {
     const authHeader = req.headers.authorization;
 
     if (!authHeader?.startsWith("Bearer ")) {
-      // RFC 9728 §5.1 / MCP auth: point the client at the protected-resource
-      // metadata via WWW-Authenticate so it can discover the auth server.
-      res
-        .status(401)
-        .set(
-          "WWW-Authenticate",
-          `Bearer resource_metadata="${resourceMetadataUrl}"`
-        )
-        .json({ error: "unauthorized", resource_metadata: resourceMetadataUrl });
+      send401(res, "unauthorized");
       return;
     }
 
     const rawToken = authHeader.slice(7);
     const auth = await validateBearer(rawToken);
     if (!auth) {
-      res
-        .status(401)
-        .set(
-          "WWW-Authenticate",
-          `Bearer error="invalid_token", error_description="The access token is invalid or expired", resource_metadata="${resourceMetadataUrl}"`
-        )
-        .json({ error: "invalid_token", resource_metadata: resourceMetadataUrl });
+      send401(res, "invalid_token", [
+        `error="invalid_token"`,
+        `error_description="The access token is invalid or expired"`,
+      ]);
       return;
     }
 
     const sessionId = req.headers["mcp-session-id"] as string | undefined;
     // "known" requires ownership: a session initialized by another user's
     // bearer classifies as unknown_session (404), same as a stale id.
-    const known =
-      sessionId !== undefined &&
-      sessions.get(sessionId)?.userId === auth.userId;
+    const session = sessionId !== undefined ? sessions.get(sessionId) : undefined;
     const action = classifyMcpRequest({
       method: req.method,
       sessionId,
-      known,
+      known: session !== undefined && session.userId === auth.userId,
     });
 
     // Existing session — route GET/DELETE/POST to the stored transport
-    if (action === "route") {
-      const session = sessions.get(sessionId!)!;
+    if (action === "route" && session) {
       await session.transport.handleRequest(req, res, req.body);
       return;
     }
@@ -245,6 +254,7 @@ async function main() {
       return;
     }
 
+    // action === "bad_request": no session id and not an initialize POST
     res.status(400).json({ error: "Invalid or missing session" });
   });
 

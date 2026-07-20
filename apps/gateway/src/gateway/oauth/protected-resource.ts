@@ -11,10 +11,17 @@ import { Router } from "express";
  * `/.well-known/oauth-authorization-server`) — the AS *is* this same gateway,
  * hence `authorization_servers: [baseUrl]`.
  */
+/**
+ * The discovery path advertised in `WWW-Authenticate: Bearer
+ * resource_metadata="…"` on /mcp 401s (server.ts) — exported so the 401
+ * handler and this router can never point at different paths.
+ */
+export const PROTECTED_RESOURCE_PATH = "/.well-known/oauth-protected-resource";
+
 export function createProtectedResourceRouter(baseUrl: string): Router {
   const router = Router();
 
-  router.get("/.well-known/oauth-protected-resource", (_req, res) => {
+  router.get(PROTECTED_RESOURCE_PATH, (_req, res) => {
     res.json({
       resource: `${baseUrl}/mcp`,
       authorization_servers: [baseUrl],

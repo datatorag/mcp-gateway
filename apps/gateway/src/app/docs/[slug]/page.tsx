@@ -42,6 +42,9 @@ export default async function DocPage({ params }: Props) {
   const next =
     currentIndex < allDocs.length - 1 ? allDocs[currentIndex + 1] : null;
 
+  // Without the marker, split returns [wholeDoc] and `after` is undefined.
+  const [before, after] = doc.html.split(SETUP_MARKER);
+
   return (
     <div>
       <DocViewTracker slug={doc.slug} section={doc.section} />
@@ -54,30 +57,20 @@ export default async function DocPage({ params }: Props) {
         </p>
       )}
 
-      {doc.html.includes(SETUP_MARKER) ? (
-        (() => {
-          const [before, after] = doc.html.split(SETUP_MARKER);
-          return (
-            <>
-              <div
-                className="prose mt-8"
-                dangerouslySetInnerHTML={{ __html: before }}
-              />
-              <div className="mt-6">
-                <SetupInstructions sourcePrefix="docs" />
-              </div>
-              <div
-                className="prose mt-6"
-                dangerouslySetInnerHTML={{ __html: after }}
-              />
-            </>
-          );
-        })()
-      ) : (
-        <div
-          className="prose mt-8"
-          dangerouslySetInnerHTML={{ __html: doc.html }}
-        />
+      <div
+        className="prose mt-8"
+        dangerouslySetInnerHTML={{ __html: before }}
+      />
+      {after !== undefined && (
+        <>
+          <div className="mt-6">
+            <SetupInstructions sourcePrefix="docs" />
+          </div>
+          <div
+            className="prose mt-6"
+            dangerouslySetInnerHTML={{ __html: after }}
+          />
+        </>
       )}
 
       {/* Prev / Next navigation */}
