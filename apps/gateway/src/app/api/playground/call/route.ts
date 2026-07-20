@@ -24,19 +24,14 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  // Extract and strip the optional `account` param. executeUserTool strips
-  // it again internally before calling the plugin — playground always uses
-  // the user's default account for the service; the multi-account
-  // limitation is accepted for v1.
-  const args = { ...rawArgs };
-  delete args.account;
-
   try {
+    // executeUserTool strips any `account` arg — playground always uses the
+    // user's default account for the service (v1 limitation).
     const { text, isError } = await executeUserTool(
       db,
       userId,
       namespacedName,
-      args
+      rawArgs
     );
     return NextResponse.json({
       result: { content: [{ type: "text", text }], isError },

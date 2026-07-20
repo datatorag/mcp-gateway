@@ -20,7 +20,9 @@ let db: Database | null = null;
 // convention used by apps/gateway/e2e/mcp.e2e.test.ts for the e2e harness.
 export function isDockerAvailable(): boolean {
   try {
-    execSync("docker info", { stdio: "ignore" });
+    // timeout: a wedged Docker daemon must read as "unavailable", not hang
+    // the whole test run at collection time.
+    execSync("docker info", { stdio: "ignore", timeout: 2000 });
     return true;
   } catch {
     return false;

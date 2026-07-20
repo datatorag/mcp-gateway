@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { getSessionUserId } from "@/lib/session";
 import { getEnv } from "@datatorag-mcp/config";
-import { getPlaygroundLlm, isPlaygroundEnabled } from "@/lib/llm";
+import { getPlaygroundLlm } from "@/lib/llm";
 import { runPlaygroundTurn, type EngineEvent } from "@/gateway/playground/engine";
 import { listUserEngineTools, executeUserTool } from "@/gateway/playground/tools";
 import { claimPlaygroundMessage, refundPlaygroundMessage } from "@/gateway/playground/cap";
@@ -20,7 +20,8 @@ export async function POST(request: NextRequest) {
   if (!userId) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
-  if (!isPlaygroundEnabled()) {
+  const llm = getPlaygroundLlm();
+  if (!llm) {
     return NextResponse.json({ error: "playground_disabled" }, { status: 403 });
   }
 
@@ -40,11 +41,8 @@ export async function POST(request: NextRequest) {
   void trackPlaygroundMessage(db, userId);
 
   let tools;
-  let llm;
   try {
     tools = await listUserEngineTools(db, userId);
-    llm = getPlaygroundLlm();
-    if (!llm) throw new Error("Playground LLM unavailable");
   } catch (err) {
     // Pre-stream failure after the claim landed — refund so this doesn't
     // burn one of the user's lifetime playground messages.
@@ -76,7 +74,7 @@ export async function POST(request: NextRequest) {
       };
       try {
         await runPlaygroundTurn({
-          llm: llm!,
+          llm,
           model: getEnv().PLAYGROUND_MODEL,
           tools,
           messages: messages.map((m) => ({ role: m.role, content: m.content })),
@@ -103,7 +101,7 @@ export async function POST(request: NextRequest) {
           await refundPlaygroundMessage(db, userId);
         }
         const message = err instanceof Error ? err.message : "Unknown error";
-        emit({ type: "done", stopReason: `error: ${message}` });
+        emit({ type: "error", message });
       } finally {
         try {
           controller.close();

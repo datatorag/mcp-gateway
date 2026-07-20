@@ -74,7 +74,7 @@ Three distinct flows — don't conflate them:
 | Plugins run as host child processes (`spawn`), NOT Docker containers | Simpler than the original container-per-plugin design; the never-imported `packages/docker-manager` vestige was deleted, but the `containerPort` column name still reflects the abandoned model | commit `c9b77f3`; `apps/gateway/src/gateway/plugin-manager.ts` |
 | Meta-tool gateway migration: decided direction, **deliberately not executed yet** | Direct tool exposure (~60 tools) is faster/simpler; migrate when catalog crosses ~100 tools. Meanwhile: self-contained tool descriptions, no runtime dependence on the `__` prefix | `docs/architecture/2026-04-22-meta-tool-migration.md` |
 | Public POST/DELETE `/api/servers` endpoints removed; plugin installs now via SSH on the host | Unauthenticated plugin management on a public gateway was a security hole | commits `7fb0356`, `f8a6c4f` |
-| Per-user-token plugin calls bypass the pool with a one-shot client | Avoids per-user pooling complexity while guaranteeing the right `X-User-Token`; pool stays credential-free | commit `fe083e2`; `mcp-server.ts` |
+| Per-user-token plugin calls bypass the pool with a one-shot client | Avoids per-user pooling complexity while guaranteeing the right `X-User-Token`; pool stays credential-free | commit `fe083e2`; `user-tools.ts` (`callPluginToolOnce`, consumed by `mcp-server.ts` + playground) |
 | `execFileSync` (never `execSync`) for git clone / installs | Prevents shell injection via malicious `githubRepoUrl` | commit `70cc29a` |
 | Constant-time compares (`safeStringEqual`) for all PKCE/client_id/redirect_uri checks | CASA Tier 2 SAQ item; part of the passed Google CASA evidence trail | commit `0bbfd7f`; `packages/auth/src/index.ts` |
 | Lazy tool loading: ListTools filters by connected services | Keeps the advertised tool list honest about what the user can actually call | commit `d2d45ee` |
@@ -126,7 +126,8 @@ Three distinct flows — don't conflate them:
 | Slack / Brevo / Stripe / PostHog-server clients | `apps/gateway/src/lib/{slack,brevo,stripe,posthog-server}.ts` |
 | Session cookie → userId | `apps/gateway/src/lib/session.ts` |
 | Playground agentic loop (8-iteration cap, prompt caching, system prompt) | `apps/gateway/src/gateway/playground/engine.ts` |
-| Playground tool listing (mirrors ListTools semantics) + tool execution | `apps/gateway/src/gateway/playground/tools.ts` |
+| Playground tool listing/execution (thin shaping over shared `user-tools.ts`) | `apps/gateway/src/gateway/playground/tools.ts` |
+| Shared "which tools can this user see" policy + plugin URL + one-shot call | `apps/gateway/src/gateway/user-tools.ts` |
 | Playground message-cap claim/refund (`users.playground_messages_used`) | `apps/gateway/src/gateway/playground/cap.ts` |
 | Playground SSE chat + feedback routes (401/403/429/400 mapping) | `apps/gateway/src/app/api/playground/{chat,feedback}/route.ts` |
 | Playground LLM provider factory (`anthropic` \| `bedrock`) | `apps/gateway/src/lib/llm.ts` |

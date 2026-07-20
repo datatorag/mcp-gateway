@@ -38,21 +38,13 @@ vi.mock("@/lib/session", () => ({
   getSessionUserId: () => sessionUserId(),
 }));
 
-// Populated by beforeAll (inside the gated describe block below) — never at
-// import time. The getter is only invoked once a test calls GET(), which
-// only happens after beforeAll has run, which only happens when
-// dockerAvailable is true (describe.skipIf prevents the block, including
-// beforeAll, from running at all otherwise).
+// Populated by beforeAll inside the gated describe block — see header.
 let mockDb: Database | undefined;
 
 vi.mock("@/lib/db", () => ({
   get db() {
     if (!mockDb) {
-      throw new Error(
-        "test db not initialized — this should be unreachable: the route " +
-          "should only be invoked from within the Docker-gated describe " +
-          "block, after beforeAll has set up the testcontainer."
-      );
+      throw new Error("test db not initialized before route call");
     }
     return mockDb;
   },

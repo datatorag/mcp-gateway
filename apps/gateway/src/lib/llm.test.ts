@@ -8,27 +8,30 @@ const envState = vi.hoisted(() => ({
 }));
 vi.mock("@datatorag-mcp/config", () => ({ getEnv: () => envState }));
 
-import { getPlaygroundLlm, isPlaygroundEnabled } from "./llm";
+import { getPlaygroundLlm } from "./llm";
 
-describe("getPlaygroundLlm / isPlaygroundEnabled", () => {
-  it("returns null when ANTHROPIC_API_KEY is empty and provider is anthropic", () => {
+describe("getPlaygroundLlm", () => {
+  it("returns null (playground disabled) when ANTHROPIC_API_KEY is empty and provider is anthropic", () => {
     envState.ANTHROPIC_API_KEY = "";
     envState.PLAYGROUND_PROVIDER = "anthropic";
     expect(getPlaygroundLlm()).toBeNull();
-    expect(isPlaygroundEnabled()).toBe(false);
   });
 
   it("returns an Anthropic client when key is set", () => {
     envState.ANTHROPIC_API_KEY = "sk-ant-test";
     envState.PLAYGROUND_PROVIDER = "anthropic";
     expect(getPlaygroundLlm()).not.toBeNull();
-    expect(isPlaygroundEnabled()).toBe(true);
   });
 
   it("returns a Bedrock client when provider is bedrock, regardless of API key", () => {
     envState.ANTHROPIC_API_KEY = "";
     envState.PLAYGROUND_PROVIDER = "bedrock";
     expect(getPlaygroundLlm()).not.toBeNull();
-    expect(isPlaygroundEnabled()).toBe(true);
+  });
+
+  it("reuses the same client instance for an unchanged provider/key config", () => {
+    envState.ANTHROPIC_API_KEY = "sk-ant-test";
+    envState.PLAYGROUND_PROVIDER = "anthropic";
+    expect(getPlaygroundLlm()).toBe(getPlaygroundLlm());
   });
 });

@@ -5,18 +5,15 @@ import {
 } from "@modelcontextprotocol/sdk/types.js";
 import { eq, and } from "drizzle-orm";
 import type { Database } from "@datatorag-mcp/db";
-import {
-  tools,
-  mcpServers,
-  pluginConnections,
-  connectedAccounts,
-  serviceConnections,
-} from "@datatorag-mcp/db";
-import { Client } from "@modelcontextprotocol/sdk/client/index.js";
-import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
+import { mcpServers, pluginConnections } from "@datatorag-mcp/db";
 import type { ConnectionPool } from "./pool";
 import { NAMESPACE_SEPARATOR } from "./plugin-manager";
 import { PLUGIN_SERVICE_MAP, getServiceToken } from "./service-token";
+import {
+  listUserToolRows,
+  buildPluginServerUrl,
+  callPluginToolOnce,
+} from "./user-tools";
 import { listConnectedAccounts } from "./connected-accounts";
 import { trackToolCall } from "./track";
 
@@ -42,35 +39,10 @@ export function createMcpServer(
   );
 
   server.setRequestHandler(ListToolsRequestSchema, async () => {
-    // Run user-specific and global queries in parallel
-    const [accountRows, registeredTools] = await Promise.all([
-      db
-        .selectDistinct({ connectorType: connectedAccounts.connectorType })
-        .from(connectedAccounts)
-        .where(eq(connectedAccounts.userId, userId)),
-      db
-        .select({
-          namespacedName: tools.namespacedName,
-          description: tools.description,
-          inputSchemaJson: tools.inputSchemaJson,
-          serverSlug: mcpServers.slug,
-        })
-        .from(tools)
-        .innerJoin(mcpServers, eq(tools.mcpServerId, mcpServers.id))
-        .where(and(eq(mcpServers.status, "active"), eq(tools.enabled, true))),
-    ]);
-
-    const connectedServices = new Set<string>();
-    for (const row of accountRows) connectedServices.add(row.connectorType);
-
-    // Fallback: check un-migrated service_connections
-    if (connectedServices.size === 0) {
-      const legacyRows = await db
-        .selectDistinct({ service: serviceConnections.service })
-        .from(serviceConnections)
-        .where(eq(serviceConnections.userId, userId));
-      for (const row of legacyRows) connectedServices.add(row.service);
-    }
+    // Shared connected-service policy — see user-tools.ts. This handler only
+    // shapes the rows for MCP: inject the `account` param on service-backed
+    // tools and append the built-in tools.
+    const rows = await listUserToolRows(db, userId);
 
     const toolList: {
       name: string;
@@ -78,32 +50,22 @@ export function createMcpServer(
       inputSchema: Record<string, unknown>;
     }[] = [];
 
-    for (const t of registeredTools) {
-      const requiredService = PLUGIN_SERVICE_MAP[t.serverSlug];
-
-      // Skip tools for services the user hasn't connected
-      if (requiredService && !connectedServices.has(requiredService)) continue;
-
-      const schema = (t.inputSchemaJson as Record<string, unknown>) ?? {
-        type: "object" as const,
-        properties: {},
-      };
-
-      if (requiredService) {
+    for (const t of rows) {
+      if (t.requiredService) {
         const properties = {
-          ...(schema.properties as Record<string, unknown>),
+          ...(t.schema.properties as Record<string, unknown>),
           account: ACCOUNT_PARAM_SCHEMA,
         };
         toolList.push({
           name: t.namespacedName,
-          description: t.description ?? "",
-          inputSchema: { ...schema, properties },
+          description: t.description,
+          inputSchema: { ...t.schema, properties },
         });
       } else {
         toolList.push({
           name: t.namespacedName,
-          description: t.description ?? "",
-          inputSchema: schema,
+          description: t.description,
+          inputSchema: t.schema,
         });
       }
     }
@@ -227,16 +189,7 @@ export function createMcpServer(
       };
     }
 
-    // Build URL
-    let serverUrl: string;
-    const dockerHostOverride = process.env.DOCKER_HOST_OVERRIDE;
-    if (mcpServer.githubRepoUrl) {
-      serverUrl = `http://localhost:${mcpServer.containerPort}/mcp`;
-    } else if (dockerHostOverride) {
-      serverUrl = `http://${dockerHostOverride}/mcp`;
-    } else {
-      serverUrl = `http://dtrmcp-server-${mcpServer.slug}:${mcpServer.containerPort}/mcp`;
-    }
+    const serverUrl = buildPluginServerUrl(mcpServer);
 
     // Look up per-user token: first check service connections, then legacy plugin connections
     let userToken: string | null = null;
@@ -288,23 +241,13 @@ export function createMcpServer(
     try {
       let result;
       if (userToken) {
-        const transport = new StreamableHTTPClientTransport(
-          new URL(serverUrl),
-          { requestInit: { headers: { "X-User-Token": userToken } } }
-        );
-        const oneShotClient = new Client(
-          { name: "datatorag-mcp", version: "0.1.0" },
-          { capabilities: {} }
-        );
-        try {
-          await oneShotClient.connect(transport);
-          result = await oneShotClient.callTool({
-            name: toolName,
-            arguments: args as Record<string, unknown>,
-          });
-        } finally {
-          await oneShotClient.close();
-        }
+        result = await callPluginToolOnce({
+          serverUrl,
+          userToken,
+          toolName,
+          args: args as Record<string, unknown>,
+          clientName: "datatorag-mcp",
+        });
       } else {
         const pooledClient = await pool.acquire(mcpServer.id, serverUrl);
         try {

@@ -161,9 +161,11 @@ export function trackLogin(userId: string, email: string): void {
  * (playground calls stay unmetered; see usage/classify.ts). Never throws:
  * a PostHog capture failure must not break the streaming chat response.
  */
-export async function trackPlaygroundMessage(
+async function capturePlaygroundEvent(
   db: Database,
-  userId: string
+  userId: string,
+  event: string,
+  properties: Record<string, unknown> = {}
 ): Promise<void> {
   try {
     const c = getPosthog();
@@ -171,12 +173,19 @@ export async function trackPlaygroundMessage(
     const identity = await resolveUserIdentity(db, userId);
     c.capture({
       distinctId: userId,
-      event: EVENTS.PLAYGROUND_MESSAGE_SENT,
-      properties: { ...identityProps(identity?.email ?? null) },
+      event,
+      properties: { ...properties, ...identityProps(identity?.email ?? null) },
     });
   } catch (err) {
-    console.warn(`[track] playground_message_sent failed for user=${userId}`, err);
+    console.warn(`[track] ${event} failed for user=${userId}`, err);
   }
+}
+
+export async function trackPlaygroundMessage(
+  db: Database,
+  userId: string
+): Promise<void> {
+  return capturePlaygroundEvent(db, userId, EVENTS.PLAYGROUND_MESSAGE_SENT);
 }
 
 export async function trackPlaygroundToolCall(
@@ -184,36 +193,16 @@ export async function trackPlaygroundToolCall(
   userId: string,
   tool: string
 ): Promise<void> {
-  try {
-    const c = getPosthog();
-    if (!c) return;
-    const identity = await resolveUserIdentity(db, userId);
-    c.capture({
-      distinctId: userId,
-      event: EVENTS.PLAYGROUND_TOOL_CALL,
-      properties: { tool_name: tool, ...identityProps(identity?.email ?? null) },
-    });
-  } catch (err) {
-    console.warn(`[track] playground_tool_call failed for user=${userId}`, err);
-  }
+  return capturePlaygroundEvent(db, userId, EVENTS.PLAYGROUND_TOOL_CALL, {
+    tool_name: tool,
+  });
 }
 
 export async function trackPlaygroundCapHit(
   db: Database,
   userId: string
 ): Promise<void> {
-  try {
-    const c = getPosthog();
-    if (!c) return;
-    const identity = await resolveUserIdentity(db, userId);
-    c.capture({
-      distinctId: userId,
-      event: EVENTS.PLAYGROUND_CAP_HIT,
-      properties: { ...identityProps(identity?.email ?? null) },
-    });
-  } catch (err) {
-    console.warn(`[track] playground_cap_hit failed for user=${userId}`, err);
-  }
+  return capturePlaygroundEvent(db, userId, EVENTS.PLAYGROUND_CAP_HIT);
 }
 
 /**

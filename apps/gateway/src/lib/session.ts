@@ -1,7 +1,8 @@
 import { cookies } from "next/headers";
-import { eq, and, isNull, gt, or } from "drizzle-orm";
+import { eq, and } from "drizzle-orm";
 import { db } from "./db";
 import { oauthAccessTokens } from "@datatorag-mcp/db";
+import { liveTokenConditions } from "./token-liveness";
 
 /**
  * Get the authenticated user ID from the session cookie.
@@ -18,11 +19,7 @@ export async function getSessionUserId(): Promise<string | null> {
     .where(
       and(
         eq(oauthAccessTokens.token, sessionToken),
-        isNull(oauthAccessTokens.revokedAt),
-        or(
-          isNull(oauthAccessTokens.expiresAt),
-          gt(oauthAccessTokens.expiresAt, new Date())
-        )
+        ...liveTokenConditions()
       )
     )
     .limit(1);

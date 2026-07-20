@@ -30,29 +30,28 @@ const CLIENTS: { id: ClientId; label: string }[] = [
   { id: "chatgpt", label: "ChatGPT" },
 ];
 
-type CopyFn = (text: string, key: string) => void;
-
 function CodeBlock({
   children,
-  copyKey,
-  copied,
-  onCopy,
+  onCopied,
 }: {
   children: string;
-  copyKey: string;
-  copied: string | null;
-  onCopy: CopyFn;
+  /** Fired on copy, after the clipboard write — analytics hook. */
+  onCopied?: () => void;
 }) {
+  const { copied, copy } = useCopyToClipboard<boolean>();
   return (
     <div className="relative mt-2">
       <pre className="overflow-x-auto rounded-xl border border-border bg-[#1C1917] p-4 font-mono text-xs leading-relaxed text-[#E7E5E4]">
         {children}
       </pre>
       <button
-        onClick={() => onCopy(children, copyKey)}
+        onClick={() => {
+          copy(children, true);
+          onCopied?.();
+        }}
         className="absolute right-2.5 top-2.5 rounded-md border border-white/15 bg-white/5 px-2 py-1 text-[11px] font-medium text-[#E7E5E4] transition-colors hover:bg-white/10"
       >
-        {copied === copyKey ? "Copied ✓" : "Copy"}
+        {copied ? "Copied ✓" : "Copy"}
       </button>
     </div>
   );
@@ -61,13 +60,11 @@ function CodeBlock({
 function ClientInstructions({
   client,
   mcpUrl,
-  copied,
-  onCopy,
+  onCopied,
 }: {
   client: ClientId;
   mcpUrl: string;
-  copied: string | null;
-  onCopy: CopyFn;
+  onCopied?: () => void;
 }) {
   if (client === "claude-web" || client === "claude-desktop") {
     return (
@@ -76,9 +73,7 @@ function ClientInstructions({
         <li>2. Click &quot;Add custom connector&quot;</li>
         <li>
           3. Paste this URL:
-          <CodeBlock copyKey="url" copied={copied} onCopy={onCopy}>
-            {mcpUrl}
-          </CodeBlock>
+          <CodeBlock onCopied={onCopied}>{mcpUrl}</CodeBlock>
         </li>
         <li>4. Complete the sign-in when prompted</li>
       </ol>
@@ -90,9 +85,7 @@ function ClientInstructions({
     return (
       <div className="text-xs text-muted-foreground">
         <p>Run this command in your terminal:</p>
-        <CodeBlock copyKey="command" copied={copied} onCopy={onCopy}>
-          {command}
-        </CodeBlock>
+        <CodeBlock onCopied={onCopied}>{command}</CodeBlock>
       </div>
     );
   }
@@ -108,9 +101,7 @@ function ClientInstructions({
     return (
       <div className="text-xs text-muted-foreground">
         <p>Add this to your MCP config:</p>
-        <CodeBlock copyKey="json" copied={copied} onCopy={onCopy}>
-          {json}
-        </CodeBlock>
+        <CodeBlock onCopied={onCopied}>{json}</CodeBlock>
         <p className="mt-2">Or via UI: Settings → MCP → Add</p>
       </div>
     );
@@ -124,9 +115,7 @@ function ClientInstructions({
       <li>3. Click &quot;Create&quot;</li>
       <li>
         4. Paste this URL:
-        <CodeBlock copyKey="url" copied={copied} onCopy={onCopy}>
-          {mcpUrl}
-        </CodeBlock>
+        <CodeBlock onCopied={onCopied}>{mcpUrl}</CodeBlock>
       </li>
     </ol>
   );
@@ -137,7 +126,6 @@ export function SetupWizard() {
   const [selectedClient, setSelectedClient] =
     useState<ClientId>("claude-web");
   const [mcpUrl, setMcpUrl] = useState("");
-  const { copied, copy } = useCopyToClipboard<string>();
   // undefined = "haven't observed a status fetch yet"; used to make sure we
   // only fire wizard_step_completed on a live false->true transition, never
   // on the very first status load (which could already be true from a prior
@@ -189,8 +177,7 @@ export function SetupWizard() {
     posthog.capture(EVENTS.WIZARD_CLIENT_SELECTED, { client });
   }
 
-  function handleCopy(text: string, key: string) {
-    copy(text, key);
+  function handleCopied() {
     posthog.capture(EVENTS.COPY_MCP_CONFIG, {
       source: `wizard_${selectedClient}`,
     });
@@ -261,8 +248,7 @@ export function SetupWizard() {
           <ClientInstructions
             client={selectedClient}
             mcpUrl={mcpUrl}
-            copied={copied}
-            onCopy={handleCopy}
+            onCopied={handleCopied}
           />
         </div>
       </div>

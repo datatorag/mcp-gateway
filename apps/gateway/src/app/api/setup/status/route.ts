@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
-import { and, desc, eq, gt, isNull, ne, sql } from "drizzle-orm";
+import { and, desc, eq, ne, sql } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { getSessionUserId } from "@/lib/session";
+import { liveTokenConditions } from "@/lib/token-liveness";
 import {
   connectedAccounts,
   oauthAccessTokens,
@@ -49,10 +50,9 @@ export async function GET() {
           // "web" is the dashboard's own session token — only a dynamically
           // registered MCP client proves the user's agent reached the gateway.
           ne(oauthAccessTokens.clientId, "web"),
-          // Mirror getSessionUserId's liveness check (lib/session.ts) — a
-          // revoked or expired client token must not read as "connected".
-          isNull(oauthAccessTokens.revokedAt),
-          gt(oauthAccessTokens.expiresAt, new Date())
+          // Shared liveness definition — a revoked or expired client token
+          // must not read as "connected".
+          ...liveTokenConditions()
         )
       )
       .orderBy(desc(oauthAccessTokens.createdAt))

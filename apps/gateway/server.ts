@@ -2,7 +2,7 @@ import next from "next";
 import express from "express";
 import cookieParser from "cookie-parser";
 import { randomUUID } from "node:crypto";
-import { eq, and, gt, isNull, or } from "drizzle-orm";
+import { eq, and } from "drizzle-orm";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import { createMcpServer } from "./src/gateway/mcp-server";
 import { ConnectionPool } from "./src/gateway/pool";
@@ -15,6 +15,7 @@ import { createTokenRouter } from "./src/gateway/oauth/token";
 import { createRevokeRouter } from "./src/gateway/oauth/revoke";
 import { createAuthRouter } from "./src/gateway/auth";
 import { getPluginManager } from "./src/lib/plugin-manager";
+import { liveTokenConditions } from "./src/lib/token-liveness";
 import { shutdownPosthog } from "./src/gateway/track";
 import cron from "node-cron";
 import { runDailyRollup } from "./src/gateway/usage/rollup";
@@ -139,11 +140,7 @@ async function main() {
       .where(
         and(
           eq(oauthAccessTokens.token, rawToken),
-          isNull(oauthAccessTokens.revokedAt),
-          or(
-            isNull(oauthAccessTokens.expiresAt),
-            gt(oauthAccessTokens.expiresAt, new Date())
-          )
+          ...liveTokenConditions()
         )
       )
       .limit(1);

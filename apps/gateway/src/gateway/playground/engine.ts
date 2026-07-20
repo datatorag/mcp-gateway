@@ -14,7 +14,10 @@ export type EngineEvent =
   | { type: "text"; text: string }
   | { type: "tool_start"; name: string }
   | { type: "tool_done"; name: string; isError: boolean }
-  | { type: "done"; stopReason: string };
+  | { type: "done"; stopReason: string }
+  // Emitted by the route (not this loop) when the turn fails mid-stream —
+  // part of the SSE contract the dashboard client consumes.
+  | { type: "error"; message: string };
 
 export const MAX_TOOL_ITERATIONS = 8;
 
@@ -42,18 +45,18 @@ export async function runPlaygroundTurn(opts: {
   shouldStop?: () => boolean;
 }): Promise<void> {
   const messages = [...opts.messages];
+  // Prompt caching: the tool schemas (~15k tokens for a GWS user) and the
+  // system prompt are identical across loop iterations and messages —
+  // cache_control on the LAST tool block + the system block makes every
+  // repeat a cache hit ($0.20/MTok instead of $2 on Sonnet).
+  const cachedTools = opts.tools.map((t, idx) =>
+    idx === opts.tools.length - 1 ? { ...t, cache_control: { type: "ephemeral" as const } } : t
+  );
   for (let i = 0; i < MAX_TOOL_ITERATIONS; i++) {
     if (opts.shouldStop?.()) {
       opts.emit({ type: "done", stopReason: "aborted" });
       return;
     }
-    // Prompt caching: the tool schemas (~15k tokens for a GWS user) and the
-    // system prompt are identical across loop iterations and messages —
-    // cache_control on the LAST tool block + the system block makes every
-    // repeat a cache hit ($0.20/MTok instead of $2 on Sonnet).
-    const cachedTools = opts.tools.map((t, idx) =>
-      idx === opts.tools.length - 1 ? { ...t, cache_control: { type: "ephemeral" as const } } : t
-    );
     const res = (await opts.llm.messages.create({
       model: opts.model,
       max_tokens: 1024,

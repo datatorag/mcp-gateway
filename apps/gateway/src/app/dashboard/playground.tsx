@@ -33,8 +33,8 @@ interface AssistantTurn {
   role: "assistant";
   text: string;
   tools: ToolChip[];
-  /** Set once the turn's `done` event lands without an "error:" stopReason.
-   * Feedback controls only render for completed, non-error turns. */
+  /** Set once the turn's `done` event lands. Feedback controls only render
+   * for completed, non-error turns. */
   complete: boolean;
   errorText?: string;
   /** The user message that produced this turn — sent back as `prompt` on
@@ -51,15 +51,6 @@ interface PlaygroundProps {
   prompts: string[];
   /** Whether the user has at least one connected account (any service). */
   hasConnectedAccount: boolean;
-}
-
-function friendlyError(stopReason: string): string {
-  const detail = stopReason.startsWith("error:")
-    ? stopReason.slice("error:".length).trim()
-    : stopReason;
-  return detail
-    ? `Something went wrong: ${detail}`
-    : "Something went wrong. Please try again.";
 }
 
 // Builds the {role, content}[] payload the SSE contract expects from prior
@@ -132,12 +123,15 @@ export const Playground = forwardRef<PlaygroundHandle, PlaygroundProps>(
             ),
           };
         });
+      } else if (event.type === "error") {
+        updateLastAssistant((t) => ({
+          ...t,
+          errorText: event.message
+            ? `Something went wrong: ${event.message}`
+            : "Something went wrong. Please try again.",
+        }));
       } else if (event.type === "done") {
-        updateLastAssistant((t) =>
-          event.stopReason.startsWith("error:")
-            ? { ...t, errorText: friendlyError(event.stopReason) }
-            : { ...t, complete: true }
-        );
+        updateLastAssistant((t) => ({ ...t, complete: true }));
       }
     }
 
@@ -165,115 +159,95 @@ export const Playground = forwardRef<PlaygroundHandle, PlaygroundProps>(
         { role: "user" as const, content: trimmed },
       ];
 
+      // Appends this send's assistant turn; with errorText set it renders as
+      // a failed turn (no feedback controls).
+      const pushAssistantTurn = (errorText?: string) =>
+        setTurns((prev) => [
+          ...prev,
+          { role: "assistant", text: "", tools: [], complete: false, prompt: trimmed, errorText },
+        ]);
+
       setTurns((prev) => [...prev, { role: "user", text: trimmed }]);
       setInput("");
       setStreaming(true);
       streamingRef.current = true;
 
-      let res: Response;
       try {
-        res = await fetch("/api/playground/chat", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ messages: apiMessages }),
-          signal: controller.signal,
-        });
-      } catch (err) {
-        setStreaming(false);
-        streamingRef.current = false;
-        if (isAbortError(err)) return;
-        setTurns((prev) => [
-          ...prev,
-          {
-            role: "assistant",
-            text: "",
-            tools: [],
-            complete: false,
-            prompt: trimmed,
-            errorText: "Connection lost. Please try again.",
-          },
-        ]);
-        return;
-      }
-
-      if (res.status === 403) {
-        // playground_disabled — hide the section entirely rather than show
-        // a dead chat box.
-        setHidden(true);
-        setStreaming(false);
-        streamingRef.current = false;
-        return;
-      }
-
-      if (res.status === 429) {
-        const data = (await res.json().catch(() => null)) as { cap?: number } | null;
-        setCapState({ cap: typeof data?.cap === "number" ? data.cap : 0 });
-        setStreaming(false);
-        streamingRef.current = false;
-        return;
-      }
-
-      if (!res.ok || !res.body) {
-        setTurns((prev) => [
-          ...prev,
-          {
-            role: "assistant",
-            text: "",
-            tools: [],
-            complete: false,
-            prompt: trimmed,
-            errorText: "Something went wrong. Please try again.",
-          },
-        ]);
-        setStreaming(false);
-        streamingRef.current = false;
-        return;
-      }
-
-      setTurns((prev) => [
-        ...prev,
-        { role: "assistant", text: "", tools: [], complete: false, prompt: trimmed },
-      ]);
-
-      function processFrame(part: string) {
-        const line = part.trim();
-        if (!line.startsWith("data:")) return;
-        const jsonStr = line.slice("data:".length).trim();
-        if (!jsonStr) return;
+        let res: Response;
         try {
-          handleEvent(JSON.parse(jsonStr) as EngineEvent);
-        } catch {
-          // Malformed frame — skip it rather than aborting the stream.
+          res = await fetch("/api/playground/chat", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ messages: apiMessages }),
+            signal: controller.signal,
+          });
+        } catch (err) {
+          if (!isAbortError(err)) {
+            pushAssistantTurn("Connection lost. Please try again.");
+          }
+          return;
         }
-      }
 
-      try {
-        const reader = res.body.getReader();
-        const decoder = new TextDecoder();
-        // Buffer partial SSE frames — a `\n\n` boundary can straddle two
-        // chunk-boundary reads, and a single chunk can contain multiple
-        // complete events.
-        let buffer = "";
-        for (;;) {
-          const { done, value } = await reader.read();
-          if (done) break;
-          buffer += decoder.decode(value, { stream: true });
-          const parts = buffer.split("\n\n");
-          buffer = parts.pop() ?? "";
-          for (const part of parts) processFrame(part);
+        if (res.status === 403) {
+          // playground_disabled — hide the section entirely rather than show
+          // a dead chat box.
+          setHidden(true);
+          return;
         }
-        // Flush any bytes the decoder held back for a multi-byte sequence,
-        // then process whatever's left in the buffer — the stream can end
-        // without a trailing `\n\n`, and that final frame shouldn't be
-        // silently dropped.
-        buffer += decoder.decode();
-        for (const part of buffer.split("\n\n")) processFrame(part);
-      } catch (err) {
-        if (!isAbortError(err)) {
-          updateLastAssistant((t) => ({
-            ...t,
-            errorText: "Connection lost while responding. Please try again.",
-          }));
+
+        if (res.status === 429) {
+          const data = (await res.json().catch(() => null)) as { cap?: number } | null;
+          setCapState({ cap: typeof data?.cap === "number" ? data.cap : 0 });
+          return;
+        }
+
+        if (!res.ok || !res.body) {
+          pushAssistantTurn("Something went wrong. Please try again.");
+          return;
+        }
+
+        pushAssistantTurn();
+
+        function processFrame(part: string) {
+          const line = part.trim();
+          if (!line.startsWith("data:")) return;
+          const jsonStr = line.slice("data:".length).trim();
+          if (!jsonStr) return;
+          try {
+            handleEvent(JSON.parse(jsonStr) as EngineEvent);
+          } catch {
+            // Malformed frame — skip it rather than aborting the stream.
+          }
+        }
+
+        try {
+          const reader = res.body.getReader();
+          const decoder = new TextDecoder();
+          // Buffer partial SSE frames — a `\n\n` boundary can straddle two
+          // chunk-boundary reads, and a single chunk can contain multiple
+          // complete events.
+          let buffer = "";
+          for (;;) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            buffer += decoder.decode(value, { stream: true });
+            const parts = buffer.split("\n\n");
+            buffer = parts.pop() ?? "";
+            for (const part of parts) processFrame(part);
+          }
+          // Flush any bytes the decoder held back for a multi-byte sequence,
+          // then process whatever's left in the buffer — the stream can end
+          // without a trailing `\n\n`, and that final frame shouldn't be
+          // silently dropped.
+          buffer += decoder.decode();
+          for (const part of buffer.split("\n\n")) processFrame(part);
+        } catch (err) {
+          if (!isAbortError(err)) {
+            updateLastAssistant((t) => ({
+              ...t,
+              errorText: "Connection lost while responding. Please try again.",
+            }));
+          }
         }
       } finally {
         setStreaming(false);

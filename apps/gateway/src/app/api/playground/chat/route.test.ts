@@ -6,10 +6,8 @@ vi.mock("@/lib/session", () => ({
   getSessionUserId: () => getSessionUserId(),
 }));
 
-const isPlaygroundEnabled = vi.fn();
 const getPlaygroundLlm = vi.fn();
 vi.mock("@/lib/llm", () => ({
-  isPlaygroundEnabled: () => isPlaygroundEnabled(),
   getPlaygroundLlm: () => getPlaygroundLlm(),
 }));
 
@@ -64,7 +62,6 @@ describe("POST /api/playground/chat", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     getSessionUserId.mockResolvedValue("user-1");
-    isPlaygroundEnabled.mockReturnValue(true);
     getEnv.mockReturnValue({ PLAYGROUND_MESSAGE_CAP: 20, PLAYGROUND_MODEL: "claude-sonnet-5" });
     claimPlaygroundMessage.mockResolvedValue(true);
     listUserEngineTools.mockResolvedValue([]);
@@ -85,8 +82,8 @@ describe("POST /api/playground/chat", () => {
     expect(await res.json()).toEqual({ error: "Unauthorized" });
   });
 
-  it("403s when the playground is disabled", async () => {
-    isPlaygroundEnabled.mockReturnValue(false);
+  it("403s when the playground is disabled (no LLM configured)", async () => {
+    getPlaygroundLlm.mockReturnValue(null);
     const res = await POST(chatRequest(validBody));
     expect(res.status).toBe(403);
     expect(await res.json()).toEqual({ error: "playground_disabled" });
@@ -150,7 +147,8 @@ describe("POST /api/playground/chat", () => {
     const res = await POST(chatRequest(validBody));
     expect(res.status).toBe(200);
     const text = await res.text();
-    expect(text).toContain("error: anthropic outage");
+    expect(text).toContain('"type":"error"');
+    expect(text).toContain("anthropic outage");
     expect(refundPlaygroundMessage).toHaveBeenCalledWith({}, "user-1");
   });
 
