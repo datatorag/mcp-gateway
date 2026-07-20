@@ -16,7 +16,6 @@ export function createRegisterRouter(db: Database): Router {
       client_name,
       grant_types = ["authorization_code", "refresh_token"],
       response_types = ["code"],
-      token_endpoint_auth_method = "none",
     } = req.body ?? {};
 
     if (
@@ -33,13 +32,19 @@ export function createRegisterRouter(db: Database): Router {
 
     const clientId = randomUUID();
 
+    // Public clients only: we never issue or verify a client secret, so every
+    // registration is "none" regardless of what was requested (PKCE is the
+    // protection). The response echoes the true registered method so a client
+    // requesting client_secret_post learns it was registered public.
+    const tokenEndpointAuthMethod = "none";
+
     await db.insert(oauthClients).values({
       clientId,
       redirectUris: redirect_uris,
       clientName: client_name ?? null,
       grantTypes: grant_types,
       responseTypes: response_types,
-      tokenEndpointAuthMethod: token_endpoint_auth_method,
+      tokenEndpointAuthMethod,
     });
 
     res.status(201).json({
@@ -48,7 +53,7 @@ export function createRegisterRouter(db: Database): Router {
       client_name: client_name ?? null,
       grant_types,
       response_types,
-      token_endpoint_auth_method,
+      token_endpoint_auth_method: tokenEndpointAuthMethod,
     });
   });
 

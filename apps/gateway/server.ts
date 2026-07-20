@@ -13,6 +13,7 @@ import { createRegisterRouter } from "./src/gateway/oauth/register";
 import { createAuthorizeRouter } from "./src/gateway/oauth/authorize";
 import { createTokenRouter } from "./src/gateway/oauth/token";
 import { createRevokeRouter } from "./src/gateway/oauth/revoke";
+import { oauthRateLimit } from "./src/gateway/oauth/rate-limit";
 import { createAuthRouter } from "./src/gateway/auth";
 import { getPluginManager } from "./src/lib/plugin-manager";
 import { liveTokenConditions } from "./src/lib/token-liveness";
@@ -88,7 +89,13 @@ async function main() {
 
   app.use(cookieParser());
 
-  app.use("/oauth", express.json(), express.urlencoded({ extended: true }));
+  // Per-IP rate limit on all /oauth traffic — fail fast before body parsing.
+  app.use(
+    "/oauth",
+    oauthRateLimit,
+    express.json(),
+    express.urlencoded({ extended: true })
+  );
   app.use("/mcp", express.json());
 
   // Dashboard auth (Google login -> session cookie)

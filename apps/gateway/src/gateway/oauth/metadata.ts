@@ -16,8 +16,11 @@ export function createMetadataRouter(baseUrl: string): Router {
       revocation_endpoint: `${baseUrl}/oauth/revoke`,
       response_types_supported: ["code"],
       grant_types_supported: ["authorization_code", "refresh_token"],
-      token_endpoint_auth_methods_supported: ["none", "client_secret_post"],
-      revocation_endpoint_auth_methods_supported: ["none", "client_secret_post"],
+      // Public clients only — MCP clients (Claude Desktop, Cursor, etc.) can't
+      // safely hold a secret, so PKCE (S256, required) is the protection, not
+      // client authentication. We only advertise what we actually enforce.
+      token_endpoint_auth_methods_supported: ["none"],
+      revocation_endpoint_auth_methods_supported: ["none"],
       code_challenge_methods_supported: ["S256"],
       scopes_supported: ["mcp:tools"],
     });
