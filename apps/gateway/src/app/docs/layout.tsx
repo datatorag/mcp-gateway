@@ -3,7 +3,12 @@ import Image from "next/image";
 import { getConnectorGroups, getTopLevelDocs } from "@/lib/docs";
 import { DocsSidebar } from "./sidebar";
 import { DocsNavClient } from "./nav-client";
+import { DocsCta } from "./cta";
 
+// NOTE: deliberately no session read here — cookies() would force every
+// /docs/* page to render dynamically, and docs are a static, cacheable,
+// paid-traffic surface. The CTA renders the signed-out state for everyone;
+// signed-in readers still have the Dashboard link below it.
 export default function DocsLayout({
   children,
 }: {
@@ -41,7 +46,10 @@ export default function DocsLayout({
             Docs
           </Link>
         </div>
-        <DocsNavClient topLevel={topLevel} groups={groups} />
+        <div className="flex items-center gap-2">
+          <DocsCta variant="mobile" />
+          <DocsNavClient topLevel={topLevel} groups={groups} />
+        </div>
       </div>
 
       {/* Desktop sidebar */}
@@ -67,10 +75,11 @@ export default function DocsLayout({
           <DocsSidebar topLevel={topLevel} groups={groups} />
         </nav>
 
-        <div className="border-t border-border px-3 py-3">
+        <div className="space-y-2 border-t border-border px-3 py-3">
+          <DocsCta variant="sidebar" />
           <Link
             href="/dashboard"
-            className="block rounded-lg px-3 py-1.5 text-sm text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
+            className="block rounded-lg px-3 py-1.5 text-center text-sm text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
           >
             Dashboard
           </Link>

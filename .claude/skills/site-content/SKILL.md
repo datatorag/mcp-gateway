@@ -78,13 +78,34 @@ re-sorted by `order` independently of the top-level list. URLs stay flat
 (`/docs/gmail`, not `/docs/google-workspace/gmail`) even though the sidebar nests —
 don't add a connector prefix to a doc's own slug/filename.
 
+Two docs-specific mechanisms added by SCRUM-24:
+
+- **Component embed via marker**: a doc's markdown can place `<!--setup-instructions-->`
+  on its own line; `docs/[slug]/page.tsx` splits `doc.html` on that comment (marked
+  passes HTML comments through) and renders the shared `SetupInstructions` client
+  component (`src/components/setup-instructions.tsx`) at that spot. That component is
+  the single source of truth for agent-hookup instructions — the dashboard's
+  `SetupWizard` renders it too (wizard adds the signed-in status poller on top). Its
+  `sourcePrefix` prop keeps analytics separable: `copy_mcp_config` fires with source
+  `wizard_${client}` (dashboard, historical values preserved) vs `docs_${client}`.
+- **Docs CTA**: `docs/cta.tsx` renders a sign-in/get-started CTA in the docs layout
+  (mobile header + desktop sidebar, every `/docs/*` page), firing `docs_cta_clicked`
+  (PostHog) with the page path. It links to `/auth/login`; the gtag signup conversion
+  needs no wiring here because the dashboard fires it on `?signup=1`. The layout
+  deliberately does NOT read the session (`cookies()` would force every docs page
+  dynamic) — the CTA always renders its signed-out state.
+
+Docs screenshots live in `apps/gateway/public/docs/` and must be personally-scrubbed
+before commit (public repo). Pending-capture spots use HTML-comment placeholders
+(`<!-- screenshot placeholder: name.png -->`) which render nothing.
+
 ## Page conventions
 
 - **`.prose` is hand-rolled**, defined in `apps/gateway/src/app/globals.css` (the
   "Prose — blog article styling" block) — it is NOT `@tailwindcss/typography`. Never add
   `prose-sm`, `prose-lg`, `max-w-none`, or any other Typography-plugin modifier class;
-  they do nothing here. Add new prose element styles (e.g. `img`, which has no rule
-  today) directly to this CSS block. Code-block colors (`#1C1917`/`#E7E5E4`) are
+  they do nothing here. Add new prose element styles directly to this CSS block
+  (`img` has one now: max-width 100%, rounded, bordered — added for docs screenshots). Code-block colors (`#1C1917`/`#E7E5E4`) are
   hardcoded hex, not CSS vars, duplicated in `tools/[slug]/page.tsx`'s manual `<pre>` —
   keep both in sync if you touch code-block styling.
 - **Date formatting — always parse with a `T00:00:00` suffix.** `new Date(rawDate)` on a

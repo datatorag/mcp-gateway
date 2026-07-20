@@ -8,6 +8,7 @@ export const EVENTS = {
   CONNECTOR_REMOVED: "connector_removed",
   COPY_MCP_CONFIG: "copy_mcp_config",
   DOCS_VIEWED: "docs_viewed",
+  DOCS_CTA_CLICKED: "docs_cta_clicked",
   OAUTH_REFRESH_SUCCEEDED: "oauth_refresh_succeeded",
   OAUTH_REFRESH_REPLAY: "oauth_refresh_replay",
   OAUTH_REFRESH_EXPIRED: "oauth_refresh_expired",
