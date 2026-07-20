@@ -85,7 +85,9 @@ type EngineDeps = {
 async function executeBatch(
   deps: EngineDeps,
   batch: ToolUse[],
-  decisions?: Record<string, Decision>
+  // Unvalidated wire input on the resume path (a plain object of id → decision);
+  // a write runs ONLY on a literal "approve", so any other/missing value denies.
+  decisions?: Record<string, unknown>
 ): Promise<{ results: unknown[]; aborted: boolean }> {
   const results: unknown[] = [];
   for (const tu of batch) {
@@ -201,7 +203,7 @@ export async function resumePlaygroundTurn(opts: {
   tools: EngineTool[];
   messages: unknown[]; // the paused conversation, incl. the assistant tool_use msg
   batch: ToolUse[];
-  decisions: Record<string, Decision>;
+  decisions: Record<string, unknown>;
   executeTool: (name: string, args: Record<string, unknown>) => Promise<{ text: string; isError: boolean }>;
   emit: (e: EngineEvent) => void;
   isWrite: (name: string) => boolean;

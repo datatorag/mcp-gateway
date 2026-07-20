@@ -45,14 +45,11 @@ interface AssistantTurn {
   /** The user message that produced this turn — sent back as `prompt` on
    * feedback submission. */
   prompt: string;
-  /** Writes the turn paused on, awaiting the user's approve/deny. Present
-   * only while `confirmState === "awaiting"`. */
+  /** Writes the turn paused on, awaiting the user's approve/deny. Set while
+   * the approve/deny card is showing; cleared once the user decides. */
   pending?: PendingWrite[];
   /** Resume token for the paused turn (server-held state). */
   resumeToken?: string;
-  /** "awaiting" → show the approve/deny card; "resolving" → decision sent,
-   * streaming the continuation. */
-  confirmState?: "awaiting" | "resolving";
 }
 
 type Turn = UserTurn | AssistantTurn;
@@ -171,7 +168,6 @@ export const Playground = forwardRef<PlaygroundHandle, PlaygroundProps>(
           ...t,
           pending: event.pending,
           resumeToken: event.resumeToken,
-          confirmState: "awaiting",
         }));
       } else if (event.type === "error") {
         updateLastAssistant((t) => ({
@@ -230,7 +226,7 @@ export const Playground = forwardRef<PlaygroundHandle, PlaygroundProps>(
         !hasConnectedAccount ||
         // A pending write-confirmation owns the last turn; block a new send so
         // the resume still streams into it (and the user resolves the gate).
-        turns.some((t) => t.role === "assistant" && t.confirmState === "awaiting")
+        turns.some((t) => t.role === "assistant" && t.pending)
       ) {
         return;
       }
@@ -334,12 +330,12 @@ export const Playground = forwardRef<PlaygroundHandle, PlaygroundProps>(
       abortRef.current = controller;
       setStreaming(true);
       streamingRef.current = true;
-      // Clear the card (buttons vanish) and drop the one-shot token before the
-      // continuation streams in.
+      // Clear the card (buttons vanish, gate lifts) and drop the one-shot
+      // token before the continuation streams in.
       setTurns((prev) =>
         prev.map((t, i) =>
           i === idx && t.role === "assistant"
-            ? { ...t, confirmState: "resolving", pending: undefined, resumeToken: undefined }
+            ? { ...t, pending: undefined, resumeToken: undefined }
             : t
         )
       );
@@ -426,7 +422,7 @@ export const Playground = forwardRef<PlaygroundHandle, PlaygroundProps>(
     // A pending write-confirmation owns the conversation until resolved — lock
     // the composer so the user acts on the card instead of starting a new turn.
     const awaitingConfirm = turns.some(
-      (t) => t.role === "assistant" && t.confirmState === "awaiting"
+      (t) => t.role === "assistant" && t.pending
     );
 
     return (
@@ -514,7 +510,7 @@ export const Playground = forwardRef<PlaygroundHandle, PlaygroundProps>(
                       </div>
                     )}
 
-                    {turn.confirmState === "awaiting" && turn.pending && (
+                    {turn.pending && (
                       <div className="rounded-2xl border border-amber-300 bg-amber-50 px-3 py-2.5 text-xs">
                         <p className="font-medium text-amber-900">
                           Approve this action before it runs?

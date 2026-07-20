@@ -8,7 +8,6 @@ import {
   resumePlaygroundTurn,
   type EngineEvent,
   type TurnResult,
-  type Decision,
 } from "@/gateway/playground/engine";
 import {
   listUserEngineTools,
@@ -26,11 +25,18 @@ import {
 
 type ChatMessage = { role: string; content: string };
 
-// A tool executor bound to one user, tracking each call.
-function makeExecuteTool(userId: string) {
-  return (name: string, args: Record<string, unknown>) => {
-    void trackPlaygroundToolCall(db, userId, name);
-    return executeUserTool(db, userId, name, args);
+// The engine deps shared by both entry points (fresh turn + resume), so the
+// write-gate wiring (`isWrite`) and tool execution can't drift between them.
+// tools/messages/emit/shouldStop differ per path and are supplied at the call.
+function engineBase(userId: string, llm: NonNullable<ReturnType<typeof getPlaygroundLlm>>) {
+  return {
+    llm,
+    model: getEnv().PLAYGROUND_MODEL,
+    executeTool: (name: string, args: Record<string, unknown>) => {
+      void trackPlaygroundToolCall(db, userId, name);
+      return executeUserTool(db, userId, name, args);
+    },
+    isWrite: isWriteTool,
   };
 }
 
@@ -105,13 +111,12 @@ function streamResponse(
   });
 }
 
-function normalizeDecisions(raw: unknown): Record<string, Decision> {
-  if (!raw || typeof raw !== "object") return {};
-  const out: Record<string, Decision> = {};
-  for (const [id, v] of Object.entries(raw as Record<string, unknown>)) {
-    out[id] = v === "approve" ? "approve" : "deny";
-  }
-  return out;
+// Coerce the client's decisions payload to a plain object. The per-value
+// meaning (approve vs deny) is enforced downstream by the engine's strict
+// `=== "approve"` check — safe-default deny — so this only guarantees the
+// engine receives an object (never undefined, which would skip the gate).
+function decisionMap(raw: unknown): Record<string, unknown> {
+  return raw && typeof raw === "object" ? (raw as Record<string, unknown>) : {};
 }
 
 // POST /api/playground/chat — capped, streaming (SSE) playground chat turn.
@@ -160,17 +165,13 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: message }, { status: 500 });
   }
 
-  const model = getEnv().PLAYGROUND_MODEL;
   return streamResponse(async ({ emit, clientGone, workStarted, shouldStop }) => {
     try {
       const result = await runPlaygroundTurn({
-        llm,
-        model,
+        ...engineBase(userId, llm),
         tools,
         messages: messages.map((m) => ({ role: m.role, content: m.content })),
-        executeTool: makeExecuteTool(userId),
         emit,
-        isWrite: isWriteTool,
         shouldStop,
       });
       handleTurnResult(userId, result, emit);
@@ -194,7 +195,7 @@ async function handleResume(
   resumeToken: string,
   rawDecisions: unknown
 ): Promise<Response> {
-  const decisions = normalizeDecisions(rawDecisions);
+  const decisions = decisionMap(rawDecisions);
   const pending = takePending(userId, resumeToken);
   if (!pending) {
     // Unknown/expired/foreign token — one-shot error stream (no claim to refund).
@@ -215,20 +216,16 @@ async function handleResume(
     writes.length
   );
 
-  const model = getEnv().PLAYGROUND_MODEL;
   return streamResponse(async ({ emit, shouldStop }) => {
     try {
       const tools = await listUserEngineTools(db, userId);
       const result = await resumePlaygroundTurn({
-        llm,
-        model,
+        ...engineBase(userId, llm),
         tools,
         messages: pending.messages,
         batch: pending.batch,
         decisions,
-        executeTool: makeExecuteTool(userId),
         emit,
-        isWrite: isWriteTool,
         shouldStop,
       });
       handleTurnResult(userId, result, emit);
