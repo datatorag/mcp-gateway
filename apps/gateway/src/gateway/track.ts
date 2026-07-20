@@ -156,6 +156,66 @@ export function trackLogin(userId: string, email: string): void {
   });
 }
 
+/**
+ * Playground chat analytics — separate from trackToolCall/usage_events
+ * (playground calls stay unmetered; see usage/classify.ts). Never throws:
+ * a PostHog capture failure must not break the streaming chat response.
+ */
+export async function trackPlaygroundMessage(
+  db: Database,
+  userId: string
+): Promise<void> {
+  try {
+    const c = getPosthog();
+    if (!c) return;
+    const identity = await resolveUserIdentity(db, userId);
+    c.capture({
+      distinctId: userId,
+      event: EVENTS.PLAYGROUND_MESSAGE_SENT,
+      properties: { ...identityProps(identity?.email ?? null) },
+    });
+  } catch (err) {
+    console.warn(`[track] playground_message_sent failed for user=${userId}`, err);
+  }
+}
+
+export async function trackPlaygroundToolCall(
+  db: Database,
+  userId: string,
+  tool: string
+): Promise<void> {
+  try {
+    const c = getPosthog();
+    if (!c) return;
+    const identity = await resolveUserIdentity(db, userId);
+    c.capture({
+      distinctId: userId,
+      event: EVENTS.PLAYGROUND_TOOL_CALL,
+      properties: { tool_name: tool, ...identityProps(identity?.email ?? null) },
+    });
+  } catch (err) {
+    console.warn(`[track] playground_tool_call failed for user=${userId}`, err);
+  }
+}
+
+export async function trackPlaygroundCapHit(
+  db: Database,
+  userId: string
+): Promise<void> {
+  try {
+    const c = getPosthog();
+    if (!c) return;
+    const identity = await resolveUserIdentity(db, userId);
+    c.capture({
+      distinctId: userId,
+      event: EVENTS.PLAYGROUND_CAP_HIT,
+      properties: { ...identityProps(identity?.email ?? null) },
+    });
+  } catch (err) {
+    console.warn(`[track] playground_cap_hit failed for user=${userId}`, err);
+  }
+}
+
 export async function trackOAuthCompleted(
   db: Database,
   userId: string,
