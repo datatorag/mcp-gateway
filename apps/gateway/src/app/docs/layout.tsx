@@ -52,8 +52,10 @@ export default function DocsLayout({
         </div>
       </div>
 
-      {/* Desktop sidebar */}
-      <aside className="hidden w-60 shrink-0 flex-col border-r border-border md:flex">
+      {/* Desktop sidebar — pinned to the viewport, not the content: sticky +
+          h-screen means the page content scrolls independently while the nav
+          scrolls internally and the CTA stays at the visible bottom. */}
+      <aside className="hidden w-60 shrink-0 flex-col border-r border-border md:sticky md:top-0 md:flex md:h-screen">
         <div className="flex h-16 items-center gap-3 border-b border-border px-5">
           <Link href="/" aria-label="DataToRAG home">
             <Image
