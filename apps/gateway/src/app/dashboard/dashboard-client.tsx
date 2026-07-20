@@ -1,12 +1,13 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import Link from "next/link";
 import posthog from "posthog-js";
 import { EVENTS } from "@/lib/analytics";
 import { reportSignupConversion } from "@/components/google-ads";
 import { SERVICES } from "./connections/services";
 import { SetupWizard } from "./setup-wizard";
+import { Playground, type PlaygroundHandle } from "./playground";
 import { useCopyToClipboard } from "@/lib/use-copy-to-clipboard";
 import type { ConnectedAccount, LegacyConnection } from "./connections/types";
 
@@ -27,6 +28,13 @@ export function DashboardClient() {
   const [loading, setLoading] = useState(true);
   const [disconnecting, setDisconnecting] = useState<string | null>(null);
   const { copied, copy } = useCopyToClipboard<number>();
+  const playgroundRef = useRef<PlaygroundHandle>(null);
+  const hasConnectedAccount = accounts.length > 0 || legacyConnections.length > 0;
+
+  function runPrompt(prompt: string, i: number) {
+    playgroundRef.current?.runPrompt(prompt);
+    posthog.capture(EVENTS.PLAYGROUND_PROMPT_RUN, { prompt, index: i });
+  }
 
   const fetchConnections = useCallback(async () => {
     const res = await fetch("/api/connections");
@@ -267,26 +275,42 @@ export function DashboardClient() {
         )}
       </div>
 
-      {/* Agent setup wizard + live connection status */}
-      <SetupWizard />
-
       {/* What can I do? */}
       <div className="mt-10">
         <h2 className="font-display text-base font-bold text-foreground">
           What can I do?
         </h2>
         <p className="mt-0.5 text-xs text-muted-foreground">
-          Try these with your AI assistant. Click to copy.
+          Run one below in the playground, or copy it into your own AI client.
         </p>
         <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
           {EXAMPLE_PROMPTS.map((prompt, i) => (
-            <button
+            <div
               key={i}
-              onClick={() => copy(prompt, i)}
-              className="group relative rounded-lg border border-border px-3 py-2.5 text-left text-xs leading-relaxed text-foreground transition-colors hover:border-primary/30 hover:bg-secondary/50"
+              className="group flex items-start gap-2 rounded-lg border border-border px-3 py-2.5 text-left transition-colors hover:border-primary/30 hover:bg-secondary/50"
             >
-              <span className="pr-5">{prompt}</span>
-              <span className="absolute right-2.5 top-2.5 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100">
+              <button
+                onClick={() => runPrompt(prompt, i)}
+                title="Run in playground"
+                className="flex flex-1 items-start gap-1.5 text-left text-xs leading-relaxed text-foreground"
+              >
+                <svg
+                  width="12"
+                  height="12"
+                  viewBox="0 0 16 16"
+                  fill="currentColor"
+                  className="mt-0.5 shrink-0 text-primary"
+                >
+                  <path d="M4 3l9 5-9 5V3z" />
+                </svg>
+                {prompt}
+              </button>
+              <button
+                onClick={() => copy(prompt, i)}
+                aria-label="Copy prompt"
+                title="Copy"
+                className="shrink-0 rounded-md p-1 text-muted-foreground opacity-0 transition-opacity hover:bg-secondary hover:text-foreground group-hover:opacity-100"
+              >
                 {copied === i ? (
                   <svg
                     width="14"
@@ -316,12 +340,23 @@ export function DashboardClient() {
                     <path d="M3 11V3.5A.5.5 0 013.5 3H11" />
                   </svg>
                 )}
-              </span>
-            </button>
+              </button>
+            </div>
           ))}
         </div>
       </div>
 
+      {/* Live playground chat */}
+      <Playground
+        ref={playgroundRef}
+        prompts={EXAMPLE_PROMPTS}
+        hasConnectedAccount={hasConnectedAccount}
+      />
+
+      {/* Agent setup wizard + live connection status */}
+      <div id="setup-wizard">
+        <SetupWizard />
+      </div>
     </div>
   );
 }

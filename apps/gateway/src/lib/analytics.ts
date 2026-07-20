@@ -16,6 +16,7 @@ export const EVENTS = {
   PLAYGROUND_TOOL_CALL: "playground_tool_call",
   PLAYGROUND_CAP_HIT: "playground_cap_hit",
   PLAYGROUND_FEEDBACK: "playground_feedback",
+  PLAYGROUND_PROMPT_RUN: "playground_prompt_run",
   WIZARD_CLIENT_SELECTED: "wizard_client_selected",
   WIZARD_STEP_COMPLETED: "wizard_step_completed",
 } as const;
