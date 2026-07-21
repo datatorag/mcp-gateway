@@ -46,7 +46,7 @@ export default async function HomePage() {
       <main className="flex-1 overflow-x-hidden">
         {/* Hero */}
         <ShaderBackground>
-          <div className="relative mx-auto flex min-h-[calc(100vh-4rem)] max-w-6xl flex-col items-center justify-center gap-12 px-6 pb-20 pt-24 lg:flex-row lg:gap-16 lg:pt-32">
+          <div className="relative mx-auto flex max-w-6xl flex-col items-center justify-center gap-12 px-6 pb-16 pt-24 lg:flex-row lg:gap-16 lg:pt-32">
             {/* Copy */}
             <div className="flex-1 text-center lg:text-left">
               <div className="animate-fade-in-up inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/10 px-4 py-1.5 backdrop-blur-sm">
