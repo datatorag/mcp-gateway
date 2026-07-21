@@ -10,35 +10,23 @@ import Link from "next/link";
 
 export const dynamic = "force-dynamic";
 
-async function getServers() {
-  const servers = await db
-    .select({
-      slug: mcpServers.slug,
-      name: mcpServers.name,
-      description: mcpServers.description,
-      toolCount: sql<number>`count(${tools.id})::int`,
-    })
-    .from(mcpServers)
-    .leftJoin(tools, eq(tools.mcpServerId, mcpServers.id))
-    .where(eq(mcpServers.status, "active"))
-    .groupBy(mcpServers.id)
-    .orderBy(
-      sql`CASE WHEN ${mcpServers.slug} = 'gws-mcp' THEN 0 ELSE 1 END`,
-      mcpServers.name
-    );
-
-  return servers;
+async function getToolCount(): Promise<number> {
+  const [row] = await db
+    .select({ count: sql<number>`count(${tools.id})::int` })
+    .from(tools)
+    .innerJoin(mcpServers, eq(tools.mcpServerId, mcpServers.id))
+    .where(eq(mcpServers.status, "active"));
+  return row?.count ?? 0;
 }
 
 export default async function HomePage() {
-  const [servers, userId] = await Promise.all([
-    getServers(),
+  const [totalTools, userId] = await Promise.all([
+    getToolCount(),
     getSessionUserId(),
   ]);
   const signedIn = userId !== null;
   const playgroundHref = signedIn ? "/dashboard" : "/auth/login";
   const playgroundCta = signedIn ? "Open your dashboard" : "Sign in to try it";
-  const totalTools = servers.reduce((sum, s) => sum + s.toolCount, 0);
 
   return (
     <>

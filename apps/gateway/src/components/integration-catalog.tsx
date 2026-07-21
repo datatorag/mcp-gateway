@@ -1,99 +1,34 @@
 import Link from "next/link";
+import { getConnectorGroups } from "@/lib/docs";
 import {
   GOOGLE_SERVICE_LOGOS,
   ATLASSIAN_SERVICE_LOGOS,
 } from "@/components/server-logos";
 
-/** Every live integration, one card each, linking to its docs page.
- * Docs slugs are flat (/docs/gmail), matching content/docs filenames. */
-const INTEGRATIONS: {
-  name: string;
-  docsSlug: string;
-  connector: "Google Workspace" | "Atlassian";
-  description: string;
-}[] = [
-  {
-    name: "Gmail",
-    docsSlug: "gmail",
-    connector: "Google Workspace",
-    description:
-      "Search, read, draft, reply, and send email — full inbox triage from any MCP client.",
-  },
-  {
-    name: "Calendar",
-    docsSlug: "calendar",
-    connector: "Google Workspace",
-    description:
-      "List, create, and update events, and check free/busy across calendars.",
-  },
-  {
-    name: "Drive",
-    docsSlug: "drive",
-    connector: "Google Workspace",
-    description:
-      "Search and read files, create folders, and save email attachments to Drive.",
-  },
-  {
-    name: "Docs",
-    docsSlug: "docs",
-    connector: "Google Workspace",
-    description:
-      "Create, read, and edit documents, including structured batch updates.",
-  },
-  {
-    name: "Sheets",
-    docsSlug: "sheets",
-    connector: "Google Workspace",
-    description:
-      "Read, append, and update spreadsheet data for analysis and reporting.",
-  },
-  {
-    name: "Slides",
-    docsSlug: "slides",
-    connector: "Google Workspace",
-    description: "Create decks and edit slides programmatically.",
-  },
-  {
-    name: "Contacts",
-    docsSlug: "contacts",
-    connector: "Google Workspace",
-    description:
-      "Search, create, and manage contacts, including directory search.",
-  },
-  {
-    name: "Tasks",
-    docsSlug: "tasks",
-    connector: "Google Workspace",
-    description: "Create, complete, and organize tasks across task lists.",
-  },
-  {
-    name: "Jira",
-    docsSlug: "jira",
-    connector: "Atlassian",
-    description:
-      "Search, create, comment on, and transition issues in your projects.",
-  },
-  {
-    name: "Confluence",
-    docsSlug: "confluence",
-    connector: "Atlassian",
-    description:
-      "Search, read, create, and edit pages and comments across spaces.",
-  },
-];
-
+/** Home-page catalog: one card per integration, sourced from the docs
+ * frontmatter (title/description/connector) so the cards can't drift
+ * from the docs pages they link to. Logos are keyed by doc title. */
 const LOGOS: Record<string, React.ReactNode> = {
   ...GOOGLE_SERVICE_LOGOS,
   ...ATLASSIAN_SERVICE_LOGOS,
 };
 
 export function IntegrationCatalog() {
+  const integrations = getConnectorGroups().flatMap((group) =>
+    group.pages.map((page) => ({
+      slug: page.slug,
+      name: page.title,
+      connector: group.connector.title,
+      description: page.description,
+    }))
+  );
+
   return (
     <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-      {INTEGRATIONS.map((integration, i) => (
+      {integrations.map((integration, i) => (
         <Link
-          key={integration.name}
-          href={`/docs/${integration.docsSlug}`}
+          key={integration.slug}
+          href={`/docs/${integration.slug}`}
           className="animate-fade-in-up group rounded-xl border border-border bg-background p-5 transition-colors hover:border-primary/40"
           style={{ animationDelay: `${0.05 + i * 0.03}s` }}
         >
