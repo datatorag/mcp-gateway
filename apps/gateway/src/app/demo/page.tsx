@@ -46,8 +46,8 @@ export default async function DemoPage({
               Let's Connect!
             </h1>
             <p className="mt-5 text-base leading-relaxed text-muted-foreground">
-              DataToRAG offers a secure and seamless unified AI Platform to transfrom your business.
-              Integrate Claude direclty with your Google Workspace or
+              DataToRAG offers a secure and seamless unified AI Platform to transform your business.
+              Integrate Claude directly with your Google Workspace or
               discover how our hosted LLMs can reduce your token costs without compromising quality.
               Tell us
               what you&apos;re trying to achieve and we&apos;ll show you the
