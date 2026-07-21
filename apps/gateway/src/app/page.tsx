@@ -4,7 +4,6 @@ import { mcpServers, tools } from "@datatorag-mcp/db";
 import { Navbar } from "@/components/navbar";
 import { ShaderBackground } from "@/components/shader-background";
 import { IntegrationCatalog } from "@/components/integration-catalog";
-import { GOOGLE_SERVICE_LOGOS } from "@/components/server-logos";
 import { getSessionUserId } from "@/lib/session";
 import Link from "next/link";
 
@@ -269,133 +268,55 @@ export default async function HomePage() {
           </div>
         </section>
 
-        {/* Google Workspace flagship */}
-        <section id="workspace" className="mx-auto max-w-6xl px-6 py-20">
+        {/* Available integrations */}
+        <section
+          id="integrations"
+          className="mx-auto max-w-6xl scroll-mt-28 px-6 py-20"
+        >
           <div className="animate-fade-in-up">
             <p className="text-sm font-semibold uppercase tracking-widest text-primary">
-              Flagship integration
+              Integrations
             </p>
             <h2 className="mt-3 font-display text-2xl font-bold text-foreground sm:text-3xl">
-              Google Workspace,
-              <br />
-              native in Claude.
+              Pre-built MCP connectors
             </h2>
-            <p className="mt-4 max-w-xl text-sm leading-relaxed text-muted-foreground">
-              50 tools across 8 Google services. Connect once, use everywhere —
-              inbox triage, calendar coordination, doc drafting, sheet analysis —
-              from any MCP-compatible client.
+            <p className="mt-3 max-w-lg text-sm text-muted-foreground">
+              {totalTools > 0
+                ? `${totalTools} tools, ready to use through the Model Context Protocol. `
+                : "Ready-to-use integrations through the Model Context Protocol. "}
+              Every integration works from one endpoint — connect once, use
+              them all. More added every week.
             </p>
           </div>
 
-          {/* 8 services grid */}
-          <div
-            className="animate-fade-in-up mt-10 grid grid-cols-2 gap-3 sm:grid-cols-4"
-            style={{ animationDelay: "0.1s" }}
-          >
-            {[
-              "Gmail",
-              "Calendar",
-              "Drive",
-              "Docs",
-              "Sheets",
-              "Slides",
-              "Contacts",
-              "Tasks",
-            ].map((name) => (
-              <Link
-                key={name}
-                href={`/docs/${name.toLowerCase()}`}
-                className="flex items-center gap-3 rounded-xl border border-border bg-background px-4 py-3 text-sm font-medium text-foreground transition-colors hover:border-primary/30 hover:bg-secondary/50"
-              >
-                <span className="h-5 w-5 shrink-0" aria-hidden>
-                  {GOOGLE_SERVICE_LOGOS[name]}
+          <div className="mt-10">
+            <IntegrationCatalog />
+          </div>
+
+          {/* Coming soon connectors */}
+          <div className="animate-fade-in-up mt-10" style={{ animationDelay: "0.2s" }}>
+            <p className="text-sm font-medium text-muted-foreground">
+              Coming soon
+            </p>
+            <div className="mt-3 flex flex-wrap gap-2">
+              {[
+                "Salesforce",
+                "Databricks",
+                "Slack",
+                "HubSpot",
+                "PostgreSQL",
+                "Snowflake",
+                "Notion",
+                "GitHub",
+              ].map((name) => (
+                <span
+                  key={name}
+                  className="rounded-full border border-border bg-background px-3 py-1.5 text-xs font-medium text-muted-foreground"
+                >
+                  {name}
                 </span>
-                <span className="flex-1">{name}</span>
-                <svg
-                  width="14"
-                  height="14"
-                  viewBox="0 0 16 16"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="1.5"
-                  strokeLinecap="round"
-                  className="text-muted-foreground/50"
-                >
-                  <path d="M6 4l4 4-4 4" />
-                </svg>
-              </Link>
-            ))}
-          </div>
-
-          {/* Differentiators */}
-          <div
-            className="animate-fade-in-up mt-10 grid gap-5 sm:grid-cols-2"
-            style={{ animationDelay: "0.2s" }}
-          >
-            <div className="rounded-2xl border border-border bg-background p-6">
-              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-accent text-accent-foreground">
-                <svg
-                  width="22"
-                  height="22"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="1.5"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                >
-                  <circle cx="9" cy="8" r="3" />
-                  <circle cx="17" cy="10" r="2.5" />
-                  <path d="M3 20c0-3.3 2.7-6 6-6s6 2.7 6 6" />
-                  <path d="M14.5 20c0-2.5 1.8-4.5 4-4.5s4 2 4 4.5" />
-                </svg>
-              </div>
-              <h3 className="mt-4 font-display text-base font-semibold text-foreground">
-                Multi-account support
-              </h3>
-              <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
-                Connect personal, shared, and team Google accounts under one MCP
-                endpoint. Claude can search across all of them in a single
-                prompt — or target a specific account when you need to.
-              </p>
+              ))}
             </div>
-            <div className="rounded-2xl border border-border bg-background p-6">
-              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-accent text-accent-foreground">
-                <svg
-                  width="22"
-                  height="22"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="1.5"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                >
-                  <path d="M13 2L4 14h7l-1 8 9-12h-7l1-8z" />
-                </svg>
-              </div>
-              <h3 className="mt-4 font-display text-base font-semibold text-foreground">
-                Optimized tools
-              </h3>
-              <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
-                Naive API wrappers dump everything into your context. DataToRAG
-                tools are tuned for token efficiency — the same Gmail thread
-                read costs a fraction of the tokens, which means longer
-                conversations and smarter agents.
-              </p>
-            </div>
-          </div>
-
-          <div
-            className="animate-fade-in-up mt-10"
-            style={{ animationDelay: "0.3s" }}
-          >
-            <Link
-              href="/docs/getting-started"
-              className="inline-block rounded-[var(--radius)] bg-primary px-6 py-3 text-sm font-medium text-primary-foreground transition-all hover:bg-primary/90"
-            >
-              Browse the docs
-            </Link>
           </div>
         </section>
 
@@ -514,60 +435,6 @@ export default async function HomePage() {
                   </div>
                 </div>
               ))}
-            </div>
-          </div>
-        </section>
-
-        {/* Available integrations */}
-        <section
-          id="integrations"
-          className="scroll-mt-28 border-y border-border bg-secondary/50"
-        >
-          <div className="mx-auto max-w-6xl px-6 py-20">
-            <div className="animate-fade-in-up">
-              <p className="text-sm font-semibold uppercase tracking-widest text-primary">
-                Integrations
-              </p>
-              <h2 className="mt-3 font-display text-2xl font-bold text-foreground sm:text-3xl">
-                Pre-built MCP connectors
-              </h2>
-              <p className="mt-3 max-w-lg text-sm text-muted-foreground">
-                {totalTools > 0
-                  ? `${totalTools} tools, ready to use through the Model Context Protocol. `
-                  : "Ready-to-use integrations through the Model Context Protocol. "}
-                Every integration works from one endpoint — connect once, use
-                them all. More added every week.
-              </p>
-            </div>
-
-            <div className="mt-10">
-              <IntegrationCatalog />
-            </div>
-
-            {/* Coming soon connectors */}
-            <div className="animate-fade-in-up mt-10" style={{ animationDelay: "0.2s" }}>
-              <p className="text-sm font-medium text-muted-foreground">
-                Coming soon
-              </p>
-              <div className="mt-3 flex flex-wrap gap-2">
-                {[
-                  "Salesforce",
-                  "Databricks",
-                  "Slack",
-                  "HubSpot",
-                  "PostgreSQL",
-                  "Snowflake",
-                  "Notion",
-                  "GitHub",
-                ].map((name) => (
-                  <span
-                    key={name}
-                    className="rounded-full border border-border bg-background px-3 py-1.5 text-xs font-medium text-muted-foreground"
-                  >
-                    {name}
-                  </span>
-                ))}
-              </div>
             </div>
           </div>
         </section>
