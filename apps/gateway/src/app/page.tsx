@@ -43,24 +43,24 @@ export default async function HomePage() {
             <div className="flex-1 text-center lg:text-left">
               <div className="animate-fade-in-up inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/10 px-4 py-1.5 backdrop-blur-sm">
                 <span className="text-xs font-medium text-white/90">
-                  Google Workspace for Claude · Read and Write
+                  DataToRAG · Unified AI Platform
                 </span>
               </div>
               <h1
                 className="animate-fade-in-up mt-6 font-display text-4xl font-extrabold leading-[1.1] tracking-tight text-white sm:text-5xl lg:text-6xl"
                 style={{ animationDelay: "0.06s" }}
               >
-                Stop pasting Claude&apos;s drafts into your{" "}
-                <span className="text-blue-200">Google Docs.</span>
+                Connect Claude with{" "}
+                <span className="text-blue-200">Google Workspace</span>
               </h1>
               <p
                 className="animate-fade-in-up mx-auto mt-6 max-w-2xl text-base leading-relaxed text-white/60 sm:text-lg lg:mx-0"
                 style={{ animationDelay: "0.12s" }}
               >
-                DataToRAG gives Claude write access to your Docs, Sheets, and
-                Slides. Plus Gmail, Calendar, Drive, Contacts, and Tasks. The
-                draft it just generated actually lands in the doc. No more
-                copy, switch tab, paste, format.
+                DataToRAG provides a unified platform for Claude, ChatGPT, etc to securely access your Google Workspace: Docs, Sheets,
+                Slides, Calendar, Drive, Contacts, and Tasks. Everything happens natively and integrates seamlessly. 
+                <br />
+                No more copy, paste, format. Improve your workflow and productivity today!
               </p>
               <div
                 className="animate-fade-in-up mt-8 flex flex-wrap items-center justify-center gap-3 lg:justify-start"
@@ -83,7 +83,7 @@ export default async function HomePage() {
                 className="animate-fade-in-up mx-auto mt-6 max-w-xl text-xs text-white/50 lg:mx-0"
                 style={{ animationDelay: "0.22s" }}
               >
-                Google-verified app. Passed the CASA Tier 2 security assessment (June 2026).{" "}
+                Google-verified app. CASA Tier 2 security approved (June 2026).{" "}
                 <Link
                   href="/blog/casa-tier-2-verified"
                   className="underline transition-colors hover:text-white/80"
@@ -207,16 +207,17 @@ export default async function HomePage() {
                 The platform
               </p>
               <h2 className="mt-3 font-display text-2xl font-bold text-foreground sm:text-3xl">
-                Three ways to connect your data
+                Four ways to connect your data
               </h2>
               <p className="mx-auto mt-3 max-w-lg text-sm text-muted-foreground">
                 Whether you want to plug in yourself, use a pre-built connector,
-                or need a custom integration, DataToRAG has you covered.
+                need a custom integration, or run your own models, DataToRAG has
+                you covered.
               </p>
             </div>
 
             <div
-              className="animate-fade-in-up mt-12 grid gap-6 sm:grid-cols-3"
+              className="animate-fade-in-up mt-12 grid gap-6 sm:grid-cols-2 lg:grid-cols-4"
               style={{ animationDelay: "0.1s" }}
             >
               {[
@@ -245,6 +246,16 @@ export default async function HomePage() {
                   icon: (
                     <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
                       <path d="M16 18l6-6-6-6M8 6l-6 6 6 6" />
+                    </svg>
+                  ),
+                },
+                {
+                  title: "Custom Hosted LLMs",
+                  desc: "We deploy and host cost-saving custom models on our secure infrastructure without sacrificing quality. Wire directly into the gateway — your data and inference never go to Claude or OpenAI.",
+                  icon: (
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                      <rect x="3" y="4" width="18" height="12" rx="2" />
+                      <path d="M7 20h10M9 16v4M15 16v4M7 8h.01M11 8h.01" />
                     </svg>
                   ),
                 },
@@ -375,6 +386,91 @@ export default async function HomePage() {
                   {name}
                 </span>
               ))}
+            </div>
+          </div>
+        </section>
+
+        {/* Custom Hosted LLMs */}
+        <section
+          id="custom-hosted-llms"
+          className="scroll-mt-28 border-y border-border bg-secondary/50"
+        >
+          <div className="mx-auto max-w-6xl px-6 py-20">
+            <div className="animate-fade-in-up">
+              <p className="text-sm font-semibold uppercase tracking-widest text-primary">
+                Custom deployment
+              </p>
+              <h2 className="mt-3 font-display text-2xl font-bold text-foreground sm:text-3xl">
+                Custom Hosted LLMs
+              </h2>
+              <p className="mt-4 max-w-xl text-sm leading-relaxed text-muted-foreground">
+                Cut token usage costs while keeping the same efficiency? Try our custom
+                hosted LLMs. We can assist in finding the right cost effective model for your workload.
+              </p>
+            </div>
+
+            <div
+              className="animate-fade-in-up mt-10 grid gap-5 sm:grid-cols-3"
+              style={{ animationDelay: "0.1s" }}
+            >
+              <div className="rounded-2xl border border-border bg-background p-6">
+                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-accent text-accent-foreground">
+                  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M12 2L3 7v6c0 5 4 8 9 9 5-1 9-4 9-9V7l-9-5z" />
+                  </svg>
+                </div>
+                <h3 className="mt-4 font-display text-base font-semibold text-foreground">
+                  Secure LLMs For Your Most Sensitive Data
+                </h3>
+                <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
+                  Inference runs on our secure infrastructure — nothing is
+                  sent to a third-party model API. A perfect fit for regulated
+                  industries and sensitive internal data.
+                </p>
+              </div>
+              <div className="rounded-2xl border border-border bg-background p-6">
+                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-accent text-accent-foreground">
+                  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                    <rect x="3" y="4" width="18" height="12" rx="2" />
+                    <path d="M7 20h10M9 16v4M15 16v4M7 8h.01M11 8h.01" />
+                  </svg>
+                </div>
+                <h3 className="mt-4 font-display text-base font-semibold text-foreground">
+                  Managed Infrastructure
+                </h3>
+                <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
+                  We handle deployment and ops for the model of your choice —
+                  GLM, Gemma, DeepSeek, Qwen, and other families. Connect it to
+                  your MCP gateway or access it with API Keys.
+                </p>
+              </div>
+              <div className="rounded-2xl border border-border bg-background p-6">
+                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-accent text-accent-foreground">
+                  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M12 1v22M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6" />
+                  </svg>
+                </div>
+                <h3 className="mt-4 font-display text-base font-semibold text-foreground">
+                  Cost Savings
+                </h3>
+                <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
+                  Custom hosted models cut per-token costs versus commercial
+                  APIs. Scale usage and experience real cost
+                  savings without compromising on quality.
+                </p>
+              </div>
+            </div>
+
+            <div
+              className="animate-fade-in-up mt-10"
+              style={{ animationDelay: "0.2s" }}
+            >
+              <Link
+                href="/demo"
+                className="inline-block rounded-[var(--radius)] bg-primary px-6 py-3 text-sm font-medium text-primary-foreground transition-all hover:bg-primary/90"
+              >
+                Talk to Us
+              </Link>
             </div>
           </div>
         </section>

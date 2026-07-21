@@ -172,7 +172,7 @@ export function ContactForm({ utm }: Props) {
 
       <div>
         <label htmlFor="useCase" className="text-sm font-medium text-foreground">
-          What are you trying to do? <span className="text-muted-foreground">(optional)</span>
+          What are you trying to achieve? <span className="text-muted-foreground">(optional)</span>
         </label>
         <textarea
           id="useCase"
