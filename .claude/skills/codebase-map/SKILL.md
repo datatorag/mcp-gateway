@@ -70,6 +70,10 @@ Three distinct flows — don't conflate them:
 
 ## Key decisions
 
+Big architectural decisions get an ADR page in `docs/architecture/decisions/`
+(template there; company decision log lives in the private hq repo). This table is
+the quick reference; the ADRs carry context + alternatives-considered.
+
 | Decision | Why | Evidence |
 |---|---|---|
 | File-based markdown content (blog/changelog/docs) vs DB; `/tools` pages DB-driven | Content is static at deploy time — parse once, cache in-process; tool pages must reflect live plugin registry | `apps/gateway/src/lib/blog.ts` cache comments; commits `5c7f04f`, `f67a24d` |
@@ -157,6 +161,7 @@ Three distinct flows — don't conflate them:
 | SSM → `.env` render script | `scripts/render-env.sh` |
 | Env var names + SSM flow docs | `.env.example` |
 | Meta-tool migration decision doc | `docs/architecture/2026-04-22-meta-tool-migration.md` |
+| Architecture decision records (ADRs) | `docs/architecture/decisions/` (TEMPLATE.md there) |
 
 ## Commands
 
