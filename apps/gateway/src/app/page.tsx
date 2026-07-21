@@ -4,6 +4,8 @@ import { mcpServers, tools } from "@datatorag-mcp/db";
 import { Navbar } from "@/components/navbar";
 import { ShaderBackground } from "@/components/shader-background";
 import { ToolCard } from "@/components/tool-card";
+import { GOOGLE_SERVICE_LOGOS } from "@/components/server-logos";
+import { getSessionUserId } from "@/lib/session";
 import Link from "next/link";
 
 export const dynamic = "force-dynamic";
@@ -29,7 +31,13 @@ async function getServers() {
 }
 
 export default async function HomePage() {
-  const servers = await getServers();
+  const [servers, userId] = await Promise.all([
+    getServers(),
+    getSessionUserId(),
+  ]);
+  const signedIn = userId !== null;
+  const playgroundHref = signedIn ? "/dashboard" : "/auth/login";
+  const playgroundCta = signedIn ? "Open your dashboard" : "Sign in to try it";
 
   return (
     <>
@@ -116,6 +124,101 @@ export default async function HomePage() {
             </div>
           </div>
         </ShaderBackground>
+
+        {/* Playground teaser — the "try it now" path straight from the hero */}
+        <section
+          id="playground"
+          className="scroll-mt-28 border-b border-border bg-background"
+        >
+          <div className="mx-auto grid max-w-6xl gap-12 px-6 py-20 sm:grid-cols-2 sm:items-center">
+            <div className="animate-fade-in-up">
+              <p className="text-sm font-semibold uppercase tracking-widest text-primary">
+                Playground
+              </p>
+              <h2 className="mt-3 font-display text-2xl font-bold text-foreground sm:text-3xl">
+                Try it before you
+                <br />
+                wire up a client.
+              </h2>
+              <p className="mt-4 max-w-md text-sm leading-relaxed text-muted-foreground">
+                Every account comes with a built-in playground. Sign in,
+                connect your Google account, and watch Claude search your
+                Drive, read the doc, and make the edit — no MCP client setup
+                required.
+              </p>
+              <Link
+                href={playgroundHref}
+                className="mt-6 inline-block rounded-[var(--radius)] bg-primary px-6 py-3 text-sm font-medium text-primary-foreground transition-all hover:bg-primary/90"
+              >
+                {playgroundCta}
+              </Link>
+              <p className="mt-3 text-xs text-muted-foreground">
+                {signedIn
+                  ? "You're signed in — connect an account and run your first prompt."
+                  : "Free to sign up. Google sign-in, nothing to install."}
+              </p>
+            </div>
+
+            <Link
+              href={playgroundHref}
+              aria-label={playgroundCta}
+              className="animate-fade-in-up block"
+              style={{ animationDelay: "0.1s" }}
+            >
+              <div className="rounded-xl border border-border bg-background shadow-sm transition-colors hover:border-primary/30">
+                <div className="space-y-3 p-4">
+                  <div className="flex justify-end">
+                    <div className="max-w-[85%] rounded-2xl bg-primary px-3 py-2 text-xs text-primary-foreground">
+                      Find the Q3 planning doc and add a summary of
+                      yesterday&apos;s kickoff notes.
+                    </div>
+                  </div>
+                  <div className="flex justify-start">
+                    <div className="max-w-[85%] space-y-2">
+                      <div className="flex flex-wrap gap-1.5">
+                        {["drive_search", "docs_get", "docs_write"].map(
+                          (tool) => (
+                            <span
+                              key={tool}
+                              className="inline-flex items-center gap-1 rounded-full border border-border bg-secondary/60 px-2 py-0.5 font-mono text-[11px] text-muted-foreground"
+                            >
+                              {tool}
+                              <svg
+                                width="10"
+                                height="10"
+                                viewBox="0 0 16 16"
+                                fill="none"
+                                stroke="#16a34a"
+                                strokeWidth="2.5"
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                              >
+                                <path d="M3 8.5l3.5 3.5L13 5" />
+                              </svg>
+                            </span>
+                          )
+                        )}
+                      </div>
+                      <div className="rounded-2xl border border-border bg-secondary/40 px-3 py-2 text-xs text-foreground">
+                        Done — I found &ldquo;Q3 Planning&rdquo; in your Drive
+                        and added a five-bullet summary of the kickoff under
+                        Notes. Want me to email the team a link?
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2 border-t border-border p-3">
+                  <span className="flex-1 rounded-[var(--radius)] border border-border px-3 py-2 text-xs text-muted-foreground">
+                    Ask about your inbox, calendar, or docs&hellip;
+                  </span>
+                  <span className="shrink-0 rounded-[var(--radius)] bg-primary px-3 py-2 text-xs font-medium text-primary-foreground">
+                    {signedIn ? "Open dashboard" : "Sign in to try"}
+                  </span>
+                </div>
+              </div>
+            </Link>
+          </div>
+        </section>
 
         {/* Setup walkthrough — YouTube tutorial */}
         <section id="walkthrough" className="border-b border-border bg-background">
@@ -251,9 +354,12 @@ export default async function HomePage() {
               <Link
                 key={name}
                 href={`/docs/${name.toLowerCase()}`}
-                className="flex items-center justify-between rounded-xl border border-border bg-background px-4 py-3 text-sm font-medium text-foreground transition-colors hover:border-primary/30 hover:bg-secondary/50"
+                className="flex items-center gap-3 rounded-xl border border-border bg-background px-4 py-3 text-sm font-medium text-foreground transition-colors hover:border-primary/30 hover:bg-secondary/50"
               >
-                {name}
+                <span className="h-5 w-5 shrink-0" aria-hidden>
+                  {GOOGLE_SERVICE_LOGOS[name]}
+                </span>
+                <span className="flex-1">{name}</span>
                 <svg
                   width="14"
                   height="14"
