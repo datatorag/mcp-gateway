@@ -11,6 +11,10 @@ DataToRAG gives your AI assistant access to Google Workspace (Gmail, Drive, Cale
 
 ## Quick setup
 
+Prefer video? This two-minute walkthrough covers the sign-in flow, account connection, and your first prompt against Workspace:
+
+<iframe src="https://www.youtube.com/embed/2UQvZJcuRy0" title="DataToRAG setup walkthrough" style="width:100%;aspect-ratio:16/9;border:0;border-radius:12px;" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
+
 Setup is two connections, and both are required before your assistant can do anything:
 
 1. **Connect your accounts.** Sign in at [datatorag.com/dashboard](https://datatorag.com/dashboard) and connect your Google account (and Atlassian, if you use Jira or Confluence).

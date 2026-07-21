@@ -150,7 +150,7 @@ export default async function HomePage() {
             <Link
               href={playgroundHref}
               aria-label={playgroundCta}
-              className="mx-auto mt-6 block max-w-2xl"
+              className="group mx-auto mt-6 block max-w-2xl"
             >
               <div className="rounded-2xl border border-white/15 bg-white/10 shadow-2xl backdrop-blur-sm transition-colors hover:border-white/35">
                 <div className="space-y-3 p-4">
@@ -198,8 +198,8 @@ export default async function HomePage() {
                   <span className="flex-1 rounded-full border border-white/20 px-3 py-2 text-xs text-white/50">
                     Ask about your inbox, calendar, or docs&hellip;
                   </span>
-                  <span className="shrink-0 rounded-full bg-white px-4 py-2 text-xs font-medium text-[#1a3a8f]">
-                    {signedIn ? "Open dashboard" : "Sign in to try"}
+                  <span className="shrink-0 rounded-[var(--radius)] bg-primary px-3 py-2 text-xs font-medium text-primary-foreground transition-colors group-hover:bg-primary/90">
+                    Send
                   </span>
                 </div>
               </div>
@@ -207,32 +207,6 @@ export default async function HomePage() {
           </div>
           </div>
         </ShaderBackground>
-
-        {/* Setup walkthrough — YouTube tutorial */}
-        <section id="walkthrough" className="border-b border-border bg-background">
-          <div className="mx-auto max-w-5xl px-6 py-20">
-            <div className="text-center">
-              <p className="text-sm font-semibold uppercase tracking-widest text-primary">
-                Setup walkthrough
-              </p>
-              <h2 className="mt-3 font-display text-2xl font-bold text-foreground sm:text-3xl">
-                Connect your accounts in two minutes
-              </h2>
-              <p className="mx-auto mt-3 max-w-lg text-sm text-muted-foreground">
-                A short tutorial that walks through the sign-in flow, account
-                connection, and your first prompt against Workspace.
-              </p>
-            </div>
-            <div className="mt-10 aspect-video w-full overflow-hidden rounded-2xl border border-border bg-secondary/30">
-              <iframe
-                src="https://www.youtube.com/embed/2UQvZJcuRy0"
-                className="h-full w-full"
-                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                allowFullScreen
-              />
-            </div>
-          </div>
-        </section>
 
         {/* Platform — three pillars */}
         <section

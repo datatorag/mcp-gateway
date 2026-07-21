@@ -93,7 +93,15 @@ export function DashboardClient() {
           Dashboard
         </h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          Connect your accounts and start using AI with your data.
+          Connect your accounts and start using AI with your data. New here?
+          Read the{" "}
+          <Link
+            href="/docs/getting-started"
+            className="font-medium text-primary hover:underline"
+          >
+            Getting Started guide
+          </Link>
+          .
         </p>
       </div>
 
