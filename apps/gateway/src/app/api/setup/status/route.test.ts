@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import type { NextRequest } from "next/server";
 
 const getSessionUserId = vi.fn();
 vi.mock("@/lib/session", () => ({
@@ -44,13 +45,13 @@ describe("GET /api/setup/status", () => {
 
   it("401s without a session", async () => {
     getSessionUserId.mockResolvedValue(null);
-    const res = await GET();
+    const res = await GET({} as NextRequest);
     expect(res.status).toBe(401);
   });
 
   it("reports a fresh user as fully disconnected", async () => {
     prime({});
-    const res = await GET();
+    const res = await GET({} as NextRequest);
     expect(await res.json()).toEqual({
       accountConnected: false,
       agentConnected: false,
@@ -62,7 +63,7 @@ describe("GET /api/setup/status", () => {
 
   it("counts legacy service connections as accountConnected", async () => {
     prime({ legacy: 1 });
-    const res = await GET();
+    const res = await GET({} as NextRequest);
     const body = await res.json();
     expect(body.accountConnected).toBe(true);
     expect(body.agentConnected).toBe(false);
@@ -76,7 +77,7 @@ describe("GET /api/setup/status", () => {
       agent: { clientName: "Claude", createdAt: connectedAt },
       firstToolCallAt: firstCall,
     });
-    const res = await GET();
+    const res = await GET({} as NextRequest);
     expect(await res.json()).toEqual({
       accountConnected: true,
       agentConnected: true,

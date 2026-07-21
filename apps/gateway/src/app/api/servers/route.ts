@@ -1,16 +1,11 @@
 import { NextResponse } from "next/server";
 import { eq, sql } from "drizzle-orm";
 import { db } from "@/lib/db";
-import { getSessionUserId } from "@/lib/session";
+import { withRoute } from "@/lib/with-route";
 import { mcpServers, tools } from "@datatorag-mcp/db";
 
 // GET /api/servers — list all servers with tool counts (authenticated)
-export async function GET() {
-  const userId = await getSessionUserId();
-  if (!userId) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-
+export const GET = withRoute(async () => {
   const servers = await db
     .select({
       slug: mcpServers.slug,
@@ -25,4 +20,4 @@ export async function GET() {
     .orderBy(mcpServers.createdAt);
 
   return NextResponse.json({ servers });
-}
+});

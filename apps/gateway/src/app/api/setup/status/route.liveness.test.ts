@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import type { NextRequest } from "next/server";
 import { describe, it, expect, vi, beforeAll, afterAll } from "vitest";
 import { oauthAccessTokens } from "@datatorag-mcp/db";
 import type { Database } from "@datatorag-mcp/db";
@@ -96,7 +97,7 @@ describe.skipIf(!dockerAvailable)(
         expiresAt: new Date(Date.now() + HOUR),
       });
 
-      const res = await GET();
+      const res = await GET({} as NextRequest);
       const body = await res.json();
       expect(body.agentConnected).toBe(false);
       expect(body.agentClientName).toBeNull();
@@ -113,7 +114,7 @@ describe.skipIf(!dockerAvailable)(
         expiresAt: new Date(Date.now() - HOUR),
       });
 
-      const res = await GET();
+      const res = await GET({} as NextRequest);
       const body = await res.json();
       expect(body.agentConnected).toBe(false);
       expect(body.agentClientName).toBeNull();
@@ -130,7 +131,7 @@ describe.skipIf(!dockerAvailable)(
         expiresAt: new Date(Date.now() + HOUR),
       });
 
-      const res = await GET();
+      const res = await GET({} as NextRequest);
       const body = await res.json();
       expect(body.agentConnected).toBe(true);
     });
@@ -155,7 +156,7 @@ describe.skipIf(!dockerAvailable)(
         createdAt: newer,
       });
 
-      const res = await GET();
+      const res = await GET({} as NextRequest);
       const body = await res.json();
       expect(body.agentConnected).toBe(true);
       expect(body.agentClientName).toBeNull(); // no matching oauth_clients row seeded

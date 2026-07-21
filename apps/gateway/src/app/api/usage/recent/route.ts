@@ -2,11 +2,11 @@ import { NextResponse } from "next/server";
 import { desc, eq } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { usageEvents } from "@datatorag-mcp/db";
-import { withRateLimit } from "@/lib/with-rate-limit";
+import { withRoute } from "@/lib/with-route";
 
 export const dynamic = "force-dynamic";
 
-export const GET = withRateLimit(async (userId) => {
+export const GET = withRoute(async (userId) => {
   const rows = await db
     .select({
       id: usageEvents.id,

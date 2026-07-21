@@ -29,6 +29,11 @@ const bodySchema = z.object({
 });
 
 function getClientIp(req: NextRequest): string {
+  // Prod sits behind Cloudflare (origin :80 is firewalled to CF ranges), so
+  // CF-Connecting-IP is the trustworthy client IP. The leftmost XFF entry is
+  // client-controlled and only a dev/local fallback — never prefer it.
+  const cf = req.headers.get("cf-connecting-ip");
+  if (cf) return cf.trim();
   const fwd = req.headers.get("x-forwarded-for");
   if (fwd) return fwd.split(",")[0].trim();
   return req.headers.get("x-real-ip") ?? "0.0.0.0";

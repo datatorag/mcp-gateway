@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { and, desc, eq, ne, sql } from "drizzle-orm";
 import { db } from "@/lib/db";
-import { getSessionUserId } from "@/lib/session";
+import { withRoute } from "@/lib/with-route";
 import { liveTokenConditions } from "@/lib/token-liveness";
 import {
   connectedAccounts,
@@ -19,12 +19,7 @@ export const dynamic = "force-dynamic";
 //   2. agentConnected    — an MCP client (not the web dashboard) has completed
 //                          the OAuth flow and holds an access token
 //   3. firstToolCallAt   — the agent has made a successful tool call
-export async function GET() {
-  const userId = await getSessionUserId();
-  if (!userId) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-
+export const GET = withRoute(async (userId) => {
   const [accounts, legacy, agentToken, [user]] = await Promise.all([
     db
       .select({ n: sql<number>`count(*)::int` })
@@ -72,4 +67,4 @@ export async function GET() {
     agentConnectedAt: agent?.createdAt ?? null,
     firstToolCallAt: user?.firstToolCallAt ?? null,
   });
-}
+});

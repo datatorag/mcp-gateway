@@ -1,16 +1,11 @@
 import { NextResponse } from "next/server";
 import { eq } from "drizzle-orm";
 import { db } from "@/lib/db";
-import { getSessionUserId } from "@/lib/session";
+import { withRoute } from "@/lib/with-route";
 import { users } from "@datatorag-mcp/db";
 
 // GET /api/me — return current user info
-export async function GET() {
-  const userId = await getSessionUserId();
-  if (!userId) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-
+export const GET = withRoute(async (userId) => {
   const [user] = await db
     .select({
       id: users.id,
@@ -27,4 +22,4 @@ export async function GET() {
   }
 
   return NextResponse.json({ user });
-}
+});

@@ -65,7 +65,7 @@ Three distinct flows — don't conflate them:
 - **Blog / changelog / docs are markdown-in-repo**, not a CMS: content in `apps/gateway/content/{blog,changelog,docs}/*.md`, parsed by three near-identical hand-rolled parsers `src/lib/{blog,changelog,docs}.ts` (gray-matter + `marked.parse`, no MDX). Each keeps a module-level cache populated once per process — content changes need a restart/redeploy to appear.
 - **Frontmatter contracts** — field-by-field tables with fallbacks live in the `site-content` skill. Headline facts only: blog `readTime` is computed from word count (not frontmatter); changelog `connector` is convention-only, unvalidated; docs `connector` (not `section`) drives sidebar grouping via `src/lib/docs-connectors.ts` `CONNECTORS` registry — URLs stay flat, e.g. `/docs/gmail`.
 - **`/tools/[slug]` is DB-driven**, not markdown: queries `mcpServers`/`tools` directly, 404s unless `status === "active"`, renders the plugin README from the local plugin dir first, then GitHub API fallback (1h revalidate). Home page integrations grid also queries the DB directly.
-- **App-router conventions**: no Navbar in root layout — every top-level page renders its own `<Navbar />`; `/docs` and `/dashboard` have their own nested layouts (no Navbar). `components/navbar.tsx` `flatItems` is the single source for desktop + mobile nav. Shipping a new top-level route = page + `flatItems` entry + footer link in `app/page.tsx` (no lint enforces this). Blog/docs use `generateStaticParams`; dashboard pages fetch client-side from rate-limited `/api/usage/*` routes (via `src/lib/with-rate-limit.ts`, which also does session auth).
+- **App-router conventions**: no Navbar in root layout — every top-level page renders its own `<Navbar />`; `/docs` and `/dashboard` have their own nested layouts (no Navbar). `components/navbar.tsx` `flatItems` is the single source for desktop + mobile nav. Shipping a new top-level route = page + `flatItems` entry + footer link in `app/page.tsx` (no lint enforces this). Blog/docs use `generateStaticParams`; dashboard pages fetch client-side from rate-limited `/api/usage/*` routes (via `src/lib/with-route.ts` — session auth + rate limit + generic-500 catch-all; every session-gated JSON route uses it).
 - **`.prose` typography is hand-rolled** in `src/app/globals.css` — not `@tailwindcss/typography`. No `img` rule; code-block colors are hardcoded hex (duplicated in `tools/[slug]/page.tsx`).
 
 ## Key decisions
@@ -147,7 +147,7 @@ Three distinct flows — don't conflate them:
 | Home page (DB-driven integrations grid, footer links) | `apps/gateway/src/app/page.tsx` |
 | Navbar (`flatItems` — desktop + mobile nav source of truth) | `apps/gateway/src/components/navbar.tsx` |
 | Hand-rolled `.prose` styles | `apps/gateway/src/app/globals.css` |
-| Session-auth + rate-limit API wrapper | `apps/gateway/src/lib/with-rate-limit.ts` |
+| Session-auth + rate-limit + error-envelope API wrapper | `apps/gateway/src/lib/with-route.ts` |
 | DB client factory + schema barrel | `packages/db/src/index.ts`, `packages/db/src/schema/index.ts` |
 | Migrations + journal | `packages/db/drizzle/` |
 | Env schema / `getEnv()` | `packages/config/src/index.ts` |

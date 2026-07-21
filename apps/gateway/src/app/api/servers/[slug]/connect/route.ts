@@ -17,7 +17,7 @@ export async function GET(_request: NextRequest, { params }: Props) {
 
   const userId = await getSessionUserId();
   if (!userId) {
-    return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
   const [server] = await db

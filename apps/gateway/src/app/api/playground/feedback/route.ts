@@ -1,6 +1,6 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { getSessionUserId } from "@/lib/session";
+import { withRoute } from "@/lib/with-route";
 import { trackPlaygroundFeedback } from "@/gateway/track";
 
 const MAX_COMMENT_LENGTH = 2000;
@@ -14,12 +14,7 @@ type FeedbackBody = {
 // POST /api/playground/feedback — thumbs up/down capture for a playground
 // turn. Never blocks on Slack/PostHog side effects taking too long; those
 // live inside trackPlaygroundFeedback.
-export async function POST(request: NextRequest) {
-  const userId = await getSessionUserId();
-  if (!userId) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-
+export const POST = withRoute(async (userId, request) => {
   const body = (await request.json().catch(() => null)) as FeedbackBody | null;
   const rating = body?.rating;
   if (rating !== "up" && rating !== "down") {
@@ -35,4 +30,4 @@ export async function POST(request: NextRequest) {
   await trackPlaygroundFeedback(db, userId, rating, comment, prompt);
 
   return NextResponse.json({ ok: true });
-}
+});

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { getSessionUserId } from "@/lib/session";
+import { withRoute } from "@/lib/with-route";
 import { getEnv } from "@datatorag-mcp/config";
 import { getPlaygroundLlm } from "@/lib/llm";
 import {
@@ -21,7 +21,7 @@ import {
   trackPlaygroundCapHit,
   trackPlaygroundConfirm,
 } from "@/gateway/track";
-import { logAndGenericError } from "../errors";
+import { logAndGenericError } from "@/lib/errors";
 
 type ChatMessage = { role: string; content: string };
 
@@ -121,11 +121,7 @@ function decisionMap(raw: unknown): Record<string, unknown> {
 // POST /api/playground/chat — capped, streaming (SSE) playground chat turn.
 // With { resumeToken, decisions } it instead resumes a turn paused at a write
 // (no new cap claim — same logical turn).
-export async function POST(request: NextRequest) {
-  const userId = await getSessionUserId();
-  if (!userId) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+export const POST = withRoute(async (userId, request) => {
   const llm = getPlaygroundLlm();
   if (!llm) {
     return NextResponse.json({ error: "playground_disabled" }, { status: 403 });
@@ -190,7 +186,7 @@ export async function POST(request: NextRequest) {
       });
     }
   }, request.signal);
-}
+});
 
 async function handleResume(
   request: NextRequest,

@@ -1,17 +1,12 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextResponse } from "next/server";
 import { eq } from "drizzle-orm";
 import { db } from "@/lib/db";
-import { getSessionUserId } from "@/lib/session";
+import { withRoute } from "@/lib/with-route";
 import { tools, mcpServers } from "@datatorag-mcp/db";
 import { SERVICE_PLUGIN_MAP } from "@/gateway/service-token";
 
 // GET /api/playground/tools?service=google-workspace
-export async function GET(request: NextRequest) {
-  const userId = await getSessionUserId();
-  if (!userId) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-
+export const GET = withRoute(async (_userId, request) => {
   const service = request.nextUrl.searchParams.get("service");
   if (!service) {
     return NextResponse.json(
@@ -41,4 +36,4 @@ export async function GET(request: NextRequest) {
     .orderBy(tools.name);
 
   return NextResponse.json({ tools: rows });
-}
+});

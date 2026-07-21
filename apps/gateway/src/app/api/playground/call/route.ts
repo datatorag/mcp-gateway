@@ -1,16 +1,11 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { getSessionUserId } from "@/lib/session";
+import { withRoute } from "@/lib/with-route";
 import { executeUserTool, ToolCallError } from "@/gateway/playground/tools";
-import { logAndGenericError } from "../errors";
+import { logAndGenericError } from "@/lib/errors";
 
 // POST /api/playground/call
-export async function POST(request: NextRequest) {
-  const userId = await getSessionUserId();
-  if (!userId) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-
+export const POST = withRoute(async (userId, request) => {
   const body = (await request.json()) as {
     tool: string;
     arguments?: Record<string, unknown>;
@@ -51,4 +46,4 @@ export async function POST(request: NextRequest) {
       { status: 500 }
     );
   }
-}
+});

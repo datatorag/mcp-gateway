@@ -1,7 +1,7 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextResponse } from "next/server";
 import { eq, and, notInArray } from "drizzle-orm";
 import { db } from "@/lib/db";
-import { getSessionUserId } from "@/lib/session";
+import { withRoute } from "@/lib/with-route";
 import { serviceConnections, connectedAccounts } from "@datatorag-mcp/db";
 import {
   listConnectedAccounts,
@@ -10,12 +10,7 @@ import {
 } from "@/gateway/connected-accounts";
 
 // GET /api/connections — list connected accounts for the logged-in user
-export async function GET() {
-  const userId = await getSessionUserId();
-  if (!userId) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-
+export const GET = withRoute(async (userId) => {
   const accounts = await listConnectedAccounts(db, userId);
 
   // Legacy: un-migrated service_connections (no connected_accounts row yet)
@@ -48,15 +43,10 @@ export async function GET() {
           .where(eq(serviceConnections.userId, userId));
 
   return NextResponse.json({ accounts, connections: legacyConnections });
-}
+});
 
 // DELETE /api/connections?accountId=xxx or ?service=xxx (legacy)
-export async function DELETE(request: NextRequest) {
-  const userId = await getSessionUserId();
-  if (!userId) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-
+export const DELETE = withRoute(async (userId, request) => {
   const accountId = request.nextUrl.searchParams.get("accountId");
   const service = request.nextUrl.searchParams.get("service");
 
@@ -91,15 +81,10 @@ export async function DELETE(request: NextRequest) {
     { error: "Missing accountId or service parameter" },
     { status: 400 }
   );
-}
+});
 
 // PATCH /api/connections — set default or update label
-export async function PATCH(request: NextRequest) {
-  const userId = await getSessionUserId();
-  if (!userId) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-
+export const PATCH = withRoute(async (userId, request) => {
   const body = (await request.json()) as {
     accountId: string;
     setDefault?: boolean;
@@ -144,4 +129,4 @@ export async function PATCH(request: NextRequest) {
   }
 
   return NextResponse.json({ ok: true });
-}
+});

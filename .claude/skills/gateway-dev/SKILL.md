@@ -16,14 +16,14 @@ Load the `codebase-map` skill first — this skill assumes you already know the 
 Dashboard endpoints live under `apps/gateway/src/app/api/**/route.ts` and reuse the shared wrapper rather than hand-rolling auth:
 
 1. Create `route.ts`, export `dynamic = "force-dynamic"` if the response must never be statically cached (every existing usage route does this).
-2. Wrap the handler in `withRateLimit` (`apps/gateway/src/lib/with-rate-limit.ts`) — it resolves the session via `getSessionUserId` (`apps/gateway/src/lib/session.ts`), 401s if absent, and checks `dashboardApiLimiter` (`apps/gateway/src/gateway/usage/rate-limit.ts`) before invoking your `(userId, req) => Promise<Response>` handler.
+2. Wrap the handler in `withRoute` (`apps/gateway/src/lib/with-route.ts`, replaced `with-rate-limit.ts` in the DRY-1 refactor) — it resolves the session via `getSessionUserId` (`apps/gateway/src/lib/session.ts`), 401s `{error:"Unauthorized"}` if absent, checks `dashboardApiLimiter` (`apps/gateway/src/gateway/usage/rate-limit.ts`) → 429, and maps any unhandled throw to a generic 500 via `logAndGenericError` (`apps/gateway/src/lib/errors.ts`) so a raw `Error.message` never reaches a client. Handler shape is `(userId, req, ctx) => Promise<Response>`; for `[slug]` routes pass the ctx type: `withRoute<{ params: Promise<{slug: string}> }>(...)`. Every session-gated JSON route uses it — the only exceptions are the two OAuth connect/callback redirect flows (bespoke CSRF-cookie handling).
 3. Query through `db` (`apps/gateway/src/lib/db.ts`), not a fresh `createDb()` call.
 4. Return `NextResponse.json(...)`. See `apps/gateway/src/app/api/usage/summary/route.ts` for the full shape (session → rate limit → drizzle aggregate query → JSON):
 
 ```ts
 export const dynamic = "force-dynamic";
 
-export const GET = withRateLimit(async (userId) => {
+export const GET = withRoute(async (userId) => {
   const rows = await db.select({ /* ... */ }).from(usageEvents)
     .where(eq(usageEvents.userId, userId));
   return NextResponse.json({ /* ... */ });
@@ -32,7 +32,7 @@ export const GET = withRateLimit(async (userId) => {
 
 ### Add an API route (public, unauthenticated)
 
-For public-facing endpoints (lead capture, webhooks) follow `apps/gateway/src/app/api/leads/route.ts` instead: its own dedicated limiters (`leadsMinuteLimiter`/`leadsHourLimiter` in `apps/gateway/src/gateway/leads/limiter.ts`, same `createRateLimiter` primitive as `dashboardApiLimiter`), a zod `bodySchema` with a honeypot field, and IP hashing (`createHash("sha256")` salted with `LEADS_IP_SALT` from `getEnv()`) instead of storing raw IPs.
+For public-facing endpoints (lead capture, webhooks) follow `apps/gateway/src/app/api/leads/route.ts` instead: its own dedicated limiters (`leadsMinuteLimiter`/`leadsHourLimiter` in `apps/gateway/src/gateway/leads/limiter.ts`, same `createRateLimiter` primitive as `dashboardApiLimiter`), a zod `bodySchema` with a honeypot field, and IP hashing (`createHash("sha256")` salted with `LEADS_IP_SALT` from `getEnv()`) instead of storing raw IPs. Client IP comes from `CF-Connecting-IP` first (prod is behind Cloudflare with the origin firewalled to CF ranges); the leftmost `X-Forwarded-For` entry is client-spoofable and only a dev fallback — any new public endpoint must use the same order.
 
 ### Add a gateway capability (mcp-server.ts)
 

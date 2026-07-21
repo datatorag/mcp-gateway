@@ -2,12 +2,12 @@ import { NextResponse } from "next/server";
 import { and, eq, gte, sql } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { usageEvents } from "@datatorag-mcp/db";
-import { withRateLimit } from "@/lib/with-rate-limit";
+import { withRoute } from "@/lib/with-route";
 import { parseUsageRange } from "@/gateway/usage/ranges";
 
 export const dynamic = "force-dynamic";
 
-export const GET = withRateLimit(async (userId, req) => {
+export const GET = withRoute(async (userId, req) => {
   const { range, truncExpr, start, bucket } = parseUsageRange(req);
 
   const rows = await db
