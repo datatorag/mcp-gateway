@@ -123,52 +123,35 @@ export default async function HomePage() {
               </div>
             </div>
           </div>
-        </ShaderBackground>
 
-        {/* Playground teaser — the "try it now" path straight from the hero */}
-        <section
-          id="playground"
-          className="scroll-mt-28 border-b border-border bg-background"
-        >
-          <div className="mx-auto grid max-w-6xl gap-12 px-6 py-20 sm:grid-cols-2 sm:items-center">
-            <div className="animate-fade-in-up">
-              <p className="text-sm font-semibold uppercase tracking-widest text-primary">
-                Playground
-              </p>
-              <h2 className="mt-3 font-display text-2xl font-bold text-foreground sm:text-3xl">
-                Try it before you
-                <br />
-                wire up a client.
+          {/* Playground teaser — still on the hero gradient, right under the
+              hero content. The whole card links to sign-in (or the dashboard
+              when a session exists). */}
+          <div
+            id="playground"
+            className="animate-fade-in-up relative mx-auto max-w-6xl scroll-mt-28 px-6 pb-24"
+            style={{ animationDelay: "0.34s" }}
+          >
+            <div className="mx-auto max-w-2xl text-center">
+              <h2 className="font-display text-xl font-bold text-white sm:text-2xl">
+                Or try it right now in the playground.
               </h2>
-              <p className="mt-4 max-w-md text-sm leading-relaxed text-muted-foreground">
-                Every account comes with a built-in playground. Sign in,
-                connect your Google account, and watch Claude search your
-                Drive, read the doc, and make the edit — no MCP client setup
-                required.
-              </p>
-              <Link
-                href={playgroundHref}
-                className="mt-6 inline-block rounded-[var(--radius)] bg-primary px-6 py-3 text-sm font-medium text-primary-foreground transition-all hover:bg-primary/90"
-              >
-                {playgroundCta}
-              </Link>
-              <p className="mt-3 text-xs text-muted-foreground">
+              <p className="mx-auto mt-2 max-w-md text-sm text-white/60">
                 {signedIn
-                  ? "You're signed in — connect an account and run your first prompt."
-                  : "Free to sign up. Google sign-in, nothing to install."}
+                  ? "You're signed in — open your dashboard to connect your Google account and run prompts live."
+                  : "Sign in, connect your Google account, and run prompts from your dashboard. No MCP client setup required."}
               </p>
             </div>
 
             <Link
               href={playgroundHref}
               aria-label={playgroundCta}
-              className="animate-fade-in-up block"
-              style={{ animationDelay: "0.1s" }}
+              className="mx-auto mt-6 block max-w-2xl"
             >
-              <div className="rounded-xl border border-border bg-background shadow-sm transition-colors hover:border-primary/30">
+              <div className="rounded-2xl border border-white/15 bg-white/10 shadow-2xl backdrop-blur-sm transition-colors hover:border-white/35">
                 <div className="space-y-3 p-4">
                   <div className="flex justify-end">
-                    <div className="max-w-[85%] rounded-2xl bg-primary px-3 py-2 text-xs text-primary-foreground">
+                    <div className="max-w-[85%] rounded-2xl bg-white/90 px-3 py-2 text-xs text-[#1a3a8f]">
                       Find the Q3 planning doc and add a summary of
                       yesterday&apos;s kickoff notes.
                     </div>
@@ -180,7 +163,7 @@ export default async function HomePage() {
                           (tool) => (
                             <span
                               key={tool}
-                              className="inline-flex items-center gap-1 rounded-full border border-border bg-secondary/60 px-2 py-0.5 font-mono text-[11px] text-muted-foreground"
+                              className="inline-flex items-center gap-1 rounded-full border border-white/20 bg-white/5 px-2 py-0.5 font-mono text-[11px] text-white/70"
                             >
                               {tool}
                               <svg
@@ -188,7 +171,7 @@ export default async function HomePage() {
                                 height="10"
                                 viewBox="0 0 16 16"
                                 fill="none"
-                                stroke="#16a34a"
+                                stroke="#4ade80"
                                 strokeWidth="2.5"
                                 strokeLinecap="round"
                                 strokeLinejoin="round"
@@ -199,7 +182,7 @@ export default async function HomePage() {
                           )
                         )}
                       </div>
-                      <div className="rounded-2xl border border-border bg-secondary/40 px-3 py-2 text-xs text-foreground">
+                      <div className="rounded-2xl border border-white/15 bg-white/5 px-3 py-2 text-xs text-white/90">
                         Done — I found &ldquo;Q3 Planning&rdquo; in your Drive
                         and added a five-bullet summary of the kickoff under
                         Notes. Want me to email the team a link?
@@ -207,18 +190,18 @@ export default async function HomePage() {
                     </div>
                   </div>
                 </div>
-                <div className="flex items-center gap-2 border-t border-border p-3">
-                  <span className="flex-1 rounded-[var(--radius)] border border-border px-3 py-2 text-xs text-muted-foreground">
+                <div className="flex items-center gap-2 border-t border-white/10 p-3">
+                  <span className="flex-1 rounded-full border border-white/20 px-3 py-2 text-xs text-white/50">
                     Ask about your inbox, calendar, or docs&hellip;
                   </span>
-                  <span className="shrink-0 rounded-[var(--radius)] bg-primary px-3 py-2 text-xs font-medium text-primary-foreground">
+                  <span className="shrink-0 rounded-full bg-white px-4 py-2 text-xs font-medium text-[#1a3a8f]">
                     {signedIn ? "Open dashboard" : "Sign in to try"}
                   </span>
                 </div>
               </div>
             </Link>
           </div>
-        </section>
+        </ShaderBackground>
 
         {/* Setup walkthrough — YouTube tutorial */}
         <section id="walkthrough" className="border-b border-border bg-background">
