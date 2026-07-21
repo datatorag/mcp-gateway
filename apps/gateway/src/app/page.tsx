@@ -43,7 +43,7 @@ export default async function HomePage() {
             <div className="flex-1 text-center lg:text-left">
               <div className="animate-fade-in-up inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/10 px-4 py-1.5 backdrop-blur-sm">
                 <span className="text-xs font-medium text-white/90">
-                  DataToRAG · United AI Platform
+                  DataToRAG · Unified AI Platform
                 </span>
               </div>
               <h1
