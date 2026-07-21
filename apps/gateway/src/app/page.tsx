@@ -293,6 +293,65 @@ export default async function HomePage() {
             <IntegrationCatalog />
           </div>
 
+          {/* Differentiators */}
+          <div
+            className="animate-fade-in-up mt-10 grid gap-5 sm:grid-cols-2"
+            style={{ animationDelay: "0.15s" }}
+          >
+            <div className="rounded-2xl border border-border bg-background p-6">
+              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-accent text-accent-foreground">
+                <svg
+                  width="22"
+                  height="22"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.5"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <circle cx="9" cy="8" r="3" />
+                  <circle cx="17" cy="10" r="2.5" />
+                  <path d="M3 20c0-3.3 2.7-6 6-6s6 2.7 6 6" />
+                  <path d="M14.5 20c0-2.5 1.8-4.5 4-4.5s4 2 4 4.5" />
+                </svg>
+              </div>
+              <h3 className="mt-4 font-display text-base font-semibold text-foreground">
+                Multi-account support
+              </h3>
+              <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
+                Connect personal, shared, and team Google accounts under one MCP
+                endpoint. Claude can search across all of them in a single
+                prompt — or target a specific account when you need to.
+              </p>
+            </div>
+            <div className="rounded-2xl border border-border bg-background p-6">
+              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-accent text-accent-foreground">
+                <svg
+                  width="22"
+                  height="22"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.5"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <path d="M13 2L4 14h7l-1 8 9-12h-7l1-8z" />
+                </svg>
+              </div>
+              <h3 className="mt-4 font-display text-base font-semibold text-foreground">
+                Optimized tools
+              </h3>
+              <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
+                Naive API wrappers dump everything into your context. DataToRAG
+                tools are tuned for token efficiency — the same Gmail thread
+                read costs a fraction of the tokens, which means longer
+                conversations and smarter agents.
+              </p>
+            </div>
+          </div>
+
           {/* Coming soon connectors */}
           <div className="animate-fade-in-up mt-10" style={{ animationDelay: "0.2s" }}>
             <p className="text-sm font-medium text-muted-foreground">
