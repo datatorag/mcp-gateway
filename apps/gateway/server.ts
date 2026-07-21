@@ -13,7 +13,10 @@ import {
   createProtectedResourceRouter,
   PROTECTED_RESOURCE_PATH,
 } from "./src/gateway/oauth/protected-resource";
-import { classifyMcpRequest } from "./src/gateway/mcp-session";
+import {
+  classifyMcpRequest,
+  closeSessionsForUser,
+} from "./src/gateway/mcp-session";
 import { createRegisterRouter } from "./src/gateway/oauth/register";
 import { createAuthorizeRouter } from "./src/gateway/oauth/authorize";
 import { createTokenRouter } from "./src/gateway/oauth/token";
@@ -116,20 +119,6 @@ async function main() {
     })
   );
 
-  // OAuth2 authorization server routes (MCP clients only)
-  app.use(createMetadataRouter(baseUrl));
-  app.use(createProtectedResourceRouter(baseUrl));
-  app.use(createRegisterRouter(db));
-  app.use(
-    createAuthorizeRouter(db, {
-      googleClientId: env.GOOGLE_CLIENT_ID,
-      googleClientSecret: env.GOOGLE_CLIENT_SECRET,
-      baseUrl,
-    })
-  );
-  app.use(createTokenRouter(db));
-  app.use(createRevokeRouter(db));
-
   // Session store. userId binds each session to the bearer that initialized
   // it — a session id presented with a different user's (valid) bearer is
   // treated as unknown (404), so a leaked session UUID can't route into
@@ -142,6 +131,32 @@ async function main() {
       userId: string;
     }
   >();
+
+  // OAuth2 authorization server routes (MCP clients only)
+  app.use(createMetadataRouter(baseUrl));
+  app.use(createProtectedResourceRouter(baseUrl));
+  app.use(createRegisterRouter(db));
+  app.use(
+    createAuthorizeRouter(db, {
+      googleClientId: env.GOOGLE_CLIENT_ID,
+      googleClientSecret: env.GOOGLE_CLIENT_SECRET,
+      baseUrl,
+    })
+  );
+  app.use(createTokenRouter(db));
+  app.use(
+    createRevokeRouter(db, {
+      // SEC-8: DB-side revocation 401s new requests, but an already-open SSE
+      // stream keeps flowing — close the user's live sessions too. Clients
+      // whose bearers are still valid silently re-initialize (404 path).
+      onRevoked: (userId) => {
+        void closeSessionsForUser(sessions, userId).then((n) => {
+          if (n > 0)
+            console.log(`[revoke] closed ${n} live MCP session(s) for user=${userId}`);
+        });
+      },
+    })
+  );
 
   app.get("/health", (_req, res) => {
     res.json({ status: "ok" });

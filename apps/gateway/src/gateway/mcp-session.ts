@@ -25,3 +25,31 @@ export function classifyMcpRequest(req: {
   if (req.method === "POST") return "initialize";
   return "bad_request";
 }
+
+/**
+ * Close every live session (and its SSE stream) belonging to a user — called
+ * on token revocation (SEC-8). Without this, revoking a bearer 401s new
+ * requests but an already-open stream keeps flowing until transport close.
+ * Per-user is deliberately broad: a client whose bearer is still valid just
+ * gets the 404 → silent re-initialize path on its next request, so the only
+ * client that stays out is the revoked one.
+ */
+export async function closeSessionsForUser(
+  sessions: Map<string, { transport: { close(): Promise<void> }; userId: string }>,
+  userId: string
+): Promise<number> {
+  let closed = 0;
+  for (const [id, session] of sessions) {
+    if (session.userId !== userId) continue;
+    closed++;
+    // transport.onclose normally deletes the entry; delete here too so a
+    // close() that throws can't leave a zombie session routable.
+    sessions.delete(id);
+    try {
+      await session.transport.close();
+    } catch (err) {
+      console.warn(`[mcp-session] close failed for session of user=${userId}`, err);
+    }
+  }
+  return closed;
+}

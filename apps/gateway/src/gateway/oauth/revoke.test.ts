@@ -14,7 +14,10 @@ import { createRevokeRouter } from "./revoke";
 
 type UpdateSpy = ReturnType<typeof vi.fn>;
 
-function build(row: Record<string, unknown> | undefined) {
+function build(
+  row: Record<string, unknown> | undefined,
+  onRevoked?: (userId: string) => void
+) {
   const update: UpdateSpy = vi.fn(() => ({
     set: () => ({ where: vi.fn().mockResolvedValue(undefined) }),
   }));
@@ -32,7 +35,7 @@ function build(row: Record<string, unknown> | undefined) {
     transaction: (cb: (tx: unknown) => Promise<unknown>) => cb(tx),
   } as unknown as Database;
 
-  const router = createRevokeRouter(db);
+  const router = createRevokeRouter(db, onRevoked ? { onRevoked } : undefined);
   const layer = router.stack.find(
     (l) => l.route?.path === "/oauth/revoke"
   );
@@ -93,5 +96,32 @@ describe("POST /oauth/revoke", () => {
     await handler({ body: { token: "" } } as Request, res);
     expect(update).not.toHaveBeenCalled();
     expect(res.status).toHaveBeenCalledWith(200);
+  });
+
+  // SEC-8: revocation must also tear down the user's live MCP sessions —
+  // DB-side revocation alone can't reach an already-open SSE stream.
+  it("fires onRevoked with the grant's userId after a successful revoke", async () => {
+    const onRevoked = vi.fn();
+    const { handler } = build(liveRow, onRevoked);
+    await handler(
+      { body: { token: "raw-refresh", client_id: "mcp-client-1" } } as Request,
+      mockRes()
+    );
+    expect(onRevoked).toHaveBeenCalledWith("user-1");
+  });
+
+  it("does NOT fire onRevoked for unknown tokens or mismatched clients", async () => {
+    const onRevoked = vi.fn();
+    const { handler: unknownToken } = build(undefined, onRevoked);
+    await unknownToken(
+      { body: { token: "nope", client_id: "mcp-client-1" } } as Request,
+      mockRes()
+    );
+    const { handler: wrongClient } = build(liveRow, onRevoked);
+    await wrongClient(
+      { body: { token: "raw-refresh", client_id: "someone-else" } } as Request,
+      mockRes()
+    );
+    expect(onRevoked).not.toHaveBeenCalled();
   });
 });

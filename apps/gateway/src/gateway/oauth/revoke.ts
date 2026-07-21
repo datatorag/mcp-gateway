@@ -11,8 +11,15 @@ import { revokeAccessTokensForClient } from "./grants";
 /**
  * RFC 7009 — OAuth 2.0 Token Revocation
  * Always returns 200 to avoid leaking token validity.
+ *
+ * `onRevoked` fires (after the transaction commits) with the userId whose
+ * grant was revoked — server.ts uses it to tear down the user's live MCP
+ * sessions/SSE streams (SEC-8), which DB-side revocation alone can't reach.
  */
-export function createRevokeRouter(db: Database): Router {
+export function createRevokeRouter(
+  db: Database,
+  opts?: { onRevoked?: (userId: string) => void }
+): Router {
   const router = Router();
 
   router.post("/oauth/revoke", async (req, res) => {
@@ -25,6 +32,7 @@ export function createRevokeRouter(db: Database): Router {
     }
 
     const hash = hashApiKey(token);
+    let revokedUserId: string | null = null;
 
     await db.transaction(async (tx) => {
       const [row] = await tx
@@ -35,6 +43,7 @@ export function createRevokeRouter(db: Database): Router {
         .limit(1);
 
       if (!row || row.clientId !== client_id) return;
+      revokedUserId = row.userId;
 
       await tx
         .update(oauthRefreshTokens)
@@ -65,6 +74,8 @@ export function createRevokeRouter(db: Database): Router {
         });
       }
     });
+
+    if (revokedUserId) opts?.onRevoked?.(revokedUserId);
 
     res.status(200).send();
   });
