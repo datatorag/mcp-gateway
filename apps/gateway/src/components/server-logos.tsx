@@ -93,6 +93,30 @@ export const GOOGLE_SERVICE_LOGOS: Record<string, React.ReactNode> = {
   ),
 };
 
+/** Simplified marks for the non-Google integrations listed in the
+ * home-page catalog. Same constraints as GOOGLE_SERVICE_LOGOS. */
+export const ATLASSIAN_SERVICE_LOGOS: Record<string, React.ReactNode> = {
+  Jira: (
+    <svg viewBox="0 0 24 24" className="h-full w-full">
+      <path d="M12 2 6 8l6 6 6-6-6-6z" fill="#2684FF" />
+      <path d="M12 10.5 8.25 14.25 12 18l3.75-3.75L12 10.5z" fill="#2684FF" opacity=".55" />
+    </svg>
+  ),
+  Confluence: (
+    <svg viewBox="0 0 24 24" className="h-full w-full">
+      <path
+        d="M4.2 16.8c2.8-4.6 5.7-5.5 10.3-3.3l3.6 1.7-1.7 3.6-3.6-1.7c-3.1-1.5-4.6-.9-6.6 2l-2-2.3z"
+        fill="#2684FF"
+      />
+      <path
+        d="M19.8 7.2c-2.8 4.6-5.7 5.5-10.3 3.3L5.9 8.8l1.7-3.6 3.6 1.7c3.1 1.5 4.6.9 6.6-2l2 2.3z"
+        fill="#2684FF"
+        opacity=".65"
+      />
+    </svg>
+  ),
+};
+
 export const SERVER_LOGOS: Record<string, React.ReactNode> = {
   "gws-mcp": (
     <svg viewBox="0 0 24 24" className="h-full w-full">

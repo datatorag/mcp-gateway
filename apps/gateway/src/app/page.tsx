@@ -3,7 +3,7 @@ import { db } from "@/lib/db";
 import { mcpServers, tools } from "@datatorag-mcp/db";
 import { Navbar } from "@/components/navbar";
 import { ShaderBackground } from "@/components/shader-background";
-import { ToolCard } from "@/components/tool-card";
+import { IntegrationCatalog } from "@/components/integration-catalog";
 import { GOOGLE_SERVICE_LOGOS } from "@/components/server-logos";
 import { getSessionUserId } from "@/lib/session";
 import Link from "next/link";
@@ -38,6 +38,7 @@ export default async function HomePage() {
   const signedIn = userId !== null;
   const playgroundHref = signedIn ? "/dashboard" : "/auth/login";
   const playgroundCta = signedIn ? "Open your dashboard" : "Sign in to try it";
+  const totalTools = servers.reduce((sum, s) => sum + s.toolCount, 0);
 
   return (
     <>
@@ -543,38 +544,17 @@ export default async function HomePage() {
                 Pre-built MCP connectors
               </h2>
               <p className="mt-3 max-w-lg text-sm text-muted-foreground">
-                Connect through the Model Context Protocol with ready-to-use
-                integrations. More added every week.
+                {totalTools > 0
+                  ? `${totalTools} tools, ready to use through the Model Context Protocol. `
+                  : "Ready-to-use integrations through the Model Context Protocol. "}
+                Every integration works from one endpoint — connect once, use
+                them all. More added every week.
               </p>
             </div>
 
-            {servers.length === 0 ? (
-              <div className="mt-16 text-center">
-                <p className="text-base text-muted-foreground">
-                  Connectors launching soon.
-                </p>
-                <p className="mt-1 text-sm text-muted-foreground">
-                  Contact us for early access or custom integration needs.
-                </p>
-              </div>
-            ) : (
-              <div className="mt-10 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
-                {servers.map((server, i) => (
-                  <div
-                    key={server.slug}
-                    className="animate-fade-in-up"
-                    style={{ animationDelay: `${0.1 + i * 0.05}s` }}
-                  >
-                    <ToolCard
-                      slug={server.slug}
-                      name={server.name}
-                      description={server.description}
-                      toolCount={server.toolCount}
-                    />
-                  </div>
-                ))}
-              </div>
-            )}
+            <div className="mt-10">
+              <IntegrationCatalog />
+            </div>
 
             {/* Coming soon connectors */}
             <div className="animate-fade-in-up mt-10" style={{ animationDelay: "0.2s" }}>
