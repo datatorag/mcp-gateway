@@ -6,6 +6,7 @@ import { ShaderBackground } from "@/components/shader-background";
 import { IntegrationCatalog } from "@/components/integration-catalog";
 import { getSessionUserId } from "@/lib/session";
 import Link from "next/link";
+import Script from "next/script";
 
 export const dynamic = "force-dynamic";
 
@@ -29,6 +30,13 @@ export default async function HomePage() {
 
   return (
     <>
+      {/* StartupBar directory badge widget (landing page only). Public
+          startup id — safe to ship. */}
+      <Script
+        src="https://startupbar.co/widget/loader.js"
+        data-startup-id="f6d47644-c058-43e3-b69b-5a460c92ee88"
+        strategy="afterInteractive"
+      />
       <Navbar />
 
       <main className="flex-1 overflow-x-hidden">
