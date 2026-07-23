@@ -78,26 +78,59 @@ export default async function BlogArticlePage({ params }: Props) {
   const post = getPostBySlug(slug);
   if (!post) notFound();
 
-  const jsonLd = {
-    "@context": "https://schema.org",
-    "@type": "Article",
-    headline: post.title,
-    description: post.excerpt,
-    datePublished: post.date,
-    author: {
-      "@type": "Person",
-      name: post.author,
-      ...(post.authorImage
-        ? { image: `https://datatorag.com${post.authorImage}` }
-        : {}),
+  const postUrl = `https://datatorag.com/blog/${slug}`;
+  const imagePath = post.ogImage ?? post.coverImage;
+  const jsonLd = [
+    {
+      "@context": "https://schema.org",
+      "@type": "BlogPosting",
+      headline: post.title,
+      description: post.excerpt,
+      datePublished: post.date,
+      dateModified: post.date,
+      inLanguage: "en",
+      isAccessibleForFree: true,
+      url: postUrl,
+      ...(imagePath ? { image: `https://datatorag.com${imagePath}` } : {}),
+      ...(post.tags.length > 0 ? { keywords: post.tags.join(", ") } : {}),
+      ...(post.category ? { articleSection: post.category } : {}),
+      author: {
+        "@type": "Person",
+        name: post.author,
+        ...(post.authorImage
+          ? { image: `https://datatorag.com${post.authorImage}` }
+          : {}),
+      },
+      publisher: {
+        "@type": "Organization",
+        name: "DataToRAG",
+        url: "https://datatorag.com",
+        logo: {
+          "@type": "ImageObject",
+          url: "https://datatorag.com/datatorag-logo-256.png",
+        },
+      },
+      mainEntityOfPage: { "@type": "WebPage", "@id": postUrl },
     },
-    publisher: {
-      "@type": "Organization",
-      name: "DataToRAG",
-      url: "https://datatorag.com",
+    {
+      "@context": "https://schema.org",
+      "@type": "BreadcrumbList",
+      itemListElement: [
+        {
+          "@type": "ListItem",
+          position: 1,
+          name: "Blog",
+          item: "https://datatorag.com/blog",
+        },
+        {
+          "@type": "ListItem",
+          position: 2,
+          name: post.title,
+          item: postUrl,
+        },
+      ],
     },
-    mainEntityOfPage: `https://datatorag.com/blog/${slug}`,
-  };
+  ];
 
   return (
     <>
