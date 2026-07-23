@@ -37,7 +37,7 @@ Composio gives you over a thousand toolkits and a genuinely deep Gmail, dozens o
 
 There are smaller gaps too. Composio has no standalone Slides or Contacts toolkit at the time of writing. Pipedream's per-app Google depth is thinner, with a custom-API escape hatch that pushes API-shaping onto the agent, and its credit-based pricing can surprise a busy agent. Both run on cloud-hosted cores you can't fully self-host on the standard plans.
 
-If you're a developer embedding tools for your users, start with these. If you're the user, keep reading. There's more detail in the [Composio write-up](/blog/composio-alternative) and the [Pipedream write-up](/blog/pipedream-mcp-alternative).
+If you're a developer embedding tools for your users, start with these. If you're the user, keep reading. There's more detail in the [Composio write-up](/blog/composio-alternative) and the [Pipedream write-up](/blog/pipedream-mcp-alternative), and if you're picking between the two platforms themselves, the [Composio vs Pipedream head-to-head](/blog/composio-vs-pipedream) and [Composio vs Zapier MCP](/blog/composio-vs-zapier-mcp) go row by row. Searching specifically for an open-source Composio alternative? [That's its own post](/blog/open-source-composio-alternative).
 
 ## Self-hosting an open-source server
 

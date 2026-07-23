@@ -13,6 +13,10 @@ That's the moment that tells you what Composio is. It's not a thing you sign int
 
 I don't mean that as a knock. Composio is one of the better-engineered integration platforms aimed at AI agents, and if you're a developer shipping a product that connects *your* users to hundreds of apps, it deserves a serious look. But "developer shipping a product" is the whole story. If you're the person sitting in Claude who wants your own Gmail, Docs, and Sheets to work, you're not Composio's user. You're Composio's user's user.
 
+<div style="margin:1.75rem 0;padding:1.1rem 1.35rem;border:1px solid rgba(45,91,214,0.35);border-left:4px solid #2D5BD6;border-radius:0.75rem;background:rgba(45,91,214,0.06);">
+<strong>Here for the short answer?</strong> If you want Claude working in your own Gmail, Docs, and Sheets with nothing to build, that's the product we made. <a href="/docs/getting-started">Set it up in about two minutes</a>, or <a href="/dashboard">jump straight into the dashboard</a> and connect your account.
+</div>
+
 ## SDK versus product
 
 Here's the distinction that matters, and it's easy to miss because both Composio and DataToRAG say the letters "MCP."
@@ -37,7 +41,7 @@ If you're a founder building an AI assistant for your customers, Composio's shap
 | Total integration count | 1,000+ toolkits | 8 Google services + Jira and Confluence, built deep |
 | Formal attestations | SOC 2 Type II, ISO 27001 | CASA Tier 2 passed, Google-verified (June 2026) |
 
-A note on that last row, because I want to be straight about it: Composio is ahead of us on general-purpose security attestations. They're SOC 2 Type II and ISO 27001 certified, and we're not there yet. What we did finish is CASA Tier 2, the Google-specific verification for restricted Gmail and Drive scopes. We passed it, and Google verified the app in June 2026. Different credential, different scope. If your bar is SOC 2 and ISO 27001, they've shipped and we haven't. If it's verified Google access, we're both there.
+A note on that last row, because I want to be straight about it: Composio is ahead of us on general-purpose security attestations. They're SOC 2 Type II and ISO 27001 certified, and we're not there yet. What we did finish is CASA Tier 2, the Google-specific verification for restricted Gmail and Drive scopes. We passed it, and Google verified the app in June 2026; [the full story of that review is here](/blog/casa-tier-2-verified). Different credential, different scope. If your bar is SOC 2 and ISO 27001, they've shipped and we haven't. If it's verified Google access, we're both there.
 
 ## What DataToRAG adds
 
@@ -54,7 +58,7 @@ And the one that's hardest to bolt on later: multi-account. You can connect a wo
 
 Two more differences that don't show up until you care about them, at which point they're the only ones you care about.
 
-The first is the open-source core. DataToRAG is MIT-licensed and built to be self-hosted. If you don't want a vendor in the middle of your Google data, you clone the repo, run it on Docker Compose with your own Postgres, point Claude at your own endpoint, and you're done. Composio's SDKs are open source, which is good, but the runtime that stores credentials and executes the calls is closed. Self-hosting that runtime is an enterprise-plan conversation, and on the self-serve plans your users' tokens live on Composio's cloud.
+The first is the open-source core. DataToRAG is MIT-licensed and built to be self-hosted. If you don't want a vendor in the middle of your Google data, you clone the repo, run it on Docker Compose with your own Postgres, point Claude at your own endpoint, and you're done. Composio's SDKs are open source, which is good, but the runtime that stores credentials and executes the calls is closed. Self-hosting that runtime is an enterprise-plan conversation, and on the self-serve plans your users' tokens live on Composio's cloud. I dug into exactly which layer of Composio is open and which isn't in [the open-source Composio alternative post](/blog/open-source-composio-alternative), if that's the requirement that brought you here.
 
 The second is what happens to your data in flight. DataToRAG is pass-through. When Claude calls `gmail_search`, the request goes to Google on your behalf and the result comes straight back. We don't store your messages, your files, or your calendar. There's no copy of your inbox sitting in our database to leak later, because there's no copy at all. For a lot of teams I've talked to, "the vendor never holds my Workspace data" is the line that decides it, ahead of any single feature in the table above.
 
@@ -76,7 +80,7 @@ With Composio, before any of that happens, someone on her team has to stand up a
 
 Same protocol. Completely different amount of work between her and the result. That gap is pretty much the entire reason DataToRAG exists, and I think it's why "which is better, Composio or DataToRAG" is the wrong question. They're not the same kind of thing. One is for the person building the product. One is for the person doing the work.
 
-If you want the full picture of how the options stack up, including the native Claude connectors and the self-hosted route, I put them side by side in [the Google Workspace MCP alternatives roundup](/blog/claude-google-workspace-mcp-alternatives).
+If you want the full picture of how the options stack up, including the native Claude connectors and the self-hosted route, I put them side by side in [the Google Workspace MCP alternatives roundup](/blog/claude-google-workspace-mcp-alternatives). And if you're comparing Composio against the other platforms directly, I've written up [Composio vs Zapier MCP](/blog/composio-vs-zapier-mcp) and [Composio vs Pipedream Connect](/blog/composio-vs-pipedream).
 
 ## Try it
 

@@ -69,7 +69,7 @@ That last point is the one I'd weigh hardest for regulated Google data. Pipedrea
 
 Pipedream Connect is plumbing for builders. DataToRAG is a gateway you sign into. If you're embedding tool access into a product for your own users, Pipedream's breadth and embedded auth are hard to argue with, and I'd point you there. If you're a person or a team who wants Claude to do real work across Google Workspace and Atlassian, with deep tools, multi-account in one prompt, and the option to host it yourself, you shouldn't have to build a product to get there.
 
-If you want the wider view, I lined up every option for connecting Claude to Google Workspace in [this roundup](/blog/claude-google-workspace-mcp-alternatives), native connectors included.
+If you want the wider view, I lined up every option for connecting Claude to Google Workspace in [this roundup](/blog/claude-google-workspace-mcp-alternatives), native connectors included. Choosing between Pipedream and Composio for an agent product? [That direct comparison is here](/blog/composio-vs-pipedream).
 
 ## Try it
 

@@ -10,6 +10,17 @@ Google Workspace MCP plugin the gateway installs — a separate repo, separate
 release cycle from `datatorag-mcp`. It wraps the `gws` CLI binary
 (googleworkspace/cli, Rust) rather than calling Google APIs directly.
 
+The sibling plugin `atlassian-mcp` (DataToRag/atlassian-mcp, public, local
+clone `~/git/atlassian-mcp`) follows the same repo anatomy (src/tools/ per
+service + shared response.ts, datatorag.json manifest, tsc → server/, no
+test framework) and the same ship tail below — these recipes apply there
+too, minus everything gws-binary-specific: it calls the Atlassian REST API
+directly via `src/atlassian-client.ts`, with the per-user token injected
+per call by the gateway. Plugin MCP ports on prod are assigned 40000+ by
+the plugin-manager (gws-mcp is 40000; check `mcp_servers.container_port`
+for the rest). Per-repo CLAUDE.md files in both plugin repos carry only
+repo-specific facts and point back here for everything else.
+
 ## Repo anatomy
 
 - `src/tools/*.ts` — one file per service: `gmail.ts`, `calendar.ts`,

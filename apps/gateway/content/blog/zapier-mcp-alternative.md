@@ -97,7 +97,7 @@ One last thing, because it bites a lot of people. Connecting both your work and 
 
 Zapier MCP is the widest tool you can give Claude. DataToRAG is the deepest one for Google Workspace specifically. My read: if your bottleneck is reaching a hundred different apps, go wide. If it's getting real work done inside Docs, Sheets, Slides, Gmail, Contacts, and Tasks, go deep.
 
-If you want the full menu, including the native Claude connectors and the self-hosted route, I put together a [roundup of the Google Workspace MCP alternatives](/blog/claude-google-workspace-mcp-alternatives).
+If you want the full menu, including the native Claude connectors and the self-hosted route, I put together a [roundup of the Google Workspace MCP alternatives](/blog/claude-google-workspace-mcp-alternatives). And if you're weighing Zapier MCP against Composio specifically, [that head-to-head is here](/blog/composio-vs-zapier-mcp).
 
 ## Try it
 
