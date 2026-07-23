@@ -111,6 +111,29 @@ the quick reference; the ADRs carry context + alternatives-considered.
 - **Relative imports in `apps/gateway` are extensionless** (`from "../lib/slack"`, never `"../lib/slack.js"`). tsconfig `moduleResolution: "bundler"` makes extensionless valid for every consumer — tsc, the tsx dev runtime, tsup, Next's webpack prod build, AND Turbopack (`pnpm dev`). `.js`-suffixed relative specifiers were normalized away after they broke the Turbopack dev server for any app route transitively importing `gateway/*.ts` (a webpack-only `extensionAlias` workaround existed briefly and was removed — webpack's hook doesn't apply to Turbopack, so it fixed prod while dev stayed broken). Package-subpath imports keep their extensions (e.g. `@modelcontextprotocol/sdk/client/index.js`). Don't reintroduce `.js` relative specifiers.
 - **The testcontainers harness is live** — `src/test-utils/db.ts` (real Postgres via `@testcontainers/postgresql`, runs drizzle migrations) has a real consumer: `src/app/api/setup/status/route.liveness.test.ts`. Suites using it must gate on `isDockerAvailable()` (`describe.skipIf`, probed synchronously at import time) so `pnpm vitest run` still passes on machines/CI without a Docker daemon — and must never call `getTestDb()` at module-import time, only inside the gated block's `beforeAll`.
 
+## Quality pass — design-time, not post-hoc
+
+Do NOT run agent-fan-out review passes (`/simplify`-style, 4 parallel agents) on
+every change by default — that burns tokens re-discovering what a 60-second
+design check catches up front. Instead, before implementing, answer these four
+questions inline (in the plan or in your head, one grep each) and let the
+answers shape the code:
+
+1. **Reuse** — does a helper for this already exist? Grep shared modules
+   (`response.ts` in gws-mcp, `src/lib/` + `src/gateway/usage/` here) and the
+   file you're editing's neighbors before writing a new one. If you find a
+   near-match, promote it to the shared module rather than copying it.
+2. **Source of truth** — if the change displays or derives data that exists
+   elsewhere (docs frontmatter, DB, a registry), read it from there; never
+   hand-copy values that will drift.
+3. **Altitude** — is this a special case layered on shared infrastructure? If
+   the same problem exists for sibling tools/routes, fix the shared layer once.
+4. **Efficiency** — anything hot-path, per-request, or per-item that could be
+   hoisted, batched, or skipped early?
+
+Reserve the agent fan-out review for when the user asks for it, or for large
+multi-file changes where a fresh-eyes sweep genuinely pays for itself.
+
 ## Where things live
 
 | Task | Path |
