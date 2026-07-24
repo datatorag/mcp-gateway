@@ -15,8 +15,22 @@ import {
   ResponsiveContainer,
 } from "recharts";
 import { StatCard } from "@/components/stat-card";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Card } from "@/components/ui/card";
+import { Skeleton } from "@/components/ui/skeleton";
+import {
+  Table,
+  TableHeader,
+  TableBody,
+  TableRow,
+  TableHead,
+  TableCell,
+} from "@/components/ui/table";
 
 type Range = "24h" | "7d" | "30d" | "90d";
+
+// Reference the theme token (globals.css --chart-1) so charts track the palette.
+const CHART_COLOR = "var(--chart-1)";
 
 interface ToolRow {
   toolName: string;
@@ -64,20 +78,16 @@ function RangeToggle({
 }) {
   const options: Range[] = ["24h", "7d", "30d", "90d"];
   return (
-    <div className="mt-6 inline-flex rounded-lg border border-border p-0.5">
-      {options.map((opt) => (
-        <button
-          key={opt}
-          onClick={() => onChange(opt)}
-          className={`rounded-md px-3 py-1 text-xs font-medium transition-colors ${
-            value === opt
-              ? "bg-secondary text-foreground"
-              : "text-muted-foreground hover:text-foreground"
-          }`}
-        >
-          {opt}
-        </button>
-      ))}
+    <div className="mt-6">
+      <Tabs value={value} onValueChange={(v) => onChange(v as Range)}>
+        <TabsList>
+          {options.map((opt) => (
+            <TabsTrigger key={opt} value={opt}>
+              {opt}
+            </TabsTrigger>
+          ))}
+        </TabsList>
+      </Tabs>
     </div>
   );
 }
@@ -97,7 +107,11 @@ function SummaryCards() {
 
   if (!data) {
     return (
-      <div className="mt-6 text-sm text-muted-foreground">Loading…</div>
+      <div className="mt-6 grid gap-4 sm:grid-cols-3">
+        {Array.from({ length: 3 }).map((_, i) => (
+          <Skeleton key={i} className="h-[6.5rem] rounded-xl" />
+        ))}
+      </div>
     );
   }
 
@@ -145,9 +159,9 @@ function TimeseriesChart({ range }: { range: Range }) {
             <Line
               type="monotone"
               dataKey="calls"
-              stroke="#3b82f6"
+              stroke={CHART_COLOR}
               strokeWidth={2}
-              dot={{ fill: "#3b82f6", r: 3 }}
+              dot={{ fill: CHART_COLOR, r: 3 }}
             />
           </LineChart>
         </ResponsiveContainer>
@@ -164,12 +178,12 @@ function ChartPanel({
   children: React.ReactNode;
 }) {
   return (
-    <section className="mt-10 rounded-xl border border-border p-5">
+    <Card className="mt-10 p-5">
       <h2 className="font-display text-base font-bold text-foreground">
         {title}
       </h2>
-      <div className="mt-4 h-64">{children}</div>
-    </section>
+      <div className="h-64">{children}</div>
+    </Card>
   );
 }
 
@@ -230,7 +244,7 @@ function ToolBreakdown({
                 width={140}
               />
               <Tooltip />
-              <Bar dataKey="calls" fill="#3b82f6" />
+              <Bar dataKey="calls" fill={CHART_COLOR} />
             </BarChart>
           </ResponsiveContainer>
         )}
@@ -275,79 +289,80 @@ function ToolsTable({ tools }: { tools: ToolRow[] }) {
       <h2 className="font-display text-base font-bold text-foreground">
         All tools
       </h2>
-      <div className="mt-3 overflow-x-auto rounded-xl border border-border">
-        <table className="w-full text-sm">
-          <thead className="border-b border-border bg-secondary/50 text-xs uppercase tracking-wider text-muted-foreground">
-            <tr>
-              <th className="px-4 py-2 text-left">Tool</th>
-              <th className="px-4 py-2 text-left">Connector</th>
-              <th
+      <div className="mt-3 overflow-hidden rounded-xl border">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Tool</TableHead>
+              <TableHead>Connector</TableHead>
+              <TableHead
                 onClick={() => setSort("calls")}
-                className="cursor-pointer px-4 py-2 text-right"
+                className="cursor-pointer text-right"
               >
                 Calls
-              </th>
-              <th className="px-4 py-2 text-right">Success %</th>
-              <th
-                className="px-4 py-2 text-right"
+              </TableHead>
+              <TableHead className="text-right">Success %</TableHead>
+              <TableHead
+                className="text-right"
                 title="Median latency — half of calls are faster, half slower"
               >
                 Median ms
-              </th>
-              <th
+              </TableHead>
+              <TableHead
                 onClick={() => setSort("p95")}
-                className="cursor-pointer px-4 py-2 text-right"
+                className="cursor-pointer text-right"
                 title="Slow-end latency (95th percentile) — 95% of calls are faster than this"
               >
                 Slow ms
-              </th>
-              <th className="px-4 py-2 text-right">Avg size</th>
-            </tr>
-          </thead>
-          <tbody>
+              </TableHead>
+              <TableHead className="text-right">Avg size</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
             {sorted.map((r) => (
-              <tr
-                key={r.toolName}
-                className="border-t border-border hover:bg-secondary/30"
-              >
-                <td className="px-4 py-2 font-mono text-xs">
+              <TableRow key={r.toolName}>
+                <TableCell className="font-mono text-xs">
                   <Link
                     href={`/dashboard/usage/${r.toolName}`}
                     className="text-foreground hover:text-primary"
                   >
                     {r.toolName}
                   </Link>
-                </td>
-                <td className="px-4 py-2 text-muted-foreground">
+                </TableCell>
+                <TableCell className="text-muted-foreground">
                   {r.connector ?? "—"}
-                </td>
-                <td className="px-4 py-2 text-right">
+                </TableCell>
+                <TableCell className="text-right tabular-nums">
                   {r.calls.toLocaleString()}
-                </td>
-                <td className="px-4 py-2 text-right">
+                </TableCell>
+                <TableCell className="text-right tabular-nums">
                   {r.calls > 0
                     ? `${(((r.calls - r.errors) / r.calls) * 100).toFixed(1)}%`
                     : "—"}
-                </td>
-                <td className="px-4 py-2 text-right">{r.p50} ms</td>
-                <td className="px-4 py-2 text-right">{r.p95} ms</td>
-                <td className="px-4 py-2 text-right">
+                </TableCell>
+                <TableCell className="text-right tabular-nums">
+                  {r.p50} ms
+                </TableCell>
+                <TableCell className="text-right tabular-nums">
+                  {r.p95} ms
+                </TableCell>
+                <TableCell className="text-right tabular-nums">
                   {Math.round(r.avgSize).toLocaleString()} B
-                </td>
-              </tr>
+                </TableCell>
+              </TableRow>
             ))}
             {sorted.length === 0 && (
-              <tr>
-                <td
+              <TableRow>
+                <TableCell
                   colSpan={7}
-                  className="px-4 py-8 text-center text-muted-foreground"
+                  className="py-8 text-center text-muted-foreground"
                 >
                   No tool calls in this range yet.
-                </td>
-              </tr>
+                </TableCell>
+              </TableRow>
             )}
-          </tbody>
-        </table>
+          </TableBody>
+        </Table>
       </div>
     </section>
   );
@@ -385,7 +400,7 @@ function RecentActivity() {
             <div className="flex min-w-0 items-center gap-3">
               <span
                 className={`h-1.5 w-1.5 shrink-0 rounded-full ${
-                  e.status === "success" ? "bg-emerald-500" : "bg-amber-500"
+                  e.status === "success" ? "bg-success" : "bg-warning"
                 }`}
               />
               <span className="truncate font-mono text-xs text-foreground">
@@ -396,7 +411,7 @@ function RecentActivity() {
               </span>
             </div>
             <div className="flex shrink-0 items-center gap-3 text-xs text-muted-foreground">
-              <span>{e.latencyMs} ms</span>
+              <span className="tabular-nums">{e.latencyMs} ms</span>
               <time>{new Date(e.createdAt).toLocaleTimeString()}</time>
             </div>
           </li>

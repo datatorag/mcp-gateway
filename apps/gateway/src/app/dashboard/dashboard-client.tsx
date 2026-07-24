@@ -3,12 +3,26 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import Link from "next/link";
 import posthog from "posthog-js";
+import { Play, Copy, Check } from "lucide-react";
 import { EVENTS } from "@/lib/analytics";
 import { reportSignupConversion } from "@/components/google-ads";
 import { SERVICES } from "./connections/services";
 import { SetupWizard } from "./setup-wizard";
 import { Playground, type PlaygroundHandle } from "./playground";
 import { useCopyToClipboard } from "@/lib/use-copy-to-clipboard";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import {
+  Card,
+  CardHeader,
+  CardTitle,
+  CardDescription,
+  CardAction,
+  CardContent,
+  CardFooter,
+} from "@/components/ui/card";
+import { Skeleton } from "@/components/ui/skeleton";
+import { formatConnectedDate } from "@/lib/utils";
 import type { ConnectedAccount, LegacyConnection } from "./connections/types";
 
 const EXAMPLE_PROMPTS = [
@@ -108,9 +122,23 @@ export function DashboardClient() {
       {/* Service cards */}
       <div className="mt-6 grid gap-4 sm:grid-cols-2">
         {loading ? (
-          <div className="col-span-full py-8 text-center text-sm text-muted-foreground">
-            Loading...
-          </div>
+          Array.from({ length: 2 }).map((_, i) => (
+            <Card key={i}>
+              <CardHeader>
+                <div className="flex items-start gap-3.5">
+                  <Skeleton className="h-10 w-10 rounded-lg" />
+                  <div className="space-y-2 pt-1">
+                    <Skeleton className="h-3.5 w-32" />
+                    <Skeleton className="h-3 w-44" />
+                  </div>
+                </div>
+              </CardHeader>
+              <CardContent className="space-y-2">
+                <Skeleton className="h-3 w-full" />
+                <Skeleton className="h-3 w-4/5" />
+              </CardContent>
+            </Card>
+          ))
         ) : (
           SERVICES.map((service) => {
             const serviceAccounts = accounts.filter(
@@ -123,71 +151,54 @@ export function DashboardClient() {
             const isConnected = hasAccounts || !!legacyConn;
 
             return (
-              <div
-                key={service.id}
-                className="flex flex-col rounded-xl border border-border shadow-sm"
-              >
-                {/* Card header */}
-                <div className="p-5 pb-0">
+              <Card key={service.id}>
+                <CardHeader>
                   <div className="flex items-start gap-3.5">
                     <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-secondary">
                       {service.icon}
                     </div>
                     <div className="min-w-0">
-                      <div className="flex items-center gap-2">
-                        <h3 className="font-display text-sm font-semibold text-foreground">
-                          {service.name}
-                        </h3>
-                        {isConnected ? (
-                          <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-emerald-500/10 px-2 py-0.5 text-[11px] font-medium text-emerald-600">
-                            <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
-                            Connected
-                          </span>
-                        ) : (
-                          <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-secondary px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
-                            <span className="h-1.5 w-1.5 rounded-full bg-muted-foreground/40" />
-                            Not connected
-                          </span>
-                        )}
-                      </div>
-                      <p className="mt-0.5 text-xs text-muted-foreground">
+                      <CardTitle className="text-sm font-semibold">
+                        {service.name}
+                      </CardTitle>
+                      <CardDescription className="text-xs">
                         {service.description}
-                      </p>
+                      </CardDescription>
                     </div>
                   </div>
-                </div>
+                  <CardAction>
+                    {isConnected ? (
+                      <Badge variant="success">
+                        <span className="size-1.5 rounded-full bg-current" />
+                        Connected
+                      </Badge>
+                    ) : (
+                      <Badge variant="secondary" className="text-muted-foreground">
+                        <span className="size-1.5 rounded-full bg-muted-foreground/40" />
+                        Not connected
+                      </Badge>
+                    )}
+                  </CardAction>
+                </CardHeader>
 
                 {/* Capabilities */}
-                <div className="flex-1 px-5 py-4">
+                <CardContent className="flex-1">
                   <ul className="space-y-1.5">
                     {service.capabilities.map((cap) => (
                       <li
                         key={cap}
                         className="flex items-start gap-2 text-xs text-muted-foreground"
                       >
-                        <svg
-                          width="14"
-                          height="14"
-                          viewBox="0 0 16 16"
-                          fill="none"
-                          className="mt-px shrink-0 text-muted-foreground/40"
-                        >
-                          <circle
-                            cx="8"
-                            cy="8"
-                            r="2"
-                            fill="currentColor"
-                          />
-                        </svg>
+                        <span className="mt-1.5 size-1 shrink-0 rounded-full bg-muted-foreground/40" />
                         {cap}
                       </li>
                     ))}
                   </ul>
-                </div>
+                </CardContent>
 
                 {/* Connected accounts (compact) */}
                 {hasAccounts && (
-                  <div className="space-y-1 border-t border-border px-5 py-3">
+                  <CardContent className="space-y-1 border-t pt-4">
                     {serviceAccounts.map((account) => (
                       <div
                         key={account.id}
@@ -201,84 +212,99 @@ export function DashboardClient() {
                             {account.accountEmail}
                           </span>
                           {account.isDefault && (
-                            <span className="shrink-0 text-[10px] font-medium text-primary">
+                            <Badge
+                              variant="secondary"
+                              className="bg-primary/10 text-primary"
+                            >
                               Default
-                            </span>
+                            </Badge>
                           )}
                         </div>
-                        <button
+                        <Button
+                          variant="ghost"
+                          size="xs"
                           onClick={(e) => disconnectAccount(e, account)}
                           disabled={disconnecting === account.id}
-                          className="shrink-0 text-[11px] text-muted-foreground transition-colors hover:text-foreground disabled:opacity-50"
+                          className="text-muted-foreground"
                         >
-                          {disconnecting === account.id
-                            ? "..."
-                            : "Disconnect"}
-                        </button>
+                          {disconnecting === account.id ? "..." : "Disconnect"}
+                        </Button>
                       </div>
                     ))}
-                  </div>
+                  </CardContent>
                 )}
 
                 {/* Legacy connection */}
                 {!hasAccounts && legacyConn && (
-                  <div className="flex items-center justify-between border-t border-border px-5 py-3">
+                  <CardContent className="flex items-center justify-between border-t pt-4">
                     <p className="text-[11px] text-muted-foreground">
-                      Connected{" "}
-                      {new Date(legacyConn.connectedAt).toLocaleDateString(
-                        "en-US",
-                        { month: "short", day: "numeric", year: "numeric" }
-                      )}
+                      Connected {formatConnectedDate(legacyConn.connectedAt)}
                     </p>
-                    <button
+                    <Button
+                      variant="ghost"
+                      size="xs"
                       onClick={(e) => disconnectLegacy(e, service.id)}
                       disabled={disconnecting === service.id}
-                      className="shrink-0 text-[11px] text-muted-foreground transition-colors hover:text-foreground disabled:opacity-50"
+                      className="shrink-0 text-muted-foreground hover:text-foreground"
                     >
                       {disconnecting === service.id ? "..." : "Disconnect"}
-                    </button>
-                  </div>
+                    </Button>
+                  </CardContent>
                 )}
 
                 {/* Actions footer */}
-                <div className="border-t border-border px-5 py-3">
+                <CardFooter className="gap-2">
                   {isConnected ? (
-                    <div className="flex gap-2">
-                      <Link
-                        href={`/dashboard/connections/${service.id}`}
-                        className="flex-1 rounded-[var(--radius)] border border-border py-1.5 text-center text-xs font-medium text-foreground transition-colors hover:bg-secondary"
+                    <>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="flex-1"
+                        render={
+                          <Link href={`/dashboard/connections/${service.id}`} />
+                        }
                       >
                         Playground
-                      </Link>
-                      <a
-                        href={service.connectUrl}
-                        onClick={() =>
-                          posthog.capture(EVENTS.CONNECTOR_ADDED, {
-                            connector: service.id,
-                            mode: "add_account",
-                          })
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        render={
+                          <a
+                            href={service.connectUrl}
+                            onClick={() =>
+                              posthog.capture(EVENTS.CONNECTOR_ADDED, {
+                                connector: service.id,
+                                mode: "add_account",
+                              })
+                            }
+                          />
                         }
-                        className="rounded-[var(--radius)] border border-border px-3 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
                       >
                         Add account
-                      </a>
-                    </div>
+                      </Button>
+                    </>
                   ) : (
-                    <a
-                      href={service.connectUrl}
-                      onClick={() =>
-                        posthog.capture(EVENTS.CONNECTOR_ADDED, {
-                          connector: service.id,
-                          mode: "first_connect",
-                        })
+                    <Button
+                      size="sm"
+                      className="w-full"
+                      render={
+                        <a
+                          href={service.connectUrl}
+                          onClick={() =>
+                            posthog.capture(EVENTS.CONNECTOR_ADDED, {
+                              connector: service.id,
+                              mode: "first_connect",
+                            })
+                          }
+                        />
                       }
-                      className="block rounded-[var(--radius)] bg-primary py-1.5 text-center text-xs font-medium text-primary-foreground transition-colors hover:bg-primary/90"
                     >
                       Connect
-                    </a>
+                    </Button>
                   )}
-                </div>
-              </div>
+                </CardFooter>
+              </Card>
             );
           })
         )}
@@ -308,53 +334,23 @@ export function DashboardClient() {
                 }
                 className="flex flex-1 items-start gap-1.5 text-left text-xs leading-relaxed text-foreground disabled:cursor-not-allowed disabled:opacity-50"
               >
-                <svg
-                  width="12"
-                  height="12"
-                  viewBox="0 0 16 16"
-                  fill="currentColor"
-                  className="mt-0.5 shrink-0 text-primary"
-                >
-                  <path d="M4 3l9 5-9 5V3z" />
-                </svg>
+                <Play className="mt-0.5 size-3 shrink-0 fill-primary text-primary" />
                 {prompt}
               </button>
-              <button
+              <Button
+                variant="ghost"
+                size="icon-xs"
                 onClick={() => copy(prompt, i)}
                 aria-label="Copy prompt"
                 title="Copy"
-                className="shrink-0 rounded-md p-1 text-muted-foreground opacity-0 transition-opacity hover:bg-secondary hover:text-foreground group-hover:opacity-100"
+                className="text-muted-foreground opacity-0 group-hover:opacity-100"
               >
                 {copied === i ? (
-                  <svg
-                    width="14"
-                    height="14"
-                    viewBox="0 0 16 16"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="1.5"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    className="text-emerald-500"
-                  >
-                    <path d="M3 8.5l3.5 3.5L13 4" />
-                  </svg>
+                  <Check className="size-3.5 text-emerald-500" />
                 ) : (
-                  <svg
-                    width="14"
-                    height="14"
-                    viewBox="0 0 16 16"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="1.5"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  >
-                    <rect x="5" y="5" width="8" height="8" rx="1.5" />
-                    <path d="M3 11V3.5A.5.5 0 013.5 3H11" />
-                  </svg>
+                  <Copy className="size-3.5" />
                 )}
-              </button>
+              </Button>
             </div>
           ))}
         </div>

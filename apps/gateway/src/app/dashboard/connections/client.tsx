@@ -3,6 +3,11 @@
 import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import { SERVICES } from "./services";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Card, CardContent } from "@/components/ui/card";
+import { Skeleton } from "@/components/ui/skeleton";
+import { formatConnectedDate } from "@/lib/utils";
 import type { ConnectedAccount, LegacyConnection } from "./types";
 
 export function ConnectionsClient() {
@@ -49,7 +54,22 @@ export function ConnectionsClient() {
 
   if (loading) {
     return (
-      <div className="mt-8 text-sm text-muted-foreground">Loading...</div>
+      <div className="mt-8 space-y-4">
+        {Array.from({ length: 2 }).map((_, i) => (
+          <Card key={i}>
+            <CardContent className="flex items-center justify-between">
+              <div className="flex items-center gap-4">
+                <Skeleton className="h-10 w-10 rounded-lg" />
+                <div className="space-y-2">
+                  <Skeleton className="h-4 w-40" />
+                  <Skeleton className="h-3 w-56" />
+                </div>
+              </div>
+              <Skeleton className="h-9 w-28 rounded-lg" />
+            </CardContent>
+          </Card>
+        ))}
+      </div>
     );
   }
 
@@ -66,125 +86,101 @@ export function ConnectionsClient() {
         const isConnected = hasAccounts || !!legacyConn;
 
         return (
-          <div key={service.id}>
-            <div
-              className={`rounded-2xl border border-border p-5 ${
-                isConnected
-                  ? "transition-colors hover:border-primary/30"
-                  : ""
-              }`}
-            >
-              <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-                <div className="flex items-start gap-4">
-                  <div className="shrink-0">{service.icon}</div>
-                  <div>
-                    <h3 className="font-display text-base font-semibold text-foreground">
-                      {service.name}
-                    </h3>
-                    <p className="mt-0.5 text-sm text-muted-foreground">
-                      {service.description}
-                    </p>
-                  </div>
-                </div>
-
-                <div className="shrink-0">
-                  {isConnected ? (
-                    <a
-                      href={service.connectUrl}
-                      className="inline-block rounded-[var(--radius)] border border-border px-4 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
-                    >
-                      Add account
-                    </a>
-                  ) : (
-                    <a
-                      href={service.connectUrl}
-                      className="inline-block rounded-[var(--radius)] bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
-                    >
-                      Connect
-                    </a>
-                  )}
+          <Card
+            key={service.id}
+            className={
+              isConnected ? "transition-colors hover:ring-primary/30" : ""
+            }
+          >
+            <CardContent className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex items-start gap-4">
+                <div className="shrink-0">{service.icon}</div>
+                <div>
+                  <h3 className="font-display text-base font-semibold text-foreground">
+                    {service.name}
+                  </h3>
+                  <p className="mt-0.5 text-sm text-muted-foreground">
+                    {service.description}
+                  </p>
                 </div>
               </div>
 
-              {/* Connected accounts list */}
-              {hasAccounts && (
-                <div className="mt-4 space-y-2 border-t border-border pt-4">
-                  {serviceAccounts.map((account) => (
-                    <Link
-                      key={account.id}
-                      href={`/dashboard/connections/${service.id}`}
-                      className="flex items-center justify-between rounded-lg px-3 py-2.5 transition-colors hover:bg-secondary/50"
-                    >
-                      <div className="flex items-center gap-3">
-                        <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary/10 text-xs font-medium text-primary">
-                          {account.accountEmail[0].toUpperCase()}
-                        </div>
-                        <div>
-                          <div className="flex items-center gap-2">
-                            <span className="text-sm font-medium text-foreground">
-                              {account.accountEmail}
-                            </span>
-                            {account.isDefault && (
-                              <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-medium text-primary">
-                                Default
-                              </span>
-                            )}
-                            {account.label && (
-                              <span className="rounded-full bg-secondary px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
-                                {account.label}
-                              </span>
-                            )}
-                          </div>
-                          <p className="text-xs text-muted-foreground">
-                            Connected{" "}
-                            {new Date(account.connectedAt).toLocaleDateString(
-                              "en-US",
-                              {
-                                month: "short",
-                                day: "numeric",
-                                year: "numeric",
-                              }
-                            )}
-                          </p>
-                        </div>
-                      </div>
-                      <button
-                        onClick={(e) => disconnectAccount(e, account.id)}
-                        disabled={disconnecting === account.id}
-                        className="rounded-[var(--radius)] border border-border px-3 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground disabled:opacity-50"
-                      >
-                        {disconnecting === account.id
-                          ? "..."
-                          : "Disconnect"}
-                      </button>
-                    </Link>
-                  ))}
-                </div>
-              )}
+              <Button
+                variant={isConnected ? "outline" : "default"}
+                className="self-start sm:self-auto"
+                render={<a href={service.connectUrl} />}
+              >
+                {isConnected ? "Add account" : "Connect"}
+              </Button>
+            </CardContent>
 
-              {/* Legacy connection (no connected_accounts row yet) */}
-              {!hasAccounts && legacyConn && (
-                <div className="mt-4 flex items-center justify-between border-t border-border pt-4">
-                  <p className="text-xs text-muted-foreground">
-                    Connected{" "}
-                    {new Date(legacyConn.connectedAt).toLocaleDateString(
-                      "en-US",
-                      { month: "short", day: "numeric", year: "numeric" }
-                    )}
-                  </p>
-                  <button
-                    onClick={(e) => disconnectLegacy(e, service.id)}
-                    disabled={disconnecting === service.id}
-                    className="rounded-[var(--radius)] border border-border px-3 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground disabled:opacity-50"
+            {/* Connected accounts list */}
+            {hasAccounts && (
+              <CardContent className="space-y-2 border-t pt-4">
+                {serviceAccounts.map((account) => (
+                  <Link
+                    key={account.id}
+                    href={`/dashboard/connections/${service.id}`}
+                    className="flex items-center justify-between rounded-lg px-3 py-2.5 transition-colors hover:bg-secondary/50"
                   >
-                    {disconnecting === service.id
-                      ? "..."
-                      : "Disconnect"}
-                  </button>
-                </div>
-              )}
-            </div>
-          </div>
+                    <div className="flex items-center gap-3">
+                      <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary/10 text-xs font-medium text-primary">
+                        {account.accountEmail[0].toUpperCase()}
+                      </div>
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm font-medium text-foreground">
+                            {account.accountEmail}
+                          </span>
+                          {account.isDefault && (
+                            <Badge
+                              variant="secondary"
+                              className="bg-primary/10 text-primary"
+                            >
+                              Default
+                            </Badge>
+                          )}
+                          {account.label && (
+                            <Badge variant="secondary">{account.label}</Badge>
+                          )}
+                        </div>
+                        <p className="text-xs text-muted-foreground">
+                          Connected {formatConnectedDate(account.connectedAt)}
+                        </p>
+                      </div>
+                    </div>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={(e) => disconnectAccount(e, account.id)}
+                      disabled={disconnecting === account.id}
+                      className="text-muted-foreground"
+                    >
+                      {disconnecting === account.id ? "..." : "Disconnect"}
+                    </Button>
+                  </Link>
+                ))}
+              </CardContent>
+            )}
+
+            {/* Legacy connection (no connected_accounts row yet) */}
+            {!hasAccounts && legacyConn && (
+              <CardContent className="flex items-center justify-between border-t pt-4">
+                <p className="text-xs text-muted-foreground">
+                  Connected {formatConnectedDate(legacyConn.connectedAt)}
+                </p>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={(e) => disconnectLegacy(e, service.id)}
+                  disabled={disconnecting === service.id}
+                  className="text-muted-foreground hover:text-foreground"
+                >
+                  {disconnecting === service.id ? "..." : "Disconnect"}
+                </Button>
+              </CardContent>
+            )}
+          </Card>
         );
       })}
     </div>

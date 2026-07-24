@@ -1,3 +1,5 @@
+import { Card } from "@/components/ui/card";
+
 export function StatCard({
   label,
   value,
@@ -10,18 +12,18 @@ export function StatCard({
   size?: "md" | "sm";
 }) {
   return (
-    <div className="rounded-xl border border-border p-5">
+    <Card className="gap-1 p-5">
       <p className="text-xs text-muted-foreground">{label}</p>
       <p
-        className={`mt-1 font-display font-bold text-foreground ${
+        className={`font-display font-bold text-foreground tabular-nums ${
           size === "sm" ? "text-xl" : "text-2xl"
         }`}
       >
         {value}
       </p>
       {hint && (
-        <p className="mt-1 text-[10px] text-muted-foreground/70">{hint}</p>
+        <p className="text-[10px] text-muted-foreground/70">{hint}</p>
       )}
-    </div>
+    </Card>
   );
 }
