@@ -1,425 +1,190 @@
 import { describe, it, expect, vi } from "vitest";
+import { simulateReadableStream } from "ai";
+import { MockLanguageModelV3 } from "ai/test";
 import {
-  runPlaygroundTurn,
-  resumePlaygroundTurn,
-  MAX_TOOL_ITERATIONS,
-  type EngineEvent,
-  type EngineTool,
-  type TurnResult,
+  buildToolSet, streamEngineTurn, detectPause, executeWriteBatch,
+  TOOL_OUTPUT_CAP, type EngineDeps, type EngineTool,
 } from "./engine";
 
-function scriptedLlm(responses: object[]) {
-  let i = 0;
-  return { messages: { create: vi.fn(async (_req: any) => responses[i++]) } };
-}
-
-const textMsg = { stop_reason: "end_turn", content: [{ type: "text", text: "hi there" }] };
-const toolMsg = {
-  stop_reason: "tool_use",
-  content: [
-    { type: "text", text: "Let me check." },
-    { type: "tool_use", id: "tu_1", name: "gws-mcp__gmail_search", input: { query: "is:unread" } },
-  ],
-};
-
 const tools: EngineTool[] = [
-  { name: "gws-mcp__gmail_search", description: "search gmail", input_schema: {} },
+  { name: "gws-mcp__gmail_search", description: "search gmail", input_schema: { type: "object" } },
+  { name: "gws-mcp__gmail_send", description: "send mail", input_schema: { type: "object" } },
+];
+const isWrite = (n: string) => n === "gws-mcp__gmail_send";
+
+// NOTE (Step 1 finding): the installed @ai-sdk/provider v3 LanguageModelV3Usage
+// and LanguageModelV3FinishReason shapes are nested objects, not the flat
+// { inputTokens, outputTokens, totalTokens } / bare-string shapes the brief
+// assumed (that flatter shape is what `result.usage` / `result.finishReason`
+// resolve TO at the streamText level — not what a mock model's raw `finish`
+// chunk must emit). See task-4-report.md for the full deviation list.
+const usage = {
+  inputTokens: { total: 1, noCache: 1, cacheRead: undefined, cacheWrite: undefined },
+  outputTokens: { total: 1, text: 1, reasoning: undefined },
+};
+const textStream = (text: string) => [
+  { type: "stream-start", warnings: [] },
+  { type: "text-start", id: "t1" },
+  { type: "text-delta", id: "t1", delta: text },
+  { type: "text-end", id: "t1" },
+  { type: "finish", finishReason: { unified: "stop", raw: undefined }, usage },
+];
+const toolCallStream = (calls: { id: string; name: string; input: object }[]) => [
+  { type: "stream-start", warnings: [] },
+  ...calls.map((c) => ({
+    type: "tool-call", toolCallId: c.id, toolName: c.name, input: JSON.stringify(c.input),
+  })),
+  { type: "finish", finishReason: { unified: "tool-calls", raw: undefined }, usage },
 ];
 
-function baseOpts(overrides: Partial<Parameters<typeof runPlaygroundTurn>[0]> = {}) {
-  return {
-    llm: scriptedLlm([textMsg]) as any,
-    model: "claude-sonnet-5",
-    tools,
-    messages: [{ role: "user", content: "hi" }],
-    executeTool: vi.fn(async () => ({ text: "3 emails", isError: false })),
-    emit: vi.fn(),
-    // Default: nothing is a write, so existing tool tests never pause.
-    isWrite: () => false,
-    ...overrides,
-  };
+/** Model that plays scripted step streams in order (streamText calls doStream once per step).
+ * Chunks are cast to `any` — the LanguageModelV3StreamPart union is exact-object-typed
+ * (e.g. `{ type: "stream-start"; warnings: [] }`) and doesn't infer cleanly from a plain
+ * object literal array; the runtime shapes are verified against the installed provider
+ * types in Step 1 (see task-4-report.md). */
+function scriptedModel(steps: object[][]) {
+  let i = 0;
+  return new MockLanguageModelV3({
+    doStream: async () => ({
+      stream: simulateReadableStream({ chunks: steps[Math.min(i++, steps.length - 1)] as any }),
+    }),
+  });
 }
 
-describe("runPlaygroundTurn", () => {
-  it("emits text and done for a plain response", async () => {
-    const emit = vi.fn();
-    const opts = baseOpts({ emit });
-    await runPlaygroundTurn(opts as any);
+function deps(model: MockLanguageModelV3, executeTool = vi.fn(async () => ({ text: "ok", isError: false }))): EngineDeps {
+  return { model, tools, isWrite, executeTool };
+}
 
-    expect(emit.mock.calls.map((c) => c[0])).toEqual([
-      { type: "text", text: "hi there" },
-      { type: "done", stopReason: "end_turn" },
-    ] satisfies EngineEvent[]);
+describe("streamEngineTurn + detectPause", () => {
+  it("plain text turn: streams text, no pause", async () => {
+    const d = deps(scriptedModel([textStream("hi there")]));
+    const result = streamEngineTurn(d, [{ role: "user", content: "hi" }]);
+    expect(await result.text).toBe("hi there");
+    expect(await detectPause(d, [{ role: "user", content: "hi" }], result)).toBeNull();
   });
 
-  it("runs the tool loop: tool_use -> executeTool -> feeds tool_result back -> final text", async () => {
-    const emit = vi.fn();
-    const llm = scriptedLlm([toolMsg, textMsg]);
+  it("read tool loop: executes the read, feeds result back, finishes with text, no pause", async () => {
     const executeTool = vi.fn(async () => ({ text: "3 emails", isError: false }));
-    const opts = baseOpts({ llm: llm as any, executeTool, emit });
-    await runPlaygroundTurn(opts as any);
-
-    expect(emit.mock.calls.map((c) => c[0])).toEqual([
-      { type: "text", text: "Let me check." },
-      { type: "tool_start", name: "gws-mcp__gmail_search" },
-      { type: "tool_done", name: "gws-mcp__gmail_search", isError: false },
-      { type: "text", text: "hi there" },
-      { type: "done", stopReason: "end_turn" },
-    ] satisfies EngineEvent[]);
-
+    const d = deps(
+      scriptedModel([
+        toolCallStream([{ id: "tc1", name: "gws-mcp__gmail_search", input: { query: "is:unread" } }]),
+        textStream("You have 3 unread."),
+      ]),
+      executeTool
+    );
+    const result = streamEngineTurn(d, [{ role: "user", content: "unread?" }]);
+    expect(await result.text).toContain("3 unread");
     expect(executeTool).toHaveBeenCalledWith("gws-mcp__gmail_search", { query: "is:unread" });
-
-    // second create() call's messages should end with a user turn whose
-    // content[0] is the tool_result block.
-    expect(llm.messages.create).toHaveBeenCalledTimes(2);
-    const secondCallArgs = llm.messages.create.mock.calls[1][0];
-    const lastMessage = secondCallArgs.messages[secondCallArgs.messages.length - 1];
-    expect(lastMessage.role).toBe("user");
-    expect(lastMessage.content[0]).toEqual({
-      type: "tool_result",
-      tool_use_id: "tu_1",
-      content: "3 emails",
-    });
-
-    // the assistant turn (tool_use content) must have been pushed before the
-    // user tool_result turn.
-    const assistantMessage = secondCallArgs.messages[secondCallArgs.messages.length - 2];
-    expect(assistantMessage.role).toBe("assistant");
-    expect(assistantMessage.content).toEqual(toolMsg.content);
+    expect(await detectPause(d, [{ role: "user", content: "unread?" }], result)).toBeNull();
   });
 
-  it("stops after MAX_TOOL_ITERATIONS and emits done with stopReason 'max_iterations'", async () => {
-    const emit = vi.fn();
-    const llm = scriptedLlm(Array(20).fill(toolMsg));
-    const opts = baseOpts({ llm: llm as any, emit });
-    await runPlaygroundTurn(opts as any);
-
-    expect(llm.messages.create).toHaveBeenCalledTimes(MAX_TOOL_ITERATIONS);
-    expect(MAX_TOOL_ITERATIONS).toBe(8);
-    const lastEvent = emit.mock.calls[emit.mock.calls.length - 1][0];
-    expect(lastEvent).toEqual({ type: "done", stopReason: "max_iterations" });
-  });
-
-  it("feeds tool errors back as is_error tool_result and keeps going", async () => {
-    const emit = vi.fn();
-    const llm = scriptedLlm([toolMsg, textMsg]);
-    const executeTool = vi.fn(async () => {
-      throw new Error("boom: tool failed");
-    });
-    const opts = baseOpts({ llm: llm as any, executeTool, emit });
-    await runPlaygroundTurn(opts as any);
-
-    expect(emit.mock.calls.map((c) => c[0])).toEqual([
-      { type: "text", text: "Let me check." },
-      { type: "tool_start", name: "gws-mcp__gmail_search" },
-      { type: "tool_done", name: "gws-mcp__gmail_search", isError: true },
-      { type: "text", text: "hi there" },
-      { type: "done", stopReason: "end_turn" },
-    ] satisfies EngineEvent[]);
-
-    const secondCallArgs = llm.messages.create.mock.calls[1][0];
-    const lastMessage = secondCallArgs.messages[secondCallArgs.messages.length - 1];
-    expect(lastMessage.content[0]).toEqual({
-      type: "tool_result",
-      tool_use_id: "tu_1",
-      content: "boom: tool failed",
-      is_error: true,
-    });
-  });
-
-  it("marks the last tool and the system block with ephemeral cache_control", async () => {
-    const emit = vi.fn();
-    const llm = scriptedLlm([textMsg]);
-    const manyTools: EngineTool[] = [
-      { name: "tool_a", description: "a", input_schema: {} },
-      { name: "tool_b", description: "b", input_schema: {} },
-      { name: "tool_c", description: "c", input_schema: {} },
-    ];
-    const opts = baseOpts({ llm: llm as any, emit, tools: manyTools });
-    await runPlaygroundTurn(opts as any);
-
-    const callArgs = llm.messages.create.mock.calls[0][0];
-    expect(callArgs.system[0].cache_control).toEqual({ type: "ephemeral" });
-    expect(callArgs.tools[callArgs.tools.length - 1].cache_control).toEqual({ type: "ephemeral" });
-    expect(callArgs.tools[0].cache_control).toBeUndefined();
-    expect(callArgs.tools[1].cache_control).toBeUndefined();
-  });
-
-  it("handles multiple tool_use blocks in a single LLM response (parallel tool calls)", async () => {
-    const emit = vi.fn();
-    const parallelToolMsg = {
-      stop_reason: "tool_use",
-      content: [
-        { type: "text", text: "Let me check multiple things." },
-        { type: "tool_use", id: "tu_1", name: "gws-mcp__gmail_search", input: { query: "is:unread" } },
-        { type: "tool_use", id: "tu_2", name: "tools-b", input: { param: "value" } },
-      ],
-    };
-    const llm = scriptedLlm([parallelToolMsg, textMsg]);
-    const executeTool = vi.fn(async (name: string) => {
-      if (name === "gws-mcp__gmail_search") return { text: "5 unread emails", isError: false };
-      return { text: "result from tool B", isError: false };
-    });
-    const multiToolConfig = [
-      { name: "gws-mcp__gmail_search", description: "search gmail", input_schema: {} },
-      { name: "tools-b", description: "tool b", input_schema: {} },
-    ];
-    const opts = baseOpts({ llm: llm as any, executeTool, emit, tools: multiToolConfig });
-    await runPlaygroundTurn(opts as any);
-
-    // Verify executeTool called twice, in order
-    expect(executeTool).toHaveBeenCalledTimes(2);
-    expect(executeTool).toHaveBeenNthCalledWith(1, "gws-mcp__gmail_search", { query: "is:unread" });
-    expect(executeTool).toHaveBeenNthCalledWith(2, "tools-b", { param: "value" });
-
-    // Verify emit contains tool_start/tool_done for both tools
-    expect(emit.mock.calls.map((c) => c[0])).toEqual([
-      { type: "text", text: "Let me check multiple things." },
-      { type: "tool_start", name: "gws-mcp__gmail_search" },
-      { type: "tool_done", name: "gws-mcp__gmail_search", isError: false },
-      { type: "tool_start", name: "tools-b" },
-      { type: "tool_done", name: "tools-b", isError: false },
-      { type: "text", text: "hi there" },
-      { type: "done", stopReason: "end_turn" },
-    ] satisfies EngineEvent[]);
-
-    // Verify second create() call's messages end with a user turn containing two tool_result blocks
-    expect(llm.messages.create).toHaveBeenCalledTimes(2);
-    const secondCallArgs = llm.messages.create.mock.calls[1][0];
-    const lastMessage = secondCallArgs.messages[secondCallArgs.messages.length - 1];
-    expect(lastMessage.role).toBe("user");
-    expect(lastMessage.content).toHaveLength(2);
-    expect(lastMessage.content[0]).toEqual({
-      type: "tool_result",
-      tool_use_id: "tu_1",
-      content: "5 unread emails",
-    });
-    expect(lastMessage.content[1]).toEqual({
-      type: "tool_result",
-      tool_use_id: "tu_2",
-      content: "result from tool B",
-    });
-
-    // Verify the assistant turn with parallel tool_use blocks was pushed before the user tool_result turn
-    const assistantMessage = secondCallArgs.messages[secondCallArgs.messages.length - 2];
-    expect(assistantMessage.role).toBe("assistant");
-    expect(assistantMessage.content).toEqual(parallelToolMsg.content);
-  });
-
-  it("stops before the next iteration when shouldStop flips true (client abort)", async () => {
-    const emit = vi.fn();
-    // Iteration 1: create() -> toolMsg, shouldStop checked at top of iter 1
-    // (false) and before the single tool executes (false); loop then goes to
-    // check shouldStop at the top of iteration 2, which returns true.
-    const shouldStop = vi
-      .fn()
-      .mockReturnValueOnce(false) // top of iteration 1
-      .mockReturnValueOnce(false) // before tool execution in iteration 1
-      .mockReturnValue(true); // top of iteration 2 -> stop
-    const llm = scriptedLlm([toolMsg, textMsg]);
-    const executeTool = vi.fn(async () => ({ text: "3 emails", isError: false }));
-    const opts = baseOpts({ llm: llm as any, executeTool, emit, shouldStop });
-    await runPlaygroundTurn(opts as any);
-
-    expect(llm.messages.create).toHaveBeenCalledTimes(1);
+  it("mixed batch: read executes, write does NOT — pause carries only the write", async () => {
+    const executeTool = vi.fn(async () => ({ text: "found it", isError: false }));
+    const d = deps(
+      scriptedModel([
+        toolCallStream([
+          { id: "tc_r", name: "gws-mcp__gmail_search", input: { query: "q" } },
+          { id: "tc_w", name: "gws-mcp__gmail_send", input: { to: "a@b.c" } },
+        ]),
+      ]),
+      executeTool
+    );
+    const history = [{ role: "user" as const, content: "send it" }];
+    const result = streamEngineTurn(d, history);
+    const pause = await detectPause(d, history, result);
+    expect(pause).not.toBeNull();
+    expect(pause!.pending).toEqual([{ id: "tc_w", name: "gws-mcp__gmail_send", input: { to: "a@b.c" } }]);
+    // The read ran; the write never did.
     expect(executeTool).toHaveBeenCalledTimes(1);
-    const lastEvent = emit.mock.calls[emit.mock.calls.length - 1][0];
-    expect(lastEvent).toEqual({ type: "done", stopReason: "aborted" });
+    expect(executeTool).toHaveBeenCalledWith("gws-mcp__gmail_search", { query: "q" });
+    // Paused messages include history + the assistant tool-call step(s).
+    expect(pause!.messages.length).toBeGreaterThan(history.length);
   });
 
-  it("stops before executing a remaining tool in the same response when shouldStop flips true mid-batch", async () => {
-    const emit = vi.fn();
-    const parallelToolMsg = {
-      stop_reason: "tool_use",
-      content: [
-        { type: "tool_use", id: "tu_1", name: "gws-mcp__gmail_search", input: { query: "is:unread" } },
-        { type: "tool_use", id: "tu_2", name: "tools-b", input: { param: "value" } },
-      ],
-    };
-    // shouldStop is false at the top of the (only) iteration and before the
-    // first tool, then flips true right before the second tool would run.
-    const shouldStop = vi
-      .fn()
-      .mockReturnValueOnce(false) // top of iteration
-      .mockReturnValueOnce(false) // before tool 1
-      .mockReturnValue(true); // before tool 2 -> stop
-    const llm = scriptedLlm([parallelToolMsg]);
-    const executeTool = vi.fn(async () => ({ text: "ok", isError: false }));
-    const opts = baseOpts({ llm: llm as any, executeTool, emit, shouldStop });
-    await runPlaygroundTurn(opts as any);
+  it("caps tool output fed back to the model at TOOL_OUTPUT_CAP", async () => {
+    const executeTool = vi.fn(async () => ({ text: "x".repeat(TOOL_OUTPUT_CAP + 500), isError: false }));
+    const d = deps(
+      scriptedModel([
+        toolCallStream([{ id: "tc1", name: "gws-mcp__gmail_search", input: {} }]),
+        textStream("done"),
+      ]),
+      executeTool
+    );
+    const result = streamEngineTurn(d, [{ role: "user", content: "go" }]);
+    await result.text;
+    const msgs = (await result.response).messages;
+    const toolMsg = JSON.stringify(msgs);
+    expect(toolMsg).not.toContain("x".repeat(TOOL_OUTPUT_CAP + 1));
+  });
 
-    expect(executeTool).toHaveBeenCalledTimes(1);
-    expect(executeTool).toHaveBeenCalledWith("gws-mcp__gmail_search", { query: "is:unread" });
-    expect(llm.messages.create).toHaveBeenCalledTimes(1);
-    const lastEvent = emit.mock.calls[emit.mock.calls.length - 1][0];
-    expect(lastEvent).toEqual({ type: "done", stopReason: "aborted" });
+  it("stops at the iteration cap", async () => {
+    // Model that ALWAYS asks for another read → loop must stop at 8 steps.
+    const d = deps(
+      scriptedModel([toolCallStream([{ id: "tc", name: "gws-mcp__gmail_search", input: {} }])])
+    );
+    const result = streamEngineTurn(d, [{ role: "user", content: "loop" }]);
+    await result.text;
+    expect((await result.steps).length).toBeLessThanOrEqual(8);
   });
 });
 
-const sendToolMsg = {
-  stop_reason: "tool_use",
-  content: [
-    { type: "text", text: "I'll send that." },
-    { type: "tool_use", id: "w_1", name: "gws-mcp__gmail_send", input: { to: "a@b.com" } },
-  ],
-};
-const isWrite = (name: string) => name.includes("send") || name.includes("create");
+describe("buildToolSet", () => {
+  it("gives reads an execute function and writes none", () => {
+    const d = deps(scriptedModel([textStream("x")]));
+    const set = buildToolSet(d);
+    expect(typeof set["gws-mcp__gmail_search"]?.execute).toBe("function");
+    expect(set["gws-mcp__gmail_send"]?.execute).toBeUndefined();
+  });
+});
 
-describe("write confirmation gate", () => {
-  it("pauses before a write: executes nothing, returns awaiting_confirmation", async () => {
-    const emit = vi.fn();
+describe("executeWriteBatch", () => {
+  const writes = [
+    { id: "w1", name: "gws-mcp__gmail_send", input: { to: "a@b.c" } },
+    { id: "w2", name: "gws-mcp__docs_create", input: { title: "t" } },
+  ];
+
+  it("runs approved writes through executeTool; denies everything else by default", async () => {
     const executeTool = vi.fn(async () => ({ text: "sent", isError: false }));
-    const llm = scriptedLlm([sendToolMsg]);
-    const opts = baseOpts({ llm: llm as any, executeTool, emit, isWrite });
-    const result = (await runPlaygroundTurn(opts as any)) as TurnResult;
-
-    expect(result.status).toBe("awaiting_confirmation");
-    if (result.status !== "awaiting_confirmation") throw new Error("unreachable");
-    expect(result.pending).toEqual([
-      { id: "w_1", name: "gws-mcp__gmail_send", input: { to: "a@b.com" } },
-    ]);
-    // Nothing ran, no tool chips, no done — just the assistant's text.
-    expect(executeTool).not.toHaveBeenCalled();
-    expect(emit.mock.calls.map((c) => c[0])).toEqual([
-      { type: "text", text: "I'll send that." },
-    ] satisfies EngineEvent[]);
-    // The paused batch + messages (incl. the assistant tool_use msg) are returned.
-    expect(result.batch).toHaveLength(1);
-    const lastMsg = result.messages[result.messages.length - 1] as any;
-    expect(lastMsg.role).toBe("assistant");
-    expect(lastMsg.content).toEqual(sendToolMsg.content);
-  });
-
-  it("pauses the whole mixed batch (read + write) before running the read", async () => {
-    const emit = vi.fn();
-    const executeTool = vi.fn(async () => ({ text: "x", isError: false }));
-    const mixed = {
-      stop_reason: "tool_use",
-      content: [
-        { type: "tool_use", id: "r_1", name: "gws-mcp__gmail_search", input: {} },
-        { type: "tool_use", id: "w_1", name: "gws-mcp__gmail_send", input: { to: "a@b.com" } },
-      ],
-    };
-    const opts = baseOpts({ llm: scriptedLlm([mixed]) as any, executeTool, emit, isWrite });
-    const result = (await runPlaygroundTurn(opts as any)) as TurnResult;
-
-    expect(result.status).toBe("awaiting_confirmation");
-    if (result.status !== "awaiting_confirmation") throw new Error("unreachable");
-    // Only the write is pending, but nothing (not even the read) has run.
-    expect(result.pending.map((p) => p.id)).toEqual(["w_1"]);
-    expect(result.batch).toHaveLength(2);
-    expect(executeTool).not.toHaveBeenCalled();
-  });
-
-  it("resume approve: runs the write, then continues to the final answer", async () => {
-    const emit = vi.fn();
-    const executeTool = vi.fn(async () => ({ text: "sent ok", isError: false }));
-    // After the write result feeds back, the model wraps up.
-    const llm = scriptedLlm([textMsg]);
-    const result = (await resumePlaygroundTurn({
-      llm: llm as any,
-      model: "claude-sonnet-5",
-      tools,
-      messages: [{ role: "user", content: "send it" }, { role: "assistant", content: sendToolMsg.content }],
-      batch: [{ id: "w_1", name: "gws-mcp__gmail_send", input: { to: "a@b.com" } }],
-      decisions: { w_1: "approve" },
-      executeTool,
-      emit,
-      isWrite,
-    })) as TurnResult;
-
-    expect(result.status).toBe("complete");
-    expect(executeTool).toHaveBeenCalledWith("gws-mcp__gmail_send", { to: "a@b.com" });
-    expect(emit.mock.calls.map((c) => c[0])).toEqual([
-      { type: "tool_start", name: "gws-mcp__gmail_send" },
-      { type: "tool_done", name: "gws-mcp__gmail_send", isError: false },
-      { type: "text", text: "hi there" },
-      { type: "done", stopReason: "end_turn" },
-    ] satisfies EngineEvent[]);
-    // The approved write's real result is fed back to the model.
-    const contInput = llm.messages.create.mock.calls[0][0];
-    const toolResultMsg = contInput.messages[contInput.messages.length - 1];
-    expect(toolResultMsg.content[0]).toEqual({
-      type: "tool_result",
-      tool_use_id: "w_1",
-      content: "sent ok",
-    });
-  });
-
-  it("resume deny: refuses the write without running it, feeds back a declined result", async () => {
-    const emit = vi.fn();
-    const executeTool = vi.fn(async () => ({ text: "should not run", isError: false }));
-    const llm = scriptedLlm([textMsg]);
-    const result = (await resumePlaygroundTurn({
-      llm: llm as any,
-      model: "claude-sonnet-5",
-      tools,
-      messages: [{ role: "user", content: "send it" }, { role: "assistant", content: sendToolMsg.content }],
-      batch: [{ id: "w_1", name: "gws-mcp__gmail_send", input: { to: "a@b.com" } }],
-      decisions: { w_1: "deny" },
-      executeTool,
-      emit,
-      isWrite,
-    })) as TurnResult;
-
-    expect(result.status).toBe("complete");
-    expect(executeTool).not.toHaveBeenCalled();
-    expect(emit.mock.calls.map((c) => c[0])).toEqual([
-      { type: "tool_start", name: "gws-mcp__gmail_send" },
-      { type: "tool_done", name: "gws-mcp__gmail_send", isError: true },
-      { type: "text", text: "hi there" },
-      { type: "done", stopReason: "end_turn" },
-    ] satisfies EngineEvent[]);
-    const contInput = llm.messages.create.mock.calls[0][0];
-    const toolResultMsg = contInput.messages[contInput.messages.length - 1];
-    expect(toolResultMsg.content[0]).toEqual({
-      type: "tool_result",
-      tool_use_id: "w_1",
-      content: "User declined this action.",
-      is_error: true,
-    });
-  });
-
-  it("resume treats a missing decision as denied (safe default)", async () => {
-    const emit = vi.fn();
-    const executeTool = vi.fn(async () => ({ text: "should not run", isError: false }));
-    const result = (await resumePlaygroundTurn({
-      llm: scriptedLlm([textMsg]) as any,
-      model: "claude-sonnet-5",
-      tools,
-      messages: [{ role: "assistant", content: sendToolMsg.content }],
-      batch: [{ id: "w_1", name: "gws-mcp__gmail_send", input: {} }],
-      decisions: {}, // no decision for w_1
-      executeTool,
-      emit,
-      isWrite,
-    })) as TurnResult;
-
-    expect(result.status).toBe("complete");
-    expect(executeTool).not.toHaveBeenCalled();
-  });
-
-  it("resume runs reads in the paused batch regardless of decisions", async () => {
-    const emit = vi.fn();
-    const executeTool = vi.fn(async () => ({ text: "read result", isError: false }));
-    const batch = [
-      { id: "r_1", name: "gws-mcp__gmail_search", input: { q: "x" } },
-      { id: "w_1", name: "gws-mcp__gmail_send", input: { to: "a@b.com" } },
-    ];
-    await resumePlaygroundTurn({
-      llm: scriptedLlm([textMsg]) as any,
-      model: "claude-sonnet-5",
-      tools,
-      messages: [{ role: "assistant", content: [] }],
-      batch,
-      decisions: { w_1: "deny" },
-      executeTool,
-      emit,
-      isWrite,
-    });
-
-    // The read ran; the denied write did not.
+    const d = { ...deps(scriptedModel([textStream("x")])), executeTool };
+    const { toolMessage, outcomes } = await executeWriteBatch(d, writes, { w1: "approve" });
     expect(executeTool).toHaveBeenCalledTimes(1);
-    expect(executeTool).toHaveBeenCalledWith("gws-mcp__gmail_search", { q: "x" });
+    expect(executeTool).toHaveBeenCalledWith("gws-mcp__gmail_send", { to: "a@b.c" });
+    expect(outcomes).toEqual([
+      { name: "gws-mcp__gmail_send", isError: false, denied: false },
+      { name: "gws-mcp__docs_create", isError: true, denied: true },
+    ]);
+    const s = JSON.stringify(toolMessage);
+    expect(s).toContain("User declined this action.");
+    expect(s).toContain("sent");
+  });
+
+  it("treats arbitrary decision values as deny", async () => {
+    const executeTool = vi.fn(async () => ({ text: "sent", isError: false }));
+    const d = { ...deps(scriptedModel([textStream("x")])), executeTool };
+    const { outcomes } = await executeWriteBatch(d, writes, { w1: "APPROVE", w2: true });
+    expect(executeTool).not.toHaveBeenCalled();
+    expect(outcomes.every((o) => o.denied)).toBe(true);
+  });
+
+  it("stops before each write when the abort signal fired", async () => {
+    const ac = new AbortController();
+    ac.abort();
+    const executeTool = vi.fn(async () => ({ text: "sent", isError: false }));
+    const d = { ...deps(scriptedModel([textStream("x")])), executeTool, abortSignal: ac.signal };
+    await executeWriteBatch(d, writes, { w1: "approve", w2: "approve" });
+    expect(executeTool).not.toHaveBeenCalled();
+  });
+
+  it("caps write output and converts executor throws to error results", async () => {
+    const executeTool = vi
+      .fn()
+      .mockResolvedValueOnce({ text: "y".repeat(TOOL_OUTPUT_CAP + 500), isError: false })
+      .mockRejectedValueOnce(new Error("boom"));
+    const d = { ...deps(scriptedModel([textStream("x")])), executeTool };
+    const { toolMessage, outcomes } = await executeWriteBatch(d, writes, { w1: "approve", w2: "approve" });
+    const s = JSON.stringify(toolMessage);
+    expect(s).not.toContain("y".repeat(TOOL_OUTPUT_CAP + 1));
+    expect(s).toContain("boom");
+    expect(outcomes[1]).toEqual({ name: "gws-mcp__docs_create", isError: true, denied: false });
   });
 });
