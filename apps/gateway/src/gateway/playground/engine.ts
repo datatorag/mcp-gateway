@@ -1,7 +1,12 @@
 import {
   streamText, dynamicTool, jsonSchema, stepCountIs,
-  type LanguageModel, type ModelMessage, type ToolSet, type StreamTextResult, type ToolResultPart,
+  type LanguageModel, type ModelMessage, type SystemModelMessage, type ToolSet,
+  type StreamTextResult, type ToolResultPart,
 } from "ai";
+
+/** `ai` re-exports the VALUE surface but not `ProviderOptions` itself; take it
+ * off a message type so these stay in lockstep with the installed SDK. */
+type ProviderOptions = NonNullable<SystemModelMessage["providerOptions"]>;
 
 /** Pure, injectable playground engine on the AI SDK. Never imports the LLM
  * factory, db, or config — the route supplies everything, keeping this file
@@ -50,6 +55,64 @@ export const SYSTEM_PROMPT =
   "tool normally — do not ask for confirmation in text. " +
   "If the user hasn't connected the needed service, tell them to connect it on the dashboard.";
 
+/** Prompt-cache breakpoints (Anthropic — the provider this deployment runs;
+ * see PLAYGROUND_PROVIDER / getPlaygroundModel).
+ *
+ * A cache breakpoint is a per-BLOCK marker, NOT a call-level setting. Passing
+ * `providerOptions: { anthropic: { cacheControl } }` to `streamText` — which
+ * is what this file used to do — only sets a top-level `cache_control` field
+ * on the request body (@ai-sdk/anthropic dist/index.js ~:3612,
+ * `...anthropicOptions?.cacheControl && { cache_control }`). Anthropic does
+ * not treat that as a breakpoint, so it bought us nothing: ~15k tokens of
+ * tool schemas (a connected Google Workspace user) were re-billed at full
+ * rate on every step of every turn.
+ *
+ * The provider reads REAL breakpoints from exactly two places we control:
+ *   - each system MESSAGE's own `providerOptions` (dist/index.js ~:2295), and
+ *   - each TOOL definition's own `providerOptions` (dist/index.js ~:1506).
+ * `system` therefore has to be a `SystemModelMessage`, not a bare string:
+ * `convertToLanguageModelPrompt` (ai dist/index.js ~:1526) forwards
+ * `message.providerOptions` for the object form and drops it for the string
+ * form.
+ *
+ * Verified by capturing the serialized request body through a stub `fetch`:
+ * `system[0].cache_control = {type:"ephemeral"}`,
+ * `tools[last].cache_control = {type:"ephemeral"}`, tools before it carry
+ * none, and there is no top-level `cache_control` left.
+ *
+ * NOT wired for Bedrock. The Bedrock branch of `getPlaygroundModel` is a
+ * supported-but-currently-unused path; it ignores the `anthropic` key
+ * entirely and wants `providerOptions.bedrock.cachePoint`, so if this
+ * deployment ever switches providers it will run UNCACHED until that is added
+ * (and note @ai-sdk/amazon-bedrock's `prepareTools` builds each `toolSpec`
+ * from name/description/inputSchema only — it never reads
+ * `tool.providerOptions` — so a Bedrock cache point on a tool definition is
+ * not expressible there at this version). */
+const SYSTEM_CACHE_OPTIONS: ProviderOptions = {
+  anthropic: { cacheControl: { type: "ephemeral" } },
+};
+
+const TOOL_CACHE_OPTIONS: ProviderOptions = {
+  anthropic: { cacheControl: { type: "ephemeral" } },
+};
+
+/** System prompt as a MESSAGE, so it can carry the cache breakpoint above.
+ *
+ * Handed to `streamText`'s `system:` option, which accepts a
+ * `SystemModelMessage` as well as a string (`standardizePrompt`, ai
+ * dist/index.js ~:2318), rather than being prepended to `messages`. Both
+ * produce a byte-identical request — `convertToLanguageModelPrompt` maps them
+ * into the same leading system entry — but a system message inside `messages`
+ * makes the SDK `console.warn` about prompt injection on every single turn,
+ * and silencing that means opting into `allowSystemInMessages: true`, which
+ * turns off the very check that would catch a client-supplied system message
+ * sneaking through `buildModelHistory`. Keep it here. */
+const SYSTEM_MESSAGE: SystemModelMessage = {
+  role: "system",
+  content: SYSTEM_PROMPT,
+  providerOptions: SYSTEM_CACHE_OPTIONS,
+};
+
 /** Shared capped executor: the ONLY way tool output enters the conversation
  * (reads inside streamText, approved writes in executeWriteBatch). */
 async function runCapped(deps: EngineDeps, name: string, args: Record<string, unknown>) {
@@ -96,6 +159,16 @@ export function buildToolSet(deps: EngineDeps): ToolSet {
       });
     }
   }
+  // Cache breakpoint on the LAST tool definition: tool schemas are identical
+  // across every step and every turn (~15k tokens for a Google Workspace
+  // user), so this turns the whole tool block into a cache read. Order is
+  // deterministic — taken from `deps.tools`, which is also the order the set
+  // was built in and therefore the order the provider serializes.
+  const lastName = deps.tools[deps.tools.length - 1]?.name;
+  const lastTool = lastName === undefined ? undefined : set[lastName];
+  if (lastName !== undefined && lastTool !== undefined) {
+    set[lastName] = { ...lastTool, providerOptions: TOOL_CACHE_OPTIONS };
+  }
   return set;
 }
 
@@ -105,13 +178,10 @@ export function streamEngineTurn(
 ): StreamTextResult<ToolSet, never> {
   return streamText({
     model: deps.model,
-    system: SYSTEM_PROMPT,
-    // Prompt caching (Anthropic): system + tools are identical across steps
-    // and turns; ephemeral cache-control makes repeats cache hits. Bedrock's
-    // equivalent (cachePoint) is documented for system/messages but NOT
-    // confirmed for tool blocks — do not extend this to Bedrock without
-    // verifying that first.
-    providerOptions: { anthropic: { cacheControl: { type: "ephemeral" } } },
+    // Object form (not a bare string) so it can carry the cache breakpoint —
+    // see SYSTEM_CACHE_OPTIONS. Do NOT collapse this back to
+    // `system: SYSTEM_PROMPT`; that silently drops prompt caching.
+    system: SYSTEM_MESSAGE,
     messages,
     tools: buildToolSet(deps),
     stopWhen: stepCountIs(MAX_TOOL_ITERATIONS),

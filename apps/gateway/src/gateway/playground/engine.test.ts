@@ -135,6 +135,25 @@ describe("buildToolSet", () => {
     expect(typeof set["gws-mcp__gmail_search"]?.execute).toBe("function");
     expect(set["gws-mcp__gmail_send"]?.execute).toBeUndefined();
   });
+
+  // A cache breakpoint is per-BLOCK: the Anthropic provider reads it off the
+  // TOOL's own providerOptions. Losing this silently ~10x's input-token cost
+  // (tool schemas run ~15k tokens for a Google Workspace user).
+  it("puts an Anthropic cache breakpoint on the LAST tool only, in deps.tools order", () => {
+    const d = deps(scriptedModel([textStream("x")]));
+    const set = buildToolSet(d);
+    expect(set["gws-mcp__gmail_search"]?.providerOptions).toBeUndefined();
+    expect(set["gws-mcp__gmail_send"]?.providerOptions).toEqual({
+      anthropic: { cacheControl: { type: "ephemeral" } },
+    });
+    // Still a write (no execute) after the providerOptions merge.
+    expect(set["gws-mcp__gmail_send"]?.execute).toBeUndefined();
+  });
+
+  it("no-ops the breakpoint when the user has no tools connected", () => {
+    const d = { ...deps(scriptedModel([textStream("x")])), tools: [] };
+    expect(buildToolSet(d)).toEqual({});
+  });
 });
 
 describe("executeWriteBatch", () => {
@@ -187,6 +206,27 @@ describe("executeWriteBatch", () => {
     expect(s).toContain("boom");
     expect(outcomes[1]).toEqual({ name: "gws-mcp__docs_create", isError: true, denied: false });
   });
+
+  // Regression pins for the guarded hasOwnProperty lookup in `isApproved`:
+  // with a plain `decisions[id]`, an EMPTY decisions object still resolves
+  // these ids off Object.prototype, and any future "truthy means approved"
+  // refactor would turn a hostile tool-call id into a free write.
+  it.each(["__proto__", "constructor"])(
+    "denies a write whose id is %s against an empty decisions object",
+    async (hostileId) => {
+      const executeTool = vi.fn(async () => ({ text: "sent", isError: false }));
+      const d = { ...deps(scriptedModel([textStream("x")])), executeTool };
+      const { outcomes } = await executeWriteBatch(
+        d,
+        [{ id: hostileId, name: "gws-mcp__gmail_send", input: { to: "a@b.c" } }],
+        {}
+      );
+      expect(executeTool).not.toHaveBeenCalled();
+      expect(outcomes).toEqual([
+        { name: "gws-mcp__gmail_send", isError: true, denied: true },
+      ]);
+    }
+  );
 
   it("converts a non-Error throw to a well-formed error result", async () => {
     const executeTool = vi.fn().mockRejectedValueOnce("boom");
