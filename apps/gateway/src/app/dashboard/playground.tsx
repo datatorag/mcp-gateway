@@ -91,7 +91,7 @@ type FeedbackState = "idle" | "down-pending" | "sending" | "thanks";
  * transport throws for transport-level failures, so that the bubble can render
  * `error.message` verbatim (preserving the route's own actionable wording)
  * without ever exposing an internal sentinel. */
-const GENERIC_ERROR = "Something went wrong. Please try again.";
+export const GENERIC_ERROR = "Something went wrong. Please try again.";
 
 /** Resolve the error-bubble text.
  *
@@ -107,8 +107,13 @@ const GENERIC_ERROR = "Something went wrong. Please try again.";
  *    the failure happened before or during the stream.
  *
  * So: pass actionable text through, and normalise everything else — client- or
- * server-generated — to `GENERIC_ERROR`. */
-function errorBubbleText(error: Error | undefined): string {
+ * server-generated — to `GENERIC_ERROR`.
+ *
+ * Exported for `playground.test.ts`, which is the only assertion anywhere on
+ * this product's user-facing copy — it exists because this exact defect
+ * (two "generic" strings silently diverging) shipped twice, invisible to
+ * tsc/build/tests both times. */
+export function errorBubbleText(error: Error | undefined): string {
   const serverMessage = error?.message?.trim();
   return !serverMessage || serverMessage === SERVER_GENERIC_ERROR
     ? GENERIC_ERROR
