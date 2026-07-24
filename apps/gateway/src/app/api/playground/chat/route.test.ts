@@ -512,6 +512,155 @@ describe("POST /api/playground/chat", () => {
     expect(chunks.some((c) => c.type === "data-write-outcome")).toBe(true);
   });
 
+  // ---------------------------------------------------------------------
+  // Resume continues the SAME assistant message (no duplicate render)
+  //
+  // Manual e2e caught this: after Deny, the tool card, the "Action denied"
+  // line and the write-outcome badges rendered TWICE, in two separate
+  // assistant messages. Cause: `createUIMessageStream` injects a freshly
+  // generated `messageId` onto the `start` chunk (ai@6.0.235 dist/index.js
+  // :8977 -> :6397-6412). Client-side that id lands in
+  // `state.message.id` (:6309-6311) and `AbstractChat.makeRequest`'s
+  // `write()` compares it against `lastMessage.id` to pick `replaceMessage`
+  // vs `pushMessage` (:14003-14011) — a different id pushes a SECOND
+  // message that was structuredClone'd from the paused one, so every part
+  // it already had renders again.
+  //
+  // Three static review passes predicted this mechanism and then concluded
+  // it wasn't triggered, by reasoning from `toUIMessageStream` (which
+  // really does stay silent without `generateMessageId`) and missing the
+  // outer `createUIMessageStream`. So these assert on the REAL stream and
+  // the REAL client, never on the SDK source.
+
+  it("resume: the start chunk carries NO message id, so the client cannot pushMessage", async () => {
+    takePending.mockReturnValue({
+      userId: "user-1",
+      messages: [{ role: "assistant", content: [] }],
+      writes: [{ id: "w_no", name: "gws-mcp__docs_create", input: {} }],
+      createdAt: 0,
+    });
+    executeWriteBatch.mockResolvedValue({
+      toolMessage: { role: "tool", content: [] },
+      outcomes: [{ name: "gws-mcp__docs_create", isError: true, denied: true }],
+    });
+    streamEngineTurn.mockImplementation(() => fakeResult(textChunks("declined")));
+
+    const res = await POST(
+      chatRequest({ resumeToken: "resume-token-abc", decisions: { w_no: "deny" } })
+    );
+    const chunks = sseChunks(await res.text());
+
+    const starts = chunks.filter((c) => c.type === "start");
+    expect(starts).toHaveLength(1);
+    // Absent — NOT merely different. A present-but-different id is exactly
+    // the bug; a present-and-equal id would only be safe if the server knew
+    // the paused message's id, and it deliberately does not (see the
+    // security note in route.ts: the resume body carries the token and the
+    // decisions, nothing else).
+    expect(starts[0]).not.toHaveProperty("messageId");
+
+    // Full order, so a regression that reintroduces an id — or reorders the
+    // terminal tool chunk / badge row that must precede the continuation —
+    // is caught here rather than in manual testing.
+    expect(chunks).toEqual([
+      { type: "tool-output-denied", toolCallId: "w_no" },
+      {
+        type: "data-write-outcome",
+        data: { outcomes: [{ name: "gws-mcp__docs_create", isError: true, denied: true }] },
+      },
+      { type: "start" },
+      { type: "text-start", id: "t1" },
+      { type: "text-delta", id: "t1", delta: "declined" },
+      { type: "text-end", id: "t1" },
+      { type: "finish", finishReason: "stop" },
+    ]);
+  });
+
+  it("fresh turn: the start chunk DOES carry a message id, so each turn is its own message", async () => {
+    // The other half of the contract — the fix is resume-only.
+    const res = await POST(chatRequest(validBody));
+    const chunks = sseChunks(await res.text());
+    const start = chunks.find((c) => c.type === "start");
+    expect(start).toBeDefined();
+    expect(typeof start!.messageId).toBe("string");
+    expect(start!.messageId).not.toBe("");
+  });
+
+  it("resume: the real SDK client appends into the paused message instead of pushing a duplicate", async () => {
+    // End-to-end at the client level, since the browser session can't be
+    // driven from here: a real `Chat` (the class `useChat` wraps) seeded
+    // with a paused assistant message, talking to the real route over the
+    // real DefaultChatTransport, with the same `prepareSendMessagesRequest`
+    // shape playground.tsx uses. Asserts what the DOM would show — how many
+    // assistant messages exist and which parts each one carries.
+    const { Chat } = await import("@ai-sdk/react");
+    const { DefaultChatTransport } = await import("ai");
+
+    takePending.mockReturnValue({
+      userId: "user-1",
+      messages: [{ role: "assistant", content: [] }],
+      writes: [{ id: "w_no", name: "gws-mcp__docs_create", input: {} }],
+      createdAt: 0,
+    });
+    executeWriteBatch.mockResolvedValue({
+      toolMessage: { role: "tool", content: [] },
+      outcomes: [{ name: "gws-mcp__docs_create", isError: true, denied: true }],
+    });
+    streamEngineTurn.mockImplementation(() =>
+      fakeResult(textChunks("I attempted to create the Google Doc"))
+    );
+
+    const pending = [{ id: "w_no", name: "gws-mcp__docs_create", input: {} }];
+    const chat = new Chat({
+      messages: [
+        { id: "u1", role: "user", parts: [{ type: "text", text: "make a doc" }] },
+        {
+          id: "a1",
+          role: "assistant",
+          parts: [
+            { type: "step-start" },
+            {
+              type: "dynamic-tool",
+              toolName: "gws-mcp__docs_create",
+              toolCallId: "w_no",
+              state: "input-available",
+              input: {},
+            },
+            {
+              type: "data-confirm",
+              data: { resumeToken: "resume-token-abc", pending },
+            },
+          ],
+        },
+      ],
+      transport: new DefaultChatTransport({
+        api: "http://localhost/api/playground/chat",
+        fetch: (async (_url: unknown, init: { body?: unknown }) =>
+          POST(chatRequest(JSON.parse(String(init.body))))) as never,
+        prepareSendMessagesRequest: ({ body }: { body?: Record<string, unknown> }) => ({
+          body: { resumeToken: body?.resumeToken, decisions: body?.decisions },
+        }),
+      }),
+      // Mirrors playground.tsx's resolveConfirm: no user message is appended.
+    } as never);
+
+    await chat.sendMessage(undefined, {
+      body: { resumeToken: "resume-token-abc", decisions: { w_no: "deny" } },
+    });
+
+    // Two messages, not three: the continuation replaced `a1` in place.
+    expect(chat.messages.map((m) => m.id)).toEqual(["u1", "a1"]);
+    // And `a1` holds ONE of each part — the duplicate render was a second
+    // message carrying a clone of exactly these.
+    expect(chat.messages[1].parts.map((p) => p.type)).toEqual([
+      "step-start",
+      "dynamic-tool",
+      "data-confirm",
+      "data-write-outcome",
+      "text",
+    ]);
+  });
+
   it("resume with an unknown/expired token emits an error and never resumes", async () => {
     takePending.mockReturnValue(null);
     const res = await POST(

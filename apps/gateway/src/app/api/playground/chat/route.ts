@@ -87,6 +87,55 @@ function tapDelivered(
   );
 }
 
+/** Drops the `messageId` from the resume stream's `start` chunk, so the
+ * continuation lands in the SAME assistant message the user just approved or
+ * denied instead of a second, duplicated one.
+ *
+ * Where that id comes from — verified against the installed ai@6.0.235, not
+ * inferred: it is NOT `toUIMessageStream`, which emits `messageId` only when
+ * a `responseMessageId`/`generateMessageId` is configured (dist/index.js
+ * :8675) and we pass neither. It is `createUIMessageStream` ITSELF: it hands
+ * a freshly generated id to `handleUIMessageStreamFinish` unconditionally
+ * (dist/index.js :8977, `messageId: generateId2()`), whose transform stamps
+ * it onto the first `start` chunk that lacks one (:6397-6412).
+ *
+ * Why that breaks resume: client-side, `processUIMessageStream`'s `start`
+ * handler assigns `state.message.id = chunk.messageId` (:6309-6311), and
+ * `AbstractChat.makeRequest`'s `write()` then compares
+ * `response.state.message.id === this.lastMessage?.id` to choose
+ * `replaceMessage` vs `pushMessage` (:14003-14011). On resume the streaming
+ * state is seeded from a structuredClone of the paused assistant message
+ * (:13969-13972 + `createStreamingUIMessageState` :5786), so a DIFFERENT id
+ * means `pushMessage` — a brand-new message that already carries every part
+ * cloned from the paused one. The tool card, the "Action denied" line and the
+ * write-outcome badges all render a second time.
+ *
+ * With no `messageId` on `start` the client keeps the paused message's id and
+ * takes the `replaceMessage` branch: one message, appended in place. The
+ * server therefore needs no id from the client at all — the identity used is
+ * the client's own `lastMessage`, which by construction IS the paused
+ * message (an unresolved `data-confirm` locks the composer and regenerate, so
+ * nothing can be appended after it).
+ *
+ * Resume-path only. The fresh-turn path keeps the injected id, which is what
+ * makes each new turn a new assistant message. */
+function withoutStartMessageId(
+  stream: ReadableStream<UIMessageChunk>
+): ReadableStream<UIMessageChunk> {
+  return stream.pipeThrough(
+    new TransformStream<UIMessageChunk, UIMessageChunk>({
+      transform(chunk, controller) {
+        if (chunk.type === "start" && chunk.messageId !== undefined) {
+          const { messageId: _dropped, ...rest } = chunk;
+          controller.enqueue(rest);
+          return;
+        }
+        controller.enqueue(chunk);
+      },
+    })
+  );
+}
+
 /** Runs one engine stream into the writer; on pause persists the hold and
  * emits data-confirm. Returns nothing — errors propagate to the stream's
  * onError.
@@ -113,18 +162,14 @@ async function runTurnIntoStream(
   const result = streamEngineTurn(deps, history);
   const tapped = tapDelivered(
     // DO NOT add `generateMessageId` to these options. The client's
-    // approve/deny resume depends on this stream NOT carrying a message id:
-    // `toUIMessageStream` emits `messageId` on its `start` chunk only when
-    // `generateMessageId` is configured, and `processUIMessageStream`'s
-    // `start` handler does `state.message.id = chunk.messageId` when one is
-    // present. On a resume the SDK seeds its streaming state from the paused
-    // assistant message (createStreamingUIMessageState reuses `lastMessage`
-    // when it is an assistant message), so with no id the continuation keeps
-    // that message's id and is written back with `replaceMessage` — it flows
-    // into the SAME message. Add `generateMessageId` and the id changes
-    // mid-stream, the id check fails, and the SDK `pushMessage`s a DUPLICATE
-    // message that still carries every part cloned from the original: the
-    // confirmation card and all tool cards would render a second time.
+    // approve/deny resume depends on the RESUME response's `start` chunk
+    // carrying no message id (see `withoutStartMessageId` above for the full
+    // mechanism and the ai@6.0.235 line references). `toUIMessageStream`
+    // emits `messageId` only when `generateMessageId` is configured, so
+    // leaving it unset is what lets `withoutStartMessageId` have a single,
+    // known id source to strip — the one `createUIMessageStream` injects.
+    // Configure it here and BOTH paths would carry an id from two different
+    // places, and the resume would push a duplicate message again.
     result.toUIMessageStream({
       // Without this, an in-band stream error (a fullStream `error` part —
       // e.g. a zero-step provider failure) is converted to a chunk carrying
@@ -326,5 +371,7 @@ async function handleResume(
     // No cap was claimed on resume, so nothing to refund.
     onError: (err) => logAndGenericError("[playground] resume failed", err),
   });
-  return createUIMessageStreamResponse({ stream });
+  // The continuation belongs to the assistant message the user just decided
+  // on, not to a new one.
+  return createUIMessageStreamResponse({ stream: withoutStartMessageId(stream) });
 }
