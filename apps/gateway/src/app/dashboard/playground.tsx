@@ -44,6 +44,10 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import type { Decision, PendingWrite } from "@/gateway/playground/engine";
+// Value import (not `import type`) — the string is compared at runtime. The
+// module is dependency-free (a console.error and two exports), so pulling it
+// into the client bundle costs nothing and drags in no server-only API.
+import { GENERIC_ERROR_MESSAGE as SERVER_GENERIC_ERROR } from "@/lib/errors";
 
 /* -------------------------------------------------------------------------- */
 /* Wire types                                                                  */
@@ -83,11 +87,33 @@ interface PlaygroundProps {
 
 type FeedbackState = "idle" | "down-pending" | "sending" | "thanks";
 
-/** Fallback copy for the error bubble. Also the message the transport throws
- * for transport-level failures, so that the bubble can render `error.message`
- * verbatim (preserving the route's own actionable wording) without ever
- * exposing an internal sentinel. */
+/** The playground's canonical "no useful detail" copy. Also the message the
+ * transport throws for transport-level failures, so that the bubble can render
+ * `error.message` verbatim (preserving the route's own actionable wording)
+ * without ever exposing an internal sentinel. */
 const GENERIC_ERROR = "Something went wrong. Please try again.";
+
+/** Resolve the error-bubble text.
+ *
+ * A stream `error` chunk reaches us as `new Error(chunk.errorText)`, so
+ * `error.message` is whatever the route wrote. Two kinds arrive:
+ *
+ *  - Actionable, server-authored copy — today that's the expired-resume-token
+ *    notice ("This confirmation expired — please run the prompt again."),
+ *    which tells the user exactly what to do and must survive verbatim.
+ *  - `logAndGenericError`'s placeholder, which carries no more information
+ *    than our own copy but is worded differently. Showing it would mean the
+ *    product has two different "generic error" strings depending on whether
+ *    the failure happened before or during the stream.
+ *
+ * So: pass actionable text through, and normalise everything else — client- or
+ * server-generated — to `GENERIC_ERROR`. */
+function errorBubbleText(error: Error | undefined): string {
+  const serverMessage = error?.message?.trim();
+  return !serverMessage || serverMessage === SERVER_GENERIC_ERROR
+    ? GENERIC_ERROR
+    : serverMessage;
+}
 
 /* -------------------------------------------------------------------------- */
 /* Pure helpers                                                                */
@@ -705,15 +731,12 @@ export const Playground = forwardRef<PlaygroundHandle, PlaygroundProps>(
                 resolvedTokens={resolvedTokens}
               />
 
+              {/* 429 raises the cap panel instead, and a 403 has already
+                  returned null for the whole component — so neither ever
+                  reaches this bubble. */}
               {error && !capState && (
                 <div className="rounded-2xl border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">
-                  {/* Prefer the server's own wording when it sent any — e.g.
-                      the expired-resume-token stream carries actionable copy
-                      ("This confirmation expired — please run the prompt
-                      again."). Safe to surface: every other error the route
-                      emits goes through `logAndGenericError`, which returns a
-                      sanitized generic string, so no internal detail leaks. */}
-                  {error.message.trim() || GENERIC_ERROR}
+                  {errorBubbleText(error)}
                 </div>
               )}
             </ConversationContent>
