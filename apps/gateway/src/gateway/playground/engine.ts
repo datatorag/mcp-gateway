@@ -1,6 +1,6 @@
 import {
   streamText, dynamicTool, jsonSchema, stepCountIs,
-  type LanguageModel, type ModelMessage, type ToolSet, type StreamTextResult,
+  type LanguageModel, type ModelMessage, type ToolSet, type StreamTextResult, type ToolResultPart,
 } from "ai";
 
 /** Pure, injectable playground engine on the AI SDK. Never imports the LLM
@@ -46,7 +46,8 @@ async function runCapped(deps: EngineDeps, name: string, args: Record<string, un
     const r = await deps.executeTool(name, args);
     return { text: r.text.slice(0, TOOL_OUTPUT_CAP), isError: r.isError };
   } catch (err) {
-    return { text: (err as Error).message, isError: true };
+    const msg = err instanceof Error ? err.message : String(err);
+    return { text: msg.slice(0, TOOL_OUTPUT_CAP), isError: true };
   }
 }
 
@@ -141,10 +142,12 @@ export async function executeWriteBatch(
   writes: PendingWrite[],
   decisions: Record<string, unknown>
 ): Promise<{ toolMessage: ModelMessage; outcomes: { name: string; isError: boolean; denied: boolean }[] }> {
-  const content: unknown[] = [];
+  const content: ToolResultPart[] = [];
   const outcomes: { name: string; isError: boolean; denied: boolean }[] = [];
   for (const w of writes) {
-    const denied = decisions[w.id] !== "approve";
+    const approved =
+      Object.prototype.hasOwnProperty.call(decisions, w.id) && decisions[w.id] === "approve";
+    const denied = !approved;
     const aborted = deps.abortSignal?.aborted === true;
     const r = denied || aborted
       ? { text: "User declined this action.", isError: true }
@@ -157,5 +160,5 @@ export async function executeWriteBatch(
       output: r.isError ? { type: "error-text", value: r.text } : { type: "text", value: r.text },
     });
   }
-  return { toolMessage: { role: "tool", content } as ModelMessage, outcomes };
+  return { toolMessage: { role: "tool", content }, outcomes };
 }

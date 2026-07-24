@@ -124,7 +124,7 @@ describe("streamEngineTurn + detectPause", () => {
     );
     const result = streamEngineTurn(d, [{ role: "user", content: "loop" }]);
     await result.text;
-    expect((await result.steps).length).toBeLessThanOrEqual(8);
+    expect((await result.steps).length).toBe(8);
   });
 });
 
@@ -186,5 +186,14 @@ describe("executeWriteBatch", () => {
     expect(s).not.toContain("y".repeat(TOOL_OUTPUT_CAP + 1));
     expect(s).toContain("boom");
     expect(outcomes[1]).toEqual({ name: "gws-mcp__docs_create", isError: true, denied: false });
+  });
+
+  it("converts a non-Error throw to a well-formed error result", async () => {
+    const executeTool = vi.fn().mockRejectedValueOnce("boom");
+    const d = { ...deps(scriptedModel([textStream("x")])), executeTool };
+    const { toolMessage, outcomes } = await executeWriteBatch(d, [writes[0]], { w1: "approve" });
+    expect(outcomes[0]).toEqual({ name: "gws-mcp__gmail_send", isError: true, denied: false });
+    const result = toolMessage.content[0] as { output: { type: string; value: string } };
+    expect(result.output).toEqual({ type: "error-text", value: "boom" });
   });
 });
