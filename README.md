@@ -2,7 +2,7 @@
 
 **Connect your Google Workspace, Jira, and Confluence to Claude — through one MCP endpoint.**
 
-DataToRAG is an open-source [Model Context Protocol](https://modelcontextprotocol.io) gateway that turns your everyday work tools into something your AI assistant can actually use. Gmail, Calendar, Drive, Docs, Sheets, Slides, Tasks, Contacts, Jira, and Confluence — 70 tools across one endpoint, with multi-account support and token-optimized responses.
+DataToRAG is an open-source [Model Context Protocol](https://modelcontextprotocol.io) gateway that turns your everyday work tools into something your AI assistant can actually use. Gmail, Calendar, Drive, Docs, Sheets, Slides, Tasks, Contacts, Jira, and Confluence — 76 tools across one endpoint, with multi-account support and token-optimized responses.
 
 - **Website** → [datatorag.com](https://datatorag.com)
 - **Docs** → [datatorag.com/docs](https://datatorag.com/docs)
@@ -14,7 +14,7 @@ DataToRAG is an open-source [Model Context Protocol](https://modelcontextprotoco
 
 **Works with any MCP client.** Claude Desktop, Cursor, Windsurf, custom agents — anything that speaks the Model Context Protocol.
 
-**Google Workspace, natively.** 48 tools across Gmail, Calendar, Drive, Docs, Sheets, Slides, Contacts, and Tasks. Search threads, draft replies, update cells, batch-create slides, find files, manage tasks — from a single prompt.
+**Google Workspace, natively.** 54 tools across Gmail, Calendar, Drive, Docs, Sheets, Slides, Contacts, and Tasks. Search threads, draft replies, automate inbox filters, update cells, batch-create slides, find files, manage tasks — from a single prompt.
 
 **Atlassian, too.** 22 tools for Jira and Confluence: search by JQL or CQL, create and transition issues, read and edit pages, manage comments and attachments.
 
@@ -50,10 +50,12 @@ Then sign in at [datatorag.com/dashboard](https://datatorag.com/dashboard) and c
 
 | Connector | Tools | Services |
 |-----------|-------|----------|
-| [Google Workspace](https://datatorag.com/docs/google-workspace) | 48 | Gmail · Calendar · Drive · Docs · Sheets · Slides · Contacts · Tasks |
+| [Google Workspace](https://datatorag.com/docs/google-workspace) | 54 | Gmail · Calendar · Drive · Docs · Sheets · Slides · Contacts · Tasks |
 | [Atlassian](https://datatorag.com/docs/atlassian) | 22 | Jira · Confluence |
 
 Each tool is documented with its operations, required OAuth scopes, and example prompts at [datatorag.com/docs](https://datatorag.com/docs).
+
+Both connectors are themselves open-source MCP servers that plug into the gateway: [gws-mcp](https://github.com/DataToRag/gws-mcp) and [atlassian-mcp](https://github.com/DataToRag/atlassian-mcp).
 
 ---
 
