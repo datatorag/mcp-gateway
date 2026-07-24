@@ -28,7 +28,7 @@ import {
   useMemo,
   useState,
 } from "react";
-import { Streamdown } from "streamdown";
+import { Streamdown, defaultRehypePlugins } from "streamdown";
 
 export type MessageProps = HTMLAttributes<HTMLDivElement> & {
   from: UIMessage["role"];
@@ -321,21 +321,113 @@ export const MessageBranchPage = ({
   );
 };
 
-export type MessageResponseProps = ComponentProps<typeof Streamdown>;
+type RehypePlugins = NonNullable<ComponentProps<typeof Streamdown>["rehypePlugins"]>;
+type UrlTransform = NonNullable<ComponentProps<typeof Streamdown>["urlTransform"]>;
+
+/** Streamdown 2.5 exposes NEITHER allowlist as a component prop: both live
+ * inside `defaultRehypePlugins.harden` (rehype-harden), hard-coded to
+ * `allowedImagePrefixes: ["*"], allowedLinkPrefixes: ["*"]` — i.e. wide open.
+ * Tightening them means rebuilding the plugin list. */
+type HardenOptions = {
+  allowedImagePrefixes?: string[];
+};
+
+/** Streamdown's own default rehype plugin list with `harden` re-configured.
+ * Derived from `defaultRehypePlugins` (rather than a hand-rolled list) so
+ * `raw` and `sanitize` — which strip raw HTML — stay exactly as Streamdown
+ * ships them, in order. */
+function hardenedRehypePlugins(overrides: HardenOptions): RehypePlugins {
+  return Object.entries(defaultRehypePlugins).map(([name, plugin]) => {
+    if (name !== "harden") {
+      return plugin;
+    }
+    const [hardenPlugin, hardenDefaults] = plugin as unknown as [
+      unknown,
+      HardenOptions,
+    ];
+    return [hardenPlugin, { ...hardenDefaults, ...overrides }];
+  }) as RehypePlugins;
+}
+
+/** Link allowlisting is done with react-markdown's `urlTransform` rather than
+ * rehype-harden's `allowedLinkPrefixes`, which cannot express "any https URL":
+ * harden matches a prefix by parsing it into a URL and comparing ORIGINS, and
+ * it throws outright ("defaultOrigin is required...") if you hand it a
+ * non-wildcard prefix without a `defaultOrigin`. Both spellings were tried —
+ * `["https://"]` alone throws at render, and `["https://"]` plus a
+ * `defaultOrigin` collapses to same-origin-only and blocks every external
+ * link, including the verification links the playground's system prompt asks
+ * the model to produce. A literal prefix test is what the name actually
+ * promises. `""` is react-markdown's own representation of a rejected URL
+ * (see its `defaultUrlTransform`). */
+function prefixUrlTransform(allowedPrefixes: string[]): UrlTransform {
+  return (url: string) =>
+    url.startsWith("#") || allowedPrefixes.some((prefix) => url.startsWith(prefix))
+      ? url
+      : "";
+}
+
+export type MessageResponseProps = ComponentProps<typeof Streamdown> & {
+  /** URL prefixes an image `src` must start with; `[]` blocks every image.
+   * Use `[]` wherever the markdown is model output derived from untrusted
+   * content: an image URL is a silent, automatic, browser-issued GET to an
+   * arbitrary host, so it is an exfiltration channel that needs no user
+   * interaction. Blocked images render as an inline "[Image blocked]" chip. */
+  allowedImagePrefixes?: string[];
+  /** URL prefixes an anchor `href` must start with (plain string prefix
+   * match; in-page `#fragment` links are always kept). Anything else renders
+   * with an empty href, so it cannot navigate. */
+  allowedLinkPrefixes?: string[];
+};
 
 const streamdownPlugins = { cjk, code, math, mermaid };
 
 export const MessageResponse = memo(
-  ({ className, ...props }: MessageResponseProps) => (
-    <Streamdown
-      className={cn(
-        "size-full [&>*:first-child]:mt-0 [&>*:last-child]:mb-0",
-        className
-      )}
-      plugins={streamdownPlugins}
-      {...props}
-    />
-  ),
+  ({
+    className,
+    allowedImagePrefixes,
+    allowedLinkPrefixes,
+    rehypePlugins,
+    urlTransform,
+    ...props
+  }: MessageResponseProps) => {
+    // Both memos key on the joined VALUES, not the array identities: call
+    // sites pass inline literals (static policy), and a fresh identity every
+    // render would churn `rehypePlugins`/`urlTransform`, which Streamdown
+    // compares by reference when deciding whether to re-render each block.
+    const imageKey = allowedImagePrefixes?.join(" ");
+    const linkKey = allowedLinkPrefixes?.join(" ");
+
+    // (No stale-closure hazard: each key is derived from the array it guards,
+    // so the key changes exactly when the contents do.)
+    const hardened = useMemo(
+      () =>
+        allowedImagePrefixes === undefined
+          ? undefined
+          : hardenedRehypePlugins({ allowedImagePrefixes }),
+      [imageKey] // eslint-disable-line react-hooks/exhaustive-deps
+    );
+    const linkTransform = useMemo(
+      () =>
+        allowedLinkPrefixes === undefined
+          ? undefined
+          : prefixUrlTransform(allowedLinkPrefixes),
+      [linkKey] // eslint-disable-line react-hooks/exhaustive-deps
+    );
+
+    return (
+      <Streamdown
+        className={cn(
+          "size-full [&>*:first-child]:mt-0 [&>*:last-child]:mb-0",
+          className
+        )}
+        plugins={streamdownPlugins}
+        rehypePlugins={rehypePlugins ?? hardened}
+        urlTransform={urlTransform ?? linkTransform}
+        {...props}
+      />
+    );
+  },
   (prevProps, nextProps) =>
     prevProps.children === nextProps.children &&
     nextProps.isAnimating === prevProps.isAnimating
