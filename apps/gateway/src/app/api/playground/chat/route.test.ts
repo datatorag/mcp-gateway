@@ -491,15 +491,21 @@ describe("POST /api/playground/chat", () => {
       toolCallId: "w_ok",
       output: "sent",
     });
-    // Denied write → output-error, so the card lands on "Error", not "Running".
+    // Denied write → output-denied, so the card lands on "Denied" (orange),
+    // not "Running" and not a red "Error" — the user pressed Deny, nothing
+    // failed. The chunk carries no message by design; the reason is conveyed
+    // by the badge plus the data-write-outcome row asserted below.
     expect(chunks).toContainEqual({
-      type: "tool-output-error",
+      type: "tool-output-denied",
       toolCallId: "w_no",
-      errorText: "User declined this action.",
     });
+    expect(chunks.some((c) => c.type === "tool-output-error")).toBe(false);
     // Every pending write is accounted for — none left dangling.
     const terminal = chunks.filter(
-      (c) => c.type === "tool-output-available" || c.type === "tool-output-error"
+      (c) =>
+        c.type === "tool-output-available" ||
+        c.type === "tool-output-error" ||
+        c.type === "tool-output-denied"
     );
     expect(terminal.map((c) => c.toolCallId)).toEqual(["w_ok", "w_no"]);
     // The badge stream the client renders separately is untouched.

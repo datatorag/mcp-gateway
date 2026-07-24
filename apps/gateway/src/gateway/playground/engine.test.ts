@@ -2,7 +2,7 @@ import { describe, it, expect, vi } from "vitest";
 import { simulateReadableStream } from "ai";
 import { MockLanguageModelV3 } from "ai/test";
 import {
-  buildToolSet, streamEngineTurn, detectPause, executeWriteBatch,
+  buildToolSet, streamEngineTurn, detectPause, executeWriteBatch, isApproved,
   TOOL_OUTPUT_CAP, type EngineDeps, type EngineTool,
 } from "./engine";
 
@@ -207,10 +207,12 @@ describe("executeWriteBatch", () => {
     expect(outcomes[1]).toEqual({ name: "gws-mcp__docs_create", isError: true, denied: false });
   });
 
-  // Regression pins for the guarded hasOwnProperty lookup in `isApproved`:
-  // with a plain `decisions[id]`, an EMPTY decisions object still resolves
-  // these ids off Object.prototype, and any future "truthy means approved"
-  // refactor would turn a hostile tool-call id into a free write.
+  // NOTE: these two pin the OUTCOME for hostile ids, not the hasOwnProperty
+  // guard itself — they pass either way, because `({})["__proto__"]` is
+  // Object.prototype and `({})["constructor"]` is the Object function, and
+  // neither is `=== "approve"`. Their value is catching a future "truthy
+  // means approved" refactor, which both of those WOULD sail through. The
+  // guard itself is pinned by the prototype-pollution case below.
   it.each(["__proto__", "constructor"])(
     "denies a write whose id is %s against an empty decisions object",
     async (hostileId) => {
@@ -227,6 +229,39 @@ describe("executeWriteBatch", () => {
       ]);
     }
   );
+
+  // THE test for `isApproved`'s `Object.prototype.hasOwnProperty.call` guard.
+  // With a bare `decisions[id]` lookup, an attacker-influenced tool-call id
+  // that resolves to "approve" through the prototype chain would execute a
+  // real write against the user's account with an EMPTY decisions object —
+  // i.e. with the user having approved nothing. Reverting the guard makes
+  // this case fail (verified by mutation).
+  it("denies a write whose id resolves to \"approve\" through a polluted Object.prototype", async () => {
+    const proto = Object.prototype as unknown as Record<string, unknown>;
+    proto.pollutedWriteId = "approve";
+    try {
+      // Sanity: the unguarded lookup really would say "approved" here, so
+      // this test is exercising the guard rather than a vacuous truth.
+      expect(({} as Record<string, unknown>).pollutedWriteId).toBe("approve");
+      expect(isApproved({}, "pollutedWriteId")).toBe(false);
+
+      const executeTool = vi.fn(async () => ({ text: "sent", isError: false }));
+      const d = { ...deps(scriptedModel([textStream("x")])), executeTool };
+      const { outcomes } = await executeWriteBatch(
+        d,
+        [{ id: "pollutedWriteId", name: "gws-mcp__gmail_send", input: { to: "a@b.c" } }],
+        {}
+      );
+      expect(executeTool).not.toHaveBeenCalled();
+      expect(outcomes).toEqual([
+        { name: "gws-mcp__gmail_send", isError: true, denied: true },
+      ]);
+    } finally {
+      // MUST run even on failure: a leaked Object.prototype key would cause
+      // baffling failures in unrelated tests later in the same run.
+      delete proto.pollutedWriteId;
+    }
+  });
 
   it("converts a non-Error throw to a well-formed error result", async () => {
     const executeTool = vi.fn().mockRejectedValueOnce("boom");

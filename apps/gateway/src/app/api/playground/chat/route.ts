@@ -290,16 +290,28 @@ async function handleResume(
       //
       // `data-write-outcome` stays as-is below — the client renders its
       // approved/denied badges off that, independently of the tool cards.
+      //
+      // Three terminal states, not two. A DENIED write is not an error: the
+      // SDK's `tool-output-denied` puts the part in state `output-denied`,
+      // which tool.tsx already maps to an orange "Denied" badge rather than a
+      // red "Error". That chunk carries only a toolCallId (no message field),
+      // so the card body renders empty — which is right here: the user is the
+      // one who pressed Deny, the header says "Denied", and the
+      // `data-write-outcome` row adds a per-write `denied` badge. The text we
+      // drop ("User declined this action.") was written for the MODEL, and it
+      // still goes to the model via `toolMessage`.
       pending.writes.forEach((w, i) => {
         const outcome = outcomes[i];
         if (outcome === undefined) return;
+        if (outcome.denied) {
+          writer.write({ type: "tool-output-denied", toolCallId: w.id });
+          return;
+        }
         const result = toolMessage.role === "tool" ? toolMessage.content[i] : undefined;
         const text =
           result?.type === "tool-result" && "value" in result.output
             ? String(result.output.value)
-            : outcome.denied
-              ? "User declined this action."
-              : "";
+            : "";
         writer.write(
           outcome.isError
             ? { type: "tool-output-error", toolCallId: w.id, errorText: text }
