@@ -330,7 +330,22 @@ export const Playground = forwardRef<PlaygroundHandle, PlaygroundProps>(
           Chat with your connected accounts, right here.
         </p>
 
-        <div className="relative mt-3 flex max-h-[34rem] min-h-[12rem] flex-col rounded-xl border border-border">
+        {/* Grid, not flex, on purpose: this panel has only a max-height (it
+            grows with content up to the cap), never an explicit height. A
+            flex column's `flex-1` child never gets a *definite* height out
+            of that — `height:100%` on `use-stick-to-bottom`'s inner scroller
+            (rendered by <Conversation>) falls back to content height, so it
+            never scrolls and the outer `overflow-y-hidden` silently clips
+            (verified live: inner grew to 1131px inside a 429px box). CSS
+            Grid's row-sizing algorithm gives the `minmax(0,1fr)` row a
+            genuinely definite size even when the grid container's own
+            height is intrinsic, so the log row — and therefore the
+            inner scroller's `height:100%` — resolves correctly once content
+            exceeds the cap, while still shrinking to content (down to
+            min-height) for short conversations. Verified in a standalone
+            harness reproducing this exact class structure (see
+            conversation-scroll-fix.md). */}
+        <div className="relative mt-3 grid max-h-[34rem] min-h-[12rem] grid-rows-[minmax(0,1fr)_auto] rounded-xl border border-border">
           {!hasConnectedAccount && (
             <div className="absolute inset-0 z-10 flex items-center justify-center rounded-xl bg-background/90 p-4 text-center backdrop-blur-sm">
               <p className="text-xs font-medium text-muted-foreground">
