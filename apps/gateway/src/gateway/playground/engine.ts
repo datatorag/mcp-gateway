@@ -55,8 +55,8 @@ export const SYSTEM_PROMPT =
   "tool normally — do not ask for confirmation in text. " +
   "If the user hasn't connected the needed service, tell them to connect it on the dashboard.";
 
-/** Prompt-cache breakpoints (Anthropic — the provider this deployment runs;
- * see PLAYGROUND_PROVIDER / getPlaygroundModel).
+/** Prompt-cache breakpoints (Anthropic — the only provider this app supports;
+ * see `getPlaygroundModel`).
  *
  * A cache breakpoint is a per-BLOCK marker, NOT a call-level setting. Passing
  * `providerOptions: { anthropic: { cacheControl } }` to `streamText` — which
@@ -80,14 +80,10 @@ export const SYSTEM_PROMPT =
  * `tools[last].cache_control = {type:"ephemeral"}`, tools before it carry
  * none, and there is no top-level `cache_control` left.
  *
- * NOT wired for Bedrock. The Bedrock branch of `getPlaygroundModel` is a
- * supported-but-currently-unused path; it ignores the `anthropic` key
- * entirely and wants `providerOptions.bedrock.cachePoint`, so if this
- * deployment ever switches providers it will run UNCACHED until that is added
- * (and note @ai-sdk/amazon-bedrock's `prepareTools` builds each `toolSpec`
- * from name/description/inputSchema only — it never reads
- * `tool.providerOptions` — so a Bedrock cache point on a tool definition is
- * not expressible there at this version). */
+ * Both constants are namespaced under `anthropic` because that is the only
+ * provider wired up. Every provider spells cache breakpoints differently, so
+ * adding one means adding its own key here — an unrecognised provider silently
+ * ignores these and runs UNCACHED rather than failing loudly. */
 const SYSTEM_CACHE_OPTIONS: ProviderOptions = {
   anthropic: { cacheControl: { type: "ephemeral" } },
 };

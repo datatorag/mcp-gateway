@@ -161,7 +161,7 @@ multi-file changes where a fresh-eyes sweep genuinely pays for itself.
 | Shared "which tools can this user see" policy + plugin URL + one-shot call | `apps/gateway/src/gateway/user-tools.ts` |
 | Playground message-cap claim/refund (`users.playground_messages_used`) | `apps/gateway/src/gateway/playground/cap.ts` |
 | Playground SSE chat + feedback routes (401/403/429/400 mapping) | `apps/gateway/src/app/api/playground/{chat,feedback}/route.ts` |
-| Playground LLM provider factory (`anthropic` \| `bedrock`) | `apps/gateway/src/lib/llm.ts` |
+| Playground LLM model factory (Anthropic) | `apps/gateway/src/lib/llm.ts` |
 | Playground chat UI (`PlaygroundHandle.runPrompt`, feedback controls) | `apps/gateway/src/app/dashboard/playground.tsx` |
 | Setup wizard (client picker, config snippets, live status polling) | `apps/gateway/src/app/dashboard/setup-wizard.tsx` |
 | Setup status API (live non-"web" tokens only — not revoked/expired) | `apps/gateway/src/app/api/setup/status/route.ts` |
