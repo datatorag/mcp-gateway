@@ -20,7 +20,11 @@ export function buildModelHistory(messages: unknown): ModelMessage[] | null {
         (p as { type?: unknown })?.type === "text" &&
         typeof (p as { text?: unknown }).text === "string")
       .map((p) => p.text)
-      .join("");
+      // Blank line, not "": a multi-step assistant message has one text part
+      // per step, so a paused-then-resumed turn ("I'll create the doc." then
+      // "Created it: <link>") would otherwise replay to the model as one
+      // run-on string with the words glued together.
+      .join("\n\n");
     if (!text.trim()) continue;
     out.push({ role: msg.role, content: text });
   }

@@ -112,8 +112,11 @@ export const ToolContent = ({ className, ...props }: ToolContentProps) => (
   <CollapsibleContent
     className={cn(
       // Base UI attribute vocabulary (`data-open`/`data-closed`), not Radix's
-      // `data-state`. The exit animation still won't run — CollapsiblePanel
-      // defaults to keepMounted=false and unmounts instead of animating out.
+      // `data-state`. The exit animation DOES run: with keepMounted=false,
+      // `useCollapsiblePanel` holds `mounted` true through
+      // `transitionStatus === "ending"` and unmounts only from
+      // `runOnceCloseAnimationsFinish`, so `data-closed:animate-out` plays
+      // to completion first.
       "data-closed:fade-out-0 data-closed:slide-out-to-top-2 data-open:slide-in-from-top-2 space-y-4 p-4 text-popover-foreground outline-none data-closed:animate-out data-open:animate-in",
       className
     )}

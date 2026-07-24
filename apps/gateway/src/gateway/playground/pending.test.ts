@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import type { ModelMessage } from "ai";
 import { putPending, takePending, _resetPendingStore } from "./pending";
 import type { PendingWrite } from "./engine";
@@ -34,5 +34,50 @@ describe("playground pending store", () => {
 
   it("returns null for an unknown token", () => {
     expect(takePending("user-1", "nope")).toBeNull();
+  });
+});
+
+// Mirrors the constants in pending.ts (neither is exported). If either
+// changes there, these tests fail loudly rather than silently drifting.
+const TTL_MS = 5 * 60 * 1000;
+const MAX_ENTRIES = 500;
+
+describe("playground pending store: expiry and eviction", () => {
+  beforeEach(() => {
+    _resetPendingStore();
+    vi.useFakeTimers();
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  // The TTL is the ONLY thing that stops a leaked/stolen resume token from
+  // being redeemed later to execute a real write against the user's Google
+  // Workspace / Atlassian account, so both sides of the boundary are pinned.
+  it("accepts a token taken just before the 5-minute TTL", () => {
+    const token = putPending("user-1", messages, writes);
+    vi.advanceTimersByTime(TTL_MS - 1);
+    expect(takePending("user-1", token)).not.toBeNull();
+  });
+
+  it("refuses a token taken after the 5-minute TTL", () => {
+    const token = putPending("user-1", messages, writes);
+    vi.advanceTimersByTime(TTL_MS + 1);
+    expect(takePending("user-1", token)).toBeNull();
+  });
+
+  it("evicts oldest-first once MAX_ENTRIES is exceeded", () => {
+    // `sweep` runs at the TOP of putPending, so the cap is enforced against
+    // the size BEFORE the new insert: MAX_ENTRIES + 2 puts is the first point
+    // at which an eviction has actually happened.
+    const tokens: string[] = [];
+    for (let i = 0; i < MAX_ENTRIES + 2; i++) {
+      tokens.push(putPending("user-1", messages, writes));
+    }
+    // Oldest gone...
+    expect(takePending("user-1", tokens[0])).toBeNull();
+    // ...newest (and the one just after the evicted head) still there.
+    expect(takePending("user-1", tokens[1])).not.toBeNull();
+    expect(takePending("user-1", tokens[tokens.length - 1])).not.toBeNull();
   });
 });

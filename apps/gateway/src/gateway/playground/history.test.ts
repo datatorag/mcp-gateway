@@ -17,7 +17,7 @@ describe("buildModelHistory", () => {
     ]);
   });
 
-  it("joins multiple text parts and drops tool/data parts", () => {
+  it("joins multiple text parts with a blank line and drops tool/data parts", () => {
     expect(
       buildModelHistory([
         user("q"),
@@ -31,7 +31,9 @@ describe("buildModelHistory", () => {
       ])
     ).toEqual([
       { role: "user", content: "q" },
-      { role: "assistant", content: "ab" },
+      // Separated, not concatenated: a paused-then-resumed turn's per-step
+      // text parts must not replay to the model glued together ("ab").
+      { role: "assistant", content: "a\n\nb" },
       { role: "user", content: "next" },
     ]);
   });
