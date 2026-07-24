@@ -1,14 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import {
   createUIMessageStream, createUIMessageStreamResponse,
-  type UIMessageStreamWriter, type UIMessageChunk,
+  type UIMessageStreamWriter, type UIMessageChunk, type ModelMessage,
 } from "ai";
 import { db } from "@/lib/db";
 import { withRoute } from "@/lib/with-route";
 import { getEnv } from "@datatorag-mcp/config";
 import { getPlaygroundModel } from "@/lib/llm";
 import {
-  streamEngineTurn, detectPause, executeWriteBatch, type EngineDeps,
+  streamEngineTurn, detectPause, executeWriteBatch, isApproved, type EngineDeps,
 } from "@/gateway/playground/engine";
 import { buildModelHistory } from "@/gateway/playground/history";
 import { listUserEngineTools, executeUserTool } from "@/gateway/playground/tools";
@@ -106,7 +106,7 @@ function tapDelivered(
 async function runTurnIntoStream(
   userId: string,
   deps: EngineDeps,
-  history: Parameters<typeof streamEngineTurn>[1],
+  history: ModelMessage[],
   writer: UIMessageStreamWriter,
   markDelivered: () => void
 ): Promise<void> {
@@ -260,13 +260,10 @@ async function handleResume(
     return createUIMessageStreamResponse({ stream });
   }
 
-  // Same guarded-lookup form as engine.ts's per-write approval check (added
-  // in 2374311 to keep the write gate off the prototype chain) — kept
-  // consistent here even though this particular read only feeds analytics,
-  // so nobody copies the bare-index form from this call site later.
-  const anyApproved = pending.writes.some(
-    (w) => Object.prototype.hasOwnProperty.call(decisions, w.id) && decisions[w.id] === "approve"
-  );
+  // Shares `isApproved` with engine.ts's actual write gate (single source of
+  // truth) even though this particular read only feeds analytics — so the
+  // two never have a chance to diverge.
+  const anyApproved = pending.writes.some((w) => isApproved(decisions, w.id));
   void trackPlaygroundConfirm(
     db, userId, anyApproved ? "approved" : "denied", pending.writes.length
   );

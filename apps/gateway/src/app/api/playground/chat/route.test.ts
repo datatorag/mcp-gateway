@@ -37,11 +37,19 @@ vi.mock("@/gateway/playground/tools", () => ({
 const streamEngineTurn = vi.fn();
 const detectPause = vi.fn();
 const executeWriteBatch = vi.fn();
-vi.mock("@/gateway/playground/engine", () => ({
-  streamEngineTurn: (...args: unknown[]) => streamEngineTurn(...args),
-  detectPause: (...args: unknown[]) => detectPause(...args),
-  executeWriteBatch: (...args: unknown[]) => executeWriteBatch(...args),
-}));
+// `isApproved` is NOT mocked — like `buildModelHistory` above, it's a pure
+// function with no external deps, and the route's `anyApproved` computation
+// (exercised below) is meant to run against its real deny-by-default logic.
+vi.mock("@/gateway/playground/engine", async (importOriginal) => {
+  const actual =
+    await importOriginal<typeof import("@/gateway/playground/engine")>();
+  return {
+    ...actual,
+    streamEngineTurn: (...args: unknown[]) => streamEngineTurn(...args),
+    detectPause: (...args: unknown[]) => detectPause(...args),
+    executeWriteBatch: (...args: unknown[]) => executeWriteBatch(...args),
+  };
+});
 
 const putPending = vi.fn();
 const takePending = vi.fn();

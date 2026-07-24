@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { GENERIC_ERROR_MESSAGE } from "@/lib/errors";
-import { GENERIC_ERROR, errorBubbleText } from "./playground";
+import { GENERIC_ERROR, errorBubbleText } from "./playground-presentation";
 
 /**
  * The playground error bubble has to do one subtle thing: pass a genuinely

@@ -13,6 +13,17 @@ export const TOOL_OUTPUT_CAP = 20_000;
 export type EngineTool = { name: string; description: string; input_schema: Record<string, unknown> };
 export type PendingWrite = { id: string; name: string; input: Record<string, unknown> };
 export type Decision = "approve" | "deny";
+
+/** Single source of truth for "was this pending write approved?" — used both
+ * as the actual security gate (deny-by-default, in `executeWriteBatch`
+ * below) and by the route to pick an analytics label. The guarded
+ * `hasOwnProperty` lookup (rather than `decisions[id]`) keeps a hostile write
+ * id such as `"__proto__"` from reading off `Object.prototype` and being
+ * treated as approved. */
+export function isApproved(decisions: Record<string, unknown>, id: string): boolean {
+  return Object.prototype.hasOwnProperty.call(decisions, id) && decisions[id] === "approve";
+}
+
 export type ExecuteToolFn = (name: string, args: Record<string, unknown>) => Promise<{ text: string; isError: boolean }>;
 export type EngineDeps = {
   model: LanguageModel;
@@ -145,9 +156,7 @@ export async function executeWriteBatch(
   const content: ToolResultPart[] = [];
   const outcomes: { name: string; isError: boolean; denied: boolean }[] = [];
   for (const w of writes) {
-    const approved =
-      Object.prototype.hasOwnProperty.call(decisions, w.id) && decisions[w.id] === "approve";
-    const denied = !approved;
+    const denied = !isApproved(decisions, w.id);
     const aborted = deps.abortSignal?.aborted === true;
     const r = denied || aborted
       ? { text: "User declined this action.", isError: true }

@@ -10,21 +10,13 @@ import {
   useState,
 } from "react";
 import { useChat } from "@ai-sdk/react";
-import { DefaultChatTransport, type DynamicToolUIPart, type UIMessage } from "ai";
-import { RefreshCcwIcon, ThumbsDownIcon, ThumbsUpIcon } from "lucide-react";
+import { DefaultChatTransport } from "ai";
 
 import {
   Conversation,
   ConversationContent,
   ConversationScrollButton,
 } from "@/components/ai-elements/conversation";
-import {
-  Message,
-  MessageAction,
-  MessageActions,
-  MessageContent,
-  MessageResponse,
-} from "@/components/ai-elements/message";
 import {
   PromptInput,
   PromptInputFooter,
@@ -33,44 +25,16 @@ import {
   PromptInputTools,
 } from "@/components/ai-elements/prompt-input";
 import { Suggestion, Suggestions } from "@/components/ai-elements/suggestion";
-import {
-  Tool,
-  ToolContent,
-  ToolHeader,
-  ToolInput,
-  ToolOutput,
-} from "@/components/ai-elements/tool";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import type { Decision, PendingWrite } from "@/gateway/playground/engine";
-// Value import (not `import type`) — the string is compared at runtime. The
-// module is dependency-free (a console.error and two exports), so pulling it
-// into the client bundle costs nothing and drags in no server-only API.
-import { GENERIC_ERROR_MESSAGE as SERVER_GENERIC_ERROR } from "@/lib/errors";
-
-/* -------------------------------------------------------------------------- */
-/* Wire types                                                                  */
-/* -------------------------------------------------------------------------- */
-
-/** One entry of the route's `data-write-outcome` payload. Mirrors
- * `executeWriteBatch`'s return shape in the engine (which types it inline, so
- * there is nothing importable). NOTE: `denied` conflates "the user denied this
- * write" with "the batch was aborted before this write ran" — the server cannot
- * tell them apart downstream, so the UI must not invent a distinction. */
-export type WriteOutcome = { name: string; isError: boolean; denied: boolean };
-
-/** Custom stream parts the playground route writes alongside the standard
- * text/tool parts. Keys become `data-<key>` part types. */
-type PlaygroundDataParts = {
-  confirm: { resumeToken: string; pending: PendingWrite[] };
-  "write-outcome": { outcomes: WriteOutcome[] };
-};
-
-/** The message shape flowing through `useChat` — and, equally, the shape the
- * presentation components below accept. Anything that can produce a
- * `PlaygroundMessage[]` (a live chat, a canned script) can drive the UI. */
-export type PlaygroundMessage = UIMessage<unknown, PlaygroundDataParts>;
+import {
+  errorBubbleText,
+  GENERIC_ERROR,
+  MessageList,
+  messageText,
+  type FeedbackState,
+  type PlaygroundMessage,
+} from "./playground-presentation";
 
 export interface PlaygroundHandle {
   /** Seed the input with `prompt` and submit it immediately. Used by the
@@ -85,65 +49,6 @@ interface PlaygroundProps {
   hasConnectedAccount: boolean;
 }
 
-type FeedbackState = "idle" | "down-pending" | "sending" | "thanks";
-
-/** The playground's canonical "no useful detail" copy. Also the message the
- * transport throws for transport-level failures, so that the bubble can render
- * `error.message` verbatim (preserving the route's own actionable wording)
- * without ever exposing an internal sentinel. */
-export const GENERIC_ERROR = "Something went wrong. Please try again.";
-
-/** Resolve the error-bubble text.
- *
- * A stream `error` chunk reaches us as `new Error(chunk.errorText)`, so
- * `error.message` is whatever the route wrote. Two kinds arrive:
- *
- *  - Actionable, server-authored copy — today that's the expired-resume-token
- *    notice ("This confirmation expired — please run the prompt again."),
- *    which tells the user exactly what to do and must survive verbatim.
- *  - `logAndGenericError`'s placeholder, which carries no more information
- *    than our own copy but is worded differently. Showing it would mean the
- *    product has two different "generic error" strings depending on whether
- *    the failure happened before or during the stream.
- *
- * So: pass actionable text through, and normalise everything else — client- or
- * server-generated — to `GENERIC_ERROR`.
- *
- * Exported for `playground.test.ts`, which is the only assertion anywhere on
- * this product's user-facing copy — it exists because this exact defect
- * (two "generic" strings silently diverging) shipped twice, invisible to
- * tsc/build/tests both times. */
-export function errorBubbleText(error: Error | undefined): string {
-  const serverMessage = error?.message?.trim();
-  return !serverMessage || serverMessage === SERVER_GENERIC_ERROR
-    ? GENERIC_ERROR
-    : serverMessage;
-}
-
-/* -------------------------------------------------------------------------- */
-/* Pure helpers                                                                */
-/* -------------------------------------------------------------------------- */
-
-/** MCP tool names arrive namespaced as `<slug>__<tool>`; only the tail is
- * meaningful to a user reading a confirmation card or a tool chip. */
-function shortToolName(name: string): string {
-  return name.split("__").pop() || name;
-}
-
-/** Compact one-line summary of a pending write's arguments, shown on the
- * confirmation card so the user sees what will actually run before approving. */
-function summarizeArgs(input: Record<string, unknown>): string {
-  const s = JSON.stringify(input ?? {});
-  return s.length > 160 ? `${s.slice(0, 159)}…` : s;
-}
-
-function messageText(message: PlaygroundMessage): string {
-  return message.parts
-    .filter((part) => part.type === "text")
-    .map((part) => part.text)
-    .join("");
-}
-
 /** Feedback is reported against the prompt that produced the answer, which is
  * the nearest USER message before this assistant message in the list. */
 function precedingUserPrompt(
@@ -156,283 +61,6 @@ function precedingUserPrompt(
     if (candidate.role === "user") return messageText(candidate);
   }
   return "";
-}
-
-/* -------------------------------------------------------------------------- */
-/* Presentation layer                                                          */
-/*                                                                             */
-/* Everything below renders from plain UIMessage-shaped data plus callbacks.   */
-/* None of it touches useChat — the same components can later be driven by a   */
-/* canned script (marketing demo) with no chat runtime behind them.            */
-/* -------------------------------------------------------------------------- */
-
-function ToolCard({ part }: { part: DynamicToolUIPart }) {
-  return (
-    <Tool className="mb-0 text-xs">
-      <ToolHeader
-        state={part.state}
-        toolName={shortToolName(part.toolName)}
-        type="dynamic-tool"
-      />
-      <ToolContent>
-        <ToolInput input={part.input ?? {}} />
-        <ToolOutput errorText={part.errorText} output={part.output} />
-      </ToolContent>
-    </Tool>
-  );
-}
-
-interface ConfirmCardProps {
-  resumeToken: string;
-  pending: PendingWrite[];
-  /** Client-local resolution for this token, if the user already decided.
-   * The server never rewrites the original `data-confirm` part. */
-  resolution: Decision | undefined;
-  /** Approve/Deny are locked while a request is in flight. */
-  disabled: boolean;
-  onDecide: (
-    resumeToken: string,
-    pending: PendingWrite[],
-    decision: Decision
-  ) => void;
-}
-
-function ConfirmCard({
-  resumeToken,
-  pending,
-  resolution,
-  disabled,
-  onDecide,
-}: ConfirmCardProps) {
-  if (resolution) {
-    return (
-      <p className="text-[11px] text-muted-foreground">
-        Action {resolution === "approve" ? "approved" : "denied"}
-      </p>
-    );
-  }
-
-  return (
-    <div className="rounded-2xl border border-amber-300 bg-amber-50 px-3 py-2.5 text-xs">
-      <p className="font-medium text-amber-900">
-        Approve this action before it runs?
-      </p>
-      <ul className="mt-1.5 space-y-1">
-        {pending.map((write) => (
-          <li key={write.id} className="text-amber-800">
-            <span className="font-mono font-medium">
-              {shortToolName(write.name)}
-            </span>
-            <span className="break-all text-amber-700">
-              {" · "}
-              {summarizeArgs(write.input)}
-            </span>
-          </li>
-        ))}
-      </ul>
-      <div className="mt-2 flex gap-2">
-        <Button
-          disabled={disabled}
-          onClick={() => onDecide(resumeToken, pending, "approve")}
-          size="xs"
-        >
-          Approve &amp; run
-        </Button>
-        <Button
-          className="border-amber-300 bg-transparent text-amber-900 hover:bg-amber-100"
-          disabled={disabled}
-          onClick={() => onDecide(resumeToken, pending, "deny")}
-          size="xs"
-          variant="outline"
-        >
-          Deny
-        </Button>
-      </div>
-    </div>
-  );
-}
-
-function WriteOutcomes({ outcomes }: { outcomes: WriteOutcome[] }) {
-  return (
-    <div className="flex flex-wrap gap-1.5">
-      {outcomes.map((outcome, i) => (
-        <span className="flex items-center gap-1" key={i}>
-          <Badge variant={outcome.isError ? "destructive" : "success"}>
-            {shortToolName(outcome.name)}
-          </Badge>
-          {outcome.denied && <Badge variant="secondary">denied</Badge>}
-        </span>
-      ))}
-    </div>
-  );
-}
-
-interface FeedbackControlsProps {
-  messageId: string;
-  state: FeedbackState;
-  comment: string;
-  onRate: (messageId: string, rating: "up" | "down") => void;
-  onCommentChange: (messageId: string, comment: string) => void;
-  onSendComment: (messageId: string) => void;
-}
-
-function FeedbackControls({
-  messageId,
-  state,
-  comment,
-  onRate,
-  onCommentChange,
-  onSendComment,
-}: FeedbackControlsProps) {
-  if (state === "thanks") {
-    return (
-      <span className="text-[11px] text-muted-foreground">
-        Thanks for the feedback
-      </span>
-    );
-  }
-
-  return (
-    <>
-      <MessageAction
-        disabled={state === "sending"}
-        label="Good response"
-        onClick={() => onRate(messageId, "up")}
-        tooltip="Good response"
-      >
-        <ThumbsUpIcon className="size-3.5" />
-      </MessageAction>
-      <MessageAction
-        disabled={state === "sending"}
-        label="Bad response"
-        onClick={() => onRate(messageId, "down")}
-        tooltip="Bad response"
-      >
-        <ThumbsDownIcon className="size-3.5" />
-      </MessageAction>
-      {state === "down-pending" && (
-        <span className="flex items-center gap-1.5">
-          <Input
-            className="h-7 w-56 text-[11px]"
-            onChange={(e) => onCommentChange(messageId, e.target.value)}
-            placeholder="What went wrong? (optional)"
-            value={comment}
-          />
-          <Button onClick={() => onSendComment(messageId)} size="xs" variant="outline">
-            Send
-          </Button>
-        </span>
-      )}
-    </>
-  );
-}
-
-interface MessageListProps {
-  messages: PlaygroundMessage[];
-  /** Client-local approve/deny decisions, keyed by resume token. */
-  resolvedTokens: ReadonlyMap<string, Decision>;
-  /** A request is in flight — confirm buttons and regenerate are locked. */
-  busy: boolean;
-  /** Whether the final message in the list has finished streaming. Earlier
-   * messages are complete by construction. */
-  lastMessageComplete: boolean;
-  /** Assistant messages whose turn ended in an error; they get no feedback UI. */
-  erroredIds: ReadonlySet<string>;
-  /** True while an unresolved confirm gates the conversation. */
-  awaitingConfirm: boolean;
-  onDecide: ConfirmCardProps["onDecide"];
-  onRegenerate: () => void;
-  feedback: Record<string, FeedbackState>;
-  comments: Record<string, string>;
-  onRate: FeedbackControlsProps["onRate"];
-  onCommentChange: FeedbackControlsProps["onCommentChange"];
-  onSendComment: FeedbackControlsProps["onSendComment"];
-}
-
-function MessageList({
-  messages,
-  resolvedTokens,
-  busy,
-  lastMessageComplete,
-  erroredIds,
-  awaitingConfirm,
-  onDecide,
-  onRegenerate,
-  feedback,
-  comments,
-  onRate,
-  onCommentChange,
-  onSendComment,
-}: MessageListProps) {
-  return (
-    <>
-      {messages.map((message, index) => {
-        const isLast = index === messages.length - 1;
-        const complete = !isLast || lastMessageComplete;
-        const showActions =
-          message.role === "assistant" && complete && !erroredIds.has(message.id);
-
-        return (
-          <Message from={message.role} key={message.id}>
-            <MessageContent className="text-xs">
-              {message.parts.map((part, partIndex) => {
-                const key = `${message.id}-${partIndex}`;
-                if (part.type === "text") {
-                  return (
-                    <MessageResponse className="text-xs" key={key}>
-                      {part.text}
-                    </MessageResponse>
-                  );
-                }
-                if (part.type === "dynamic-tool") {
-                  return <ToolCard key={key} part={part} />;
-                }
-                if (part.type === "data-confirm") {
-                  return (
-                    <ConfirmCard
-                      disabled={busy}
-                      key={key}
-                      onDecide={onDecide}
-                      pending={part.data.pending}
-                      resolution={resolvedTokens.get(part.data.resumeToken)}
-                      resumeToken={part.data.resumeToken}
-                    />
-                  );
-                }
-                if (part.type === "data-write-outcome") {
-                  return <WriteOutcomes key={key} outcomes={part.data.outcomes} />;
-                }
-                return null;
-              })}
-            </MessageContent>
-
-            {showActions && (
-              <MessageActions>
-                {isLast && (
-                  <MessageAction
-                    disabled={awaitingConfirm || busy}
-                    label="Regenerate"
-                    onClick={onRegenerate}
-                    tooltip="Regenerate"
-                  >
-                    <RefreshCcwIcon className="size-3.5" />
-                  </MessageAction>
-                )}
-                <FeedbackControls
-                  comment={comments[message.id] ?? ""}
-                  messageId={message.id}
-                  onCommentChange={onCommentChange}
-                  onRate={onRate}
-                  onSendComment={onSendComment}
-                  state={feedback[message.id] ?? "idle"}
-                />
-              </MessageActions>
-            )}
-          </Message>
-        );
-      })}
-    </>
-  );
 }
 
 /* -------------------------------------------------------------------------- */
@@ -624,26 +252,39 @@ export const Playground = forwardRef<PlaygroundHandle, PlaygroundProps>(
 
     useImperativeHandle(ref, () => ({ runPrompt: send }), [send]);
 
-    const submitFeedback = useCallback(
-      (messageId: string, rating: "up" | "down") => {
-        const prompt = precedingUserPrompt(messages, messageId);
-        const comment = comments[messageId]?.trim() || undefined;
-        setFeedback((prev) => ({ ...prev, [messageId]: "sending" }));
-        void (async () => {
-          try {
-            await fetch("/api/playground/feedback", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ rating, comment, prompt }),
-            });
-          } catch {
-            // Never block the UI on a feedback-submission failure.
-          }
-          setFeedback((prev) => ({ ...prev, [messageId]: "thanks" }));
-        })();
-      },
-      [messages, comments]
-    );
+    // `submitFeedback` (and, transitively, `handleRate`/`handleSendComment`,
+    // both passed to every memoized `MessageRow`) must not be recreated on
+    // every streamed token just because it reads `messages`/`comments` — those
+    // reads only matter at click time, not render time. Track the latest
+    // values in refs instead of closing over the state directly, so the
+    // callback's identity stays stable across renders (deps: none) while
+    // still reading current data at call time.
+    const messagesRef = useRef(messages);
+    useEffect(() => {
+      messagesRef.current = messages;
+    }, [messages]);
+    const commentsRef = useRef(comments);
+    useEffect(() => {
+      commentsRef.current = comments;
+    }, [comments]);
+
+    const submitFeedback = useCallback((messageId: string, rating: "up" | "down") => {
+      const prompt = precedingUserPrompt(messagesRef.current, messageId);
+      const comment = commentsRef.current[messageId]?.trim() || undefined;
+      setFeedback((prev) => ({ ...prev, [messageId]: "sending" }));
+      void (async () => {
+        try {
+          await fetch("/api/playground/feedback", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ rating, comment, prompt }),
+          });
+        } catch {
+          // Never block the UI on a feedback-submission failure.
+        }
+        setFeedback((prev) => ({ ...prev, [messageId]: "thanks" }));
+      })();
+    }, []);
 
     const handleRate = useCallback(
       (messageId: string, rating: "up" | "down") => {
