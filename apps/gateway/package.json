@@ -16,8 +16,6 @@
     "@ai-sdk/amazon-bedrock": "^4",
     "@ai-sdk/anthropic": "^3",
     "@ai-sdk/react": "^3",
-    "@anthropic-ai/bedrock-sdk": "^0.32.0",
-    "@anthropic-ai/sdk": "^0.112.3",
     "@aws-sdk/credential-providers": "^3.1094.0",
     "@base-ui/react": "^1.6.0",
     "@datatorag-mcp/auth": "workspace:^",

@@ -6,9 +6,9 @@ vi.mock("@/lib/session", () => ({
   getSessionUserId: () => getSessionUserId(),
 }));
 
-const getPlaygroundLlm = vi.fn();
+const getPlaygroundModel = vi.fn();
 vi.mock("@/lib/llm", () => ({
-  getPlaygroundLlm: () => getPlaygroundLlm(),
+  getPlaygroundModel: () => getPlaygroundModel(),
 }));
 
 const getEnv = vi.fn();
@@ -28,14 +28,19 @@ const executeUserTool = vi.fn();
 vi.mock("@/gateway/playground/tools", () => ({
   listUserEngineTools: (...args: unknown[]) => listUserEngineTools(...args),
   executeUserTool: (...args: unknown[]) => executeUserTool(...args),
-  isWriteTool: (name: string) => name.includes("send") || name.includes("create"),
 }));
 
-const runPlaygroundTurn = vi.fn();
-const resumePlaygroundTurn = vi.fn();
+// history.ts is NOT mocked — it's a pure function with no external deps, so
+// the 400 "Bad request" contract is exercised against the real
+// buildModelHistory, on real UIMessage-shaped ({ role, parts }) bodies.
+
+const streamEngineTurn = vi.fn();
+const detectPause = vi.fn();
+const executeWriteBatch = vi.fn();
 vi.mock("@/gateway/playground/engine", () => ({
-  runPlaygroundTurn: (...args: unknown[]) => runPlaygroundTurn(...args),
-  resumePlaygroundTurn: (...args: unknown[]) => resumePlaygroundTurn(...args),
+  streamEngineTurn: (...args: unknown[]) => streamEngineTurn(...args),
+  detectPause: (...args: unknown[]) => detectPause(...args),
+  executeWriteBatch: (...args: unknown[]) => executeWriteBatch(...args),
 }));
 
 const putPending = vi.fn();
@@ -68,23 +73,58 @@ function chatRequest(body: unknown): NextRequest {
   });
 }
 
-const validBody = { messages: [{ role: "user", content: "hi" }] };
+// UIMessage-shaped body matching buildModelHistory's real contract
+// ({ role, parts: [{ type: "text", text }] }) — the successor of the old
+// client's flat { role, content } shape.
+const validBody = { messages: [{ role: "user", parts: [{ type: "text", text: "hi" }] }] };
+
+type FakeChunk = { type: string; [key: string]: unknown };
+
+/** Turns an array of UIMessage-stream-chunk-shaped objects into a real
+ * ReadableStream, standing in for `StreamTextResult#toUIMessageStream()`. */
+function chunkStream(chunks: FakeChunk[]): ReadableStream<FakeChunk> {
+  return new ReadableStream({
+    start(controller) {
+      for (const c of chunks) controller.enqueue(c);
+      controller.close();
+    },
+  });
+}
+
+/** Minimal stand-in for the `StreamTextResult` the route consumes — only
+ * `toUIMessageStream()` is called on it (detectPause is mocked separately
+ * and never inspects this object for real). */
+function fakeResult(chunks: FakeChunk[]) {
+  return { toUIMessageStream: () => chunkStream(chunks) };
+}
+
+const START: FakeChunk = { type: "start" };
+const FINISH: FakeChunk = { type: "finish", finishReason: "stop" };
+
+// A real content turn: start/finish bookkeeping bracketing an actual
+// text-delta — the shape the refund tap must recognize as "delivered".
+const textChunks = (text: string): FakeChunk[] => [
+  START,
+  { type: "text-start", id: "t1" },
+  { type: "text-delta", id: "t1", delta: text },
+  { type: "text-end", id: "t1" },
+  FINISH,
+];
 
 describe("POST /api/playground/chat", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     getSessionUserId.mockResolvedValue("user-1");
-    getEnv.mockReturnValue({ PLAYGROUND_MESSAGE_CAP: 20, PLAYGROUND_MODEL: "claude-sonnet-5" });
+    getEnv.mockReturnValue({ PLAYGROUND_MESSAGE_CAP: 20 });
+    getPlaygroundModel.mockReturnValue({ modelId: "fake-model" });
     claimPlaygroundMessage.mockResolvedValue(true);
     listUserEngineTools.mockResolvedValue({ tools: [], isWrite: () => false });
-    getPlaygroundLlm.mockReturnValue({ messages: { create: vi.fn() } });
-    runPlaygroundTurn.mockImplementation(async ({ emit }) => {
-      emit({ type: "done", stopReason: "end_turn" });
-      return { status: "complete" };
-    });
-    resumePlaygroundTurn.mockImplementation(async ({ emit }) => {
-      emit({ type: "done", stopReason: "end_turn" });
-      return { status: "complete" };
+    executeUserTool.mockResolvedValue({ text: "ok", isError: false });
+    streamEngineTurn.mockImplementation(() => fakeResult(textChunks("hi there")));
+    detectPause.mockResolvedValue(null);
+    executeWriteBatch.mockResolvedValue({
+      toolMessage: { role: "tool", content: [] },
+      outcomes: [],
     });
     putPending.mockReturnValue("resume-token-abc");
     takePending.mockReturnValue(null);
@@ -102,8 +142,8 @@ describe("POST /api/playground/chat", () => {
     expect(await res.json()).toEqual({ error: "Unauthorized" });
   });
 
-  it("403s when the playground is disabled (no LLM configured)", async () => {
-    getPlaygroundLlm.mockReturnValue(null);
+  it("403s when the playground is disabled (no model configured)", async () => {
+    getPlaygroundModel.mockReturnValue(null);
     const res = await POST(chatRequest(validBody));
     expect(res.status).toBe(403);
     expect(await res.json()).toEqual({ error: "playground_disabled" });
@@ -117,7 +157,7 @@ describe("POST /api/playground/chat", () => {
 
   it("400s when the last turn is not from the user", async () => {
     const res = await POST(
-      chatRequest({ messages: [{ role: "assistant", content: "hi" }] })
+      chatRequest({ messages: [{ role: "assistant", parts: [{ type: "text", text: "hi" }] }] })
     );
     expect(res.status).toBe(400);
     expect(await res.json()).toEqual({ error: "Bad request" });
@@ -139,18 +179,35 @@ describe("POST /api/playground/chat", () => {
     expect(res.status).toBe(429);
     expect(await res.json()).toEqual({ error: "cap_exceeded", cap: 20 });
     expect(trackPlaygroundCapHit).toHaveBeenCalledWith({}, "user-1");
-    expect(runPlaygroundTurn).not.toHaveBeenCalled();
+    expect(streamEngineTurn).not.toHaveBeenCalled();
   });
 
-  it("returns a text/event-stream response on the happy path", async () => {
+  it("returns a UI message stream (text/event-stream) response on the happy path", async () => {
     const res = await POST(chatRequest(validBody));
     expect(res.status).toBe(200);
     expect(res.headers.get("content-type")).toContain("text/event-stream");
     expect(trackPlaygroundMessage).toHaveBeenCalledWith({}, "user-1");
-    // Drain the stream so the async start() body runs to completion.
+    // Drain the stream so the async execute() body runs to completion.
     const text = await res.text();
-    expect(text).toContain('"type":"done"');
-    expect(runPlaygroundTurn).toHaveBeenCalledTimes(1);
+    expect(text).toContain('"type":"text-delta"');
+    expect(text).toContain("hi there");
+    expect(streamEngineTurn).toHaveBeenCalledTimes(1);
+  });
+
+  it("threads request.signal into EngineDeps.abortSignal on the fresh-turn path", async () => {
+    const res = await POST(chatRequest(validBody));
+    await res.text();
+    const deps = streamEngineTurn.mock.calls[0][0];
+    expect(deps.abortSignal).toBeInstanceOf(AbortSignal);
+  });
+
+  it("wires executeTool to track-then-execute (covers reads and, identically, approved writes)", async () => {
+    const res = await POST(chatRequest(validBody));
+    await res.text();
+    const deps = streamEngineTurn.mock.calls[0][0];
+    await deps.executeTool("gws-mcp__gmail_search", { q: "x" });
+    expect(trackPlaygroundToolCall).toHaveBeenCalledWith({}, "user-1", "gws-mcp__gmail_search");
+    expect(executeUserTool).toHaveBeenCalledWith({}, "user-1", "gws-mcp__gmail_search", { q: "x" });
   });
 
   it("refunds the claim when listUserEngineTools fails before streaming", async () => {
@@ -160,10 +217,11 @@ describe("POST /api/playground/chat", () => {
     expect(refundPlaygroundMessage).toHaveBeenCalledWith({}, "user-1");
   });
 
-  it("refunds the claim on engine-level failure during streaming (no work delivered)", async () => {
-    // Provider fails before a single event reaches the client — the outage
-    // case the refund exists for.
-    runPlaygroundTurn.mockRejectedValue(new Error("anthropic outage"));
+  it("refunds the claim when the turn fails before any real content is delivered", async () => {
+    // Only bookkeeping chunks reach the writer (no text/tool activity), then
+    // the turn fails — the provider-outage case the refund tap exists for.
+    streamEngineTurn.mockImplementation(() => fakeResult([START]));
+    detectPause.mockRejectedValue(new Error("anthropic outage"));
     const errSpy = vi.spyOn(console, "error").mockImplementation(() => {});
     const res = await POST(chatRequest(validBody));
     expect(res.status).toBe(200);
@@ -178,89 +236,69 @@ describe("POST /api/playground/chat", () => {
     errSpy.mockRestore();
   });
 
-  it("does NOT refund when the engine throws after work was already delivered", async () => {
-    // e.g. Anthropic tokens were spent and text was already streamed before
-    // a later failure (including a client abort surfacing as a throw).
-    runPlaygroundTurn.mockImplementation(async ({ emit }) => {
-      emit({ type: "text", text: "partial answer" });
-      throw new Error("stream interrupted");
-    });
+  it("does NOT refund when the turn fails after real content was already delivered", async () => {
+    // e.g. tokens were spent and text was already streamed (a client abort
+    // mid-generation would surface the same way: content first, failure
+    // after) before a later failure.
+    streamEngineTurn.mockImplementation(() => fakeResult(textChunks("partial answer")));
+    detectPause.mockRejectedValue(new Error("stream interrupted"));
     const res = await POST(chatRequest(validBody));
     expect(res.status).toBe(200);
     const text = await res.text();
-    expect(text).toContain('"type":"text"');
+    expect(text).toContain('"type":"text-delta"');
+    expect(text).toContain("partial answer");
+    expect(text).toContain('"type":"error"');
     expect(refundPlaygroundMessage).not.toHaveBeenCalled();
   });
 
-  it("does NOT refund when the client aborts mid-stream (enqueue throws on a closed controller)", async () => {
-    let releaseEngine!: () => void;
-    const engineReleased = new Promise<void>((resolve) => {
-      releaseEngine = resolve;
-    });
-    let capturedShouldStop: (() => boolean) | undefined;
-
-    runPlaygroundTurn.mockImplementation(async ({ emit, shouldStop }) => {
-      capturedShouldStop = shouldStop;
-      emit({ type: "text", text: "first" }); // succeeds — client still attached
-      await engineReleased;
-      // By now the client has aborted; this enqueue throws on the closed
-      // controller. The route's emit() wrapper must swallow it (clientGone)
-      // rather than letting it propagate as the "genuine failure" path.
-      emit({ type: "text", text: "second" });
-      throw new Error("should not cause a refund");
-    });
-
+  it("does NOT refund on a turn that completes with only bookkeeping chunks and no error", async () => {
+    // Degenerate but non-failing case (e.g. the model produced nothing):
+    // no refund is warranted because nothing THREW — refunds are only for
+    // genuine failures, not "the model said nothing".
+    streamEngineTurn.mockImplementation(() => fakeResult([START, FINISH]));
     const res = await POST(chatRequest(validBody));
-    const reader = res.body!.getReader();
-    await reader.read(); // consume the "first" event
-    await reader.cancel(); // simulate AbortController.abort() from the client
-
-    releaseEngine();
-    // Let the route's async start()/catch finish running.
-    await new Promise((resolve) => setTimeout(resolve, 0));
-    await new Promise((resolve) => setTimeout(resolve, 0));
-
+    await res.text();
     expect(refundPlaygroundMessage).not.toHaveBeenCalled();
-
-    // The route must wire a shouldStop callback into the engine so the loop
-    // (and any pending tool execution) actually halts on abort — not just
-    // the refund gate. We can't observe the real engine loop through this
-    // mock, but we can prove the route passes a working predicate and that
-    // it reports "stopped" once the client has gone away (clientGone was
-    // set by the failed enqueue of "second" above).
-    expect(typeof capturedShouldStop).toBe("function");
-    expect(capturedShouldStop!()).toBe(true);
   });
 
-  it("stores the paused turn and emits a confirm event when the engine awaits confirmation", async () => {
-    const pending = [{ id: "w_1", name: "gws-mcp__gmail_send", input: { to: "a@b.com" } }];
+  it("stores the paused turn and emits a data-confirm part when the engine awaits confirmation", async () => {
     const pausedMessages = [{ role: "assistant", content: [] }];
-    const batch = pending;
-    runPlaygroundTurn.mockResolvedValue({
-      status: "awaiting_confirmation",
-      messages: pausedMessages,
-      batch,
-      pending,
-    });
+    const pending = [{ id: "w_1", name: "gws-mcp__gmail_send", input: { to: "a@b.com" } }];
+    streamEngineTurn.mockImplementation(() => fakeResult(textChunks("let me check")));
+    detectPause.mockResolvedValue({ messages: pausedMessages, pending });
 
     const res = await POST(chatRequest(validBody));
     const text = await res.text();
 
-    expect(putPending).toHaveBeenCalledWith("user-1", pausedMessages, batch, pending);
-    expect(text).toContain('"type":"confirm"');
+    expect(putPending).toHaveBeenCalledWith("user-1", pausedMessages, pending);
+    expect(text).toContain('"type":"data-confirm"');
     expect(text).toContain("resume-token-abc");
     expect(text).toContain("gws-mcp__gmail_send");
     expect(trackPlaygroundConfirm).toHaveBeenCalledWith({}, "user-1", "shown", 1);
   });
 
-  it("resume: does NOT claim a message and runs the resume path", async () => {
+  it("resume: does NOT claim a message, runs the write batch, and continues with a second turn", async () => {
     takePending.mockReturnValue({
       userId: "user-1",
       messages: [{ role: "assistant", content: [] }],
-      batch: [{ id: "w_1", name: "gws-mcp__gmail_send", input: {} }],
       writes: [{ id: "w_1", name: "gws-mcp__gmail_send", input: {} }],
       createdAt: 0,
     });
+    executeWriteBatch.mockResolvedValue({
+      toolMessage: {
+        role: "tool",
+        content: [
+          {
+            type: "tool-result",
+            toolCallId: "w_1",
+            toolName: "gws-mcp__gmail_send",
+            output: { type: "text", value: "sent" },
+          },
+        ],
+      },
+      outcomes: [{ name: "gws-mcp__gmail_send", isError: false, denied: false }],
+    });
+    streamEngineTurn.mockImplementation(() => fakeResult(textChunks("done")));
 
     const res = await POST(
       chatRequest({ resumeToken: "resume-token-abc", decisions: { w_1: "approve" } })
@@ -270,9 +308,34 @@ describe("POST /api/playground/chat", () => {
     expect(claimPlaygroundMessage).not.toHaveBeenCalled();
     expect(trackPlaygroundMessage).not.toHaveBeenCalled();
     expect(takePending).toHaveBeenCalledWith("user-1", "resume-token-abc");
-    expect(resumePlaygroundTurn).toHaveBeenCalledTimes(1);
+    expect(executeWriteBatch).toHaveBeenCalledTimes(1);
+    expect(executeWriteBatch).toHaveBeenCalledWith(
+      expect.objectContaining({ abortSignal: expect.any(AbortSignal) }),
+      [{ id: "w_1", name: "gws-mcp__gmail_send", input: {} }],
+      { w_1: "approve" }
+    );
     expect(trackPlaygroundConfirm).toHaveBeenCalledWith({}, "user-1", "approved", 1);
-    expect(text).toContain('"type":"done"');
+    expect(text).toContain('"type":"data-write-outcome"');
+    expect(text).toContain('"type":"text-delta"');
+    expect(text).toContain("done");
+    // The follow-up turn runs against pending.messages + the write outcome
+    // tool message, not a fresh cap claim's history.
+    expect(streamEngineTurn).toHaveBeenCalledTimes(1);
+  });
+
+  it("resume: tracks confirm as 'denied' when no write was approved, and never refunds (no claim was made)", async () => {
+    takePending.mockReturnValue({
+      userId: "user-1",
+      messages: [{ role: "assistant", content: [] }],
+      writes: [{ id: "w_1", name: "gws-mcp__gmail_send", input: {} }],
+      createdAt: 0,
+    });
+    const res = await POST(
+      chatRequest({ resumeToken: "resume-token-abc", decisions: { w_1: "deny" } })
+    );
+    await res.text();
+    expect(trackPlaygroundConfirm).toHaveBeenCalledWith({}, "user-1", "denied", 1);
+    expect(refundPlaygroundMessage).not.toHaveBeenCalled();
   });
 
   it("resume with an unknown/expired token emits an error and never resumes", async () => {
@@ -282,8 +345,9 @@ describe("POST /api/playground/chat", () => {
     );
     const text = await res.text();
 
-    expect(resumePlaygroundTurn).not.toHaveBeenCalled();
+    expect(executeWriteBatch).not.toHaveBeenCalled();
+    expect(streamEngineTurn).not.toHaveBeenCalled();
     expect(text).toContain('"type":"error"');
-    expect(text.toLowerCase()).toContain("expired");
+    expect(text).toContain("This confirmation expired — please run the prompt again.");
   });
 });
