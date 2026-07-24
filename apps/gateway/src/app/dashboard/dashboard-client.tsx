@@ -22,6 +22,7 @@ import {
   CardFooter,
 } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
+import { formatConnectedDate } from "@/lib/utils";
 import type { ConnectedAccount, LegacyConnection } from "./connections/types";
 
 const EXAMPLE_PROMPTS = [
@@ -122,7 +123,7 @@ export function DashboardClient() {
       <div className="mt-6 grid gap-4 sm:grid-cols-2">
         {loading ? (
           Array.from({ length: 2 }).map((_, i) => (
-            <Card key={i} className="gap-4">
+            <Card key={i}>
               <CardHeader>
                 <div className="flex items-start gap-3.5">
                   <Skeleton className="h-10 w-10 rounded-lg" />
@@ -150,28 +151,25 @@ export function DashboardClient() {
             const isConnected = hasAccounts || !!legacyConn;
 
             return (
-              <Card key={service.id} className="flex flex-col">
+              <Card key={service.id}>
                 <CardHeader>
                   <div className="flex items-start gap-3.5">
                     <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-secondary">
                       {service.icon}
                     </div>
                     <div className="min-w-0">
-                      <CardTitle className="font-display text-sm font-semibold">
+                      <CardTitle className="text-sm font-semibold">
                         {service.name}
                       </CardTitle>
-                      <CardDescription className="mt-0.5 text-xs">
+                      <CardDescription className="text-xs">
                         {service.description}
                       </CardDescription>
                     </div>
                   </div>
                   <CardAction>
                     {isConnected ? (
-                      <Badge
-                        variant="secondary"
-                        className="bg-emerald-500/10 text-emerald-600"
-                      >
-                        <span className="size-1.5 rounded-full bg-emerald-500" />
+                      <Badge variant="success">
+                        <span className="size-1.5 rounded-full bg-current" />
                         Connected
                       </Badge>
                     ) : (
@@ -214,9 +212,12 @@ export function DashboardClient() {
                             {account.accountEmail}
                           </span>
                           {account.isDefault && (
-                            <span className="shrink-0 text-[10px] font-medium text-primary">
+                            <Badge
+                              variant="secondary"
+                              className="bg-primary/10 text-primary"
+                            >
                               Default
-                            </span>
+                            </Badge>
                           )}
                         </div>
                         <Button
@@ -224,7 +225,7 @@ export function DashboardClient() {
                           size="xs"
                           onClick={(e) => disconnectAccount(e, account)}
                           disabled={disconnecting === account.id}
-                          className="shrink-0 text-muted-foreground hover:text-foreground"
+                          className="text-muted-foreground"
                         >
                           {disconnecting === account.id ? "..." : "Disconnect"}
                         </Button>
@@ -237,11 +238,7 @@ export function DashboardClient() {
                 {!hasAccounts && legacyConn && (
                   <CardContent className="flex items-center justify-between border-t pt-4">
                     <p className="text-[11px] text-muted-foreground">
-                      Connected{" "}
-                      {new Date(legacyConn.connectedAt).toLocaleDateString(
-                        "en-US",
-                        { month: "short", day: "numeric", year: "numeric" }
-                      )}
+                      Connected {formatConnectedDate(legacyConn.connectedAt)}
                     </p>
                     <Button
                       variant="ghost"
@@ -346,7 +343,7 @@ export function DashboardClient() {
                 onClick={() => copy(prompt, i)}
                 aria-label="Copy prompt"
                 title="Copy"
-                className="shrink-0 text-muted-foreground opacity-0 group-hover:opacity-100"
+                className="text-muted-foreground opacity-0 group-hover:opacity-100"
               >
                 {copied === i ? (
                   <Check className="size-3.5 text-emerald-500" />

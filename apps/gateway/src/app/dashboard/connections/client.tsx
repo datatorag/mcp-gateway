@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
+import { formatConnectedDate } from "@/lib/utils";
 import type { ConnectedAccount, LegacyConnection } from "./types";
 
 export function ConnectionsClient() {
@@ -106,7 +107,7 @@ export function ConnectionsClient() {
 
               <Button
                 variant={isConnected ? "outline" : "default"}
-                className="shrink-0 self-start sm:self-auto"
+                className="self-start sm:self-auto"
                 render={<a href={service.connectUrl} />}
               >
                 {isConnected ? "Add account" : "Connect"}
@@ -144,15 +145,7 @@ export function ConnectionsClient() {
                           )}
                         </div>
                         <p className="text-xs text-muted-foreground">
-                          Connected{" "}
-                          {new Date(account.connectedAt).toLocaleDateString(
-                            "en-US",
-                            {
-                              month: "short",
-                              day: "numeric",
-                              year: "numeric",
-                            }
-                          )}
+                          Connected {formatConnectedDate(account.connectedAt)}
                         </p>
                       </div>
                     </div>
@@ -161,7 +154,7 @@ export function ConnectionsClient() {
                       size="sm"
                       onClick={(e) => disconnectAccount(e, account.id)}
                       disabled={disconnecting === account.id}
-                      className="text-muted-foreground hover:text-foreground"
+                      className="text-muted-foreground"
                     >
                       {disconnecting === account.id ? "..." : "Disconnect"}
                     </Button>
@@ -174,11 +167,7 @@ export function ConnectionsClient() {
             {!hasAccounts && legacyConn && (
               <CardContent className="flex items-center justify-between border-t pt-4">
                 <p className="text-xs text-muted-foreground">
-                  Connected{" "}
-                  {new Date(legacyConn.connectedAt).toLocaleDateString(
-                    "en-US",
-                    { month: "short", day: "numeric", year: "numeric" }
-                  )}
+                  Connected {formatConnectedDate(legacyConn.connectedAt)}
                 </p>
                 <Button
                   variant="outline"

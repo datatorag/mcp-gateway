@@ -29,7 +29,8 @@ import {
 
 type Range = "24h" | "7d" | "30d" | "90d";
 
-const CHART_COLOR = "#2D5BD6";
+// Reference the theme token (globals.css --chart-1) so charts track the palette.
+const CHART_COLOR = "var(--chart-1)";
 
 interface ToolRow {
   toolName: string;
@@ -177,7 +178,7 @@ function ChartPanel({
   children: React.ReactNode;
 }) {
   return (
-    <Card className="mt-10 gap-4 p-5">
+    <Card className="mt-10 p-5">
       <h2 className="font-display text-base font-bold text-foreground">
         {title}
       </h2>
@@ -399,7 +400,7 @@ function RecentActivity() {
             <div className="flex min-w-0 items-center gap-3">
               <span
                 className={`h-1.5 w-1.5 shrink-0 rounded-full ${
-                  e.status === "success" ? "bg-emerald-500" : "bg-amber-500"
+                  e.status === "success" ? "bg-success" : "bg-warning"
                 }`}
               />
               <span className="truncate font-mono text-xs text-foreground">
