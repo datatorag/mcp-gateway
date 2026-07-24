@@ -65,11 +65,12 @@ vi.mock("@/lib/db", () => ({ db: {} }));
 
 import { POST } from "./route";
 
-function chatRequest(body: unknown): NextRequest {
+function chatRequest(body: unknown, init?: { signal?: AbortSignal }): NextRequest {
   return new NextRequest("http://localhost/api/playground/chat", {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify(body),
+    signal: init?.signal,
   });
 }
 
@@ -93,9 +94,30 @@ function chunkStream(chunks: FakeChunk[]): ReadableStream<FakeChunk> {
 
 /** Minimal stand-in for the `StreamTextResult` the route consumes — only
  * `toUIMessageStream()` is called on it (detectPause is mocked separately
- * and never inspects this object for real). */
+ * and never inspects this object for real). Ignores whatever options the
+ * route passes (e.g. the `onError` added for finding 4) — irrelevant to a
+ * fake source that never errors. */
 function fakeResult(chunks: FakeChunk[]) {
   return { toUIMessageStream: () => chunkStream(chunks) };
+}
+
+/** Same idea as `chunkStream`, but pull-based with a per-chunk delay so the
+ * route's internal write loop paces itself in real time instead of draining
+ * synchronously — giving a test a real window to read the first chunk off
+ * the response and cancel mid-stream, the way an actual client disconnect
+ * would land partway through a turn. */
+function slowChunkStream(chunks: FakeChunk[], delayMs: number): ReadableStream<FakeChunk> {
+  let i = 0;
+  return new ReadableStream({
+    async pull(controller) {
+      if (i >= chunks.length) {
+        controller.close();
+        return;
+      }
+      await new Promise((resolve) => setTimeout(resolve, delayMs));
+      controller.enqueue(chunks[i++]);
+    },
+  });
 }
 
 const START: FakeChunk = { type: "start" };
@@ -236,6 +258,17 @@ describe("POST /api/playground/chat", () => {
     errSpy.mockRestore();
   });
 
+  // The next two cases pin BOTH timings of "the client aborted, then the
+  // turn failed" — after real content, and before any content at all. They
+  // deliberately agree (neither refunds): a client abort never refunds,
+  // regardless of when it lands. That's a product decision, not an
+  // oversight — see the `!request.signal.aborted` comment in route.ts. The
+  // `!delivered` branch alone already covers "after content" (tokens were
+  // genuinely spent); the abort exclusion specifically closes the "before
+  // content" loophole (abort immediately after the request is sent, before
+  // a single output token, to farm free-but-not-really-free provider calls
+  // against the user's cap without ever decrementing it).
+
   it("does NOT refund when the turn fails after real content was already delivered", async () => {
     // e.g. tokens were spent and text was already streamed (a client abort
     // mid-generation would surface the same way: content first, failure
@@ -251,6 +284,27 @@ describe("POST /api/playground/chat", () => {
     expect(refundPlaygroundMessage).not.toHaveBeenCalled();
   });
 
+  it("does NOT refund when the client aborts BEFORE any content is delivered", async () => {
+    // The DoS-shaped loophole this exists to close: POST a large history,
+    // abort as soon as headers return — before a single content chunk —
+    // and (pre-fix) the cap claim would be refunded every time, letting an
+    // authenticated user loop that indefinitely while real provider input
+    // tokens (the full prompt + tool list) are still spent. The abort here
+    // is a REAL AbortSignal firing (not just "the engine happened to
+    // throw"), landing before any content reaches the tap.
+    const controller = new AbortController();
+    const req = chatRequest(validBody, { signal: controller.signal });
+    streamEngineTurn.mockImplementation(() => {
+      // Simulates the client disconnecting right as the turn starts.
+      controller.abort();
+      return fakeResult([START]); // zero content chunks reach the tap
+    });
+    detectPause.mockRejectedValue(new Error("aborted"));
+    const res = await POST(req);
+    await res.text();
+    expect(refundPlaygroundMessage).not.toHaveBeenCalled();
+  });
+
   it("does NOT refund on a turn that completes with only bookkeeping chunks and no error", async () => {
     // Degenerate but non-failing case (e.g. the model produced nothing):
     // no refund is warranted because nothing THREW — refunds are only for
@@ -259,6 +313,35 @@ describe("POST /api/playground/chat", () => {
     const res = await POST(chatRequest(validBody));
     await res.text();
     expect(refundPlaygroundMessage).not.toHaveBeenCalled();
+  });
+
+  it("client disconnect mid-stream: no error escapes the route, and refund fires at most once", async () => {
+    // A slow, pull-based source so the write loop paces itself in real time,
+    // giving this test a genuine window to read the first chunk off the
+    // response and cancel before the (mocked) turn has finished producing —
+    // unlike the other tests, which drain the whole response synchronously.
+    streamEngineTurn.mockImplementation(() => ({
+      toUIMessageStream: () => slowChunkStream(textChunks("a longer streamed reply"), 15),
+    }));
+    const errSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+
+    const res = await POST(chatRequest(validBody));
+    const reader = res.body!.getReader();
+    await reader.read(); // consume the first SSE chunk — response has started
+    await reader.cancel(); // simulate the client disconnecting mid-stream
+
+    // The internal write loop keeps running against the now-torn-down
+    // response controller (createUIMessageStream's own `safeEnqueue` is
+    // documented to swallow those writes) until the mocked turn finishes —
+    // give it time to do so, and to hit anything that would throw.
+    await new Promise((resolve) => setTimeout(resolve, 250));
+
+    const turnFailedLogged = errSpy.mock.calls.some(
+      ([msg]) => typeof msg === "string" && msg.includes("[playground] turn failed")
+    );
+    expect(turnFailedLogged).toBe(false);
+    expect(refundPlaygroundMessage.mock.calls.length).toBeLessThanOrEqual(1);
+    errSpy.mockRestore();
   });
 
   it("stores the paused turn and emits a data-confirm part when the engine awaits confirmation", async () => {

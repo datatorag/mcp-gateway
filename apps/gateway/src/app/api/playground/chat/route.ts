@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import {
-  createUIMessageStream, createUIMessageStreamResponse, type UIMessageStreamWriter,
+  createUIMessageStream, createUIMessageStreamResponse,
+  type UIMessageStreamWriter, type UIMessageChunk,
 } from "ai";
 import { db } from "@/lib/db";
 import { withRoute } from "@/lib/with-route";
@@ -46,22 +47,35 @@ function engineDeps(
 // has been called at all — so counting it (or any of these) as "delivered"
 // would make the refund tap never fire, even on a turn that fails outright
 // before a single token or tool call reaches the client.
-const NON_CONTENT_CHUNK_TYPES = new Set([
+//
+// Typed against `UIMessageChunk["type"]` (ai@6.0.235) rather than a bare
+// `Set<string>` so a future `ai` upgrade that adds a new chunk type here
+// (or removes one) fails `tsc`, instead of the new type silently falling
+// through as "content" (or, if added here by mistake, silently suppressing
+// the refund tap) with nothing catching it at build time.
+const NON_CONTENT_CHUNK_TYPES: Set<UIMessageChunk["type"]> = new Set([
   "start", "start-step", "finish-step", "finish", "abort", "message-metadata", "error",
 ]);
 
 /** Tap a UIMessage-chunk stream so the route knows whether any REAL content
- * (text, reasoning, a tool call/result, a source/file, or a custom data
- * part) reached the response — the successor of the old `workStarted` flag;
- * it gates the refund decision (a turn that dies with zero content parts
- * delivered refunds). Structural/bookkeeping chunks never flip it. */
-function tapDelivered<T extends { type: string }>(
-  stream: ReadableStream<T>,
+ * (text, reasoning, a tool call/result, or a source/file) reached the
+ * response — the successor of the old `workStarted` flag; it gates the
+ * refund decision (a turn that dies with zero content parts delivered
+ * refunds). Structural/bookkeeping chunks never flip it.
+ *
+ * Note: this does NOT cover `data-confirm` / `data-write-outcome` — those
+ * are written directly to the writer (below), bypassing this tap entirely.
+ * That's harmless in practice: a pause always pushes at least one
+ * tool-input chunk through the tap before `data-confirm` is written, and
+ * the resume path's follow-up turn passes a no-op `markDelivered` (resume
+ * never claims a cap message, so there's nothing to refund there). */
+function tapDelivered(
+  stream: ReadableStream<UIMessageChunk>,
   onFirst: () => void
-): ReadableStream<T> {
+): ReadableStream<UIMessageChunk> {
   let fired = false;
   return stream.pipeThrough(
-    new TransformStream<T, T>({
+    new TransformStream<UIMessageChunk, UIMessageChunk>({
       transform(chunk, controller) {
         if (!fired && !NON_CONTENT_CHUNK_TYPES.has(chunk.type)) {
           fired = true;
@@ -97,7 +111,19 @@ async function runTurnIntoStream(
   markDelivered: () => void
 ): Promise<void> {
   const result = streamEngineTurn(deps, history);
-  const tapped = tapDelivered(result.toUIMessageStream(), markDelivered);
+  const tapped = tapDelivered(
+    result.toUIMessageStream({
+      // Without this, an in-band stream error (a fullStream `error` part —
+      // e.g. a zero-step provider failure) is converted to a chunk carrying
+      // the SDK's default "An error occurred." and never touches
+      // logAndGenericError, so it's neither logged server-side nor worded
+      // consistently with the route's own onError below (which the client
+      // would ALSO see, once the failure additionally rejects the engine
+      // result — the client would get both messages back to back).
+      onError: (err) => logAndGenericError("[playground] stream error", err),
+    }),
+    markDelivered
+  );
   const reader = tapped.getReader();
   for (;;) {
     const { done, value } = await reader.read();
@@ -167,7 +193,29 @@ export const POST = withRoute(async (userId, request) => {
     onError: (err) => {
       // Engine/provider failure with no real content delivered: refund. Once
       // any content reached the client, the work (and tokens) were real.
-      if (!delivered) void refundPlaygroundMessage(db, userId);
+      //
+      // EXCEPT a client abort (`request.signal.aborted`): refunding an
+      // aborted request would let an authenticated user loop "POST a large
+      // history, abort as soon as headers return" indefinitely — burning
+      // real provider input tokens (the full prompt + tool list) while their
+      // cap never decrements. Product decision (Manuel, this fix round): an
+      // abort NEVER refunds, regardless of how early it lands. The accepted
+      // trade-off is that a user who legitimately hits Stop within the first
+      // instant — before a single output token — is charged one of their
+      // lifetime playground messages anyway. Do not "fix" this back; the
+      // refund exists for genuine provider/infra failures, not for aborts.
+      //
+      // onError must return synchronously (its return value is the error
+      // text sent to the client), so this can't be awaited — but it also
+      // can't be a bare `void` fire-and-forget: an unhandled rejection here
+      // (e.g. a DB blip during the same outage that triggered the refund)
+      // would both permanently strand the user's claim AND surface as an
+      // unhandled promise rejection. Attach a catch instead.
+      if (!delivered && !request.signal.aborted) {
+        refundPlaygroundMessage(db, userId).catch((refundErr) =>
+          console.error("[playground] refund failed", refundErr)
+        );
+      }
       return logAndGenericError("[playground] turn failed", err);
     },
   });
@@ -199,7 +247,13 @@ async function handleResume(
     return createUIMessageStreamResponse({ stream });
   }
 
-  const anyApproved = pending.writes.some((w) => decisions[w.id] === "approve");
+  // Same guarded-lookup form as engine.ts's per-write approval check (added
+  // in 2374311 to keep the write gate off the prototype chain) — kept
+  // consistent here even though this particular read only feeds analytics,
+  // so nobody copies the bare-index form from this call site later.
+  const anyApproved = pending.writes.some(
+    (w) => Object.prototype.hasOwnProperty.call(decisions, w.id) && decisions[w.id] === "approve"
+  );
   void trackPlaygroundConfirm(
     db, userId, anyApproved ? "approved" : "denied", pending.writes.length
   );
