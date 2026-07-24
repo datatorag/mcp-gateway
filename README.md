@@ -55,7 +55,7 @@ Then sign in at [datatorag.com/dashboard](https://datatorag.com/dashboard) and c
 
 Each tool is documented with its operations, required OAuth scopes, and example prompts at [datatorag.com/docs](https://datatorag.com/docs).
 
-Both connectors are themselves open-source MCP servers that plug into the gateway: [gws-mcp](https://github.com/DataToRag/gws-mcp) and [atlassian-mcp](https://github.com/DataToRag/atlassian-mcp).
+Both connectors are themselves open-source MCP servers that plug into the gateway: [gws-mcp](https://github.com/datatorag/gws-mcp) and [atlassian-mcp](https://github.com/datatorag/atlassian-mcp).
 
 ---
 
