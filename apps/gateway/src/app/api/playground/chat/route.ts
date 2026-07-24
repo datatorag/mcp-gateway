@@ -273,6 +273,40 @@ async function handleResume(
       const tools = await listUserEngineTools(db, userId);
       const deps = engineDeps(userId, model, tools, request.signal);
       const { toolMessage, outcomes } = await executeWriteBatch(deps, pending.writes, decisions);
+
+      // Close out each gated write's tool card. `streamText` enqueues the
+      // tool-call chunk BEFORE it checks `tool.execute != null` (ai@6.0.235
+      // dist/index.js ~:6819), so an unexecuted write still reached the
+      // client as a `dynamic-tool` part in state `input-available` — i.e.
+      // rendered as a pulsing "Running" forever, even after a Deny, because
+      // the route (not the SDK) is what actually runs these. `outcomes` is
+      // produced by `executeWriteBatch` one-per-write in `pending.writes`
+      // order, so index i lines up with `pending.writes[i].id`.
+      //
+      // `processUIMessageStream`'s `getToolInvocation` falls back to a
+      // backwards scan over ALL of the message's parts (dist/index.js
+      // ~:5822-5833), so these resolve their parts across the step boundary
+      // even though the tool call was emitted on the previous request.
+      //
+      // `data-write-outcome` stays as-is below — the client renders its
+      // approved/denied badges off that, independently of the tool cards.
+      pending.writes.forEach((w, i) => {
+        const outcome = outcomes[i];
+        if (outcome === undefined) return;
+        const result = toolMessage.role === "tool" ? toolMessage.content[i] : undefined;
+        const text =
+          result?.type === "tool-result" && "value" in result.output
+            ? String(result.output.value)
+            : outcome.denied
+              ? "User declined this action."
+              : "";
+        writer.write(
+          outcome.isError
+            ? { type: "tool-output-error", toolCallId: w.id, errorText: text }
+            : { type: "tool-output-available", toolCallId: w.id, output: text }
+        );
+      });
+
       writer.write({ type: "data-write-outcome", data: { outcomes } });
       const history = [...pending.messages, toolMessage];
       await runTurnIntoStream(userId, deps, history, writer, () => {});

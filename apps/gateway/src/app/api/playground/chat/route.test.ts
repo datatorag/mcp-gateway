@@ -128,6 +128,17 @@ function slowChunkStream(chunks: FakeChunk[], delayMs: number): ReadableStream<F
   });
 }
 
+/** Parses the SSE body back into the UI-message chunks the route wrote, so a
+ * test can assert on chunk shape/order instead of substring-matching JSON. */
+function sseChunks(body: string): FakeChunk[] {
+  return body
+    .split("\n")
+    .filter((line) => line.startsWith("data: "))
+    .map((line) => line.slice("data: ".length))
+    .filter((payload) => payload !== "[DONE]")
+    .map((payload) => JSON.parse(payload) as FakeChunk);
+}
+
 const START: FakeChunk = { type: "start" };
 const FINISH: FakeChunk = { type: "finish", finishReason: "stop" };
 
@@ -427,6 +438,72 @@ describe("POST /api/playground/chat", () => {
     await res.text();
     expect(trackPlaygroundConfirm).toHaveBeenCalledWith({}, "user-1", "denied", 1);
     expect(refundPlaygroundMessage).not.toHaveBeenCalled();
+  });
+
+  it("resume: emits a terminal tool chunk for EVERY pending write, approved and denied", async () => {
+    // `streamText` enqueues the tool-call chunk before it checks
+    // `tool.execute != null`, so a gated write already reached the client as
+    // a `dynamic-tool` part in state `input-available` ("Running", pulsing
+    // clock). The route — not the SDK — executes these, so the route is what
+    // has to close them out; without this the card spins forever, including
+    // after a Deny.
+    takePending.mockReturnValue({
+      userId: "user-1",
+      messages: [{ role: "assistant", content: [] }],
+      writes: [
+        { id: "w_ok", name: "gws-mcp__gmail_send", input: {} },
+        { id: "w_no", name: "gws-mcp__docs_create", input: {} },
+      ],
+      createdAt: 0,
+    });
+    executeWriteBatch.mockResolvedValue({
+      toolMessage: {
+        role: "tool",
+        content: [
+          {
+            type: "tool-result",
+            toolCallId: "w_ok",
+            toolName: "gws-mcp__gmail_send",
+            output: { type: "text", value: "sent" },
+          },
+          {
+            type: "tool-result",
+            toolCallId: "w_no",
+            toolName: "gws-mcp__docs_create",
+            output: { type: "error-text", value: "User declined this action." },
+          },
+        ],
+      },
+      outcomes: [
+        { name: "gws-mcp__gmail_send", isError: false, denied: false },
+        { name: "gws-mcp__docs_create", isError: true, denied: true },
+      ],
+    });
+
+    const res = await POST(
+      chatRequest({ resumeToken: "resume-token-abc", decisions: { w_ok: "approve" } })
+    );
+    const chunks = sseChunks(await res.text());
+
+    // Approved write → output-available, carrying the real tool output.
+    expect(chunks).toContainEqual({
+      type: "tool-output-available",
+      toolCallId: "w_ok",
+      output: "sent",
+    });
+    // Denied write → output-error, so the card lands on "Error", not "Running".
+    expect(chunks).toContainEqual({
+      type: "tool-output-error",
+      toolCallId: "w_no",
+      errorText: "User declined this action.",
+    });
+    // Every pending write is accounted for — none left dangling.
+    const terminal = chunks.filter(
+      (c) => c.type === "tool-output-available" || c.type === "tool-output-error"
+    );
+    expect(terminal.map((c) => c.toolCallId)).toEqual(["w_ok", "w_no"]);
+    // The badge stream the client renders separately is untouched.
+    expect(chunks.some((c) => c.type === "data-write-outcome")).toBe(true);
   });
 
   it("resume with an unknown/expired token emits an error and never resumes", async () => {
