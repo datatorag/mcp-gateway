@@ -90,12 +90,18 @@ export const ToolHeader = ({
       )}
       {...props}
     >
-      <div className="flex items-center gap-2">
+      {/* `span`s, not `div`s: Base UI's CollapsibleTrigger renders a real
+          <button> (nativeButton defaults true), which only accepts phrasing
+          content. */}
+      <span className="flex items-center gap-2">
         <WrenchIcon className="size-4 text-muted-foreground" />
         <span className="font-medium text-sm">{title ?? derivedName}</span>
         {getStatusBadge(state)}
-      </div>
-      <ChevronDownIcon className="size-4 text-muted-foreground transition-transform group-data-[state=open]:rotate-180" />
+      </span>
+      {/* Base UI's Collapsible.Root emits `data-open`/`data-closed` — there is
+          no `data-state` attribute anywhere in @base-ui/react, so the upstream
+          Radix-flavoured `group-data-[state=open]` never matched. */}
+      <ChevronDownIcon className="size-4 text-muted-foreground transition-transform group-data-open:rotate-180" />
     </CollapsibleTrigger>
   );
 };
@@ -105,7 +111,10 @@ export type ToolContentProps = ComponentProps<typeof CollapsibleContent>;
 export const ToolContent = ({ className, ...props }: ToolContentProps) => (
   <CollapsibleContent
     className={cn(
-      "data-[state=closed]:fade-out-0 data-[state=closed]:slide-out-to-top-2 data-[state=open]:slide-in-from-top-2 space-y-4 p-4 text-popover-foreground outline-none data-[state=closed]:animate-out data-[state=open]:animate-in",
+      // Base UI attribute vocabulary (`data-open`/`data-closed`), not Radix's
+      // `data-state`. The exit animation still won't run — CollapsiblePanel
+      // defaults to keepMounted=false and unmounts instead of animating out.
+      "data-closed:fade-out-0 data-closed:slide-out-to-top-2 data-open:slide-in-from-top-2 space-y-4 p-4 text-popover-foreground outline-none data-closed:animate-out data-open:animate-in",
       className
     )}
     {...props}

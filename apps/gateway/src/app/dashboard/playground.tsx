@@ -27,7 +27,6 @@ import {
 } from "@/components/ai-elements/message";
 import {
   PromptInput,
-  PromptInputBody,
   PromptInputFooter,
   PromptInputSubmit,
   PromptInputTextarea,
@@ -83,6 +82,12 @@ interface PlaygroundProps {
 }
 
 type FeedbackState = "idle" | "down-pending" | "sending" | "thanks";
+
+/** Fallback copy for the error bubble. Also the message the transport throws
+ * for transport-level failures, so that the bubble can render `error.message`
+ * verbatim (preserving the route's own actionable wording) without ever
+ * exposing an internal sentinel. */
+const GENERIC_ERROR = "Something went wrong. Please try again.";
 
 /* -------------------------------------------------------------------------- */
 /* Pure helpers                                                                */
@@ -430,7 +435,18 @@ export const Playground = forwardRef<PlaygroundHandle, PlaygroundProps>(
           // error state; 403/429 additionally flip local state that suppresses
           // the generic error bubble in favour of a dedicated panel.
           fetch: async (url, init) => {
-            const res = await fetch(url, init);
+            let res: Response;
+            try {
+              res = await fetch(url, init);
+            } catch (err) {
+              // An abort is normal (stop(), or unmount cleanup) — pass it
+              // through untouched. Anything else is a connection failure and
+              // must not surface a raw browser string in the error bubble.
+              if (err instanceof DOMException && err.name === "AbortError") {
+                throw err;
+              }
+              throw new Error(GENERIC_ERROR);
+            }
             if (res.status === 403) {
               setHidden(true);
               throw new Error("playground_disabled");
@@ -442,8 +458,13 @@ export const Playground = forwardRef<PlaygroundHandle, PlaygroundProps>(
               setCapState({ cap: typeof data?.cap === "number" ? data.cap : 0 });
               throw new Error("cap_exceeded");
             }
-            // 400 / 500 (and anything else non-2xx) land in the chat error state.
-            if (!res.ok) throw new Error("request_failed");
+            // 400 / 500 (and anything else non-2xx) land in the chat error
+            // state. The thrown message IS the user-facing copy, because the
+            // error bubble renders `error.message` verbatim so that the
+            // route's own actionable text (e.g. the expired-resume-token
+            // stream) survives — a sentinel like "request_failed" would be
+            // rendered to the user as-is.
+            if (!res.ok) throw new Error(GENERIC_ERROR);
             return res;
           },
           // Two request shapes on one endpoint: a fresh turn posts the message
@@ -482,6 +503,10 @@ export const Playground = forwardRef<PlaygroundHandle, PlaygroundProps>(
       }
     }, []);
 
+    // Abort any in-flight stream on unmount, so navigating away mid-turn
+    // doesn't leave the request running and firing no-op state setters.
+    useEffect(() => () => void stop(), [stop]);
+
     // A turn that ends in an error gets no feedback controls. `status` alone
     // can't express this once the next turn clears the error, so the failed
     // message id is remembered.
@@ -514,6 +539,7 @@ export const Playground = forwardRef<PlaygroundHandle, PlaygroundProps>(
         if (
           !text ||
           streaming ||
+          busyRef.current ||
           capState ||
           hidden ||
           !hasConnectedAccount ||
@@ -521,8 +547,12 @@ export const Playground = forwardRef<PlaygroundHandle, PlaygroundProps>(
         ) {
           return;
         }
-        setInput("");
-        void runExclusive(() => sendMessage({ text }));
+        // Clear only once the call is actually going out — `runExclusive`
+        // drops a re-entrant call, and clearing first would eat the text.
+        void runExclusive(async () => {
+          setInput("");
+          await sendMessage({ text });
+        });
       },
       [
         streaming,
@@ -543,16 +573,20 @@ export const Playground = forwardRef<PlaygroundHandle, PlaygroundProps>(
      * message, destroying the paused turn the resume token refers to. */
     const resolveConfirm = useCallback(
       (resumeToken: string, pending: PendingWrite[], decision: Decision) => {
-        if (streaming) return;
-        setResolvedTokens((prev) => new Map(prev).set(resumeToken, decision));
+        if (streaming || busyRef.current) return;
         // `Object.fromEntries` (not `obj[key] = …`) so a hostile write id such
         // as "__proto__" becomes an own property instead of mutating a prototype.
         const decisions = Object.fromEntries(
           pending.map((write) => [write.id, decision])
         );
-        void runExclusive(() =>
-          sendMessage(undefined, { body: { resumeToken, decisions } })
-        );
+        // Marking the token resolved must happen INSIDE the exclusive section:
+        // `runExclusive` drops a re-entrant call, and recording the decision
+        // for a resume that never fires would flip the card to "approved" and
+        // unlock the composer while stranding the paused turn forever.
+        void runExclusive(async () => {
+          setResolvedTokens((prev) => new Map(prev).set(resumeToken, decision));
+          await sendMessage(undefined, { body: { resumeToken, decisions } });
+        });
       },
       [streaming, runExclusive, sendMessage]
     );
@@ -642,10 +676,10 @@ export const Playground = forwardRef<PlaygroundHandle, PlaygroundProps>(
                   </p>
                   {hasConnectedAccount && (
                     <Suggestions>
-                      {prompts.slice(0, 3).map((prompt) => (
+                      {prompts.slice(0, 3).map((prompt, i) => (
                         <Suggestion
                           className="h-auto py-1 text-[11px]"
-                          key={prompt}
+                          key={i}
                           onClick={send}
                           suggestion={prompt}
                         />
@@ -673,7 +707,13 @@ export const Playground = forwardRef<PlaygroundHandle, PlaygroundProps>(
 
               {error && !capState && (
                 <div className="rounded-2xl border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">
-                  Something went wrong. Please try again.
+                  {/* Prefer the server's own wording when it sent any — e.g.
+                      the expired-resume-token stream carries actionable copy
+                      ("This confirmation expired — please run the prompt
+                      again."). Safe to surface: every other error the route
+                      emits goes through `logAndGenericError`, which returns a
+                      sanitized generic string, so no internal detail leaks. */}
+                  {error.message.trim() || GENERIC_ERROR}
                 </div>
               )}
             </ConversationContent>
@@ -700,29 +740,34 @@ export const Playground = forwardRef<PlaygroundHandle, PlaygroundProps>(
                 </Button>
               </div>
             ) : (
+              // No `PromptInputBody` wrapper here, deliberately: it renders a
+              // `display:contents` div, which removes the BOX but not the
+              // ELEMENT, and `InputGroup` derives its entire layout from
+              // direct-child `has-[>…]` selectors (`has-[>textarea]:h-auto`,
+              // `has-[>[data-align=block-end]]:flex-col`). Behind a wrapper
+              // none of them match and the composer collapses to a 32px
+              // horizontal row with the textarea and toolbar side by side.
               <PromptInput onSubmit={(message) => send(message.text ?? "")}>
-                <PromptInputBody>
-                  <PromptInputTextarea
-                    className="min-h-10 text-xs"
-                    disabled={streaming || !hasConnectedAccount || awaitingConfirm}
-                    onChange={(e) => setInput(e.target.value)}
-                    placeholder={placeholder}
-                    value={input}
+                <PromptInputTextarea
+                  className="min-h-10 text-xs"
+                  disabled={streaming || !hasConnectedAccount || awaitingConfirm}
+                  onChange={(e) => setInput(e.target.value)}
+                  placeholder={placeholder}
+                  value={input}
+                />
+                <PromptInputFooter>
+                  <PromptInputTools />
+                  {/* While streaming this control becomes Stop, so it must
+                      stay enabled; the send-time guards apply otherwise. */}
+                  <PromptInputSubmit
+                    disabled={
+                      !streaming &&
+                      (!hasConnectedAccount || awaitingConfirm || !input.trim())
+                    }
+                    onStop={stop}
+                    status={status}
                   />
-                  <PromptInputFooter>
-                    <PromptInputTools />
-                    {/* While streaming this control becomes Stop, so it must
-                        stay enabled; the send-time guards apply otherwise. */}
-                    <PromptInputSubmit
-                      disabled={
-                        !streaming &&
-                        (!hasConnectedAccount || awaitingConfirm || !input.trim())
-                      }
-                      onStop={stop}
-                      status={status}
-                    />
-                  </PromptInputFooter>
-                </PromptInputBody>
+                </PromptInputFooter>
               </PromptInput>
             )}
           </div>

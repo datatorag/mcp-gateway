@@ -112,6 +112,19 @@ async function runTurnIntoStream(
 ): Promise<void> {
   const result = streamEngineTurn(deps, history);
   const tapped = tapDelivered(
+    // DO NOT add `generateMessageId` to these options. The client's
+    // approve/deny resume depends on this stream NOT carrying a message id:
+    // `toUIMessageStream` emits `messageId` on its `start` chunk only when
+    // `generateMessageId` is configured, and `processUIMessageStream`'s
+    // `start` handler does `state.message.id = chunk.messageId` when one is
+    // present. On a resume the SDK seeds its streaming state from the paused
+    // assistant message (createStreamingUIMessageState reuses `lastMessage`
+    // when it is an assistant message), so with no id the continuation keeps
+    // that message's id and is written back with `replaceMessage` — it flows
+    // into the SAME message. Add `generateMessageId` and the id changes
+    // mid-stream, the id check fails, and the SDK `pushMessage`s a DUPLICATE
+    // message that still carries every part cloned from the original: the
+    // confirmation card and all tool cards would render a second time.
     result.toUIMessageStream({
       // Without this, an in-band stream error (a fullStream `error` part —
       // e.g. a zero-step provider failure) is converted to a chunk carrying
