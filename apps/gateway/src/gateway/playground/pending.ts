@@ -1,11 +1,16 @@
 import { randomUUID } from "node:crypto";
-import type { ToolUse, PendingWrite } from "./engine";
+import type { ModelMessage } from "ai";
+import type { PendingWrite } from "./engine";
 
 /**
  * Short-lived server-side hold for a playground turn paused at a write,
  * awaiting the user's approve/deny. The paused conversation can't live in the
  * browser (it's the raw provider message array, and a client could tamper
  * with it), so it stays here keyed by an opaque resume token.
+ *
+ * Reads execute immediately inside streamText, so by the time a turn pauses,
+ * `messages` already has their results folded in — only the writes are left
+ * unexecuted, awaiting approval.
  *
  * In-memory is sufficient: prod runs a single gateway container, a lost hold
  * (redeploy/expiry) just means the user re-runs the prompt, and holds are
@@ -15,10 +20,9 @@ import type { ToolUse, PendingWrite } from "./engine";
 
 export type PendingTurn = {
   userId: string;
-  messages: unknown[];
-  batch: ToolUse[];
-  /** The writes in `batch` awaiting a decision — the gate set, so the resume
-   * doesn't have to re-classify to know what was pending. */
+  messages: ModelMessage[];
+  /** The writes awaiting a decision — the gate set, so the resume doesn't
+   * have to re-classify to know what was pending. */
   writes: PendingWrite[];
   createdAt: number;
 };
@@ -43,14 +47,13 @@ function sweep(now: number): void {
 /** Persist a paused turn and return its resume token. */
 export function putPending(
   userId: string,
-  messages: unknown[],
-  batch: ToolUse[],
+  messages: ModelMessage[],
   writes: PendingWrite[]
 ): string {
   const now = Date.now();
   sweep(now);
   const token = randomUUID();
-  store.set(token, { userId, messages, batch, writes, createdAt: now });
+  store.set(token, { userId, messages, writes, createdAt: now });
   return token;
 }
 
