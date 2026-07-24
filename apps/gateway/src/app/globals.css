@@ -1,6 +1,13 @@
 @import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+
+@custom-variant dark (&:is(.dark *));
 
 :root {
+  /* DataToRAG product palette (source of truth — do NOT let `shadcn init`
+     overwrite these back to the default neutral theme). Stone neutrals +
+     one indigo accent. See brand/product-design-system in datatorag-hq. */
   --background: #FAFAF8;
   --foreground: #1C1917;
   --primary: #2D5BD6;
@@ -14,9 +21,34 @@
   --border: #E7E5E4;
   --ring: #2D5BD6;
   --destructive: #DC2626;
+  --destructive-foreground: #FFFFFF;
   --success: #16A34A;
   --warning: #D97706;
   --radius: 0.75rem;
+
+  /* shadcn structural tokens — themed to our palette, not stock grey */
+  --card: #FFFFFF;
+  --card-foreground: #1C1917;
+  --popover: #FFFFFF;
+  --popover-foreground: #1C1917;
+  --input: #E7E5E4;
+
+  /* charts — indigo-led, semantic accents (was neutral greys) */
+  --chart-1: #2D5BD6;
+  --chart-2: #6486E3;
+  --chart-3: #16A34A;
+  --chart-4: #D97706;
+  --chart-5: #A8A29E;
+
+  /* sidebar — light stone shell, indigo active */
+  --sidebar: #FFFFFF;
+  --sidebar-foreground: #1C1917;
+  --sidebar-primary: #2D5BD6;
+  --sidebar-primary-foreground: #FFFFFF;
+  --sidebar-accent: #F0EFEB;
+  --sidebar-accent-foreground: #1C1917;
+  --sidebar-border: #E7E5E4;
+  --sidebar-ring: #2D5BD6;
 }
 
 @theme inline {
@@ -38,11 +70,32 @@
   --font-sans: var(--font-inter);
   --font-display: var(--font-montserrat);
   --font-mono: var(--font-pt-mono);
-}
-
-body {
-  background: var(--background);
-  color: var(--foreground);
+  --font-heading: var(--font-montserrat);
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar: var(--sidebar);
+  --color-chart-5: var(--chart-5);
+  --color-chart-4: var(--chart-4);
+  --color-chart-3: var(--chart-3);
+  --color-chart-2: var(--chart-2);
+  --color-chart-1: var(--chart-1);
+  --color-input: var(--input);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-popover: var(--popover);
+  --color-card-foreground: var(--card-foreground);
+  --color-card: var(--card);
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.4);
+  --radius-2xl: calc(var(--radius) * 1.8);
+  --radius-3xl: calc(var(--radius) * 2.2);
+  --radius-4xl: calc(var(--radius) * 2.6);
 }
 
 ::selection {
@@ -221,4 +274,50 @@ body {
 
 .prose tr:last-child td {
   border-bottom: none;
+}
+
+.dark {
+  --background: oklch(0.145 0 0);
+  --foreground: oklch(0.985 0 0);
+  --card: oklch(0.205 0 0);
+  --card-foreground: oklch(0.985 0 0);
+  --popover: oklch(0.205 0 0);
+  --popover-foreground: oklch(0.985 0 0);
+  --primary: oklch(0.922 0 0);
+  --primary-foreground: oklch(0.205 0 0);
+  --secondary: oklch(0.269 0 0);
+  --secondary-foreground: oklch(0.985 0 0);
+  --muted: oklch(0.269 0 0);
+  --muted-foreground: oklch(0.708 0 0);
+  --accent: oklch(0.269 0 0);
+  --accent-foreground: oklch(0.985 0 0);
+  --destructive: oklch(0.704 0.191 22.216);
+  --border: oklch(1 0 0 / 10%);
+  --input: oklch(1 0 0 / 15%);
+  --ring: oklch(0.556 0 0);
+  --chart-1: oklch(0.87 0 0);
+  --chart-2: oklch(0.556 0 0);
+  --chart-3: oklch(0.439 0 0);
+  --chart-4: oklch(0.371 0 0);
+  --chart-5: oklch(0.269 0 0);
+  --sidebar: oklch(0.205 0 0);
+  --sidebar-foreground: oklch(0.985 0 0);
+  --sidebar-primary: oklch(0.488 0.243 264.376);
+  --sidebar-primary-foreground: oklch(0.985 0 0);
+  --sidebar-accent: oklch(0.269 0 0);
+  --sidebar-accent-foreground: oklch(0.985 0 0);
+  --sidebar-border: oklch(1 0 0 / 10%);
+  --sidebar-ring: oklch(0.556 0 0);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+  html {
+    @apply font-sans;
+  }
 }
