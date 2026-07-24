@@ -3,10 +3,10 @@ import type { ModelMessage } from "ai";
 /**
  * Rebuilds the model conversation from client-supplied UIMessages as
  * TEXT-ONLY history (the successor of the old client's buildApiMessages):
- * only user/assistant roles, only text parts, assistant messages with no
- * text (errored/aborted turns) dropped. Tool and data parts are discarded —
- * nothing in client history is ever executed or replayed to the model.
- * Returns null on a malformed payload (route maps that to 400).
+ * only user/assistant roles, only text parts. Messages with no text are dropped
+ * (assistant = errored/aborted turns; user = no usable content). Tool and data
+ * parts are discarded — nothing in client history is ever executed or replayed
+ * to the model. Returns null on a malformed payload (route maps that to 400).
  */
 export function buildModelHistory(messages: unknown): ModelMessage[] | null {
   if (!Array.isArray(messages)) return null;
@@ -21,7 +21,7 @@ export function buildModelHistory(messages: unknown): ModelMessage[] | null {
         typeof (p as { text?: unknown }).text === "string")
       .map((p) => p.text)
       .join("");
-    if (msg.role === "assistant" && !text.trim()) continue;
+    if (!text.trim()) continue;
     out.push({ role: msg.role, content: text });
   }
   const last = out[out.length - 1];
