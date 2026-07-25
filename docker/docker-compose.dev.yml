@@ -1,35 +1,8 @@
+# Local dev stack. The database is Neon (same instance the app uses) — there is
+# no local Postgres service and no auto-migration step here: DATABASE_URL comes
+# from the environment, and schema changes are applied deliberately, never as a
+# side effect of starting the stack.
 services:
-  postgres:
-    image: postgres:16
-    environment:
-      POSTGRES_DB: datatoragmcp
-      POSTGRES_USER: datatoragmcp
-      POSTGRES_PASSWORD: localdev
-    ports:
-      - "54320:5432"
-    volumes:
-      - postgres-data:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U datatoragmcp"]
-      interval: 5s
-      timeout: 3s
-      retries: 10
-    networks:
-      - dtrmcp
-
-  db-init:
-    build:
-      context: ..
-      dockerfile: packages/db/Dockerfile
-    environment:
-      DATABASE_URL: postgresql://datatoragmcp:localdev@postgres:5432/datatoragmcp
-    depends_on:
-      postgres:
-        condition: service_healthy
-    networks:
-      - dtrmcp
-    restart: "no"
-
   gateway:
     build:
       context: ..
@@ -37,7 +10,7 @@ services:
     ports:
       - "8285:8285"
     environment:
-      DATABASE_URL: postgresql://datatoragmcp:localdev@postgres:5432/datatoragmcp
+      DATABASE_URL: ${DATABASE_URL:?DATABASE_URL is required (Neon connection string)}
       GATEWAY_PORT: "8285"
       GATEWAY_BASE_URL: http://localhost:8285
       GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
@@ -46,10 +19,8 @@ services:
       GOOGLE_GWS_CLIENT_SECRET: ${GOOGLE_GWS_CLIENT_SECRET:-}
       ATLASSIAN_CLIENT_ID: ${ATLASSIAN_CLIENT_ID:-}
       ATLASSIAN_CLIENT_SECRET: ${ATLASSIAN_CLIENT_SECRET:-}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
       NODE_ENV: development
-    depends_on:
-      db-init:
-        condition: service_completed_successfully
     networks:
       - dtrmcp
 
@@ -57,6 +28,3 @@ networks:
   dtrmcp:
     name: datatorag-mcp-network
     driver: bridge
-
-volumes:
-  postgres-data:

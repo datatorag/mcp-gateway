@@ -1,144 +1,254 @@
 import { NextRequest, NextResponse } from "next/server";
+import {
+  createUIMessageStream, createUIMessageStreamResponse,
+  type UIMessageStreamWriter, type UIMessageChunk, type ModelMessage,
+} from "ai";
 import { db } from "@/lib/db";
 import { withRoute } from "@/lib/with-route";
 import { getEnv } from "@datatorag-mcp/config";
-import { getPlaygroundLlm } from "@/lib/llm";
+import { getPlaygroundModel } from "@/lib/llm";
 import {
-  runPlaygroundTurn,
-  resumePlaygroundTurn,
-  type EngineEvent,
-  type TurnResult,
+  streamEngineTurn, detectPause, executeWriteBatch, isApproved, type EngineDeps,
 } from "@/gateway/playground/engine";
-import {
-  listUserEngineTools,
-  executeUserTool,
-} from "@/gateway/playground/tools";
+import { buildModelHistory } from "@/gateway/playground/history";
+import { listUserEngineTools, executeUserTool } from "@/gateway/playground/tools";
 import { claimPlaygroundMessage, refundPlaygroundMessage } from "@/gateway/playground/cap";
 import { putPending, takePending } from "@/gateway/playground/pending";
 import {
-  trackPlaygroundMessage,
-  trackPlaygroundToolCall,
-  trackPlaygroundCapHit,
-  trackPlaygroundConfirm,
+  trackPlaygroundMessage, trackPlaygroundToolCall, trackPlaygroundCapHit, trackPlaygroundConfirm,
 } from "@/gateway/track";
 import { logAndGenericError } from "@/lib/errors";
 
-type ChatMessage = { role: string; content: string };
-
-// The engine deps common to both entry points (fresh turn + resume). tools,
-// isWrite (both from listUserEngineTools), messages, emit and shouldStop differ
-// per path and are supplied at the call.
-function engineBase(userId: string, llm: NonNullable<ReturnType<typeof getPlaygroundLlm>>) {
+// Engine deps shared by both entry points; executeTool carries the tool-call
+// tracking so reads (inside streamText) and approved writes (resume batch)
+// are tracked identically.
+function engineDeps(
+  userId: string,
+  model: NonNullable<ReturnType<typeof getPlaygroundModel>>,
+  tools: Awaited<ReturnType<typeof listUserEngineTools>>,
+  abortSignal: AbortSignal | undefined
+): EngineDeps {
   return {
-    llm,
-    model: getEnv().PLAYGROUND_MODEL,
-    executeTool: (name: string, args: Record<string, unknown>) => {
+    model,
+    tools: tools.tools,
+    isWrite: tools.isWrite,
+    executeTool: (name, args) => {
       void trackPlaygroundToolCall(db, userId, name);
       return executeUserTool(db, userId, name, args);
     },
+    abortSignal,
   };
 }
 
-// A paused turn returns awaiting_confirmation — persist it and hand the user
-// the pending writes to approve/deny. complete/aborted need nothing (the
-// engine already emitted `done`).
-function handleTurnResult(
+// UI-message-stream chunk types that are pure protocol bookkeeping (turn
+// start/end framing, or an error announcement converted from a fullStream
+// error part) rather than real assistant output. `start` in particular is
+// enqueued unconditionally the instant the stream opens — before the model
+// has been called at all — so counting it (or any of these) as "delivered"
+// would make the refund tap never fire, even on a turn that fails outright
+// before a single token or tool call reaches the client.
+//
+// Every chunk type gets an explicit verdict, as a total map rather than a
+// `Set` of the exclusions. A `Set<UIMessageChunk["type"]>` only type-checks
+// the elements put INTO it — it cannot notice a union member that was never
+// listed — so an `ai` upgrade adding a new bookkeeping chunk would silently
+// fall through as "content" and quietly disable the refund tap. A
+// `Record<UIMessageChunk["type"], boolean>` is total: a variant added
+// upstream is a missing property and a variant removed upstream is an excess
+// property, and both fail `tsc`. That is the guarantee this classification
+// needs, and the reason the list below is exhaustive rather than terse.
+//
+// `data-*` chunks (our own `data-confirm` / `data-write-outcome`) land on the
+// type's `data-${string}` index signature, so they need no entry; they are
+// absent at runtime, hence the `=== true` test below rather than a bare
+// truthiness check.
+const NON_CONTENT_CHUNK_TYPES: Record<UIMessageChunk["type"], boolean> = {
+  // Protocol bookkeeping — never real assistant output.
+  start: true,
+  "start-step": true,
+  "finish-step": true,
+  finish: true,
+  abort: true,
+  "message-metadata": true,
+  error: true,
+  // Real content: text, reasoning, tool activity, sources, files.
+  "text-start": false,
+  "text-delta": false,
+  "text-end": false,
+  "reasoning-start": false,
+  "reasoning-delta": false,
+  "reasoning-end": false,
+  "tool-input-start": false,
+  "tool-input-delta": false,
+  "tool-input-available": false,
+  "tool-input-error": false,
+  "tool-approval-request": false,
+  "tool-output-available": false,
+  "tool-output-error": false,
+  "tool-output-denied": false,
+  "source-url": false,
+  "source-document": false,
+  file: false,
+};
+
+/** Tap a UIMessage-chunk stream so the route knows whether any REAL content
+ * (text, reasoning, a tool call/result, or a source/file) reached the
+ * response — the successor of the old `workStarted` flag; it gates the
+ * refund decision (a turn that dies with zero content parts delivered
+ * refunds). Structural/bookkeeping chunks never flip it.
+ *
+ * Note: this does NOT cover `data-confirm` / `data-write-outcome` — those
+ * are written directly to the writer (below), bypassing this tap entirely.
+ * That's harmless in practice: a pause always pushes at least one
+ * tool-input chunk through the tap before `data-confirm` is written, and
+ * the resume path's follow-up turn passes a no-op `markDelivered` (resume
+ * never claims a cap message, so there's nothing to refund there). */
+function tapDelivered(
+  stream: ReadableStream<UIMessageChunk>,
+  onFirst: () => void
+): ReadableStream<UIMessageChunk> {
+  let fired = false;
+  return stream.pipeThrough(
+    new TransformStream<UIMessageChunk, UIMessageChunk>({
+      transform(chunk, controller) {
+        if (!fired && NON_CONTENT_CHUNK_TYPES[chunk.type] !== true) {
+          fired = true;
+          onFirst();
+        }
+        controller.enqueue(chunk);
+      },
+    })
+  );
+}
+
+/** Drops the `messageId` from the resume stream's `start` chunk, so the
+ * continuation lands in the SAME assistant message the user just approved or
+ * denied instead of a second, duplicated one.
+ *
+ * Where that id comes from — verified against the installed ai@6.0.235, not
+ * inferred: it is NOT `toUIMessageStream`, which emits `messageId` only when
+ * a `responseMessageId`/`generateMessageId` is configured (dist/index.js
+ * :8675) and we pass neither. It is `createUIMessageStream` ITSELF: it hands
+ * a freshly generated id to `handleUIMessageStreamFinish` unconditionally
+ * (dist/index.js :8977, `messageId: generateId2()`), whose transform stamps
+ * it onto the first `start` chunk that lacks one (:6397-6412).
+ *
+ * Why that breaks resume: client-side, `processUIMessageStream`'s `start`
+ * handler assigns `state.message.id = chunk.messageId` (:6309-6311), and
+ * `AbstractChat.makeRequest`'s `write()` then compares
+ * `response.state.message.id === this.lastMessage?.id` to choose
+ * `replaceMessage` vs `pushMessage` (:14003-14011). On resume the streaming
+ * state is seeded from a structuredClone of the paused assistant message
+ * (:13969-13972 + `createStreamingUIMessageState` :5786), so a DIFFERENT id
+ * means `pushMessage` — a brand-new message that already carries every part
+ * cloned from the paused one. The tool card, the "Action denied" line and the
+ * write-outcome badges all render a second time.
+ *
+ * With no `messageId` on `start` the client keeps the paused message's id and
+ * takes the `replaceMessage` branch: one message, appended in place. The
+ * server therefore needs no id from the client at all — the identity used is
+ * the client's own `lastMessage`, which by construction IS the paused
+ * message (an unresolved `data-confirm` locks the composer and regenerate, so
+ * nothing can be appended after it).
+ *
+ * Resume-path only. The fresh-turn path keeps the injected id, which is what
+ * makes each new turn a new assistant message. */
+function withoutStartMessageId(
+  stream: ReadableStream<UIMessageChunk>
+): ReadableStream<UIMessageChunk> {
+  return stream.pipeThrough(
+    new TransformStream<UIMessageChunk, UIMessageChunk>({
+      transform(chunk, controller) {
+        if (chunk.type === "start" && chunk.messageId !== undefined) {
+          const { messageId: _dropped, ...rest } = chunk;
+          controller.enqueue(rest);
+          return;
+        }
+        controller.enqueue(chunk);
+      },
+    })
+  );
+}
+
+/** Runs one engine stream into the writer; on pause persists the hold and
+ * emits data-confirm. Returns nothing — errors propagate to the stream's
+ * onError.
+ *
+ * Drains the tapped UI-message-chunk stream into the writer with a plain
+ * read loop rather than `writer.merge()`. `merge()` kicks off its own
+ * background consumption and returns immediately — racing it against the
+ * `detectPause` call below is NOT safe: `detectPause` awaits the engine
+ * result's own `finishReason`/`toolCalls`/etc. promises, which resolve off
+ * the SAME underlying provider stream (typically via an internal tee) and
+ * can settle — and reject, in an engine-level failure — before the tapped
+ * stream's transform has processed even its first chunk. That race was
+ * observed directly in route.test.ts ("does NOT refund when the turn fails
+ * after real content was already delivered" flaked without this fix): the
+ * refund tap must see `delivered` flip before any failure can be decided,
+ * so we fully drain the tap ourselves — and only then call detectPause. */
+async function runTurnIntoStream(
   userId: string,
-  result: TurnResult,
-  emit: (e: EngineEvent) => void
-): void {
-  if (result.status === "awaiting_confirmation") {
-    const token = putPending(userId, result.messages, result.batch, result.pending);
-    emit({ type: "confirm", resumeToken: token, pending: result.pending });
-    void trackPlaygroundConfirm(db, userId, "shown", result.pending.length);
+  deps: EngineDeps,
+  history: ModelMessage[],
+  writer: UIMessageStreamWriter,
+  markDelivered: () => void
+): Promise<void> {
+  const result = streamEngineTurn(deps, history);
+  const tapped = tapDelivered(
+    // DO NOT add `generateMessageId` to these options. The client's
+    // approve/deny resume depends on the RESUME response's `start` chunk
+    // carrying no message id (see `withoutStartMessageId` above for the full
+    // mechanism and the ai@6.0.235 line references). `toUIMessageStream`
+    // emits `messageId` only when `generateMessageId` is configured, so
+    // leaving it unset is what lets `withoutStartMessageId` have a single,
+    // known id source to strip — the one `createUIMessageStream` injects.
+    // Configure it here and BOTH paths would carry an id from two different
+    // places, and the resume would push a duplicate message again.
+    result.toUIMessageStream({
+      // Without this, an in-band stream error (a fullStream `error` part —
+      // e.g. a zero-step provider failure) is converted to a chunk carrying
+      // the SDK's default "An error occurred." and never touches
+      // logAndGenericError, so it's neither logged server-side nor worded
+      // consistently with the route's own onError below (which the client
+      // would ALSO see, once the failure additionally rejects the engine
+      // result — the client would get both messages back to back).
+      onError: (err) => logAndGenericError("[playground] stream error", err),
+    }),
+    markDelivered
+  );
+  const reader = tapped.getReader();
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    writer.write(value);
+  }
+  const pause = await detectPause(deps, history, result);
+  if (pause) {
+    const token = putPending(userId, pause.messages, pause.pending);
+    writer.write({ type: "data-confirm", data: { resumeToken: token, pending: pause.pending } });
+    void trackPlaygroundConfirm(db, userId, "shown", pause.pending.length);
   }
 }
 
-// Wraps a turn's work in the SSE ReadableStream + emit plumbing. `clientGone`
-// tracks an aborted controller (enqueue throws); `workStarted` whether any
-// event reached the client — both gate the caller's refund decision so an
-// abort mid-stream can't become a free, uncapped turn.
-function streamResponse(
-  work: (ctx: {
-    emit: (e: EngineEvent) => void;
-    clientGone: () => boolean;
-    workStarted: () => boolean;
-    shouldStop: () => boolean;
-  }) => Promise<void>,
-  signal: AbortSignal | undefined
-): Response {
-  const encoder = new TextEncoder();
-  const stream = new ReadableStream({
-    async start(controller) {
-      let clientGone = false;
-      let workStarted = false;
-      const emit = (e: EngineEvent) => {
-        try {
-          controller.enqueue(encoder.encode(`data: ${JSON.stringify(e)}\n\n`));
-          workStarted = true;
-        } catch {
-          // Controller already closed/errored — the client went away. Never
-          // let this propagate into the engine loop.
-          clientGone = true;
-        }
-      };
-      try {
-        await work({
-          emit,
-          clientGone: () => clientGone,
-          workStarted: () => workStarted,
-          // Stops the loop (and pending tool execution) as soon as the client
-          // is gone or the request aborted — otherwise the loop runs to the
-          // iteration cap against a dead stream, executing real side effects.
-          shouldStop: () => clientGone || signal?.aborted === true,
-        });
-      } finally {
-        try {
-          controller.close();
-        } catch {
-          // Already closed/errored (client gone) — nothing to do.
-        }
-      }
-    },
-  });
-  return new Response(stream, {
-    headers: {
-      "Content-Type": "text/event-stream",
-      "Cache-Control": "no-cache",
-      Connection: "keep-alive",
-    },
-  });
-}
-
-// Coerce the client's decisions payload to a plain object. The per-value
-// meaning (approve vs deny) is enforced downstream by the engine's strict
-// `=== "approve"` check — safe-default deny — so this only guarantees the
-// engine receives an object (never undefined, which would skip the gate).
-function decisionMap(raw: unknown): Record<string, unknown> {
-  return raw && typeof raw === "object" ? (raw as Record<string, unknown>) : {};
-}
-
-// POST /api/playground/chat — capped, streaming (SSE) playground chat turn.
-// With { resumeToken, decisions } it instead resumes a turn paused at a write
-// (no new cap claim — same logical turn).
+// POST /api/playground/chat — capped, streaming (AI SDK UIMessage stream)
+// playground chat turn. With { resumeToken, decisions } it instead resumes a
+// turn paused at a write (no new cap claim — same logical turn).
 export const POST = withRoute(async (userId, request) => {
-  const llm = getPlaygroundLlm();
-  if (!llm) {
+  const model = getPlaygroundModel();
+  if (!model) {
     return NextResponse.json({ error: "playground_disabled" }, { status: 403 });
   }
 
   const body = (await request.json().catch(() => null)) as {
-    messages?: ChatMessage[];
-    resumeToken?: string;
-    decisions?: unknown;
+    messages?: unknown; resumeToken?: string; decisions?: unknown;
   } | null;
 
   if (typeof body?.resumeToken === "string") {
-    return handleResume(request, userId, llm, body.resumeToken, body.decisions);
+    return handleResume(request, userId, model, body.resumeToken, body.decisions);
   }
 
-  const messages = body?.messages;
-  if (!messages?.length || messages[messages.length - 1].role !== "user") {
+  const history = buildModelHistory(body?.messages);
+  if (!history) {
     return NextResponse.json({ error: "Bad request" }, { status: 400 });
   }
 
@@ -149,12 +259,12 @@ export const POST = withRoute(async (userId, request) => {
   }
   void trackPlaygroundMessage(db, userId);
 
-  let tools, isWrite;
+  let tools;
   try {
-    ({ tools, isWrite } = await listUserEngineTools(db, userId));
+    tools = await listUserEngineTools(db, userId);
   } catch (err) {
-    // Pre-stream failure after the claim landed — refund so this doesn't burn
-    // one of the user's lifetime playground messages.
+    // Pre-stream failure after the claim landed — refund so this doesn't
+    // burn one of the user's lifetime playground messages.
     await refundPlaygroundMessage(db, userId);
     return NextResponse.json(
       { error: logAndGenericError("[playground] tool listing failed", err) },
@@ -162,81 +272,140 @@ export const POST = withRoute(async (userId, request) => {
     );
   }
 
-  return streamResponse(async ({ emit, clientGone, workStarted, shouldStop }) => {
-    try {
-      const result = await runPlaygroundTurn({
-        ...engineBase(userId, llm),
-        tools,
-        isWrite,
-        messages: messages.map((m) => ({ role: m.role, content: m.content })),
-        emit,
-        shouldStop,
-      });
-      handleTurnResult(userId, result, emit);
-    } catch (err) {
-      // Engine/provider failure with no work delivered yet: refund. Not if the
-      // client already went away or any event was delivered — that work (and
-      // the tokens spent) is real.
-      if (!clientGone() && !workStarted()) {
-        await refundPlaygroundMessage(db, userId);
+  let delivered = false;
+  const stream = createUIMessageStream({
+    execute: ({ writer }) =>
+      runTurnIntoStream(
+        userId,
+        engineDeps(userId, model, tools, request.signal),
+        history,
+        writer,
+        () => { delivered = true; }
+      ),
+    onError: (err) => {
+      // Engine/provider failure with no real content delivered: refund. Once
+      // any content reached the client, the work (and tokens) were real.
+      //
+      // EXCEPT a client abort (`request.signal.aborted`): refunding an
+      // aborted request would let an authenticated user loop "POST a large
+      // history, abort as soon as headers return" indefinitely — burning
+      // real provider input tokens (the full prompt + tool list) while their
+      // cap never decrements. Product decision (Manuel, this fix round): an
+      // abort NEVER refunds, regardless of how early it lands. The accepted
+      // trade-off is that a user who legitimately hits Stop within the first
+      // instant — before a single output token — is charged one of their
+      // lifetime playground messages anyway. Do not "fix" this back; the
+      // refund exists for genuine provider/infra failures, not for aborts.
+      //
+      // onError must return synchronously (its return value is the error
+      // text sent to the client), so this can't be awaited — but it also
+      // can't be a bare `void` fire-and-forget: an unhandled rejection here
+      // (e.g. a DB blip during the same outage that triggered the refund)
+      // would both permanently strand the user's claim AND surface as an
+      // unhandled promise rejection. Attach a catch instead.
+      if (!delivered && !request.signal.aborted) {
+        refundPlaygroundMessage(db, userId).catch((refundErr) =>
+          console.error("[playground] refund failed", refundErr)
+        );
       }
-      emit({
-        type: "error",
-        message: logAndGenericError("[playground] turn failed", err),
-      });
-    }
-  }, request.signal);
+      return logAndGenericError("[playground] turn failed", err);
+    },
+  });
+  return createUIMessageStreamResponse({ stream });
 });
 
 async function handleResume(
   request: NextRequest,
   userId: string,
-  llm: NonNullable<ReturnType<typeof getPlaygroundLlm>>,
+  model: NonNullable<ReturnType<typeof getPlaygroundModel>>,
   resumeToken: string,
   rawDecisions: unknown
 ): Promise<Response> {
-  const decisions = decisionMap(rawDecisions);
+  const decisions =
+    rawDecisions && typeof rawDecisions === "object"
+      ? (rawDecisions as Record<string, unknown>)
+      : {};
   const pending = takePending(userId, resumeToken);
   if (!pending) {
     // Unknown/expired/foreign token — one-shot error stream (no claim to refund).
-    return streamResponse(async ({ emit }) => {
-      emit({
-        type: "error",
-        message: "This confirmation expired — please run the prompt again.",
-      });
-    }, request.signal);
+    const stream = createUIMessageStream({
+      execute: async ({ writer }) => {
+        writer.write({
+          type: "error",
+          errorText: "This confirmation expired — please run the prompt again.",
+        });
+      },
+    });
+    return createUIMessageStreamResponse({ stream });
   }
 
-  // The gated writes were classified at pause time and stored — track the
-  // user's decision from them, no re-classification needed.
-  const anyApproved = pending.writes.some((w) => decisions[w.id] === "approve");
+  // Shares `isApproved` with engine.ts's actual write gate (single source of
+  // truth) even though this particular read only feeds analytics — so the
+  // two never have a chance to diverge.
+  const anyApproved = pending.writes.some((w) => isApproved(decisions, w.id));
   void trackPlaygroundConfirm(
-    db,
-    userId,
-    anyApproved ? "approved" : "denied",
-    pending.writes.length
+    db, userId, anyApproved ? "approved" : "denied", pending.writes.length
   );
 
-  return streamResponse(async ({ emit, shouldStop }) => {
-    try {
-      const { tools, isWrite } = await listUserEngineTools(db, userId);
-      const result = await resumePlaygroundTurn({
-        ...engineBase(userId, llm),
-        tools,
-        isWrite,
-        messages: pending.messages,
-        batch: pending.batch,
-        decisions,
-        emit,
-        shouldStop,
+  const stream = createUIMessageStream({
+    execute: async ({ writer }) => {
+      const tools = await listUserEngineTools(db, userId);
+      const deps = engineDeps(userId, model, tools, request.signal);
+      const { toolMessage, outcomes } = await executeWriteBatch(deps, pending.writes, decisions);
+
+      // Close out each gated write's tool card. `streamText` enqueues the
+      // tool-call chunk BEFORE it checks `tool.execute != null` (ai@6.0.235
+      // dist/index.js ~:6819), so an unexecuted write still reached the
+      // client as a `dynamic-tool` part in state `input-available` — i.e.
+      // rendered as a pulsing "Running" forever, even after a Deny, because
+      // the route (not the SDK) is what actually runs these. `outcomes` is
+      // produced by `executeWriteBatch` one-per-write in `pending.writes`
+      // order, so index i lines up with `pending.writes[i].id`.
+      //
+      // `processUIMessageStream`'s `getToolInvocation` falls back to a
+      // backwards scan over ALL of the message's parts (dist/index.js
+      // ~:5822-5833), so these resolve their parts across the step boundary
+      // even though the tool call was emitted on the previous request.
+      //
+      // `data-write-outcome` stays as-is below — the client renders its
+      // approved/denied badges off that, independently of the tool cards.
+      //
+      // Three terminal states, not two. A DENIED write is not an error: the
+      // SDK's `tool-output-denied` puts the part in state `output-denied`,
+      // which tool.tsx already maps to an orange "Denied" badge rather than a
+      // red "Error". That chunk carries only a toolCallId (no message field),
+      // so the card body renders empty — which is right here: the user is the
+      // one who pressed Deny, the header says "Denied", and the
+      // `data-write-outcome` row adds a per-write `denied` badge. The text we
+      // drop ("User declined this action.") was written for the MODEL, and it
+      // still goes to the model via `toolMessage`.
+      pending.writes.forEach((w, i) => {
+        const outcome = outcomes[i];
+        if (outcome === undefined) return;
+        if (outcome.denied) {
+          writer.write({ type: "tool-output-denied", toolCallId: w.id });
+          return;
+        }
+        const result = toolMessage.role === "tool" ? toolMessage.content[i] : undefined;
+        const text =
+          result?.type === "tool-result" && "value" in result.output
+            ? String(result.output.value)
+            : "";
+        writer.write(
+          outcome.isError
+            ? { type: "tool-output-error", toolCallId: w.id, errorText: text }
+            : { type: "tool-output-available", toolCallId: w.id, output: text }
+        );
       });
-      handleTurnResult(userId, result, emit);
-    } catch (err) {
-      // No cap was claimed on resume, so nothing to refund.
-      emit({
-        type: "error",
-        message: logAndGenericError("[playground] resume failed", err),
-      });
-    }
-  }, request.signal);
+
+      writer.write({ type: "data-write-outcome", data: { outcomes } });
+      const history = [...pending.messages, toolMessage];
+      await runTurnIntoStream(userId, deps, history, writer, () => {});
+    },
+    // No cap was claimed on resume, so nothing to refund.
+    onError: (err) => logAndGenericError("[playground] resume failed", err),
+  });
+  // The continuation belongs to the assistant message the user just decided
+  // on, not to a new one.
+  return createUIMessageStreamResponse({ stream: withoutStartMessageId(stream) });
 }

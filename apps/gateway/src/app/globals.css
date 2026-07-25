@@ -2,6 +2,27 @@
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
 
+/* Streamdown (the markdown renderer behind ai-elements' MessageResponse)
+   ships NO CSS of its own — it emits Tailwind utility class names and relies
+   on the host app to generate them. Tailwind v4 skips node_modules during
+   automatic source detection, so without the `streamdown/dist` line below
+   every assistant message renders unstyled (no list markers, no table
+   borders). That one line is load-bearing: it contributes ~109 selectors
+   / ~10.5 KB.
+
+   The four @streamdown/* lines currently contribute ZERO selectors and ZERO
+   bytes — those packages are remark/rehype/shiki/mermaid wrappers with no
+   class names in them, and @streamdown/math styles via KaTeX's own CSS rather
+   than Tailwind. They are kept for forward-compat, because streamdown's README
+   says to add a line per installed plugin and a future plugin release could
+   start emitting utilities. Keep in sync with the plugins wired up in
+   src/components/ai-elements/message.tsx. */
+@source "../../node_modules/streamdown/dist/*.js";
+@source "../../node_modules/@streamdown/cjk/dist/*.js";
+@source "../../node_modules/@streamdown/code/dist/*.js";
+@source "../../node_modules/@streamdown/math/dist/*.js";
+@source "../../node_modules/@streamdown/mermaid/dist/*.js";
+
 @custom-variant dark (&:is(.dark *));
 
 :root {
