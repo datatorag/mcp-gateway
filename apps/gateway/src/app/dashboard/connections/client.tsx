@@ -108,7 +108,6 @@ export function ConnectionsClient() {
               <Button
                 variant={isConnected ? "outline" : "default"}
                 className="self-start sm:self-auto"
-                nativeButton={false}
                 render={<a href={service.connectUrl} />}
               >
                 {isConnected ? "Add account" : "Connect"}

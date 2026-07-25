@@ -48,14 +48,48 @@ function engineDeps(
 // would make the refund tap never fire, even on a turn that fails outright
 // before a single token or tool call reaches the client.
 //
-// Typed against `UIMessageChunk["type"]` (ai@6.0.235) rather than a bare
-// `Set<string>` so a future `ai` upgrade that adds a new chunk type here
-// (or removes one) fails `tsc`, instead of the new type silently falling
-// through as "content" (or, if added here by mistake, silently suppressing
-// the refund tap) with nothing catching it at build time.
-const NON_CONTENT_CHUNK_TYPES: Set<UIMessageChunk["type"]> = new Set([
-  "start", "start-step", "finish-step", "finish", "abort", "message-metadata", "error",
-]);
+// Every chunk type gets an explicit verdict, as a total map rather than a
+// `Set` of the exclusions. A `Set<UIMessageChunk["type"]>` only type-checks
+// the elements put INTO it — it cannot notice a union member that was never
+// listed — so an `ai` upgrade adding a new bookkeeping chunk would silently
+// fall through as "content" and quietly disable the refund tap. A
+// `Record<UIMessageChunk["type"], boolean>` is total: a variant added
+// upstream is a missing property and a variant removed upstream is an excess
+// property, and both fail `tsc`. That is the guarantee this classification
+// needs, and the reason the list below is exhaustive rather than terse.
+//
+// `data-*` chunks (our own `data-confirm` / `data-write-outcome`) land on the
+// type's `data-${string}` index signature, so they need no entry; they are
+// absent at runtime, hence the `=== true` test below rather than a bare
+// truthiness check.
+const NON_CONTENT_CHUNK_TYPES: Record<UIMessageChunk["type"], boolean> = {
+  // Protocol bookkeeping — never real assistant output.
+  start: true,
+  "start-step": true,
+  "finish-step": true,
+  finish: true,
+  abort: true,
+  "message-metadata": true,
+  error: true,
+  // Real content: text, reasoning, tool activity, sources, files.
+  "text-start": false,
+  "text-delta": false,
+  "text-end": false,
+  "reasoning-start": false,
+  "reasoning-delta": false,
+  "reasoning-end": false,
+  "tool-input-start": false,
+  "tool-input-delta": false,
+  "tool-input-available": false,
+  "tool-input-error": false,
+  "tool-approval-request": false,
+  "tool-output-available": false,
+  "tool-output-error": false,
+  "tool-output-denied": false,
+  "source-url": false,
+  "source-document": false,
+  file: false,
+};
 
 /** Tap a UIMessage-chunk stream so the route knows whether any REAL content
  * (text, reasoning, a tool call/result, or a source/file) reached the
@@ -77,7 +111,7 @@ function tapDelivered(
   return stream.pipeThrough(
     new TransformStream<UIMessageChunk, UIMessageChunk>({
       transform(chunk, controller) {
-        if (!fired && !NON_CONTENT_CHUNK_TYPES.has(chunk.type)) {
+        if (!fired && NON_CONTENT_CHUNK_TYPES[chunk.type] !== true) {
           fired = true;
           onFirst();
         }

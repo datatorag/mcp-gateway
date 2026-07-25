@@ -1,5 +1,6 @@
 import { Button as ButtonPrimitive } from "@base-ui/react/button"
 import { cva, type VariantProps } from "class-variance-authority"
+import { isValidElement } from "react"
 
 import { cn } from "@/lib/utils"
 
@@ -40,6 +41,24 @@ const buttonVariants = cva(
   }
 )
 
+/** Base UI's Button defaults `nativeButton` to `true` — correct for the plain
+ * case, where it really does render a `<button>`. The moment `render` swaps in
+ * an anchor or a Next `<Link>`, that assumption is wrong: Base UI keeps
+ * emitting native button semantics and the DOM ends up with interactive
+ * content nested inside a link, which React reports and assistive tech trips
+ * over.
+ *
+ * Deriving the flag from what `render` actually produces puts the rule in the
+ * one place that can enforce it. Every link-rendering call site used to repeat
+ * `nativeButton={false}` by hand, so the next one added would silently
+ * regress. An explicit `nativeButton` prop still wins (it is spread after). */
+function isNativeButton(render: ButtonPrimitive.Props["render"]): boolean {
+  if (render === undefined) return true
+  // A render *function*'s output can't be inspected from here — keep Base UI's
+  // default and let such a call site pass `nativeButton` explicitly.
+  return !isValidElement(render) || render.type === "button"
+}
+
 function Button({
   className,
   variant = "default",
@@ -49,6 +68,7 @@ function Button({
   return (
     <ButtonPrimitive
       data-slot="button"
+      nativeButton={isNativeButton(props.render)}
       className={cn(buttonVariants({ variant, size, className }))}
       {...props}
     />

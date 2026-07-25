@@ -29,12 +29,14 @@ export function isApproved(decisions: Record<string, unknown>, id: string): bool
   return Object.prototype.hasOwnProperty.call(decisions, id) && decisions[id] === "approve";
 }
 
-export type ExecuteToolFn = (name: string, args: Record<string, unknown>) => Promise<{ text: string; isError: boolean }>;
 export type EngineDeps = {
   model: LanguageModel;
   tools: EngineTool[];
   isWrite: (name: string) => boolean;
-  executeTool: ExecuteToolFn;
+  executeTool: (
+    name: string,
+    args: Record<string, unknown>
+  ) => Promise<{ text: string; isError: boolean }>;
   abortSignal?: AbortSignal;
 };
 
@@ -80,15 +82,13 @@ export const SYSTEM_PROMPT =
  * `tools[last].cache_control = {type:"ephemeral"}`, tools before it carry
  * none, and there is no top-level `cache_control` left.
  *
- * Both constants are namespaced under `anthropic` because that is the only
- * provider wired up. Every provider spells cache breakpoints differently, so
- * adding one means adding its own key here — an unrecognised provider silently
- * ignores these and runs UNCACHED rather than failing loudly. */
-const SYSTEM_CACHE_OPTIONS: ProviderOptions = {
-  anthropic: { cacheControl: { type: "ephemeral" } },
-};
-
-const TOOL_CACHE_OPTIONS: ProviderOptions = {
+ * One constant covers both breakpoints — the policy is identical, and the two
+ * being the same value is the point, not a coincidence. It is namespaced under
+ * `anthropic` because that is the only provider wired up. Every provider spells
+ * cache breakpoints differently, so adding one means adding its own key here —
+ * an unrecognised provider silently ignores this and runs UNCACHED rather than
+ * failing loudly. */
+const EPHEMERAL_CACHE_OPTIONS: ProviderOptions = {
   anthropic: { cacheControl: { type: "ephemeral" } },
 };
 
@@ -106,7 +106,7 @@ const TOOL_CACHE_OPTIONS: ProviderOptions = {
 const SYSTEM_MESSAGE: SystemModelMessage = {
   role: "system",
   content: SYSTEM_PROMPT,
-  providerOptions: SYSTEM_CACHE_OPTIONS,
+  providerOptions: EPHEMERAL_CACHE_OPTIONS,
 };
 
 /** Shared capped executor: the ONLY way tool output enters the conversation
@@ -163,7 +163,7 @@ export function buildToolSet(deps: EngineDeps): ToolSet {
   const lastName = deps.tools[deps.tools.length - 1]?.name;
   const lastTool = lastName === undefined ? undefined : set[lastName];
   if (lastName !== undefined && lastTool !== undefined) {
-    set[lastName] = { ...lastTool, providerOptions: TOOL_CACHE_OPTIONS };
+    set[lastName] = { ...lastTool, providerOptions: EPHEMERAL_CACHE_OPTIONS };
   }
   return set;
 }

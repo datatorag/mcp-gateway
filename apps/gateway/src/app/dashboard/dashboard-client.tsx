@@ -260,7 +260,6 @@ export function DashboardClient() {
                         variant="outline"
                         size="sm"
                         className="flex-1"
-                        nativeButton={false}
                         render={
                           <Link href={`/dashboard/connections/${service.id}`} />
                         }
@@ -270,7 +269,6 @@ export function DashboardClient() {
                       <Button
                         variant="outline"
                         size="sm"
-                        nativeButton={false}
                         render={
                           <a
                             href={service.connectUrl}
@@ -290,7 +288,6 @@ export function DashboardClient() {
                     <Button
                       size="sm"
                       className="w-full"
-                      nativeButton={false}
                       render={
                         <a
                           href={service.connectUrl}
