@@ -110,15 +110,25 @@ The gateway is a thin routing layer: it authenticates the client, forwards per-u
 ### Prerequisites
 
 - Docker
+- A PostgreSQL database and its connection string in `DATABASE_URL` — any
+  Postgres works (Neon, RDS, or a container you run yourself). The dev stack
+  does not start one for you.
 - Google OAuth client for login (and a separate one for Google Workspace scopes)
 - Atlassian OAuth client (optional, for Jira + Confluence)
 
 ### Local Development
 
 ```bash
-# Start postgres, run migrations, seed a test user, and boot the gateway
-docker compose -f docker/docker-compose.dev.yml up -d
+# Apply the schema to your database (once, and after any schema change)
+pnpm --filter @datatorag-mcp/db db:push
+
+# Boot the gateway
+DATABASE_URL=<your-postgres-url> \
+  docker compose -f docker/docker-compose.dev.yml up -d
 ```
+
+Migrations are deliberately not run on startup — the stack never mutates your
+schema as a side effect of booting.
 
 | Service | URL |
 |---------|-----|
@@ -143,19 +153,15 @@ Connect a local MCP client:
 ### Development Without Docker
 
 ```bash
-# Start only postgres
-docker compose -f docker/docker-compose.dev.yml up postgres -d
-
 pnpm install
 
-# Push schema + seed
-DATABASE_URL=postgresql://datatoragmcp:localdev@localhost:54320/datatoragmcp \
+# Push schema + seed a test user
+DATABASE_URL=<your-postgres-url> \
   pnpm --filter @datatorag-mcp/db db:push && \
   pnpm --filter @datatorag-mcp/db db:seed
 
-# Start gateway
-DATABASE_URL=postgresql://datatoragmcp:localdev@localhost:54320/datatoragmcp \
-  pnpm --filter @datatorag-mcp/gateway dev
+# Start gateway (reads DATABASE_URL from the root .env)
+pnpm dev:gateway
 ```
 
 ### Environment Variables

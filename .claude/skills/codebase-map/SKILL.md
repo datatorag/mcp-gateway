@@ -189,6 +189,6 @@ multi-file changes where a fresh-eyes sweep genuinely pays for itself.
 ## Commands
 
 - Tests: `pnpm vitest run` (in `apps/gateway`) · Typecheck: `pnpm exec tsc --noEmit` · Build: `pnpm build`
-- Dev: `pnpm dev:infra` (postgres + db-init) then `pnpm dev:gateway`; or in `apps/gateway`: `pnpm dev`
+- Dev: `pnpm dev:gateway`; or in `apps/gateway`: `pnpm dev`. There is no local postgres — `DATABASE_URL` points at a Neon branch, and nothing migrates on boot.
 - Migrations: `pnpm --filter @datatorag-mcp/db db:generate` / `db:migrate` (`db:push` is dev-only)
 - Deploys and DB queries: use the `deploy` and `db-query` skills — infra specifics live there and in private memory.
