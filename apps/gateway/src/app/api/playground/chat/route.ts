@@ -58,6 +58,11 @@ function engineDeps(
 // property, and both fail `tsc`. That is the guarantee this classification
 // needs, and the reason the list below is exhaustive rather than terse.
 //
+// That guarantee has now been cashed in once: the `ai` major bump added
+// `custom`, `reasoning-file` and `tool-approval-response` to the union, and
+// `tsc` refused to compile until each got a verdict here. A `Set` of
+// exclusions would have accepted all three in silence.
+//
 // `data-*` chunks (our own `data-confirm` / `data-write-outcome`) land on the
 // type's `data-${string}` index signature, so they need no entry; they are
 // absent at runtime, hence the `=== true` test below rather than a bare
@@ -78,11 +83,22 @@ const NON_CONTENT_CHUNK_TYPES: Record<UIMessageChunk["type"], boolean> = {
   "reasoning-start": false,
   "reasoning-delta": false,
   "reasoning-end": false,
+  // Provider-emitted reasoning artefact, sibling of `file` below — content.
+  "reasoning-file": false,
+  // Provider-namespaced content block (`kind: "<provider>.<name>"`). It is
+  // model output we chose not to model further, not turn framing: if one of
+  // these reached the client, the provider call really happened and really
+  // billed, so the turn is not refundable.
+  custom: false,
   "tool-input-start": false,
   "tool-input-delta": false,
   "tool-input-available": false,
   "tool-input-error": false,
   "tool-approval-request": false,
+  // The decision half of the approval handshake. Grouped with the request
+  // above rather than with the framing block: reaching an approval exchange
+  // at all means tool work was proposed and streamed.
+  "tool-approval-response": false,
   "tool-output-available": false,
   "tool-output-error": false,
   "tool-output-denied": false,
@@ -125,24 +141,25 @@ function tapDelivered(
  * continuation lands in the SAME assistant message the user just approved or
  * denied instead of a second, duplicated one.
  *
- * Where that id comes from — verified against the installed ai@6.0.235, not
+ * Where that id comes from — verified against the installed ai@7.0.37, not
  * inferred: it is NOT `toUIMessageStream`, which emits `messageId` only when
  * a `responseMessageId`/`generateMessageId` is configured (dist/index.js
- * :8675) and we pass neither. It is `createUIMessageStream` ITSELF: it hands
+ * :7590) and we pass neither. It is `createUIMessageStream` ITSELF: it hands
  * a freshly generated id to `handleUIMessageStreamFinish` unconditionally
- * (dist/index.js :8977, `messageId: generateId2()`), whose transform stamps
- * it onto the first `start` chunk that lacks one (:6397-6412).
+ * (dist/index.js :10401, `messageId: generateId2()`), whose transform stamps
+ * it onto the first `start` chunk that lacks one (:7199-7212).
  *
  * Why that breaks resume: client-side, `processUIMessageStream`'s `start`
- * handler assigns `state.message.id = chunk.messageId` (:6309-6311), and
+ * handler assigns `state.message.id = chunk.messageId` (:7110), and
  * `AbstractChat.makeRequest`'s `write()` then compares
  * `response.state.message.id === this.lastMessage?.id` to choose
- * `replaceMessage` vs `pushMessage` (:14003-14011). On resume the streaming
- * state is seeded from a structuredClone of the paused assistant message
- * (:13969-13972 + `createStreamingUIMessageState` :5786), so a DIFFERENT id
- * means `pushMessage` — a brand-new message that already carries every part
- * cloned from the paused one. The tool card, the "Action denied" line and the
- * write-outcome badges all render a second time.
+ * `replaceMessage` vs `pushMessage` (:16951-16961). On resume the streaming
+ * state is seeded from a deep clone of the paused assistant message
+ * (:16918-16921, whose `state.snapshot` is `structuredClone` —
+ * @ai-sdk/react dist/index.js :196 — plus `createStreamingUIMessageState`
+ * :6530), so a DIFFERENT id means `pushMessage` — a brand-new message that
+ * already carries every part cloned from the paused one. The tool card, the
+ * "Action denied" line and the write-outcome badges all render a second time.
  *
  * With no `messageId` on `start` the client keeps the paused message's id and
  * takes the `replaceMessage` branch: one message, appended in place. The
@@ -150,6 +167,13 @@ function tapDelivered(
  * the client's own `lastMessage`, which by construction IS the paused
  * message (an unresolved `data-confirm` locks the composer and regenerate, so
  * nothing can be appended after it).
+ *
+ * All of the above survived the SDK major unchanged, and was re-verified by
+ * replaying both legs through `readUIMessageStream` rather than by re-reading
+ * the source: a resume stream whose `start` carries no id lands back in the
+ * paused message (same id, `replaceMessage`), resolving the pending
+ * `dynamic-tool` part in place — `output-available` on approve,
+ * `output-denied` on deny.
  *
  * Resume-path only. The fresh-turn path keeps the injected id, which is what
  * makes each new turn a new assistant message. */
@@ -198,7 +222,7 @@ async function runTurnIntoStream(
     // DO NOT add `generateMessageId` to these options. The client's
     // approve/deny resume depends on the RESUME response's `start` chunk
     // carrying no message id (see `withoutStartMessageId` above for the full
-    // mechanism and the ai@6.0.235 line references). `toUIMessageStream`
+    // mechanism and the ai@7.0.37 line references). `toUIMessageStream`
     // emits `messageId` only when `generateMessageId` is configured, so
     // leaving it unset is what lets `withoutStartMessageId` have a single,
     // known id source to strip — the one `createUIMessageStream` injects.
@@ -354,9 +378,9 @@ async function handleResume(
       const { toolMessage, outcomes } = await executeWriteBatch(deps, pending.writes, decisions);
 
       // Close out each gated write's tool card. `streamText` enqueues the
-      // tool-call chunk BEFORE it checks `tool.execute != null` (ai@6.0.235
-      // dist/index.js ~:6819), so an unexecuted write still reached the
-      // client as a `dynamic-tool` part in state `input-available` — i.e.
+      // tool-call chunk BEFORE it checks `tool.execute != null` (ai@7.0.37
+      // dist/index.js :7809 vs :7829), so an unexecuted write still reached
+      // the client as a `dynamic-tool` part in state `input-available` — i.e.
       // rendered as a pulsing "Running" forever, even after a Deny, because
       // the route (not the SDK) is what actually runs these. `outcomes` is
       // produced by `executeWriteBatch` one-per-write in `pending.writes`
@@ -364,8 +388,11 @@ async function handleResume(
       //
       // `processUIMessageStream`'s `getToolInvocation` falls back to a
       // backwards scan over ALL of the message's parts (dist/index.js
-      // ~:5822-5833), so these resolve their parts across the step boundary
-      // even though the tool call was emitted on the previous request.
+      // :6571-6585), so these resolve their parts across the step boundary
+      // even though the tool call was emitted on the previous request. That
+      // scan filters on `isToolUIPart`, which is `isStaticToolUIPart ||
+      // isDynamicToolUIPart` (:6514-6516) — so it still matches the
+      // `dynamic-tool` parts our engine produces.
       //
       // `data-write-outcome` stays as-is below — the client renders its
       // approved/denied badges off that, independently of the tool cards.

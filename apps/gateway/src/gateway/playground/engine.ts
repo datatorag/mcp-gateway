@@ -1,7 +1,7 @@
 import {
   streamText, dynamicTool, jsonSchema, stepCountIs,
   type LanguageModel, type ModelMessage, type SystemModelMessage, type ToolSet,
-  type StreamTextResult, type ToolResultPart,
+  type ToolResultPart,
 } from "ai";
 
 /** `ai` re-exports the VALUE surface but not `ProviderOptions` itself; take it
@@ -122,16 +122,24 @@ async function runCapped(deps: EngineDeps, name: string, args: Record<string, un
 }
 
 /** Reads get execute; writes get NONE — an unexecuted tool call is the AI
- * SDK's native stop point (see the runtime `tool.execute == null` check in
- * `executeToolCall`, ai@6.0.235 dist/index.js), which is where the
- * confirmation gate lives.
+ * SDK's native stop point (the runtime `tool.execute != null` check that
+ * decides whether a call joins `toolCallsToExecute`, ai@7.0.37
+ * dist/index.js :7829), which is where the confirmation gate lives.
  *
- * Deviation from the brief: `dynamicTool()`'s TS signature (v6.0.235)
- * declares `execute` as a REQUIRED field, even though its runtime body is
- * just `{ ...tool, type: "dynamic" }` (a typing gap — the general `Tool`
- * type it wraps allows omitting `execute`). Write tools are therefore built
- * as a plain object literal (still tagged `type: "dynamic"`) instead of
- * going through `dynamicTool()`. */
+ * Re-verified on the v7 line, since this is the security-critical half of
+ * the gate: given one read and one write in the same step, the model's
+ * request for BOTH still reaches the client (the transform enqueues the
+ * tool-call chunk before it ever looks at `execute`), only the read is
+ * executed server-side, and the write comes back out of `detectPause`.
+ *
+ * The write branch below builds a plain object literal tagged
+ * `type: "dynamic"` rather than calling `dynamicTool()`. That started as a
+ * workaround: on the v6 line `dynamicTool()`'s signature declared `execute`
+ * REQUIRED even though its runtime body is just `{ ...tool, type: "dynamic" }`.
+ * The v7 signature no longer requires it, so the two forms are now
+ * equivalent. The literal is kept anyway: it is the line that decides which
+ * tools can run without asking, and that is not somewhere to take a
+ * cosmetic diff. */
 export function buildToolSet(deps: EngineDeps): ToolSet {
   const set: ToolSet = {};
   for (const t of deps.tools) {
@@ -168,10 +176,19 @@ export function buildToolSet(deps: EngineDeps): ToolSet {
   return set;
 }
 
-export function streamEngineTurn(
-  deps: EngineDeps,
-  messages: ModelMessage[]
-): StreamTextResult<ToolSet, never> {
+/** The shape `streamEngineTurn` hands to `detectPause`, inferred from
+ * `streamText` rather than spelled out.
+ *
+ * It used to be written literally as `StreamTextResult<ToolSet, never>`, but
+ * that broke on the SDK major: the result type gained a runtime-context type
+ * parameter, so the arity changed and the second slot no longer means what it
+ * did. Naming the parameters here buys nothing — nothing outside this module
+ * references the alias, and only `finishReason` / `toolCalls` / `toolResults`
+ * / `response` are ever read off it — while guaranteeing a rewrite on every
+ * future generic-signature change. Inferring keeps it correct for free. */
+export type EngineTurnResult = ReturnType<typeof streamEngineTurn>;
+
+export function streamEngineTurn(deps: EngineDeps, messages: ModelMessage[]) {
   return streamText({
     model: deps.model,
     // Object form (not a bare string) so it can carry the cache breakpoint —
@@ -191,7 +208,7 @@ export function streamEngineTurn(
 export async function detectPause(
   deps: EngineDeps,
   history: ModelMessage[],
-  result: StreamTextResult<ToolSet, never>
+  result: EngineTurnResult
 ): Promise<{ messages: ModelMessage[]; pending: PendingWrite[] } | null> {
   const [finishReason, toolCalls, toolResults, response] = await Promise.all([
     result.finishReason, result.toolCalls, result.toolResults, result.response,

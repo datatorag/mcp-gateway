@@ -518,11 +518,11 @@ describe("POST /api/playground/chat", () => {
   // Manual e2e caught this: after Deny, the tool card, the "Action denied"
   // line and the write-outcome badges rendered TWICE, in two separate
   // assistant messages. Cause: `createUIMessageStream` injects a freshly
-  // generated `messageId` onto the `start` chunk (ai@6.0.235 dist/index.js
-  // :8977 -> :6397-6412). Client-side that id lands in
-  // `state.message.id` (:6309-6311) and `AbstractChat.makeRequest`'s
+  // generated `messageId` onto the `start` chunk (ai@7.0.37 dist/index.js
+  // :10401 -> :7199-7212). Client-side that id lands in
+  // `state.message.id` (:7110) and `AbstractChat.makeRequest`'s
   // `write()` compares it against `lastMessage.id` to pick `replaceMessage`
-  // vs `pushMessage` (:14003-14011) — a different id pushes a SECOND
+  // vs `pushMessage` (:16951-16961) — a different id pushes a SECOND
   // message that was structuredClone'd from the paused one, so every part
   // it already had renders again.
   //

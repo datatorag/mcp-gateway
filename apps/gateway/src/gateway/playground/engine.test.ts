@@ -12,12 +12,16 @@ const tools: EngineTool[] = [
 ];
 const isWrite = (n: string) => n === "gws-mcp__gmail_send";
 
-// NOTE (Step 1 finding): the installed @ai-sdk/provider v3 LanguageModelV3Usage
-// and LanguageModelV3FinishReason shapes are nested objects, not the flat
-// { inputTokens, outputTokens, totalTokens } / bare-string shapes the brief
-// assumed (that flatter shape is what `result.usage` / `result.finishReason`
-// resolve TO at the streamText level — not what a mock model's raw `finish`
-// chunk must emit). See task-4-report.md for the full deviation list.
+// NOTE: `LanguageModelV3Usage` and `LanguageModelV3FinishReason` are nested
+// objects, not the flat { inputTokens, outputTokens, totalTokens } /
+// bare-string shapes it is natural to reach for — that flatter shape is what
+// `result.usage` / `result.finishReason` resolve TO at the streamText level,
+// not what a mock model's raw `finish` chunk must emit.
+//
+// The language-model SPEC version and the @ai-sdk/provider PACKAGE version
+// move independently: the `ai` major bump carried the package from 3.x to
+// 4.x while the spec these mocks implement stayed at V3, so these literals
+// (and the `MockLanguageModelV3` import above) needed no change.
 const usage = {
   inputTokens: { total: 1, noCache: 1, cacheRead: undefined, cacheWrite: undefined },
   outputTokens: { total: 1, text: 1, reasoning: undefined },
@@ -40,8 +44,8 @@ const toolCallStream = (calls: { id: string; name: string; input: object }[]) =>
 /** Model that plays scripted step streams in order (streamText calls doStream once per step).
  * Chunks are cast to `any` — the LanguageModelV3StreamPart union is exact-object-typed
  * (e.g. `{ type: "stream-start"; warnings: [] }`) and doesn't infer cleanly from a plain
- * object literal array; the runtime shapes are verified against the installed provider
- * types in Step 1 (see task-4-report.md). */
+ * object literal array; the runtime shapes are checked against the installed provider
+ * types by hand, and pinned by these tests actually driving `streamText`. */
 function scriptedModel(steps: object[][]) {
   let i = 0;
   return new MockLanguageModelV3({
