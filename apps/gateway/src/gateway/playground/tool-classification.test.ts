@@ -2,27 +2,27 @@ import { describe, it, expect } from "vitest";
 import { and, eq } from "drizzle-orm";
 import { mcpServers, tools as toolsTable } from "@datatorag-mcp/db";
 import { getDb } from "@/lib/db";
-import { classifyWrite } from "./tools";
+import { classifyWrite, KNOWN_READ_TOOLS } from "./tools";
 
 /**
  * The write gate decides whether a tool can touch a user's data without being
  * asked first, and it decides it from the tool's NAME. That is a defensible
  * design — names are ours, they are stable, and unlike an MCP annotation a
- * plugin server cannot forge one — but it has one honest weakness: it is a
- * judgement about a string. A tool named in a way nobody anticipated could be
- * read as harmless and run unprompted, and nothing would say so.
+ * plugin server cannot forge one — and since the gate inverted to fail-closed
+ * it has no silent failure mode left: a tool the classifier does not
+ * positively recognise prompts for approval rather than running unasked.
  *
- * This file is the answer to that. It is the classification of every tool in
- * the registry, written down, in the repository, as a thing a human agreed to.
- * A tool arriving with a name the heuristic reads differently than a person
- * would does not slip past — it turns up here, in a diff, next to the word
- * "read", where it is a question someone has to answer rather than a silence.
+ * This file is the review record behind that. It is the classification of
+ * every tool in the registry, written down, in the repository, as a thing a
+ * human agreed to. A new tool does not slip past — it fails closed at runtime
+ * and turns up here (and in KNOWN_READ_TOOLS, if a read), in a diff, where it
+ * is a question someone has to answer rather than a silence.
  *
  * WHEN THIS FAILS, DO NOT JUST UPDATE IT. The failure is the point: read the
  * name, decide what the tool actually does, and if the classifier is wrong,
- * fix the classifier (a verb it does not know, or an entry in the escalation
- * list) before touching the snapshot. Editing "write" to "read" here to get
- * CI green removes a user's approval prompt.
+ * fix the classifier (an entry in KNOWN_READ_TOOLS or the escalation list)
+ * before touching the snapshot. Editing "write" to "read" here to get CI
+ * green removes a user's approval prompt.
  */
 
 /** Every enabled tool served by an active plugin, and what the gate makes of
@@ -135,6 +135,17 @@ describe("registry write/read classification snapshot", () => {
   it("is sorted by name, so a new tool shows up as an insertion", () => {
     const names = REGISTRY_CLASSIFICATION.map(([name]) => name);
     expect(names).toEqual([...names].sort());
+  });
+
+  it("KNOWN_READ_TOOLS is exactly this snapshot's read set", () => {
+    // The gate's allowlist and this review record must be the same list, or
+    // one of them is lying: an entry only here would fail closed at runtime
+    // despite its reviewed "read"; an entry only there would run unprompted
+    // with no review record. Needs no database, so it runs everywhere.
+    const snapshotReads = REGISTRY_CLASSIFICATION.filter(
+      ([, classification]) => classification === "read"
+    ).map(([name]) => name);
+    expect([...KNOWN_READ_TOOLS].sort()).toEqual(snapshotReads);
   });
 });
 

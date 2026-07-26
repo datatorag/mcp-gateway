@@ -65,10 +65,9 @@ export function isWriteTool(namespacedName: string): boolean {
 /**
  * Tools that must be treated as writes even though their name reads as one.
  *
- * This list can only ever RAISE a tool to "write". There is deliberately no
- * companion list that lowers one to "read": the whole point of a floor is that
- * nothing can dig under it, and a mechanism for declaring something safe is a
- * mechanism for declaring something unsafely safe.
+ * This list can only ever RAISE a tool to "write". KNOWN_READ_TOOLS below can
+ * mark a tool as a read, but never one whose name carries a write verb — the
+ * verb floor is checked first, so nothing can dig under it.
  *
  * It lives in source, in this file, on purpose. Which of our tools can change
  * a user's data is a security decision, and a security decision belongs
@@ -81,6 +80,62 @@ export function isWriteTool(namespacedName: string): boolean {
  * tool by tool).
  */
 export const ALWAYS_WRITE_TOOLS: ReadonlySet<string> = new Set<string>([]);
+
+/**
+ * The tools the gate lets run WITHOUT approval — every tool not named here
+ * (and not carrying a write verb, which is checked first) is treated as a
+ * write and prompts.
+ *
+ * This inverts the gate's old default. The verb heuristic used to be a
+ * denylist: a name with no recognised write verb classified as a read and ran
+ * unprompted, so a NEW tool with a verb nobody anticipated ("sync", "apply",
+ * "merge"…) would have walked past the approval prompt in silence. Now the
+ * unknown fails closed: the worst a surprising name can do is prompt when it
+ * didn't need to.
+ *
+ * Seeded from the tool registry as of the inversion — the exact set the
+ * classification snapshot test recorded as reads — so every tool that existed
+ * that day behaves precisely as it did before. Like the escalation list above,
+ * it lives in source so that granting a tool unprompted execution is a
+ * reviewed, diff-visible decision, never a value fetched at runtime from the
+ * servers the gate protects against. When a new read tool ships, its entry
+ * here and its snapshot entry land in the same reviewed commit.
+ *
+ * Ordered by name so additions land as additions, not churn.
+ */
+export const KNOWN_READ_TOOLS: ReadonlySet<string> = new Set<string>([
+  "atlassian-mcp__confluence_get_attachment",
+  "atlassian-mcp__confluence_get_comments",
+  "atlassian-mcp__confluence_get_page",
+  "atlassian-mcp__confluence_list_pages",
+  "atlassian-mcp__confluence_search",
+  "atlassian-mcp__jira_get_attachment",
+  "atlassian-mcp__jira_get_comments",
+  "atlassian-mcp__jira_get_issue",
+  "atlassian-mcp__jira_get_transitions",
+  "atlassian-mcp__jira_list_fields",
+  "atlassian-mcp__jira_search",
+  "atlassian-mcp__jira_search_users",
+  "gws-mcp__calendar_freebusy",
+  "gws-mcp__calendar_get_event",
+  "gws-mcp__calendar_list_events",
+  "gws-mcp__contacts_directory_search",
+  "gws-mcp__contacts_get",
+  "gws-mcp__contacts_list",
+  "gws-mcp__contacts_search",
+  "gws-mcp__docs_get",
+  "gws-mcp__drive_read_file",
+  "gws-mcp__drive_search",
+  "gws-mcp__gmail_list",
+  "gws-mcp__gmail_list_filters",
+  "gws-mcp__gmail_read",
+  "gws-mcp__gmail_search",
+  "gws-mcp__gws_auth_setup",
+  "gws-mcp__sheets_read",
+  "gws-mcp__slides_get",
+  "gws-mcp__tasks_list",
+  "gws-mcp__tasks_list_tasks",
+]);
 
 /**
  * Whether a tool must be user-approved before it is allowed to run.
@@ -99,14 +154,25 @@ export const ALWAYS_WRITE_TOOLS: ReadonlySet<string> = new Set<string>([]);
  * tool and has never once changed an outcome. So this is not a patched bypass,
  * it is a deleted one — the code that could be lied to is gone.
  *
- * The escalation set is a parameter with a default so the raise-only property
- * is testable without reaching into module state.
+ * Decision order, and why it is that order:
+ *   1. escalation list says write        → write (a human said so)
+ *   2. name carries a write verb         → write (the floor; even a
+ *      KNOWN_READ_TOOLS entry cannot lower a write-verbed name)
+ *   3. name is in KNOWN_READ_TOOLS       → read  (a human reviewed it)
+ *   4. otherwise                         → write (fail closed: unrecognised
+ *      tools prompt until someone classifies them)
+ *
+ * Both sets are parameters with defaults so the raise-only and fail-closed
+ * properties are testable without reaching into module state.
  */
 export function classifyWrite(
   namespacedName: string,
-  alwaysWrite: ReadonlySet<string> = ALWAYS_WRITE_TOOLS
+  alwaysWrite: ReadonlySet<string> = ALWAYS_WRITE_TOOLS,
+  knownRead: ReadonlySet<string> = KNOWN_READ_TOOLS
 ): boolean {
-  return isWriteTool(namespacedName) || alwaysWrite.has(namespacedName);
+  if (alwaysWrite.has(namespacedName)) return true;
+  if (isWriteTool(namespacedName)) return true;
+  return !knownRead.has(namespacedName);
 }
 
 /**

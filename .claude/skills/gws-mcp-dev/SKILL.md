@@ -94,7 +94,15 @@ in addition to landing the merge itself:
    per tool added/removed. See the `site-content` skill's publish
    checklist; use the `content-marketer` agent to draft the changelog/docs
    prose.
-3. **Session re-auth note**: gateway MCP sessions are in-memory only — the
+3. **Playground write-gate classification** — a NEW tool fails closed in the
+   playground (always prompts for approval) until it is classified in the
+   gateway repo: add it to the snapshot in
+   `apps/gateway/src/gateway/playground/tool-classification.test.ts` and,
+   if it is a read, to `KNOWN_READ_TOOLS` in
+   `apps/gateway/src/gateway/playground/tools.ts` (same commit; tests
+   enforce the two lists agree and that the snapshot matches the live
+   registry).
+4. **Session re-auth note**: gateway MCP sessions are in-memory only — the
    restart in step 1 drops all live sessions for this connector. This is
    expected, not a regression; users just re-auth on their next tool call
    (see `ops-debugging`).

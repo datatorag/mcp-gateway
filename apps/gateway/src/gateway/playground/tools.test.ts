@@ -55,17 +55,33 @@ describe("classifyWrite", () => {
     ).toBe(true);
   });
 
-  it("lets the escalation list raise a read to a write", () => {
-    expect(classifyWrite("x-mcp__weird_lookup")).toBe(false);
+  it("fails closed on a tool name with a verb nobody anticipated", () => {
+    // THE regression this inversion exists to prevent. Under the old
+    // denylist, a name whose verb the heuristic did not recognise classified
+    // as a READ and executed with no approval prompt — this exact assertion
+    // was `toBe(false)` before the inversion. Now anything the gate does not
+    // positively recognise prompts.
+    expect(classifyWrite("gws-mcp__gmail_snooze")).toBe(true);
+    expect(classifyWrite("x-mcp__weird_lookup")).toBe(true);
+    expect(classifyWrite("gws-mcp__calendar_sync_external")).toBe(true);
+  });
+
+  it("lets the escalation list raise a known read to a write", () => {
+    const knownRead = new Set(["x-mcp__weird_lookup"]);
     expect(
-      classifyWrite("x-mcp__weird_lookup", new Set(["x-mcp__weird_lookup"]))
+      classifyWrite("x-mcp__weird_lookup", new Set<string>(), knownRead)
+    ).toBe(false);
+    expect(
+      classifyWrite("x-mcp__weird_lookup", new Set(["x-mcp__weird_lookup"]), knownRead)
     ).toBe(true);
   });
 
   it("never lets anything lower a write to a read", () => {
     // There is no argument, list, annotation or configuration that can turn
-    // this off — the heuristic is a floor, and the only override direction is
-    // up. If this ever fails, a way to declare a write safe has been added.
+    // this off — the verb heuristic is a floor, and the only override
+    // direction is up. Even an entry in the known-read list cannot lower a
+    // name that carries a write verb. If this ever fails, a way to declare a
+    // write safe has been added.
     for (const name of [
       "gws-mcp__gmail_send",
       "gws-mcp__docs_delete",
@@ -73,6 +89,7 @@ describe("classifyWrite", () => {
     ]) {
       expect(classifyWrite(name, new Set([name]))).toBe(true);
       expect(classifyWrite(name, new Set<string>())).toBe(true);
+      expect(classifyWrite(name, new Set<string>(), new Set([name]))).toBe(true);
     }
   });
 

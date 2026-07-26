@@ -1,5 +1,27 @@
 import { defineConfig } from "vitest/config";
 import path from "node:path";
+import fs from "node:fs";
+
+// The registry-classification safety net (tool-classification.test.ts) needs a
+// database to compare the reviewed snapshot against the live tools table, and
+// skips without DATABASE_URL. Nothing exported that variable to test runs, so
+// the net silently ran nowhere. Seed it from the root .env — where the dev
+// server already gets it — so a plain `pnpm vitest run` exercises the check on
+// any machine with a configured environment. No .env / no DATABASE_URL keeps
+// the old posture: the DB-backed suite reports as skipped, everything else
+// runs. Only DATABASE_URL is lifted, deliberately — the unit suites mock their
+// config, and importing the whole .env could change what unmocked code sees.
+if (!process.env.DATABASE_URL) {
+  try {
+    const rootEnv = fs.readFileSync(path.resolve(__dirname, "../../.env"), "utf8");
+    const match = rootEnv.match(/^DATABASE_URL=(.+)$/m);
+    if (match) {
+      process.env.DATABASE_URL = match[1].trim().replace(/^["']|["']$/g, "");
+    }
+  } catch {
+    // No root .env — CI or a fresh checkout; the DB-backed suite skips.
+  }
+}
 
 export default defineConfig({
   test: {
