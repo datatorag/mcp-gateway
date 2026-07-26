@@ -26,8 +26,16 @@ export type UserToolRow = {
   /** Service the tool needs (from PLUGIN_SERVICE_MAP); undefined for tools
    * whose server has no service mapping — those are visible to everyone. */
   requiredService: string | undefined;
-  /** MCP readOnlyHint annotation: true = read-only, false = mutating, null =
-   * unannotated. Drives the playground write-confirmation gate. */
+  /** MCP readOnlyHint annotation as the plugin server declared it: true =
+   * read-only, false = mutating, null = unannotated.
+   *
+   * Recorded, not trusted. It used to decide the playground's write-approval
+   * gate, which meant a server could exempt its own destructive tools from
+   * being approved by annotating them read-only. The gate now classifies from
+   * the tool name alone (see playground/tools.ts `classifyWrite`) and no code
+   * path reads this field to make a security decision. It is kept because it
+   * is a true record of what the server said, which is worth having when
+   * auditing a plugin. */
   readOnlyHint: boolean | null;
 };
 

@@ -32,33 +32,78 @@ import {
   flattenToolResult,
   isWriteTool,
   classifyWrite,
+  stripAccountArg,
+  ALWAYS_WRITE_TOOLS,
   ToolCallError,
 } from "./tools";
 import { getServiceToken } from "../service-token";
 
 describe("classifyWrite", () => {
-  it("trusts the readOnlyHint annotation over the verb heuristic", () => {
-    // A "search"-named tool the plugin declared mutating → write.
-    expect(
-      classifyWrite({ namespacedName: "x-mcp__weird_search", readOnlyHint: false })
-    ).toBe(true);
-    // A "create"-named tool the plugin declared read-only → read.
-    expect(
-      classifyWrite({ namespacedName: "x-mcp__create_report_view", readOnlyHint: true })
-    ).toBe(false);
+  it("classifies from the tool name", () => {
+    expect(classifyWrite("gws-mcp__gmail_send")).toBe(true);
+    expect(classifyWrite("gws-mcp__gmail_search")).toBe(false);
+    // Arbitrary-op runner with no other verb — the expanded heuristic gates it.
+    expect(classifyWrite("gws-mcp__gws_run")).toBe(true);
   });
 
-  it("falls back to the verb heuristic when unannotated (null)", () => {
+  it("gates a mutating tool that claims to be read-only", () => {
+    // The exact bypass this classifier exists to be immune to. A plugin can
+    // annotate a tool `readOnlyHint: true` — and a hostile or merely sloppy one
+    // will — but nothing it says reaches this decision, so the name is all
+    // there is and the name says "delete".
     expect(
-      classifyWrite({ namespacedName: "gws-mcp__gmail_send", readOnlyHint: null })
+      classifyWrite("evil-mcp__docs_delete", new Set(["irrelevant"]))
     ).toBe(true);
+  });
+
+  it("lets the escalation list raise a read to a write", () => {
+    expect(classifyWrite("x-mcp__weird_lookup")).toBe(false);
     expect(
-      classifyWrite({ namespacedName: "gws-mcp__gmail_search", readOnlyHint: null })
-    ).toBe(false);
-    // Arbitrary-op runner with no other verb — the expanded heuristic gates it.
-    expect(
-      classifyWrite({ namespacedName: "gws-mcp__gws_run", readOnlyHint: null })
+      classifyWrite("x-mcp__weird_lookup", new Set(["x-mcp__weird_lookup"]))
     ).toBe(true);
+  });
+
+  it("never lets anything lower a write to a read", () => {
+    // There is no argument, list, annotation or configuration that can turn
+    // this off — the heuristic is a floor, and the only override direction is
+    // up. If this ever fails, a way to declare a write safe has been added.
+    for (const name of [
+      "gws-mcp__gmail_send",
+      "gws-mcp__docs_delete",
+      "atlassian-mcp__jira_create_issue",
+    ]) {
+      expect(classifyWrite(name, new Set([name]))).toBe(true);
+      expect(classifyWrite(name, new Set<string>())).toBe(true);
+    }
+  });
+
+  it("ships with an empty escalation list", () => {
+    // Not a placeholder: the snapshot test asserts every registry tool is
+    // already classified correctly without one. If an entry is ever added,
+    // this should be updated alongside the snapshot so the addition is
+    // deliberate rather than incidental.
+    expect([...ALWAYS_WRITE_TOOLS]).toEqual([]);
+  });
+});
+
+describe("stripAccountArg", () => {
+  it("removes the account key without touching the rest", () => {
+    expect(
+      stripAccountArg({ query: "is:unread", account: "someone@example.com" })
+    ).toEqual({ query: "is:unread" });
+  });
+
+  it("does not mutate the caller's object", () => {
+    const args = { query: "q", account: "a@b.c" };
+    stripAccountArg(args);
+    expect(args).toEqual({ query: "q", account: "a@b.c" });
+  });
+
+  it("passes through anything that has no account key", () => {
+    expect(stripAccountArg({ query: "q" })).toEqual({ query: "q" });
+    expect(stripAccountArg({})).toEqual({});
+    expect(stripAccountArg(undefined)).toBeUndefined();
+    expect(stripAccountArg(null)).toBeNull();
   });
 });
 
@@ -413,27 +458,27 @@ describe("listUserEngineTools", () => {
     ]);
   });
 
-  it("derives isWrite from the readOnlyHint annotation (heuristic fallback when null)", async () => {
+  it("derives isWrite from the tool name, ignoring what the plugin claims", async () => {
     const toolRows = [
       {
         namespacedName: "gws-mcp__gmail_search",
         description: "search",
         inputSchemaJson: null,
-        readOnlyHint: null, // unannotated → heuristic → read
+        readOnlyHint: null,
         serverSlug: "gws-mcp",
       },
       {
         namespacedName: "gws-mcp__weird_name",
-        description: "declared mutating",
+        description: "no write verb in the name",
         inputSchemaJson: null,
-        readOnlyHint: false, // annotation says write, despite no write verb
+        readOnlyHint: false, // annotation says "mutating" — not consulted
         serverSlug: "gws-mcp",
       },
       {
         namespacedName: "gws-mcp__create_thing",
-        description: "declared read-only",
+        description: "a create tool claiming to be read-only",
         inputSchemaJson: null,
-        readOnlyHint: true, // annotation says read, despite the "create" verb
+        readOnlyHint: true, // annotation says "read-only" — not consulted
         serverSlug: "gws-mcp",
       },
     ];
@@ -450,8 +495,11 @@ describe("listUserEngineTools", () => {
     const { isWrite } = await listUserEngineTools(db, "user-1");
 
     expect(isWrite("gws-mcp__gmail_search")).toBe(false);
-    expect(isWrite("gws-mcp__weird_name")).toBe(true);
-    expect(isWrite("gws-mcp__create_thing")).toBe(false);
+    // The annotation said this one mutates; the name has no write verb and the
+    // name is what we go on.
+    expect(isWrite("gws-mcp__weird_name")).toBe(false);
+    // The annotation said this one is read-only. It is called "create". Gated.
+    expect(isWrite("gws-mcp__create_thing")).toBe(true);
     // A tool the user can't see is not classified as a write.
     expect(isWrite("gws-mcp__unknown")).toBe(false);
   });

@@ -1,12 +1,14 @@
 import { MCPClient } from "@mastra/mcp";
 import { RequestContext } from "@mastra/core/request-context";
 import type { ToolsInput } from "@mastra/core/agent";
+import type { Tool } from "@mastra/core/tools";
 import { eq } from "drizzle-orm";
 import type { Database } from "@datatorag-mcp/db";
 import { mcpServers } from "@datatorag-mcp/db";
 import { NAMESPACE_SEPARATOR } from "@/gateway/plugin-manager";
 import { buildPluginServerUrl, listUserToolRows } from "@/gateway/user-tools";
 import { PLUGIN_SERVICE_MAP, getServiceToken } from "@/gateway/service-token";
+import { classifyWrite, stripAccountArg } from "@/gateway/playground/tools";
 import { getDb } from "@/lib/db";
 
 /**
@@ -221,6 +223,47 @@ export function resetPluginMCPClient(): void {
 }
 
 /* -------------------------------------------------------------------------- */
+/* The write gate                                                              */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Applies our policy to one tool the MCP client just handed us, in place.
+ *
+ * Two things happen here, and both are the kind of thing that is invisible
+ * when it is missing:
+ *
+ * 1. THE WRITE GATE. `requireApproval` is set from the same classifier the
+ *    previous agent loop used, so a tool that can change the user's data
+ *    cannot reach the plugin server until the user has said yes. This is set
+ *    as a plain property on the tool rather than by wrapping it: the runtime
+ *    reads it off the tool itself, and it defaults to `false`, which is
+ *    exactly why every tool has to be visited — a tool we forget to classify
+ *    is a tool that runs unprompted, not a tool that errors.
+ *
+ * 2. THE ACCOUNT STRIP. See `stripAccountArg` — the playground has always
+ *    acted as the user's default account, and it still does.
+ *
+ * Mutating rather than copying is safe and deliberate: the client builds these
+ * tool objects fresh on every listing, so the object we are handed belongs to
+ * this request. Copying a class instance would risk dropping whatever the
+ * framework keeps off the own-property surface.
+ */
+export function applyToolPolicy(
+  namespacedName: string,
+  tool: Tool<unknown, unknown, unknown, unknown>
+): Tool<unknown, unknown, unknown, unknown> {
+  tool.requireApproval = classifyWrite(namespacedName);
+
+  const execute = tool.execute;
+  if (execute) {
+    tool.execute = (input, context) =>
+      execute(stripAccountArg(input), context);
+  }
+
+  return tool;
+}
+
+/* -------------------------------------------------------------------------- */
 /* Per-request tool resolution                                                 */
 /* -------------------------------------------------------------------------- */
 
@@ -262,7 +305,11 @@ export async function resolvePluginTools(
       if (!allowed.has(namespacedName)) continue;
       // The KEY is what the model sees and what comes back on a tool call, so
       // this is where our naming convention is actually enforced.
-      resolved[namespacedName] = tool;
+      //
+      // Every tool goes through applyToolPolicy — there is no path that puts a
+      // tool in front of the model without one, which is the property that
+      // makes the gate a gate rather than a habit.
+      resolved[namespacedName] = applyToolPolicy(namespacedName, tool);
     }
   }
   return resolved;
