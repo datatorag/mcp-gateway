@@ -31,7 +31,7 @@ vi.mock("@datatorag-mcp/config", () => ({
 }));
 
 import { createDatatoragAgent, DATATORAG_AGENT_ID } from "../src/mastra/agents/datatorag";
-import { deriveThreadId } from "../src/mastra/run-ownership";
+import { deriveThreadId } from "../src/gateway/playground/run-ownership";
 
 const DB_URL = process.env.PLAYGROUND_PERSISTENCE_URL;
 

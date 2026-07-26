@@ -1,4 +1,5 @@
-import { createHash, createHmac, randomBytes, timingSafeEqual } from "node:crypto";
+import { createHash, createHmac, randomBytes } from "node:crypto";
+import { safeStringEqual } from "@datatorag-mcp/auth";
 
 /**
  * Who is allowed to approve a suspended tool call.
@@ -11,7 +12,7 @@ import { createHash, createHmac, randomBytes, timingSafeEqual } from "node:crypt
  * was reproduced end to end against a real MCP server, and the victim's write
  * really executed on it, which is the only evidence that counts. That
  * reproduction is kept, next to the proof that the route's gate defeats it, in
- * `../app/api/playground/chat/route.ownership.test.ts`.
+ * `../../app/api/playground/chat/route.ownership.test.ts`.
  *
  * It is worse than "an endpoint we must remember to check", because the run id
  * is not something we hand out deliberately: it is embedded in the approval id
@@ -79,11 +80,10 @@ export function mintRunId(userId: string): string {
 export function ownsRunId(userId: string, runId: string): boolean {
   const at = runId.indexOf(SEPARATOR);
   if (at === -1) return false;
-  const presented = Buffer.from(runId.slice(at + SEPARATOR.length));
-  const expected = Buffer.from(tag(userId, runId.slice(0, at)));
-  // timingSafeEqual throws on a length mismatch, so that has to be checked
-  // first — and it is not a leak: the tag length is fixed and public.
-  return presented.length === expected.length && timingSafeEqual(presented, expected);
+  // The shared comparator, same as the OAuth paths: it hashes both sides to a
+  // fixed length first, so it never throws on a mismatched length and needs no
+  // length pre-check of its own.
+  return safeStringEqual(runId.slice(at + SEPARATOR.length), tag(userId, runId.slice(0, at)));
 }
 
 /** One approval decision found in a client-supplied messages array. */

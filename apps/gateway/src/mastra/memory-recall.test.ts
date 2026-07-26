@@ -9,7 +9,7 @@ vi.mock("@datatorag-mcp/config", () => ({
 }));
 
 import { createDatatoragAgent, DATATORAG_AGENT_ID, MEMORY_LAST_MESSAGES } from "./agents/datatorag";
-import { deriveThreadId } from "./run-ownership";
+import { deriveThreadId } from "@/gateway/playground/run-ownership";
 
 /**
  * Where the conversation in the prompt comes from, measured on the bytes that

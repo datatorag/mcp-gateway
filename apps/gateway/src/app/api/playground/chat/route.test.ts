@@ -68,7 +68,7 @@ vi.mock("@mastra/ai-sdk", () => ({
   handleChatStream: (...args: unknown[]) => handleChatStream(...args),
 }));
 
-import { mintRunId } from "@/mastra/run-ownership";
+import { mintRunId } from "@/gateway/playground/run-ownership";
 import { USER_ID_CONTEXT_KEY, userTokenContextKey } from "@/mastra/mcp/client";
 import { POST } from "./route";
 

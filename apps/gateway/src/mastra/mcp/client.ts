@@ -6,7 +6,11 @@ import { eq } from "drizzle-orm";
 import type { Database } from "@datatorag-mcp/db";
 import { mcpServers } from "@datatorag-mcp/db";
 import { NAMESPACE_SEPARATOR } from "@/gateway/plugin-manager";
-import { buildPluginServerUrl, listUserToolRows } from "@/gateway/user-tools";
+import {
+  buildPluginServerUrl,
+  listUserToolRows,
+  type PluginServerRow,
+} from "@/gateway/user-tools";
 import { PLUGIN_SERVICE_MAP, getServiceToken } from "@/gateway/service-token";
 import { classifyWrite, stripAccountArg } from "@/gateway/playground/tools";
 import { capToolOutput } from "@/gateway/playground/cap";
@@ -105,49 +109,9 @@ export function toNamespacedName(serverSlug: string, toolName: string): string {
   return `${serverSlug}${NAMESPACE_SEPARATOR}${toolName}`;
 }
 
-/** Inverse of {@link toNamespacedName}; null for anything not namespaced.
- * Splits on the FIRST separator, so underscores in the tool name survive. */
-export function parseNamespacedToolName(
-  namespacedName: string
-): { serverSlug: string; toolName: string } | null {
-  const at = namespacedName.indexOf(NAMESPACE_SEPARATOR);
-  if (at === -1) return null;
-  return {
-    serverSlug: namespacedName.slice(0, at),
-    toolName: namespacedName.slice(at + NAMESPACE_SEPARATOR.length),
-  };
-}
-
-/** The id the framework stamps on a tool it sourced from an MCP server:
- * `<server>_<tool>`. Exposed so the mapping below is stated once and testable,
- * not open-coded wherever someone happens to meet one of these ids. */
-export function toFrameworkToolId(serverSlug: string, toolName: string): string {
-  return `${serverSlug}_${toolName}`;
-}
-
-/** Framework tool id → our namespaced name, given the server it came from.
- *
- * The server has to be supplied: it CANNOT be recovered from the id alone, for
- * the ambiguity reason above. Returns null if the id does not belong to that
- * server. */
-export function fromFrameworkToolId(
-  serverSlug: string,
-  frameworkToolId: string
-): string | null {
-  const prefix = `${serverSlug}_`;
-  if (!frameworkToolId.startsWith(prefix)) return null;
-  return toNamespacedName(serverSlug, frameworkToolId.slice(prefix.length));
-}
-
 /* -------------------------------------------------------------------------- */
 /* The shared client                                                           */
 /* -------------------------------------------------------------------------- */
-
-export type PluginServerRow = {
-  slug: string;
-  containerPort: number | null;
-  githubRepoUrl: string | null;
-};
 
 /** Active plugin servers, with whatever address each is currently reachable at.
  * Ports are assigned by the plugin supervisor and recorded on the row; we read
@@ -295,10 +259,8 @@ export function applyToolPolicy(
  *
  * Returns the same object it was given; the marker is the only change. */
 export function applyPromptCacheBreakpoint(tools: ToolsInput): ToolsInput {
-  const names = Object.keys(tools);
-  const lastName = names[names.length - 1];
-  if (lastName === undefined) return tools;
-  const lastTool = tools[lastName] as { providerOptions?: unknown } | undefined;
+  const values = Object.values(tools) as Array<{ providerOptions?: unknown }>;
+  const lastTool = values[values.length - 1];
   if (lastTool === undefined) return tools;
   lastTool.providerOptions = { ...EPHEMERAL_CACHE_OPTIONS };
   return tools;

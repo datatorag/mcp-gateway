@@ -9,10 +9,7 @@ import { shortToolName } from "@/app/dashboard/playground-presentation";
 import {
   buildPluginRequestContext,
   createPluginMCPClient,
-  fromFrameworkToolId,
-  parseNamespacedToolName,
   resolvePluginTools,
-  toFrameworkToolId,
   toNamespacedName,
   USER_TOKEN_HEADER,
 } from "./client";
@@ -138,29 +135,12 @@ function track(fn: () => Promise<void>) {
 /* -------------------------------------------------------------------------- */
 
 describe("plugin tool naming", () => {
-  it("round-trips a tool name that contains underscores", () => {
+  it("keeps a tool name that contains underscores intact and splittable", () => {
     const namespaced = toNamespacedName("gws-mcp", "slides_batch_update");
     expect(namespaced).toBe("gws-mcp__slides_batch_update");
 
-    const parsed = parseNamespacedToolName(namespaced);
-    expect(parsed).toEqual({ serverSlug: "gws-mcp", toolName: "slides_batch_update" });
-
     // The UI trims the same name for display; it must still find the tool.
     expect(shortToolName(namespaced)).toBe("slides_batch_update");
-  });
-
-  it("recovers our name from the framework's single-underscore id", () => {
-    const frameworkId = toFrameworkToolId("gws-mcp", "gmail_send");
-    expect(frameworkId).toBe("gws-mcp_gmail_send");
-
-    // The framework's id is ambiguous on its own — this is exactly why the
-    // server has to be passed in and why we do not adopt that convention.
-    expect(fromFrameworkToolId("gws-mcp", frameworkId)).toBe("gws-mcp__gmail_send");
-    expect(fromFrameworkToolId("atlassian-mcp", frameworkId)).toBeNull();
-  });
-
-  it("refuses to parse a name that was never namespaced", () => {
-    expect(parseNamespacedToolName("gmail_send")).toBeNull();
   });
 });
 

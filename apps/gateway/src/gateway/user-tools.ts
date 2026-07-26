@@ -105,14 +105,19 @@ export async function listUserToolRows(
   return result;
 }
 
-/** URL of a plugin's MCP endpoint: locally-run plugins (githubRepoUrl set)
- * listen on localhost; containerized ones on their compose-network hostname,
- * unless DOCKER_HOST_OVERRIDE redirects (dev-against-remote-plugins). */
-export function buildPluginServerUrl(server: {
+/** The registry row fields that say where a plugin server is reachable. Stated
+ * once here, next to the function that turns it into a URL, so a consumer that
+ * lists servers and a consumer that addresses one cannot drift apart. */
+export type PluginServerRow = {
   slug: string;
   containerPort: number | null;
   githubRepoUrl: string | null;
-}): string {
+};
+
+/** URL of a plugin's MCP endpoint: locally-run plugins (githubRepoUrl set)
+ * listen on localhost; containerized ones on their compose-network hostname,
+ * unless DOCKER_HOST_OVERRIDE redirects (dev-against-remote-plugins). */
+export function buildPluginServerUrl(server: PluginServerRow): string {
   if (server.githubRepoUrl) {
     return `http://localhost:${server.containerPort}/mcp`;
   }

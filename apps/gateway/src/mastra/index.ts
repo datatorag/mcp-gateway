@@ -1,5 +1,6 @@
 import { Mastra } from "@mastra/core/mastra";
 import { PostgresStore } from "@mastra/pg";
+import { getEnv } from "@datatorag-mcp/config";
 import { createDatatoragAgent, DATATORAG_AGENT_ID } from "./agents/datatorag";
 import { resolveUserPluginTools } from "./mcp/client";
 
@@ -16,14 +17,19 @@ import { resolveUserPluginTools } from "./mcp/client";
  *
  * Constructed lazily and memoised. Doing it at module scope would mean every
  * importer — including a production build with a placeholder connection
- * string — pays for a validated connection config it may never use. */
+ * string — pays for a validated connection config it may never use.
+ *
+ * The connection string comes from the validated config rather than straight
+ * off `process.env`: the schema requires a URL, so a missing or malformed one
+ * fails as a configuration error instead of arriving here as an empty string
+ * that the store then rejects as a connection problem. */
 let store: PostgresStore | undefined;
 
 function getStore(): PostgresStore {
   if (!store) {
     store = new PostgresStore({
       id: "playground-agent-store",
-      connectionString: process.env.DATABASE_URL ?? "",
+      connectionString: getEnv().DATABASE_URL,
     });
   }
   return store;

@@ -12,8 +12,9 @@ import {
 } from "@/mastra/mcp/client";
 import {
   deriveThreadId, findApprovalTargets, mintRunId, ownsRunId,
-} from "@/mastra/run-ownership";
+} from "@/gateway/playground/run-ownership";
 import { claimPlaygroundMessage, refundPlaygroundMessage } from "@/gateway/playground/cap";
+import { RUNS_CAP_HEADER, RUNS_REMAINING_HEADER } from "@/gateway/playground/quota-headers";
 import {
   trackPlaygroundMessage, trackPlaygroundToolCall, trackPlaygroundCapHit, trackPlaygroundConfirm,
 } from "@/gateway/track";
@@ -52,16 +53,6 @@ import { logAndGenericError } from "@/lib/errors";
  * removes the native approval part the client binds to. When a release ships a
  * v7 emitter, this one string flips. */
 const MASTRA_STREAM_VERSION = "v6" as const;
-
-/** Where the turn quota is told to the client.
- *
- * Response headers, and specifically NOT a stream part or the `finish`
- * payload. A turn that suspends on an approval ends at the approval request
- * and emits no `finish` at all, so anything carried there would go missing on
- * exactly the turns where a user is most likely to run out. Headers are
- * written before the first chunk, on every turn, suspended or not. */
-const RUNS_REMAINING_HEADER = "X-Playground-Runs-Remaining";
-const RUNS_CAP_HEADER = "X-Playground-Runs-Cap";
 
 /** Chunk types that are protocol bookkeeping rather than assistant output.
  *

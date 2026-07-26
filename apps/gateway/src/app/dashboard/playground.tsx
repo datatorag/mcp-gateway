@@ -29,6 +29,7 @@ import {
 } from "@/components/ai-elements/prompt-input";
 import { Suggestion, Suggestions } from "@/components/ai-elements/suggestion";
 import { Button } from "@/components/ui/button";
+import { RUNS_CAP_HEADER, RUNS_REMAINING_HEADER } from "@/gateway/playground/quota-headers";
 import {
   errorBubbleText,
   GENERIC_ERROR,
@@ -43,17 +44,6 @@ import {
  * the composer instead, so rendering this sentinel would put an internal
  * string in front of the user. */
 const CAP_EXCEEDED = "cap_exceeded";
-
-/** Headers the chat route puts on a successful streaming turn so the quota
- * notice does not need a place in the conversation.
- *
- * A response header rather than the stream's `finish` payload, deliberately: a
- * turn that suspends on an approval ends WITHOUT a `finish` part — it stops at
- * the approval request — so anything carried there would silently never arrive
- * on exactly the turns that matter most. Headers are written before the first
- * chunk and are unconditional. */
-const RUNS_REMAINING_HEADER = "x-playground-runs-remaining";
-const RUNS_CAP_HEADER = "x-playground-runs-cap";
 
 export interface PlaygroundHandle {
   /** Seed the input with `prompt` and submit it immediately. Used by the
@@ -181,7 +171,8 @@ export const Playground = forwardRef<PlaygroundHandle, PlaygroundProps>(
       // re-billed on every turn. Worse, a thread whose last turn stopped on an
       // approval would come back with a pending decision that is no longer
       // answerable: the suspended run is consumed on first use, and approval
-      // ids do not survive a restart by design (see mastra/run-ownership.ts).
+      // ids do not survive a restart by design (see
+      // gateway/playground/run-ownership.ts).
       // Restoring a conversation means restoring its messages and handling
       // that state, together, in one change.
       // Recording a decision has to POST it, or the suspended turn never
