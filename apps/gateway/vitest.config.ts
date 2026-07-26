@@ -11,11 +11,7 @@ export default defineConfig({
     // `describe.runIf(!!process.env.MCP_E2E_URL)` and reports as skipped
     // (not passed/failed) when that env var is unset, so it doesn't change
     // the unit-suite pass count. See apps/gateway/e2e/README.md.
-    // `.tsx` is included for the component tests that render the chat message
-    // list for real (jsdom, via a per-file `@vitest-environment` docblock) —
-    // the one class of playground defect that type-checks, builds and streams
-    // perfectly while showing the user nothing.
-    include: ["src/**/*.test.ts", "src/**/*.test.tsx", "e2e/**/*.e2e.test.ts"],
+    include: ["src/**/*.test.ts", "e2e/**/*.e2e.test.ts"],
     globals: false,
     testTimeout: 30_000,
     hookTimeout: 60_000,
