@@ -9,6 +9,8 @@ import { NAMESPACE_SEPARATOR } from "@/gateway/plugin-manager";
 import { buildPluginServerUrl, listUserToolRows } from "@/gateway/user-tools";
 import { PLUGIN_SERVICE_MAP, getServiceToken } from "@/gateway/service-token";
 import { classifyWrite, stripAccountArg } from "@/gateway/playground/tools";
+import { capToolOutput } from "@/gateway/playground/cap";
+import { EPHEMERAL_CACHE_OPTIONS } from "@/mastra/agents/datatorag";
 import { getDb } from "@/lib/db";
 
 /**
@@ -243,6 +245,13 @@ export function resetPluginMCPClient(): void {
  * 2. THE ACCOUNT STRIP. See `stripAccountArg` — the playground has always
  *    acted as the user's default account, and it still does.
  *
+ * 3. THE OUTPUT CAP. See `capToolOutput` — a tool result is re-sent on every
+ *    later step of the turn, so an unbounded one is paid for repeatedly.
+ *
+ * All three wrap the tool the client handed us rather than the transport, so
+ * they hold for every call the model can make, including one made on the
+ * resume leg after an approval.
+ *
  * Mutating rather than copying is safe and deliberate: the client builds these
  * tool objects fresh on every listing, so the object we are handed belongs to
  * this request. Copying a class instance would risk dropping whatever the
@@ -256,11 +265,37 @@ export function applyToolPolicy(
 
   const execute = tool.execute;
   if (execute) {
-    tool.execute = (input, context) =>
-      execute(stripAccountArg(input), context);
+    tool.execute = async (input, context) =>
+      capToolOutput(await execute(stripAccountArg(input), context));
   }
 
   return tool;
+}
+
+/** Attaches the tool-schema half of the prompt-cache pair to a resolved set.
+ *
+ * The breakpoint goes on the LAST tool because a cache prefix is cumulative:
+ * marking the final schema makes the whole tool block a cache read on every
+ * later step, where marking the first would cover only that one. Tool schemas
+ * are the largest invariant part of the request — ~11k tokens for a user with
+ * Workspace connected — and they are re-sent on every step of a multi-step
+ * turn, which is the normal shape of a playground turn.
+ *
+ * "Last" is well defined: the set is a plain object built in a single pass
+ * below, so its key order is its insertion order, and that is the order the
+ * provider serializes. The order has to be STABLE across the steps of a turn
+ * for the cache to hit at all — it is, because the set is resolved once per
+ * request and reused for every step of that request.
+ *
+ * Returns the same object it was given; the marker is the only change. */
+export function applyPromptCacheBreakpoint(tools: ToolsInput): ToolsInput {
+  const names = Object.keys(tools);
+  const lastName = names[names.length - 1];
+  if (lastName === undefined) return tools;
+  const lastTool = tools[lastName] as { providerOptions?: unknown } | undefined;
+  if (lastTool === undefined) return tools;
+  lastTool.providerOptions = { ...EPHEMERAL_CACHE_OPTIONS };
+  return tools;
 }
 
 /* -------------------------------------------------------------------------- */
@@ -312,7 +347,7 @@ export async function resolvePluginTools(
       resolved[namespacedName] = applyToolPolicy(namespacedName, tool);
     }
   }
-  return resolved;
+  return applyPromptCacheBreakpoint(resolved);
 }
 
 /** The resolver the agent is built with: same as {@link resolvePluginTools},

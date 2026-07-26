@@ -4,6 +4,11 @@ import type { ToolsInput } from "@mastra/core/agent";
 import type { RequestContext } from "@mastra/core/request-context";
 import type { MastraCompositeStore } from "@mastra/core/storage";
 import { Memory } from "@mastra/memory";
+// Mastra carries its own copy of the AI SDK message types, and they are not
+// structurally identical to the app's `ai` package types (the provider-options
+// value type differs). The agent is what consumes this, so the agent's own
+// spelling is the correct one to build against.
+import type { CoreSystemMessage } from "@mastra/core/llm";
 import { getEnv } from "@datatorag-mcp/config";
 
 /** Stable id for the playground agent. The route and any client that names an
@@ -17,11 +22,9 @@ export const DATATORAG_AGENT_ID = "datatorag-playground";
  * swaps the agent runtime would make any behaviour regression impossible to
  * attribute. Change the runtime first, then the prompt, in separate commits.
  *
- * Passed as a plain string. The engine being replaced hands the provider the
- * same text as a system MESSAGE carrying an ephemeral cache breakpoint, which
- * is what stops the prompt and the tool schemas being re-billed at full rate on
- * every step. Re-establishing that breakpoint belongs with the change that puts
- * real traffic through this agent, not here — nothing calls this yet. */
+ * The text only. What actually reaches the provider is {@link SYSTEM_MESSAGE}
+ * below, which wraps this in the message form that can carry a cache
+ * breakpoint. */
 export const SYSTEM_PROMPT =
   "You are the DataToRAG playground assistant, demonstrating what an AI agent can do " +
   "with the user's connected accounts (Google Workspace, Atlassian) through the DataToRAG MCP gateway. " +
@@ -38,6 +41,44 @@ export const SYSTEM_PROMPT =
   "The user separately approves each write before it runs, so propose the action and call the " +
   "tool normally — do not ask for confirmation in text. " +
   "If the user hasn't connected the needed service, tell them to connect it on the dashboard.";
+
+/** Ephemeral prompt-cache breakpoint (Anthropic — the only provider wired up).
+ *
+ * A breakpoint is a marker on a specific BLOCK of the request, not a setting on
+ * the call. There are two blocks worth marking and they are both invariant
+ * across every step of a turn: the system prompt, and the tool schemas (~11k
+ * tokens once a user has Workspace connected). Without the markers, both are
+ * re-sent and re-billed at full rate on every single step of every multi-step
+ * turn — which is the common case here, since the whole point of the playground
+ * is tool use.
+ *
+ * Exported because the other half of the pair lives on the tool set (see
+ * `../mcp/client.ts`); the policy is one decision and is stated once.
+ *
+ * Verified by capturing the serialized request body through a stub `fetch`
+ * rather than read off the types: with this attached, the outgoing body carries
+ * `system[0].cache_control = { type: "ephemeral" }` and
+ * `tools[last].cache_control = { type: "ephemeral" }` with no marker on the
+ * tools before it. Without it, neither field is present anywhere in the body.
+ * See `prompt-cache.test.ts`, which asserts exactly that on a real request
+ * body — the only place the answer is actually visible.
+ *
+ * An unrecognised provider ignores this and runs UNCACHED rather than failing,
+ * so adding a second provider means adding its own key here. */
+export const EPHEMERAL_CACHE_OPTIONS = {
+  anthropic: { cacheControl: { type: "ephemeral" } },
+} as const satisfies Record<string, Record<string, unknown>>;
+
+/** The system prompt in the form that can carry a cache breakpoint.
+ *
+ * A bare string cannot: there is nowhere on it to hang `providerOptions`, so
+ * the marker is dropped on the way to the provider and the prompt is re-billed
+ * every step. Do NOT simplify this back to `instructions: SYSTEM_PROMPT`. */
+export const SYSTEM_MESSAGE: CoreSystemMessage = {
+  role: "system",
+  content: SYSTEM_PROMPT,
+  providerOptions: EPHEMERAL_CACHE_OPTIONS,
+};
 
 /** How many prior messages of a thread are replayed into the prompt. Set
  * explicitly rather than inherited from the framework default so the recall
@@ -102,7 +143,9 @@ export function createDatatoragAgent(
     name: "DataToRAG Playground",
     description:
       "Demonstrates what an agent can do with a user's connected accounts through the gateway.",
-    instructions: SYSTEM_PROMPT,
+    // The MESSAGE, not the string — see SYSTEM_MESSAGE. This is what carries
+    // the prompt-cache breakpoint.
+    instructions: SYSTEM_MESSAGE,
     model: () => resolveModel(),
     // Tools are resolved per request, from the request context, for the same
     // reason the model is: a static list would be wrong for everyone. Two users
