@@ -45,20 +45,30 @@ export function capToolOutput(output: unknown): unknown {
 /**
  * Atomically claim one playground message. Same claim pattern as
  * trackFirstToolCall (track.ts): a guarded UPDATE ... RETURNING, no
- * SELECT-then-UPDATE race. Returns true iff the row was under cap and the
- * increment landed.
+ * SELECT-then-UPDATE race.
+ *
+ * Returns the number of runs LEFT after this claim, or `null` when the row was
+ * already at cap and nothing was claimed. The count is the value the guarded
+ * UPDATE returned, so it is the post-increment truth rather than a second,
+ * racy read — which is the whole reason it is surfaced instead of a bare
+ * boolean: the caller can tell the user the turn they just spent was their
+ * last one, on that turn's own response, rather than leaving them to discover
+ * it by being refused the next time.
  */
 export async function claimPlaygroundMessage(
   db: Database,
   userId: string,
   cap: number
-): Promise<boolean> {
+): Promise<number | null> {
   const rows = await db
     .update(users)
     .set({ playgroundMessagesUsed: sql`${users.playgroundMessagesUsed} + 1` })
     .where(and(eq(users.id, userId), lt(users.playgroundMessagesUsed, cap)))
     .returning({ used: users.playgroundMessagesUsed });
-  return rows.length > 0;
+  const used = rows[0]?.used;
+  if (used === undefined) return null;
+  // Never negative: the guard only lets the increment land from below the cap.
+  return Math.max(0, cap - used);
 }
 
 /**

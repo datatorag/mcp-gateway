@@ -158,7 +158,7 @@ beforeEach(() => {
     PLAYGROUND_MODEL: "claude-haiku-4-5",
     PLAYGROUND_MESSAGE_CAP: 20,
   });
-  claimPlaygroundMessage.mockResolvedValue(true);
+  claimPlaygroundMessage.mockResolvedValue(19);
   refundPlaygroundMessage.mockResolvedValue(undefined);
   handleChatStream.mockResolvedValue(chunkStream([{ type: "start" }, { type: "finish" }]));
 });
@@ -198,7 +198,7 @@ describe("POST /api/playground/chat — guards", () => {
 
 describe("POST /api/playground/chat — the turn cap", () => {
   it("429s with cap_exceeded when the claim fails, and records the hit", async () => {
-    claimPlaygroundMessage.mockResolvedValue(false);
+    claimPlaygroundMessage.mockResolvedValue(null);
     const response = await POST(post({ messages: USER_TURN }));
 
     expect(response.status).toBe(429);
@@ -212,6 +212,42 @@ describe("POST /api/playground/chat — the turn cap", () => {
 
     expect(claimPlaygroundMessage).toHaveBeenCalledWith({}, USER, 20);
     expect(trackPlaygroundMessage).toHaveBeenCalledWith({}, USER);
+  });
+
+  it("reports the runs left on the response of the turn that spent one", async () => {
+    claimPlaygroundMessage.mockResolvedValue(3);
+    const response = await POST(post({ messages: USER_TURN }));
+
+    expect(response.headers.get("x-playground-runs-remaining")).toBe("3");
+    expect(response.headers.get("x-playground-runs-cap")).toBe("20");
+    await drain(response);
+  });
+
+  it("reports the quota even when the turn suspends and never emits `finish`", async () => {
+    // The reason this is a HEADER and not part of the finish payload: a turn
+    // gated on a write stops at the approval request, so a stream that legally
+    // never finishes must still be able to say the user is out of runs.
+    claimPlaygroundMessage.mockResolvedValue(0);
+    handleChatStream.mockResolvedValue(
+      chunkStream([
+        { type: "start" },
+        { type: "tool-input-available", toolCallId: "call-1", toolName: "gws-mcp__docs_create", input: {} },
+        { type: "tool-approval-request", toolCallId: "call-1", approvalId: "run::call-1" },
+      ])
+    );
+    const response = await POST(post({ messages: USER_TURN }));
+
+    expect(response.headers.get("x-playground-runs-remaining")).toBe("0");
+    const chunks = await drain(response);
+    expect(chunks.some((c) => c.type === "finish")).toBe(false);
+  });
+
+  it("reports no quota on an approval decision, which spends nothing", async () => {
+    const response = await POST(post({ messages: approvalTurn(USER) }));
+
+    expect(response.headers.get("x-playground-runs-remaining")).toBeNull();
+    expect(response.headers.get("x-playground-runs-cap")).toBeNull();
+    await drain(response);
   });
 
   it("claims nothing on an approval decision — it continues a paid turn", async () => {

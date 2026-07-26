@@ -53,6 +53,16 @@ import { logAndGenericError } from "@/lib/errors";
  * v7 emitter, this one string flips. */
 const MASTRA_STREAM_VERSION = "v6" as const;
 
+/** Where the turn quota is told to the client.
+ *
+ * Response headers, and specifically NOT a stream part or the `finish`
+ * payload. A turn that suspends on an approval ends at the approval request
+ * and emits no `finish` at all, so anything carried there would go missing on
+ * exactly the turns where a user is most likely to run out. Headers are
+ * written before the first chunk, on every turn, suspended or not. */
+const RUNS_REMAINING_HEADER = "X-Playground-Runs-Remaining";
+const RUNS_CAP_HEADER = "X-Playground-Runs-Cap";
+
 /** Chunk types that are protocol bookkeeping rather than assistant output.
  *
  * Feeds one decision: whether a turn that failed had already produced anything
@@ -233,6 +243,11 @@ export const POST = withRoute(async (userId, request) => {
     trigger !== "regenerate-message" &&
     (messages[messages.length - 1] as { role?: unknown })?.role === "assistant";
 
+  // Quota headers ride on the streaming response; an approval leg claims
+  // nothing and so reports nothing, leaving the client's notion of the quota
+  // untouched rather than resetting it.
+  const quotaHeaders: Record<string, string> = {};
+
   if (isApprovalLeg) {
     void trackPlaygroundConfirm(
       db,
@@ -242,10 +257,13 @@ export const POST = withRoute(async (userId, request) => {
     );
   } else {
     const cap = env.PLAYGROUND_MESSAGE_CAP;
-    if (!(await claimPlaygroundMessage(db, userId, cap))) {
+    const remaining = await claimPlaygroundMessage(db, userId, cap);
+    if (remaining === null) {
       void trackPlaygroundCapHit(db, userId);
       return NextResponse.json({ error: "cap_exceeded", cap }, { status: 429 });
     }
+    quotaHeaders[RUNS_REMAINING_HEADER] = String(remaining);
+    quotaHeaders[RUNS_CAP_HEADER] = String(cap);
     void trackPlaygroundMessage(db, userId);
   }
 
@@ -317,6 +335,7 @@ export const POST = withRoute(async (userId, request) => {
   }
 
   return createUIMessageStreamResponse({
+    headers: quotaHeaders,
     stream: instrumentStream(stream, {
       onDelivered: () => { delivered = true; },
       onToolResult: (toolName) => { void trackPlaygroundToolCall(db, userId, toolName); },

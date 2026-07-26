@@ -14,17 +14,24 @@ describe("claimPlaygroundMessage", () => {
     vi.clearAllMocks();
   });
 
-  it("returns true when the guarded UPDATE claims a row (under cap)", async () => {
+  it("returns the runs left when the guarded UPDATE claims a row (under cap)", async () => {
     returning.mockResolvedValue([{ used: 5 }]);
-    const claimed = await claimPlaygroundMessage(dbMock, "user-1", 20);
-    expect(claimed).toBe(true);
+    const remaining = await claimPlaygroundMessage(dbMock, "user-1", 20);
+    expect(remaining).toBe(15);
     expect(update).toHaveBeenCalledTimes(1);
   });
 
-  it("returns false when the guarded UPDATE claims no row (at cap)", async () => {
+  it("returns 0 — not null — on the claim that spends the last run", async () => {
+    // The difference the header depends on: this turn RAN, and is also the
+    // user's last. Reporting it as a refusal would hide the turn's own output.
+    returning.mockResolvedValue([{ used: 20 }]);
+    expect(await claimPlaygroundMessage(dbMock, "user-1", 20)).toBe(0);
+  });
+
+  it("returns null when the guarded UPDATE claims no row (at cap)", async () => {
     returning.mockResolvedValue([]);
-    const claimed = await claimPlaygroundMessage(dbMock, "user-1", 20);
-    expect(claimed).toBe(false);
+    const remaining = await claimPlaygroundMessage(dbMock, "user-1", 20);
+    expect(remaining).toBeNull();
   });
 });
 
