@@ -1,9 +1,4 @@
-import { createServer, type Server } from "node:http";
-import type { AddressInfo } from "node:net";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { z } from "zod";
-import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import { Mastra } from "@mastra/core/mastra";
 import { InMemoryStore } from "@mastra/core/storage";
 import { handleChatStream } from "@mastra/ai-sdk";
@@ -12,6 +7,7 @@ vi.mock("@datatorag-mcp/config", () => ({
   getEnv: () => ({ ANTHROPIC_API_KEY: "test-key", PLAYGROUND_MODEL: "claude-haiku-4-5" }),
 }));
 
+import { startFakePlugin } from "./test-support/fake-plugin";
 import { buildPluginRequestContext, createPluginMCPClient, resolvePluginTools } from "./mcp/client";
 import { createDatatoragAgent, DATATORAG_AGENT_ID, SYSTEM_PROMPT } from "./agents/datatorag";
 
@@ -65,50 +61,6 @@ function anthropicStreamResponse(): Response {
   return new Response(body, { status: 200, headers: { "content-type": "text/event-stream" } });
 }
 
-/** A real MCP server, so the tools under test are the ones the client actually
- * builds rather than hand-made stand-ins. Whether a framework-built tool object
- * even accepts our marker is half the question. */
-async function startPlugin(toolNames: string[]) {
-  const http: Server = createServer((req, res) => {
-    void (async () => {
-      if (req.method !== "POST") {
-        res.writeHead(405).end();
-        return;
-      }
-      const chunks: Buffer[] = [];
-      for await (const chunk of req) chunks.push(chunk as Buffer);
-      const raw = Buffer.concat(chunks).toString("utf8");
-      const server = new McpServer({ name: "cache-plugin", version: "1.0.0" });
-      for (const name of toolNames) {
-        server.registerTool(
-          name,
-          { description: name, inputSchema: { title: z.string().optional() } },
-          async () => ({ content: [{ type: "text" as const, text: "ok" }] })
-        );
-      }
-      const transport = new StreamableHTTPServerTransport({
-        sessionIdGenerator: undefined,
-        enableJsonResponse: true,
-      });
-      res.on("close", () => {
-        void transport.close();
-        void server.close();
-      });
-      await server.connect(transport);
-      await transport.handleRequest(req, res, raw.length > 0 ? JSON.parse(raw) : undefined);
-    })();
-  });
-  await new Promise<void>((resolve) => http.listen(0, "127.0.0.1", resolve));
-  return {
-    port: (http.address() as AddressInfo).port,
-    close: () =>
-      new Promise<void>((resolve) => {
-        http.closeAllConnections?.();
-        http.close(() => resolve());
-      }),
-  };
-}
-
 /** Reads a stream to completion. Via a reader rather than `for await`, because
  * the stream type is only async-iterable at runtime, not in its declaration. */
 async function drainStream(stream: unknown): Promise<void> {
@@ -142,7 +94,7 @@ afterEach(async () => {
 
 /** One real turn through the real agent, returning the body it sent. */
 async function captureTurn(toolNames: string[]): Promise<CapturedBody> {
-  const plugin = await startPlugin(toolNames);
+  const plugin = await startFakePlugin(toolNames);
   cleanups.push(plugin.close);
 
   const client = createPluginMCPClient(
@@ -153,7 +105,10 @@ async function captureTurn(toolNames: string[]): Promise<CapturedBody> {
         githubRepoUrl: "https://github.com/datatorag/gws-mcp",
       },
     ],
-    { id: `cache-${Date.now()}-${Math.random()}` }
+    {
+      id: `cache-${Date.now()}-${Math.random()}`,
+      tokensByServer: { "gws-mcp": "cache-token" },
+    }
   );
   cleanups.push(() => client.disconnect());
 

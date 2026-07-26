@@ -1,135 +1,61 @@
-import { createServer, type Server } from "node:http";
-import type { AddressInfo } from "node:net";
 import { afterEach, describe, expect, it } from "vitest";
-import { z } from "zod";
-import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
-import type { MCPClient } from "@mastra/mcp";
 import { shortToolName } from "@/app/dashboard/playground-presentation";
+import { startFakePlugin, fakePluginServerRow } from "@/mastra/test-support/fake-plugin";
 import {
   buildPluginRequestContext,
-  createPluginMCPClient,
+  getPluginMCPClient,
+  readPluginTokens,
+  resetPluginClientCache,
   resolvePluginTools,
   toNamespacedName,
-  USER_TOKEN_HEADER,
 } from "./client";
 
 /**
- * Two things are worth testing here and they are the two things that would be
- * silently wrong in production:
+ * Whose credentials the plugin servers actually act with.
  *
- * 1. Whose credentials go out on the wire. The claim is that one shared client
- *    can serve many users because identity travels per request. That is only
- *    true if the header actually arrives. So the assertions below are made on
- *    what a REAL MCP SERVER RECEIVED, not on what the client thinks it sent —
- *    a mocked fetch would happily confirm a broken design.
- * 2. That tool names survive the trip. Every tool we serve has underscores in
- *    its own name, and the framework joins server and tool with a single
- *    underscore, so its names cannot be taken apart again. Ours can, and the
- *    UI depends on that.
+ * The assertions below are made on WHAT THE SERVER RECORDED — which session it
+ * opened, whose token it bound to that session, and which identity it attributed
+ * each call to. Never on what our client believes it sent. That distinction is
+ * not pedantry: the defect this file exists to catch passed a test suite that
+ * asserted on the outgoing header, because the fake server on the other end read
+ * that header per call and the real one does not. It reads it once, when the
+ * session is created, and ignores it forever after.
+ *
+ * See `test-support/fake-plugin.ts` — the fake now binds identity the same
+ * hostile way, which is what gives these assertions teeth.
  */
-
-/* -------------------------------------------------------------------------- */
-/* A real MCP server over HTTP, which records what it was sent                 */
-/* -------------------------------------------------------------------------- */
-
-type ReceivedCall = {
-  tool: string;
-  token: string | undefined;
-  args: Record<string, unknown>;
-};
-
-type FakePlugin = {
-  url: string;
-  port: number;
-  calls: ReceivedCall[];
-  close: () => Promise<void>;
-};
-
-async function startFakePlugin(toolNames: string[]): Promise<FakePlugin> {
-  const calls: ReceivedCall[] = [];
-
-  const http: Server = createServer((req, res) => {
-    void (async () => {
-      if (req.method !== "POST") {
-        // No SSE fallback needed; the client only needs the POST path.
-        res.writeHead(405).end();
-        return;
-      }
-      const chunks: Buffer[] = [];
-      for await (const chunk of req) chunks.push(chunk as Buffer);
-      const raw = Buffer.concat(chunks).toString("utf8");
-      const body = raw.length > 0 ? JSON.parse(raw) : undefined;
-
-      // The token is read off THIS request, and the tool handler below closes
-      // over it, so a recorded call can only ever report the header that
-      // actually arrived with it.
-      const header = req.headers[USER_TOKEN_HEADER.toLowerCase()];
-      const token = Array.isArray(header) ? header[0] : header;
-
-      const server = new McpServer({ name: "fake-plugin", version: "1.0.0" });
-      for (const toolName of toolNames) {
-        server.registerTool(
-          toolName,
-          {
-            description: `fake ${toolName}`,
-            inputSchema: { note: z.string().optional() },
-          },
-          async (args) => {
-            calls.push({ tool: toolName, token, args: args as Record<string, unknown> });
-            return { content: [{ type: "text" as const, text: `ran ${toolName}` }] };
-          }
-        );
-      }
-
-      // Stateless: a server per request, so nothing is shared between users
-      // on the server side either.
-      const transport = new StreamableHTTPServerTransport({
-        sessionIdGenerator: undefined,
-        enableJsonResponse: true,
-      });
-      res.on("close", () => {
-        void transport.close();
-        void server.close();
-      });
-      await server.connect(transport);
-      await transport.handleRequest(req, res, body);
-    })();
-  });
-
-  await new Promise<void>((resolve) => http.listen(0, "127.0.0.1", resolve));
-  const port = (http.address() as AddressInfo).port;
-
-  return {
-    port,
-    url: `http://127.0.0.1:${port}/mcp`,
-    calls,
-    close: () =>
-      new Promise<void>((resolve) => {
-        http.closeAllConnections?.();
-        http.close(() => resolve());
-      }),
-  };
-}
-
-/** Server rows shaped the way the plugin registry stores them. `githubRepoUrl`
- * set means "runs on localhost at containerPort", which is what a fake plugin
- * on an ephemeral port is. */
-function serverRow(slug: string, port: number) {
-  return {
-    slug,
-    containerPort: port,
-    githubRepoUrl: `https://github.com/datatorag/${slug}`,
-  };
-}
 
 const cleanups: Array<() => Promise<void>> = [];
 afterEach(async () => {
+  await resetPluginClientCache();
   while (cleanups.length > 0) await cleanups.pop()!();
 });
 
 function track(fn: () => Promise<void>) {
   cleanups.push(fn);
+}
+
+/** The production path, minus the database: resolve one user's tools through
+ * the memoised per-user client, exactly as `resolveUserPluginTools` does. */
+async function toolsFor(opts: {
+  userId: string;
+  servers: ReturnType<typeof fakePluginServerRow>[];
+  tokensByServer: Record<string, string>;
+  allowed: string[];
+}) {
+  const requestContext = buildPluginRequestContext({
+    userId: opts.userId,
+    tokensByServer: opts.tokensByServer,
+  });
+  const client = getPluginMCPClient(opts.servers, {
+    userId: opts.userId,
+    tokensByServer: readPluginTokens(requestContext, opts.servers.map((s) => s.slug)),
+  });
+  const tools = await resolvePluginTools(requestContext, {
+    client,
+    listAllowedToolNames: async () => new Set(opts.allowed),
+  });
+  return { tools, requestContext };
 }
 
 /* -------------------------------------------------------------------------- */
@@ -144,84 +70,205 @@ describe("plugin tool naming", () => {
   });
 });
 
-describe("per-user tool resolution", () => {
-  it("gives two users their own tool sets and sends each user's own token", async () => {
+describe("per-user MCP sessions", () => {
+  it("gives two users their own sessions, and the server attributes each call to its own user", async () => {
     const gws = await startFakePlugin(["gmail_send", "docs_create"]);
     const atlassian = await startFakePlugin(["jira_create_issue"]);
     track(gws.close);
     track(atlassian.close);
 
-    const client: MCPClient = createPluginMCPClient(
-      [serverRow("gws-mcp", gws.port), serverRow("atlassian-mcp", atlassian.port)],
-      { id: `test-${Date.now()}-${Math.random()}` }
-    );
-    track(() => client.disconnect());
+    const servers = [
+      fakePluginServerRow("gws-mcp", gws.port),
+      fakePluginServerRow("atlassian-mcp", atlassian.port),
+    ];
 
-    // Alice has both services connected; Bob only has Google. This is the
-    // shape the shared connected-service policy produces.
-    const allowedByUser: Record<string, Set<string>> = {
-      alice: new Set(["gws-mcp__gmail_send", "gws-mcp__docs_create", "atlassian-mcp__jira_create_issue"]),
-      bob: new Set(["gws-mcp__gmail_send"]),
-    };
-    const deps = {
-      client,
-      listAllowedToolNames: async (userId: string) => allowedByUser[userId] ?? new Set<string>(),
-    };
-
-    const aliceContext = buildPluginRequestContext({
+    // Alice has both services connected; Bob only Google. The shape the shared
+    // connected-service policy produces.
+    const alice = await toolsFor({
       userId: "alice",
-      tokensByServer: { "gws-mcp": "alice-google-token", "atlassian-mcp": "alice-atlassian-token" },
+      servers,
+      tokensByServer: {
+        "gws-mcp": "alice-google-token",
+        "atlassian-mcp": "alice-atlassian-token",
+      },
+      allowed: [
+        "gws-mcp__gmail_send",
+        "gws-mcp__docs_create",
+        "atlassian-mcp__jira_create_issue",
+      ],
     });
-    const bobContext = buildPluginRequestContext({
+    const bob = await toolsFor({
       userId: "bob",
+      servers,
       tokensByServer: { "gws-mcp": "bob-google-token" },
+      allowed: ["gws-mcp__gmail_send"],
     });
 
-    const aliceTools = await resolvePluginTools(aliceContext, deps);
-    const bobTools = await resolvePluginTools(bobContext, deps);
-
-    expect(Object.keys(aliceTools).sort()).toEqual([
+    expect(Object.keys(alice.tools).sort()).toEqual([
       "atlassian-mcp__jira_create_issue",
       "gws-mcp__docs_create",
       "gws-mcp__gmail_send",
     ]);
-    expect(Object.keys(bobTools)).toEqual(["gws-mcp__gmail_send"]);
+    expect(Object.keys(bob.tools)).toEqual(["gws-mcp__gmail_send"]);
 
-    // Interleaved on purpose: if the token were latched onto the shared
-    // connection instead of the request, the second call would carry the
-    // first caller's credential.
-    await aliceTools["gws-mcp__gmail_send"]!.execute!({ note: "a" }, { requestContext: aliceContext });
-    await bobTools["gws-mcp__gmail_send"]!.execute!({ note: "b" }, { requestContext: bobContext });
-    await aliceTools["atlassian-mcp__jira_create_issue"]!.execute!(
+    // Interleaved on purpose. Two users are live in one process at the same
+    // time, which is the only arrangement in which the failure is visible.
+    await alice.tools["gws-mcp__gmail_send"]!.execute!(
+      { note: "a" },
+      { requestContext: alice.requestContext }
+    );
+    await bob.tools["gws-mcp__gmail_send"]!.execute!(
+      { note: "b" },
+      { requestContext: bob.requestContext }
+    );
+    await alice.tools["atlassian-mcp__jira_create_issue"]!.execute!(
       { note: "c" },
-      { requestContext: aliceContext }
+      { requestContext: alice.requestContext }
     );
 
-    expect(gws.calls).toEqual([
+    // THE REGRESSION. `token` here is the token the SESSION was bound to at
+    // initialize, which is the only identity the real plugin has. One shared
+    // client opens one session, so both users' calls would carry the same
+    // value — `undefined` in the shape that shipped, since the handshake
+    // happens outside any request and carried no token at all.
+    expect(gws.calls.map((c) => ({ tool: c.tool, token: c.token, args: c.args }))).toEqual([
       { tool: "gmail_send", token: "alice-google-token", args: { note: "a" } },
       { tool: "gmail_send", token: "bob-google-token", args: { note: "b" } },
     ]);
+    // Two callers, two sessions. Not one.
+    expect(new Set(gws.calls.map((c) => c.sessionId)).size).toBe(2);
+    expect(gws.sessions.map((s) => s.token).sort()).toEqual([
+      "alice-google-token",
+      "bob-google-token",
+    ]);
+
     // Alice's Atlassian call carries her ATLASSIAN token, not her Google one:
     // per-plugin keys, because these credentials are not interchangeable.
-    expect(atlassian.calls).toEqual([
-      { tool: "jira_create_issue", token: "alice-atlassian-token", args: { note: "c" } },
+    expect(atlassian.calls.map((c) => ({ tool: c.tool, token: c.token }))).toEqual([
+      { tool: "jira_create_issue", token: "alice-atlassian-token" },
     ]);
   });
 
-  it("resolves no tools at all when the request cannot say who it is", async () => {
+  it("gives the server's own answer about who ran the tool, in the result the model sees", async () => {
+    const gws = await startFakePlugin(["gmail_send"]);
+    track(gws.close);
+    const servers = [fakePluginServerRow("gws-mcp", gws.port)];
+
+    const alice = await toolsFor({
+      userId: "alice",
+      servers,
+      tokensByServer: { "gws-mcp": "alice-google-token" },
+      allowed: ["gws-mcp__gmail_send"],
+    });
+    const bob = await toolsFor({
+      userId: "bob",
+      servers,
+      tokensByServer: { "gws-mcp": "bob-google-token" },
+      allowed: ["gws-mcp__gmail_send"],
+    });
+
+    const aliceResult = await alice.tools["gws-mcp__gmail_send"]!.execute!(
+      {},
+      { requestContext: alice.requestContext }
+    );
+    const bobResult = await bob.tools["gws-mcp__gmail_send"]!.execute!(
+      {},
+      { requestContext: bob.requestContext }
+    );
+
+    // The server names the identity it acted as. This is what a user would see
+    // going wrong — Bob reading Alice's mailbox, or nobody's.
+    expect(JSON.stringify(aliceResult)).toContain("as alice-google-token");
+    expect(JSON.stringify(bobResult)).toContain("as bob-google-token");
+    expect(JSON.stringify(bobResult)).not.toContain("alice");
+    expect(JSON.stringify(aliceResult)).not.toContain("anonymous");
+  });
+
+  it("reuses one session for the same user and token", async () => {
+    const gws = await startFakePlugin(["gmail_send"]);
+    track(gws.close);
+    const servers = [fakePluginServerRow("gws-mcp", gws.port)];
+
+    const first = await toolsFor({
+      userId: "carol",
+      servers,
+      tokensByServer: { "gws-mcp": "carol-token" },
+      allowed: ["gws-mcp__gmail_send"],
+    });
+    await first.tools["gws-mcp__gmail_send"]!.execute!(
+      {},
+      { requestContext: first.requestContext }
+    );
+
+    const second = await toolsFor({
+      userId: "carol",
+      servers,
+      tokensByServer: { "gws-mcp": "carol-token" },
+      allowed: ["gws-mcp__gmail_send"],
+    });
+    await second.tools["gws-mcp__gmail_send"]!.execute!(
+      {},
+      { requestContext: second.requestContext }
+    );
+
+    // The memoisation half of the bargain: a second turn by the same user with
+    // the same credential does not pay for another handshake.
+    expect(gws.sessions).toHaveLength(1);
+    expect(gws.calls).toHaveLength(2);
+  });
+
+  it("opens a new session when a user's token is refreshed, and never uses the stale one", async () => {
+    const gws = await startFakePlugin(["gmail_send"]);
+    track(gws.close);
+    const servers = [fakePluginServerRow("gws-mcp", gws.port)];
+
+    const before = await toolsFor({
+      userId: "dave",
+      servers,
+      tokensByServer: { "gws-mcp": "dave-token-v1" },
+      allowed: ["gws-mcp__gmail_send"],
+    });
+    await before.tools["gws-mcp__gmail_send"]!.execute!(
+      { note: "before" },
+      { requestContext: before.requestContext }
+    );
+
+    // Access tokens expire and get refreshed mid-life. A session pins whatever
+    // credential opened it, so keeping the old session would keep using the
+    // expired token until the process restarted.
+    const after = await toolsFor({
+      userId: "dave",
+      servers,
+      tokensByServer: { "gws-mcp": "dave-token-v2" },
+      allowed: ["gws-mcp__gmail_send"],
+    });
+    await after.tools["gws-mcp__gmail_send"]!.execute!(
+      { note: "after" },
+      { requestContext: after.requestContext }
+    );
+
+    expect(gws.sessions.map((s) => s.token)).toEqual(["dave-token-v1", "dave-token-v2"]);
+    expect(gws.calls.map((c) => ({ token: c.token, args: c.args }))).toEqual([
+      { token: "dave-token-v1", args: { note: "before" } },
+      { token: "dave-token-v2", args: { note: "after" } },
+    ]);
+  });
+
+  it("resolves no tools, and opens no session, when the request cannot say who it is", async () => {
     const gws = await startFakePlugin(["gmail_send"]);
     track(gws.close);
 
-    const client = createPluginMCPClient([serverRow("gws-mcp", gws.port)], {
-      id: `test-anon-${Date.now()}-${Math.random()}`,
+    const client = getPluginMCPClient([fakePluginServerRow("gws-mcp", gws.port)], {
+      userId: "anon-probe",
+      tokensByServer: {},
     });
-    track(() => client.disconnect());
-
     const tools = await resolvePluginTools(undefined, {
       client,
       listAllowedToolNames: async () => new Set(["gws-mcp__gmail_send"]),
     });
+
     expect(tools).toEqual({});
     expect(gws.calls).toEqual([]);
+    expect(gws.sessions).toEqual([]);
   });
 });

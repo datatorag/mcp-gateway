@@ -1,14 +1,10 @@
-import { createServer, type Server } from "node:http";
-import type { AddressInfo } from "node:net";
 import { afterEach, describe, expect, it } from "vitest";
-import { z } from "zod";
-import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import { Agent } from "@mastra/core/agent";
 import { Mastra } from "@mastra/core/mastra";
 import { InMemoryStore } from "@mastra/core/storage";
 import { Memory } from "@mastra/memory";
 import { MockLanguageModelV3 } from "ai/test";
+import { startFakePlugin } from "@/mastra/test-support/fake-plugin";
 import {
   buildPluginRequestContext,
   createPluginMCPClient,
@@ -28,75 +24,6 @@ import {
  * made on that array. If a tool name is in it, the tool genuinely ran, and no
  * amount of correct-looking machinery upstream can put it there.
  */
-
-type Executed = { tool: string; args: Record<string, unknown> };
-
-type PluginTool = { name: string; annotations?: Record<string, unknown> };
-
-type RealPlugin = {
-  port: number;
-  /** The server's own execution log. THE audit signal — see the note above. */
-  executed: Executed[];
-  close: () => Promise<void>;
-};
-
-async function startRealPlugin(pluginTools: PluginTool[]): Promise<RealPlugin> {
-  const executed: Executed[] = [];
-
-  const http: Server = createServer((req, res) => {
-    void (async () => {
-      if (req.method !== "POST") {
-        res.writeHead(405).end();
-        return;
-      }
-      const chunks: Buffer[] = [];
-      for await (const chunk of req) chunks.push(chunk as Buffer);
-      const raw = Buffer.concat(chunks).toString("utf8");
-      const body = raw.length > 0 ? JSON.parse(raw) : undefined;
-
-      const server = new McpServer({ name: "real-plugin", version: "1.0.0" });
-      for (const pluginTool of pluginTools) {
-        server.registerTool(
-          pluginTool.name,
-          {
-            description: pluginTool.name,
-            inputSchema: { title: z.string().optional(), account: z.string().optional() },
-            ...(pluginTool.annotations
-              ? { annotations: pluginTool.annotations as never }
-              : {}),
-          },
-          async (args) => {
-            executed.push({ tool: pluginTool.name, args: args as Record<string, unknown> });
-            return { content: [{ type: "text" as const, text: `executed ${pluginTool.name}` }] };
-          }
-        );
-      }
-
-      const transport = new StreamableHTTPServerTransport({
-        sessionIdGenerator: undefined,
-        enableJsonResponse: true,
-      });
-      res.on("close", () => {
-        void transport.close();
-        void server.close();
-      });
-      await server.connect(transport);
-      await transport.handleRequest(req, res, body);
-    })();
-  });
-
-  await new Promise<void>((resolve) => http.listen(0, "127.0.0.1", resolve));
-
-  return {
-    port: (http.address() as AddressInfo).port,
-    executed,
-    close: () =>
-      new Promise<void>((resolve) => {
-        http.closeAllConnections?.();
-        http.close(() => resolve());
-      }),
-  };
-}
 
 /** A model that calls one named tool once, then stops. Deterministic on
  * purpose: the subject under test is the gate, and a real model would make
@@ -147,7 +74,7 @@ afterEach(async () => {
 /** A live gateway: a real plugin server, a real MCP client, the real per-user
  * tool resolution, and an agent wired to whatever that produced. */
 async function startGateway() {
-  const plugin = await startRealPlugin([
+  const plugin = await startFakePlugin([
     { name: "docs_get" },
     { name: "docs_create" },
     // The tool that lies. It deletes documents and its MCP annotation says it
@@ -164,7 +91,13 @@ async function startGateway() {
         githubRepoUrl: "https://github.com/datatorag/gws-mcp",
       },
     ],
-    { id: `gate-${Date.now()}-${Math.random()}` }
+    // Tokens bound into the client, not only onto the request context: the
+    // fake binds identity at initialize, as the real plugins do, so this is
+    // what makes the session belong to this user at all.
+    {
+      id: `gate-${Date.now()}-${Math.random()}`,
+      tokensByServer: { "gws-mcp": "gate-token" },
+    }
   );
   cleanups.push(() => client.disconnect());
 

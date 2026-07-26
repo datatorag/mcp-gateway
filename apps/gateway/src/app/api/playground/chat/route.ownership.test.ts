@@ -1,10 +1,5 @@
-import { createServer, type Server } from "node:http";
-import type { AddressInfo } from "node:net";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { NextRequest } from "next/server";
-import { z } from "zod";
-import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import { Agent } from "@mastra/core/agent";
 import { Mastra } from "@mastra/core/mastra";
 import { InMemoryStore } from "@mastra/core/storage";
@@ -77,6 +72,7 @@ vi.mock("@/mastra", async (importOriginal) => ({
   getMastra: () => getMastra(),
 }));
 
+import { startFakePlugin } from "@/mastra/test-support/fake-plugin";
 import { buildPluginRequestContext, createPluginMCPClient, resolvePluginTools } from "@/mastra/mcp/client";
 import { POST } from "./route";
 
@@ -84,57 +80,9 @@ import { POST } from "./route";
 /* A real MCP server, and its execution log                                    */
 /* -------------------------------------------------------------------------- */
 
+/** `plugin.executed` is THE audit signal. Appended inside the server's own tool
+ * handler, so a name in there means the call genuinely arrived. */
 type Executed = { tool: string; args: Record<string, unknown> };
-
-async function startRealPlugin(toolNames: string[]) {
-  /** THE audit signal. Appended inside the server's own tool handler, so a
-   * name in here means the call genuinely arrived. */
-  const executed: Executed[] = [];
-
-  const http: Server = createServer((req, res) => {
-    void (async () => {
-      if (req.method !== "POST") {
-        res.writeHead(405).end();
-        return;
-      }
-      const chunks: Buffer[] = [];
-      for await (const chunk of req) chunks.push(chunk as Buffer);
-      const raw = Buffer.concat(chunks).toString("utf8");
-      const server = new McpServer({ name: "real-plugin", version: "1.0.0" });
-      for (const name of toolNames) {
-        server.registerTool(
-          name,
-          { description: name, inputSchema: { title: z.string().optional() } },
-          async (args) => {
-            executed.push({ tool: name, args: args as Record<string, unknown> });
-            return { content: [{ type: "text" as const, text: `executed ${name}` }] };
-          }
-        );
-      }
-      const transport = new StreamableHTTPServerTransport({
-        sessionIdGenerator: undefined,
-        enableJsonResponse: true,
-      });
-      res.on("close", () => {
-        void transport.close();
-        void server.close();
-      });
-      await server.connect(transport);
-      await transport.handleRequest(req, res, raw.length > 0 ? JSON.parse(raw) : undefined);
-    })();
-  });
-  await new Promise<void>((resolve) => http.listen(0, "127.0.0.1", resolve));
-
-  return {
-    port: (http.address() as AddressInfo).port,
-    executed,
-    close: () =>
-      new Promise<void>((resolve) => {
-        http.closeAllConnections?.();
-        http.close(() => resolve());
-      }),
-  };
-}
 
 /** Calls one tool once, then talks. Deterministic because the subject under
  * test is the gate, not the model's willingness to try. */
@@ -188,7 +136,7 @@ const WRITE_TOOL = "gws-mcp__docs_create";
 const TOOL_CALL_ID = "call-victim";
 
 async function setup() {
-  const plugin = await startRealPlugin(["docs_create"]);
+  const plugin = await startFakePlugin(["docs_create"]);
   cleanups.push(plugin.close);
 
   const client = createPluginMCPClient(
@@ -201,7 +149,12 @@ async function setup() {
         githubRepoUrl: "https://github.com/datatorag/gws-mcp",
       },
     ],
-    { id: `own-${Date.now()}-${Math.random()}` }
+    {
+      id: `own-${Date.now()}-${Math.random()}`,
+      // The session is opened as USER_A, which is what makes the resumed write
+      // in these tests genuinely A's rather than nobody's.
+      tokensByServer: { "gws-mcp": "t" },
+    }
   );
   cleanups.push(() => client.disconnect());
 

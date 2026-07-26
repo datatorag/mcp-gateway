@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { MCPClient } from "@mastra/mcp";
 import { RequestContext } from "@mastra/core/request-context";
 import type { ToolsInput } from "@mastra/core/agent";
@@ -26,11 +27,25 @@ import { getDb } from "@/lib/db";
  * building, port allocation, process supervision, token vaulting, metering —
  * is unchanged and lives where it always did.
  *
- * The shape here is deliberate: ONE client for the process, holding one
- * connection per plugin, with the caller's identity travelling per request
- * instead of per client. A client per user would mean a fresh MCP handshake
- * for every visitor and a pile of sockets to reap; the framework's request
- * context exists precisely so that is unnecessary.
+ * The shape here is deliberate, and it is NOT the obvious one: a client — and
+ * therefore an MCP session — PER USER, memoised, rather than one shared client
+ * with the caller's identity travelling per request.
+ *
+ * One shared client is what a reading of the framework suggests, and it is
+ * wrong against the servers we actually run. Our plugin servers keep a map of
+ * session id → transport. The first request of a session builds the upstream
+ * API client from the `X-User-Token` on THAT request; every later request is
+ * routed by its `mcp-session-id` alone and the token header is never read
+ * again. So a shared client establishes one session, and that session's
+ * identity is whatever was present at initialize — which, since the handshake
+ * happens outside any request, is nothing at all. Every call then runs
+ * unauthenticated, and would run as user A if A had happened to open it.
+ *
+ * Hence: one session per user, opened with that user's token already on the
+ * initialize request (see `tokensByServer` below — the token is bound into the
+ * client's own `fetch`, not fished out of a request context that does not
+ * reach the handshake). Two users can never share a session, because a session
+ * is never reachable from more than one user's cache key.
  */
 
 /** Header our plugin servers read to decide whose credentials to act with.
@@ -110,7 +125,7 @@ export function toNamespacedName(serverSlug: string, toolName: string): string {
 }
 
 /* -------------------------------------------------------------------------- */
-/* The shared client                                                           */
+/* The per-user client                                                         */
 /* -------------------------------------------------------------------------- */
 
 /** Active plugin servers, with whatever address each is currently reachable at.
@@ -127,17 +142,45 @@ export async function listPluginServers(db: Database): Promise<PluginServerRow[]
     .where(eq(mcpServers.status, "active"));
 }
 
-/** One client, one connection per plugin, identity supplied per request.
+/** Plugin slug → this user's token for that plugin. Absent means not connected;
+ * never an empty string, so "missing" is never mistaken for "valid". */
+export type PluginTokens = Record<string, string>;
+
+/** The tokens for one request, read back out of its context.
  *
- * The per-server `fetch` is the whole trick: it receives the request context as
- * a third argument, so the outgoing HTTP request can carry the token of the
- * user this particular call belongs to while the connection underneath stays
- * shared. The header is set only when a token is present — the connection
- * handshake happens outside any request and legitimately has none. */
+ * The slugs have to be supplied because a `RequestContext` is a bag with no
+ * listable keys — the caller already knows which plugins exist, so it says so
+ * rather than the context guessing. */
+export function readPluginTokens(
+  requestContext: RequestContext | undefined | null,
+  serverSlugs: string[]
+): PluginTokens {
+  const tokens: PluginTokens = {};
+  for (const slug of serverSlugs) {
+    const token = requestContext?.get(userTokenContextKey(slug));
+    if (typeof token === "string" && token.length > 0) tokens[slug] = token;
+  }
+  return tokens;
+}
+
+/** One client for ONE user, holding one session per plugin, opened as them.
+ *
+ * `tokensByServer` is the load-bearing argument. Bound into the per-server
+ * `fetch` closure, it puts the token on EVERY outgoing request including the
+ * initialize handshake — and initialize is the only one our plugin servers read
+ * it on. A token supplied any other way arrives too late to decide who the
+ * session is.
+ *
+ * The request-context lookup is kept as a fallback rather than removed. It is
+ * correct and harmless for a plugin that does read the header per call, and it
+ * is what a client built without bound tokens (a test, a tokenless probe) still
+ * has. The bound token WINS where both exist, so the header can never disagree
+ * with the identity the session was actually opened as. */
 export function createPluginMCPClient(
   servers: PluginServerRow[],
-  opts?: { id?: string; timeout?: number }
+  opts?: { id?: string; timeout?: number; tokensByServer?: PluginTokens }
 ): MCPClient {
+  const boundTokens = opts?.tokensByServer ?? {};
   return new MCPClient({
     id: opts?.id ?? "datatorag-playground-plugins",
     ...(opts?.timeout ? { timeout: opts.timeout } : {}),
@@ -151,7 +194,10 @@ export function createPluginMCPClient(
             init?: RequestInit,
             requestContext?: RequestContext | null
           ) => {
-            const token = requestContext?.get(userTokenContextKey(server.slug));
+            const contextToken = requestContext?.get(userTokenContextKey(server.slug));
+            const token =
+              boundTokens[server.slug] ??
+              (typeof contextToken === "string" ? contextToken : undefined);
             const headers = new Headers(init?.headers);
             if (typeof token === "string" && token.length > 0) {
               headers.set(USER_TOKEN_HEADER, token);
@@ -164,23 +210,127 @@ export function createPluginMCPClient(
   });
 }
 
-/** Process-wide client, rebuilt only when the set of plugins or their addresses
- * changes (a plugin installed, removed, or restarted on a new port). The old
- * client is disconnected on the way out so its sockets do not accumulate. */
-let cached: { signature: string; client: MCPClient } | undefined;
+/* -------------------------------------------------------------------------- */
+/* The per-user client cache                                                   */
+/* -------------------------------------------------------------------------- */
 
-export async function getPluginMCPClient(db: Database): Promise<MCPClient> {
-  const servers = await listPluginServers(db);
+/**
+ * How long a user's plugin sessions are kept alive after their last use, and
+ * how many users' worth we keep at once.
+ *
+ * A client per user is a client per user, so this cache grows with traffic and
+ * has to be bounded. The policy is idle-TTL plus an LRU cap, both enforced by a
+ * sweep on every lookup — no timers, because a timer in a serverless-shaped
+ * process either keeps it alive or never fires. Eviction always `disconnect()`s,
+ * which is what actually terminates the MCP sessions on the plugin servers;
+ * dropping the reference alone would leak a session per user, on every plugin,
+ * for the lifetime of the process.
+ *
+ * The TTL is generous relative to a chat turn and short relative to an access
+ * token's life, so the common case is a warm session for the length of a
+ * conversation and a cold one the next day. Nothing depends on the exact
+ * numbers: a swept-out client costs one handshake to rebuild.
+ */
+const CLIENT_IDLE_TTL_MS = 10 * 60_000;
+const MAX_CACHED_CLIENTS = 200;
+
+type CachedClient = { key: string; client: MCPClient; lastUsedAt: number };
+
+/** Insertion-ordered, and re-inserted on every hit, so iteration order IS
+ * least-recently-used order. */
+const clientCache = new Map<string, CachedClient>();
+
+function disposeCachedClient(entry: CachedClient): void {
+  clientCache.delete(entry.key);
+  void entry.client.disconnect().catch(() => {});
+}
+
+function sweepClientCache(now: number): void {
+  for (const entry of Array.from(clientCache.values())) {
+    if (now - entry.lastUsedAt > CLIENT_IDLE_TTL_MS) disposeCachedClient(entry);
+  }
+  while (clientCache.size > MAX_CACHED_CLIENTS) {
+    const oldest = clientCache.values().next().value;
+    if (!oldest) break;
+    disposeCachedClient(oldest);
+  }
+}
+
+/**
+ * An opaque digest of the tokens a client was built with.
+ *
+ * It exists so that a REFRESHED TOKEN GETS A NEW SESSION. A session pins the
+ * credential it was opened with; keep the session and the user keeps acting
+ * with a token that expired hours ago. Changing the fingerprint changes the
+ * cache key, so the old client is left to age out and a new session opens with
+ * the current token — the one correct behaviour that a user-id-only key cannot
+ * produce.
+ *
+ * The digest is one-way and is only ever compared to another digest. It must
+ * never be logged, returned in an error, or surfaced anywhere a token's
+ * presence could be confirmed by guessing at its input.
+ */
+function tokenFingerprint(tokensByServer: PluginTokens): string {
+  const material = Object.keys(tokensByServer)
+    .sort()
+    .map((slug) => `${slug}\u0000${tokensByServer[slug]}`)
+    .join("\u0001");
+  return createHash("sha256").update(material).digest("hex");
+}
+
+/**
+ * This user's plugin client, memoised.
+ *
+ * The key is (server set, user, token fingerprint) and every part of it earns
+ * its place:
+ * - the SERVER SET, so installing, removing or restarting a plugin invalidates
+ *   the client rather than leaving it pointed at a port nobody is listening on;
+ * - the USER, so no two people can ever be handed the same session — the
+ *   property that makes cross-tenant leakage structurally impossible here
+ *   rather than merely unobserved;
+ * - the TOKEN FINGERPRINT, so a refresh opens a new session instead of pinning
+ *   a stale credential for as long as the process lives.
+ */
+export function getPluginMCPClient(
+  servers: PluginServerRow[],
+  opts: { userId: string; tokensByServer: PluginTokens }
+): MCPClient {
   const signature = servers
     .map((s) => `${s.slug}@${buildPluginServerUrl(s)}`)
     .sort()
     .join("|");
-  if (cached?.signature === signature) return cached.client;
+  const key = [signature, opts.userId, tokenFingerprint(opts.tokensByServer)].join("\u0002");
 
-  const previous = cached?.client;
-  cached = { signature, client: createPluginMCPClient(servers) };
-  if (previous) void previous.disconnect().catch(() => {});
-  return cached.client;
+  const now = Date.now();
+  sweepClientCache(now);
+
+  const hit = clientCache.get(key);
+  if (hit) {
+    hit.lastUsedAt = now;
+    // Re-insert to move it to the young end of the LRU order.
+    clientCache.delete(key);
+    clientCache.set(key, hit);
+    return hit.client;
+  }
+
+  const client = createPluginMCPClient(servers, {
+    // Distinct per cache entry: the framework keeps its own registry of clients
+    // by id and hands back the existing one for a repeat id, which for a
+    // per-user client would be the shared-client bug wearing a different hat.
+    id: `datatorag-playground-plugins-${createHash("sha256").update(key).digest("hex").slice(0, 32)}`,
+    tokensByServer: opts.tokensByServer,
+  });
+  clientCache.set(key, { key, client, lastUsedAt: now });
+  sweepClientCache(now);
+  return client;
+}
+
+/** Disconnects and forgets every cached client. For tests and shutdown; nothing
+ * in a request path should need it. */
+export async function resetPluginClientCache(): Promise<void> {
+  const entries = Array.from(clientCache.values());
+  clientCache.clear();
+  await Promise.allSettled(entries.map((entry) => entry.client.disconnect()));
 }
 
 /* -------------------------------------------------------------------------- */
@@ -319,18 +469,33 @@ export async function resolvePluginTools(
 }
 
 /** The resolver the agent is built with: same as {@link resolvePluginTools},
- * wired to the real database and the shared client. Kept separate so the
- * resolution logic above stays injectable and testable without either. */
+ * wired to the real database and to THIS CALLER'S client. Kept separate so the
+ * resolution logic above stays injectable and testable without either.
+ *
+ * The identity check is repeated here rather than left to `resolvePluginTools`
+ * because the client is chosen by user: an anonymous request must not open a
+ * session at all, not merely be handed no tools from one. */
 export async function resolveUserPluginTools({
   requestContext,
 }: {
   requestContext: RequestContext;
 }): Promise<ToolsInput> {
+  const userId = requestContext?.get(USER_ID_CONTEXT_KEY);
+  if (typeof userId !== "string" || userId.length === 0) return {};
+
   const db = getDb();
+  const servers = await listPluginServers(db);
+  // The tokens are already on the request context — the route loaded them when
+  // it built it — so this costs no extra database work.
+  const client = getPluginMCPClient(servers, {
+    userId,
+    tokensByServer: readPluginTokens(requestContext, servers.map((s) => s.slug)),
+  });
+
   return resolvePluginTools(requestContext, {
-    client: await getPluginMCPClient(db),
-    listAllowedToolNames: async (userId) => {
-      const rows = await listUserToolRows(db, userId);
+    client,
+    listAllowedToolNames: async (id) => {
+      const rows = await listUserToolRows(db, id);
       return new Set(rows.map((row) => row.namespacedName));
     },
   });
