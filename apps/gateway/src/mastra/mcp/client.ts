@@ -219,11 +219,6 @@ export async function getPluginMCPClient(db: Database): Promise<MCPClient> {
   return cached.client;
 }
 
-/** Test seam: forget the memoised client. */
-export function resetPluginMCPClient(): void {
-  cached = undefined;
-}
-
 /* -------------------------------------------------------------------------- */
 /* The write gate                                                              */
 /* -------------------------------------------------------------------------- */
