@@ -12,9 +12,10 @@ import { PLUGIN_SERVICE_MAP } from "./service-token";
 
 /**
  * The single definition of "which registry tools can this user see" plus the
- * plugin-invocation mechanics, shared by the MCP front door (mcp-server.ts)
- * and the playground (playground/tools.ts). Each consumer shapes the rows for
- * its own protocol on top; the policy lives only here.
+ * plugin-invocation mechanics, shared by the MCP front door (mcp-server.ts),
+ * the agent's MCP client (src/mastra/mcp/client.ts) and the direct tool call
+ * behind /api/playground/call (playground/tools.ts). Each consumer shapes the
+ * rows for its own protocol on top; the policy lives only here.
  */
 
 export type UserToolRow = {
@@ -26,8 +27,16 @@ export type UserToolRow = {
   /** Service the tool needs (from PLUGIN_SERVICE_MAP); undefined for tools
    * whose server has no service mapping — those are visible to everyone. */
   requiredService: string | undefined;
-  /** MCP readOnlyHint annotation: true = read-only, false = mutating, null =
-   * unannotated. Drives the playground write-confirmation gate. */
+  /** MCP readOnlyHint annotation as the plugin server declared it: true =
+   * read-only, false = mutating, null = unannotated.
+   *
+   * Recorded, not trusted. It used to decide the playground's write-approval
+   * gate, which meant a server could exempt its own destructive tools from
+   * being approved by annotating them read-only. The gate now classifies from
+   * the tool name alone (see playground/tools.ts `classifyWrite`) and no code
+   * path reads this field to make a security decision. It is kept because it
+   * is a true record of what the server said, which is worth having when
+   * auditing a plugin. */
   readOnlyHint: boolean | null;
 };
 
@@ -96,14 +105,19 @@ export async function listUserToolRows(
   return result;
 }
 
-/** URL of a plugin's MCP endpoint: locally-run plugins (githubRepoUrl set)
- * listen on localhost; containerized ones on their compose-network hostname,
- * unless DOCKER_HOST_OVERRIDE redirects (dev-against-remote-plugins). */
-export function buildPluginServerUrl(server: {
+/** The registry row fields that say where a plugin server is reachable. Stated
+ * once here, next to the function that turns it into a URL, so a consumer that
+ * lists servers and a consumer that addresses one cannot drift apart. */
+export type PluginServerRow = {
   slug: string;
   containerPort: number | null;
   githubRepoUrl: string | null;
-}): string {
+};
+
+/** URL of a plugin's MCP endpoint: locally-run plugins (githubRepoUrl set)
+ * listen on localhost; containerized ones on their compose-network hostname,
+ * unless DOCKER_HOST_OVERRIDE redirects (dev-against-remote-plugins). */
+export function buildPluginServerUrl(server: PluginServerRow): string {
   if (server.githubRepoUrl) {
     return `http://localhost:${server.containerPort}/mcp`;
   }

@@ -20,6 +20,7 @@ import type { ComponentProps, ReactNode } from "react";
 import { isValidElement } from "react";
 
 import { CodeBlock } from "./code-block";
+import { formatToolOutput } from "./format-tool-output";
 
 export type ToolProps = ComponentProps<typeof Collapsible>;
 
@@ -156,12 +157,11 @@ export const ToolOutput = ({
 
   let Output = <div>{output as ReactNode}</div>;
 
-  if (typeof output === "object" && !isValidElement(output)) {
-    Output = (
-      <CodeBlock code={JSON.stringify(output, null, 2)} language="json" />
-    );
-  } else if (typeof output === "string") {
-    Output = <CodeBlock code={output} language="json" />;
+  if (
+    (typeof output === "object" && !isValidElement(output)) ||
+    typeof output === "string"
+  ) {
+    Output = <CodeBlock code={formatToolOutput(output)} language="json" />;
   }
 
   return (

@@ -10,7 +10,10 @@ import {
   useState,
 } from "react";
 import { useChat } from "@ai-sdk/react";
-import { DefaultChatTransport } from "ai";
+import {
+  DefaultChatTransport,
+  lastAssistantMessageIsCompleteWithApprovalResponses,
+} from "ai";
 
 import {
   Conversation,
@@ -26,15 +29,21 @@ import {
 } from "@/components/ai-elements/prompt-input";
 import { Suggestion, Suggestions } from "@/components/ai-elements/suggestion";
 import { Button } from "@/components/ui/button";
-import type { Decision, PendingWrite } from "@/gateway/playground/engine";
+import { RUNS_CAP_HEADER, RUNS_REMAINING_HEADER } from "@/gateway/playground/quota-headers";
 import {
   errorBubbleText,
   GENERIC_ERROR,
+  hasPendingApproval,
   MessageList,
   messageText,
   type FeedbackState,
   type PlaygroundMessage,
 } from "./playground-presentation";
+
+/** Thrown by the transport for a 429, and never shown: the cap panel replaces
+ * the composer instead, so rendering this sentinel would put an internal
+ * string in front of the user. */
+const CAP_EXCEEDED = "cap_exceeded";
 
 export interface PlaygroundHandle {
   /** Seed the input with `prompt` and submit it immediately. Used by the
@@ -72,12 +81,6 @@ export const Playground = forwardRef<PlaygroundHandle, PlaygroundProps>(
     const [input, setInput] = useState("");
     const [capState, setCapState] = useState<{ cap: number } | null>(null);
     const [hidden, setHidden] = useState(false);
-    // Confirm resolution is CLIENT-LOCAL: the server hands out a one-shot
-    // resume token and never rewrites the original `data-confirm` part, so the
-    // only record that the user already decided lives here.
-    const [resolvedTokens, setResolvedTokens] = useState<
-      ReadonlyMap<string, Decision>
-    >(() => new Map());
     const [feedback, setFeedback] = useState<Record<string, FeedbackState>>({});
     const [comments, setComments] = useState<Record<string, string>>({});
     const [erroredIds, setErroredIds] = useState<ReadonlySet<string>>(
@@ -115,7 +118,7 @@ export const Playground = forwardRef<PlaygroundHandle, PlaygroundProps>(
                 cap?: number;
               } | null;
               setCapState({ cap: typeof data?.cap === "number" ? data.cap : 0 });
-              throw new Error("cap_exceeded");
+              throw new Error(CAP_EXCEEDED);
             }
             // 400 / 500 (and anything else non-2xx) land in the chat error
             // state. The thrown message IS the user-facing copy, because the
@@ -124,26 +127,60 @@ export const Playground = forwardRef<PlaygroundHandle, PlaygroundProps>(
             // stream) survives — a sentinel like "request_failed" would be
             // rendered to the user as-is.
             if (!res.ok) throw new Error(GENERIC_ERROR);
+            // The turn that EXHAUSTS the quota says so on its own response,
+            // instead of the user discovering it by being refused next time.
+            // Absent headers mean "this turn spent nothing" (an approval leg),
+            // which must leave the quota state alone rather than reset it.
+            const remaining = res.headers.get(RUNS_REMAINING_HEADER);
+            const cap = res.headers.get(RUNS_CAP_HEADER);
+            if (remaining !== null && cap !== null && Number(remaining) <= 0) {
+              setCapState({ cap: Number(cap) });
+            }
             return res;
           },
-          // Two request shapes on one endpoint: a fresh turn posts the message
-          // list; resuming a paused turn posts only the server-held token plus
-          // the user's decisions (see `resolveConfirm`).
-          prepareSendMessagesRequest: ({ messages, body }) =>
-            body && typeof body.resumeToken === "string"
-              ? {
-                  body: {
-                    resumeToken: body.resumeToken,
-                    decisions: body.decisions,
-                  },
-                }
-              : { body: { messages } },
+          // No `prepareSendMessagesRequest`: there is one request shape now.
+          // A decision on a gated write is not a different kind of request —
+          // it is the same messages array with one tool part moved to
+          // `approval-responded`, which the transport sends by default and the
+          // route recognises on arrival.
         }),
       []
     );
 
-    const { messages, sendMessage, stop, regenerate, status, error } =
-      useChat<PlaygroundMessage>({ transport });
+    const {
+      messages,
+      sendMessage,
+      addToolApprovalResponse,
+      stop,
+      regenerate,
+      status,
+      error,
+    } = useChat<PlaygroundMessage>({
+      transport,
+      // NO `id`, SO EVERY PAGE LOAD IS A NEW CONVERSATION — deliberate, and
+      // not the same thing as conversations not being saved. The server now
+      // persists every turn, keyed by the conversation id the browser sends;
+      // with no `id` here the chat runtime mints a fresh one per mount, so a
+      // reload starts a new thread and the previous one stays on disk,
+      // complete, addressed by nobody.
+      //
+      // DO NOT "fix" this by pinning a stable id on its own. A stable id
+      // without also loading that thread's messages back into this list gives
+      // the user an empty transcript that the assistant nonetheless remembers
+      // — invisible context they cannot see, edit, or clear, re-sent and
+      // re-billed on every turn. Worse, a thread whose last turn stopped on an
+      // approval would come back with a pending decision that is no longer
+      // answerable: the suspended run is consumed on first use, and approval
+      // ids do not survive a restart by design (see
+      // gateway/playground/run-ownership.ts).
+      // Restoring a conversation means restoring its messages and handling
+      // that state, together, in one change.
+      // Recording a decision has to POST it, or the suspended turn never
+      // resumes. This fires that request once every gated call in the last
+      // step has an answer — so a turn that paused on two writes waits for
+      // both decisions and then resumes once.
+      sendAutomaticallyWhen: lastAssistantMessageIsCompleteWithApprovalResponses,
+    });
 
     const streaming = status === "submitted" || status === "streaming";
 
@@ -180,17 +217,14 @@ export const Playground = forwardRef<PlaygroundHandle, PlaygroundProps>(
 
     // An unresolved write-confirmation owns the conversation: it locks the
     // composer and regenerate until the user approves or denies.
-    const awaitingConfirm = useMemo(
-      () =>
-        messages.some((message) =>
-          message.parts.some(
-            (part) =>
-              part.type === "data-confirm" &&
-              !resolvedTokens.has(part.data.resumeToken)
-          )
-        ),
-      [messages, resolvedTokens]
-    );
+    //
+    // Read straight off the tool parts, with no client-side bookkeeping: the
+    // chat runtime rewrites the part in place when the decision is recorded,
+    // so "already decided" is a state of the conversation rather than
+    // something this component has to remember. It is also what makes this
+    // correct across a suspended stream, which closes with no `finish` part
+    // and therefore gives no other signal that the turn stopped.
+    const awaitingConfirm = useMemo(() => hasPendingApproval(messages), [messages]);
 
     const send = useCallback(
       (raw: string) => {
@@ -224,30 +258,27 @@ export const Playground = forwardRef<PlaygroundHandle, PlaygroundProps>(
       ]
     );
 
-    /** Approve or deny every write in a paused batch, then resume the turn.
+    /** Answer one gated tool call.
      *
-     * `sendMessage(undefined, …)` fires a request WITHOUT appending a user
-     * message — the continuation streams straight into the paused assistant
-     * message. `regenerate()` would be wrong here: it drops the last assistant
-     * message, destroying the paused turn the resume token refers to. */
-    const resolveConfirm = useCallback(
-      (resumeToken: string, pending: PendingWrite[], decision: Decision) => {
+     * ⚠️ `approvalId` is passed through EXACTLY as it arrived. It is minted by
+     * the server and carries its owner in an HMAC that is verified in constant
+     * time, so any client-side rewriting — trimming, re-encoding, splitting off
+     * a "cleaner" id, regenerating it — produces a 403 and leaves the user
+     * unable to approve their own write. There is deliberately no
+     * normalisation step here to be tempted into "fixing".
+     *
+     * Recording the response rewrites the tool part in place and, once every
+     * gated call in the step has an answer, posts the whole conversation back
+     * (see `sendAutomaticallyWhen`). `regenerate()` would be wrong here: it
+     * drops the last assistant message, destroying the suspended turn. */
+    const respondToApproval = useCallback(
+      (approvalId: string, approved: boolean) => {
         if (streaming || busyRef.current) return;
-        // `Object.fromEntries` (not `obj[key] = …`) so a hostile write id such
-        // as "__proto__" becomes an own property instead of mutating a prototype.
-        const decisions = Object.fromEntries(
-          pending.map((write) => [write.id, decision])
-        );
-        // Marking the token resolved must happen INSIDE the exclusive section:
-        // `runExclusive` drops a re-entrant call, and recording the decision
-        // for a resume that never fires would flip the card to "approved" and
-        // unlock the composer while stranding the paused turn forever.
         void runExclusive(async () => {
-          setResolvedTokens((prev) => new Map(prev).set(resumeToken, decision));
-          await sendMessage(undefined, { body: { resumeToken, decisions } });
+          await addToolApprovalResponse({ id: approvalId, approved });
         });
       },
-      [streaming, runExclusive, sendMessage]
+      [streaming, runExclusive, addToolApprovalResponse]
     );
 
     useImperativeHandle(ref, () => ({ runPrompt: send }), [send]);
@@ -382,20 +413,28 @@ export const Playground = forwardRef<PlaygroundHandle, PlaygroundProps>(
                 comments={comments}
                 erroredIds={erroredIds}
                 feedback={feedback}
+                // `ready` really does mean "the stream closed", including for
+                // a turn that suspended on an approval and therefore never
+                // emitted a `finish` part — the runtime sets it when the body
+                // ends, not when it sees `finish`. Completeness and
+                // finishedness are not the same thing here, which is why
+                // `awaitingConfirm` is passed alongside.
                 lastMessageComplete={status === "ready"}
                 messages={messages}
                 onCommentChange={handleCommentChange}
-                onDecide={resolveConfirm}
+                onDecide={respondToApproval}
                 onRate={handleRate}
                 onRegenerate={handleRegenerate}
                 onSendComment={handleSendComment}
-                resolvedTokens={resolvedTokens}
               />
 
               {/* 429 raises the cap panel instead, and a 403 has already
                   returned null for the whole component — so neither ever
-                  reaches this bubble. */}
-              {error && !capState && (
+                  reaches this bubble. Keyed on the sentinel rather than on
+                  `capState`, which is now also set by a successful turn that
+                  merely spent the last run: a genuine failure after that
+                  point still deserves a bubble. */}
+              {error && error.message !== CAP_EXCEEDED && (
                 <div className="rounded-2xl border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">
                   {errorBubbleText(error)}
                 </div>
