@@ -30,18 +30,19 @@ import { createHash, createHmac, randomBytes, timingSafeEqual } from "node:crypt
  * verify is not resumable BY ANY PATH, because a run that was never minted
  * here can never have been suspended here either.
  *
- * KEY LIFETIME. The key is random per process and never persisted. That is
- * deliberate, not an oversight: a pending approval already did not survive a
- * restart under the previous implementation (holds lived in a `Map`), and
- * production runs a single gateway container. So this costs nothing that was
- * not already the case, and it avoids introducing a new long-lived secret to
- * store and rotate. A restart mid-approval means the user re-runs the prompt —
- * the same outcome, and the same message, as before.
+ * KEY LIFETIME. The key is random per process and never persisted, and that is
+ * deliberate rather than an oversight. It does mean a restart invalidates every
+ * outstanding approval id: the run snapshot itself lives in Postgres and
+ * survives, but no id minted by the old process verifies against the new key,
+ * so a user who was mid-approval re-runs the prompt. That was already the
+ * outcome — and the same message — before, so nothing regressed, and it buys
+ * not having a long-lived secret to store and rotate. Production runs a single
+ * gateway container, so it costs one re-run per deploy at worst.
  *
- * If the gateway ever runs more than one process, this key has to move to
- * shared configuration at the same time as the pending-turn storage does, and
- * for the same reason. Until then a shared secret would be a liability with no
- * benefit.
+ * If the gateway ever runs more than one process, this key must move to shared
+ * configuration — otherwise an approval would only verify on the instance that
+ * happened to serve the turn that minted it. Until then a shared secret would
+ * be a liability with no benefit.
  */
 const KEY = randomBytes(32);
 

@@ -12,9 +12,10 @@ import { PLUGIN_SERVICE_MAP } from "./service-token";
 
 /**
  * The single definition of "which registry tools can this user see" plus the
- * plugin-invocation mechanics, shared by the MCP front door (mcp-server.ts)
- * and the playground (playground/tools.ts). Each consumer shapes the rows for
- * its own protocol on top; the policy lives only here.
+ * plugin-invocation mechanics, shared by the MCP front door (mcp-server.ts),
+ * the agent's MCP client (src/mastra/mcp/client.ts) and the direct tool call
+ * behind /api/playground/call (playground/tools.ts). Each consumer shapes the
+ * rows for its own protocol on top; the policy lives only here.
  */
 
 export type UserToolRow = {

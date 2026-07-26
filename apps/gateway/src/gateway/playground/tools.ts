@@ -1,21 +1,25 @@
 import { eq } from "drizzle-orm";
 import type { Database } from "@datatorag-mcp/db";
 import { mcpServers } from "@datatorag-mcp/db";
-import type { EngineTool } from "./engine";
 import { NAMESPACE_SEPARATOR } from "../plugin-manager";
 import { PLUGIN_SERVICE_MAP, getServiceToken } from "../service-token";
-import {
-  listUserToolRows,
-  buildPluginServerUrl,
-  callPluginToolOnce,
-} from "../user-tools";
+import { buildPluginServerUrl, callPluginToolOnce } from "../user-tools";
 
 /**
- * Extracted from POST /api/playground/call, which now delegates to
- * listUserEngineTools/executeUserTool below. This module is also the tool
- * source/executor for the playground agent loop (engine.ts, wired up by
- * the streaming route). The connected-service policy and plugin-invocation
- * mechanics are shared with the MCP front door via ../user-tools.
+ * Two things live here, and they are no longer one feature.
+ *
+ * The WRITE CLASSIFICATION — `isWriteTool`, `ALWAYS_WRITE_TOOLS`,
+ * `classifyWrite`, `stripAccountArg` — is the product's security policy for
+ * which tool calls a user has to approve. The agent runtime consumes it (see
+ * `src/mastra/mcp/client.ts`, which sets `requireApproval` from it); it does
+ * not depend on the runtime, which is why it outlived the hand-rolled loop
+ * that used to be its only caller.
+ *
+ * `executeUserTool` and its helpers are the direct, non-agent tool call behind
+ * POST /api/playground/call — the per-service tool tester on the connections
+ * page. That path never went through the agent loop and is untouched by its
+ * removal. The connected-service policy and plugin-invocation mechanics it
+ * shares with the MCP front door live in ../user-tools.
  */
 
 /** Thrown for pre-flight tool-call failures the route maps to a specific
@@ -146,9 +150,8 @@ export function parseNamespacedName(namespacedName: string): {
 }
 
 /** Flattens an MCP CallToolResult to the { text, isError } shape the
- * playground engine and the /api/playground/call route both consume:
- * all `content[].text` blocks joined with "\n"; isError only when the
- * result explicitly says so. */
+ * /api/playground/call route consumes: all `content[].text` blocks joined
+ * with "\n"; isError only when the result explicitly says so. */
 export function flattenToolResult(result: {
   content?: Array<{ type: string; text?: string }>;
   isError?: boolean;
@@ -161,35 +164,11 @@ export function flattenToolResult(result: {
 }
 
 /**
- * The user's visible tools (shared connected-service policy — see
- * user-tools.ts), shaped for the Anthropic API as EngineTool[], plus an
- * `isWrite` predicate from classifyWrite — the write-confirmation gate the
- * engine consumes. (/api/playground/tools filters neither status nor enabled —
- * this intentionally does NOT copy that route's query shape.)
- */
-export async function listUserEngineTools(
-  db: Database,
-  userId: string
-): Promise<{ tools: EngineTool[]; isWrite: (name: string) => boolean }> {
-  const rows = await listUserToolRows(db, userId);
-  const writeNames = new Set<string>();
-  const tools = rows.map((r) => {
-    if (classifyWrite(r.namespacedName)) writeNames.add(r.namespacedName);
-    return {
-      name: r.namespacedName,
-      description: r.description,
-      input_schema: r.schema,
-    };
-  });
-  return { tools, isWrite: (name) => writeNames.has(name) };
-}
-
-/**
- * Executes one namespaced tool exactly like POST /api/playground/call did
- * (slug split, PLUGIN_SERVICE_MAP, getServiceToken, one-shot client — see
- * user-tools.ts). Strips any `account` key from args — playground always
- * uses the user's default account for the service; the multi-account
- * limitation is accepted for v1.
+ * Executes one namespaced tool for POST /api/playground/call — the connections
+ * page's tool tester (slug split, PLUGIN_SERVICE_MAP, getServiceToken,
+ * one-shot client — see user-tools.ts). Strips any `account` key from args:
+ * that surface always uses the user's default account for the service, and the
+ * multi-account limitation is accepted for v1.
  *
  * Throws a ToolCallError (with an HTTP status) for pre-flight failures
  * (bad name, unknown server, no service mapping, service not connected) so
