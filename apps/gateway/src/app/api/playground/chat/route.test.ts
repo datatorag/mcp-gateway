@@ -1,61 +1,37 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { NextRequest } from "next/server";
+import type { UIMessageChunk } from "ai";
+
+/**
+ * The route's own responsibilities, and only those.
+ *
+ * The agent loop is not one of them any more — history, tool calls, the pause
+ * at a gated write and the resume after a decision all belong to the runtime,
+ * and mocking the runtime to re-test them here would only assert that the mock
+ * behaves like the mock. What is genuinely ours is the envelope: who the
+ * caller is, whether they may spend a turn, what gets refunded when nothing
+ * happened, what we count, and — critically — how much of the request body is
+ * allowed to reach the runtime at all.
+ *
+ * The two claims that cannot honestly be made against a mock are made
+ * elsewhere against real infrastructure: approval ownership in
+ * `route.ownership.test.ts`, judged on an MCP server's execution log, and
+ * prompt caching in `mastra/prompt-cache.test.ts`, judged on the bytes of the
+ * outgoing provider request.
+ */
 
 const getSessionUserId = vi.fn();
-vi.mock("@/lib/session", () => ({
-  getSessionUserId: () => getSessionUserId(),
-}));
-
-const getPlaygroundModel = vi.fn();
-vi.mock("@/lib/llm", () => ({
-  getPlaygroundModel: () => getPlaygroundModel(),
-}));
+vi.mock("@/lib/session", () => ({ getSessionUserId: () => getSessionUserId() }));
 
 const getEnv = vi.fn();
-vi.mock("@datatorag-mcp/config", () => ({
-  getEnv: () => getEnv(),
-}));
+vi.mock("@datatorag-mcp/config", () => ({ getEnv: () => getEnv() }));
 
 const claimPlaygroundMessage = vi.fn();
 const refundPlaygroundMessage = vi.fn();
-vi.mock("@/gateway/playground/cap", () => ({
+vi.mock("@/gateway/playground/cap", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/gateway/playground/cap")>()),
   claimPlaygroundMessage: (...args: unknown[]) => claimPlaygroundMessage(...args),
   refundPlaygroundMessage: (...args: unknown[]) => refundPlaygroundMessage(...args),
-}));
-
-const listUserEngineTools = vi.fn();
-const executeUserTool = vi.fn();
-vi.mock("@/gateway/playground/tools", () => ({
-  listUserEngineTools: (...args: unknown[]) => listUserEngineTools(...args),
-  executeUserTool: (...args: unknown[]) => executeUserTool(...args),
-}));
-
-// history.ts is NOT mocked — it's a pure function with no external deps, so
-// the 400 "Bad request" contract is exercised against the real
-// buildModelHistory, on real UIMessage-shaped ({ role, parts }) bodies.
-
-const streamEngineTurn = vi.fn();
-const detectPause = vi.fn();
-const executeWriteBatch = vi.fn();
-// `isApproved` is NOT mocked — like `buildModelHistory` above, it's a pure
-// function with no external deps, and the route's `anyApproved` computation
-// (exercised below) is meant to run against its real deny-by-default logic.
-vi.mock("@/gateway/playground/engine", async (importOriginal) => {
-  const actual =
-    await importOriginal<typeof import("@/gateway/playground/engine")>();
-  return {
-    ...actual,
-    streamEngineTurn: (...args: unknown[]) => streamEngineTurn(...args),
-    detectPause: (...args: unknown[]) => detectPause(...args),
-    executeWriteBatch: (...args: unknown[]) => executeWriteBatch(...args),
-  };
-});
-
-const putPending = vi.fn();
-const takePending = vi.fn();
-vi.mock("@/gateway/playground/pending", () => ({
-  putPending: (...args: unknown[]) => putPending(...args),
-  takePending: (...args: unknown[]) => takePending(...args),
 }));
 
 const trackPlaygroundMessage = vi.fn();
@@ -63,17 +39,42 @@ const trackPlaygroundToolCall = vi.fn();
 const trackPlaygroundCapHit = vi.fn();
 const trackPlaygroundConfirm = vi.fn();
 vi.mock("@/gateway/track", () => ({
-  trackPlaygroundMessage: (...args: unknown[]) => trackPlaygroundMessage(...args),
-  trackPlaygroundToolCall: (...args: unknown[]) => trackPlaygroundToolCall(...args),
-  trackPlaygroundCapHit: (...args: unknown[]) => trackPlaygroundCapHit(...args),
-  trackPlaygroundConfirm: (...args: unknown[]) => trackPlaygroundConfirm(...args),
+  trackPlaygroundMessage: (...a: unknown[]) => trackPlaygroundMessage(...a),
+  trackPlaygroundToolCall: (...a: unknown[]) => trackPlaygroundToolCall(...a),
+  trackPlaygroundCapHit: (...a: unknown[]) => trackPlaygroundCapHit(...a),
+  trackPlaygroundConfirm: (...a: unknown[]) => trackPlaygroundConfirm(...a),
 }));
 
-vi.mock("@/lib/db", () => ({ db: {} }));
+vi.mock("@/lib/db", () => ({ db: {}, getDb: () => ({}) }));
 
+vi.mock("@/mastra", () => ({
+  getMastra: () => ({ mastra: true }),
+  DATATORAG_AGENT_ID: "datatorag-playground",
+}));
+
+vi.mock("@/mastra/mcp/client", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/mastra/mcp/client")>()),
+  listPluginServers: async () => [
+    { slug: "gws-mcp", containerPort: 1, githubRepoUrl: null },
+    { slug: "atlassian-mcp", containerPort: 2, githubRepoUrl: null },
+  ],
+  loadUserPluginTokens: async (_db: unknown, userId: string) => ({
+    "gws-mcp": `gws-token-for-${userId}`,
+  }),
+}));
+
+const handleChatStream = vi.fn();
+vi.mock("@mastra/ai-sdk", () => ({
+  handleChatStream: (...args: unknown[]) => handleChatStream(...args),
+}));
+
+import { mintRunId } from "@/mastra/run-ownership";
+import { USER_ID_CONTEXT_KEY, userTokenContextKey } from "@/mastra/mcp/client";
 import { POST } from "./route";
 
-function chatRequest(body: unknown, init?: { signal?: AbortSignal }): NextRequest {
+const USER = "user-1";
+
+function post(body: unknown, init?: { signal?: AbortSignal }): NextRequest {
   return new NextRequest("http://localhost/api/playground/chat", {
     method: "POST",
     headers: { "content-type": "application/json" },
@@ -82,595 +83,366 @@ function chatRequest(body: unknown, init?: { signal?: AbortSignal }): NextReques
   });
 }
 
-// UIMessage-shaped body matching buildModelHistory's real contract
-// ({ role, parts: [{ type: "text", text }] }) — the successor of the old
-// client's flat { role, content } shape.
-const validBody = { messages: [{ role: "user", parts: [{ type: "text", text: "hi" }] }] };
-
-type FakeChunk = { type: string; [key: string]: unknown };
-
-/** Turns an array of UIMessage-stream-chunk-shaped objects into a real
- * ReadableStream, standing in for `StreamTextResult#toUIMessageStream()`. */
-function chunkStream(chunks: FakeChunk[]): ReadableStream<FakeChunk> {
+function chunkStream(chunks: UIMessageChunk[]): ReadableStream<UIMessageChunk> {
   return new ReadableStream({
     start(controller) {
-      for (const c of chunks) controller.enqueue(c);
+      for (const chunk of chunks) controller.enqueue(chunk);
       controller.close();
     },
   });
 }
 
-/** Minimal stand-in for the `StreamTextResult` the route consumes — only
- * `toUIMessageStream()` is called on it (detectPause is mocked separately
- * and never inspects this object for real). Ignores whatever options the
- * route passes (e.g. the `onError` added for finding 4) — irrelevant to a
- * fake source that never errors. */
-function fakeResult(chunks: FakeChunk[]) {
-  return { toUIMessageStream: () => chunkStream(chunks) };
-}
-
-/** Same idea as `chunkStream`, but pull-based with a per-chunk delay so the
- * route's internal write loop paces itself in real time instead of draining
- * synchronously — giving a test a real window to read the first chunk off
- * the response and cancel mid-stream, the way an actual client disconnect
- * would land partway through a turn. */
-function slowChunkStream(chunks: FakeChunk[], delayMs: number): ReadableStream<FakeChunk> {
-  let i = 0;
+/** Emits what it is given, then dies — a provider failing mid-turn.
+ *
+ * Pull-based, and it has to be: `controller.error()` resets the queue, so
+ * enqueueing everything up front and then erroring in `start` delivers NOTHING
+ * and silently turns every "content was already delivered" case into "nothing
+ * was delivered". Handing chunks out one read at a time is both the honest
+ * model of a real stream and the only shape in which these tests mean what
+ * they say. */
+function failingStream(before: UIMessageChunk[]): ReadableStream<UIMessageChunk> {
+  let index = 0;
   return new ReadableStream({
-    async pull(controller) {
-      if (i >= chunks.length) {
-        controller.close();
+    pull(controller) {
+      if (index < before.length) {
+        controller.enqueue(before[index++]!);
         return;
       }
-      await new Promise((resolve) => setTimeout(resolve, delayMs));
-      controller.enqueue(chunks[i++]);
+      controller.error(new Error("provider exploded"));
     },
   });
 }
 
-/** Parses the SSE body back into the UI-message chunks the route wrote, so a
- * test can assert on chunk shape/order instead of substring-matching JSON. */
-function sseChunks(body: string): FakeChunk[] {
-  return body
+async function drain(response: Response): Promise<Array<Record<string, unknown>>> {
+  const text = await response.text();
+  return text
     .split("\n")
-    .filter((line) => line.startsWith("data: "))
-    .map((line) => line.slice("data: ".length))
-    .filter((payload) => payload !== "[DONE]")
-    .map((payload) => JSON.parse(payload) as FakeChunk);
+    .filter((line) => line.startsWith("data: ") && !line.includes("[DONE]"))
+    .map((line) => JSON.parse(line.slice(6)) as Record<string, unknown>);
 }
 
-const START: FakeChunk = { type: "start" };
-const FINISH: FakeChunk = { type: "finish", finishReason: "stop" };
+const USER_TURN = [{ id: "u1", role: "user", parts: [{ type: "text", text: "hi" }] }];
 
-// A real content turn: start/finish bookkeeping bracketing an actual
-// text-delta — the shape the refund tap must recognize as "delivered".
-const textChunks = (text: string): FakeChunk[] => [
-  START,
-  { type: "text-start", id: "t1" },
-  { type: "text-delta", id: "t1", delta: text },
-  { type: "text-end", id: "t1" },
-  FINISH,
-];
+/** An approval decision as a client sends one: inline on the trailing
+ * assistant message, carrying a run id this process really minted. */
+function approvalTurn(ownerId: string) {
+  return [
+    ...USER_TURN,
+    {
+      id: "a1",
+      role: "assistant",
+      parts: [
+        {
+          type: "tool-gws-mcp__docs_create",
+          toolCallId: "call-1",
+          state: "approval-responded",
+          input: {},
+          approval: { id: `${mintRunId(ownerId)}::call-1`, approved: true },
+        },
+      ],
+    },
+  ];
+}
 
-describe("POST /api/playground/chat", () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-    getSessionUserId.mockResolvedValue("user-1");
-    getEnv.mockReturnValue({ PLAYGROUND_MESSAGE_CAP: 20 });
-    getPlaygroundModel.mockReturnValue({ modelId: "fake-model" });
-    claimPlaygroundMessage.mockResolvedValue(true);
-    listUserEngineTools.mockResolvedValue({ tools: [], isWrite: () => false });
-    executeUserTool.mockResolvedValue({ text: "ok", isError: false });
-    streamEngineTurn.mockImplementation(() => fakeResult(textChunks("hi there")));
-    detectPause.mockResolvedValue(null);
-    executeWriteBatch.mockResolvedValue({
-      toolMessage: { role: "tool", content: [] },
-      outcomes: [],
-    });
-    putPending.mockReturnValue("resume-token-abc");
-    takePending.mockReturnValue(null);
-    trackPlaygroundMessage.mockResolvedValue(undefined);
-    trackPlaygroundToolCall.mockResolvedValue(undefined);
-    trackPlaygroundCapHit.mockResolvedValue(undefined);
-    trackPlaygroundConfirm.mockResolvedValue(undefined);
-    refundPlaygroundMessage.mockResolvedValue(undefined);
+/** The `params` the route handed the runtime on the most recent call. */
+function lastParams(): Record<string, unknown> {
+  const call = handleChatStream.mock.calls.at(-1)?.[0] as { params: Record<string, unknown> };
+  return call.params;
+}
+
+beforeEach(() => {
+  vi.clearAllMocks();
+  getSessionUserId.mockResolvedValue(USER);
+  getEnv.mockReturnValue({
+    ANTHROPIC_API_KEY: "test-key",
+    PLAYGROUND_MODEL: "claude-haiku-4-5",
+    PLAYGROUND_MESSAGE_CAP: 20,
   });
+  claimPlaygroundMessage.mockResolvedValue(19);
+  refundPlaygroundMessage.mockResolvedValue(undefined);
+  handleChatStream.mockResolvedValue(chunkStream([{ type: "start" }, { type: "finish" }]));
+});
 
-  it("401s without a session", async () => {
+describe("POST /api/playground/chat — guards", () => {
+  it("401s with no session", async () => {
     getSessionUserId.mockResolvedValue(null);
-    const res = await POST(chatRequest(validBody));
-    expect(res.status).toBe(401);
-    expect(await res.json()).toEqual({ error: "Unauthorized" });
+    expect((await POST(post({ messages: USER_TURN }))).status).toBe(401);
   });
 
-  it("403s when the playground is disabled (no model configured)", async () => {
-    getPlaygroundModel.mockReturnValue(null);
-    const res = await POST(chatRequest(validBody));
-    expect(res.status).toBe(403);
-    expect(await res.json()).toEqual({ error: "playground_disabled" });
+  it("403s when no model is configured", async () => {
+    getEnv.mockReturnValue({ ANTHROPIC_API_KEY: "", PLAYGROUND_MESSAGE_CAP: 20 });
+    const response = await POST(post({ messages: USER_TURN }));
+
+    expect(response.status).toBe(403);
+    expect(await response.json()).toEqual({ error: "playground_disabled" });
+    // Nothing charged for a turn that could never have run.
+    expect(claimPlaygroundMessage).not.toHaveBeenCalled();
   });
 
-  it("400s on an empty messages body", async () => {
-    const res = await POST(chatRequest({ messages: [] }));
-    expect(res.status).toBe(400);
-    expect(await res.json()).toEqual({ error: "Bad request" });
-  });
-
-  it("400s when the last turn is not from the user", async () => {
-    const res = await POST(
-      chatRequest({ messages: [{ role: "assistant", parts: [{ type: "text", text: "hi" }] }] })
-    );
-    expect(res.status).toBe(400);
-    expect(await res.json()).toEqual({ error: "Bad request" });
+  it("400s on a body with no usable messages", async () => {
+    for (const body of [{}, { messages: [] }, { messages: "nope" }]) {
+      expect((await POST(post(body))).status).toBe(400);
+    }
+    expect(handleChatStream).not.toHaveBeenCalled();
   });
 
   it("400s on unparseable JSON", async () => {
-    const req = new NextRequest("http://localhost/api/playground/chat", {
+    const request = new NextRequest("http://localhost/api/playground/chat", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: "{not json",
+      body: "{ not json",
     });
-    const res = await POST(req);
-    expect(res.status).toBe(400);
+    expect((await POST(request)).status).toBe(400);
+  });
+});
+
+describe("POST /api/playground/chat — the turn cap", () => {
+  it("429s with cap_exceeded when the claim fails, and records the hit", async () => {
+    claimPlaygroundMessage.mockResolvedValue(null);
+    const response = await POST(post({ messages: USER_TURN }));
+
+    expect(response.status).toBe(429);
+    expect(await response.json()).toEqual({ error: "cap_exceeded", cap: 20 });
+    expect(trackPlaygroundCapHit).toHaveBeenCalledWith({}, USER);
+    expect(handleChatStream).not.toHaveBeenCalled();
   });
 
-  it("429s with cap_exceeded when the claim fails", async () => {
-    claimPlaygroundMessage.mockResolvedValue(false);
-    const res = await POST(chatRequest(validBody));
-    expect(res.status).toBe(429);
-    expect(await res.json()).toEqual({ error: "cap_exceeded", cap: 20 });
-    expect(trackPlaygroundCapHit).toHaveBeenCalledWith({}, "user-1");
-    expect(streamEngineTurn).not.toHaveBeenCalled();
+  it("claims and counts one message on a fresh turn", async () => {
+    await drain(await POST(post({ messages: USER_TURN })));
+
+    expect(claimPlaygroundMessage).toHaveBeenCalledWith({}, USER, 20);
+    expect(trackPlaygroundMessage).toHaveBeenCalledWith({}, USER);
   });
 
-  it("returns a UI message stream (text/event-stream) response on the happy path", async () => {
-    const res = await POST(chatRequest(validBody));
-    expect(res.status).toBe(200);
-    expect(res.headers.get("content-type")).toContain("text/event-stream");
-    expect(trackPlaygroundMessage).toHaveBeenCalledWith({}, "user-1");
-    // Drain the stream so the async execute() body runs to completion.
-    const text = await res.text();
-    expect(text).toContain('"type":"text-delta"');
-    expect(text).toContain("hi there");
-    expect(streamEngineTurn).toHaveBeenCalledTimes(1);
+  it("reports the runs left on the response of the turn that spent one", async () => {
+    claimPlaygroundMessage.mockResolvedValue(3);
+    const response = await POST(post({ messages: USER_TURN }));
+
+    expect(response.headers.get("x-playground-runs-remaining")).toBe("3");
+    expect(response.headers.get("x-playground-runs-cap")).toBe("20");
+    await drain(response);
   });
 
-  it("threads request.signal into EngineDeps.abortSignal on the fresh-turn path", async () => {
-    const res = await POST(chatRequest(validBody));
-    await res.text();
-    const deps = streamEngineTurn.mock.calls[0][0];
-    expect(deps.abortSignal).toBeInstanceOf(AbortSignal);
-  });
-
-  it("wires executeTool to track-then-execute (covers reads and, identically, approved writes)", async () => {
-    const res = await POST(chatRequest(validBody));
-    await res.text();
-    const deps = streamEngineTurn.mock.calls[0][0];
-    await deps.executeTool("gws-mcp__gmail_search", { q: "x" });
-    expect(trackPlaygroundToolCall).toHaveBeenCalledWith({}, "user-1", "gws-mcp__gmail_search");
-    expect(executeUserTool).toHaveBeenCalledWith({}, "user-1", "gws-mcp__gmail_search", { q: "x" });
-  });
-
-  it("refunds the claim when listUserEngineTools fails before streaming", async () => {
-    listUserEngineTools.mockRejectedValue(new Error("db down"));
-    const res = await POST(chatRequest(validBody));
-    expect(res.status).toBe(500);
-    expect(refundPlaygroundMessage).toHaveBeenCalledWith({}, "user-1");
-  });
-
-  it("refunds the claim when the turn fails before any real content is delivered", async () => {
-    // Only bookkeeping chunks reach the writer (no text/tool activity), then
-    // the turn fails — the provider-outage case the refund tap exists for.
-    streamEngineTurn.mockImplementation(() => fakeResult([START]));
-    detectPause.mockRejectedValue(new Error("anthropic outage"));
-    const errSpy = vi.spyOn(console, "error").mockImplementation(() => {});
-    const res = await POST(chatRequest(validBody));
-    expect(res.status).toBe(200);
-    const text = await res.text();
-    expect(text).toContain('"type":"error"');
-    // The raw provider message must never reach the client (SEC-7) — it's
-    // logged server-side and replaced with a generic message.
-    expect(text).not.toContain("anthropic outage");
-    expect(text).toContain("Something went wrong");
-    expect(errSpy).toHaveBeenCalled();
-    expect(refundPlaygroundMessage).toHaveBeenCalledWith({}, "user-1");
-    errSpy.mockRestore();
-  });
-
-  // The next two cases pin BOTH timings of "the client aborted, then the
-  // turn failed" — after real content, and before any content at all. They
-  // deliberately agree (neither refunds): a client abort never refunds,
-  // regardless of when it lands. That's a product decision, not an
-  // oversight — see the `!request.signal.aborted` comment in route.ts. The
-  // `!delivered` branch alone already covers "after content" (tokens were
-  // genuinely spent); the abort exclusion specifically closes the "before
-  // content" loophole (abort immediately after the request is sent, before
-  // a single output token, to farm free-but-not-really-free provider calls
-  // against the user's cap without ever decrementing it).
-
-  it("does NOT refund when the turn fails after real content was already delivered", async () => {
-    // e.g. tokens were spent and text was already streamed (a client abort
-    // mid-generation would surface the same way: content first, failure
-    // after) before a later failure.
-    streamEngineTurn.mockImplementation(() => fakeResult(textChunks("partial answer")));
-    detectPause.mockRejectedValue(new Error("stream interrupted"));
-    const res = await POST(chatRequest(validBody));
-    expect(res.status).toBe(200);
-    const text = await res.text();
-    expect(text).toContain('"type":"text-delta"');
-    expect(text).toContain("partial answer");
-    expect(text).toContain('"type":"error"');
-    expect(refundPlaygroundMessage).not.toHaveBeenCalled();
-  });
-
-  it("does NOT refund when the client aborts BEFORE any content is delivered", async () => {
-    // The DoS-shaped loophole this exists to close: POST a large history,
-    // abort as soon as headers return — before a single content chunk —
-    // and (pre-fix) the cap claim would be refunded every time, letting an
-    // authenticated user loop that indefinitely while real provider input
-    // tokens (the full prompt + tool list) are still spent. The abort here
-    // is a REAL AbortSignal firing (not just "the engine happened to
-    // throw"), landing before any content reaches the tap.
-    const controller = new AbortController();
-    const req = chatRequest(validBody, { signal: controller.signal });
-    streamEngineTurn.mockImplementation(() => {
-      // Simulates the client disconnecting right as the turn starts.
-      controller.abort();
-      return fakeResult([START]); // zero content chunks reach the tap
-    });
-    detectPause.mockRejectedValue(new Error("aborted"));
-    const res = await POST(req);
-    await res.text();
-    expect(refundPlaygroundMessage).not.toHaveBeenCalled();
-  });
-
-  it("does NOT refund on a turn that completes with only bookkeeping chunks and no error", async () => {
-    // Degenerate but non-failing case (e.g. the model produced nothing):
-    // no refund is warranted because nothing THREW — refunds are only for
-    // genuine failures, not "the model said nothing".
-    streamEngineTurn.mockImplementation(() => fakeResult([START, FINISH]));
-    const res = await POST(chatRequest(validBody));
-    await res.text();
-    expect(refundPlaygroundMessage).not.toHaveBeenCalled();
-  });
-
-  it("client disconnect mid-stream: no error escapes the route, and refund fires at most once", async () => {
-    // A slow, pull-based source so the write loop paces itself in real time,
-    // giving this test a genuine window to read the first chunk off the
-    // response and cancel before the (mocked) turn has finished producing —
-    // unlike the other tests, which drain the whole response synchronously.
-    streamEngineTurn.mockImplementation(() => ({
-      toUIMessageStream: () => slowChunkStream(textChunks("a longer streamed reply"), 15),
-    }));
-    const errSpy = vi.spyOn(console, "error").mockImplementation(() => {});
-
-    const res = await POST(chatRequest(validBody));
-    const reader = res.body!.getReader();
-    await reader.read(); // consume the first SSE chunk — response has started
-    await reader.cancel(); // simulate the client disconnecting mid-stream
-
-    // The internal write loop keeps running against the now-torn-down
-    // response controller (createUIMessageStream's own `safeEnqueue` is
-    // documented to swallow those writes) until the mocked turn finishes —
-    // give it time to do so, and to hit anything that would throw.
-    await new Promise((resolve) => setTimeout(resolve, 250));
-
-    const turnFailedLogged = errSpy.mock.calls.some(
-      ([msg]) => typeof msg === "string" && msg.includes("[playground] turn failed")
+  it("reports the quota even when the turn suspends and never emits `finish`", async () => {
+    // The reason this is a HEADER and not part of the finish payload: a turn
+    // gated on a write stops at the approval request, so a stream that legally
+    // never finishes must still be able to say the user is out of runs.
+    claimPlaygroundMessage.mockResolvedValue(0);
+    handleChatStream.mockResolvedValue(
+      chunkStream([
+        { type: "start" },
+        { type: "tool-input-available", toolCallId: "call-1", toolName: "gws-mcp__docs_create", input: {} },
+        { type: "tool-approval-request", toolCallId: "call-1", approvalId: "run::call-1" },
+      ])
     );
-    expect(turnFailedLogged).toBe(false);
-    expect(refundPlaygroundMessage.mock.calls.length).toBeLessThanOrEqual(1);
-    errSpy.mockRestore();
+    const response = await POST(post({ messages: USER_TURN }));
+
+    expect(response.headers.get("x-playground-runs-remaining")).toBe("0");
+    const chunks = await drain(response);
+    expect(chunks.some((c) => c.type === "finish")).toBe(false);
   });
 
-  it("stores the paused turn and emits a data-confirm part when the engine awaits confirmation", async () => {
-    const pausedMessages = [{ role: "assistant", content: [] }];
-    const pending = [{ id: "w_1", name: "gws-mcp__gmail_send", input: { to: "a@b.com" } }];
-    streamEngineTurn.mockImplementation(() => fakeResult(textChunks("let me check")));
-    detectPause.mockResolvedValue({ messages: pausedMessages, pending });
+  it("reports no quota on an approval decision, which spends nothing", async () => {
+    const response = await POST(post({ messages: approvalTurn(USER) }));
 
-    const res = await POST(chatRequest(validBody));
-    const text = await res.text();
-
-    expect(putPending).toHaveBeenCalledWith("user-1", pausedMessages, pending);
-    expect(text).toContain('"type":"data-confirm"');
-    expect(text).toContain("resume-token-abc");
-    expect(text).toContain("gws-mcp__gmail_send");
-    expect(trackPlaygroundConfirm).toHaveBeenCalledWith({}, "user-1", "shown", 1);
+    expect(response.headers.get("x-playground-runs-remaining")).toBeNull();
+    expect(response.headers.get("x-playground-runs-cap")).toBeNull();
+    await drain(response);
   });
 
-  it("resume: does NOT claim a message, runs the write batch, and continues with a second turn", async () => {
-    takePending.mockReturnValue({
-      userId: "user-1",
-      messages: [{ role: "assistant", content: [] }],
-      writes: [{ id: "w_1", name: "gws-mcp__gmail_send", input: {} }],
-      createdAt: 0,
-    });
-    executeWriteBatch.mockResolvedValue({
-      toolMessage: {
-        role: "tool",
-        content: [
-          {
-            type: "tool-result",
-            toolCallId: "w_1",
-            toolName: "gws-mcp__gmail_send",
-            output: { type: "text", value: "sent" },
-          },
-        ],
-      },
-      outcomes: [{ name: "gws-mcp__gmail_send", isError: false, denied: false }],
-    });
-    streamEngineTurn.mockImplementation(() => fakeResult(textChunks("done")));
-
-    const res = await POST(
-      chatRequest({ resumeToken: "resume-token-abc", decisions: { w_1: "approve" } })
-    );
-    const text = await res.text();
+  it("claims nothing on an approval decision — it continues a paid turn", async () => {
+    await drain(await POST(post({ messages: approvalTurn(USER) })));
 
     expect(claimPlaygroundMessage).not.toHaveBeenCalled();
-    expect(trackPlaygroundMessage).not.toHaveBeenCalled();
-    expect(takePending).toHaveBeenCalledWith("user-1", "resume-token-abc");
-    expect(executeWriteBatch).toHaveBeenCalledTimes(1);
-    expect(executeWriteBatch).toHaveBeenCalledWith(
-      expect.objectContaining({ abortSignal: expect.any(AbortSignal) }),
-      [{ id: "w_1", name: "gws-mcp__gmail_send", input: {} }],
-      { w_1: "approve" }
-    );
-    expect(trackPlaygroundConfirm).toHaveBeenCalledWith({}, "user-1", "approved", 1);
-    expect(text).toContain('"type":"data-write-outcome"');
-    expect(text).toContain('"type":"text-delta"');
-    expect(text).toContain("done");
-    // The follow-up turn runs against pending.messages + the write outcome
-    // tool message, not a fresh cap claim's history.
-    expect(streamEngineTurn).toHaveBeenCalledTimes(1);
+    expect(trackPlaygroundConfirm).toHaveBeenCalledWith({}, USER, "approved", 1);
   });
 
-  it("resume: tracks confirm as 'denied' when no write was approved, and never refunds (no claim was made)", async () => {
-    takePending.mockReturnValue({
-      userId: "user-1",
-      messages: [{ role: "assistant", content: [] }],
-      writes: [{ id: "w_1", name: "gws-mcp__gmail_send", input: {} }],
-      createdAt: 0,
-    });
-    const res = await POST(
-      chatRequest({ resumeToken: "resume-token-abc", decisions: { w_1: "deny" } })
+  it("records a decision of 'denied' when nothing in the batch was approved", async () => {
+    const messages = approvalTurn(USER);
+    (messages[1] as { parts: Array<{ approval: { approved: boolean } }> }).parts[0]!
+      .approval.approved = false;
+    await drain(await POST(post({ messages })));
+
+    expect(trackPlaygroundConfirm).toHaveBeenCalledWith({}, USER, "denied", 1);
+  });
+});
+
+describe("POST /api/playground/chat — refunds", () => {
+  it("refunds when the turn dies before it produced anything", async () => {
+    handleChatStream.mockRejectedValue(new Error("nope"));
+    const response = await POST(post({ messages: USER_TURN }));
+
+    expect(response.status).toBe(500);
+    expect(refundPlaygroundMessage).toHaveBeenCalledWith({}, USER);
+  });
+
+  it("refunds when the stream fails having delivered only bookkeeping", async () => {
+    // `start` is enqueued before the model is even called, so a turn that
+    // fails right after it has produced nothing the user can see.
+    handleChatStream.mockResolvedValue(failingStream([{ type: "start" }]));
+    const chunks = await drain(await POST(post({ messages: USER_TURN })));
+
+    expect(chunks.some((c) => c.type === "error")).toBe(true);
+    expect(refundPlaygroundMessage).toHaveBeenCalledWith({}, USER);
+  });
+
+  it("does NOT refund once real content has reached the client", async () => {
+    handleChatStream.mockResolvedValue(
+      failingStream([
+        { type: "start" },
+        { type: "text-start", id: "t0" },
+        { type: "text-delta", id: "t0", delta: "partial answer" },
+      ])
     );
-    await res.text();
-    expect(trackPlaygroundConfirm).toHaveBeenCalledWith({}, "user-1", "denied", 1);
+    await drain(await POST(post({ messages: USER_TURN })));
+
+    // The tokens were really spent. A failure afterwards is not a reason to
+    // hand the turn back.
     expect(refundPlaygroundMessage).not.toHaveBeenCalled();
   });
 
-  it("resume: emits a terminal tool chunk for EVERY pending write, approved and denied", async () => {
-    // `streamText` enqueues the tool-call chunk before it checks
-    // `tool.execute != null`, so a gated write already reached the client as
-    // a `dynamic-tool` part in state `input-available` ("Running", pulsing
-    // clock). The route — not the SDK — executes these, so the route is what
-    // has to close them out; without this the card spins forever, including
-    // after a Deny.
-    takePending.mockReturnValue({
-      userId: "user-1",
-      messages: [{ role: "assistant", content: [] }],
-      writes: [
-        { id: "w_ok", name: "gws-mcp__gmail_send", input: {} },
-        { id: "w_no", name: "gws-mcp__docs_create", input: {} },
-      ],
-      createdAt: 0,
-    });
-    executeWriteBatch.mockResolvedValue({
-      toolMessage: {
-        role: "tool",
-        content: [
-          {
-            type: "tool-result",
-            toolCallId: "w_ok",
-            toolName: "gws-mcp__gmail_send",
-            output: { type: "text", value: "sent" },
-          },
-          {
-            type: "tool-result",
-            toolCallId: "w_no",
-            toolName: "gws-mcp__docs_create",
-            output: { type: "error-text", value: "User declined this action." },
-          },
-        ],
-      },
-      outcomes: [
-        { name: "gws-mcp__gmail_send", isError: false, denied: false },
-        { name: "gws-mcp__docs_create", isError: true, denied: true },
-      ],
-    });
+  it("does NOT refund an aborted request, however early it died", async () => {
+    const controller = new AbortController();
+    controller.abort();
+    handleChatStream.mockResolvedValue(failingStream([{ type: "start" }]));
+    await drain(await POST(post({ messages: USER_TURN }, { signal: controller.signal })));
 
-    const res = await POST(
-      chatRequest({ resumeToken: "resume-token-abc", decisions: { w_ok: "approve" } })
-    );
-    const chunks = sseChunks(await res.text());
-
-    // Approved write → output-available, carrying the real tool output.
-    expect(chunks).toContainEqual({
-      type: "tool-output-available",
-      toolCallId: "w_ok",
-      output: "sent",
-    });
-    // Denied write → output-denied, so the card lands on "Denied" (orange),
-    // not "Running" and not a red "Error" — the user pressed Deny, nothing
-    // failed. The chunk carries no message by design; the reason is conveyed
-    // by the badge plus the data-write-outcome row asserted below.
-    expect(chunks).toContainEqual({
-      type: "tool-output-denied",
-      toolCallId: "w_no",
-    });
-    expect(chunks.some((c) => c.type === "tool-output-error")).toBe(false);
-    // Every pending write is accounted for — none left dangling.
-    const terminal = chunks.filter(
-      (c) =>
-        c.type === "tool-output-available" ||
-        c.type === "tool-output-error" ||
-        c.type === "tool-output-denied"
-    );
-    expect(terminal.map((c) => c.toolCallId)).toEqual(["w_ok", "w_no"]);
-    // The badge stream the client renders separately is untouched.
-    expect(chunks.some((c) => c.type === "data-write-outcome")).toBe(true);
+    // Otherwise "POST a large history, abort at once" is a free loop: real
+    // provider input tokens burned while the cap never moves.
+    expect(refundPlaygroundMessage).not.toHaveBeenCalled();
   });
 
-  // ---------------------------------------------------------------------
-  // Resume continues the SAME assistant message (no duplicate render)
-  //
-  // Manual e2e caught this: after Deny, the tool card, the "Action denied"
-  // line and the write-outcome badges rendered TWICE, in two separate
-  // assistant messages. Cause: `createUIMessageStream` injects a freshly
-  // generated `messageId` onto the `start` chunk (ai@6.0.235 dist/index.js
-  // :8977 -> :6397-6412). Client-side that id lands in
-  // `state.message.id` (:6309-6311) and `AbstractChat.makeRequest`'s
-  // `write()` compares it against `lastMessage.id` to pick `replaceMessage`
-  // vs `pushMessage` (:14003-14011) — a different id pushes a SECOND
-  // message that was structuredClone'd from the paused one, so every part
-  // it already had renders again.
-  //
-  // Three static review passes predicted this mechanism and then concluded
-  // it wasn't triggered, by reasoning from `toUIMessageStream` (which
-  // really does stay silent without `generateMessageId`) and missing the
-  // outer `createUIMessageStream`. So these assert on the REAL stream and
-  // the REAL client, never on the SDK source.
+  it("never refunds on an approval decision — no claim was made to undo", async () => {
+    handleChatStream.mockRejectedValue(new Error("nope"));
+    await POST(post({ messages: approvalTurn(USER) }));
 
-  it("resume: the start chunk carries NO message id, so the client cannot pushMessage", async () => {
-    takePending.mockReturnValue({
-      userId: "user-1",
-      messages: [{ role: "assistant", content: [] }],
-      writes: [{ id: "w_no", name: "gws-mcp__docs_create", input: {} }],
-      createdAt: 0,
-    });
-    executeWriteBatch.mockResolvedValue({
-      toolMessage: { role: "tool", content: [] },
-      outcomes: [{ name: "gws-mcp__docs_create", isError: true, denied: true }],
-    });
-    streamEngineTurn.mockImplementation(() => fakeResult(textChunks("declined")));
+    expect(refundPlaygroundMessage).not.toHaveBeenCalled();
+  });
+});
 
-    const res = await POST(
-      chatRequest({ resumeToken: "resume-token-abc", decisions: { w_no: "deny" } })
+describe("POST /api/playground/chat — metering taps", () => {
+  it("counts a tool call when it produced a result, naming it from the call", async () => {
+    handleChatStream.mockResolvedValue(
+      chunkStream([
+        { type: "start" },
+        { type: "tool-input-available", toolCallId: "c1", toolName: "gws-mcp__docs_get", input: {} },
+        { type: "tool-output-available", toolCallId: "c1", output: "ok" },
+        { type: "finish" },
+      ])
     );
-    const chunks = sseChunks(await res.text());
+    await drain(await POST(post({ messages: USER_TURN })));
 
-    const starts = chunks.filter((c) => c.type === "start");
-    expect(starts).toHaveLength(1);
-    // Absent — NOT merely different. A present-but-different id is exactly
-    // the bug; a present-and-equal id would only be safe if the server knew
-    // the paused message's id, and it deliberately does not (see the
-    // security note in route.ts: the resume body carries the token and the
-    // decisions, nothing else).
-    expect(starts[0]).not.toHaveProperty("messageId");
-
-    // Full order, so a regression that reintroduces an id — or reorders the
-    // terminal tool chunk / badge row that must precede the continuation —
-    // is caught here rather than in manual testing.
-    expect(chunks).toEqual([
-      { type: "tool-output-denied", toolCallId: "w_no" },
-      {
-        type: "data-write-outcome",
-        data: { outcomes: [{ name: "gws-mcp__docs_create", isError: true, denied: true }] },
-      },
-      { type: "start" },
-      { type: "text-start", id: "t1" },
-      { type: "text-delta", id: "t1", delta: "declined" },
-      { type: "text-end", id: "t1" },
-      { type: "finish", finishReason: "stop" },
-    ]);
+    expect(trackPlaygroundToolCall).toHaveBeenCalledWith({}, USER, "gws-mcp__docs_get");
   });
 
-  it("fresh turn: the start chunk DOES carry a message id, so each turn is its own message", async () => {
-    // The other half of the contract — the fix is resume-only.
-    const res = await POST(chatRequest(validBody));
-    const chunks = sseChunks(await res.text());
-    const start = chunks.find((c) => c.type === "start");
-    expect(start).toBeDefined();
-    expect(typeof start!.messageId).toBe("string");
-    expect(start!.messageId).not.toBe("");
-  });
-
-  it("resume: the real SDK client appends into the paused message instead of pushing a duplicate", async () => {
-    // End-to-end at the client level, since the browser session can't be
-    // driven from here: a real `Chat` (the class `useChat` wraps) seeded
-    // with a paused assistant message, talking to the real route over the
-    // real DefaultChatTransport, with the same `prepareSendMessagesRequest`
-    // shape playground.tsx uses. Asserts what the DOM would show — how many
-    // assistant messages exist and which parts each one carries.
-    const { Chat } = await import("@ai-sdk/react");
-    const { DefaultChatTransport } = await import("ai");
-
-    takePending.mockReturnValue({
-      userId: "user-1",
-      messages: [{ role: "assistant", content: [] }],
-      writes: [{ id: "w_no", name: "gws-mcp__docs_create", input: {} }],
-      createdAt: 0,
-    });
-    executeWriteBatch.mockResolvedValue({
-      toolMessage: { role: "tool", content: [] },
-      outcomes: [{ name: "gws-mcp__docs_create", isError: true, denied: true }],
-    });
-    streamEngineTurn.mockImplementation(() =>
-      fakeResult(textChunks("I attempted to create the Google Doc"))
-    );
-
-    const pending = [{ id: "w_no", name: "gws-mcp__docs_create", input: {} }];
-    const chat = new Chat({
-      messages: [
-        { id: "u1", role: "user", parts: [{ type: "text", text: "make a doc" }] },
+  it("does NOT count a gated write that was announced but never ran", async () => {
+    handleChatStream.mockResolvedValue(
+      chunkStream([
+        { type: "start" },
         {
-          id: "a1",
-          role: "assistant",
-          parts: [
-            { type: "step-start" },
-            {
-              type: "dynamic-tool",
-              toolName: "gws-mcp__docs_create",
-              toolCallId: "w_no",
-              state: "input-available",
-              input: {},
-            },
-            {
-              type: "data-confirm",
-              data: { resumeToken: "resume-token-abc", pending },
-            },
-          ],
+          type: "tool-input-available",
+          toolCallId: "c1",
+          toolName: "gws-mcp__docs_create",
+          input: {},
         },
-      ],
-      transport: new DefaultChatTransport({
-        api: "http://localhost/api/playground/chat",
-        fetch: (async (_url: unknown, init: { body?: unknown }) =>
-          POST(chatRequest(JSON.parse(String(init.body))))) as never,
-        prepareSendMessagesRequest: ({ body }: { body?: Record<string, unknown> }) => ({
-          body: { resumeToken: body?.resumeToken, decisions: body?.decisions },
-        }),
-      }),
-      // Mirrors playground.tsx's resolveConfirm: no user message is appended.
-    } as never);
+        { type: "tool-approval-request", approvalId: "r::c1", toolCallId: "c1" },
+      ])
+    );
+    await drain(await POST(post({ messages: USER_TURN })));
 
-    await chat.sendMessage(undefined, {
-      body: { resumeToken: "resume-token-abc", decisions: { w_no: "deny" } },
-    });
-
-    // Two messages, not three: the continuation replaced `a1` in place.
-    expect(chat.messages.map((m) => m.id)).toEqual(["u1", "a1"]);
-    // And `a1` holds ONE of each part — the duplicate render was a second
-    // message carrying a clone of exactly these.
-    expect(chat.messages[1].parts.map((p) => p.type)).toEqual([
-      "step-start",
-      "dynamic-tool",
-      "data-confirm",
-      "data-write-outcome",
-      "text",
-    ]);
+    // Billing for an action the user has not allowed yet — and may decline —
+    // would be charging for intent.
+    expect(trackPlaygroundToolCall).not.toHaveBeenCalled();
+    expect(trackPlaygroundConfirm).toHaveBeenCalledWith({}, USER, "shown", 1);
   });
 
-  it("resume with an unknown/expired token emits an error and never resumes", async () => {
-    takePending.mockReturnValue(null);
-    const res = await POST(
-      chatRequest({ resumeToken: "gone", decisions: { w_1: "approve" } })
+  it("counts a tool call whose result was an error", async () => {
+    handleChatStream.mockResolvedValue(
+      chunkStream([
+        { type: "start" },
+        { type: "tool-input-available", toolCallId: "c1", toolName: "gws-mcp__docs_get", input: {} },
+        { type: "tool-output-error", toolCallId: "c1", errorText: "boom" },
+      ])
     );
-    const text = await res.text();
+    await drain(await POST(post({ messages: USER_TURN })));
 
-    expect(executeWriteBatch).not.toHaveBeenCalled();
-    expect(streamEngineTurn).not.toHaveBeenCalled();
-    expect(text).toContain('"type":"error"');
-    expect(text).toContain("This confirmation expired — please run the prompt again.");
+    // The call reached the plugin; failing there does not un-spend it.
+    expect(trackPlaygroundToolCall).toHaveBeenCalledWith({}, USER, "gws-mcp__docs_get");
+  });
+});
+
+describe("POST /api/playground/chat — what reaches the runtime", () => {
+  it("streams back a UI message stream on the happy path", async () => {
+    const response = await POST(post({ messages: USER_TURN }));
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("content-type")).toContain("text/event-stream");
+    expect(await drain(response)).toEqual([{ type: "start" }, { type: "finish" }]);
+  });
+
+  it("names the agent and the runtime's v6 output protocol", async () => {
+    await drain(await POST(post({ messages: USER_TURN })));
+    const call = handleChatStream.mock.calls[0]![0] as Record<string, unknown>;
+
+    expect(call.agentId).toBe("datatorag-playground");
+    // NOT the app's SDK version — the runtime's emitter. v6 is what carries a
+    // native approval part; v5 silently falls back to a custom data part.
+    expect(call.version).toBe("v6");
+  });
+
+  it("carries the caller's identity and per-plugin tokens in params", async () => {
+    await drain(await POST(post({ messages: USER_TURN })));
+    const context = lastParams().requestContext as { get: (k: string) => unknown };
+
+    expect(context.get(USER_ID_CONTEXT_KEY)).toBe(USER);
+    // Keyed PER PLUGIN. One shared key would hand the Atlassian plugin the
+    // user's Google token.
+    expect(context.get(userTokenContextKey("gws-mcp"))).toBe(`gws-token-for-${USER}`);
+    expect(context.get(userTokenContextKey("atlassian-mcp"))).toBeUndefined();
+  });
+
+  it("mints a run id for a fresh turn and none for an approval decision", async () => {
+    await drain(await POST(post({ messages: USER_TURN })));
+    expect(typeof lastParams().runId).toBe("string");
+
+    // On a decision the runtime takes the run id off the approval itself.
+    await drain(await POST(post({ messages: approvalTurn(USER) })));
+    expect(lastParams().runId).toBeUndefined();
+  });
+
+  it("never forwards a client-supplied runId or resumeData", async () => {
+    await drain(
+      await POST(
+        post({ messages: USER_TURN, runId: "attacker-run-id", resumeData: { approved: true } })
+      )
+    );
+    const params = lastParams();
+
+    // Both are direct resume primitives on the runtime's API. The route
+    // constructs its own or sends neither; it never relays the body's.
+    expect(params.runId).not.toBe("attacker-run-id");
+    expect(params.resumeData).toBeUndefined();
+  });
+
+  it("namespaces the conversation thread by user, so an id cannot cross accounts", async () => {
+    await drain(await POST(post({ messages: USER_TURN, id: "shared-chat-id" })));
+    const asUserOne = (lastParams().memory as { thread: string }).thread;
+
+    getSessionUserId.mockResolvedValue("user-2");
+    await drain(await POST(post({ messages: USER_TURN, id: "shared-chat-id" })));
+    const memory = lastParams().memory as { thread: string; resource: string };
+
+    expect(memory.resource).toBe("user-2");
+    // Same conversation id from the browser, two different threads.
+    expect(memory.thread).not.toBe(asUserOne);
+  });
+
+  it("rejects an approval whose run id belongs to somebody else", async () => {
+    const response = await POST(post({ messages: approvalTurn("someone-else") }));
+
+    expect(response.status).toBe(403);
+    // The runtime is never handed the request at all — the refusal lands
+    // before anything that could resume.
+    expect(handleChatStream).not.toHaveBeenCalled();
   });
 });

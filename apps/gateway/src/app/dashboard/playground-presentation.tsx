@@ -5,11 +5,20 @@
  * marketing/ads demo) with zero chat runtime behind them.
  *
  * ZERO runtime imports from `ai` or `@ai-sdk/react` — only type-only ones,
- * which are erased at build time. `playground.tsx` (the container, which DOES
- * import `useChat`/`DefaultChatTransport`) composes these. */
+ * which are erased at build time. That is why the part guards below are
+ * hand-written string checks rather than the SDK's `isToolUIPart`/`getToolName`
+ * helpers: those are runtime exports, and importing one would drag the whole
+ * chat runtime into a bundle whose entire point is not having it. The checks
+ * are the same one-liners the SDK uses. `playground.tsx` (the container, which
+ * DOES import `useChat`) composes these.
+ *
+ * Every part rendered here is a STANDARD assistant-message part. There is no
+ * playground-specific stream protocol any more: tool activity, the pause for
+ * approval, the approved run's result and a denial are all states of one
+ * `tool-<name>` part, which is what the agent runtime emits natively. */
 
 import { memo } from "react";
-import type { DynamicToolUIPart, UIMessage } from "ai";
+import type { DynamicToolUIPart, ToolUIPart, UIMessage } from "ai";
 import { RefreshCcwIcon, ThumbsDownIcon, ThumbsUpIcon } from "lucide-react";
 
 import {
@@ -26,10 +35,8 @@ import {
   ToolInput,
   ToolOutput,
 } from "@/components/ai-elements/tool";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import type { Decision, PendingWrite } from "@/gateway/playground/engine";
 // Value import (not `import type`) — the string is compared at runtime. The
 // module is dependency-free (a console.error and two exports), so pulling it
 // into the client bundle costs nothing and drags in no server-only API.
@@ -39,24 +46,26 @@ import { GENERIC_ERROR_MESSAGE as SERVER_GENERIC_ERROR } from "@/lib/errors";
 /* Wire types                                                                  */
 /* -------------------------------------------------------------------------- */
 
-/** One entry of the route's `data-write-outcome` payload. Mirrors
- * `executeWriteBatch`'s return shape in the engine (which types it inline, so
- * there is nothing importable). NOTE: `denied` conflates "the user denied this
- * write" with "the batch was aborted before this write ran" — the server cannot
- * tell them apart downstream, so the UI must not invent a distinction. */
-export type WriteOutcome = { name: string; isError: boolean; denied: boolean };
-
-/** Custom stream parts the playground route writes alongside the standard
- * text/tool parts. Keys become `data-<key>` part types. */
-type PlaygroundDataParts = {
-  confirm: { resumeToken: string; pending: PendingWrite[] };
-  "write-outcome": { outcomes: WriteOutcome[] };
-};
-
 /** The message shape flowing through `useChat` — and, equally, the shape the
  * presentation components below accept. Anything that can produce a
- * `PlaygroundMessage[]` (a live chat, a canned script) can drive the UI. */
-export type PlaygroundMessage = UIMessage<unknown, PlaygroundDataParts>;
+ * `PlaygroundMessage[]` (a live chat, a canned script) can drive the UI.
+ *
+ * Deliberately the SDK's plain `UIMessage`, with no custom data-part map: the
+ * playground no longer adds parts of its own. */
+export type PlaygroundMessage = UIMessage;
+
+export type PlaygroundMessagePart = PlaygroundMessage["parts"][number];
+
+/** A tool invocation part, in either of the two shapes the SDK produces.
+ *
+ * Both are handled on purpose. Tools resolved through MCP arrive with
+ * `dynamic: false`, so they assemble as `tool-<name>` — the case that actually
+ * occurs today, and the one the previous version of this file did NOT match
+ * (it matched `dynamic-tool` only, which renders nothing at all while the rest
+ * of the chat streams perfectly: a silent blank where a tool card belongs).
+ * `dynamic-tool` stays supported because tolerating both costs one branch and
+ * the failure mode of guessing wrong is invisible. */
+export type AnyToolPart = ToolUIPart | DynamicToolUIPart;
 
 export type FeedbackState = "idle" | "down-pending" | "sending" | "thanks";
 
@@ -71,9 +80,8 @@ export const GENERIC_ERROR = "Something went wrong. Please try again.";
  * A stream `error` chunk reaches us as `new Error(chunk.errorText)`, so
  * `error.message` is whatever the route wrote. Two kinds arrive:
  *
- *  - Actionable, server-authored copy — today that's the expired-resume-token
- *    notice ("This confirmation expired — please run the prompt again."),
- *    which tells the user exactly what to do and must survive verbatim.
+ *  - Actionable, server-authored copy, which tells the user exactly what to do
+ *    and must survive verbatim.
  *  - `logAndGenericError`'s placeholder, which carries no more information
  *    than our own copy but is worded differently. Showing it would mean the
  *    product has two different "generic error" strings depending on whether
@@ -97,6 +105,45 @@ export function errorBubbleText(error: Error | undefined): string {
 /* Pure helpers                                                                */
 /* -------------------------------------------------------------------------- */
 
+/** Whether a message part is a tool invocation, in either shape.
+ *
+ * The `tool-` prefix test is the whole point of this module's rewrite: no other
+ * part type in the SDK's vocabulary starts with it (`text`, `reasoning*`,
+ * `source-*`, `file`, `data-*`, `step-start`, `custom`, `dynamic-tool`), so the
+ * prefix is unambiguous. */
+export function isToolPart(part: PlaygroundMessagePart): part is AnyToolPart {
+  return part.type === "dynamic-tool" || part.type.startsWith("tool-");
+}
+
+/** The tool's name, wherever this part shape keeps it. */
+export function toolPartName(part: AnyToolPart): string {
+  return part.type === "dynamic-tool"
+    ? part.toolName
+    : part.type.slice("tool-".length);
+}
+
+/** The approval id this part is waiting on, if it is waiting on one.
+ *
+ * ⚠️ The returned string is a SERVER-MINTED CREDENTIAL and must be handed back
+ * byte-for-byte. It embeds a run id that carries its owner in an HMAC the
+ * server verifies in constant time, so trimming, re-encoding, splitting or
+ * regenerating any part of it makes the user unable to approve their own write
+ * (the server answers 403). Read it, pass it, never touch it. */
+export function pendingApprovalId(
+  part: PlaygroundMessagePart
+): string | undefined {
+  return isToolPart(part) && part.state === "approval-requested"
+    ? part.approval.id
+    : undefined;
+}
+
+/** Whether any message is holding the conversation open on a decision. */
+export function hasPendingApproval(messages: PlaygroundMessage[]): boolean {
+  return messages.some((message) =>
+    message.parts.some((part) => pendingApprovalId(part) !== undefined)
+  );
+}
+
 /** MCP tool names arrive namespaced as `<slug>__<tool>`; only the tail is
  * meaningful to a user reading a confirmation card or a tool chip. */
 export function shortToolName(name: string): string {
@@ -105,8 +152,15 @@ export function shortToolName(name: string): string {
 
 /** Compact one-line summary of a pending write's arguments, shown on the
  * confirmation card so the user sees what will actually run before approving. */
-export function summarizeArgs(input: Record<string, unknown>): string {
-  const s = JSON.stringify(input ?? {});
+export function summarizeArgs(input: unknown): string {
+  let s: string;
+  try {
+    s = JSON.stringify(input ?? {}) ?? "{}";
+  } catch {
+    // A tool input that will not serialize is a bug at the tool, not a reason
+    // to render nothing where the user expects to see what they are approving.
+    s = "{}";
+  }
   return s.length > 160 ? `${s.slice(0, 159)}…` : s;
 }
 
@@ -125,14 +179,27 @@ export function messageText(message: PlaygroundMessage): string {
 /* canned script (marketing demo) with no chat runtime behind them.            */
 /* -------------------------------------------------------------------------- */
 
-function ToolCard({ part }: { part: DynamicToolUIPart }) {
+/** One tool invocation, at whatever stage it has reached.
+ *
+ * DENIED VS NEVER-RAN, which used to be one conflated flag on a custom part,
+ * is now simply the part's own state and needs nothing from us: the runtime
+ * moves a refused call to `output-denied` ("Denied"), while a call that was
+ * approved but whose turn ended before it produced anything stays at
+ * `approval-responded` ("Responded") and one that was never decided stays at
+ * `approval-requested` ("Awaiting Approval"). Three distinct badges, from the
+ * standard part, per call rather than per batch. */
+export function ToolCard({ part }: { part: AnyToolPart }) {
+  const name = shortToolName(toolPartName(part));
   return (
     <Tool className="mb-0 text-xs">
-      <ToolHeader
-        state={part.state}
-        toolName={shortToolName(part.toolName)}
-        type="dynamic-tool"
-      />
+      {/* `title` overrides the header's own name derivation, which would
+          otherwise show the full `<slug>__<tool>` type. The two branches exist
+          because the header's props are a discriminated union on `type`. */}
+      {part.type === "dynamic-tool" ? (
+        <ToolHeader state={part.state} toolName={name} type="dynamic-tool" />
+      ) : (
+        <ToolHeader state={part.state} title={name} type={part.type} />
+      )}
       <ToolContent>
         <ToolInput input={part.input ?? {}} />
         <ToolOutput errorText={part.errorText} output={part.output} />
@@ -142,57 +209,39 @@ function ToolCard({ part }: { part: DynamicToolUIPart }) {
 }
 
 export interface ConfirmCardProps {
-  resumeToken: string;
-  pending: PendingWrite[];
-  /** Client-local resolution for this token, if the user already decided.
-   * The server never rewrites the original `data-confirm` part. */
-  resolution: Decision | undefined;
+  /** Server-minted, opaque, and passed back UNCHANGED — see
+   * {@link pendingApprovalId}. */
+  approvalId: string;
+  toolName: string;
+  input: unknown;
   /** Approve/Deny are locked while a request is in flight. */
   disabled: boolean;
-  onDecide: (
-    resumeToken: string,
-    pending: PendingWrite[],
-    decision: Decision
-  ) => void;
+  onDecide: (approvalId: string, approved: boolean) => void;
 }
 
-function ConfirmCard({
-  resumeToken,
-  pending,
-  resolution,
+export function ConfirmCard({
+  approvalId,
+  toolName,
+  input,
   disabled,
   onDecide,
 }: ConfirmCardProps) {
-  if (resolution) {
-    return (
-      <p className="text-[11px] text-muted-foreground">
-        Action {resolution === "approve" ? "approved" : "denied"}
-      </p>
-    );
-  }
-
   return (
     <div className="rounded-2xl border border-amber-300 bg-amber-50 px-3 py-2.5 text-xs">
       <p className="font-medium text-amber-900">
         Approve this action before it runs?
       </p>
-      <ul className="mt-1.5 space-y-1">
-        {pending.map((write) => (
-          <li key={write.id} className="text-amber-800">
-            <span className="font-mono font-medium">
-              {shortToolName(write.name)}
-            </span>
-            <span className="break-all text-amber-700">
-              {" · "}
-              {summarizeArgs(write.input)}
-            </span>
-          </li>
-        ))}
-      </ul>
+      <p className="mt-1.5 text-amber-800">
+        <span className="font-mono font-medium">{shortToolName(toolName)}</span>
+        <span className="break-all text-amber-700">
+          {" · "}
+          {summarizeArgs(input)}
+        </span>
+      </p>
       <div className="mt-2 flex gap-2">
         <Button
           disabled={disabled}
-          onClick={() => onDecide(resumeToken, pending, "approve")}
+          onClick={() => onDecide(approvalId, true)}
           size="xs"
         >
           Approve &amp; run
@@ -200,28 +249,13 @@ function ConfirmCard({
         <Button
           className="border-amber-300 bg-transparent text-amber-900 hover:bg-amber-100"
           disabled={disabled}
-          onClick={() => onDecide(resumeToken, pending, "deny")}
+          onClick={() => onDecide(approvalId, false)}
           size="xs"
           variant="outline"
         >
           Deny
         </Button>
       </div>
-    </div>
-  );
-}
-
-export function WriteOutcomes({ outcomes }: { outcomes: WriteOutcome[] }) {
-  return (
-    <div className="flex flex-wrap gap-1.5">
-      {outcomes.map((outcome, i) => (
-        <span className="flex items-center gap-1" key={i}>
-          <Badge variant={outcome.isError ? "destructive" : "success"}>
-            {shortToolName(outcome.name)}
-          </Badge>
-          {outcome.denied && <Badge variant="secondary">denied</Badge>}
-        </span>
-      ))}
     </div>
   );
 }
@@ -295,11 +329,9 @@ interface MessageRowProps {
    * message at all — computed by the caller from completeness + error state,
    * since those are list-wide concerns this row doesn't need to know about. */
   showActions: boolean;
-  /** Client-local approve/deny decisions, keyed by resume token. */
-  resolvedTokens: ReadonlyMap<string, Decision>;
   /** A request is in flight — confirm buttons and regenerate are locked. */
   busy: boolean;
-  /** True while an unresolved confirm gates the conversation. */
+  /** True while an unresolved approval gates the conversation. */
   awaitingConfirm: boolean;
   onDecide: ConfirmCardProps["onDecide"];
   onRegenerate: () => void;
@@ -320,7 +352,6 @@ export const MessageRow = memo(function MessageRow({
   message,
   isLast,
   showActions,
-  resolvedTokens,
   busy,
   awaitingConfirm,
   onDecide,
@@ -359,23 +390,26 @@ export const MessageRow = memo(function MessageRow({
               </MessageResponse>
             );
           }
-          if (part.type === "dynamic-tool") {
-            return <ToolCard key={key} part={part} />;
-          }
-          if (part.type === "data-confirm") {
+          if (isToolPart(part)) {
+            const approvalId = pendingApprovalId(part);
             return (
-              <ConfirmCard
-                disabled={busy}
-                key={key}
-                onDecide={onDecide}
-                pending={part.data.pending}
-                resolution={resolvedTokens.get(part.data.resumeToken)}
-                resumeToken={part.data.resumeToken}
-              />
+              <div className="space-y-2" key={key}>
+                <ToolCard part={part} />
+                {/* The confirm card is bound to the SAME part: an approval
+                    request is a state of the tool call, not a message of its
+                    own, so the card appears under the tool it gates and
+                    disappears the moment the part moves on. */}
+                {approvalId !== undefined && (
+                  <ConfirmCard
+                    approvalId={approvalId}
+                    disabled={busy}
+                    input={part.input}
+                    onDecide={onDecide}
+                    toolName={toolPartName(part)}
+                  />
+                )}
+              </div>
             );
-          }
-          if (part.type === "data-write-outcome") {
-            return <WriteOutcomes key={key} outcomes={part.data.outcomes} />;
           }
           return null;
         })}
@@ -409,8 +443,6 @@ export const MessageRow = memo(function MessageRow({
 
 export interface MessageListProps {
   messages: PlaygroundMessage[];
-  /** Client-local approve/deny decisions, keyed by resume token. */
-  resolvedTokens: ReadonlyMap<string, Decision>;
   /** A request is in flight — confirm buttons and regenerate are locked. */
   busy: boolean;
   /** Whether the final message in the list has finished streaming. Earlier
@@ -418,7 +450,7 @@ export interface MessageListProps {
   lastMessageComplete: boolean;
   /** Assistant messages whose turn ended in an error; they get no feedback UI. */
   erroredIds: ReadonlySet<string>;
-  /** True while an unresolved confirm gates the conversation. */
+  /** True while an unresolved approval gates the conversation. */
   awaitingConfirm: boolean;
   onDecide: ConfirmCardProps["onDecide"];
   onRegenerate: () => void;
@@ -431,7 +463,6 @@ export interface MessageListProps {
 
 export function MessageList({
   messages,
-  resolvedTokens,
   busy,
   lastMessageComplete,
   erroredIds,
@@ -449,8 +480,16 @@ export function MessageList({
       {messages.map((message, index) => {
         const isLast = index === messages.length - 1;
         const complete = !isLast || lastMessageComplete;
+        // A turn suspended on an approval is "complete" by every signal the
+        // chat runtime has — the stream really did close, with no `finish`
+        // part, and the status really is `ready`. It is not finished, though,
+        // so the last message gets no regenerate/feedback row until the user
+        // decides.
         const showActions =
-          message.role === "assistant" && complete && !erroredIds.has(message.id);
+          message.role === "assistant" &&
+          complete &&
+          !erroredIds.has(message.id) &&
+          !(isLast && awaitingConfirm);
 
         return (
           <MessageRow
@@ -466,7 +505,6 @@ export function MessageList({
             onRate={onRate}
             onRegenerate={onRegenerate}
             onSendComment={onSendComment}
-            resolvedTokens={resolvedTokens}
             showActions={showActions}
           />
         );
