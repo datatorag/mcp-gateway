@@ -144,7 +144,18 @@ export function findApprovalTargets(messages: unknown): ApprovalTarget[] {
  * id, or conversation history silently forks on every restart. It does not
  * need to be unguessable, because guessing it buys nothing: the derivation
  * already binds it to one account, and thread reads are additionally scoped by
- * the `resource` we pass alongside it. Plain hashing is the right tool. */
+ * the `resource` we pass alongside it. Plain hashing is the right tool.
+ *
+ * THIS DERIVATION IS THE CONTROL, not a tidiness measure — measured, not
+ * assumed. Handing the runtime one user's thread id alongside another user's
+ * resource id recalls NOTHING of the first user's conversation, so reads are
+ * genuinely scoped by the pair. But the write is not refused: the second
+ * user's messages land in the named thread, tagged with their own resource id,
+ * where neither party will ever recall them. So the reason no user can address
+ * another's thread is that the id is derived here, from the session user, and
+ * never accepted from the request — keep it that way. Taking a thread id off
+ * the wire would not leak a conversation, but it would let anyone scribble
+ * into anyone's. */
 export function deriveThreadId(userId: string, clientThreadId: string): string {
   return createHash("sha256")
     .update(`${userId}\u0000${clientThreadId}`)

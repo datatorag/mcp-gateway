@@ -256,6 +256,17 @@ export function resetPluginMCPClient(): void {
  * tool objects fresh on every listing, so the object we are handed belongs to
  * this request. Copying a class instance would risk dropping whatever the
  * framework keeps off the own-property surface.
+ *
+ * NOT TAKEN UP YET, and worth knowing before anyone redesigns the classifier:
+ * `requireApproval` also accepts `(input, ctx) => boolean | Promise<boolean>`,
+ * so the decision may read the tool's ARGUMENTS and not just its name. That
+ * makes rules like "sending mail outside the company needs approval, internal
+ * does not" expressible, which a name-based classifier cannot say at all — it
+ * sees `gws-mcp__gmail_send` and nothing about the recipient. Deliberately not
+ * built here: an input-aware rule is a product policy decision, and this change
+ * was scoped to keeping the existing gate's behaviour identical. The current
+ * boolean form is the floor either way — an input-aware rule may raise a read
+ * to needing approval, never lower a write.
  */
 export function applyToolPolicy(
   namespacedName: string,

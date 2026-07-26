@@ -1,3 +1,35 @@
+# Env-gated e2e harnesses
+
+Two suites live here, each gated on its own env var and each reporting as
+**skipped** with nothing set:
+
+| Suite | Gate | What it needs |
+|---|---|---|
+| `mcp.e2e.test.ts` | `MCP_E2E_URL` | a running gateway to talk to |
+| `playground-persistence.e2e.test.ts` | `PLAYGROUND_PERSISTENCE_URL` | a **non-production** Postgres URL it may write to |
+
+## Playground conversation persistence
+
+`playground-persistence.e2e.test.ts` proves that a playground conversation is
+actually written to Postgres and is recalled out of it by a runtime that never
+saw the conversation happen — the claim that cannot be checked from the API
+surface, because supplying a thread and resource with no memory attached
+silently stores nothing and looks identical to success.
+
+It **writes to the database it is given**, so it takes its own URL and
+deliberately does not fall back to `DATABASE_URL`: a fallback would mean a
+shell configured for production runs a write test against production. Point it
+at a development branch.
+
+```bash
+cd apps/gateway
+PLAYGROUND_PERSISTENCE_URL='postgresql://…dev-branch…' pnpm vitest run e2e/
+```
+
+Rows are scoped to a per-run random user id and deleted afterwards. Allow it a
+couple of minutes on a cold database — it opens two pools and the store
+reconciles its schema on first use.
+
 # MCP front-door e2e harness
 
 `apps/gateway/e2e/mcp.e2e.test.ts` is an **env-gated** end-to-end suite that

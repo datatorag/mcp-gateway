@@ -161,6 +161,18 @@ export function createDatatoragAgent(
     // like working persistence until you go looking for the rows. That is why
     // the instance is attached here and not assumed.
     //
+    // AND NO, THIS DOES NOT SEND THE CONVERSATION TWICE. The chat client posts
+    // the whole conversation on every turn, and memory recalls the same
+    // conversation out of storage, so the obvious worry is a prompt that
+    // carries each turn once per source — invisible in behaviour, and a
+    // provider bill that grows with the square of the conversation. It was
+    // measured on the captured request body rather than reasoned about: the
+    // two sources are merged by message id, an early message appears in the
+    // outgoing prompt exactly once at turn three, and re-posted turns produce
+    // no duplicate rows. `../memory-recall.test.ts` pins those counts so a
+    // dependency bump that starts concatenating fails there instead of on an
+    // invoice.
+    //
     // Semantic recall and working memory stay off: both are opt-in, semantic
     // recall additionally needs a vector store we do not run, and neither is
     // needed to simply keep a conversation.

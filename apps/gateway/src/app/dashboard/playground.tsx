@@ -167,6 +167,23 @@ export const Playground = forwardRef<PlaygroundHandle, PlaygroundProps>(
       error,
     } = useChat<PlaygroundMessage>({
       transport,
+      // NO `id`, SO EVERY PAGE LOAD IS A NEW CONVERSATION — deliberate, and
+      // not the same thing as conversations not being saved. The server now
+      // persists every turn, keyed by the conversation id the browser sends;
+      // with no `id` here the chat runtime mints a fresh one per mount, so a
+      // reload starts a new thread and the previous one stays on disk,
+      // complete, addressed by nobody.
+      //
+      // DO NOT "fix" this by pinning a stable id on its own. A stable id
+      // without also loading that thread's messages back into this list gives
+      // the user an empty transcript that the assistant nonetheless remembers
+      // — invisible context they cannot see, edit, or clear, re-sent and
+      // re-billed on every turn. Worse, a thread whose last turn stopped on an
+      // approval would come back with a pending decision that is no longer
+      // answerable: the suspended run is consumed on first use, and approval
+      // ids do not survive a restart by design (see mastra/run-ownership.ts).
+      // Restoring a conversation means restoring its messages and handling
+      // that state, together, in one change.
       // Recording a decision has to POST it, or the suspended turn never
       // resumes. This fires that request once every gated call in the last
       // step has an answer — so a turn that paused on two writes waits for
