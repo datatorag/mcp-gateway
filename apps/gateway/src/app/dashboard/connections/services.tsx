@@ -2,7 +2,8 @@ export interface ServiceConfig {
   id: string;
   name: string;
   description: string;
-  capabilities: string[];
+  /** One line per capability, tagged with the ServiceIcon keys it covers. */
+  capabilities: { text: string; services: string[] }[];
   connectUrl: string;
   icon: React.ReactNode;
 }
@@ -14,9 +15,22 @@ export const SERVICES: ServiceConfig[] = [
     description:
       "Gmail, Drive, Calendar, Docs, Sheets, Slides, Contacts, and Tasks",
     capabilities: [
-      "Search emails, send replies, create and update drafts",
-      "Read and create Docs, Sheets, and Slides",
-      "Search Drive, manage files and folders",
+      {
+        text: "Search emails, send replies, create and update drafts",
+        services: ["gmail"],
+      },
+      {
+        text: "Read and create Docs, Sheets, and Slides",
+        services: ["docs", "sheets", "slides"],
+      },
+      {
+        text: "Search Drive, manage files and folders",
+        services: ["drive"],
+      },
+      {
+        text: "Manage Calendar events, Contacts, and Tasks",
+        services: ["calendar", "contacts", "tasks"],
+      },
     ],
     connectUrl: "/auth/google/connect",
     icon: (
@@ -45,9 +59,18 @@ export const SERVICES: ServiceConfig[] = [
     name: "Atlassian",
     description: "Jira and Confluence — issues, pages, comments, and search",
     capabilities: [
-      "Search, create, and update Jira issues",
-      "Read and edit Confluence pages",
-      "Manage comments, transitions, and attachments",
+      {
+        text: "Search, create, and update Jira issues",
+        services: ["jira"],
+      },
+      {
+        text: "Read and edit Confluence pages",
+        services: ["confluence"],
+      },
+      {
+        text: "Manage comments, transitions, and attachments",
+        services: ["jira", "confluence"],
+      },
     ],
     connectUrl: "/auth/atlassian/connect",
     icon: (

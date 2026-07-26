@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import type { ConnectedAccount, LegacyConnection } from "../types";
+import { ServiceIcon, serviceFromToolName } from "@/components/service-icon";
 
 interface Tool {
   name: string;
@@ -330,7 +331,13 @@ export function ConnectionDetailClient({
                   : "text-foreground hover:bg-secondary"
               }`}
             >
-              <span className="font-medium font-mono text-xs">{tool.name}</span>
+              <span className="inline-flex items-center gap-1.5 font-medium font-mono text-xs">
+                <ServiceIcon
+                  service={serviceFromToolName(tool.namespacedName)}
+                  size={14}
+                />
+                {tool.name}
+              </span>
               {tool.description && (
                 <span className="ml-2 text-xs text-muted-foreground">
                   {tool.description.length > 80

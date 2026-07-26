@@ -19,6 +19,7 @@ import {
 import type { ComponentProps, ReactNode } from "react";
 import { isValidElement } from "react";
 
+import { ServiceIcon, serviceFromToolName } from "@/components/service-icon";
 import { CodeBlock } from "./code-block";
 import { formatToolOutput } from "./format-tool-output";
 
@@ -82,6 +83,7 @@ export const ToolHeader = ({
 }: ToolHeaderProps) => {
   const derivedName =
     type === "dynamic-tool" ? toolName : type.split("-").slice(1).join("-");
+  const service = serviceFromToolName(derivedName);
 
   return (
     <CollapsibleTrigger
@@ -95,7 +97,11 @@ export const ToolHeader = ({
           <button> (nativeButton defaults true), which only accepts phrasing
           content. */}
       <span className="flex items-center gap-2">
-        <WrenchIcon className="size-4 text-muted-foreground" />
+        {service ? (
+          <ServiceIcon service={service} size={16} />
+        ) : (
+          <WrenchIcon className="size-4 text-muted-foreground" />
+        )}
         <span className="font-medium text-sm">{title ?? derivedName}</span>
         {getStatusBadge(state)}
       </span>

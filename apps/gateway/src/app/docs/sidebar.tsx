@@ -4,6 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import type { DocPage, ConnectorGroup } from "@/lib/docs";
+import { ServiceIcon, serviceFromSlug } from "@/components/service-icon";
 
 interface Props {
   topLevel: Pick<DocPage, "slug" | "title">[];
@@ -21,7 +22,7 @@ export function DocsSidebar({ topLevel, groups, onNavigate }: Props) {
   const isActive = (slug: string) => pathname === `/docs/${slug}`;
 
   const itemClass = (slug: string) =>
-    `block rounded-lg px-3 py-1.5 text-sm transition-colors ${
+    `flex items-center gap-2 rounded-lg px-3 py-1.5 text-sm transition-colors ${
       isActive(slug)
         ? "bg-secondary font-medium text-foreground"
         : "text-muted-foreground hover:bg-secondary hover:text-foreground"
@@ -111,16 +112,20 @@ function ConnectorGroupNav({
 
       {expanded && pages.length > 0 && (
         <div className="ml-2 mt-0.5 space-y-0.5 border-l border-border pl-2">
-          {pages.map((page) => (
-            <Link
-              key={page.slug}
-              href={`/docs/${page.slug}`}
-              onClick={onNavigate}
-              className={itemClass(page.slug)}
-            >
-              {page.title}
-            </Link>
-          ))}
+          {pages.map((page) => {
+            const service = serviceFromSlug(page.slug);
+            return (
+              <Link
+                key={page.slug}
+                href={`/docs/${page.slug}`}
+                onClick={onNavigate}
+                className={itemClass(page.slug)}
+              >
+                {service && <ServiceIcon service={service} size={15} />}
+                {page.title}
+              </Link>
+            );
+          })}
         </div>
       )}
     </div>

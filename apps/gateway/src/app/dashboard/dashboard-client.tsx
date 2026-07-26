@@ -7,6 +7,7 @@ import { Play, Copy, Check } from "lucide-react";
 import { EVENTS } from "@/lib/analytics";
 import { reportSignupConversion } from "@/components/google-ads";
 import { SERVICES } from "./connections/services";
+import { ServiceIcon } from "@/components/service-icon";
 import { SetupWizard } from "./setup-wizard";
 import { Playground, type PlaygroundHandle } from "./playground";
 import { useCopyToClipboard } from "@/lib/use-copy-to-clipboard";
@@ -186,11 +187,15 @@ export function DashboardClient() {
                   <ul className="space-y-1.5">
                     {service.capabilities.map((cap) => (
                       <li
-                        key={cap}
+                        key={cap.text}
                         className="flex items-start gap-2 text-xs text-muted-foreground"
                       >
-                        <span className="mt-1.5 size-1 shrink-0 rounded-full bg-muted-foreground/40" />
-                        {cap}
+                        <span className="flex shrink-0 items-center gap-1 pt-px">
+                          {cap.services.map((s) => (
+                            <ServiceIcon key={s} service={s} size={14} />
+                          ))}
+                        </span>
+                        {cap.text}
                       </li>
                     ))}
                   </ul>

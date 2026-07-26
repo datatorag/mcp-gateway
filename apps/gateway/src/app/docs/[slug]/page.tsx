@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import Link from "next/link";
 import { getAllDocs, getDocBySlug } from "@/lib/docs";
 import { SetupInstructions } from "@/components/setup-instructions";
+import { ServiceIcon, serviceFromSlug } from "@/components/service-icon";
 import { DocViewTracker } from "./view-tracker";
 
 // A doc's markdown can place `<!--setup-instructions-->` on its own line to
@@ -48,7 +49,10 @@ export default async function DocPage({ params }: Props) {
   return (
     <div>
       <DocViewTracker slug={doc.slug} section={doc.section} />
-      <h1 className="font-display text-2xl font-bold text-foreground">
+      <h1 className="flex items-center gap-3 font-display text-2xl font-bold text-foreground">
+        {serviceFromSlug(doc.slug) && (
+          <ServiceIcon service={doc.slug} size={28} />
+        )}
         {doc.title}
       </h1>
       {doc.description && (

@@ -173,6 +173,7 @@ multi-file changes where a fresh-eyes sweep genuinely pays for itself.
 | Tool detail page (DB + README fallback) | `apps/gateway/src/app/tools/[slug]/page.tsx` |
 | Home page (DB-driven integrations grid, footer links) | `apps/gateway/src/app/page.tsx` |
 | Navbar (`flatItems` — desktop + mobile nav source of truth) | `apps/gateway/src/components/navbar.tsx` |
+| Per-service brand icons (`ServiceIcon`, `serviceFromToolName`/`serviceFromSlug`; assets + provenance in `public/icons/services/`) | `apps/gateway/src/components/service-icon.tsx` |
 | Hand-rolled `.prose` styles | `apps/gateway/src/app/globals.css` |
 | Session-auth + rate-limit + error-envelope API wrapper | `apps/gateway/src/lib/with-route.ts` |
 | DB client factory + schema barrel | `packages/db/src/index.ts`, `packages/db/src/schema/index.ts` |
