@@ -1,6 +1,7 @@
 import { Mastra } from "@mastra/core/mastra";
 import { PostgresStore } from "@mastra/pg";
 import { createDatatoragAgent, DATATORAG_AGENT_ID } from "./agents/datatorag";
+import { resolveUserPluginTools } from "./mcp/client";
 
 /** The agent runtime for the dashboard playground.
  *
@@ -45,7 +46,11 @@ export function getMastra(): Mastra {
     const storage = getStore();
     instance = new Mastra({
       storage,
-      agents: { [DATATORAG_AGENT_ID]: createDatatoragAgent(storage) },
+      agents: {
+        // This module is the composition root: it is the only place that knows
+        // both how the agent is built and where its tools really come from.
+        [DATATORAG_AGENT_ID]: createDatatoragAgent(storage, resolveUserPluginTools),
+      },
     });
   }
   return instance;

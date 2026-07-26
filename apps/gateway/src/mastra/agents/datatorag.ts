@@ -1,5 +1,7 @@
 import { createAnthropic } from "@ai-sdk/anthropic";
 import { Agent } from "@mastra/core/agent";
+import type { ToolsInput } from "@mastra/core/agent";
+import type { RequestContext } from "@mastra/core/request-context";
 import type { MastraCompositeStore } from "@mastra/core/storage";
 import { Memory } from "@mastra/memory";
 import { getEnv } from "@datatorag-mcp/config";
@@ -67,17 +69,34 @@ function resolveModel() {
   return cachedModel.model;
 }
 
-/** Builds the playground agent against a caller-supplied store.
+/** Resolves the tools available on one request.
+ *
+ * Not a fixed list, because there is no such thing here: which tools exist
+ * depends on which services the requesting user has connected, and that is
+ * known only once a request arrives carrying their identity. */
+export type PlaygroundToolResolver = (args: {
+  requestContext: RequestContext;
+}) => Promise<ToolsInput>;
+
+/** Builds the playground agent against a caller-supplied store and tool source.
  *
  * The store is injected rather than constructed here so that the agent's
  * `Memory` and the surrounding runtime share ONE store instance — one pool, one
  * schema, one place to change the connection. See the note in `../index.ts`
  * about why the runtime needs the store too.
  *
+ * The tool resolver is injected for a different reason: it reaches out to the
+ * database and to live plugin processes, and an agent that could only be built
+ * with both running would be untestable and would drag them into every import
+ * of this file.
+ *
  * `model` is a resolver, not a value: the playground is disabled when no
  * Anthropic key is configured, and resolving lazily keeps that a request-time
  * failure instead of an import-time crash for every other part of the app. */
-export function createDatatoragAgent(storage: MastraCompositeStore) {
+export function createDatatoragAgent(
+  storage: MastraCompositeStore,
+  resolveTools: PlaygroundToolResolver
+) {
   return new Agent({
     id: DATATORAG_AGENT_ID,
     name: "DataToRAG Playground",
@@ -85,6 +104,11 @@ export function createDatatoragAgent(storage: MastraCompositeStore) {
       "Demonstrates what an agent can do with a user's connected accounts through the gateway.",
     instructions: SYSTEM_PROMPT,
     model: () => resolveModel(),
+    // Tools are resolved per request, from the request context, for the same
+    // reason the model is: a static list would be wrong for everyone. Two users
+    // hitting this agent in the same process see different tools, and each
+    // user's tool calls travel with that user's own credentials.
+    tools: resolveTools,
     // Conversation persistence. Threads are addressed per request: the caller
     // supplies `{ thread, resource }`, where `resource` is our own user id, so
     // a thread is filed under the user who owns it.
