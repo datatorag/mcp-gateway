@@ -81,7 +81,7 @@ export default async function HomePage() {
                   Get Started
                 </Link>
                 <Link
-                  href="/demo"
+                  href="/contact"
                   className="rounded-full border border-white/30 px-7 py-3 text-sm font-medium text-white transition-all hover:border-white/50 hover:bg-white/10"
                 >
                   Talk to Us
@@ -474,7 +474,7 @@ export default async function HomePage() {
               style={{ animationDelay: "0.2s" }}
             >
               <Link
-                href="/demo"
+                href="/contact"
                 className="inline-block rounded-[var(--radius)] bg-primary px-6 py-3 text-sm font-medium text-primary-foreground transition-all hover:bg-primary/90"
               >
                 Talk to Us
@@ -552,7 +552,7 @@ export default async function HomePage() {
                 warehouses, and more.
               </p>
               <Link
-                href="/demo"
+                href="/contact"
                 className="mt-6 inline-block rounded-[var(--radius)] bg-primary px-6 py-3 text-sm font-medium text-primary-foreground transition-all hover:bg-primary/90"
               >
                 Contact Us
@@ -659,7 +659,7 @@ export default async function HomePage() {
                 Start Free
               </Link>
               <Link
-                href="/demo"
+                href="/contact"
                 className="rounded-[var(--radius)] border border-white/20 px-6 py-3 text-sm font-medium text-white transition-all hover:border-white/40 hover:bg-white/5"
               >
                 Contact Sales
@@ -678,6 +678,8 @@ export default async function HomePage() {
           >
             Security: Google-verified (CASA Tier 2)
           </Link>
+          {" "}&middot;{" "}
+          <a href="/pricing" className="underline hover:text-foreground">Pricing</a>
           {" "}&middot;{" "}
           <a href="/privacy" className="underline hover:text-foreground">Privacy Policy</a>
           {" "}&middot;{" "}

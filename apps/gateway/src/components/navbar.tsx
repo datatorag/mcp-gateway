@@ -19,10 +19,11 @@ const productItems: NavLink[] = [
 ];
 
 const flatItems: NavLink[] = [
+  { href: "/pricing", label: "Pricing" },
   { href: "/docs", label: "Docs" },
   { href: "/blog", label: "Blog" },
   { href: "/changelog", label: "Changelog" },
-  { href: "/demo", label: "Contact" },
+  { href: "/contact", label: "Contact" },
 ];
 
 const navItemClass =
