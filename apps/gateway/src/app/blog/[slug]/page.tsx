@@ -28,6 +28,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
       description: post.excerpt,
       type: "article",
       publishedTime: post.date,
+      ...(post.updated ? { modifiedTime: post.updated } : {}),
       authors: [post.author],
       url: `https://datatorag.com/blog/${slug}`,
       ...(post.ogImage ? { images: [{ url: post.ogImage }] } : {}),
@@ -87,7 +88,7 @@ export default async function BlogArticlePage({ params }: Props) {
       headline: post.title,
       description: post.excerpt,
       datePublished: post.date,
-      dateModified: post.date,
+      dateModified: post.updated ?? post.date,
       inLanguage: "en",
       isAccessibleForFree: true,
       url: postUrl,
@@ -195,6 +196,21 @@ export default async function BlogArticlePage({ params }: Props) {
               </div>
             </div>
           </header>
+
+          {post.updated && (
+            <div className="mt-6 rounded-xl border border-border bg-secondary/50 px-4 py-3 text-sm text-muted-foreground">
+              <span className="font-medium text-foreground">
+                Edited{" "}
+                <time dateTime={post.updated}>
+                  {new Date(`${post.updated}T00:00:00`).toLocaleDateString(
+                    "en-US",
+                    { year: "numeric", month: "long", day: "numeric" }
+                  )}
+                </time>
+              </span>
+              {post.updatedNote && <>: {post.updatedNote}</>}
+            </div>
+          )}
 
           {post.coverImage && (
             <div className="mt-8 overflow-hidden rounded-2xl border border-border">

@@ -10,6 +10,11 @@ export interface BlogPost {
   title: string;
   excerpt: string;
   date: string;
+  /** ISO date of the latest edit to a published post; absent = never edited.
+   * Feeds JSON-LD dateModified and the rendered "Edited" note. */
+  updated?: string;
+  /** One-line summary of what the latest edit changed, shown in the note. */
+  updatedNote?: string;
   readTime: string;
   author: string;
   authorImage?: string;
@@ -80,6 +85,8 @@ function parsePost(slug: string): BlogPost | null {
     title: data.title ?? slug,
     excerpt: data.excerpt ?? "",
     date: data.date ?? new Date().toISOString().slice(0, 10),
+    updated: data.updated,
+    updatedNote: data.updatedNote,
     readTime,
     author: data.author ?? "DataToRAG",
     authorImage: data.authorImage,

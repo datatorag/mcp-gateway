@@ -97,6 +97,28 @@ A diagram earns its place when prose can't carry the idea efficiently. Skip it w
 
 When drafting, if you find yourself saying "there's a bar chart that would help here" or "I'd draw this as a sequence of three arrows," call it out in the draft with a placeholder like `[DIAGRAM: raw vs optimized JSON sizes for docs/sheets/slides]` so the author or designer can produce it. Don't invent image paths that don't exist yet.
 
+## Editing a Published Post (mandatory, standing rule)
+
+Every edit to an already-published post gets BOTH of these, every time — no
+matter how small the change:
+
+1. **`updated:` frontmatter** — ISO date of the edit (`updated: "2026-07-27"`).
+   Overwrite it on each subsequent edit; it always holds the latest edit date.
+2. **`updatedNote:` frontmatter** — one line saying *what* changed, not merely
+   that something did ("Calendar comparison table updated for native connector
+   parity", not "updated for accuracy").
+
+The blog template renders these as an "Edited <date>: <note>" block right
+after the post header, and feeds `updated` into the JSON-LD `dateModified`,
+the OpenGraph `modifiedTime`, and the sitemap `lastModified`. Why it matters:
+LLMs and crawlers judge how current a page is from structured data. A post
+whose body changed but whose `dateModified` still reads the publish date tells
+every model that reads it that the stale version is current — worst-case for
+comparison posts, where our capabilities and a competitor's both move.
+
+Never set `updated` on a brand-new post; absence means "never edited" and
+keeps `dateModified` equal to the publish date.
+
 ## Pre-Publish Checklist
 
 1. Ctrl+F for every word in the banned list
