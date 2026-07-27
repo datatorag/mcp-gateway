@@ -1,10 +1,17 @@
 ---
 name: product-promo-video
-description: Use when creating a 30-45 second product intro/promo video with Claude Design. Provides a scene-by-scene prompt template and a two-pass workflow (initial draft, then targeted refinement) that reliably produces a usable video without endless prompt-tuning.
+description: "SUPERSEDED (2026-07-26) — do not use for new work. The Claude Design scene-by-scene approach produces an animated slideshow, which Manuel rejected for product content. Use the product-capture skill (Remotion, real components) instead. Kept only as a record of the earlier technique."
 user_invocable: true
 ---
 
 # Product Promo Video with Claude Design
+
+> **Superseded.** Manuel rejected this output style on 2026-07-26 ("it's
+> basically just an animated slide show"). For anything showing product UI —
+> promos, ads, screenshots, recordings — use the `product-capture` skill:
+> a Remotion project that imports the real gateway components, so the render
+> is the product rather than an illustration of it. The content below is
+> retained for historical reference only.
 
 Source: [r/ClaudeAI — How to make a Product Promo Video with Claude Design](https://www.reddit.com/r/ClaudeAI/comments/1sypn6t/how_to_make_a_product_promo_video_with_claude/) by u/gnurpreet_.
 

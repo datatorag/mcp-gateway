@@ -15,7 +15,9 @@ import { mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 
 const OUT_DIR = "./out";
-const MODEL_ID = "eleven_turbo_v2_5";
+// v3 is the expressive model; Turbo v2.5 flattens prosody (measured) and
+// kills the contemplative Voyager narration register.
+const MODEL_ID = "eleven_v3";
 const VOICE_SETTINGS = {
   stability: 0.45,
   similarity_boost: 0.75,

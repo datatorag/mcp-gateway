@@ -1,0 +1,25 @@
+{
+  "name": "capture",
+  "private": true,
+  "description": "Remotion project for product screenshots, docs imagery, and recordings. Imports the real gateway components — never copies them.",
+  "scripts": {
+    "studio": "remotion studio",
+    "still": "remotion still",
+    "render": "remotion render"
+  },
+  "dependencies": {
+    "@remotion/cli": "^4.0.360",
+    "@remotion/google-fonts": "^4.0.360",
+    "@remotion/tailwind-v4": "^4.0.360",
+    "react": "19.2.4",
+    "react-dom": "19.2.4",
+    "remotion": "^4.0.360"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "^4",
+    "@types/node": "^26.1.2",
+    "@types/react": "^19",
+    "tailwindcss": "^4",
+    "typescript": "^5.8.0"
+  }
+}

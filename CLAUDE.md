@@ -42,7 +42,8 @@ re-reading the source:
 - `services-integrations` — Brevo/Slack/Stripe/PostHog/event-pipeline patterns.
 - `ops-debugging` — prod runbook (placeholder form; live values in memory).
 - `gws-mcp-dev` — developing the gws-mcp plugin repo + its ship tail.
-- Plus: `blog-writing`, `db-query`, `deploy`, `humanizer`, `marketing-video`, `product-promo-video` (pre-existing).
+- `product-capture` — Remotion project at `tools/capture` for product screenshots/recordings; imports real gateway components so captures can't drift.
+- Plus: `blog-writing`, `db-query`, `deploy`, `humanizer`, `marketing-video` (brand explainers only), `product-promo-video` (superseded).
 
 Agents in `.claude/agents/`: `engineer` implements, `qa-engineer` verifies,
 `content-marketer` keeps changelog/blog covering what shipped,

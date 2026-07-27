@@ -1,6 +1,6 @@
 ---
 name: marketing-video
-description: Produce a 60-90s vertical explainer video for DataToRAG using the Voyager-style pipeline (script → ElevenLabs voiceover → Claude Design React build → puppeteer screencast → ffmpeg mux). Use when the user asks for a marketing video, explainer, product reel, or Reddit/social vertical short.
+description: Produce a 60-90s vertical BRAND explainer for DataToRAG using the Voyager-style pipeline (script → ElevenLabs v3 voiceover → Claude Design React build → render → ffmpeg mux). Scope is abstract brand pieces in the Voyager/navy house style; anything that shows real product UI renders via the product-capture skill (Remotion) instead of the puppeteer screencast.
 ---
 
 # Marketing Video — Voyager-style Vertical Explainer
@@ -13,7 +13,7 @@ End-to-end pipeline that turns a one-line product angle into a finished 1080×19
 - The user has a feature/angle they want to dramatize in 60–90s of voiceover with motion-graphics visuals
 - Output target is vertical (TikTok, Reels, Reddit video, Twitter/X vertical)
 
-Don't use this for: horizontal landing-page hero animations, demo screencasts of the real product UI, or anything longer than ~90s (the build prompt + pacing don't scale past a tight short).
+Don't use this for: horizontal landing-page hero animations, anything longer than ~90s (the build prompt + pacing don't scale past a tight short), or **anything that puts real product UI on screen** — that renders through the `product-capture` skill (Remotion, imports the actual gateway components), not the puppeteer screencast. The screencast pipeline below remains only for the abstract Voyager-style scenes this skill covers.
 
 ## House style — non-negotiable
 
@@ -39,7 +39,11 @@ Get one sentence from the user about what the video is for. Then decide:
 
 ### 2. Write narration
 
-Save to `docs/explainer-video/script.md`. Use the [humanizer skill](../humanizer/) to strip AI-tells before finalizing. Sentences should be short. Period-stopped beats. No em-dashes (ElevenLabs Turbo v2.5 sometimes reads them as audible "dash").
+Save to `docs/explainer-video/script.md`. Use the [humanizer skill](../humanizer/) to strip AI-tells before finalizing. Sentences should be short. Period-stopped beats. No em-dashes (ElevenLabs sometimes reads them as an audible "dash").
+
+TTS model is **ElevenLabs v3 (`eleven_v3`)** — the expressive model. Do not
+drop back to Turbo v2.5: it flattens prosody (measured on this pipeline's
+narration register), which kills the contemplative Voyager read.
 
 ### 3. Generate audio
 

@@ -1,0 +1,27 @@
+/* The product's real stylesheet — tokens, shadcn theme, prose — so captures
+   are styled by the same CSS as production, not an approximation of it. */
+@import "../../../apps/gateway/src/app/globals.css";
+
+/* Tailwind v4 auto-detects sources relative to the imported stylesheet's
+   project (the gateway). Shots in THIS project also use utility classes, so
+   register this tree as a source too. */
+@source "../src";
+
+/* next/font injects these variables in the app; outside Next the same faces
+   are loaded by src/lib/fonts.ts and bound to their family names here. */
+:root {
+  --font-inter: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-montserrat: "Montserrat", ui-sans-serif, system-ui, sans-serif;
+  --font-pt-mono: "PT Mono", ui-monospace, monospace;
+}
+
+/* Remotion seeks its own frame clock; CSS animations and transitions run on
+   wall-clock time and desynchronize from it (a spinner mid-spin in one frame,
+   snapped elsewhere in the next). Kill all wall-clock motion globally — any
+   motion a capture needs is driven from useCurrentFrame() instead. */
+*,
+*::before,
+*::after {
+  animation: none !important;
+  transition: none !important;
+}
