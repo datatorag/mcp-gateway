@@ -7,9 +7,6 @@ import {
 
 export const dynamic = "force-dynamic";
 
-// /demo predates /contact and stays live: it's the recorded landing page in
-// our analytics history and the destination on ad assets, so it must keep
-// serving (no redirect). /contact is the canonical URL for search.
 export const metadata: Metadata = {
   title: "Get in touch | DataToRAG",
   description:
@@ -24,7 +21,7 @@ export const metadata: Metadata = {
   },
 };
 
-export default async function DemoPage({
+export default async function ContactRoute({
   searchParams,
 }: {
   searchParams: Promise<ContactSearchParams>;

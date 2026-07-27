@@ -260,7 +260,7 @@ export default async function BlogArticlePage({ params }: Props) {
                 Start free
               </Link>
               <Link
-                href="/demo"
+                href="/contact"
                 className="rounded-[var(--radius)] border border-border px-6 py-3 text-sm font-medium text-foreground transition-colors hover:border-primary/40 hover:bg-secondary/50"
               >
                 Contact us

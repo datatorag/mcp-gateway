@@ -5,7 +5,7 @@ import posthog from "posthog-js";
 import { TEAM_SIZE_VALUES, type TeamSize } from "@datatorag-mcp/db/schema";
 import { reportLeadConversion } from "@/components/google-ads";
 
-interface Utm {
+export interface Utm {
   source?: string;
   medium?: string;
   campaign?: string;
