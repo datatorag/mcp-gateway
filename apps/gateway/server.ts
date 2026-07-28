@@ -2,7 +2,7 @@ import next from "next";
 import express from "express";
 import cookieParser from "cookie-parser";
 import { randomUUID } from "node:crypto";
-import { eq, and } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import { createMcpServer } from "./src/gateway/mcp-server";
 import { ConnectionPool } from "./src/gateway/pool";
@@ -24,8 +24,16 @@ import { createRevokeRouter } from "./src/gateway/oauth/revoke";
 import { oauthRateLimit } from "./src/gateway/oauth/rate-limit";
 import { createAuthRouter } from "./src/gateway/auth";
 import { getPluginManager } from "./src/lib/plugin-manager";
-import { liveTokenConditions } from "./src/lib/token-liveness";
+import { isTokenLive } from "./src/lib/token-liveness";
 import { shutdownPosthog } from "./src/gateway/track";
+import {
+  classifyAuthFailure,
+  extractClientInfo,
+  trackMcpRequestReceived,
+  trackMcpSessionInitialized,
+  trackMcpAuthFailed,
+  type AuthFailureReason,
+} from "./src/gateway/mcp-analytics";
 import cron from "node-cron";
 import { runDailyRollup } from "./src/gateway/usage/rollup";
 import { runDailyDigest } from "./src/gateway/digest";
@@ -162,24 +170,33 @@ async function main() {
     res.json({ status: "ok" });
   });
 
-  /** Validate a Bearer token (OAuth access token). Returns userId if valid. */
-  async function validateBearer(
-    rawToken: string
-  ): Promise<{ userId: string } | null> {
+  /**
+   * Validate a Bearer token (OAuth access token). Fetches the row without
+   * liveness conditions so a reject can be classified (expired/revoked rows
+   * still name their owner); acceptance is exactly isTokenLive — the same
+   * rule liveTokenConditions expresses in SQL.
+   */
+  async function validateBearer(rawToken: string): Promise<
+    | { ok: true; userId: string }
+    | { ok: false; reason: AuthFailureReason; userId: string | null }
+  > {
     const [token] = await db
-      .select({ userId: oauthAccessTokens.userId })
+      .select({
+        userId: oauthAccessTokens.userId,
+        revokedAt: oauthAccessTokens.revokedAt,
+        expiresAt: oauthAccessTokens.expiresAt,
+      })
       .from(oauthAccessTokens)
-      .where(
-        and(
-          eq(oauthAccessTokens.token, rawToken),
-          ...liveTokenConditions()
-        )
-      )
+      .where(eq(oauthAccessTokens.token, rawToken))
       .limit(1);
 
-    if (!token) return null;
+    if (token && isTokenLive(token)) return { ok: true, userId: token.userId };
 
-    return { userId: token.userId };
+    return {
+      ok: false,
+      reason: classifyAuthFailure(token),
+      userId: token?.userId ?? null,
+    };
   }
 
   // MCP endpoint
@@ -206,15 +223,46 @@ async function main() {
 
   app.all("/mcp", async (req, res) => {
     const authHeader = req.headers.authorization;
+    // Client name/version only ride on initialize POSTs; {} otherwise. The
+    // body itself is never captured — see mcp-analytics.ts.
+    const clientInfo = extractClientInfo(req.body);
+    const sessionId = req.headers["mcp-session-id"] as string | undefined;
+
+    // Every request that reaches the endpoint gets captured, authenticated
+    // or not — the copy_mcp_config → tool_call gap was invisible before.
+    const receiveRequest = (userId: string | null, action: ReturnType<typeof classifyMcpRequest>) =>
+      void trackMcpRequestReceived(db, {
+        userId,
+        action,
+        method: req.method,
+        clientName: clientInfo.name,
+        clientVersion: clientInfo.version,
+      });
+    // For rejected requests the true session action is unknowable (session
+    // ownership needs a user) — classify with known:false as best effort.
+    const unauthAction = () =>
+      classifyMcpRequest({ method: req.method, sessionId, known: false });
 
     if (!authHeader?.startsWith("Bearer ")) {
+      receiveRequest(null, unauthAction());
+      void trackMcpAuthFailed(db, {
+        userId: null,
+        reason: "missing_credential",
+        method: req.method,
+      });
       send401(res, "unauthorized");
       return;
     }
 
     const rawToken = authHeader.slice(7);
     const auth = await validateBearer(rawToken);
-    if (!auth) {
+    if (!auth.ok) {
+      receiveRequest(auth.userId, unauthAction());
+      void trackMcpAuthFailed(db, {
+        userId: auth.userId,
+        reason: auth.reason,
+        method: req.method,
+      });
       send401(res, "invalid_token", [
         `error="invalid_token"`,
         `error_description="The access token is invalid or expired"`,
@@ -222,7 +270,6 @@ async function main() {
       return;
     }
 
-    const sessionId = req.headers["mcp-session-id"] as string | undefined;
     // "known" requires ownership: a session initialized by another user's
     // bearer classifies as unknown_session (404), same as a stale id.
     const session = sessionId !== undefined ? sessions.get(sessionId) : undefined;
@@ -231,6 +278,7 @@ async function main() {
       sessionId,
       known: session !== undefined && session.userId === auth.userId,
     });
+    receiveRequest(auth.userId, action);
 
     // Existing session — route GET/DELETE/POST to the stored transport
     if (action === "route" && session) {
@@ -253,6 +301,12 @@ async function main() {
         sessionIdGenerator: () => randomUUID(),
         onsessioninitialized: (id) => {
           sessions.set(id, { server, transport, userId: auth.userId });
+          // The handshake actually completed — the first hard evidence a
+          // client ever reached us. Fire-and-forget like every capture here.
+          void trackMcpSessionInitialized(db, auth.userId, {
+            clientName: clientInfo.name,
+            clientVersion: clientInfo.version,
+          });
         },
       });
 

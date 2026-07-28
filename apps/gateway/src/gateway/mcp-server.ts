@@ -16,6 +16,7 @@ import {
 } from "./user-tools";
 import { listConnectedAccounts } from "./connected-accounts";
 import { trackToolCall } from "./track";
+import { trackMcpToolsListed } from "./mcp-analytics";
 
 const ACCOUNT_PARAM_SCHEMA = {
   type: "string",
@@ -96,6 +97,11 @@ export function createMcpServer(
         },
       }
     );
+
+    // A user who lists tools and then stops is a very different activation
+    // signal from one whose client never connected. Count only — never the
+    // tool list itself.
+    void trackMcpToolsListed(db, userId, toolList.length);
 
     return { tools: toolList };
   });

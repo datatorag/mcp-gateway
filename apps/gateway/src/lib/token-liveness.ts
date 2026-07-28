@@ -16,3 +16,16 @@ export function liveTokenConditions() {
     ),
   ];
 }
+
+/**
+ * Row-level mirror of liveTokenConditions, for call sites that fetch the
+ * token row first (e.g. to classify WHY a bearer was rejected). Keep the two
+ * definitions in this file in lockstep — they are the same rule in SQL and JS.
+ */
+export function isTokenLive(row: {
+  revokedAt: Date | null;
+  expiresAt: Date | null;
+}): boolean {
+  if (row.revokedAt !== null) return false;
+  return row.expiresAt === null || row.expiresAt > new Date();
+}

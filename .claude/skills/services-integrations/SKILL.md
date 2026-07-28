@@ -67,6 +67,13 @@ Note: `digest.ts`'s `collectPosthog()` uses a *different* credential pair — `P
 - `trackSignup()` is PostHog-only (`identify` + `user_signed_up` capture). The #leads Slack post for signups lives in `apps/gateway/src/gateway/signup-alert.ts` `notifySignup(db, user)` (SCRUM-26), called from the same `isNewUser` branch in `auth.ts`: it skips internal accounts via `isInternalEmail` (the SCRUM-6 lesson — `trackSignup`'s old inline Slack line didn't), looks up the newest `leads` row by email to label the post "Lead → signup conversion" vs "Direct signup", and includes the lead's UTM attribution. Never-throw, `void`-called.
 - `trackOAuthCompleted()` fires `account_connected`.
 
+**Connection-path events** (`apps/gateway/src/gateway/mcp-analytics.ts`) close the copy_mcp_config → tool_call blind spot — before these, a client could connect, list tools, or fail auth with no trace:
+
+- `mcp_request_received` (every request at `/mcp`, with the `classifyMcpRequest` action + client name/version off initialize bodies), `mcp_session_initialized` (completed handshake), `mcp_auth_failed` (reason class: `missing_credential`/`invalid`/`expired`/`revoked` — expired/revoked attribute to the token's owner), `mcp_tools_listed` (tool count only). Wired in `server.ts`'s `/mcp` handler + `mcp-server.ts`'s ListTools.
+- Same `distinctId` (gateway user id) and `identityProps()` as every other server event, so the activation funnel joins; unauthenticated traffic lands under the stable `mcp_anonymous` person instead of being dropped.
+- **Never capture request bodies, tool arguments, or tool names in these events** — counts, outcomes, and client name/version only.
+- `validateBearer` in `server.ts` fetches the token row without liveness conditions to classify rejects; acceptance is `isTokenLive()` (`src/lib/token-liveness.ts`), the row-level mirror of `liveTokenConditions()` — the two live in one file and must not drift.
+
 **Playground (LLM loop):** the dashboard playground (`apps/gateway/src/gateway/playground/`, streamed by `POST /api/playground/chat`) has its own analytics track, deliberately separate from `trackToolCall`:
 
 - New server-side events in `track.ts` (names in `src/lib/analytics.ts` `EVENTS`): `playground_message_sent`, `playground_tool_call`, `playground_cap_hit`, `playground_feedback` — all never-throw, all spread `identityProps()`. Client-side (posthog-js, dashboard components): `playground_prompt_run` (a "What can I do?" card's Run button), `wizard_client_selected`, `wizard_step_completed` (setup wizard).
