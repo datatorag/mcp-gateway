@@ -75,6 +75,7 @@ export async function generateMetadata({ params }: Props) {
   return {
     title: `${data.server.name} | DataToRAG`,
     description: data.server.description ?? `Data source with ${data.tools.length} capabilities`,
+    alternates: { canonical: `https://datatorag.com/tools/${slug}` },
   };
 }
 

@@ -8,6 +8,7 @@ export const metadata: Metadata = {
   title: "Blog | DataToRAG",
   description:
     "Insights on connecting enterprise data to AI assistants through the Model Context Protocol.",
+  alternates: { canonical: "https://datatorag.com/blog" },
   openGraph: {
     title: "Blog | DataToRAG",
     description:

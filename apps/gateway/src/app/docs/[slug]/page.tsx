@@ -29,6 +29,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   return {
     title: `${doc.title} | DataToRAG Docs`,
     description: doc.description,
+    alternates: { canonical: `https://datatorag.com/docs/${slug}` },
   };
 }
 

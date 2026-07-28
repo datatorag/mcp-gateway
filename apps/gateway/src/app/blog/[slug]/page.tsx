@@ -23,6 +23,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
     title: `${post.title} | DataToRAG`,
     description: post.excerpt,
     authors: [{ name: post.author }],
+    alternates: { canonical: `https://datatorag.com/blog/${slug}` },
     openGraph: {
       title: post.title,
       description: post.excerpt,

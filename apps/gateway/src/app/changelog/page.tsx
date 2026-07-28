@@ -6,6 +6,7 @@ export const metadata: Metadata = {
   title: "Changelog | DataToRAG",
   description:
     "What's new in the DataToRAG MCP gateway and its connectors — new tools, improvements, and fixes.",
+  alternates: { canonical: "https://datatorag.com/changelog" },
   openGraph: {
     title: "Changelog | DataToRAG",
     description:

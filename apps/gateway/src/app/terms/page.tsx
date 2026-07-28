@@ -6,6 +6,7 @@ export const dynamic = "force-static";
 export const metadata: Metadata = {
   title: "Terms of Service | DataToRAG",
   description: "DataToRAG terms of service.",
+  alternates: { canonical: "https://datatorag.com/terms" },
 };
 
 export default function TermsPage() {

@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import { eq, sql } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { mcpServers, tools } from "@datatorag-mcp/db";
@@ -9,6 +10,14 @@ import Link from "next/link";
 import Script from "next/script";
 
 export const dynamic = "force-dynamic";
+
+/* Self-referencing and absolute, on the non-www origin: Search Console was
+   reporting the four origin variants (http/https x www/non-www) as
+   "Duplicate without user-selected canonical" because nothing on the page
+   named which one is the real URL. Matches the origin the sitemap uses. */
+export const metadata: Metadata = {
+  alternates: { canonical: "https://datatorag.com" },
+};
 
 async function getToolCount(): Promise<number> {
   const [row] = await db
