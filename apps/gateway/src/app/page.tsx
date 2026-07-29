@@ -5,18 +5,38 @@ import { mcpServers, tools } from "@datatorag-mcp/db";
 import { Navbar } from "@/components/navbar";
 import { ShaderBackground } from "@/components/shader-background";
 import { IntegrationCatalog } from "@/components/integration-catalog";
+import { DemoSection } from "@/components/demo/demo-section";
 import { getSessionUserId } from "@/lib/session";
 import Link from "next/link";
 import Script from "next/script";
 
 export const dynamic = "force-dynamic";
 
-/* Self-referencing and absolute, on the non-www origin: Search Console was
-   reporting the four origin variants (http/https x www/non-www) as
-   "Duplicate without user-selected canonical" because nothing on the page
-   named which one is the real URL. Matches the origin the sitemap uses. */
+const HOME_TITLE = "Let Claude edit your Google Sheets - DataToRAG";
+const HOME_DESCRIPTION =
+  "Claude's built-in connector reads your files but can't change them. DataToRAG appends the rows, sends the email, updates the ticket. 76 tools behind one URL, and every write asks you first.";
+
+/* Canonical is self-referencing and absolute, on the non-www origin: Search
+   Console was reporting the four origin variants (http/https x www/non-www)
+   as "Duplicate without user-selected canonical" because nothing on the page
+   named which one is the real URL. Matches the origin the sitemap uses.
+   Title/description are homepage-specific — the root layout default stays
+   the fallback for pages without their own. */
 export const metadata: Metadata = {
+  title: HOME_TITLE,
+  description: HOME_DESCRIPTION,
   alternates: { canonical: "https://datatorag.com" },
+  openGraph: {
+    title: HOME_TITLE,
+    description: HOME_DESCRIPTION,
+    type: "website",
+    url: "https://datatorag.com",
+  },
+  twitter: {
+    card: "summary",
+    title: HOME_TITLE,
+    description: HOME_DESCRIPTION,
+  },
 };
 
 async function getToolCount(): Promise<number> {
@@ -35,7 +55,6 @@ export default async function HomePage() {
   ]);
   const signedIn = userId !== null;
   const playgroundHref = signedIn ? "/dashboard" : "/auth/login";
-  const playgroundCta = signedIn ? "Open your dashboard" : "Sign in to try it";
 
   return (
     <>
@@ -214,9 +233,10 @@ export default async function HomePage() {
             </div>
           </div>
 
-          {/* Playground teaser — still on the hero gradient, right under the
-              hero content. The whole card links to sign-in (or the dashboard
-              when a session exists). */}
+          {/* Scripted demo — the real playground presentation components
+              replaying an authored session. Replaces the old hand-built
+              teaser mock (which had a fake input bar). Entirely client-side:
+              no MCP calls, no API routes, no LLM. */}
           <div
             id="playground"
             className="animate-fade-in-up relative mx-auto w-full max-w-6xl scroll-mt-28 px-6 pt-16"
@@ -224,72 +244,27 @@ export default async function HomePage() {
           >
             <div className="mx-auto max-w-2xl text-center">
               <h2 className="font-display text-xl font-bold text-white sm:text-2xl">
-                Or try it right now in the playground.
+                Watch it do the work.
               </h2>
               <p className="mx-auto mt-2 max-w-md text-sm text-white/60">
-                {signedIn
-                  ? "You're signed in — open your dashboard to connect your Google account and run prompts live."
-                  : "Sign in, connect your Google account, and run prompts from your dashboard. No MCP client setup required."}
+                A scripted replay with sample data — but this is the real
+                playground UI, approval gate included.
               </p>
             </div>
 
-            <Link
-              href={playgroundHref}
-              aria-label={playgroundCta}
-              className="group mx-auto mt-6 block max-w-2xl"
-            >
-              <div className="rounded-2xl border border-white/15 bg-white/10 shadow-2xl backdrop-blur-sm transition-colors hover:border-white/35">
-                <div className="space-y-3 p-4">
-                  <div className="flex justify-end">
-                    <div className="max-w-[85%] rounded-2xl bg-white/90 px-3 py-2 text-xs text-[#1a3a8f]">
-                      Find the Q3 planning doc and add a summary of
-                      yesterday&apos;s kickoff notes.
-                    </div>
-                  </div>
-                  <div className="flex justify-start">
-                    <div className="max-w-[85%] space-y-2">
-                      <div className="flex flex-wrap gap-1.5">
-                        {["drive_search", "docs_get", "docs_write"].map(
-                          (tool) => (
-                            <span
-                              key={tool}
-                              className="inline-flex items-center gap-1 rounded-full border border-white/20 bg-white/5 px-2 py-0.5 font-mono text-[11px] text-white/70"
-                            >
-                              {tool}
-                              <svg
-                                width="10"
-                                height="10"
-                                viewBox="0 0 16 16"
-                                fill="none"
-                                stroke="#4ade80"
-                                strokeWidth="2.5"
-                                strokeLinecap="round"
-                                strokeLinejoin="round"
-                              >
-                                <path d="M3 8.5l3.5 3.5L13 5" />
-                              </svg>
-                            </span>
-                          )
-                        )}
-                      </div>
-                      <div className="rounded-2xl border border-white/15 bg-white/5 px-3 py-2 text-xs text-white/90">
-                        Done — I found &ldquo;Q3 Planning&rdquo; in your Drive
-                        and added a five-bullet summary of the kickoff under
-                        Notes. Want me to email the team a link?
-                      </div>
-                    </div>
-                  </div>
-                </div>
-                <div className="flex items-center gap-2 border-t border-white/10 p-3">
-                  <span className="flex-1 rounded-full border border-white/20 px-3 py-2 text-xs text-white/50">
-                    Ask about your inbox, calendar, or docs&hellip;
-                  </span>
-                  <span className="shrink-0 rounded-[var(--radius)] bg-primary px-3 py-2 text-xs font-medium text-primary-foreground transition-colors group-hover:bg-primary/90">
-                    Send
-                  </span>
-                </div>
+            <div className="mx-auto mt-6 max-w-2xl">
+              <DemoSection />
+              <div className="mt-4 text-center">
+                <Link
+                  href={playgroundHref}
+                  className="text-sm text-white/70 underline underline-offset-4 transition-colors hover:text-white"
+                >
+                  {signedIn
+                    ? "Run it for real — open your dashboard"
+                    : "Run it for real — sign in and try the playground"}
+                </Link>
               </div>
-            </Link>
+            </div>
           </div>
           </div>
         </ShaderBackground>
