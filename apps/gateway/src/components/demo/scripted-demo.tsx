@@ -1,40 +1,59 @@
 "use client";
 
-/** The landing page's scripted playground demo.
+/** Looping playback of one scripted demo window (the transcript area only —
+ * the card shell and header are server-rendered by demo-section).
  *
  * Renders the playground's REAL presentation components (MessageRow,
  * ToolCard, ConfirmCard) from authored data — see demo-scripts.ts. Nothing
- * here talks to a server: no MCP calls, no API routes, no LLM; Approve/Deny
- * on the ConfirmCard are pure client-side state transitions. Deliberately NO
- * text input affordance — an input that swallows typing would misrepresent
- * the demo as a live chat.
+ * here talks to a server: no MCP calls, no API routes, no LLM, no network
+ * requests of any kind; Approve/Deny on the ConfirmCard are pure client-side
+ * state transitions. Deliberately NO text input affordance — an input that
+ * swallows typing would misrepresent the demo as a live chat.
+ *
+ * Motion is bounded: playback pauses whenever the window is scrolled out of
+ * the viewport, and prefers-reduced-motion renders the completed end state
+ * with no playback at all.
  */
 
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
-import { RefreshCcwIcon } from "lucide-react";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { MessageRow } from "@/app/dashboard/playground-presentation";
-import { DEMO_SCRIPTS } from "./demo-scripts";
-import { useScriptPlayer } from "./use-script-player";
+import type { PlaygroundMessage } from "@/app/dashboard/playground-presentation";
+import { DEMO_SCRIPTS, type DemoScript } from "./demo-scripts";
+import {
+  buildMessages,
+  finishedState,
+  useScriptPlayer,
+} from "./use-script-player";
 
 const noop = () => {};
-const NO_ERRORED_IDS = { has: () => false } as unknown as ReadonlySet<string>;
 const EMPTY: Record<string, never> = {};
 
-function Playback({
-  scriptIndex,
-  active,
+/** How long a window rests on its resolved state before looping. */
+const REST_MS = 6000;
+
+/** The transcript rows, top-anchored: the conversation grows downward from
+ * the top of the fixed frame, so any spare room in shorter states sits at
+ * the bottom and reads as room to grow. */
+function Transcript({
+  messages,
+  awaitingApproval,
+  onDecide,
 }: {
-  scriptIndex: number;
-  active: boolean;
+  messages: PlaygroundMessage[];
+  awaitingApproval: boolean;
+  onDecide: (approvalId: string, approved: boolean) => void;
 }) {
-  const script = DEMO_SCRIPTS[scriptIndex % DEMO_SCRIPTS.length];
-  const { messages, awaitingApproval, onDecide } = useScriptPlayer(
-    script,
-    active
-  );
   const scrollRef = useRef<HTMLDivElement>(null);
 
-  // Keep the latest beat in view as content grows inside the fixed frame.
+  // Frames are sized to each script's measured peak, but keep the newest
+  // beat in view if content ever runs a few pixels over.
   useLayoutEffect(() => {
     const el = scrollRef.current;
     if (el) el.scrollTop = el.scrollHeight;
@@ -42,13 +61,9 @@ function Playback({
 
   return (
     <div
-      className="h-[420px] overflow-y-auto overscroll-contain p-4"
+      className="h-full overflow-y-auto overscroll-contain p-4"
       ref={scrollRef}
     >
-      {/* Bottom-anchored like a real chat: while content is shorter than the
-          fixed frame it settles at the bottom, so the resolved end state never
-          strands a short transcript at the top of a mostly-empty card. */}
-      <div className="flex min-h-full flex-col justify-end">
       {messages.map((message, index) => (
         <MessageRow
           awaitingConfirm={awaitingApproval}
@@ -66,57 +81,118 @@ function Playback({
           showActions={false}
         />
       ))}
-      </div>
     </div>
   );
 }
 
-export default function ScriptedDemo() {
-  // Playback starts when the demo scrolls near the viewport, not on load.
+function Playback({
+  script,
+  active,
+  onDone,
+}: {
+  script: DemoScript;
+  active: boolean;
+  onDone: () => void;
+}) {
+  const { messages, phase, awaitingApproval, onDecide } = useScriptPlayer(
+    script,
+    active
+  );
+
+  useEffect(() => {
+    if (phase === "done") onDone();
+  }, [phase, onDone]);
+
+  return (
+    <Transcript
+      awaitingApproval={awaitingApproval}
+      messages={messages}
+      onDecide={onDecide}
+    />
+  );
+}
+
+/** Lifecycle: rest on the completed end state through the initial stagger →
+ * play the script live → rest on the resolved state → remount and play
+ * again. All timers pause off-screen. The scripts' differing run lengths
+ * keep the three windows out of sync once the stagger has separated them. */
+export default function ScriptedTranscript({
+  id,
+  startDelayMs,
+}: {
+  id: string;
+  startDelayMs: number;
+}) {
   const rootRef = useRef<HTMLDivElement>(null);
-  const [active, setActive] = useState(false);
+
+  // Pause whenever the window is scrolled out of view; resume on return.
+  const [visible, setVisible] = useState(false);
   useEffect(() => {
     const el = rootRef.current;
     if (!el || typeof IntersectionObserver === "undefined") {
-      setActive(true);
+      setVisible(true);
       return;
     }
-    const observer = new IntersectionObserver(
-      (entries) => {
-        if (entries.some((e) => e.isIntersecting)) {
-          setActive(true);
-          observer.disconnect();
-        }
-      },
-      { rootMargin: "120px" }
+    const observer = new IntersectionObserver((entries) =>
+      setVisible(entries.some((e) => e.isIntersecting))
     );
     observer.observe(el);
     return () => observer.disconnect();
   }, []);
 
-  // Replay cycles scripts (Sheets → Gmail → Jira → …): breadth is shown,
-  // not claimed. The remount (key) resets the player completely.
+  const [reducedMotion] = useState(
+    () =>
+      typeof window !== "undefined" &&
+      window.matchMedia("(prefers-reduced-motion: reduce)").matches
+  );
+
+  // started=false renders the completed end state (initial stagger, and
+  // permanently under reduced motion). `run` remounts Playback per loop.
+  const [started, setStarted] = useState(startDelayMs === 0);
   const [run, setRun] = useState(0);
+  const [done, setDone] = useState(false);
+
+  useEffect(() => {
+    if (started || reducedMotion || !visible) return;
+    const t = setTimeout(() => setStarted(true), startDelayMs);
+    return () => clearTimeout(t);
+  }, [started, reducedMotion, visible, startDelayMs]);
+
+  const handleDone = useCallback(() => setDone(true), []);
+  useEffect(() => {
+    if (!done || !visible) return;
+    const t = setTimeout(() => {
+      setDone(false);
+      setRun((r) => r + 1);
+    }, REST_MS);
+    return () => clearTimeout(t);
+  }, [done, visible]);
+
+  const script = DEMO_SCRIPTS.find((s) => s.id === id);
+  const restingMessages = useMemo(
+    () => (script ? buildMessages(script, finishedState(script)) : []),
+    [script]
+  );
+  if (!script) return null;
+
+  const playing = started && !reducedMotion;
 
   return (
-    <div
-      className="overflow-hidden rounded-2xl border border-border bg-background text-left shadow-2xl"
-      ref={rootRef}
-    >
-      <div className="flex items-center justify-between border-b border-border px-4 py-2">
-        <span className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
-          Scripted demo · sample data
-        </span>
-        <button
-          className="flex cursor-pointer items-center gap-1.5 rounded-lg px-2 py-1 text-[11px] font-medium text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
-          onClick={() => setRun((r) => r + 1)}
-          type="button"
-        >
-          <RefreshCcwIcon className="size-3" />
-          Replay
-        </button>
-      </div>
-      <Playback active={active} key={run} scriptIndex={run} />
+    <div className="h-full" ref={rootRef}>
+      {playing ? (
+        <Playback
+          active={visible}
+          key={run}
+          onDone={handleDone}
+          script={script}
+        />
+      ) : (
+        <Transcript
+          awaitingApproval={false}
+          messages={restingMessages}
+          onDecide={noop}
+        />
+      )}
     </div>
   );
 }

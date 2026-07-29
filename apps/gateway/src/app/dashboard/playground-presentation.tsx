@@ -233,18 +233,22 @@ export function ConfirmCard({
   onDecide,
 }: ConfirmCardProps) {
   return (
-    <div className="rounded-2xl border border-amber-300 bg-amber-50 px-3 py-2.5 text-xs">
+    <div className="rounded-2xl border border-amber-300 bg-amber-50 px-4 py-3 text-xs">
       <p className="font-medium text-amber-900">
         Approve this action before it runs?
       </p>
-      <p className="mt-1.5 text-amber-800">
+      <p className="mt-2 text-amber-800">
         <span className="font-mono font-medium">{shortToolName(toolName)}</span>
-        <span className="break-words text-amber-700">
+        {/* overflow-wrap:anywhere (not break-words): identical line breaking,
+            but long unbreakable tokens (file ids, URLs) also stop inflating
+            min-content width, so a grid/flex ancestor can't be pushed wider
+            than its column by this card. */}
+        <span className="text-amber-700 [overflow-wrap:anywhere]">
           {" · "}
           {summarizeArgs(input)}
         </span>
       </p>
-      <div className="mt-2 flex gap-2">
+      <div className="mt-3 flex gap-2">
         <Button
           disabled={disabled}
           onClick={() => onDecide(approvalId, true)}
@@ -369,8 +373,11 @@ export const MessageRow = memo(function MessageRow({
   onSendComment,
 }: MessageRowProps) {
   return (
-    <Message from={message.role}>
-      <MessageContent className="text-xs">
+    // The rows own the conversation's vertical rhythm (rather than the list
+    // container), so every surface that renders them — dashboard playground,
+    // landing demo — gets the same turn-by-turn spacing.
+    <Message className="mt-5 first:mt-0" from={message.role}>
+      <MessageContent className="gap-3 text-xs">
         {message.parts.map((part, partIndex) => {
           const key = `${message.id}-${partIndex}`;
           if (part.type === "text") {
@@ -399,20 +406,30 @@ export const MessageRow = memo(function MessageRow({
           if (isToolPart(part)) {
             const approvalId = pendingApprovalId(part);
             return (
-              <div className="space-y-2" key={key}>
+              // A pending approval is the beat the conversation pauses on —
+              // give the gated block visibly more room than ordinary parts.
+              // The confirm card's gap is an explicit margin on its own
+              // wrapper, NOT space-y on the parent: space-y puts its margin
+              // on the ToolCard, whose mb-0 silently cancels it.
+              <div
+                className={approvalId !== undefined ? "py-2" : undefined}
+                key={key}
+              >
                 <ToolCard part={part} />
                 {/* The confirm card is bound to the SAME part: an approval
                     request is a state of the tool call, not a message of its
                     own, so the card appears under the tool it gates and
                     disappears the moment the part moves on. */}
                 {approvalId !== undefined && (
-                  <ConfirmCard
-                    approvalId={approvalId}
-                    disabled={busy}
-                    input={part.input}
-                    onDecide={onDecide}
-                    toolName={toolPartName(part)}
-                  />
+                  <div className="mt-6">
+                    <ConfirmCard
+                      approvalId={approvalId}
+                      disabled={busy}
+                      input={part.input}
+                      onDecide={onDecide}
+                      toolName={toolPartName(part)}
+                    />
+                  </div>
                 )}
               </div>
             );

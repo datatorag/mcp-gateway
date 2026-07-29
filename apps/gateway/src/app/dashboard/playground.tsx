@@ -386,7 +386,9 @@ export const Playground = forwardRef<PlaygroundHandle, PlaygroundProps>(
           )}
 
           <Conversation className="min-h-0">
-            <ConversationContent className="gap-4 p-4">
+            {/* gap-0: the message rows carry their own vertical rhythm now
+                (see MessageRow), so the container must not add to it. */}
+            <ConversationContent className="gap-0 p-4">
               {messages.length === 0 && (
                 <div className="space-y-2">
                   <p className="text-xs text-muted-foreground">
@@ -435,7 +437,7 @@ export const Playground = forwardRef<PlaygroundHandle, PlaygroundProps>(
                   merely spent the last run: a genuine failure after that
                   point still deserves a bubble. */}
               {error && error.message !== CAP_EXCEEDED && (
-                <div className="rounded-2xl border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">
+                <div className="mt-5 rounded-2xl border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">
                   {errorBubbleText(error)}
                 </div>
               )}

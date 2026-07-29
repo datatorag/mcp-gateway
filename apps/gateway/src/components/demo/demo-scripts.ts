@@ -119,25 +119,25 @@ const sheets: DemoScript = {
   ],
 };
 
+/** Gmail and Jira are deliberately short — ask, gate, done. They render in
+ * the bento grid's small cells, whose narrower frames can't fit the full
+ * multi-tool arc readably; their job is breadth, and the Sheets script
+ * carries the full arc. Keep their args compact for the same reason. */
 const gmail: DemoScript = {
   id: "gmail",
   deniedText: "Cancelled - nothing was sent.",
   steps: [
     {
       kind: "user",
-      text: "Email alex@example.com a recap of today's standup: we shipped the CSV importer and the customer demo is booked for Friday.",
-    },
-    {
-      kind: "assistant",
-      text: "Composing the recap - it sends only after you approve.",
+      text: "Send Alex a note that the customer demo moved to Friday.",
     },
     {
       kind: "approval",
       toolName: "gws-mcp__gmail_send",
       input: {
         to: "alex@example.com",
-        subject: "Standup recap: importer shipped, demo Friday",
-        body: "Hi Alex,\n\nQuick recap from today's standup:\n- The CSV importer shipped this morning\n- Customer demo is booked for Friday\n\nBest,\nSam",
+        subject: "Demo moved to Friday",
+        body: "Hi Alex - heads up that the customer demo moved to Friday. Same time, same link.",
       },
       output: envelope({
         id: "198demo4c7f3a2e1",
@@ -148,7 +148,7 @@ const gmail: DemoScript = {
     },
     {
       kind: "assistant",
-      text: "Sent - Alex has the recap in their inbox.",
+      text: "Sent - Alex has it in their inbox.",
     },
   ],
 };
@@ -159,22 +159,19 @@ const jira: DemoScript = {
   steps: [
     {
       kind: "user",
-      text: "File a bug in the OPS project: the CSV importer drops rows that contain quoted commas. High priority.",
+      text: "File a bug in OPS: the importer drops rows with quoted commas.",
     },
     {
       kind: "assistant",
-      text: "Filing that in OPS now.",
+      text: "Filing it in OPS now.",
     },
     {
       kind: "approval",
       toolName: "atlassian-mcp__jira_create_issue",
       input: {
         project_key: "OPS",
-        summary: "CSV importer drops rows containing quoted commas",
-        description:
-          'Rows whose fields contain quoted commas (e.g. "Acme, Inc") are silently skipped during import.',
+        summary: "Importer drops rows containing quoted commas",
         issue_type: "Bug",
-        additional_fields: { priority: { name: "High" } },
       },
       output: envelope({
         id: "10042",
@@ -185,10 +182,10 @@ const jira: DemoScript = {
     },
     {
       kind: "assistant",
-      text: "Created OPS-214 and marked it High priority.",
+      text: "Created OPS-214 in your project.",
     },
   ],
 };
 
-/** Replay cycles through these in order: breadth is shown, not claimed. */
+/** The demo grid renders all of these at once: breadth is shown, not claimed. */
 export const DEMO_SCRIPTS: DemoScript[] = [sheets, gmail, jira];

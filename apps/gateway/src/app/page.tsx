@@ -5,7 +5,8 @@ import { mcpServers, tools } from "@datatorag-mcp/db";
 import { Navbar } from "@/components/navbar";
 import { ShaderBackground } from "@/components/shader-background";
 import { IntegrationCatalog } from "@/components/integration-catalog";
-import { DemoSection } from "@/components/demo/demo-section";
+import { CircleCheckIcon, CircleMinusIcon } from "lucide-react";
+import { DemoWindow } from "@/components/demo/demo-section";
 import { getSessionUserId } from "@/lib/session";
 import Link from "next/link";
 import Script from "next/script";
@@ -233,41 +234,118 @@ export default async function HomePage() {
             </div>
           </div>
 
-          {/* Scripted demo — the real playground presentation components
-              replaying an authored session. Replaces the old hand-built
-              teaser mock (which had a fake input bar). Entirely client-side:
-              no MCP calls, no API routes, no LLM. */}
-          <div
-            id="playground"
-            className="animate-fade-in-up relative mx-auto w-full max-w-6xl scroll-mt-28 px-6 pt-16"
-            style={{ animationDelay: "0.34s" }}
-          >
-            <div className="mx-auto max-w-2xl text-center">
-              <h2 className="font-display text-xl font-bold text-white sm:text-2xl">
+          </div>
+        </ShaderBackground>
+
+        {/* Scripted demo — its own band: the product working, not more hero.
+            Three windows replay authored sessions through the real playground
+            presentation components; entirely client-side (no MCP calls, no
+            API routes, no LLM). Bento hierarchy is deliberate: Sheets carries
+            the full approval-gate arc and gets the space; Gmail and Jira
+            prove breadth with short scripts. The problem/solution pairs are
+            deliberately unparallel — only sourced limitations are named. */}
+        <section id="playground" className="scroll-mt-28 bg-background">
+          <div className="mx-auto max-w-6xl px-6 py-16 sm:py-20">
+            <div className="animate-fade-in-up text-center">
+              <h2 className="font-display text-2xl font-bold text-foreground sm:text-3xl">
                 Watch it do the work.
               </h2>
-              <p className="mx-auto mt-2 max-w-md text-sm text-white/60">
+              <p className="mx-auto mt-3 max-w-md text-sm text-muted-foreground">
                 A scripted replay with sample data. This is the real
                 playground UI, approval gate included.
               </p>
             </div>
 
-            <div className="mx-auto mt-6 max-w-2xl">
-              <DemoSection />
-              <div className="mt-4 text-center">
-                <Link
-                  href={playgroundHref}
-                  className="text-sm text-white/70 underline underline-offset-4 transition-colors hover:text-white"
-                >
-                  {signedIn
-                    ? "Run it for real: open your dashboard"
-                    : "Run it for real: sign in and try the playground"}
-                </Link>
+            <div
+              className="animate-fade-in-up mt-10 grid gap-4 lg:grid-cols-2"
+              style={{ animationDelay: "0.1s" }}
+            >
+              {/* The text is the argument, the window is the evidence: the
+                  solution line is the largest type in each cell, the problem
+                  line stays visibly quieter. Neither outranks the section
+                  heading. */}
+              <div className="min-w-0 rounded-2xl border border-border bg-secondary/50 p-5 sm:p-6 lg:col-span-2 lg:grid lg:grid-cols-12 lg:items-start lg:gap-8">
+                <div className="min-w-0 lg:col-span-5 lg:pt-2">
+                  {/* Same visual grammar as the hero comparison table:
+                      muted minus for the gap, primary check for the fix. */}
+                  <p className="flex items-start gap-2.5 text-base leading-relaxed text-muted-foreground sm:text-lg">
+                    <CircleMinusIcon
+                      aria-hidden="true"
+                      className="mt-1 size-5 shrink-0 text-muted-foreground/60"
+                    />
+                    <span>
+                      Claude reads the sheet you already keep, then hands you
+                      rows to paste in yourself.
+                    </span>
+                  </p>
+                  <p className="mt-3 flex items-start gap-2.5 font-display text-xl font-semibold leading-snug text-foreground sm:text-2xl">
+                    <CircleCheckIcon
+                      aria-hidden="true"
+                      className="mt-1 size-5 shrink-0 text-primary"
+                    />
+                    <span>
+                      DataToRAG appends them to that same file, after asking
+                      you first.
+                    </span>
+                  </p>
+                </div>
+                <div className="min-w-0 lg:col-span-7 lg:mt-0 mt-5">
+                  <DemoWindow id="sheets" />
+                </div>
               </div>
+
+              {[
+                {
+                  id: "gmail",
+                  problem: "Claude writes the email and stops at the draft.",
+                  solution:
+                    "DataToRAG sends it from your account, once you approve.",
+                },
+                {
+                  id: "jira",
+                  problem:
+                    "The ticket gets described in chat, then typed into Jira by hand.",
+                  solution:
+                    "DataToRAG creates it in your project with the fields already set.",
+                },
+              ].map((cell) => (
+                <div
+                  className="min-w-0 rounded-2xl border border-border bg-secondary/50 p-5 sm:p-6"
+                  key={cell.id}
+                >
+                  <p className="flex items-start gap-2 text-sm leading-relaxed text-muted-foreground">
+                    <CircleMinusIcon
+                      aria-hidden="true"
+                      className="mt-0.5 size-4 shrink-0 text-muted-foreground/60"
+                    />
+                    <span>{cell.problem}</span>
+                  </p>
+                  <p className="mt-2 flex items-start gap-2 text-base font-semibold leading-snug text-foreground">
+                    <CircleCheckIcon
+                      aria-hidden="true"
+                      className="mt-0.5 size-4 shrink-0 text-primary"
+                    />
+                    <span>{cell.solution}</span>
+                  </p>
+                  <div className="mt-4">
+                    <DemoWindow id={cell.id} />
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <div className="mt-6 text-center">
+              <Link
+                href={playgroundHref}
+                className="text-sm text-muted-foreground underline underline-offset-4 transition-colors hover:text-foreground"
+              >
+                {signedIn
+                  ? "Run it for real: open your dashboard"
+                  : "Run it for real: sign in and try the playground"}
+              </Link>
             </div>
           </div>
-          </div>
-        </ShaderBackground>
+        </section>
 
         {/* Platform — three pillars */}
         <section
