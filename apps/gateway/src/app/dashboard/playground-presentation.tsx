@@ -406,22 +406,18 @@ export const MessageRow = memo(function MessageRow({
           if (isToolPart(part)) {
             const approvalId = pendingApprovalId(part);
             return (
-              // A pending approval is the beat the conversation pauses on —
-              // give the gated block visibly more room than ordinary parts.
-              // The confirm card's gap is an explicit margin on its own
-              // wrapper, NOT space-y on the parent: space-y puts its margin
-              // on the ToolCard, whose mb-0 silently cancels it.
-              <div
-                className={approvalId !== undefined ? "py-2" : undefined}
-                key={key}
-              >
+              // The confirm card's gap matches the list's part gap (gap-3),
+              // as an explicit margin on its own wrapper — NOT space-y on
+              // the parent: space-y puts its margin on the ToolCard, whose
+              // mb-0 silently cancels it.
+              <div key={key}>
                 <ToolCard part={part} />
                 {/* The confirm card is bound to the SAME part: an approval
                     request is a state of the tool call, not a message of its
                     own, so the card appears under the tool it gates and
                     disappears the moment the part moves on. */}
                 {approvalId !== undefined && (
-                  <div className="mt-6">
+                  <div className="mt-3">
                     <ConfirmCard
                       approvalId={approvalId}
                       disabled={busy}

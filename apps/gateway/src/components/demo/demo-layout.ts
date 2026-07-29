@@ -27,19 +27,19 @@ export const DEMO_WINDOWS: Record<string, DemoWindowLayout> = {
   sheets: {
     id: "sheets",
     service: "Sheets",
-    frame: "h-[584px] sm:h-[424px] lg:h-[440px]",
+    frame: "h-[556px] sm:h-[396px] lg:h-[412px]",
     startDelayMs: 0,
   },
   gmail: {
     id: "gmail",
     service: "Gmail",
-    frame: "h-[408px] sm:h-[320px] lg:h-[336px]",
+    frame: "h-[380px] sm:h-[292px] lg:h-[308px]",
     startDelayMs: 7000,
   },
   jira: {
     id: "jira",
     service: "Jira",
-    frame: "h-[420px] sm:h-[332px] lg:h-[364px]",
+    frame: "h-[392px] sm:h-[304px] lg:h-[336px]",
     startDelayMs: 14000,
   },
 };

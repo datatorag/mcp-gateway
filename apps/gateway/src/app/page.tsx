@@ -310,7 +310,7 @@ export default async function HomePage() {
                 },
               ].map((cell) => (
                 <div
-                  className="min-w-0 rounded-2xl border border-border bg-secondary/50 p-5 sm:p-6"
+                  className="flex min-w-0 flex-col rounded-2xl border border-border bg-secondary/50 p-5 sm:p-6"
                   key={cell.id}
                 >
                   <p className="flex items-start gap-2 text-sm leading-relaxed text-muted-foreground">
@@ -327,7 +327,10 @@ export default async function HomePage() {
                     />
                     <span>{cell.solution}</span>
                   </p>
-                  <div className="mt-4">
+                  {/* Bottom-anchor the window: the two small cells' text pairs
+                      wrap differently, so anchoring keeps both chat windows on
+                      the same baseline across the row. */}
+                  <div className="mt-4 flex grow flex-col justify-end">
                     <DemoWindow id={cell.id} />
                   </div>
                 </div>
