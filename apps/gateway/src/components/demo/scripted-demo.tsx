@@ -45,6 +45,10 @@ function Playback({
       className="h-[420px] overflow-y-auto overscroll-contain p-4"
       ref={scrollRef}
     >
+      {/* Bottom-anchored like a real chat: while content is shorter than the
+          fixed frame it settles at the bottom, so the resolved end state never
+          strands a short transcript at the top of a mostly-empty card. */}
+      <div className="flex min-h-full flex-col justify-end">
       {messages.map((message, index) => (
         <MessageRow
           awaitingConfirm={awaitingApproval}
@@ -62,6 +66,7 @@ function Playback({
           showActions={false}
         />
       ))}
+      </div>
     </div>
   );
 }

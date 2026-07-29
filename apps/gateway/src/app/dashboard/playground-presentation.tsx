@@ -151,11 +151,17 @@ export function shortToolName(name: string): string {
 }
 
 /** Compact one-line summary of a pending write's arguments, shown on the
- * confirmation card so the user sees what will actually run before approving. */
+ * confirmation card so the user sees what will actually run before approving.
+ *
+ * Serialized with spaces at every structural boundary (indent-then-collapse,
+ * so commas inside string VALUES are untouched) — paired with `break-words`
+ * on the card, lines wrap between tokens and a value like a dollar amount is
+ * never split mid-number, which reads as a rendering fault exactly where the
+ * user is deciding whether to trust a write. */
 export function summarizeArgs(input: unknown): string {
   let s: string;
   try {
-    s = JSON.stringify(input ?? {}) ?? "{}";
+    s = JSON.stringify(input ?? {}, null, 1)?.replace(/\n\s*/g, " ") ?? "{}";
   } catch {
     // A tool input that will not serialize is a bug at the tool, not a reason
     // to render nothing where the user expects to see what they are approving.
@@ -233,7 +239,7 @@ export function ConfirmCard({
       </p>
       <p className="mt-1.5 text-amber-800">
         <span className="font-mono font-medium">{shortToolName(toolName)}</span>
-        <span className="break-all text-amber-700">
+        <span className="break-words text-amber-700">
           {" · "}
           {summarizeArgs(input)}
         </span>

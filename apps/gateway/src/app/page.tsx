@@ -247,7 +247,7 @@ export default async function HomePage() {
                 Watch it do the work.
               </h2>
               <p className="mx-auto mt-2 max-w-md text-sm text-white/60">
-                A scripted replay with sample data — but this is the real
+                A scripted replay with sample data. This is the real
                 playground UI, approval gate included.
               </p>
             </div>
@@ -260,8 +260,8 @@ export default async function HomePage() {
                   className="text-sm text-white/70 underline underline-offset-4 transition-colors hover:text-white"
                 >
                   {signedIn
-                    ? "Run it for real — open your dashboard"
-                    : "Run it for real — sign in and try the playground"}
+                    ? "Run it for real: open your dashboard"
+                    : "Run it for real: sign in and try the playground"}
                 </Link>
               </div>
             </div>

@@ -195,7 +195,9 @@ describe("what the user sees for a suspended turn", () => {
     const text = visibleText();
 
     expect(text).toContain("Approve this action before it runs?");
-    expect(text).toContain('{"title":"Q3 report"}');
+    // summarizeArgs spaces structural boundaries so the card wraps between
+    // tokens (never mid-value) under break-words.
+    expect(text).toContain('{ "title": "Q3 report" }');
     expect(buttonLabelled("Approve & run")).toBeTruthy();
     expect(buttonLabelled("Deny")).toBeTruthy();
   });

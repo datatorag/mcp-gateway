@@ -52,7 +52,10 @@ export interface DemoScript {
   deniedText: string;
 }
 
-const SHEET_ID = "1DemoQ3PipelineSheetId0000000000000000000000";
+// Shaped like a real 44-char Google file id (with "demo" embedded) — an
+// obviously-padded fake reads as a rendering fault at the approval beat,
+// where the eye has nowhere else to go. Still invented; matches no real file.
+const SHEET_ID = "1qX8kR3vTnUwZ0demoQ3PplnS5yGhJcMa7BfeKdL2oiE";
 
 const sheets: DemoScript = {
   id: "sheets",

@@ -95,8 +95,12 @@ export const ToolHeader = ({
     >
       {/* `span`s, not `div`s: Base UI's CollapsibleTrigger renders a real
           <button> (nativeButton defaults true), which only accepts phrasing
-          content. */}
-      <span className="flex items-center gap-2">
+          content.
+          flex-wrap + min-w-0: at phone widths a long tool name plus the
+          longest badge ("Awaiting Approval") cannot share one line — the
+          badge wraps below the name instead of running off the card edge
+          and pushing the chevron out of view. */}
+      <span className="flex min-w-0 flex-1 flex-wrap items-center gap-x-2 gap-y-1">
         {service ? (
           <ServiceIcon service={service} size={16} />
         ) : (
@@ -108,7 +112,7 @@ export const ToolHeader = ({
       {/* Base UI's Collapsible.Root emits `data-open`/`data-closed` — there is
           no `data-state` attribute anywhere in @base-ui/react, so the upstream
           Radix-flavoured `group-data-[state=open]` never matched. */}
-      <ChevronDownIcon className="size-4 text-muted-foreground transition-transform group-data-open:rotate-180" />
+      <ChevronDownIcon className="size-4 shrink-0 text-muted-foreground transition-transform group-data-open:rotate-180" />
     </CollapsibleTrigger>
   );
 };
