@@ -60,24 +60,29 @@ export default async function HomePage() {
             <div className="flex-1 text-center lg:text-left">
               <div className="animate-fade-in-up inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/10 px-4 py-1.5 backdrop-blur-sm">
                 <span className="text-xs font-medium text-white/90">
-                  DataToRAG · Unified AI Platform
+                  MCP gateway for Google Workspace and Jira
                 </span>
               </div>
               <h1
                 className="animate-fade-in-up mt-6 font-display text-4xl font-extrabold leading-[1.1] tracking-tight text-white sm:text-5xl lg:text-6xl"
                 style={{ animationDelay: "0.06s" }}
               >
-                Connect Claude with{" "}
-                <span className="text-blue-200">Google Workspace</span>
+                Claude reads{" "}
+                <span className="whitespace-nowrap">your spreadsheet.</span>{" "}
+                <span className="text-blue-200">
+                  <span className="whitespace-nowrap">We let it</span>{" "}
+                  <span className="whitespace-nowrap">edit one.</span>
+                </span>
               </h1>
               <p
                 className="animate-fade-in-up mx-auto mt-6 max-w-2xl text-base leading-relaxed text-white/60 sm:text-lg lg:mx-0"
                 style={{ animationDelay: "0.12s" }}
               >
-                DataToRAG provides a unified platform for Claude, ChatGPT, etc to securely access your Google Workspace: Docs, Sheets,
-                Slides, Calendar, Drive, Contacts, and Tasks. Everything happens natively and integrates seamlessly. 
-                <br />
-                No more copy, paste, format. Improve your workflow and productivity today!
+                Append the rows, send the email, update the ticket. Claude does
+                the work in your real files instead of handing you something to
+                paste. {totalTools > 0 ? totalTools : 76} tools across Google
+                Workspace, Jira and Confluence behind one URL - and every write
+                asks you first.
               </p>
               <div
                 className="animate-fade-in-up mt-8 flex flex-wrap items-center justify-center gap-3 lg:justify-start"
@@ -96,6 +101,82 @@ export default async function HomePage() {
                   Talk to Us
                 </Link>
               </div>
+
+              {/* Accuracy constraint: rows must stay create-vs-change (the
+                  built-in connector can create new files) — never a general
+                  "no write access" claim. */}
+              <div
+                className="animate-fade-in-up mx-auto mt-8 w-full max-w-md lg:mx-0"
+                style={{ animationDelay: "0.2s" }}
+              >
+                <table className="w-full overflow-hidden rounded-xl border border-white/15 bg-white/5 text-sm backdrop-blur-sm">
+                  <thead>
+                    <tr className="border-b border-white/10 text-[11px] uppercase tracking-wider text-white/50">
+                      <th scope="col" className="px-4 py-2.5"></th>
+                      <th
+                        scope="col"
+                        className="px-2 py-2.5 text-center font-medium"
+                      >
+                        Built-in connector
+                      </th>
+                      <th
+                        scope="col"
+                        className="px-2 py-2.5 text-center font-medium text-blue-200"
+                      >
+                        DataToRAG
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody className="text-white/80">
+                    {[
+                      { capability: "Read a file", builtIn: true },
+                      { capability: "Edit an existing sheet", builtIn: false },
+                      { capability: "Send an email", builtIn: false },
+                    ].map(({ capability, builtIn }) => (
+                      <tr
+                        key={capability}
+                        className="border-b border-white/10 last:border-b-0"
+                      >
+                        <th
+                          scope="row"
+                          className="px-4 py-2.5 text-left font-normal"
+                        >
+                          {capability}
+                        </th>
+                        {[builtIn, true].map((yes, i) => (
+                          <td key={i} className="px-2 py-2.5 text-center">
+                            {yes ? (
+                              <>
+                                <svg
+                                  width="14"
+                                  height="14"
+                                  viewBox="0 0 16 16"
+                                  fill="none"
+                                  stroke="currentColor"
+                                  strokeWidth="2"
+                                  strokeLinecap="round"
+                                  strokeLinejoin="round"
+                                  aria-hidden="true"
+                                  className="inline-block text-white/90"
+                                >
+                                  <path d="M3 8.5l3.5 3.5L13 5" />
+                                </svg>
+                                <span className="sr-only">Yes</span>
+                              </>
+                            ) : (
+                              <span className="text-white/30" aria-hidden="true">
+                                &mdash;
+                              </span>
+                            )}
+                            {!yes && <span className="sr-only">No</span>}
+                          </td>
+                        ))}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
               <p
                 className="animate-fade-in-up mx-auto mt-6 max-w-xl text-xs text-white/50 lg:mx-0"
                 style={{ animationDelay: "0.22s" }}

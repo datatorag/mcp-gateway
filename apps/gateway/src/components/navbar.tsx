@@ -60,7 +60,7 @@ export function Navbar() {
             </span>
           </Link>
 
-          <nav className="hidden items-center gap-1 md:flex">
+          <nav className="hidden items-center gap-1 lg:flex">
             <div ref={dropdownRef} className="relative">
               <button
                 type="button"
@@ -134,7 +134,7 @@ export function Navbar() {
           <button
             type="button"
             onClick={() => setMobileOpen(!mobileOpen)}
-            className="flex h-9 w-9 items-center justify-center rounded-lg text-white/70 transition-colors hover:text-white md:hidden"
+            className="flex h-9 w-9 items-center justify-center rounded-lg text-white/70 transition-colors hover:text-white lg:hidden"
             aria-label="Toggle menu"
             aria-expanded={mobileOpen}
           >
