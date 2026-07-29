@@ -7,6 +7,8 @@
  * the chunk arrives. */
 
 import dynamic from "next/dynamic";
+import Link from "next/link";
+import { ArrowUpIcon } from "lucide-react";
 import { DEMO_WINDOWS } from "./demo-layout";
 
 const ScriptedTranscript = dynamic(() => import("./scripted-demo"), {
@@ -14,7 +16,16 @@ const ScriptedTranscript = dynamic(() => import("./scripted-demo"), {
   loading: () => null,
 });
 
-export function DemoWindow({ id }: { id: string }) {
+export function DemoWindow({
+  id,
+  promptHref,
+  promptLabel,
+}: {
+  id: string;
+  /** Where the composer-shaped link sends the viewer (playground/sign-in). */
+  promptHref: string;
+  promptLabel: string;
+}) {
   const layout = DEMO_WINDOWS[id];
   if (!layout) return null;
   return (
@@ -28,6 +39,26 @@ export function DemoWindow({ id }: { id: string }) {
       </div>
       <div className={layout.frame}>
         <ScriptedTranscript id={id} startDelayMs={layout.startDelayMs} />
+      </div>
+      {/* Composer-shaped, but a LINK, not an input: it cannot swallow typing,
+          the label says where it goes, and clicking lands in the real
+          playground. A field that accepted keystrokes here would misrepresent
+          the scripted replay as a live chat — keep it un-typeable. */}
+      <div className="border-t border-border p-3">
+        <Link
+          className="flex items-center justify-between gap-2 rounded-xl border border-border bg-background px-3 py-2 transition-colors hover:border-foreground/30 hover:bg-secondary/50"
+          href={promptHref}
+        >
+          <span className="truncate text-xs text-muted-foreground">
+            {promptLabel}
+          </span>
+          <span
+            aria-hidden="true"
+            className="flex size-6 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground"
+          >
+            <ArrowUpIcon className="size-3.5" />
+          </span>
+        </Link>
       </div>
     </div>
   );

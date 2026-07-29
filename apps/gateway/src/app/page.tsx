@@ -56,6 +56,9 @@ export default async function HomePage() {
   ]);
   const signedIn = userId !== null;
   const playgroundHref = signedIn ? "/dashboard" : "/auth/login";
+  const demoPromptLabel = signedIn
+    ? "Open the playground to run your own prompt"
+    : "Sign in to run your own prompt";
 
   return (
     <>
@@ -290,7 +293,11 @@ export default async function HomePage() {
                   </p>
                 </div>
                 <div className="min-w-0 lg:col-span-7 lg:mt-0 mt-5">
-                  <DemoWindow id="sheets" />
+                  <DemoWindow
+                    id="sheets"
+                    promptHref={playgroundHref}
+                    promptLabel={demoPromptLabel}
+                  />
                 </div>
               </div>
 
@@ -331,7 +338,11 @@ export default async function HomePage() {
                       wrap differently, so anchoring keeps both chat windows on
                       the same baseline across the row. */}
                   <div className="mt-4 flex grow flex-col justify-end">
-                    <DemoWindow id={cell.id} />
+                    <DemoWindow
+                      id={cell.id}
+                      promptHref={playgroundHref}
+                      promptLabel={demoPromptLabel}
+                    />
                   </div>
                 </div>
               ))}
