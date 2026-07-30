@@ -32,7 +32,7 @@ So the first thing write access has to mean is verbs that change existing things
 
 ## Problem 2: so people build their own server, and OAuth eats them
 
-The obvious response to a read-only-in-practice connector is "fine, I'll run my own MCP server." The r/mcp archive is a graveyard of what happens next.
+The obvious response to a connector that won't change your files is "fine, I'll run my own MCP server." The r/mcp archive is a graveyard of what happens next.
 
 ["Auth was a pain when building MCP servers"](https://www.reddit.com/r/mcp/comments/1ojhgsk/auth_was_a_pain_when_building_mcp_servers_so_we/) sits at 101 points. ["How are you handling OAuth when running MCP servers remotely?"](https://www.reddit.com/r/mcp/comments/1mw09b5/how_are_you_handling_oauth_when_running_mcp/) is another thread on the same wound, at 35. From that post:
 
