@@ -106,10 +106,9 @@ export default async function HomePage() {
                 className="animate-fade-in-up mx-auto mt-6 max-w-2xl text-base leading-relaxed text-white/60 sm:text-lg lg:mx-0"
                 style={{ animationDelay: "0.12s" }}
               >
-                Append the rows, send the email, update the ticket. Claude does
-                the work in your real files instead of handing you something to
-                paste. {totalTools > 0 ? totalTools : 76} tools across Google
-                Workspace, Jira and Confluence behind one URL - and every write
+                Append the rows, send the email, update the ticket.{" "}
+                {totalTools > 0 ? totalTools : 76} tools across Google
+                Workspace, Jira and Confluence behind one URL, and every write
                 asks you first.
               </p>
               <div
