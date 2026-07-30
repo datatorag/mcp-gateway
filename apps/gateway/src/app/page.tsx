@@ -7,6 +7,7 @@ import { ShaderBackground } from "@/components/shader-background";
 import { IntegrationCatalog } from "@/components/integration-catalog";
 import { CircleCheckIcon, CircleMinusIcon } from "lucide-react";
 import { CasaBadge } from "@/components/casa-badge";
+import { StartupBarOffset } from "@/components/startupbar-offset";
 import { DemoWindow } from "@/components/demo/demo-section";
 import { getSessionUserId } from "@/lib/session";
 import Link from "next/link";
@@ -70,6 +71,9 @@ export default async function HomePage() {
         data-startup-id="f6d47644-c058-43e3-b69b-5a460c92ee88"
         strategy="afterInteractive"
       />
+      {/* Tracks the injected bar's real height so the navbar and page sit
+          below it instead of underneath it — see the component's comment. */}
+      <StartupBarOffset />
       <Navbar />
 
       <main className="flex-1 overflow-x-hidden">
