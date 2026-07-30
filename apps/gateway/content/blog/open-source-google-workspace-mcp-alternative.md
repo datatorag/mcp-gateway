@@ -2,6 +2,7 @@
 title: "You Can Self-Host a Google Workspace MCP for Free. The OAuth Verification Is the Catch."
 excerpt: "The open-source Google Workspace MCP servers are genuinely good. The cost isn't the code. It's the Google Cloud project, the consent screen, and the verification that comes after."
 date: "2026-06-29"
+updated: "2026-07-30"
 author: "Manuel Yang"
 category: "Comparison"
 tags: ["self-hosting", "google-workspace", "mcp", "open-source", "oauth", "alternative"]
@@ -17,7 +18,7 @@ This post is about that gap. The distance between "the code runs on my laptop" a
 
 Let me be fair to it, because the OSS servers earn it.
 
-You get the full tool surface. `taylorwilsdon/google_workspace_mcp` spans twelve Google services with real write access, not just read. It runs locally with `uvx`, in Docker, or on Kubernetes with the included Helm chart. It handles multiple accounts through per-call user impersonation. The license is MIT, so you can fork it, change it, ship it inside your own product, whatever you want. There's an older, narrower option too (`MarkusPfundstein/mcp-gsuite`, Gmail and Calendar only, around 487 stars) if you want something small enough to read end to end.
+You get the full tool surface. `taylorwilsdon/google_workspace_mcp` spans twelve Google services and supports writes, not just reads. It runs locally with `uvx`, in Docker, or on Kubernetes with the included Helm chart. It handles multiple accounts through per-call user impersonation. The license is MIT, so you can fork it, change it, ship it inside your own product, whatever you want. There's an older, narrower option too (`MarkusPfundstein/mcp-gsuite`, Gmail and Calendar only, around 487 stars) if you want something small enough to read end to end.
 
 And the big one: your data never leaves your infrastructure. The server runs where you put it. Tokens live where you store them. For a security team that wants Google data to stay inside its own walls, that isn't a nice-to-have, it's the entire reason to self-host. I'm not going to pretend a hosted gateway beats that on data residency. It doesn't.
 

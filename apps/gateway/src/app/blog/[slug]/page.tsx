@@ -198,7 +198,11 @@ export default async function BlogArticlePage({ params }: Props) {
             </div>
           </header>
 
-          {post.updated && (
+          {/* Visible disclosure only when there is something to disclose:
+              `updated` alone still feeds dateModified/modifiedTime for
+              trivial edits, while `updatedNote` marks a correction worth a
+              reader-facing note. Edit notes mean less when spent on nothing. */}
+          {post.updated && post.updatedNote && (
             <div className="mt-6 rounded-xl border border-border bg-secondary/50 px-4 py-3 text-sm text-muted-foreground">
               <span className="font-medium text-foreground">
                 Edited{" "}

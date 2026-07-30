@@ -1,7 +1,9 @@
 ---
 title: "Claude Can Read Your Google Docs. It Can't Edit Them."
-excerpt: "Claude's native Google Drive connector is effectively read-only. DataToRAG lets Claude write Docs, update Sheets, and edit Slides in place."
+excerpt: "Claude's native Google Drive connector reads your files and creates new ones, but it can't change what's already there. DataToRAG lets Claude write Docs, update Sheets, and edit Slides in place."
 date: "2026-04-21"
+updated: "2026-07-30"
+updatedNote: "Corrected the excerpt, which called the native connector 'effectively read-only'. That was wrong: it does create new files. The limit is that it can't change files that already exist."
 author: "Manuel Yang"
 category: "Comparison"
 coverImage: "/blog/drive-comparison.png"
