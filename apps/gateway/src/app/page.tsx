@@ -6,6 +6,7 @@ import { Navbar } from "@/components/navbar";
 import { ShaderBackground } from "@/components/shader-background";
 import { IntegrationCatalog } from "@/components/integration-catalog";
 import { CircleCheckIcon, CircleMinusIcon } from "lucide-react";
+import { CasaBadge } from "@/components/casa-badge";
 import { DemoWindow } from "@/components/demo/demo-section";
 import { getSessionUserId } from "@/lib/session";
 import Link from "next/link";
@@ -200,18 +201,16 @@ export default async function HomePage() {
                 </table>
               </div>
 
-              <p
-                className="animate-fade-in-up mx-auto mt-6 max-w-xl text-xs text-white/50 lg:mx-0"
+              {/* Badge lockup, not fine print. */}
+              <div
+                className="animate-fade-in-up mt-6"
                 style={{ animationDelay: "0.22s" }}
               >
-                Google-verified app. CASA Tier 2 security approved (June 2026).{" "}
-                <Link
-                  href="/blog/casa-tier-2-verified"
-                  className="underline transition-colors hover:text-white/80"
-                >
-                  Read more
-                </Link>
-              </p>
+                <CasaBadge
+                  className="justify-center lg:justify-start"
+                  tone="dark"
+                />
+              </div>
             </div>
 
             {/* Demo video — vertical, to the right on desktop */}

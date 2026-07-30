@@ -1,4 +1,5 @@
 import Image from "next/image";
+import { CasaBadge } from "@/components/casa-badge";
 
 export default function LoginPage() {
   return (
@@ -46,6 +47,11 @@ export default function LoginPage() {
               </svg>
               Continue with Google
             </a>
+          </div>
+
+          {/* Shown before the OAuth grant step. */}
+          <div className="mt-6 border-t border-border pt-5">
+            <CasaBadge className="justify-center" />
           </div>
         </div>
 

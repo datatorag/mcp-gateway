@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import type { ConnectedAccount, LegacyConnection } from "../types";
 import { ServiceIcon, serviceFromToolName } from "@/components/service-icon";
+import { CasaBadge } from "@/components/casa-badge";
 
 interface Tool {
   name: string;
@@ -192,6 +193,8 @@ export function ConnectionDetailClient({
         >
           Connect
         </a>
+        {/* Shown before the consent-screen step Connect leads to. */}
+        <CasaBadge className="mt-5 justify-center" />
       </div>
     );
   }

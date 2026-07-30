@@ -5,6 +5,7 @@ import Link from "next/link";
 import posthog from "posthog-js";
 import { Play, Copy, Check } from "lucide-react";
 import { EVENTS } from "@/lib/analytics";
+import { CasaBadge } from "@/components/casa-badge";
 import { reportSignupConversion } from "@/components/google-ads";
 import { SERVICES } from "./connections/services";
 import { ServiceIcon } from "@/components/service-icon";
@@ -119,6 +120,9 @@ export function DashboardClient() {
           .
         </p>
       </div>
+
+      {/* Shown before the consent-screen step the Connect buttons lead to. */}
+      <CasaBadge className="mt-4" />
 
       {/* Service cards */}
       <div className="mt-6 grid gap-4 sm:grid-cols-2">
