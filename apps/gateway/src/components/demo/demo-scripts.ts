@@ -60,7 +60,7 @@ const SHEET_ID = "1qX8kR3vTnUwZ0demoQ3PplnS5yGhJcMa7BfeKdL2oiE";
 const sheets: DemoScript = {
   id: "sheets",
   deniedText:
-    "No problem - I left the sheet untouched. Say the word and I'll add them.",
+    "No problem. I left the sheet untouched. Say the word and I'll add them.",
   steps: [
     {
       kind: "user",
@@ -114,7 +114,7 @@ const sheets: DemoScript = {
     },
     {
       kind: "assistant",
-      text: "Done - both deals are in Q3 Pipeline, rows 8 and 9.",
+      text: "Done. Both deals are in Q3 Pipeline, rows 8 and 9.",
     },
   ],
 };
@@ -125,7 +125,7 @@ const sheets: DemoScript = {
  * carries the full arc. Keep their args compact for the same reason. */
 const gmail: DemoScript = {
   id: "gmail",
-  deniedText: "Cancelled - nothing was sent.",
+  deniedText: "Cancelled. Nothing was sent.",
   steps: [
     {
       kind: "user",
@@ -137,7 +137,7 @@ const gmail: DemoScript = {
       input: {
         to: "alex@example.com",
         subject: "Demo moved to Friday",
-        body: "Hi Alex - heads up that the customer demo moved to Friday. Same time, same link.",
+        body: "Hi Alex, heads up that the customer demo moved to Friday. Same time, same link.",
       },
       output: envelope({
         id: "198demo4c7f3a2e1",
@@ -148,14 +148,14 @@ const gmail: DemoScript = {
     },
     {
       kind: "assistant",
-      text: "Sent - Alex has it in their inbox.",
+      text: "Sent. Alex has it in their inbox.",
     },
   ],
 };
 
 const jira: DemoScript = {
   id: "jira",
-  deniedText: "Understood - no ticket was created.",
+  deniedText: "Understood. No ticket was created.",
   steps: [
     {
       kind: "user",
