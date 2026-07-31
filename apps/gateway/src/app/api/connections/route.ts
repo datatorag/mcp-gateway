@@ -8,6 +8,7 @@ import {
   disconnectAccount,
   setDefaultAccount,
 } from "@/gateway/connected-accounts";
+import { revokeGoogleToken } from "@/lib/google-revoke";
 
 // GET /api/connections — list connected accounts for the logged-in user
 export const GET = withRoute(async (userId) => {
@@ -56,6 +57,29 @@ export const DELETE = withRoute(async (userId, request) => {
   }
 
   if (service) {
+    // Tell Google before forgetting locally (see disconnectAccount for the
+    // single-account path): best effort per row, never blocking the delete.
+    if (service === "google-workspace") {
+      const rows = await db
+        .select({
+          accessToken: serviceConnections.accessToken,
+          refreshToken: serviceConnections.refreshToken,
+        })
+        .from(serviceConnections)
+        .where(
+          and(
+            eq(serviceConnections.userId, userId),
+            eq(serviceConnections.service, service)
+          )
+        );
+      await Promise.all(
+        rows.map((row) => {
+          const token = row.refreshToken ?? row.accessToken;
+          return token ? revokeGoogleToken(token) : Promise.resolve(false);
+        })
+      );
+    }
+
     // Delete all connected_accounts for this service first
     await db
       .delete(connectedAccounts)
