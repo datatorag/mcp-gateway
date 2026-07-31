@@ -37,8 +37,12 @@ repo-specific facts and point back here for everything else.
   `description`, and an `oauth` block (`scopes`, `authorizeUrl`/`tokenUrl`,
   `clientIdEnv`/`clientSecretEnv` — env var *names*, no secret values).
 - Build: `package.json`'s `build` script, `scripts/download-binaries.sh`.
-- No test framework — verification is `tsc --strict` plus a live smoke test
-  against real Google APIs, documented in the merge commit message.
+- Tests: vitest (`npm test`), added 2026-07-31 — unit tests live next to the
+  module (`src/tools/*.test.ts`, excluded from the tsc build via tsconfig
+  `exclude`) and use a fake `{ api }` client, so handlers are testable
+  without network. Live smoke tests against real Google APIs remain the
+  verification for actual API behavior, documented in the merge commit
+  message. Note: this repo uses npm (package-lock.json), not pnpm.
 
 **The `gws` binary model, in two sentences**: `GwsClient.exec()` shells out
 to a prebuilt `gws` binary (one per platform, in `bin/`) via
@@ -71,11 +75,12 @@ hands it to `GwsClient` per request, no per-user `gws auth login`).
 3. **Register** — adding to a service file's exported tool array and
    `handle<Service>()` switch is enough; `src/tools/index.ts` picks it up
    automatically via `register()`, no separate wiring step.
-4. **Build + verify locally**: `pnpm run build` (`download-binaries.sh`
-   then `tsc`), confirm it's clean, then run a live smoke test against the
-   real API for the tool you touched (read-only calls first) — there is no
-   test suite, so this is the actual verification step. Note what you
-   tested in the eventual commit/PR body, matching this repo's convention.
+4. **Build + verify locally**: `npm run build` (`download-binaries.sh`
+   then `tsc`), confirm it's clean, run `npm test` (vitest; unit-test the
+   handler with a fake client), then run a live smoke test against the
+   real API for the tool you touched (read-only calls first) — unit tests
+   cover wiring and error shaping, only a live call verifies actual API
+   behavior. Note what you tested in the eventual commit/PR body.
 5. **PR to main** — see Conventions below for message shape.
 
 ## Ship tail
