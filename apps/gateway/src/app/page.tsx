@@ -840,6 +840,8 @@ export default async function HomePage() {
           {" "}&middot;{" "}
           <a href="/pricing" className="underline hover:text-foreground">Pricing</a>
           {" "}&middot;{" "}
+          <a href="/skills" className="underline hover:text-foreground">Skills</a>
+          {" "}&middot;{" "}
           <a href="/privacy" className="underline hover:text-foreground">Privacy Policy</a>
           {" "}&middot;{" "}
           <a href="/terms" className="underline hover:text-foreground">Terms of Service</a>

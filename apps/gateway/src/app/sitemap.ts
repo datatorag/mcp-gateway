@@ -4,6 +4,7 @@ import { db } from "@/lib/db";
 import { mcpServers } from "@datatorag-mcp/db";
 import { getAllPosts } from "@/lib/blog";
 import { getAllDocs } from "@/lib/docs";
+import { getAllSkills } from "@/lib/skills";
 
 // Request-time so the tools query runs against the live DB, not at build.
 export const dynamic = "force-dynamic";
@@ -15,6 +16,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     { url: BASE, changeFrequency: "weekly", priority: 1 },
     { url: `${BASE}/blog`, changeFrequency: "weekly", priority: 0.8 },
     { url: `${BASE}/docs`, changeFrequency: "weekly", priority: 0.8 },
+    { url: `${BASE}/skills`, changeFrequency: "weekly", priority: 0.8 },
     { url: `${BASE}/changelog`, changeFrequency: "weekly", priority: 0.6 },
     { url: `${BASE}/pricing`, changeFrequency: "monthly", priority: 0.8 },
     // /demo still serves (ad destinations, analytics history) but canonicalizes
@@ -37,6 +39,12 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     priority: 0.6,
   }));
 
+  const skills: MetadataRoute.Sitemap = getAllSkills().map((s) => ({
+    url: `${BASE}/skills/${s.slug}`,
+    changeFrequency: "monthly",
+    priority: 0.7,
+  }));
+
   // Server/tool pages come from the DB; the sitemap must render even if
   // that query fails, so these are best-effort.
   let tools: MetadataRoute.Sitemap = [];
@@ -54,5 +62,5 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     console.warn("[sitemap] tools query failed, omitting /tools URLs", err);
   }
 
-  return [...staticRoutes, ...posts, ...docs, ...tools];
+  return [...staticRoutes, ...posts, ...docs, ...skills, ...tools];
 }

@@ -12,8 +12,8 @@ Next.js App Router site in `apps/gateway`).
 
 ## Content systems
 
-Blog, changelog, and docs are markdown-in-repo, not a CMS — three near-identical
-hand-rolled parsers, no MDX. Each reads `content/{blog,changelog,docs}/*.md` from
+Blog, changelog, docs, and skills are markdown-in-repo, not a CMS — four near-identical
+hand-rolled parsers, no MDX. Each reads `content/{blog,changelog,docs,skills}/*.md` from
 `path.join(process.cwd(), "content", ...)`, parses frontmatter with `gray-matter`
 (`matter()`) and body with `marked.parse(content) as string`, and keeps a **module-level
 cache** (`let xCache: T[] | null = null`, populated once) with the comment "content is
@@ -99,6 +99,47 @@ Docs screenshots live in `apps/gateway/public/docs/` and must be personally-scru
 before commit (public repo). Pending-capture spots use HTML-comment placeholders
 (`<!-- screenshot placeholder: name.png -->`) which render nothing.
 
+### Skills — `apps/gateway/src/lib/skills.ts`
+
+Slug = filename. Its OWN collection, deliberately not blog posts: a skill page is a
+reference artifact people return to and copy from, a blog post is a one-time read, so
+skills get no reverse-chronological feed and do not use `getRelatedPosts`. Sorted by
+`order`, not date.
+
+| Field | Type | Fallback |
+|---|---|---|
+| `title` | string — query-shaped, drives metadata | `slug` |
+| `situation` | string — the reader's problem, headlines the index card | `""` |
+| `produces` | string — what they get | `""` |
+| `tools` | string array — bare tool names | `[]` |
+| `accounts` | `"single"` \| `"multiple"` | `"single"` |
+| `order` | number | `99` |
+
+**The load-bearing mechanism is `skillSource`.** The body is split around its first
+```` ```markdown ```` fence: prose before it becomes `introHtml` (with the leading `#`
+H1 stripped, since the page renders its own), prose after becomes `notesHtml`, and the
+fence's inner text is lifted VERBATIM as `skillSource` — which is what the copy button
+puts on the clipboard. Never re-extract the copy payload from rendered HTML; a rendering
+is not the data, and scraped DOM text arrives with mangled entities and escapes. Render
+for reading, copy from source.
+
+**Treat `content/skills/*.md` as security-relevant content, not marketing copy.** The
+fenced block is copied verbatim by readers and then executed by their agent against
+their own OAuth-scoped mailbox, calendar and files. An edit here ships instructions that
+run with every reader's tokens, so the rails inside each skill ("read and mark-read
+only, never delete, archive or send") are load-bearing and must survive edits. Review a
+change to this directory like code, not like prose. Also note `marked` output is not
+sanitised (same as blog/docs), so raw HTML in a skill file would render as-is.
+
+`getRelatedSkills` ranks by shared connector (derived from tool-name prefixes via
+`connectorsFor`), then by `order`.
+
+**Accuracy gate:** `skills.test.ts` pins every declared tool against a list of tools the
+connectors actually ship. A skill naming a tool we do not ship is worse than no skill —
+a reader pastes it in and it fails on them. Extend that list only after confirming the
+tool exists on the live wire, never to make a test pass. Note `tools` is the surface the
+skill operates over, not a strict call list.
+
 ## Page conventions
 
 - **`.prose` is hand-rolled**, defined in `apps/gateway/src/app/globals.css` (the
@@ -145,7 +186,9 @@ same commit:
    into both desktop nav and the mobile menu. One entry covers both; there's no lint or
    test enforcing this, so a route that's live but missing from `flatItems` is the most
    common way a page ships with no nav visibility.
-3. The footer links row in `apps/gateway/src/app/page.tsx` (the home page's `<footer>`,
+3. `apps/gateway/src/app/sitemap.ts` — add the static route, and map the collection's
+   entries if it has detail pages (blog/docs/skills all do).
+4. The footer links row in `apps/gateway/src/app/page.tsx` (the home page's `<footer>`,
    currently Security/Privacy/Terms/Changelog/GitHub separated by `&middot;`) — add the
    new link in the same style.
 

@@ -20,6 +20,7 @@ const productItems: NavLink[] = [
 
 const flatItems: NavLink[] = [
   { href: "/pricing", label: "Pricing" },
+  { href: "/skills", label: "Skills" },
   { href: "/docs", label: "Docs" },
   { href: "/blog", label: "Blog" },
   { href: "/changelog", label: "Changelog" },

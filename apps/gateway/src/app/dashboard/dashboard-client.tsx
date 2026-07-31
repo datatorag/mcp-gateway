@@ -319,6 +319,30 @@ export function DashboardClient() {
         )}
       </div>
 
+      {/* The activation moment: an account is connected and the honest next
+          question is "what do I actually do now?". Answer it here rather
+          than leaving an empty playground to answer it. */}
+      {hasConnectedAccount && (
+        <Link
+          className="group mt-10 flex items-start justify-between gap-4 rounded-xl border border-primary/30 bg-primary/[0.03] p-5 transition-colors hover:bg-primary/[0.06]"
+          href="/skills"
+        >
+          <div>
+            <h2 className="font-display text-base font-bold text-foreground">
+              Connected. Now teach Claude what to do with it
+            </h2>
+            <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
+              Working skills you can copy straight into your client: triage
+              your inbox, see your week across every calendar, keep a
+              knowledge base in Sheets.
+            </p>
+          </div>
+          <span className="mt-1 shrink-0 text-sm font-medium text-primary">
+            Browse skills &rarr;
+          </span>
+        </Link>
+      )}
+
       {/* What can I do? */}
       <div className="mt-10">
         <h2 className="font-display text-base font-bold text-foreground">
