@@ -1,6 +1,7 @@
 import { eq, and } from "drizzle-orm";
 import type { Database } from "@datatorag-mcp/db";
 import { serviceConnections, connectedAccounts } from "@datatorag-mcp/db";
+import { revokeGoogleToken } from "@/lib/google-revoke";
 
 /** Mapping from plugin slug to the service connection it needs. */
 export const PLUGIN_SERVICE_MAP: Record<string, string> = {
@@ -126,6 +127,42 @@ const REFRESH_FN: Record<
   "google-workspace": refreshGoogleToken,
   atlassian: refreshAtlassianToken,
 };
+
+/** Service-specific upstream revocation, beside REFRESH_FN because this is
+ * the same dispatch: per-provider OAuth mechanics keyed by service. A
+ * provider with no entry simply has no upstream revocation yet — adding one
+ * is a row here, not another branch at the call sites.
+ *
+ * Atlassian is absent deliberately: its revocation story is its own piece of
+ * work and guessing at it would be worse than the honest gap. */
+const REVOKE_FN = new Map<string, (token: string) => Promise<boolean>>([
+  ["google-workspace", revokeGoogleToken],
+]);
+
+/** Tell the provider to drop a connection's grant before we forget it
+ * locally.
+ *
+ * Deleting only our rows leaves the grant live upstream, where a previously
+ * leaked refresh token keeps working. Revoking the REFRESH token kills the
+ * whole grant including derived access tokens, so prefer it and fall back to
+ * the access token.
+ *
+ * Strictly best effort, and deliberately never throws: a user who clicked
+ * disconnect must never stay connected because a provider was slow or down.
+ * The caller deletes regardless of what this returns. */
+export async function revokeUpstream(
+  service: string,
+  tokens: { accessToken?: string | null; refreshToken?: string | null }
+): Promise<boolean> {
+  // A Map, not an object literal: `service` reaches here from a query
+  // parameter, and a plain object would resolve "__proto__" or "constructor"
+  // to something that is not a revoke function.
+  const revoke = REVOKE_FN.get(service);
+  if (!revoke) return false;
+  const token = tokens.refreshToken ?? tokens.accessToken;
+  if (!token) return false;
+  return revoke(token);
+}
 
 /**
  * Get a valid access token for a user's service connection.

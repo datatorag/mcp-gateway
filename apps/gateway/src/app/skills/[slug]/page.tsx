@@ -112,7 +112,7 @@ export default async function SkillPage({ params }: Props) {
           />
 
           <div className="mt-8">
-            <CopySkill source={skill.skillSource} />
+            <CopySkill slug={skill.slug} source={skill.skillSource} />
             <p className="mt-3 text-xs text-muted-foreground">
               Paste this into your Claude client as a skill, then ask for it by
               name. It calls your connected accounts through the gateway, and

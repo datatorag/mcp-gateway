@@ -1,7 +1,5 @@
-import fs from "node:fs";
-import path from "node:path";
-import matter from "gray-matter";
 import { marked } from "marked";
+import { defineCollection, field, type ParsedFile } from "./content-collection";
 
 /** Skills are their own collection, not blog posts.
  *
@@ -16,8 +14,6 @@ import { marked } from "marked";
  * from rendered HTML, so what a user pastes into Claude is byte-for-byte the
  * file we tested.
  */
-
-const SKILLS_DIR = path.join(process.cwd(), "content", "skills");
 
 export interface Skill {
   slug: string;
@@ -47,27 +43,18 @@ export interface Skill {
  * Skills author the artifact as a ```markdown fence. */
 const SKILL_FENCE = /^```markdown\n([\s\S]*?)\n```$/m;
 
-let skillsCache: Skill[] | null = null;
-const skillsBySlug = new Map<string, Skill>();
+const collection = defineCollection<Skill>({
+  dir: "skills",
+  parse: parseSkill,
+  sort: (a, b) => a.order - b.order,
+});
 
 export function getAllSkills(): Skill[] {
-  if (skillsCache) return skillsCache;
-  if (!fs.existsSync(SKILLS_DIR)) return [];
-
-  skillsCache = fs
-    .readdirSync(SKILLS_DIR)
-    .filter((f) => f.endsWith(".md"))
-    .map((f) => parseSkill(f.replace(/\.md$/, "")))
-    .filter((s): s is Skill => s !== null)
-    .sort((a, b) => a.order - b.order);
-
-  for (const skill of skillsCache) skillsBySlug.set(skill.slug, skill);
-  return skillsCache;
+  return collection.getAll();
 }
 
 export function getSkillBySlug(slug: string): Skill | null {
-  if (!skillsCache) getAllSkills();
-  return skillsBySlug.get(slug) ?? null;
+  return collection.getBySlug(slug);
 }
 
 /** Sibling skills, ranked by shared connector then by authored order.
@@ -103,13 +90,7 @@ export function connectorsFor(tools: string[]): string[] {
   return [...out];
 }
 
-function parseSkill(slug: string): Skill | null {
-  const filePath = path.join(SKILLS_DIR, `${slug}.md`);
-  if (!fs.existsSync(filePath)) return null;
-
-  const raw = fs.readFileSync(filePath, "utf-8");
-  const { data, content } = matter(raw);
-
+function parseSkill({ slug, data, content }: ParsedFile): Skill | null {
   const fence = SKILL_FENCE.exec(content);
   if (!fence) return null; // a skill without its artifact is not a skill
   const skillSource = fence[1];
@@ -122,12 +103,12 @@ function parseSkill(slug: string): Skill | null {
 
   return {
     slug,
-    title: data.title ?? slug,
-    situation: data.situation ?? "",
-    produces: data.produces ?? "",
-    tools: Array.isArray(data.tools) ? data.tools.map(String) : [],
+    title: field.string(data.title, slug),
+    situation: field.string(data.situation),
+    produces: field.string(data.produces),
+    tools: field.stringArray(data.tools),
     accounts: data.accounts === "multiple" ? "multiple" : "single",
-    order: typeof data.order === "number" ? data.order : 99,
+    order: field.number(data.order, 99),
     introHtml: marked.parse(intro) as string,
     skillSource,
     notesHtml: marked.parse(notes) as string,

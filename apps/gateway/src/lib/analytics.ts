@@ -7,6 +7,7 @@ export const EVENTS = {
   CONNECTOR_ADDED: "connector_added",
   CONNECTOR_REMOVED: "connector_removed",
   COPY_MCP_CONFIG: "copy_mcp_config",
+  SKILL_COPIED: "skill_copied",
   MCP_REQUEST_RECEIVED: "mcp_request_received",
   MCP_SESSION_INITIALIZED: "mcp_session_initialized",
   MCP_AUTH_FAILED: "mcp_auth_failed",

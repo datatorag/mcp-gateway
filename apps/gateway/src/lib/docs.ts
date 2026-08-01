@@ -1,10 +1,6 @@
-import fs from "node:fs";
-import path from "node:path";
-import matter from "gray-matter";
 import { marked } from "marked";
 import { CONNECTORS, type Connector } from "./docs-connectors";
-
-const DOCS_DIR = path.join(process.cwd(), "content", "docs");
+import { defineCollection, field, type ParsedFile } from "./content-collection";
 
 export interface DocPage {
   slug: string;
@@ -23,28 +19,18 @@ export interface ConnectorGroup {
   pages: DocPage[];
 }
 
-let pagesCache: DocPage[] | null = null;
-const pagesBySlug = new Map<string, DocPage>();
+const collection = defineCollection<DocPage>({
+  dir: "docs",
+  parse: parsePage,
+  sort: (a, b) => a.order - b.order,
+});
 
 export function getAllDocs(): DocPage[] {
-  if (pagesCache) return pagesCache;
-
-  if (!fs.existsSync(DOCS_DIR)) return [];
-
-  pagesCache = fs
-    .readdirSync(DOCS_DIR)
-    .filter((f) => f.endsWith(".md"))
-    .map((f) => parsePage(f.replace(/\.md$/, "")))
-    .filter((p): p is DocPage => p !== null)
-    .sort((a, b) => a.order - b.order);
-
-  for (const page of pagesCache) pagesBySlug.set(page.slug, page);
-  return pagesCache;
+  return collection.getAll();
 }
 
 export function getDocBySlug(slug: string): DocPage | null {
-  if (!pagesCache) getAllDocs();
-  return pagesBySlug.get(slug) ?? null;
+  return collection.getBySlug(slug);
 }
 
 export function getTopLevelDocs(): DocPage[] {
@@ -65,21 +51,16 @@ export function getConnectorGroups(): ConnectorGroup[] {
   });
 }
 
-function parsePage(slug: string): DocPage | null {
-  const filePath = path.join(DOCS_DIR, `${slug}.md`);
-  if (!fs.existsSync(filePath)) return null;
-
-  const raw = fs.readFileSync(filePath, "utf-8");
-  const { data, content } = matter(raw);
+function parsePage({ slug, data, content }: ParsedFile): DocPage {
   const html = marked.parse(content) as string;
 
   return {
     slug,
-    title: data.title ?? slug,
-    description: data.description ?? "",
-    order: data.order ?? 99,
-    section: data.section ?? "general",
-    connector: data.connector ?? null,
+    title: field.string(data.title, slug),
+    description: field.string(data.description),
+    order: field.number(data.order, 99),
+    section: field.string(data.section, "general"),
+    connector: field.string(data.connector) || null,
     content,
     html,
   };

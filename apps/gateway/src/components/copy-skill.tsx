@@ -1,7 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import posthog from "posthog-js";
 import { CheckIcon, CopyIcon } from "lucide-react";
+import { EVENTS } from "@/lib/analytics";
+import { useCopyToClipboard } from "@/lib/use-copy-to-clipboard";
 
 /** The skill file, with a copy button that puts the VERBATIM source on the
  * clipboard.
@@ -11,21 +13,19 @@ import { CheckIcon, CopyIcon } from "lucide-react";
  * block. A rendering is not the data: re-extracting from the DOM is how you
  * ship a skill that pastes with mangled escapes and silently fails for the
  * user. Render for reading, copy from source.
+ *
+ * A copy is the activation signal this whole section exists to produce, so
+ * it reports one — but only when the write actually succeeded, which is why
+ * the hook resolves to a boolean.
  */
-export function CopySkill({ source }: { source: string }) {
-  const [copied, setCopied] = useState(false);
+export function CopySkill({ slug, source }: { slug: string; source: string }) {
+  const { copied, copy } = useCopyToClipboard<boolean>();
 
-  const copy = async () => {
-    try {
-      await navigator.clipboard.writeText(source);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    } catch {
-      // Clipboard denied (insecure context, or the user said no). Leave the
-      // button un-ticked rather than claiming a copy that did not happen —
-      // the source is on screen and selectable either way.
+  async function handleCopy() {
+    if (await copy(source, true)) {
+      posthog.capture(EVENTS.SKILL_COPIED, { skill: slug });
     }
-  };
+  }
 
   return (
     <div className="overflow-hidden rounded-2xl border border-border bg-secondary/40">
@@ -35,7 +35,7 @@ export function CopySkill({ source }: { source: string }) {
         </span>
         <button
           className="flex cursor-pointer items-center gap-1.5 rounded-lg border border-border bg-background px-2.5 py-1.5 text-xs font-medium text-foreground transition-colors hover:bg-secondary"
-          onClick={copy}
+          onClick={handleCopy}
           type="button"
         >
           {copied ? (

@@ -1,48 +1,17 @@
 import { describe, expect, it } from "vitest";
 import { connectorsFor, getAllSkills, getRelatedSkills } from "./skills";
+import { REGISTRY_TOOL_NAMES } from "@/gateway/playground/registry-snapshot";
 
-/** Tools shipped by our connectors, as verified against the live prod
- * registry on 2026-07-31 (55 gws-mcp + 22 atlassian-mcp).
+/** A published skill may only name tools we actually ship.
  *
- * This list is the guard on the rule that matters for published skills: a
- * skill naming a tool we do not ship is worse than no skill, because a
- * reader pastes it in and it fails on them. Add to this list only after
- * confirming the tool exists on the wire — never to make a test pass. */
-const SHIPPED_TOOLS = new Set([
-  // gmail
-  "gmail_send", "gmail_reply", "gmail_forward", "gmail_read", "gmail_search",
-  "gmail_list", "gmail_create_draft", "gmail_update_draft", "gmail_send_draft",
-  "gmail_delete_draft", "gmail_mark_read", "gmail_list_filters",
-  "gmail_create_filter", "gmail_delete_filter", "gmail_create_label",
-  "gmail_save_attachment_to_drive",
-  // calendar
-  "calendar_list_events", "calendar_get_event", "calendar_create_event",
-  "calendar_update_event", "calendar_delete_event", "calendar_freebusy",
-  // contacts
-  "contacts_search", "contacts_get", "contacts_list", "contacts_create",
-  "contacts_update", "contacts_delete", "contacts_directory_search",
-  // drive
-  "drive_create_folder", "drive_search", "drive_read_file",
-  // sheets
-  "sheets_read", "sheets_update", "sheets_append", "sheets_create",
-  "sheets_add_tab", "sheets_delete",
-  // docs / slides / tasks
-  "docs_get", "docs_write", "docs_batch_update", "docs_create", "docs_delete",
-  "slides_get", "slides_create", "slides_batch_update", "slides_delete",
-  "tasks_list", "tasks_list_tasks", "tasks_create", "tasks_update",
-  "tasks_complete", "tasks_delete",
-  // generic / auth
-  "gws_run", "gws_auth_setup",
-  // atlassian
-  "jira_search_users", "jira_search", "jira_get_issue", "jira_list_fields",
-  "jira_create_issue", "jira_update_issue", "jira_add_comment",
-  "jira_edit_comment", "jira_delete_comment", "jira_get_comments",
-  "jira_get_transitions", "jira_transition_issue", "jira_get_attachment",
-  "confluence_list_pages", "confluence_get_page", "confluence_create_page",
-  "confluence_edit_page", "confluence_delete_page", "confluence_search",
-  "confluence_get_comments", "confluence_add_comment",
-  "confluence_get_attachment",
-]);
+ * Derived from the gate's reviewed registry snapshot rather than listed
+ * again here: the two lists were 76-of-77 identical and had already drifted
+ * (sheets_add_tab was in one and not the other). One record, two readers.
+ *
+ * The rule matters because a skill is copied verbatim into a reader's agent:
+ * naming a tool we do not ship is worse than shipping no skill, because it
+ * fails on them, not on us. */
+const SHIPPED_TOOLS = REGISTRY_TOOL_NAMES;
 
 const skills = getAllSkills();
 

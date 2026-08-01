@@ -1,7 +1,7 @@
 import { eq, and } from "drizzle-orm";
 import type { Database } from "@datatorag-mcp/db";
 import { connectedAccounts, serviceConnections } from "@datatorag-mcp/db";
-import { revokeGoogleToken } from "@/lib/google-revoke";
+import { revokeUpstream } from "./service-token";
 
 /**
  * List all connected accounts for a user, joined with service connection metadata.
@@ -204,18 +204,15 @@ export async function disconnectAccount(
   // because a user who clicked disconnect must never stay connected just
   // because Google was slow. Revoking the refresh token (when present) kills
   // the whole grant including derived access tokens.
-  if (account.connectorType === "google-workspace") {
-    const [conn] = await db
-      .select({
-        accessToken: serviceConnections.accessToken,
-        refreshToken: serviceConnections.refreshToken,
-      })
-      .from(serviceConnections)
-      .where(eq(serviceConnections.id, account.serviceConnectionId))
-      .limit(1);
-    const token = conn?.refreshToken ?? conn?.accessToken;
-    if (token) await revokeGoogleToken(token);
-  }
+  const [conn] = await db
+    .select({
+      accessToken: serviceConnections.accessToken,
+      refreshToken: serviceConnections.refreshToken,
+    })
+    .from(serviceConnections)
+    .where(eq(serviceConnections.id, account.serviceConnectionId))
+    .limit(1);
+  if (conn) await revokeUpstream(account.connectorType, conn);
 
   await db.transaction(async (tx) => {
     // Delete connected_accounts row

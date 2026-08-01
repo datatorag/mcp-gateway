@@ -3,6 +3,7 @@ import { and, eq } from "drizzle-orm";
 import { mcpServers, tools as toolsTable } from "@datatorag-mcp/db";
 import { getDb } from "@/lib/db";
 import { classifyWrite, KNOWN_READ_TOOLS } from "./tools";
+import { REGISTRY_CLASSIFICATION } from "./registry-snapshot";
 
 /**
  * The write gate decides whether a tool can touch a user's data without being
@@ -25,96 +26,6 @@ import { classifyWrite, KNOWN_READ_TOOLS } from "./tools";
  * green removes a user's approval prompt.
  */
 
-/** Every enabled tool served by an active plugin, and what the gate makes of
- * it. Ordered by name so additions land as additions, not as churn. */
-const REGISTRY_CLASSIFICATION: ReadonlyArray<readonly [string, "read" | "write"]> = [
-  ["atlassian-mcp__confluence_add_comment", "write"],
-  ["atlassian-mcp__confluence_create_page", "write"],
-  ["atlassian-mcp__confluence_delete_page", "write"],
-  ["atlassian-mcp__confluence_edit_page", "write"],
-  ["atlassian-mcp__confluence_get_attachment", "read"],
-  ["atlassian-mcp__confluence_get_comments", "read"],
-  ["atlassian-mcp__confluence_get_page", "read"],
-  ["atlassian-mcp__confluence_list_pages", "read"],
-  ["atlassian-mcp__confluence_search", "read"],
-  ["atlassian-mcp__jira_add_comment", "write"],
-  ["atlassian-mcp__jira_create_issue", "write"],
-  ["atlassian-mcp__jira_delete_comment", "write"],
-  ["atlassian-mcp__jira_edit_comment", "write"],
-  ["atlassian-mcp__jira_get_attachment", "read"],
-  ["atlassian-mcp__jira_get_comments", "read"],
-  ["atlassian-mcp__jira_get_issue", "read"],
-  // Lists the transitions an issue COULD take; it does not take one.
-  // `jira_transition_issue`, below, is the one that does.
-  ["atlassian-mcp__jira_get_transitions", "read"],
-  ["atlassian-mcp__jira_list_fields", "read"],
-  ["atlassian-mcp__jira_search", "read"],
-  ["atlassian-mcp__jira_search_users", "read"],
-  ["atlassian-mcp__jira_transition_issue", "write"],
-  ["atlassian-mcp__jira_update_issue", "write"],
-  ["gws-mcp__calendar_create_event", "write"],
-  ["gws-mcp__calendar_delete_event", "write"],
-  ["gws-mcp__calendar_freebusy", "read"],
-  ["gws-mcp__calendar_get_event", "read"],
-  ["gws-mcp__calendar_list_events", "read"],
-  ["gws-mcp__calendar_update_event", "write"],
-  ["gws-mcp__contacts_create", "write"],
-  ["gws-mcp__contacts_delete", "write"],
-  // Searches the org directory. "directory" is not a verb; token matching is
-  // what keeps this a read.
-  ["gws-mcp__contacts_directory_search", "read"],
-  ["gws-mcp__contacts_get", "read"],
-  ["gws-mcp__contacts_list", "read"],
-  ["gws-mcp__contacts_search", "read"],
-  ["gws-mcp__contacts_update", "write"],
-  ["gws-mcp__docs_batch_update", "write"],
-  ["gws-mcp__docs_create", "write"],
-  ["gws-mcp__docs_delete", "write"],
-  ["gws-mcp__docs_get", "read"],
-  ["gws-mcp__docs_write", "write"],
-  ["gws-mcp__drive_create_folder", "write"],
-  ["gws-mcp__drive_read_file", "read"],
-  ["gws-mcp__drive_search", "read"],
-  ["gws-mcp__gmail_create_draft", "write"],
-  ["gws-mcp__gmail_create_filter", "write"],
-  ["gws-mcp__gmail_create_label", "write"],
-  ["gws-mcp__gmail_delete_draft", "write"],
-  ["gws-mcp__gmail_delete_filter", "write"],
-  ["gws-mcp__gmail_forward", "write"],
-  ["gws-mcp__gmail_list", "read"],
-  ["gws-mcp__gmail_list_filters", "read"],
-  // Changes the mailbox: an unread message stops being unread. Cheap to undo,
-  // still not something to do to someone's inbox unasked.
-  ["gws-mcp__gmail_mark_read", "write"],
-  ["gws-mcp__gmail_read", "read"],
-  ["gws-mcp__gmail_reply", "write"],
-  ["gws-mcp__gmail_save_attachment_to_drive", "write"],
-  ["gws-mcp__gmail_search", "read"],
-  ["gws-mcp__gmail_send", "write"],
-  ["gws-mcp__gmail_send_draft", "write"],
-  ["gws-mcp__gmail_update_draft", "write"],
-  // Reports how auth is configured; it does not configure it.
-  ["gws-mcp__gws_auth_setup", "read"],
-  // The arbitrary-operation runner. Its name says nothing about what it will
-  // do, which is exactly why it is a write: an unnamed operation cannot be
-  // assumed to be a safe one.
-  ["gws-mcp__gws_run", "write"],
-  ["gws-mcp__sheets_append", "write"],
-  ["gws-mcp__sheets_create", "write"],
-  ["gws-mcp__sheets_delete", "write"],
-  ["gws-mcp__sheets_read", "read"],
-  ["gws-mcp__sheets_update", "write"],
-  ["gws-mcp__slides_batch_update", "write"],
-  ["gws-mcp__slides_create", "write"],
-  ["gws-mcp__slides_delete", "write"],
-  ["gws-mcp__slides_get", "read"],
-  ["gws-mcp__tasks_complete", "write"],
-  ["gws-mcp__tasks_create", "write"],
-  ["gws-mcp__tasks_delete", "write"],
-  ["gws-mcp__tasks_list", "read"],
-  ["gws-mcp__tasks_list_tasks", "read"],
-  ["gws-mcp__tasks_update", "write"],
-];
 
 describe("registry write/read classification snapshot", () => {
   it("classifies every tool in the registry exactly as recorded", () => {
@@ -172,5 +83,54 @@ describe.runIf(!!process.env.DATABASE_URL)("snapshot vs the live registry", () =
     const removed = [...recorded].filter((name) => !live.has(name)).sort();
 
     expect({ unreviewed, removed }).toEqual({ unreviewed: [], removed: [] });
+  });
+
+  /** The same safety taxonomy exists twice, in two repositories: this gate's
+   * KNOWN_READ_TOOLS, and each plugin's own `readOnlyHint` annotations. Both
+   * are hand-maintained, and they silently diverged — the plugins correctly
+   * flipped `gws_auth_setup` to non-read (its "login" action starts an OAuth
+   * flow and writes credentials) while this list still called it a read that
+   * runs unprompted.
+   *
+   * This test is the fix; reconciling the entry was only its consequence. It
+   * does NOT make the gate trust annotations — that trust was deliberately
+   * removed, and `classifyWrite` still decides from the tool name alone. It
+   * asserts the two independently-maintained records AGREE, so the next
+   * divergence fails here in a diff instead of quietly widening what runs
+   * without asking. */
+  it("agrees with what the plugins themselves declare read-only", async () => {
+    const rows = await getDb()
+      .select({
+        namespacedName: toolsTable.namespacedName,
+        readOnlyHint: toolsTable.readOnlyHint,
+      })
+      .from(toolsTable)
+      .innerJoin(mcpServers, eq(toolsTable.mcpServerId, mcpServers.id))
+      .where(and(eq(mcpServers.status, "active"), eq(toolsTable.enabled, true)));
+
+    // Unannotated tools (null) say nothing either way and are not evidence
+    // of disagreement — only an explicit true/false is.
+    const declaredRead = new Set(
+      rows.filter((r) => r.readOnlyHint === true).map((r) => r.namespacedName)
+    );
+    const declaredNotRead = new Set(
+      rows.filter((r) => r.readOnlyHint === false).map((r) => r.namespacedName)
+    );
+
+    // Declared read-only upstream, but the gate does not list it as a read:
+    // harmless today (it prompts) but a sign the lists have drifted.
+    const missingFromGate = [...declaredRead]
+      .filter((name) => !KNOWN_READ_TOOLS.has(name))
+      .sort();
+    // The dangerous direction: the gate runs it unprompted while the plugin
+    // that implements it says it is not read-only.
+    const runsUnpromptedButNotRead = [...KNOWN_READ_TOOLS]
+      .filter((name) => declaredNotRead.has(name))
+      .sort();
+
+    expect({ missingFromGate, runsUnpromptedButNotRead }).toEqual({
+      missingFromGate: [],
+      runsUnpromptedButNotRead: [],
+    });
   });
 });
