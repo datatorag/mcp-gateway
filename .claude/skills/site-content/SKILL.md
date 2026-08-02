@@ -12,13 +12,30 @@ Next.js App Router site in `apps/gateway`).
 
 ## Content systems
 
-Blog, changelog, docs, and skills are markdown-in-repo, not a CMS — four near-identical
-hand-rolled parsers, no MDX. Each reads `content/{blog,changelog,docs,skills}/*.md` from
-`path.join(process.cwd(), "content", ...)`, parses frontmatter with `gray-matter`
-(`matter()`) and body with `marked.parse(content) as string`, and keeps a **module-level
-cache** (`let xCache: T[] | null = null`, populated once) with the comment "content is
-static at deploy time" — meaning a markdown edit does nothing on a running server; it
-needs a restart/redeploy (dev server hot-reload aside).
+Blog, changelog, docs, and skills are markdown-in-repo, not a CMS — no MDX. All four run
+on **one shared loader**, `apps/gateway/src/lib/content-collection.ts`; the four
+near-identical hand-rolled copies it replaced had already drifted apart in their fallback
+handling, which is why it exists.
+
+Each collection is declared with `defineCollection<T>({ dir, parse, sort })`. The loader
+reads `content/<dir>/*.md` from `path.join(process.cwd(), "content", ...)`, parses
+frontmatter with `gray-matter` (`matter()`), derives the slug from the filename, hands
+each file to the collection's own `parse` as a `ParsedFile` (`{ slug, data, content }`),
+drops any file whose `parse` returns `null`, applies `sort`, and returns
+`{ getAll, getBySlug }` — the slug lookup is Map-backed. The cache is **per collection and
+populated once**, with the same "content is static at deploy time" meaning as before: a
+markdown edit does nothing on a running server; it needs a restart/redeploy (dev server
+hot-reload aside).
+
+Read frontmatter through the `field.*` helpers (`field.string`, `field.number`,
+`field.stringArray`) rather than hand-written `typeof` checks or `??` chains. Divergent
+fallback handling between collections is exactly the drift the shared loader removed —
+`field.stringArray` discards a non-array instead of coercing it, and that behaviour should
+stay uniform. Body-to-HTML is still each collection's own job (`marked.parse(content) as
+string`), because the four differ in how they split the body.
+
+**Adding a collection** is: a `parse` function, a `defineCollection` call, and a type. Do
+not add a fifth loader.
 
 ### Blog — `apps/gateway/src/lib/blog.ts`
 
@@ -133,6 +150,18 @@ sanitised (same as blog/docs), so raw HTML in a skill file would render as-is.
 
 `getRelatedSkills` ranks by shared connector (derived from tool-name prefixes via
 `connectorsFor`), then by `order`.
+
+**The skill card is shared, not copied.** `apps/gateway/src/components/skill-card.tsx`
+renders one skill as a card and is used by BOTH the `/skills` index and the home page's
+`#skills` section. It leads with `situation` rather than `title` on purpose: that line is
+in the reader's words and the title is in ours, so someone scanning for their own problem
+finds it in the quote. Render it through this component wherever a skill is listed — the
+card is the unit people compare skills with, and a second hand-maintained copy drifts.
+
+The home page shows `getAllSkills().slice(0, 3)` (authored `order`) and links to `/skills`
+for the rest; the section renders nothing at all when the collection is empty. Adding a
+fourth skill file therefore extends `/skills` but does not change the home page, which is
+deliberate — the grid stays a clean three and growing the home page stays a decision.
 
 **Accuracy gate:** `skills.test.ts` pins every declared tool against a list of tools the
 connectors actually ship. A skill naming a tool we do not ship is worse than no skill —

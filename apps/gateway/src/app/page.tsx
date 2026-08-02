@@ -9,6 +9,8 @@ import { CircleCheckIcon, CircleMinusIcon } from "lucide-react";
 import { CasaBadge } from "@/components/casa-badge";
 import { StartupBarOffset } from "@/components/startupbar-offset";
 import { DemoWindow } from "@/components/demo/demo-section";
+import { SkillCard } from "@/components/skill-card";
+import { getAllSkills } from "@/lib/skills";
 import { getSessionUserId } from "@/lib/session";
 import Link from "next/link";
 import Script from "next/script";
@@ -58,6 +60,9 @@ export default async function HomePage() {
   ]);
   const signedIn = userId !== null;
   const playgroundHref = signedIn ? "/dashboard" : "/auth/login";
+  // Authored order, first three. Adding a skill file does not silently change
+  // the home page beyond that, and /skills stays the complete list.
+  const featuredSkills = getAllSkills().slice(0, 3);
   const demoPromptLabel = signedIn
     ? "Open the playground to run your own prompt"
     : "Sign in to run your own prompt";
@@ -362,6 +367,49 @@ export default async function HomePage() {
             </div>
           </div>
         </section>
+
+        {/* Skills — the demo above shows the work being done; this is where a
+            reader who now wants to do it themselves picks something up. Led by
+            each skill's own `situation` line, so the section is browsable by
+            problem rather than by feature. Sliced to three: the index carries
+            the rest, and a fourth card would leave the grid ragged. */}
+        {featuredSkills.length > 0 && (
+          <section
+            id="skills"
+            className="scroll-mt-28 border-t border-border bg-background"
+          >
+            <div className="mx-auto max-w-6xl px-6 py-20">
+              <div className="animate-fade-in-up max-w-2xl">
+                <p className="text-sm font-semibold uppercase tracking-widest text-primary">
+                  Skills
+                </p>
+                <h2 className="mt-3 font-display text-2xl font-bold text-foreground sm:text-3xl">
+                  Start with a skill, not a blank prompt.
+                </h2>
+                <p className="mt-4 text-base leading-relaxed text-muted-foreground">
+                  Each one is a file you paste into Claude. It runs against your
+                  own accounts through the gateway.
+                </p>
+              </div>
+
+              <div className="mt-12 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+                {featuredSkills.map((skill) => (
+                  <SkillCard key={skill.slug} skill={skill} />
+                ))}
+              </div>
+
+              <div className="mt-10">
+                <Link
+                  className="inline-flex items-center gap-1.5 text-sm font-medium text-primary hover:underline"
+                  href="/skills"
+                >
+                  See all skills
+                  <span aria-hidden="true">&rarr;</span>
+                </Link>
+              </div>
+            </div>
+          </section>
+        )}
 
         {/* Platform — three pillars */}
         <section
