@@ -433,7 +433,12 @@ export class PluginManager {
             inputSchemaJson: t.inputSchema ?? null,
             // MCP annotation: readOnlyHint true = declared read-only, false =
             // declared mutating, undefined = unannotated (stored as null).
-            // Drives the playground write-confirmation gate.
+            //
+            // Stored as the plugin's own claim, NOT as an input to the write
+            // gate. The gate classifies by tool name and never reads this. We
+            // keep it so a test can assert the plugin's declaration and our
+            // classification agree; a plugin controls this value, so trusting
+            // it would let a server opt its own delete tool out of approval.
             readOnlyHint: t.annotations?.readOnlyHint ?? null,
             creditsPerCall: 1,
           }))

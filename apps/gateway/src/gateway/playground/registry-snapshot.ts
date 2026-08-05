@@ -11,8 +11,13 @@
  * WHEN A TEST ON THIS FAILS, DO NOT JUST UPDATE IT. The failure is the point:
  * read the name, decide what the tool actually does, and if the classifier is
  * wrong, fix the classifier (an entry in KNOWN_READ_TOOLS or the escalation
- * list) before touching this record. Editing "write" to "read" here to get CI
- * green removes a user's approval prompt.
+ * list) before touching this record. Editing "write" to "read" here to make a
+ * failing test pass removes a real user's approval prompt.
+ *
+ * (Said "to get CI green" until it was noticed there is no CI in this
+ * repository — nothing runs on push, PR or merge. Which makes the rule more
+ * important, not less: the only thing standing behind this record is whoever
+ * is reading it.)
  *
  * Ordered by name so additions land as additions, not as churn. */
 export const REGISTRY_CLASSIFICATION: ReadonlyArray<readonly [string, "read" | "write"]> = [
@@ -64,13 +69,16 @@ export const REGISTRY_CLASSIFICATION: ReadonlyArray<readonly [string, "read" | "
   ["gws-mcp__drive_read_file", "read"],
   ["gws-mcp__drive_search", "read"],
   ["gws-mcp__gmail_create_draft", "write"],
-  ["gws-mcp__gmail_create_filter", "write"],
   ["gws-mcp__gmail_create_label", "write"],
   ["gws-mcp__gmail_delete_draft", "write"],
-  ["gws-mcp__gmail_delete_filter", "write"],
+  ["gws-mcp__gmail_delete_label", "write"],
   ["gws-mcp__gmail_forward", "write"],
+  // No token here matches WRITE_VERBS — "label"/"message" aren't write verbs.
+  // This lands on "write" via the fail-closed default, not a recognised verb.
+  ["gws-mcp__gmail_label_message", "write"],
   ["gws-mcp__gmail_list", "read"],
   ["gws-mcp__gmail_list_filters", "read"],
+  ["gws-mcp__gmail_list_labels", "read"],
   // Changes the mailbox: an unread message stops being unread. Cheap to undo,
   // still not something to do to someone's inbox unasked.
   ["gws-mcp__gmail_mark_read", "write"],
@@ -81,6 +89,8 @@ export const REGISTRY_CLASSIFICATION: ReadonlyArray<readonly [string, "read" | "
   ["gws-mcp__gmail_send", "write"],
   ["gws-mcp__gmail_send_draft", "write"],
   ["gws-mcp__gmail_update_draft", "write"],
+  // Renames a label / changes visibility only — destroys no data, still not a read.
+  ["gws-mcp__gmail_update_label", "write"],
   // Not a read: its "login" action starts an OAuth flow and writes
   // credentials. It reported status only in an earlier form, and this entry
   // said so until the plugin's own annotation was corrected.
@@ -91,9 +101,12 @@ export const REGISTRY_CLASSIFICATION: ReadonlyArray<readonly [string, "read" | "
   ["gws-mcp__gws_run", "write"],
   ["gws-mcp__sheets_add_tab", "write"],
   ["gws-mcp__sheets_append", "write"],
+  ["gws-mcp__sheets_clear", "write"],
   ["gws-mcp__sheets_create", "write"],
   ["gws-mcp__sheets_delete", "write"],
+  ["gws-mcp__sheets_delete_tab", "write"],
   ["gws-mcp__sheets_read", "read"],
+  ["gws-mcp__sheets_rename_tab", "write"],
   ["gws-mcp__sheets_update", "write"],
   ["gws-mcp__slides_batch_update", "write"],
   ["gws-mcp__slides_create", "write"],

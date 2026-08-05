@@ -22,8 +22,12 @@ import { REGISTRY_CLASSIFICATION } from "./registry-snapshot";
  * WHEN THIS FAILS, DO NOT JUST UPDATE IT. The failure is the point: read the
  * name, decide what the tool actually does, and if the classifier is wrong,
  * fix the classifier (an entry in KNOWN_READ_TOOLS or the escalation list)
- * before touching the snapshot. Editing "write" to "read" here to get CI
- * green removes a user's approval prompt.
+ * before touching the snapshot. Editing "write" to "read" here to make a
+ * failing test pass removes a real user's approval prompt.
+ *
+ * Note there is no CI in this repository: nothing runs this on push, PR or
+ * merge. It fails only in front of whoever ran it, which is the person who
+ * then has to decide honestly rather than conveniently.
  */
 
 
@@ -46,6 +50,28 @@ describe("registry write/read classification snapshot", () => {
   it("is sorted by name, so a new tool shows up as an insertion", () => {
     const names = REGISTRY_CLASSIFICATION.map(([name]) => name);
     expect(names).toEqual([...names].sort());
+  });
+
+  /** A withheld tool can hide in THREE places, and until now only two were
+   * guarded. The plugin repo pins that the Gmail filter write tools are absent
+   * from its code and from its OAuth manifest. This is the third: the registry
+   * kept advertising both long after the plugin stopped shipping them, because
+   * nothing re-synced it and nothing asserted it had been.
+   *
+   * They are withheld because writing a filter needs a scope we do not have,
+   * so the tools can only ever fail. Advertising a tool that cannot work is
+   * worse than not having it: it is a capability someone plans around, and the
+   * error arrives after they have relied on it.
+   *
+   * Pinned both ways on purpose. A guard that over-reaches gets deleted by
+   * whoever it blocks, so this also asserts the READ half stays — listing
+   * filters is legitimately covered by the scope we do have, and it must not
+   * become collateral damage the next time someone tidies this up. */
+  it("does not advertise tools withheld for a scope we do not have", () => {
+    const names = new Set(REGISTRY_CLASSIFICATION.map(([name]) => name));
+    expect(names.has("gws-mcp__gmail_create_filter")).toBe(false);
+    expect(names.has("gws-mcp__gmail_delete_filter")).toBe(false);
+    expect(names.has("gws-mcp__gmail_list_filters")).toBe(true);
   });
 
   it("KNOWN_READ_TOOLS is exactly this snapshot's read set", () => {
