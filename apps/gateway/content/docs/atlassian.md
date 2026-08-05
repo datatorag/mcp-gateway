@@ -20,8 +20,12 @@ Sign in at [datatorag.com/dashboard](https://datatorag.com/dashboard) and click 
 
 ## Required scopes
 
+Jira uses Atlassian's classic scopes; Confluence uses granular ones, because
+the Confluence v2 API the connector calls does not accept classic scopes.
+
 - `read:jira-work`, `write:jira-work`, `read:jira-user`
-- `read:confluence-content.all`, `write:confluence-content`
-- `read:confluence-space.summary`, `write:confluence-file`
-- `search:confluence`, `readonly:content.attachment:confluence`
+- `read:space:confluence`, `read:page:confluence`
+- `write:page:confluence`, `delete:page:confluence`
+- `read:comment:confluence`, `write:comment:confluence`
+- `read:attachment:confluence`, `search:confluence`
 - `read:me`, `offline_access`

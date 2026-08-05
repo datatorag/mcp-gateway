@@ -312,16 +312,40 @@ export function createAuthRouter(
 
   // --- Atlassian connection (Jira + Confluence) ---
 
+  /** Jira stays on classic scopes; Confluence must be granular.
+   *
+   * Atlassian's classic Confluence scopes are not accepted by the Confluence
+   * v2 REST API — a v2 call made with a classic grant fails
+   * `401 Unauthorized; scope does not match`, not 403, so it reads like an
+   * auth bug rather than a scope one. The connector calls v2 for every
+   * Confluence operation except CQL search, which is why searching worked
+   * while reading a page did not: `search:confluence` is already granular and
+   * the v1 search endpoint accepted it.
+   *
+   * Each scope below is the one required by an endpoint the connector
+   * actually calls. Adding a Confluence tool that hits a new v2 resource
+   * needs its scope added here AND every user to reconnect, because a grant
+   * is fixed at consent time.
+   *
+   * Jira is deliberately untouched: its tools call `/rest/api/3`, which the
+   * classic Jira scopes cover, and Atlassian's guidance is to prefer classic
+   * where it works.
+   */
   const ATLASSIAN_SCOPES = [
+    // Jira — /rest/api/3/*
     "read:jira-work",
     "write:jira-work",
     "read:jira-user",
-    "read:confluence-content.all",
-    "write:confluence-content",
-    "read:confluence-space.summary",
-    "write:confluence-file",
+    // Confluence — /wiki/api/v2/*
+    "read:space:confluence", // GET /spaces (space key -> id lookup)
+    "read:page:confluence", // GET /pages/{id}, GET /spaces/{id}/pages
+    "write:page:confluence", // POST /pages, PUT /pages/{id}
+    "delete:page:confluence", // DELETE /pages/{id}
+    "read:comment:confluence", // GET /pages/{id}/{footer,inline}-comments
+    "write:comment:confluence", // POST /footer-comments
+    "read:attachment:confluence", // GET /pages/{id}/attachments
+    // Confluence — /wiki/rest/api/search (v1; no v2 equivalent for CQL)
     "search:confluence",
-    "readonly:content.attachment:confluence",
     "read:me",
     "offline_access",
   ].join(" ");

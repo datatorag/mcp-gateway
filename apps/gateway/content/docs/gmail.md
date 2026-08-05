@@ -28,7 +28,6 @@ The Gmail connector gives your AI assistant full access to your inbox — search
 ## Required scopes
 
 - `https://www.googleapis.com/auth/gmail.modify`
-- `https://www.googleapis.com/auth/gmail.send`
 
 ## Example prompts
 

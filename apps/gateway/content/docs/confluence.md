@@ -24,9 +24,13 @@ The Confluence tools let your AI assistant search space content, read and author
 
 ## Required scopes
 
-- `read:confluence-content.all`, `write:confluence-content`
-- `read:confluence-space.summary`, `write:confluence-file`
-- `search:confluence`, `readonly:content.attachment:confluence`
+Granular scopes, not classic ones: every Confluence tool except search calls
+the v2 API, which rejects a classic grant with `scope does not match`.
+
+- `read:space:confluence`, `read:page:confluence`
+- `write:page:confluence`, `delete:page:confluence`
+- `read:comment:confluence`, `write:comment:confluence`
+- `read:attachment:confluence`, `search:confluence`
 
 ## Example prompts
 
