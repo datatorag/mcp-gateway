@@ -3,7 +3,7 @@ title: "Keep a knowledge base in Google Sheets your agent can read"
 order: 3
 situation: "Our notes are scattered and half of them are stale. I want one place my agent can read and update."
 produces: "A Google Sheet your agent reads and writes reliably, without the traps that make spreadsheets bad interfaces."
-tools: [sheets_create, sheets_read, sheets_update, sheets_append]
+tools: [sheets_create, sheets_add_tab, sheets_read, sheets_update, sheets_append]
 accounts: single
 ---
 
@@ -47,6 +47,70 @@ properties that made those documents worth keeping.
 5. **Stable column order.** Adding a column at the end is safe. Reordering breaks every reader
    silently.
 6. **Fixed vocabularies.** Dates as `YYYY-MM-DD`, status from a defined set, not free text.
+7. **URLs in their own plain-text column.** A `=HYPERLINK(url, label)` cell reads back as
+   just the label. The address is not in the response at all, so a link that is perfectly
+   usable to a person is unreachable to an agent.
+8. **Status is a column, never formatting.** Strikethrough, colour and bold do not appear in
+   the response, and nothing in this connector reads them. A row struck through to mean
+   "done" is live data as far as an agent is concerned.
+
+## What writing does to your values
+
+Sheets parses what you write. Measured on a throwaway sheet, not assumed:
+
+| You write | It stores | What happened |
+|---|---|---|
+| `007` | `7` | leading zeros stripped |
+| `+15551234567` | `15551234567` | leading `+` stripped |
+| `1.50` | `1.5` | trailing zero dropped |
+| `=1+1` | `2` | a leading `=` is evaluated as a formula |
+
+Two things to design around:
+
+- **Ids that look like numbers get mangled.** Prefix them (`ACC-007`), or accept that `007`
+  and `7` are the same record and you have just merged two.
+- **Never write unchecked text into a cell.** A value beginning with `=` is a formula, not a
+  string. Prefix with `'` if it has to survive verbatim.
+
+`YYYY-MM-DD` dates and the word `TRUE` both round-trip unchanged, which is one more reason
+the fixed vocabulary above picks that date format.
+
+## Tabs
+
+`sheets_add_tab` creates a tab and writes its header row in one call, so a new concern does
+not need a new file.
+
+Naming a tab that does not exist fails loudly rather than silently, and the error lists every
+tab that does exist, so a typo tells you the real name on the way past. Read that error
+instead of guessing again.
+
+## When there is more than one tab
+
+- **One tab owns a fact.** If `status` lives in two tabs they will disagree, and nothing in
+  the response says which one is right. Everywhere else references the owning tab's `id`.
+- **Two tables whose ids point at each other are a graph, and nothing joins it for you.**
+  `sheets_read` takes one tab at a time, so a join is two reads and your own matching. Keep
+  foreign keys as the literal `id` from the other tab, never a display name.
+- **A rule nobody runs is decoration.** A `checked` column a human is supposed to tick is a
+  wish. If a check matters, it belongs in the prompt that runs every time.
+
+## The sheet is a cache
+
+When a fact's real home is somewhere else (a billing system, a repo, a dashboard), the sheet
+holds a copy that started going stale the moment it was written. Give those tables a
+`checked_on` column, and treat an old date as *unknown* rather than as the value. A knowledge
+base that cannot tell you how old it is gets trusted right up until the first time it is
+wrong, and then not at all.
+
+## A Lessons tab
+
+Add a `Lessons` tab: `date`, `lesson`, `source_tab`. When a run turns up something the schema
+does not capture (a column nobody populates, a status nobody uses, two rows that are the same
+company), append it there instead of reporting it into a chat nobody rereads.
+
+It is the one tab whose HISTORY is the point, and it earns the exception. Everything else
+append-only belongs outside the sheet, but a lesson *about this sheet* stored anywhere else
+will not be there the next time this sheet is opened.
 
 ## Reading it
 
@@ -86,3 +150,28 @@ knowing you read everything and assuming it.
 **Design the sheet for the reader, not the viewer.** Merged headers and spacer columns are
 what make a sheet pleasant for a person and unreliable for an agent. If you want both, keep
 the pretty version as a separate view.
+
+**We measured that coercion table rather than reasoning about it, and reasoning would have
+got it wrong in both directions.** Two cases we expected to break did not: `YYYY-MM-DD` dates
+and the word `TRUE` both survived untouched. The leading-`+` case we had not thought of at
+all. Ten minutes on a throwaway sheet is cheaper than one mangled id column.
+
+**`=HYPERLINK` costs the most time of any trap here, because the sheet looks correct.** Every
+link is clickable, every label is meaningful, and nothing about the page suggests a problem.
+The agent sees a column of words with no addresses in it and has no way to report what is
+missing, because from where it stands nothing is.
+
+**Formatting is where the real state usually turns out to live.** Ask anyone what a
+struck-through row in their sheet means and they will answer immediately. Nothing in the
+response carries it, so that answer is not available to an agent, and unlike a missing column
+there is no gap to notice. Every convention a team keeps in bold, colour or strikethrough has
+to become a column before any of this works.
+
+**One tab owns a fact is the rule that gets broken first**, because breaking it is always
+locally convenient: copying `status` into the tab you are already looking at saves a read
+today. The two copies diverge quietly, and the failure surfaces much later as an agent
+confidently reporting a number that was true last month.
+
+**A knowledge base is a habit, not a schema.** The rules above are what make a sheet
+readable; the `Lessons` tab and the `checked_on` columns are what keep it worth reading. We
+have seen more of these die from nobody maintaining them than from bad structure.

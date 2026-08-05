@@ -44,6 +44,7 @@ re-reading the source:
 - `gws-mcp-dev` — developing the gws-mcp plugin repo + its ship tail.
 - `product-capture` — Remotion project at `tools/capture` for product screenshots/recordings; imports real gateway components so captures can't drift.
 - `parent-updates` — keeping the `datatorag-hq` parent session current. It cannot see this session, so an update not sent did not happen.
+- `outbound-copy` — anything a person outside the company reads: transactional/lifecycle email, in-product strings, form and error copy. Load it (and `manuel-voice`) before drafting a line.
 - Plus: `blog-writing`, `db-query`, `deploy`, `humanizer`, `marketing-video` (brand explainers only), `product-promo-video` (superseded).
 
 Agents in `.claude/agents/`: `engineer` implements, `qa-engineer` verifies,
