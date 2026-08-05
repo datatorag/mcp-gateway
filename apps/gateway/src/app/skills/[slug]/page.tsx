@@ -48,7 +48,7 @@ export default async function SkillPage({ params }: Props) {
     <>
       <Navbar />
       <main className="flex-1 bg-background">
-        <article className="mx-auto max-w-3xl px-6 py-20">
+        <article className="mx-auto max-w-3xl px-6 pb-16 pt-32 sm:pb-20 sm:pt-36">
           <Link
             className="inline-flex items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground"
             href="/skills"

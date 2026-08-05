@@ -3,6 +3,7 @@ import Link from "next/link";
 import { Navbar } from "@/components/navbar";
 import { SkillCard } from "@/components/skill-card";
 import { getAllSkills } from "@/lib/skills";
+import { getAllPersonas } from "@/lib/personas";
 
 const TITLE = "Skills for Claude and Google Workspace | DataToRAG";
 const DESCRIPTION =
@@ -22,12 +23,13 @@ export const metadata: Metadata = {
 
 export default function SkillsIndexPage() {
   const skills = getAllSkills();
+  const personas = getAllPersonas();
 
   return (
     <>
       <Navbar />
       <main className="flex-1 bg-background">
-        <div className="mx-auto max-w-5xl px-6 py-20">
+        <div className="mx-auto max-w-5xl px-6 pb-16 pt-32 sm:pb-20 sm:pt-36">
           <div className="max-w-2xl">
             <p className="text-sm font-semibold uppercase tracking-widest text-primary">
               Skills
@@ -41,6 +43,27 @@ export default function SkillsIndexPage() {
               against your own data through the gateway.
             </p>
           </div>
+
+          {/* Personas sit above the list, not in front of it. Someone who
+              knows what they want scrolls past to the full grid. */}
+          {personas.length > 0 && (
+            <div className="mt-10">
+              <p className="text-sm font-medium text-foreground">
+                Or start from where you are:
+              </p>
+              <div className="mt-4 flex flex-wrap gap-2">
+                {personas.map((persona) => (
+                  <Link
+                    className="rounded-full border border-border bg-secondary/40 px-4 py-2 text-sm font-medium text-foreground transition-colors hover:border-foreground/20 hover:bg-secondary/70"
+                    href={`/skills/for/${persona.slug}`}
+                    key={persona.slug}
+                  >
+                    {persona.title}
+                  </Link>
+                ))}
+              </div>
+            </div>
+          )}
 
           {/* Browsable by situation: people arrive with "my inbox is a mess",
               not with "I would like to use gmail_search". */}

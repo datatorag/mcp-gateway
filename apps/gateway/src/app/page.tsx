@@ -11,6 +11,7 @@ import { StartupBarOffset } from "@/components/startupbar-offset";
 import { DemoWindow } from "@/components/demo/demo-section";
 import { SkillCard } from "@/components/skill-card";
 import { getAllSkills } from "@/lib/skills";
+import { getAllPersonas } from "@/lib/personas";
 import { getSessionUserId } from "@/lib/session";
 import Link from "next/link";
 import Script from "next/script";
@@ -63,6 +64,9 @@ export default async function HomePage() {
   // Authored order, first three. Adding a skill file does not silently change
   // the home page beyond that, and /skills stays the complete list.
   const featuredSkills = getAllSkills().slice(0, 3);
+  // Same set as /skills/for/*, three of them for the grid. A subset, never
+  // a card that exists only here.
+  const homePersonas = getAllPersonas().slice(0, 3);
   const demoPromptLabel = signedIn
     ? "Open the playground to run your own prompt"
     : "Sign in to run your own prompt";
@@ -702,35 +706,37 @@ export default async function HomePage() {
               </h2>
             </div>
 
+            {/* Read from the personas collection, not a second hardcoded
+                copy — the /skills/for/* pages are the same set, so the site
+                sorts every reader by one taxonomy. Three here, all of them
+                there; a card that exists only on this page would put the two
+                taxonomies back. */}
             <div
               className="animate-fade-in-up mt-12 grid gap-6 sm:grid-cols-3"
               style={{ animationDelay: "0.1s" }}
             >
-              {[
-                {
-                  title: "Executives & managers",
-                  desc: "Unified inbox triage across multiple Gmail accounts, calendar coordination, and drafting docs or slides via AI. Cross-account search finds the thread you need without context-switching.",
-                },
-                {
-                  title: "Customer-facing teams",
-                  desc: "Sales, CS, and support pull email and call context straight into AI prompts. Connect personal, shared, and team inboxes under one endpoint — triage threads fast without leaving the assistant.",
-                },
-                {
-                  title: "Developers & AI builders",
-                  desc: "One HTTP endpoint for Claude, custom agents, or internal tooling. OAuth per user, optimized tool responses, no infrastructure to run. Ship AI features without building an MCP server from scratch.",
-                },
-              ].map((persona) => (
-                <div
-                  key={persona.title}
-                  className="rounded-2xl border border-border bg-background p-6"
+              {homePersonas.map((persona) => (
+                <Link
+                  key={persona.slug}
+                  href={`/skills/for/${persona.slug}`}
+                  className="group flex flex-col rounded-2xl border border-border bg-background p-6 transition-colors hover:border-foreground/20"
                 >
                   <h3 className="font-display text-base font-semibold text-foreground">
                     {persona.title}
                   </h3>
-                  <p className="mt-3 text-sm leading-relaxed text-muted-foreground">
-                    {persona.desc}
+                  <p className="mt-3 flex-1 text-sm leading-relaxed text-muted-foreground">
+                    &ldquo;{persona.situation}&rdquo;
                   </p>
-                </div>
+                  <span className="mt-5 inline-flex items-center gap-1.5 text-sm font-medium text-primary">
+                    See the skills
+                    <span
+                      aria-hidden="true"
+                      className="transition-transform group-hover:translate-x-0.5"
+                    >
+                      &rarr;
+                    </span>
+                  </span>
+                </Link>
               ))}
             </div>
           </div>

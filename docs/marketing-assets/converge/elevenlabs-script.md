@@ -1,7 +1,8 @@
 # Convergence clip — ElevenLabs voiceover script
 
 Voiceover script for the "one gateway / convergence" landscape clip
-(`datatorag-converge.webm`, 1920×1080, ~11s, currently **silent** — VO not yet muxed).
+(`datatorag-converge.webm`, 1920×1080, 11.0s, silent). The muxed result is
+`datatorag-converge-vo.mp4`; the generated audio alone is `datatorag-converge-vo.mp3`.
 
 **The read used is Clip 3 ("The Convergence")** — it matches the convergence
 visual. The other two are optional alternates kept only in case we want to A/B a

@@ -20,9 +20,10 @@ How things are organized here:
 
 | Asset | File | Dims | Length | Audio | Where it's used |
 |---|---|---|---|---|---|
-| Landing-page explainer (Voyager 68s doc) | `apps/gateway/public/explainer-2026-05.mp4` | 1080×1920 (vertical) | ~68s | VO baked in | `/demo` "See it in action" |
+| Landing-page explainer (Voyager 68s doc) | `apps/gateway/public/explainer-2026-05.mp4` | 1080×1920 (vertical) | ~68s | VO baked in | home-page hero (right column) **and** `/demo` + `/contact` "See it in action" |
 | ↳ poster frame | `apps/gateway/public/explainer-2026-05-poster.jpg` | 1080×1920 | — | — | poster for the above |
-| Convergence clip ("one gateway") | `converge/datatorag-converge.webm` | 1920×1080 (landscape) | ~11s | **none yet** — VO to mux | not yet placed |
+| Convergence clip ("one gateway"), silent | `converge/datatorag-converge.webm` | 1920×1080 (landscape) | 11.0s | none | source for the muxed cut below |
+| ↳ with voiceover | `converge/datatorag-converge-vo.mp4` | 1920×1080 (landscape) | 11.0s | VO muxed | not yet placed on the site |
 
 ## Landing-page explainer — "Voyager 68s doc"
 

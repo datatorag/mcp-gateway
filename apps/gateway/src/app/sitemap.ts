@@ -5,6 +5,7 @@ import { mcpServers } from "@datatorag-mcp/db";
 import { getAllPosts } from "@/lib/blog";
 import { getAllDocs } from "@/lib/docs";
 import { getAllSkills } from "@/lib/skills";
+import { getAllPersonas } from "@/lib/personas";
 
 // Request-time so the tools query runs against the live DB, not at build.
 export const dynamic = "force-dynamic";
@@ -45,6 +46,14 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     priority: 0.7,
   }));
 
+  // Personas are indexable routes on purpose: they exist so which audience
+  // reads is answerable from traffic, and an unindexed page answers nothing.
+  const personas: MetadataRoute.Sitemap = getAllPersonas().map((p) => ({
+    url: `${BASE}/skills/for/${p.slug}`,
+    changeFrequency: "monthly",
+    priority: 0.6,
+  }));
+
   // Server/tool pages come from the DB; the sitemap must render even if
   // that query fails, so these are best-effort.
   let tools: MetadataRoute.Sitemap = [];
@@ -62,5 +71,5 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     console.warn("[sitemap] tools query failed, omitting /tools URLs", err);
   }
 
-  return [...staticRoutes, ...posts, ...docs, ...skills, ...tools];
+  return [...staticRoutes, ...posts, ...docs, ...skills, ...personas, ...tools];
 }
