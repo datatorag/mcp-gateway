@@ -5,6 +5,7 @@ import { db } from "@/lib/db";
 import { leads, TEAM_SIZE_VALUES } from "@datatorag-mcp/db";
 import { getEnv } from "@datatorag-mcp/config";
 import { leadsMinuteLimiter, leadsHourLimiter } from "@/gateway/leads/limiter";
+import { sendLeadConfirmation } from "@/gateway/leads/confirmation";
 import { sendSlack } from "@/lib/slack";
 
 export const dynamic = "force-dynamic";
@@ -108,6 +109,15 @@ export async function POST(req: NextRequest) {
         (utmBits ? `\nUTM: ${utmBits}` : "") +
         (data.referrer ? `\nReferrer: ${data.referrer}` : "") +
         (data.useCase ? `\nUse case: ${data.useCase}` : ""),
+    });
+    // Fire-and-forget, exactly like the Slack ping above: the lead row is
+    // saved and that is the thing that must not be lost. A confirmation that
+    // fails to send is worth a log line, never a 500 to someone who filled
+    // the form in correctly.
+    void sendLeadConfirmation({
+      name: data.name,
+      email: data.email,
+      senderEmail: getEnv().LEADS_CONFIRMATION_FROM,
     });
     return NextResponse.json({ ok: true });
   } catch (err) {

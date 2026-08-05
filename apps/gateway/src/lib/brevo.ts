@@ -86,3 +86,35 @@ export async function sendBrevoTemplate(
     params,
   });
 }
+
+/**
+ * Send a one-off email whose body lives in this repo rather than in a Brevo
+ * console template.
+ *
+ * Templates are right for lifecycle mail that marketing edits without a
+ * deploy. They are wrong for anything whose wording is a claim about the
+ * product: a console template is copy nobody reviews, outside the accuracy
+ * rules every other surface is held to, and invisible to a diff. Anything a
+ * stranger receives in our name goes through code review like a page does.
+ *
+ * `sender` must be a verified Brevo sender or the API rejects the send.
+ */
+export async function sendBrevoEmail(input: {
+  to: string;
+  toName?: string;
+  subject: string;
+  textContent: string;
+  htmlContent: string;
+  senderEmail: string;
+  senderName: string;
+  replyTo?: string;
+}): Promise<boolean> {
+  return brevoPost("/smtp/email", {
+    to: [{ email: input.to, ...(input.toName ? { name: input.toName } : {}) }],
+    sender: { email: input.senderEmail, name: input.senderName },
+    ...(input.replyTo ? { replyTo: { email: input.replyTo } } : {}),
+    subject: input.subject,
+    textContent: input.textContent,
+    htmlContent: input.htmlContent,
+  });
+}

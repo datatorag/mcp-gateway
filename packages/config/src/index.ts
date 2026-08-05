@@ -42,6 +42,11 @@ const envSchema = z.object({
   POSTHOG_PROJECT_ID: z.string().default(""),
   // Brevo (lifecycle emails: welcome + no-activation follow-up); empty = disabled
   BREVO_API_KEY: z.string().default(""),
+  // From/reply-to on the contact-form confirmation. MUST be a verified Brevo
+  // sender or the API rejects the send. Replies are that email's primary ask,
+  // so this has to be an inbox someone actually reads — hence a personal
+  // address rather than a role one.
+  LEADS_CONFIRMATION_FROM: z.string().default("manuel@datatorag.com"),
   // Internal/test traffic excluded from analytics queries (daily digest).
   // Comma-separated; values live in env/SSM only — never in this public repo.
   // Keep mirrored with the PostHog "Internal / Test users" cohort.
