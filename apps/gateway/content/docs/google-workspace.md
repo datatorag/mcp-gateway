@@ -26,6 +26,9 @@ Sign in at [datatorag.com/dashboard](https://datatorag.com/dashboard) and click 
 
 You can connect multiple Google accounts — personal, work, shared inboxes — and your AI assistant can target a specific one or search across all of them.
 
-## Tool count
+## Tools
 
-50 tools across the eight services. Each service's page lists its operations, required scopes, and example prompts.
+Each service's page lists its operations, required scopes, and example prompts.
+The live count is on the [pricing page](/pricing), which reads it from the
+registry rather than restating it here, because a number written into a docs
+page is wrong the next time a tool ships.

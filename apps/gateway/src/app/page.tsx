@@ -19,8 +19,13 @@ import Script from "next/script";
 export const dynamic = "force-dynamic";
 
 const HOME_TITLE = "Let Claude edit your Google Sheets - DataToRAG";
+/* Deliberately names services rather than a tool count. This string is static
+   metadata, so unlike the body below it cannot read the live number, and every
+   exact count we hard-coded went stale as the registry moved. Services change
+   far less often than counts, so this claim survives the next tool in either
+   direction. `lib/tool-count-claims.test.ts` fails if a bare count comes back. */
 const HOME_DESCRIPTION =
-  "Claude's built-in connector reads your files but can't change them. DataToRAG appends the rows, sends the email, updates the ticket. 76 tools behind one URL, and every write asks you first.";
+  "Claude's built-in connector reads your files but can't change them. DataToRAG appends the rows, sends the email, updates the ticket. Gmail, Drive, Sheets, Docs, Calendar and Jira behind one URL, and every write asks you first.";
 
 /* Canonical is self-referencing and absolute, on the non-www origin: Search
    Console was reporting the four origin variants (http/https x www/non-www)
@@ -116,7 +121,11 @@ export default async function HomePage() {
                 style={{ animationDelay: "0.12s" }}
               >
                 Append the rows, send the email, update the ticket.{" "}
-                {totalTools > 0 ? totalTools : 76} tools across Google
+                {/* Fallback is rounded, not an exact number: it only renders
+                    when the count query failed, and stating a precise figure
+                    we did not just read is how a wrong one ships. Matches the
+                    pricing page and the lead page. */}
+                {totalTools > 0 ? totalTools : "70+"} tools across Google
                 Workspace, Jira and Confluence behind one URL, and every write
                 asks you first.
               </p>
