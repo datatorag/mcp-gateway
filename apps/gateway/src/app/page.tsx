@@ -19,13 +19,20 @@ import Script from "next/script";
 export const dynamic = "force-dynamic";
 
 const HOME_TITLE = "Let Claude edit your Google Sheets - DataToRAG";
-/* Deliberately names services rather than a tool count. This string is static
-   metadata, so unlike the body below it cannot read the live number, and every
-   exact count we hard-coded went stale as the registry moved. Services change
-   far less often than counts, so this claim survives the next tool in either
-   direction. `lib/tool-count-claims.test.ts` fails if a bare count comes back. */
+/* Makes no quantity claim at all, which is why it cannot go stale. This string
+   is static metadata, so unlike the body below it cannot read the live number,
+   and every exact count we hard-coded drifted as the registry moved.
+   `lib/tool-count-claims.test.ts` fails if a bare count comes back here.
+
+   It is also the one piece of copy with a hard length budget: search results
+   truncate around 160 characters, and this is 154. An earlier version listed
+   services to avoid naming a number, which was the right instinct in the wrong
+   string — the list ran to 226 and cut off "every write asks you first", the
+   differentiator the rest of the sentence exists to set up. Keep additions
+   inside the budget, and check what falls off the end rather than what reads
+   well in the file. */
 const HOME_DESCRIPTION =
-  "Claude's built-in connector reads your files but can't change them. DataToRAG appends the rows, sends the email, updates the ticket. Gmail, Drive, Sheets, Docs, Calendar and Jira behind one URL, and every write asks you first.";
+  "Claude's connector reads your files but can't change them. DataToRAG appends the rows, sends the email and updates the ticket. Every write asks you first.";
 
 /* Canonical is self-referencing and absolute, on the non-www origin: Search
    Console was reporting the four origin variants (http/https x www/non-www)
