@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { Navbar } from "@/components/navbar";
 import { ContactForm, type Utm } from "@/components/contact-form";
+import { DemoBento } from "@/components/demo/demo-bento";
 
 // Rendered by both /contact (canonical) and /demo (kept for ad destinations
 // and historical analytics continuity) — one source of truth for the form.
@@ -93,33 +94,16 @@ export function ContactPage({ utm }: { utm: Utm }) {
           </div>
         </div>
 
-        {/* See it in action — explainer video */}
+        {/* See it in action — the same scripted windows the home page runs,
+            replacing a talking-head explainer. The windows show the product
+            doing the work; the video described it.
+
+            No composer link and no playground CTA, unlike the home page: this
+            page exists to collect the form above, and a second route out of
+            it competes with the one conversion it has. */}
         <section className="border-t border-border bg-secondary/30">
-          <div className="mx-auto max-w-3xl px-6 py-16 text-center">
-            <p className="text-sm font-semibold uppercase tracking-widest text-primary">
-              See it in action
-            </p>
-            <h2 className="mt-3 font-display text-2xl font-bold text-foreground sm:text-3xl">
-              Watch Claude work inside Google Workspace
-            </h2>
-            <p className="mx-auto mt-3 max-w-lg text-sm text-muted-foreground">
-              A short walkthrough of Claude reading and writing real Docs,
-              Sheets, and Gmail through DataToRAG.
-            </p>
-            <div className="mt-10 flex justify-center">
-              <div className="aspect-[9/16] w-full max-w-[320px] overflow-hidden rounded-3xl border border-border bg-secondary/30 shadow-xl">
-                <video
-                  src="/explainer-2026-05.mp4"
-                  poster="/explainer-2026-05-poster.jpg"
-                  autoPlay
-                  muted
-                  loop
-                  playsInline
-                  controls
-                  className="h-full w-full object-cover"
-                />
-              </div>
-            </div>
+          <div className="mx-auto max-w-6xl px-6 py-16">
+            <DemoBento heading="Watch Claude work inside Google Workspace" />
           </div>
         </section>
       </main>

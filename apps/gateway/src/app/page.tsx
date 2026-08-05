@@ -8,7 +8,7 @@ import { IntegrationCatalog } from "@/components/integration-catalog";
 import { CircleCheckIcon, CircleMinusIcon } from "lucide-react";
 import { CasaBadge } from "@/components/casa-badge";
 import { StartupBarOffset } from "@/components/startupbar-offset";
-import { DemoWindow } from "@/components/demo/demo-section";
+import { DemoBento } from "@/components/demo/demo-bento";
 import { SkillCard } from "@/components/skill-card";
 import { getAllSkills } from "@/lib/skills";
 import { getAllPersonas } from "@/lib/personas";
@@ -225,7 +225,16 @@ export default async function HomePage() {
               </div>
             </div>
 
-            {/* Demo video — vertical, to the right on desktop */}
+            {/* Hero video — vertical, to the right on desktop.
+
+                No `controls`: this is an ambient 20s loop with no narration
+                and no CTA of its own, and a scrub bar over it is the same
+                platform chrome the composition was rebuilt to shed.
+
+                `muted` is load-bearing, not decorative. The render carries a
+                silent AAC track, and a video with an audio stream will not
+                autoplay in most browsers without it — the failure would look
+                like a broken video rather than a missing attribute. */}
             <div
               className="animate-fade-in-up flex w-full flex-shrink-0 justify-center lg:w-auto"
               style={{ animationDelay: "0.28s" }}
@@ -235,13 +244,12 @@ export default async function HomePage() {
                 className="aspect-[9/16] w-full max-w-[340px] overflow-hidden rounded-3xl border border-white/10 bg-white/5 shadow-2xl backdrop-blur-sm lg:w-[340px]"
               >
                 <video
-                  src="/explainer-2026-05.mp4"
-                  poster="/explainer-2026-05-poster.jpg"
+                  src="/datatorag-hero-9x16.mp4"
+                  poster="/datatorag-hero-9x16-poster.jpg"
                   autoPlay
                   muted
                   loop
                   playsInline
-                  controls
                   className="h-full w-full object-cover"
                 />
               </div>
@@ -252,112 +260,17 @@ export default async function HomePage() {
         </ShaderBackground>
 
         {/* Scripted demo — its own band: the product working, not more hero.
-            Three windows replay authored sessions through the real playground
-            presentation components; entirely client-side (no MCP calls, no
-            API routes, no LLM). Bento hierarchy is deliberate: Sheets carries
-            the full approval-gate arc and gets the space; Gmail and Jira
-            prove breadth with short scripts. The problem/solution pairs are
-            deliberately unparallel — only sourced limitations are named. */}
+            The grid, its copy and the sample-data disclosure live in
+            DemoBento, shared with the lead page. What stays here is the CTA
+            policy: the home page wants every route into the playground it can
+            get, which is the opposite of what a lead page wants. */}
         <section id="playground" className="scroll-mt-28 bg-background">
           <div className="mx-auto max-w-6xl px-6 py-16 sm:py-20">
-            <div className="animate-fade-in-up text-center">
-              <h2 className="font-display text-2xl font-bold text-foreground sm:text-3xl">
-                Watch it do the work.
-              </h2>
-              <p className="mx-auto mt-3 max-w-md text-sm text-muted-foreground">
-                A scripted replay with sample data. This is the real
-                playground UI, approval gate included.
-              </p>
-            </div>
-
-            <div
-              className="animate-fade-in-up mt-10 grid gap-4 lg:grid-cols-2"
-              style={{ animationDelay: "0.1s" }}
-            >
-              {/* The text is the argument, the window is the evidence: the
-                  solution line is the largest type in each cell, the problem
-                  line stays visibly quieter. Neither outranks the section
-                  heading. */}
-              <div className="min-w-0 rounded-2xl border border-border bg-secondary/50 p-5 sm:p-6 lg:col-span-2 lg:grid lg:grid-cols-12 lg:items-start lg:gap-8">
-                <div className="min-w-0 lg:col-span-5 lg:pt-2">
-                  {/* Same visual grammar as the hero comparison table:
-                      muted minus for the gap, primary check for the fix. */}
-                  <p className="flex items-start gap-2.5 text-base leading-relaxed text-muted-foreground sm:text-lg">
-                    <CircleMinusIcon
-                      aria-hidden="true"
-                      className="mt-1 size-5 shrink-0 text-muted-foreground/60"
-                    />
-                    <span>
-                      Claude reads the sheet you already keep, then hands you
-                      rows to paste in yourself.
-                    </span>
-                  </p>
-                  <p className="mt-3 flex items-start gap-2.5 font-display text-xl font-semibold leading-snug text-foreground sm:text-2xl">
-                    <CircleCheckIcon
-                      aria-hidden="true"
-                      className="mt-1 size-5 shrink-0 text-primary"
-                    />
-                    <span>
-                      DataToRAG appends them to that same file, after asking
-                      you first.
-                    </span>
-                  </p>
-                </div>
-                <div className="min-w-0 lg:col-span-7 lg:mt-0 mt-5">
-                  <DemoWindow
-                    id="sheets"
-                    promptHref={playgroundHref}
-                    promptLabel={demoPromptLabel}
-                  />
-                </div>
-              </div>
-
-              {[
-                {
-                  id: "gmail",
-                  problem: "Claude writes the email and stops at the draft.",
-                  solution:
-                    "DataToRAG sends it from your account, once you approve.",
-                },
-                {
-                  id: "jira",
-                  problem:
-                    "The ticket gets described in chat, then typed into Jira by hand.",
-                  solution:
-                    "DataToRAG creates it in your project with the fields already set.",
-                },
-              ].map((cell) => (
-                <div
-                  className="flex min-w-0 flex-col rounded-2xl border border-border bg-secondary/50 p-5 sm:p-6"
-                  key={cell.id}
-                >
-                  <p className="flex items-start gap-2 text-sm leading-relaxed text-muted-foreground">
-                    <CircleMinusIcon
-                      aria-hidden="true"
-                      className="mt-0.5 size-4 shrink-0 text-muted-foreground/60"
-                    />
-                    <span>{cell.problem}</span>
-                  </p>
-                  <p className="mt-2 flex items-start gap-2 text-base font-semibold leading-snug text-foreground">
-                    <CircleCheckIcon
-                      aria-hidden="true"
-                      className="mt-0.5 size-4 shrink-0 text-primary"
-                    />
-                    <span>{cell.solution}</span>
-                  </p>
-                  {/* Bottom-anchor the window: the two small cells' text pairs
-                      wrap differently, so anchoring keeps both chat windows on
-                      the same baseline across the row. */}
-                  <div className="mt-4 flex grow flex-col justify-end">
-                    <DemoWindow
-                      id={cell.id}
-                      promptHref={playgroundHref}
-                      promptLabel={demoPromptLabel}
-                    />
-                  </div>
-                </div>
-              ))}
-            </div>
+            <DemoBento
+              heading="Watch it do the work."
+              promptHref={playgroundHref}
+              promptLabel={demoPromptLabel}
+            />
 
             <div className="mt-6 text-center">
               <Link
