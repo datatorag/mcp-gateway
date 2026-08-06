@@ -41,13 +41,13 @@ DataToRAG ships the full set of Gmail verbs:
 
 The LLM already requires your approval before calling a tool. Making the tool not actually do the thing isn't an extra layer of safety; it's extra friction for the same outcome.
 
-## What Claude's connector is genuinely good at
+## What Claude's Gmail connector is genuinely good at
 
-Reading and searching. If you ask "what did my director email me about last week," Claude's connector finds the thread, cites it, and summarizes it. Nothing wrong with that. The limitation isn't "Claude can't see Gmail." It's "Claude can't finish the workflow."
+Reading and searching. If you ask "what did my director email me about last week," Claude's Gmail connector finds the thread, cites it, and summarizes it. Nothing wrong with that. The limitation isn't "Claude can't see Gmail." It's "Claude can't finish the workflow."
 
 ## Where the gap bites
 
-Consider a common customer-support loop: read incoming customer emails, draft replies, send them. With the native connector that looks like this: Claude reads (fine), Claude drafts (fine), you open Gmail, you click into Drafts one by one, you click Send on each. Claude did the hard part (drafting) and you did the repetitive part (the clicking).
+Consider a common customer-support loop: read incoming customer emails, draft replies, send them. With the Gmail connector that looks like this: Claude reads (fine), Claude drafts (fine), you open Gmail, you click into Drafts one by one, you click Send on each. Claude did the hard part (drafting) and you did the repetitive part (the clicking).
 
 With DataToRAG: Claude reads, drafts, sends. Same conversation. One approval per message if you want checkpoints, or an approved-by-default workflow if you trust it.
 
@@ -57,7 +57,7 @@ Labels are the second gap. Any workflow shaped like "label these threads 'needs-
 
 Try this prompt on your setup: "Read the last five emails from our biggest customer and reply to each with a short acknowledgement."
 
-On the native connector, Claude drafts five emails and leaves them in Drafts. You spend the next three minutes clicking through Gmail sending them.
+On the Gmail connector, Claude drafts five emails and leaves them in Drafts. You spend the next three minutes clicking through Gmail sending them.
 
 On DataToRAG, the replies are sent before you finish reading Claude's confirmation message.
 

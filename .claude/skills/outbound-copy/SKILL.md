@@ -94,30 +94,70 @@ it gets written once and never re-read. `sendBrevoEmail` in `src/lib/brevo.ts`
 sends inline html/text for exactly this reason. Reach for a console template
 only when someone non-technical genuinely needs to edit without a deploy.
 
-## Pin the claims with tests
+## Pin the claims with tests — but know which claims a test can hold
 
-Where copy is in code, the claim rules become assertions, not comments. The
-lead confirmation module is the model — it pins the canonical CASA string, the
-absence of capability claims we cannot support, the em-dash ban, the lowercase
-subject, and HTML-escaping of user-supplied names.
+Where copy is in code, some rules become assertions rather than comments. The
+lead confirmation module pins the canonical CASA string, the em-dash ban, the
+lowercase subject, HTML-escaping of user-supplied names, and a short list of
+claims we cannot make (`shared inbox`, a feature we lack; `SOC 2`, a
+certification we do not hold).
 
-Two things that keep such a test alive:
+**Those all work because each is a fixed token.** A string is present or it is
+not; a number matches the registry or it does not. No judgment, no context.
+
+**The create-vs-change axis is NOT of that kind, and trying to pin it failed.**
+Six attempts were made to guard the home page's description against implying
+Claude cannot write. Every version blocked sentences that were true, because
+the truth of most phrasings depends on the object and a regex cannot read
+objects:
+
+- "can't write to X", "no write access to X", "only reads X", "never writes
+  X" — all true when X already exists, since changing your existing sheet is
+  not creating anything.
+- "cannot create X" — true when X can only exist inside something else. We
+  publish "Create folders in Drive: No" in our own comparison table, and a
+  comment on an existing doc cannot be created either. False for a new file,
+  which the connector does create. Same words, opposite truth values.
+- "Claude is not limited to reading" — true, and contains its own ban.
+
+**The evidence that settled it:** two independent reviewers reached opposite
+verdicts on the same sentence, "Unlike read-only connectors, DataToRAG appends
+the rows." One read it as accurate positioning the guard was wrongly blocking.
+The other read it as asserting the native connector is read-only — which we
+retracted in public, because it does create new files. Both readings are
+defensible; which one applies depends on what a reader takes "read-only
+connectors" to refer to.
+
+If two careful readers disagree about whether a sentence is true, no pattern
+is going to adjudicate it. The guard was deleted. It never caught a real
+defect, and a guard that blocks accurate copy is one somebody deletes at the
+worst possible moment.
+
+**So: mechanical claims get tests, semantic claims get review.** The
+create-vs-change axis is enforced by the sign-off rule above, not by a
+pattern — a person reading the sentence is the only instrument that works.
+
+Two things that keep a mechanical test alive:
 
 - **Write the reasoning into the test.** A banned-phrase list with no
   explanation gets deleted by whoever it blocks.
-- **Ban capability claims, not vocabulary.** The product has no telephony
-  surface, but the company does book meetings. Banning "book a call" once the
-  email links a real appointment schedule asserts something false. A match is
-  a candidate to check, not proof of a bug.
+- **Ban the feature we lack, not the vocabulary around it.** The product has
+  no telephony surface, but the company does book meetings. Banning "book a
+  call" once the email links a real appointment schedule asserts something
+  false. A match is a candidate to check, not proof of a bug.
 
 ## Sending: what actually works today
 
 Verified against the live Brevo account, not assumed:
 
-- **`manuel@datatorag.com` is the only registered sender.** Any other address
-  is rejected outright, not merely unverified.
-- **`datatorag.com` is authenticated and verified at the domain level**, so
-  adding another sender is quick rather than a DNS project.
+- **`datatorag.com` is authenticated at the domain level, so ANY address at it
+  can send.** Verified by sending from an unregistered `support@` address,
+  which delivered. Per-address registration is not a precondition.
+  (`manuel@datatorag.com` is the only address registered as a named sender,
+  which is a different thing. An earlier version of this file said any other
+  address would be "rejected outright" — that was wrong, and it cost a real
+  choice: it was given as the reason a preferred sender address was
+  unavailable when it was available all along.)
 - Sender address is `LEADS_CONFIRMATION_FROM`, so switching is config plus a
   redeploy, not a code change.
 - **Replies must reach a monitored inbox.** If copy asks for a reply, the

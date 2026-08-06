@@ -25,14 +25,14 @@ const HOME_TITLE = "Let Claude edit your Google Sheets - DataToRAG";
    `lib/tool-count-claims.test.ts` fails if a bare count comes back here.
 
    It is also the one piece of copy with a hard length budget: search results
-   truncate around 160 characters, and this is 154. An earlier version listed
+   truncate around 160 characters, and this is 149. An earlier version listed
    services to avoid naming a number, which was the right instinct in the wrong
    string — the list ran to 226 and cut off "every write asks you first", the
    differentiator the rest of the sentence exists to set up. Keep additions
    inside the budget, and check what falls off the end rather than what reads
    well in the file. */
 const HOME_DESCRIPTION =
-  "Claude's connector reads your files but can't change them. DataToRAG appends the rows, sends the email and updates the ticket. Every write asks you first.";
+  "Claude's Drive connector reads your files but can't change them. DataToRAG appends rows, sends email and updates tickets. Every write asks you first.";
 
 /* Canonical is self-referencing and absolute, on the non-www origin: Search
    Console was reporting the four origin variants (http/https x www/non-www)
@@ -155,8 +155,14 @@ export default async function HomePage() {
               </div>
 
               {/* Accuracy constraint: rows must stay create-vs-change (the
-                  built-in connector can create new files) — never a general
-                  "no write access" claim. */}
+                  built-in Drive connector can create new files) — never a
+                  general "no write access" claim.
+
+                  The column header below stays unnamed on purpose: these rows
+                  span Drive ("Read a file", "Edit an existing sheet") AND
+                  Gmail ("Send an email"), so naming it "Drive" would make the
+                  email row false. Claude has three Google connectors — Drive,
+                  Gmail, Calendar — and this table compares two of them. */}
               <div
                 className="animate-fade-in-up mx-auto mt-8 w-full max-w-md lg:mx-0"
                 style={{ animationDelay: "0.2s" }}

@@ -55,18 +55,27 @@ transcripts.
 
 ## Verify it delivered
 
-A long send can be backgrounded and return no output. A successful send
-prints `✓ Sent message to 'datatorag-hq'`. **No output is not confirmation.**
+**The channel is not symmetric.** Sends from here have been lost four separate
+times — one silent drop, two explicit failures, one backgrounded with no
+confirmation line — while every send from HQ has landed. So the delivery check
+is not belt-and-braces on this side, it is the only reason most of those were
+recoverable. Treat an unconfirmed send as *probably lost*, not probably fine.
 
-If a send returns nothing, follow it with a short one that names what should
-have arrived, and say plainly that it may have arrived twice:
+A successful send prints `✓ Sent message to 'datatorag-hq'`. Anything else —
+no output, a background notice, even exit code 0 with silence — **is not
+confirmation.** Exit 0 means the command returned, not that a message arrived.
+
+If a send does not print that line, follow it with a short one that names what
+should have arrived and says plainly it may be a duplicate:
 
 ```bash
 timeout 60 agent-deck session send datatorag-hq "Delivery check on the previous X. If it did not arrive, say so and I will resend."
 ```
 
-Prefer two medium sends over one very long one — length is what triggers the
-backgrounding.
+Put the load-bearing facts in the SHORT one. Length is what triggers
+backgrounding, so the message most likely to vanish is the detailed one you
+most wanted delivered. Two medium sends beat one long one; a summary that
+survives beats a full account that does not.
 
 ## What never goes up unfiltered
 

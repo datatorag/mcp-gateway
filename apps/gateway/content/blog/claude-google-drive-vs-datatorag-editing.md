@@ -52,9 +52,9 @@ The difference isn't "more tools." It's that a workflow that starts with reading
 
 **Sheet automation.** Pull numbers out of an email, append a row to a tracking sheet, update another cell that feeds a dashboard. A weekly-report workflow that runs end to end with zero copy-paste.
 
-**Deck updates.** Read a slide deck, change "Q1" to "Q2" everywhere, update three data labels, swap a title. Claude's connector reads the text of the deck. Ours rewrites it in place.
+**Deck updates.** Read a slide deck, change "Q1" to "Q2" everywhere, update three data labels, swap a title. Claude's Drive connector reads the text of the deck. Ours rewrites it in place.
 
-## What Claude's connector is good at
+## What Claude's Drive connector is good at
 
 Reading and searching. If all you want is "summarize this 40-page contract" or "find the doc where we agreed on the new pricing," the native connector handles it cleanly, cites sources, and syncs Docs added to a Project in real time. The limitation only hurts when you want to act on what you read.
 
@@ -66,7 +66,7 @@ If your workflow is "read one doc, change three sentences, save," DataToRAG is.
 
 Try this: "Read my Q2 roadmap Doc, add a new section titled 'Customer feedback themes,' and list our top five themes from recent customer emails."
 
-On the native connector, the answer is text you paste. On DataToRAG, the answer is the Doc itself, updated, with a link.
+On the Drive connector, the answer is text you paste. On DataToRAG, the answer is the Doc itself, updated, with a link.
 
 ## Try it
 
