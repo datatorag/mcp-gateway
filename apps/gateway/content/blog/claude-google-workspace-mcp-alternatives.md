@@ -2,6 +2,8 @@
 title: "Every Way to Connect Claude to Your Google Workspace, Compared (2026)"
 excerpt: "Native connectors, Zapier MCP, Composio, Pipedream, a self-hosted open-source server, or DataToRAG. What each one really does with your Google data, and how to pick the right one."
 date: "2026-06-29"
+updated: "2026-08-07"
+updatedNote: "Anthropic's Gmail connector has since gained labelling, marking read, and archiving. The native-connector section and the summary table are corrected, and every native claim is now stated against the enumerated tool surface with the date it was checked."
 author: "Manuel Yang"
 category: "Comparison"
 tags: ["google-workspace", "claude", "mcp", "comparison", "alternatives"]
@@ -13,9 +15,11 @@ So here's the map. What each option actually does with your Google data, where i
 
 ## Claude's native connectors
 
-Start here, because it's free and you might not need anything else. Claude connects natively to Gmail, Google Calendar, and Google Drive. Calendar is the strong one: Claude can create, update, and delete events for you. Drive can read your files and save things back, including files Claude generates. Gmail can read and search your inbox and write drafts.
+Start here, because it's free and you might not need anything else. Claude connects natively to Gmail, Google Calendar, and Google Drive. Everything in this section is what those three connectors expose as tools, enumerated on August 7, 2026, because that surface moves and this post will outlive the check.
 
-Then it stops. The native Gmail connector won't send. It drops a draft in your Drafts folder and hands the rest to you. It also can't label threads or mark messages read, because it doesn't carry the `gmail.modify` scope. There's no native Sheets cell editing, no Slides, no Contacts, no Tasks. And you connect one Google account at a time, so if you live in a work inbox and a personal one, you're disconnecting and reconnecting to switch.
+Calendar is the strong one, and it isn't close. Nine tools covering create, update, delete, search, and RSVP, plus a `suggest_time` helper that we don't ship. If calendars are the whole job and one account covers it, native is the answer and you can stop here. Drive can read your files and save things back, including files Claude generates. Gmail reads and searches your inbox, writes drafts, and files threads: it labels, stars, marks read, archives, and trashes.
+
+Then it stops, and where it stops is one verb further on than you'd guess. The native Gmail connector won't send. It drops a draft in your Drafts folder and hands the rest to you, and it has no tool to send that draft or even to delete it. Slides gets as far as an empty deck: Drive will create you a real presentation at a real URL, and it arrives with one slide, a blank title, and a blank subtitle, because nothing in the native surface writes content onto slides. Sheets has no cell-level editing. No Contacts, no Tasks. And you connect one Google account at a time, so if you live in a work inbox and a personal one, you're disconnecting and reconnecting to switch.
 
 We wrote up the Gmail gap in [Claude can draft your email, it can't send it](/blog/claude-gmail-connector-vs-datatorag-send-reply), the Drive editing gap in [Claude can read your docs, it can't edit them](/blog/claude-google-drive-vs-datatorag-editing), and the single-account limit [here](/blog/claude-google-calendar-vs-datatorag-multi-account).
 
@@ -53,7 +57,7 @@ If you want total control, your data never leaving infrastructure you own, and y
 
 Which brings me to the thing I build. DataToRAG is one MCP gateway that gives Claude deep, write-capable access to your Google Workspace and your Atlassian, behind a single sign-in. The pitch is boring on purpose: it does the writes the others skip.
 
-Deep means the real verbs. 48 Google tools across all eight services: Gmail with `gmail_send`, `gmail_reply`, `gmail_forward`, and labels; Docs with `docs_batch_update` for in-place editing; Sheets; Slides with `slides_batch_update`; Drive; Calendar; Contacts (`contacts_*`); and Tasks (`tasks_*`). Then 22 more tools for Jira and Confluence, so "file the bug and update the Confluence page" happens in one prompt. Multi-account is built in: connect work, personal, and shared accounts under one endpoint, then target one or search across all of them in a single prompt.
+Deep means the real verbs. Gmail with `gmail_send`, `gmail_reply`, `gmail_forward`, and labels; Docs with `docs_batch_update` for in-place editing; Sheets; Slides with `slides_batch_update`; Drive; Calendar; Contacts (`contacts_*`); and Tasks (`tasks_*`). Jira and Confluence too, so "file the bug and update the Confluence page" happens in one prompt. Multi-account is built in: connect work, personal, and shared accounts under one endpoint, then target one or search across all of them in a single prompt.
 
 We don't store your data. Every call is a pass-through to Google or Atlassian on your behalf. We passed Google's CASA Tier 2 assessment, and the app is Google-verified as of June 2026. And because the whole gateway is MIT-licensed, you get the choice the OSS route forces on you and the vendor route denies you: use our hosted version and skip the setup, or self-host the same code if you'd rather own the infrastructure. We did the OAuth and verification work so you don't have to, without locking you in for doing it.
 
@@ -61,7 +65,7 @@ We don't store your data. Every call is a pass-through to Google or Atlassian on
 
 | Option | Google write depth | Multi-account in one prompt | Atlassian | Hosting / open source | Setup effort |
 |---|---|---|---|---|---|
-| Claude native | Calendar full; Gmail draft-only; Drive partial; no Sheets/Slides/Contacts/Tasks | No, one account | No | Anthropic-hosted, closed | None |
+| Claude native | Calendar full CRUD plus `suggest_time`; Gmail reads and labels but can't send its own draft; Drive files, plus a Slides deck that arrives empty; no Sheets cell editing, Contacts, or Tasks | No, one account | No | Anthropic-hosted, closed | None |
 | Zapier MCP | Coarse writes for Gmail/Docs/Sheets/Drive/Calendar; no Slides/Contacts/Tasks on MCP | Not documented | Separate Zapier apps | Cloud-only, closed | Low |
 | Composio | Deep Gmail; Docs/Sheets/Tasks; no standalone Slides/Contacts | Per user, in your app | Via toolkit | Cloud core; self-host enterprise-only | Developer (SDK) |
 | Pipedream | Gmail/Sheets/Drive/Calendar writes; thinner, custom-API fallback | Per user, in your app | Via app | Cloud-only platform | Developer (SDK) |
