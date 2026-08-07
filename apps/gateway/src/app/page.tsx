@@ -7,6 +7,7 @@ import { ShaderBackground } from "@/components/shader-background";
 import { IntegrationCatalog } from "@/components/integration-catalog";
 import { CircleCheckIcon, CircleMinusIcon } from "lucide-react";
 import { CasaBadge } from "@/components/casa-badge";
+import { ConnectorComparison } from "@/components/connector-comparison";
 import { StartupBarOffset } from "@/components/startupbar-offset";
 import { DemoBento } from "@/components/demo/demo-bento";
 import { SkillCard } from "@/components/skill-card";
@@ -189,6 +190,16 @@ export default async function HomePage() {
                     {[
                       { capability: "Read a file", builtIn: true },
                       { capability: "Edit an existing sheet", builtIn: false },
+                      // "Create a deck" MUST stay Yes for the built-in column.
+                      // Verified first-hand: the built-in connector creates a
+                      // genuine Google Slides presentation, real presentation
+                      // mimeType and a real edit URL, not an exported file. Any
+                      // row implying it cannot make a deck is false and takes
+                      // ten seconds to disprove. The gap is the next row: it
+                      // refuses to create one WITH content, so the deck arrives
+                      // with a single slide and an empty title and subtitle.
+                      { capability: "Create a deck", builtIn: true },
+                      { capability: "Put content in it", builtIn: false },
                       { capability: "Send an email", builtIn: false },
                     ].map(({ capability, builtIn }) => (
                       <tr
@@ -233,6 +244,13 @@ export default async function HomePage() {
                     ))}
                   </tbody>
                 </table>
+                <a
+                  className="mt-3 inline-flex items-center gap-1 text-sm text-white/70 transition-colors hover:text-white"
+                  href="#comparison"
+                >
+                  See every capability we tested
+                  <span aria-hidden="true">&rarr;</span>
+                </a>
               </div>
 
               {/* Badge lockup, not fine print. */}
@@ -263,9 +281,18 @@ export default async function HomePage() {
               className="animate-fade-in-up flex w-full flex-shrink-0 justify-center lg:w-auto"
               style={{ animationDelay: "0.28s" }}
             >
+              {/* `max-w-md` on mobile, matching the comparison table above it
+                  rather than the fixed 340px the desktop column uses. The slot
+                  was 338px wide at every viewport, so on a narrow screen the
+                  stacked hero read as a table with a narrower video floating
+                  under it instead of one column.
+
+                  The video's caption size scales with this and is NOT the
+                  reason for the change; it is a side effect and is not to be
+                  tuned here or in the composition. */}
               <div
                 id="demo-video"
-                className="aspect-[9/16] w-full max-w-[340px] overflow-hidden rounded-3xl border border-white/10 bg-white/5 shadow-2xl backdrop-blur-sm lg:w-[340px]"
+                className="aspect-[9/16] w-full max-w-md overflow-hidden rounded-3xl border border-white/10 bg-white/5 shadow-2xl backdrop-blur-sm lg:w-[340px] lg:max-w-[340px]"
               >
                 {/* The NARRATED cut, playing silently (Manuel, 2026-08-07 —
                     reverses the earlier "voiced is YouTube/social only" call).
@@ -364,6 +391,14 @@ export default async function HomePage() {
             </div>
           </section>
         )}
+
+        {/* Full comparison. Sits here on purpose: the hero makes a short claim
+            with five rows, the playground above shows it working, and this is
+            where someone who wants to check the claim goes. Rows and their
+            constraints live in the component. */}
+        <section id="comparison" className="scroll-mt-28 bg-background">
+          <ConnectorComparison />
+        </section>
 
         {/* Platform — three pillars */}
         <section
