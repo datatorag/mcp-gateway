@@ -27,6 +27,22 @@ export const users = pgTable("users", {
   noActivationFollowupSentAt: timestamp("no_activation_followup_sent_at", {
     withTimezone: true,
   }),
+  // First-touch acquisition snapshot, captured from the browser at signup.
+  // Server-side events cannot be attributed without a session id, and a
+  // session id only joins for as long as the analytics session row is
+  // retained — these columns are the durable copy, so "which channel and
+  // campaign produced this user" stays answerable past any retention window.
+  // Every column is nullable: the visitor may have the SDK blocked, and the
+  // rows that predate this were never captured.
+  acquisitionSessionId: text("acquisition_session_id"),
+  acquisitionDistinctId: text("acquisition_distinct_id"),
+  acquisitionChannel: text("acquisition_channel"),
+  acquisitionUtmSource: text("acquisition_utm_source"),
+  acquisitionUtmMedium: text("acquisition_utm_medium"),
+  acquisitionUtmCampaign: text("acquisition_utm_campaign"),
+  acquisitionGclid: text("acquisition_gclid"),
+  acquisitionReferringDomain: text("acquisition_referring_domain"),
+  acquisitionEntryUrl: text("acquisition_entry_url"),
   // Lifetime count of playground chat messages sent (dashboard playground).
   // Capped by PLAYGROUND_MESSAGE_CAP; deliberately NOT part of billing/credits.
   playgroundMessagesUsed: integer("playground_messages_used").notNull().default(0),

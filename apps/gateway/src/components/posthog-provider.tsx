@@ -5,6 +5,7 @@ import { usePathname, useSearchParams } from "next/navigation";
 import posthog from "posthog-js";
 import { PostHogProvider as PHProvider } from "posthog-js/react";
 import { useCurrentUser } from "@/lib/use-current-user";
+import { AttributionLinks } from "@/components/attribution-links";
 
 // Init at module scope so posthog is ready before any component effect runs.
 // usePathname/useSearchParams still need to be inside components, but
@@ -62,6 +63,7 @@ export function PostHogProvider({ children }: { children: React.ReactNode }) {
         <PageviewTracker />
       </Suspense>
       <IdentifyUser />
+      <AttributionLinks />
       {children}
     </PHProvider>
   );

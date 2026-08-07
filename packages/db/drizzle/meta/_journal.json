@@ -64,6 +64,13 @@
       "when": 1784580396198,
       "tag": "0008_fancy_the_initiative",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1786126876820,
+      "tag": "0009_naive_mentor",
+      "breakpoints": true
     }
   ]
 }

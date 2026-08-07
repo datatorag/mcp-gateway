@@ -2,6 +2,12 @@ import { and, eq, isNull } from "drizzle-orm";
 import type { Database } from "@datatorag-mcp/db";
 import { users } from "@datatorag-mcp/db";
 import { EVENTS, type ProviderId } from "../lib/analytics";
+import {
+  acquisitionProps,
+  acquisitionSetOnce,
+  sessionProps,
+  type Attribution,
+} from "../lib/attribution";
 import { getPosthog, shutdownPosthog } from "../lib/posthog-server";
 import { sendSlack } from "../lib/slack";
 import { writeUsageEvent } from "./usage/write";
@@ -145,31 +151,48 @@ async function trackFirstToolCall(
 // The #leads Slack post for signups lives in signup-alert.ts (notifySignup),
 // which adds lead-match + attribution and skips internal accounts — this
 // function is PostHog-only (SCRUM-26 moved the Slack line out).
+/**
+ * `attribution` is the browser snapshot handed to the signup redirect. It is
+ * what makes this event attributable at all: a server-side capture carries no
+ * session id of its own, so without it the signup cannot be joined to the
+ * browsing session — and therefore to the channel — that produced it.
+ */
 export function trackSignup(
   userId: string,
   email: string,
-  name: string | null
+  name: string | null,
+  attribution?: Attribution | null
 ): void {
   const c = getPosthog();
   if (!c) return;
   c.identify({
     distinctId: userId,
-    properties: { email, name: name ?? undefined },
+    properties: { email, name: name ?? undefined, ...acquisitionProps(attribution) },
   });
   c.capture({
     distinctId: userId,
     event: EVENTS.USER_SIGNED_UP,
-    properties: { email, ...identityProps(email) },
+    properties: {
+      email,
+      ...identityProps(email),
+      ...sessionProps(attribution),
+      ...acquisitionProps(attribution),
+      ...acquisitionSetOnce(attribution),
+    },
   });
 }
 
-export function trackLogin(userId: string, email: string): void {
+export function trackLogin(
+  userId: string,
+  email: string,
+  attribution?: Attribution | null
+): void {
   const c = getPosthog();
   if (!c) return;
   c.capture({
     distinctId: userId,
     event: EVENTS.USER_LOGGED_IN,
-    properties: identityProps(email),
+    properties: { ...identityProps(email), ...sessionProps(attribution) },
   });
 }
 
@@ -282,7 +305,8 @@ export async function trackOAuthCompleted(
   db: Database,
   userId: string,
   provider: ProviderId,
-  accountEmail: string
+  accountEmail: string,
+  attribution?: Attribution | null
 ): Promise<void> {
   const c = getPosthog();
   if (!c) return;
@@ -294,6 +318,7 @@ export async function trackOAuthCompleted(
       provider,
       account_email: accountEmail,
       ...identityProps(email),
+      ...sessionProps(attribution),
     },
   });
 }
