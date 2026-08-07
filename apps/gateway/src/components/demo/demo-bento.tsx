@@ -1,4 +1,4 @@
-/** The scripted-demo bento: three windows replaying authored sessions through
+/** The scripted-demo bento: four windows replaying authored sessions through
  * the real playground presentation components, each paired with the gap it
  * closes. Entirely client-side — no MCP calls, no API routes, no LLM.
  *
@@ -10,10 +10,12 @@
  * thing standing between us and shipping without it. Rendering it here makes
  * that structural instead of remembered.
  *
- * Bento hierarchy is deliberate: Sheets carries the full approval-gate arc
- * and gets the space; Gmail and Jira prove breadth with short scripts. The
- * problem/solution pairs are deliberately unparallel — only sourced
- * limitations are named.
+ * Bento hierarchy is deliberate: Sheets and Slides carry the full read-then-
+ * write arc and get the wide rows, because editing something that already
+ * exists is the claim; Gmail and the two-account search prove breadth with
+ * short scripts. The problem/solution pairs are deliberately unparallel —
+ * only sourced limitations are named, and each names the connector that has
+ * the limit rather than "Claude" in general.
  */
 
 import { CircleCheckIcon, CircleMinusIcon } from "lucide-react";
@@ -22,9 +24,29 @@ import { DemoWindow } from "./demo-section";
 export const DEMO_DISCLOSURE =
   "A scripted replay with sample data. This is the real playground UI, approval gate included.";
 
-/** The two short-script cells. Sheets is not in here: it carries different
- * copy weight and a different grid span, so listing it alongside these would
- * mean a shape with an exception in it. */
+/** The wide cells: a full arc each, text beside the window. Both are edits to
+ * a file the viewer already has, which is the half of the claim that can't be
+ * approximated by dropping a new file in Drive. */
+const WIDE_CELLS = [
+  {
+    id: "sheets",
+    problem:
+      "Claude reads the sheet you already keep, then hands you rows to paste in yourself.",
+    solution:
+      "DataToRAG changes the rows in that same file, after asking you first.",
+  },
+  {
+    id: "slides",
+    problem:
+      "Claude's Drive connector can make you a deck, but it arrives empty — one slide, and the title is yours to type.",
+    solution:
+      "DataToRAG writes into the deck you already have, after asking you first.",
+  },
+];
+
+/** The two short-script cells. The wide ones are not in here: they carry
+ * different copy weight and a different grid span, so listing them alongside
+ * these would mean a shape with an exception in it. */
 const SHORT_CELLS = [
   {
     id: "gmail",
@@ -32,11 +54,11 @@ const SHORT_CELLS = [
     solution: "DataToRAG sends it from your account, once you approve.",
   },
   {
-    id: "jira",
+    id: "accounts",
     problem:
-      "The ticket gets described in chat, then typed into Jira by hand.",
+      "Claude's Gmail connector is signed in to one account, so the other inbox isn't there to search.",
     solution:
-      "DataToRAG creates it in your project with the fields already set.",
+      "DataToRAG searches your work and personal accounts in the same turn.",
   },
 ];
 
@@ -71,39 +93,38 @@ export function DemoBento({
             solution line is the largest type in each cell, the problem
             line stays visibly quieter. Neither outranks the section
             heading. */}
-        <div className="min-w-0 rounded-2xl border border-border bg-secondary/50 p-5 sm:p-6 lg:col-span-2 lg:grid lg:grid-cols-12 lg:items-start lg:gap-8">
-          <div className="min-w-0 lg:col-span-5 lg:pt-2">
-            {/* Same visual grammar as the hero comparison table:
-                muted minus for the gap, primary check for the fix. */}
-            <p className="flex items-start gap-2.5 text-base leading-relaxed text-muted-foreground sm:text-lg">
-              <CircleMinusIcon
-                aria-hidden="true"
-                className="mt-1 size-5 shrink-0 text-muted-foreground/60"
+        {WIDE_CELLS.map((cell) => (
+          <div
+            className="min-w-0 rounded-2xl border border-border bg-secondary/50 p-5 sm:p-6 lg:col-span-2 lg:grid lg:grid-cols-12 lg:items-start lg:gap-8"
+            key={cell.id}
+          >
+            <div className="min-w-0 lg:col-span-5 lg:pt-2">
+              {/* Same visual grammar as the hero comparison table:
+                  muted minus for the gap, primary check for the fix. */}
+              <p className="flex items-start gap-2.5 text-base leading-relaxed text-muted-foreground sm:text-lg">
+                <CircleMinusIcon
+                  aria-hidden="true"
+                  className="mt-1 size-5 shrink-0 text-muted-foreground/60"
+                />
+                <span>{cell.problem}</span>
+              </p>
+              <p className="mt-3 flex items-start gap-2.5 font-display text-xl font-semibold leading-snug text-foreground sm:text-2xl">
+                <CircleCheckIcon
+                  aria-hidden="true"
+                  className="mt-1 size-5 shrink-0 text-primary"
+                />
+                <span>{cell.solution}</span>
+              </p>
+            </div>
+            <div className="min-w-0 lg:col-span-7 lg:mt-0 mt-5">
+              <DemoWindow
+                id={cell.id}
+                promptHref={promptHref}
+                promptLabel={promptLabel}
               />
-              <span>
-                Claude reads the sheet you already keep, then hands you rows to
-                paste in yourself.
-              </span>
-            </p>
-            <p className="mt-3 flex items-start gap-2.5 font-display text-xl font-semibold leading-snug text-foreground sm:text-2xl">
-              <CircleCheckIcon
-                aria-hidden="true"
-                className="mt-1 size-5 shrink-0 text-primary"
-              />
-              <span>
-                DataToRAG appends them to that same file, after asking you
-                first.
-              </span>
-            </p>
+            </div>
           </div>
-          <div className="min-w-0 lg:col-span-7 lg:mt-0 mt-5">
-            <DemoWindow
-              id="sheets"
-              promptHref={promptHref}
-              promptLabel={promptLabel}
-            />
-          </div>
-        </div>
+        ))}
 
         {SHORT_CELLS.map((cell) => (
           <div

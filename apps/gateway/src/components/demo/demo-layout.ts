@@ -8,6 +8,14 @@
  * open, args fully rendered), per width tier — base covers stacked phone
  * widths, `sm` the wide single-column band, `lg` the bento columns.
  * Re-measure if a script's copy or args change.
+ *
+ * Measured at the width where each tier's frame is narrowest and its text
+ * therefore wraps tallest: 390 for base (phone), 640 for `sm`, 1024 for `lg`,
+ * plus 8px of slack. A tier that is a few pixels short only ever scrolls —
+ * the transcript keeps the newest beat in view — so the slack is for wrap
+ * differences across fonts, not for correctness. Some windows measure the
+ * same at `sm` and `lg`: their peak state is short enough that the extra
+ * column width changes no line breaks.
  */
 
 export interface DemoWindowLayout {
@@ -17,7 +25,7 @@ export interface DemoWindowLayout {
   service: string;
   /** Fixed height of the playback frame (transcript area, header excluded). */
   frame: string;
-  /** Delay before this window's first live run. Staggered so the three
+  /** Delay before this window's first live run. Staggered so the four
    * approval gates land at different moments instead of in lockstep; each
    * window shows its completed end state until its turn. */
   startDelayMs: number;
@@ -27,19 +35,25 @@ export const DEMO_WINDOWS: Record<string, DemoWindowLayout> = {
   sheets: {
     id: "sheets",
     service: "Sheets",
-    frame: "h-[556px] sm:h-[396px] lg:h-[412px]",
+    frame: "h-[522px] sm:h-[410px] lg:h-[410px]",
     startDelayMs: 0,
+  },
+  slides: {
+    id: "slides",
+    service: "Slides",
+    frame: "h-[522px] sm:h-[378px] lg:h-[378px]",
+    startDelayMs: 5_000,
   },
   gmail: {
     id: "gmail",
     service: "Gmail",
     frame: "h-[380px] sm:h-[292px] lg:h-[308px]",
-    startDelayMs: 7000,
+    startDelayMs: 10_000,
   },
-  jira: {
-    id: "jira",
-    service: "Jira",
-    frame: "h-[392px] sm:h-[304px] lg:h-[336px]",
-    startDelayMs: 14000,
+  accounts: {
+    id: "accounts",
+    service: "Gmail · two accounts",
+    frame: "h-[328px] sm:h-[248px] lg:h-[248px]",
+    startDelayMs: 15_000,
   },
 };
