@@ -249,14 +249,16 @@ export default async function HomePage() {
 
             {/* Hero video — vertical, to the right on desktop.
 
-                No `controls`: this is an ambient 20s loop with no narration
-                and no CTA of its own, and a scrub bar over it is the same
-                platform chrome the composition was rebuilt to shed.
+                No `controls`: a scrub bar over it is the same platform chrome
+                the composition was rebuilt to shed.
 
-                `muted` is load-bearing, not decorative. The render carries a
-                silent AAC track, and a video with an audio stream will not
-                autoplay in most browsers without it — the failure would look
-                like a broken video rather than a missing attribute. */}
+                `muted` is load-bearing, not decorative. This render carries a
+                REAL narration track (it is the same file that ships to YouTube
+                with sound), and a video with an audio stream will not autoplay
+                in most browsers without `muted` — the failure would look like a
+                broken video rather than a missing attribute. So the narration
+                is never heard here, by design, and the burned-in captions are
+                what carry every spoken claim. */}
             <div
               className="animate-fade-in-up flex w-full flex-shrink-0 justify-center lg:w-auto"
               style={{ animationDelay: "0.28s" }}
@@ -265,9 +267,22 @@ export default async function HomePage() {
                 id="demo-video"
                 className="aspect-[9/16] w-full max-w-[340px] overflow-hidden rounded-3xl border border-white/10 bg-white/5 shadow-2xl backdrop-blur-sm lg:w-[340px]"
               >
+                {/* The NARRATED cut, playing silently (Manuel, 2026-08-07 —
+                    reverses the earlier "voiced is YouTube/social only" call).
+                    It carries ~10s of setup that the silent cut deliberately
+                    dropped, so it opens slower here than a hero usually would;
+                    that was chosen with the trade-off on the table, in exchange
+                    for the setup itself — the sheet, then Claude's own connector
+                    refusing to change it, then the reveal.
+
+                    Its claims are BURNED IN as captions, which is what makes
+                    that survivable with no audio: every spoken line is also on
+                    screen. Do not swap this for a cut without captions while the
+                    slot stays muted, and do not drop `muted` — autoplay is
+                    blocked without it, so the hero would sit on its poster. */}
                 <video
-                  src="/datatorag-hero-9x16.mp4"
-                  poster="/datatorag-hero-9x16-poster.jpg"
+                  src="/datatorag-hero-9x16-voiced.mp4"
+                  poster="/datatorag-hero-9x16-voiced-poster.jpg"
                   autoPlay
                   muted
                   loop
