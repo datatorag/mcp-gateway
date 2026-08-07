@@ -103,6 +103,7 @@ the quick reference; the ADRs carry context + alternatives-considered.
 - **Dev compose doesn't forward Slack/Brevo/PostHog-server vars** into the container (prod compose does) — those features silently no-op in dev even with the var in `.env`. Empty `SLACK_BOT_TOKEN`/`BREVO_API_KEY` = intentional logged no-op, not a bug. Stripe is the exception: `getStripe()` throws on a missing key.
 - **Usage metering is best-effort** (200ms insert timeout) — anything built on `usage_events` must tolerate undercounting. Stored error messages are PII-scrubbed by `usage/redact.ts` (emails, long IDs) — expect `[redacted-*]` artifacts.
 - **`__` is the load-bearing tool-name separator** (`NAMESPACE_SEPARATOR`): CallTool splits on the first occurrence. A slug or tool name containing `__` misroutes.
+- **Server-side events cannot be attributed without a session id** — a `posthog-node` capture carries none of its own, so it can't be joined to the browsing session that produced it. New server-side events that need to be attributable must spread `sessionProps()` (`src/lib/attribution.ts`); new auth-redirect routes must be added to `ATTRIBUTED_PATHS` in `src/components/attribution-links.tsx` and must `stashAttribution`/`takeAttribution` across the provider round-trip. The session id is read at click time, never cached at mount (sessions roll over on idle timeout and at UTC midnight — a cached one is confidently wrong and nothing flags it). Full pattern in the `services-integrations` skill.
 - **Never-throw convention** for side channels: `sendSlack`, `brevoPost`, all analytics/track functions catch internally and warn with a `[module]` log prefix. Exactly-once side effects use atomic `UPDATE … WHERE <flag> IS NULL RETURNING id` claims (`first_tool_call_at`, follow-up emails).
 - **Content parser caches never invalidate** — editing markdown does nothing on a running prod server; redeploy.
 - **Playground is unmetered by design** — the dashboard playground (`src/gateway/playground/`) never writes `usage_events` and never sets `first_tool_call_at`; activation must keep meaning "a real MCP client called through the gateway". Its lifetime message cap uses a guarded-UPDATE claim/refund on `users.playground_messages_used` (details in the `services-integrations` skill's Playground section).
@@ -152,6 +153,9 @@ multi-file changes where a fresh-eyes sweep genuinely pays for itself.
 | Usage: classify / write / redact / rollup / ranges / rate-limit | `apps/gateway/src/gateway/usage/` |
 | PostHog events, signup/first-call tracking | `apps/gateway/src/gateway/track.ts` |
 | Identity cache + `identityProps` for captures | `apps/gateway/src/gateway/user-email.ts` |
+| Acquisition attribution: wire contract + channel derivation | `apps/gateway/src/lib/attribution.ts` |
+| Acquisition attribution: `dtr_attr` cookie stash + user-record persist | `apps/gateway/src/gateway/attribution.ts` |
+| Acquisition attribution: click-time link decorator (`ATTRIBUTED_PATHS`) | `apps/gateway/src/components/attribution-links.tsx` |
 | Daily Slack digest (Neon/Stripe/PostHog collectors) | `apps/gateway/src/gateway/digest.ts` |
 | Brevo welcome + no-activation follow-up emails | `apps/gateway/src/gateway/lifecycle.ts` |
 | Slack / Brevo / Stripe / PostHog-server clients | `apps/gateway/src/lib/{slack,brevo,stripe,posthog-server}.ts` |

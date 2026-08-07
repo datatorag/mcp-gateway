@@ -91,6 +91,25 @@ Note: `digest.ts`'s `collectPosthog()` uses a *different* credential pair — `P
 
 `apps/gateway/src/gateway/user-email.ts` provides `identityProps(email)` — the shared `{ user_email, $set: { email } }` shape spread into every server-side PostHog capture — plus a per-process `Map` cache (`resolveUserIdentity()`) so the tool-call hot path isn't a DB round trip every time.
 
+### Acquisition attribution (server-side events ↔ browser session)
+
+**A server-side capture carries no session id of its own.** PostHog derives channel, campaign and click ids on the *session*, so a `posthog-node` event with no `$session_id` cannot be joined to the browsing session that produced it — it is an orphan with respect to acquisition. Any new server-side event that needs to be attributable must be given one.
+
+The plumbing (SCRUM-48), three files:
+
+- `apps/gateway/src/lib/attribution.ts` — the wire contract. `ATTRIBUTION_PARAMS` (the `a_*` query-param names), `parseAttribution()` / `toWireParams()`, `deriveChannel()`, and the capture helpers `sessionProps()` (`$session_id`), `acquisitionProps()` (flat `acquisition_*` event properties), `acquisitionSetOnce()` (`$set_once`, because acquisition is a first-touch fact). Pure — no DOM, no express, no SDK.
+- `apps/gateway/src/components/attribution-links.tsx` — a delegated capture-phase click listener rendered inside `PostHogProvider`. It appends the snapshot to any link into `/auth/google`, `/auth/google/connect`, `/auth/atlassian/connect`. **Adding a new auth-redirect route means adding its path to `ATTRIBUTED_PATHS`** — nothing else needs touching, and no individual link does.
+- `apps/gateway/src/gateway/attribution.ts` — the `dtr_attr` cookie (httpOnly, `sameSite: lax`, 15 min) that carries the snapshot through the provider's consent screen, since query params set on the way in are gone by the callback. `stashAttribution()` on the redirect route, `takeAttribution()` first thing in the callback, `persistAcquisition()` on the new-user branch.
+
+Two rules that produce silently *wrong* answers if broken:
+
+1. **Read `posthog.get_session_id()` at the time of the action, never cached at mount.** Sessions roll over on a 30-minute idle timeout and at UTC midnight. A value captured on page load can be stale by the time someone finishes signing up, and stale attribution is worse than none — it is confidently wrong and nothing flags it. `attribution-links.tsx` reads inside the click handler for exactly this reason.
+2. **Persist the snapshot on the user record, not just the session id.** A session id joins only while the analytics session row is retained; the `users.acquisition_*` columns survive any retention window. `person_profiles: "identified_only"` stays as it is (a deliberate cost choice), which means person-level `$initial_*` only materialises at identify time — so the session join and the durable columns are the path, not person `$initial_*`.
+
+Client-side captures (`copy_mcp_config`, `wizard_*`, `playground_prompt_run`) already carry `$session_id` from posthog-js and need none of this.
+
+The entry snapshot comes from `posthog.persistence.get_initial_props()`, which derives `$initial_utm_*` / `$initial_gclid` / `$initial_referring_domain` / `$initial_current_url` from the persisted first-touch entry URL + referrer. `posthog.get_property('$initial_utm_source')` does **not** work — persistence stores `$initial_person_info`, and the `$initial_*` keys are derived, not stored.
+
 ## Leads & privacy
 
 Leads route: `apps/gateway/src/app/api/leads/route.ts`. Client IP is hashed via `hashIp()` (`sha256(LEADS_IP_SALT:ip)`, env var name only — value lives in SSM) before rate-limiting and storage; only the hash is ever persisted, never the raw IP. Rate limiting (`apps/gateway/src/gateway/leads/limiter.ts`) composes a 3/min and a 10/hour limiter, both keyed by the IP hash. A honeypot field (`website`) is silently accepted without an insert.

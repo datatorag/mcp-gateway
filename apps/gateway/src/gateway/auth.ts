@@ -4,6 +4,11 @@ import { eq, and } from "drizzle-orm";
 import type { Database } from "@datatorag-mcp/db";
 import { oauthAccessTokens, users } from "@datatorag-mcp/db";
 import { nonceMatches, OAUTH_STATE_TTL_MS } from "./oauth/csrf";
+import {
+  persistAcquisition,
+  stashAttribution,
+  takeAttribution,
+} from "./attribution";
 import { upsertServiceAccount } from "./connected-accounts";
 import { PROVIDERS } from "../lib/analytics";
 import {
@@ -49,9 +54,16 @@ export function createAuthRouter(
 ): Router {
   const router = Router();
 
+  const cookiesAreSecure = config.baseUrl.startsWith("https");
+
   // --- Dashboard login (minimal scopes) ---
 
-  router.get("/auth/google", (_req, res) => {
+  router.get("/auth/google", (req, res) => {
+    // The browser appends its session id and entry snapshot to this link at
+    // click time; park them where the callback can read them, since the trip
+    // through Google's consent screen loses the query string.
+    stashAttribution(req, res, cookiesAreSecure);
+
     const googleAuthUrl = new URL(
       "https://accounts.google.com/o/oauth2/v2/auth"
     );
@@ -69,6 +81,9 @@ export function createAuthRouter(
 
   router.get("/auth/google/callback", async (req, res) => {
     const googleCode = req.query.code as string | undefined;
+    // Read before any early return so a failed exchange still clears the
+    // stash rather than leaving it to attach to a later, unrelated flow.
+    const attribution = takeAttribution(req, res);
 
     if (!googleCode) {
       res.status(400).send("Missing code from Google");
@@ -136,7 +151,11 @@ export function createAuthRouter(
     }
 
     if (isNewUser) {
-      trackSignup(user.id, user.email, user.name);
+      // Durable copy first: a session id joins only while the analytics
+      // session row survives its retention window, a column on the user does
+      // not expire.
+      await persistAcquisition(db, user.id, attribution);
+      trackSignup(user.id, user.email, user.name, attribution);
       void sendWelcomeEmail({
         email: user.email,
         name: user.name,
@@ -149,7 +168,7 @@ export function createAuthRouter(
         createdAt: user.createdAt,
       });
     } else {
-      trackLogin(user.id, user.email);
+      trackLogin(user.id, user.email, attribution);
     }
 
     const token = randomBytes(32).toString("base64url");
@@ -200,6 +219,8 @@ export function createAuthRouter(
       return;
     }
 
+    stashAttribution(req, res, cookiesAreSecure);
+
     const googleAuthUrl = new URL(
       "https://accounts.google.com/o/oauth2/v2/auth"
     );
@@ -219,6 +240,7 @@ export function createAuthRouter(
   router.get("/auth/google/connect/callback", async (req, res) => {
     const googleCode = req.query.code as string | undefined;
     const sessionToken = req.cookies?.dtrmcp_session;
+    const attribution = takeAttribution(req, res);
 
     if (!sessionToken) {
       res.redirect("/auth/login");
@@ -305,7 +327,13 @@ export function createAuthRouter(
       expiresAt
     );
 
-    await trackOAuthCompleted(db, session.userId, PROVIDERS.GOOGLE_WORKSPACE, accountEmail);
+    await trackOAuthCompleted(
+      db,
+      session.userId,
+      PROVIDERS.GOOGLE_WORKSPACE,
+      accountEmail,
+      attribution
+    );
 
     res.redirect(`/dashboard/connections?connected=${PROVIDERS.GOOGLE_WORKSPACE}`);
   });
@@ -360,6 +388,8 @@ export function createAuthRouter(
     // CSRF: use a random nonce as `state` (never the session token — that would
     // leak a live bearer credential into the URL, referrer, and Atlassian's
     // logs). The nonce is echoed back and matched against an httpOnly cookie.
+    stashAttribution(req, res, cookiesAreSecure);
+
     const nonce = randomBytes(16).toString("base64url");
     res.cookie("atl_connect_nonce", nonce, {
       httpOnly: true,
@@ -391,6 +421,7 @@ export function createAuthRouter(
     const sessionToken = req.cookies?.dtrmcp_session as string | undefined;
     const cookieNonce = req.cookies?.atl_connect_nonce as string | undefined;
     res.clearCookie("atl_connect_nonce", { path: "/" });
+    const attribution = takeAttribution(req, res);
 
     if (!sessionToken) {
       res.redirect("/auth/login");
@@ -481,7 +512,13 @@ export function createAuthRouter(
       expiresAt
     );
 
-    await trackOAuthCompleted(db, session.userId, PROVIDERS.ATLASSIAN, accountEmail);
+    await trackOAuthCompleted(
+      db,
+      session.userId,
+      PROVIDERS.ATLASSIAN,
+      accountEmail,
+      attribution
+    );
 
     res.redirect(`/dashboard/connections?connected=${PROVIDERS.ATLASSIAN}`);
   });
