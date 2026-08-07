@@ -41,13 +41,13 @@ describe("script player state machine", () => {
     expect(done.phase).toBe("done");
     const parts = buildMessages(script, done).flatMap((m) => m.parts);
     const resolved = parts.find(
-      (p) => "state" in p && p.state === "output-available" && String(p.type).includes("sheets_append")
+      (p) => "state" in p && p.state === "output-available" && String(p.type).includes("sheets_update")
     );
     expect(resolved).toBeDefined();
     // The closing assistant summary rendered in full.
     const lastText = parts.filter((p) => p.type === "text").at(-1);
     expect(lastText && "text" in lastText ? lastText.text : "").toContain(
-      "rows 8 and 9"
+      "Rows 4 and 5"
     );
   });
 
