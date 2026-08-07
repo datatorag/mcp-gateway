@@ -95,7 +95,7 @@ Note: `digest.ts`'s `collectPosthog()` uses a *different* credential pair — `P
 
 **A server-side capture carries no session id of its own.** PostHog derives channel, campaign and click ids on the *session*, so a `posthog-node` event with no `$session_id` cannot be joined to the browsing session that produced it — it is an orphan with respect to acquisition. Any new server-side event that needs to be attributable must be given one.
 
-The plumbing (SCRUM-48), three files:
+The plumbing, three files:
 
 - `apps/gateway/src/lib/attribution.ts` — the wire contract. `ATTRIBUTION_PARAMS` (the `a_*` query-param names), `parseAttribution()` / `toWireParams()`, `deriveChannel()`, and the capture helpers `sessionProps()` (`$session_id`), `acquisitionProps()` (flat `acquisition_*` event properties), `acquisitionSetOnce()` (`$set_once`, because acquisition is a first-touch fact). Pure — no DOM, no express, no SDK.
 - `apps/gateway/src/components/attribution-links.tsx` — a delegated capture-phase click listener rendered inside `PostHogProvider`. It appends the snapshot to any link into `/auth/google`, `/auth/google/connect`, `/auth/atlassian/connect`. **Adding a new auth-redirect route means adding its path to `ATTRIBUTED_PATHS`** — nothing else needs touching, and no individual link does.
