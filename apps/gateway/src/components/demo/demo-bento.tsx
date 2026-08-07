@@ -38,7 +38,7 @@ const WIDE_CELLS = [
   {
     id: "slides",
     problem:
-      "Claude's Drive connector can make you a deck, but it arrives empty — one slide, and the title is yours to type.",
+      "Claude's Drive connector can make you a deck, but it arrives empty. One slide, and the title is yours to type.",
     solution:
       "DataToRAG writes into the deck you already have, after asking you first.",
   },

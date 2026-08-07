@@ -455,7 +455,7 @@ export default async function HomePage() {
                 },
                 {
                   title: "Custom Hosted LLMs",
-                  desc: "We deploy and host cost-saving custom models on our secure infrastructure without sacrificing quality. Wire directly into the gateway — your data and inference never go to Claude or OpenAI.",
+                  desc: "We deploy and host cost-saving custom models on our secure infrastructure without sacrificing quality. Wire directly into the gateway, so your data and inference never go to Claude or OpenAI.",
                   icon: (
                     <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
                       <rect x="3" y="4" width="18" height="12" rx="2" />
@@ -499,7 +499,7 @@ export default async function HomePage() {
               {totalTools > 0
                 ? `${totalTools} tools, ready to use through the Model Context Protocol. `
                 : "Ready-to-use integrations through the Model Context Protocol. "}
-              Every integration works from one endpoint — connect once, use
+              Every integration works from one endpoint. Connect once, use
               them all. More added every week.
             </p>
           </div>
@@ -537,7 +537,7 @@ export default async function HomePage() {
               <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
                 Connect personal, shared, and team Google accounts under one MCP
                 endpoint. Claude can search across all of them in a single
-                prompt — or target a specific account when you need to.
+                prompt, or target a specific account when you need to.
               </p>
             </div>
             <div className="rounded-2xl border border-border bg-background p-6">
@@ -560,7 +560,7 @@ export default async function HomePage() {
               </h3>
               <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
                 Naive API wrappers dump everything into your context. DataToRAG
-                tools are tuned for token efficiency — the same Gmail thread
+                tools are tuned for token efficiency, so the same Gmail thread
                 read costs a fraction of the tokens, which means longer
                 conversations and smarter agents.
               </p>
@@ -627,7 +627,7 @@ export default async function HomePage() {
                   Secure LLMs For Your Most Sensitive Data
                 </h3>
                 <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
-                  Inference runs on our secure infrastructure — nothing is
+                  Inference runs on our secure infrastructure. Nothing is
                   sent to a third-party model API. A perfect fit for regulated
                   industries and sensitive internal data.
                 </p>
@@ -643,7 +643,7 @@ export default async function HomePage() {
                   Managed Infrastructure
                 </h3>
                 <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
-                  We handle deployment and ops for the model of your choice —
+                  We handle deployment and ops for the model of your choice:
                   GLM, Gemma, DeepSeek, Qwen, and other families. Connect it to
                   your MCP gateway or access it with API Keys.
                 </p>
