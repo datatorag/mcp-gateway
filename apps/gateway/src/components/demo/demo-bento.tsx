@@ -1,4 +1,4 @@
-/** The scripted-demo bento: four windows replaying authored sessions through
+/** The scripted-demo section: four windows replaying authored sessions through
  * the real playground presentation components, each paired with the gap it
  * closes. Entirely client-side — no MCP calls, no API routes, no LLM.
  *
@@ -10,12 +10,16 @@
  * thing standing between us and shipping without it. Rendering it here makes
  * that structural instead of remembered.
  *
- * Bento hierarchy is deliberate: Sheets and Slides carry the full read-then-
- * write arc and get the wide rows, because editing something that already
- * exists is the claim; Gmail and the two-account search prove breadth with
- * short scripts. The problem/solution pairs are deliberately unparallel —
- * only sourced limitations are named, and each names the connector that has
- * the limit rather than "Claude" in general.
+ * FOUR FULL-WIDTH ROWS THAT ALTERNATE SIDES (Manuel, 2026-08-07), replacing a
+ * bento of two wide rows over a 2-up bottom row. The two demos in that bottom
+ * row rendered at half width, which is where the tool cards got cramped, so
+ * ending it is the point rather than a side effect.
+ *
+ * Order is sheets, slides, gmail, accounts, and the last one is deliberate:
+ * two accounts in one turn is the only claim here that rests on no subtlety at
+ * all, which makes it the right closer. The problem/solution pairs are
+ * deliberately unparallel — only sourced limitations are named, and each names
+ * the connector that has the limit rather than "Claude" in general.
  */
 
 import { CircleCheckIcon, CircleMinusIcon } from "lucide-react";
@@ -24,12 +28,43 @@ import { DemoWindow } from "./demo-section";
 export const DEMO_DISCLOSURE =
   "A scripted replay with sample data. This is the real playground UI, approval gate included.";
 
-/** The wide cells: a full arc each, text beside the window. Both are edits to
- * a file the viewer already has, which is the half of the claim that can't be
- * approximated by dropping a new file in Drive. */
-const WIDE_CELLS = [
+/**
+ * One list, in render order, because the order IS the argument: the two edits
+ * to a file you already have come first, then sending, then the two accounts.
+ *
+ * It used to be two arrays with two different cell shapes. Merging them is
+ * what the alternating layout requires, and it also removes a trap: the split
+ * meant the visual order was a consequence of which array a cell sat in, so
+ * moving a cell between positions could silently change its typography.
+ */
+/**
+ * How much weight a tile carries, which is the thing that keeps this a BENTO
+ * rather than a zigzag of four identical bands (Manuel, 2026-08-07: "make sure
+ * we're following a bento style layout").
+ *
+ * A bento's defining property is varied cell emphasis, and the previous shape
+ * got that from two different cell sizes. Alternation needs one list in render
+ * order, so the variation moves here instead: same tile width for all four, but
+ * the two edit-an-existing-file beats are set larger and roomier than the two
+ * that follow them. Emphasis is stored per cell rather than derived from
+ * position, because it belongs to the claim: sheets is the lead beat wherever
+ * it sits in the list.
+ *
+ * Width is deliberately NOT a lever here. Varying it would mean putting two
+ * tiles on one row again, and half-width is exactly where the tool cards were
+ * cramped.
+ */
+type Weight = "lead" | "supporting";
+
+const CELLS: {
+  id: string;
+  weight: Weight;
+  problem: string;
+  solution: string;
+}[] = [
   {
     id: "sheets",
+    weight: "lead",
     problem:
       "Claude reads the sheet you already keep, then hands you rows to paste in yourself.",
     solution:
@@ -37,30 +72,49 @@ const WIDE_CELLS = [
   },
   {
     id: "slides",
+    weight: "lead",
     problem:
       "Claude's Drive connector can make you a deck, but it arrives empty. One slide, and the title is yours to type.",
     solution:
       "DataToRAG writes into the deck you already have, after asking you first.",
   },
-];
-
-/** The two short-script cells. The wide ones are not in here: they carry
- * different copy weight and a different grid span, so listing them alongside
- * these would mean a shape with an exception in it. */
-const SHORT_CELLS = [
   {
     id: "gmail",
+    weight: "supporting",
     problem: "Claude writes the email and stops at the draft.",
     solution: "DataToRAG sends it from your account, once you approve.",
   },
   {
     id: "accounts",
+    weight: "supporting",
     problem:
       "Claude's Gmail connector is signed in to one account, so the other inbox isn't there to search.",
     solution:
       "DataToRAG searches your work and personal accounts in the same turn.",
   },
 ];
+
+/** The two weights, as whole looks rather than scattered ternaries, so a tile
+ * cannot end up with a lead heading and supporting padding. */
+const WEIGHTS: Record<
+  Weight,
+  { pad: string; problem: string; solution: string; icon: string; iconTop: string }
+> = {
+  lead: {
+    pad: "p-5 sm:p-7",
+    problem: "text-base leading-relaxed sm:text-lg",
+    solution: "font-display text-xl font-semibold leading-snug sm:text-2xl",
+    icon: "size-5",
+    iconTop: "mt-1",
+  },
+  supporting: {
+    pad: "p-5 sm:p-6",
+    problem: "text-sm leading-relaxed sm:text-base",
+    solution: "font-display text-lg font-semibold leading-snug sm:text-xl",
+    icon: "size-4 sm:size-5",
+    iconTop: "mt-0.5 sm:mt-1",
+  },
+};
 
 export function DemoBento({
   heading,
@@ -86,77 +140,64 @@ export function DemoBento({
       </div>
 
       <div
-        className="animate-fade-in-up mt-10 grid gap-4 lg:grid-cols-2"
+        className="animate-fade-in-up mt-10 grid gap-4"
         style={{ animationDelay: "0.1s" }}
       >
         {/* The text is the argument, the window is the evidence: the
             solution line is the largest type in each cell, the problem
             line stays visibly quieter. Neither outranks the section
             heading. */}
-        {WIDE_CELLS.map((cell) => (
-          <div
-            className="min-w-0 rounded-2xl border border-border bg-secondary/50 p-5 sm:p-6 lg:col-span-2 lg:grid lg:grid-cols-12 lg:items-start lg:gap-8"
-            key={cell.id}
-          >
-            <div className="min-w-0 lg:col-span-5 lg:pt-2">
-              {/* Same visual grammar as the hero comparison table:
-                  muted minus for the gap, primary check for the fix. */}
-              <p className="flex items-start gap-2.5 text-base leading-relaxed text-muted-foreground sm:text-lg">
-                <CircleMinusIcon
-                  aria-hidden="true"
-                  className="mt-1 size-5 shrink-0 text-muted-foreground/60"
+        {CELLS.map((cell, i) => {
+          // Derived from position, not stored on the cell. A hand-maintained
+          // flag would let the sequence and the alternation disagree the first
+          // time someone reorders the list.
+          const reversed = i % 2 === 1;
+          const w = WEIGHTS[cell.weight];
+          return (
+            <div
+              className={`min-w-0 rounded-2xl border border-border bg-secondary/50 lg:flex lg:items-start lg:gap-8 ${w.pad} ${
+                // `flex-row-reverse` rather than a grid column swap, ON PURPOSE.
+                // The text stays FIRST in the DOM for every row, so the stacked
+                // phone layout is always text then window. Reordering in the
+                // markup would put the evidence before the claim on the rows
+                // that alternate, which reads backwards on the surface where
+                // alternation does nothing anyway.
+                reversed ? "lg:flex-row-reverse" : ""
+              }`}
+              key={cell.id}
+            >
+              <div className="min-w-0 lg:w-5/12 lg:pt-2">
+                {/* Same visual grammar as the hero comparison table:
+                    muted minus for the gap, primary check for the fix. */}
+                <p
+                  className={`flex items-start gap-2.5 text-muted-foreground ${w.problem}`}
+                >
+                  <CircleMinusIcon
+                    aria-hidden="true"
+                    className={`shrink-0 text-muted-foreground/60 ${w.icon} ${w.iconTop}`}
+                  />
+                  <span>{cell.problem}</span>
+                </p>
+                <p
+                  className={`mt-3 flex items-start gap-2.5 text-foreground ${w.solution}`}
+                >
+                  <CircleCheckIcon
+                    aria-hidden="true"
+                    className={`shrink-0 text-primary ${w.icon} ${w.iconTop}`}
+                  />
+                  <span>{cell.solution}</span>
+                </p>
+              </div>
+              <div className="mt-5 min-w-0 lg:mt-0 lg:w-7/12">
+                <DemoWindow
+                  id={cell.id}
+                  promptHref={promptHref}
+                  promptLabel={promptLabel}
                 />
-                <span>{cell.problem}</span>
-              </p>
-              <p className="mt-3 flex items-start gap-2.5 font-display text-xl font-semibold leading-snug text-foreground sm:text-2xl">
-                <CircleCheckIcon
-                  aria-hidden="true"
-                  className="mt-1 size-5 shrink-0 text-primary"
-                />
-                <span>{cell.solution}</span>
-              </p>
+              </div>
             </div>
-            <div className="min-w-0 lg:col-span-7 lg:mt-0 mt-5">
-              <DemoWindow
-                id={cell.id}
-                promptHref={promptHref}
-                promptLabel={promptLabel}
-              />
-            </div>
-          </div>
-        ))}
-
-        {SHORT_CELLS.map((cell) => (
-          <div
-            className="flex min-w-0 flex-col rounded-2xl border border-border bg-secondary/50 p-5 sm:p-6"
-            key={cell.id}
-          >
-            <p className="flex items-start gap-2 text-sm leading-relaxed text-muted-foreground">
-              <CircleMinusIcon
-                aria-hidden="true"
-                className="mt-0.5 size-4 shrink-0 text-muted-foreground/60"
-              />
-              <span>{cell.problem}</span>
-            </p>
-            <p className="mt-2 flex items-start gap-2 text-base font-semibold leading-snug text-foreground">
-              <CircleCheckIcon
-                aria-hidden="true"
-                className="mt-0.5 size-4 shrink-0 text-primary"
-              />
-              <span>{cell.solution}</span>
-            </p>
-            {/* Bottom-anchor the window: the two short cells' text pairs wrap
-                differently, so anchoring keeps both chat windows on the same
-                baseline across the row. */}
-            <div className="mt-4 flex grow flex-col justify-end">
-              <DemoWindow
-                id={cell.id}
-                promptHref={promptHref}
-                promptLabel={promptLabel}
-              />
-            </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
     </>
   );

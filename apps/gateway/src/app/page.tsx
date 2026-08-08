@@ -105,7 +105,7 @@ export default async function HomePage() {
               space goes above the hero and below the teaser — never between
               them. The hero→teaser gap is the teaser's fixed pt. */}
           <div className="relative flex min-h-[calc(100vh-4rem)] flex-col justify-center pb-12 pt-24">
-          <div className="mx-auto flex w-full max-w-6xl flex-col items-center gap-12 px-6 lg:flex-row lg:gap-16">
+          <div className="mx-auto flex w-full max-w-7xl flex-col items-center gap-12 px-6 lg:flex-row lg:gap-16">
             {/* Copy */}
             <div className="flex-1 text-center lg:text-left">
               <div className="animate-fade-in-up inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/10 px-4 py-1.5 backdrop-blur-sm">
@@ -292,7 +292,7 @@ export default async function HomePage() {
                   tuned here or in the composition. */}
               <div
                 id="demo-video"
-                className="aspect-[9/16] w-full max-w-md overflow-hidden rounded-3xl border border-white/10 bg-white/5 shadow-2xl backdrop-blur-sm lg:w-[340px] lg:max-w-[340px]"
+                className="aspect-[9/16] w-full max-w-md overflow-hidden rounded-3xl border border-white/10 bg-white/5 shadow-2xl backdrop-blur-sm lg:w-[400px] lg:max-w-[400px]"
               >
                 {/* The NARRATED cut, playing silently (Manuel, 2026-08-07 —
                     reverses the earlier "voiced is YouTube/social only" call).
