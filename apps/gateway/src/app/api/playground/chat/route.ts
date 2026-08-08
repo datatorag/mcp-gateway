@@ -5,6 +5,7 @@ import { db } from "@/lib/db";
 import { withRoute } from "@/lib/with-route";
 import { getEnv } from "@datatorag-mcp/config";
 import { getMastra, DATATORAG_AGENT_ID } from "@/mastra";
+import { RUN_ID_CONTEXT_KEY } from "@/mastra/llm-usage";
 import {
   buildPluginRequestContext,
   listPluginServers,
@@ -285,6 +286,14 @@ export const POST = withRoute(async (userId, request) => {
       tokensByServer: await loadUserPluginTokens(db, userId, servers.map((s) => s.slug)),
     });
 
+    // The run this turn belongs to, so each model call can report its tokens
+    // against it. On an approval leg the runtime resumes the ORIGINAL run, so
+    // the id comes off the approval that was just verified rather than being
+    // minted again — otherwise a run that paused for approval would report as
+    // two runs and halve its own token total.
+    const usageRunId = isApprovalLeg ? approvals[0]?.runId : mintRunId(userId);
+    if (usageRunId) requestContext.set(RUN_ID_CONTEXT_KEY, usageRunId);
+
     stream = (await handleChatStream({
       mastra: getMastra(),
       agentId: DATATORAG_AGENT_ID,
@@ -311,7 +320,7 @@ export const POST = withRoute(async (userId, request) => {
         // ends up inside the approval id the client sends back, and what the
         // gate above verifies. On an approval leg the runtime takes the run id
         // from the approval itself, so supplying one here would be ignored.
-        ...(isApprovalLeg ? {} : { runId: mintRunId(userId) }),
+        ...(isApprovalLeg ? {} : { runId: usageRunId as string }),
       },
       onError: (err) => logAndGenericError("[playground] stream error", err),
     })) as ReadableStream<UIMessageChunk>;
