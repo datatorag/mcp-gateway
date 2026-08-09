@@ -10,6 +10,7 @@ import { CasaBadge } from "@/components/casa-badge";
 import { ConnectorComparison } from "@/components/connector-comparison";
 import { StartupBarOffset } from "@/components/startupbar-offset";
 import { DemoBento } from "@/components/demo/demo-bento";
+import { HeroVideo } from "@/components/hero-video";
 import { SkillCard } from "@/components/skill-card";
 import { getAllSkills } from "@/lib/skills";
 import { getAllPersonas } from "@/lib/personas";
@@ -332,16 +333,23 @@ export default async function HomePage() {
                     that survivable with no audio: every spoken line is also on
                     screen. Do not swap this for a cut without captions while the
                     slot stays muted, and do not drop `muted` — autoplay is
-                    blocked without it, so the hero would sit on its poster. */}
-                <video
-                  src="/datatorag-hero-9x16-voiced.mp4"
-                  poster="/datatorag-hero-9x16-voiced-poster.jpg"
-                  autoPlay
-                  muted
-                  loop
-                  playsInline
-                  className="h-full w-full object-cover"
-                />
+                    blocked without it, so the hero would sit on its poster.
+
+                    The file does carry a real narration track: AAC stereo,
+                    36.1s, mean -21.0 dB, peak -0.9 dB. Measured, because we
+                    have mis-called a silent AAC stream "no audio" before. So
+                    the sound is there and nobody could hear it, which is what
+                    the speaker button in `HeroVideo` is for: it is opt-in, it
+                    starts the narration from the top, it plays exactly one
+                    pass and then returns to this silent loop, and it goes
+                    quiet when the video scrolls away.
+
+                    That button is the ONLY way sound is meant to arrive here.
+                    `muted` stays the default state — dropping it does not give
+                    you audio, it gives you a blocked autoplay and a hero
+                    sitting on its poster, which is the failure this comment
+                    has warned about from the start. */}
+                <HeroVideo />
               </div>
             </div>
           </div>
