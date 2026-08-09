@@ -105,15 +105,7 @@ export default async function HomePage() {
               space goes above the hero and below the teaser — never between
               them. The hero→teaser gap is the teaser's fixed pt. */}
           <div className="relative flex min-h-[calc(100vh-4rem)] flex-col justify-center pb-12 pt-24">
-          {/* The column gap gives back, at `lg` only, exactly the 24px the
-              video's white mount takes: 40 + 424 is the same total as the 64 +
-              400 that stood here before it. Between 1024 and about 1068 this
-              row is already wider than the viewport (the headline sets
-              "your spreadsheet." nowrap at 60px, which alone wants 556px) and
-              `overflow-x-hidden` on <main> crops the right edge. That crop is
-              older than the mount; without this the mount would deepen it by
-              its own width. Above 1280 the gap is unchanged. */}
-          <div className="mx-auto flex w-full max-w-7xl flex-col items-center gap-12 px-6 lg:flex-row lg:gap-10 xl:gap-16">
+          <div className="mx-auto flex w-full max-w-7xl flex-col items-center gap-12 px-6 lg:flex-row lg:gap-16">
             {/* Copy */}
             <div className="flex-1 text-center lg:text-left">
               <div className="animate-fade-in-up inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/10 px-4 py-1.5 backdrop-blur-sm">
@@ -298,33 +290,35 @@ export default async function HomePage() {
                   The video's caption size scales with this and is NOT the
                   reason for the change; it is a side effect and is not to be
                   tuned here or in the composition. */}
-              {/* White card, and the video sits INSIDE its padding.
+              {/* The shadow is spelled out rather than `shadow-2xl` because
+                  `shadow-2xl` is black at 25% and this sits on a navy mesh:
+                  black over #0a1628 has almost no contrast left to spend, so
+                  the default read as nothing at all and the slot looked cut
+                  into the background rather than laid on it.
 
-                  So the desktop width here is 424, not 400: 400 of picture
-                  plus the 12px of padding on each side. The 400 is a measured
-                  decision about the picture, so the card absorbs the padding
-                  rather than the video paying for it — do not "fix" this back
-                  to 400 on the outer element, that silently crops the video to
-                  376. Mobile keeps `max-w-md` on the card for the same reason
-                  the box had it before: the visible edge is what lines up with
-                  the comparison table above, and the card is now that edge.
+                  Three layers, because elevation on a dark ground is not one
+                  shadow. The first is the CONTACT shadow — tight, barely
+                  offset, nearly opaque — and it is the one that stops the box
+                  looking pasted on. The last is AMBIENT: wide, far below, low
+                  opacity. The middle one only bridges them. A single large
+                  blur, whatever its opacity, reads as a glow instead.
 
-                  Radii are concentric: the inner clip is the outer radius
-                  MINUS the 12px of padding, which is why it is written as a
-                  calc off `--radius-3xl` rather than picked from the scale.
-                  There is no token at that value (the scale is 12/16.8/21.6/
-                  26.4px off `--radius`), and `rounded-xl` — the nearest —
-                  leaves the corners visibly fatter inside than out.
+                  The colour is darker than the darkest part of the background
+                  (#010410 against #0a1628) for the same reason: on dark you
+                  buy separation with luminance below the ground, not with more
+                  alpha on a colour the ground already contains.
 
-                  The shadow is spelled out rather than `shadow-2xl` because
-                  this sits on a navy shader: Tailwind's default black-based
-                  shadow is nearly invisible on it. The white surface does most
-                  of the lifting; the near-black drop grounds it and the faint
-                  white ring keeps the edge from dissolving where the mesh
-                  drifts light. */}
+                  The inset hairline along the top edge is the lit-surface cue
+                  — light falls from above, so the top edge catches it. It is
+                  inset rather than a `ring` so it does not double up with the
+                  border this box already carries.
+
+                  Judge any change to this at the delivered size against the
+                  live shader. It is tuned for 400px on navy, and it will look
+                  overdone zoomed in and on white. */}
               <div
                 id="demo-video"
-                className="w-full max-w-md rounded-3xl bg-white p-3 shadow-[0_2px_6px_-1px_rgba(2,8,23,0.5),0_28px_64px_-12px_rgba(2,8,23,0.85)] ring-1 ring-white/20 lg:w-[424px] lg:max-w-[424px]"
+                className="aspect-[9/16] w-full max-w-md overflow-hidden rounded-3xl border border-white/10 bg-white/5 shadow-[inset_0_1px_0_0_rgba(255,255,255,0.14),0_3px_8px_-2px_rgba(1,4,16,0.95),0_18px_36px_-10px_rgba(1,4,16,0.9),0_56px_100px_-18px_rgba(1,4,16,0.8)] backdrop-blur-sm lg:w-[400px] lg:max-w-[400px]"
               >
                 {/* The NARRATED cut, playing silently (Manuel, 2026-08-07 —
                     reverses the earlier "voiced is YouTube/social only" call).
@@ -339,21 +333,15 @@ export default async function HomePage() {
                     screen. Do not swap this for a cut without captions while the
                     slot stays muted, and do not drop `muted` — autoplay is
                     blocked without it, so the hero would sit on its poster. */}
-                {/* The hairline is what makes the mount legible. This cut opens
-                    on a near-white frame, so without it the padding and the
-                    picture are the same white and the card reads as one blank
-                    slab until the video happens to darken. */}
-                <div className="aspect-[9/16] w-full overflow-hidden rounded-[calc(var(--radius-3xl)-12px)] bg-[#0a1628] ring-1 ring-slate-900/10">
-                  <video
-                    src="/datatorag-hero-9x16-voiced.mp4"
-                    poster="/datatorag-hero-9x16-voiced-poster.jpg"
-                    autoPlay
-                    muted
-                    loop
-                    playsInline
-                    className="h-full w-full object-cover"
-                  />
-                </div>
+                <video
+                  src="/datatorag-hero-9x16-voiced.mp4"
+                  poster="/datatorag-hero-9x16-voiced-poster.jpg"
+                  autoPlay
+                  muted
+                  loop
+                  playsInline
+                  className="h-full w-full object-cover"
+                />
               </div>
             </div>
           </div>
