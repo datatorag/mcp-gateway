@@ -114,8 +114,46 @@ export default async function HomePage() {
                   MCP gateway for Google Workspace and Jira
                 </span>
               </div>
+              {/* The step down at the bottom of `lg` is not taste, it is the
+                  only thing that makes this headline fit there.
+
+                  `your spreadsheet.` is `whitespace-nowrap`, so it sets a hard
+                  minimum width for this column: 551px at 60px in this face at
+                  `tracking-tight`. The column gets whatever is left of the row
+                  after the page padding (48), the flex gap (64) and the video
+                  (400) — `clientWidth - 512`. That does not reach 551 until
+                  about 1063, so from `lg` up to there the headline overran the
+                  row and `overflow-x-hidden` on <main> cropped the right edge,
+                  taking a slice of the video with it.
+
+                  Wrapping cannot save it: the phrase is one unbreakable word
+                  as far as layout is concerned, and at 60px it is wider than
+                  the whole column. Giving the space back does not work either
+                  — closing the flex gap entirely buys 64 and still lands
+                  short. So the type gives: 54px at the bottom of `lg`, 60px
+                  above it, which leaves 16px of slack at 1024.
+
+                  The switch is at 1119 rather than the 1063 the arithmetic
+                  asks for, because a `max-width` query matches the viewport
+                  WITH the scrollbar while the column is laid out inside
+                  `clientWidth`, WITHOUT it. Tying the switch to the real
+                  threshold would put it a couple of pixels from clipping and
+                  let the platform's scrollbar width decide, so it sits ~40px
+                  clear instead and 54px covers a slightly wider band than it
+                  strictly needs. For the same reason this is a media query
+                  and not a `vw` clamp — `vw` counts the scrollbar too, so a
+                  fluid size is optimistic about the space it has by exactly
+                  the amount that makes it clip.
+
+                  It is also `lg:max-[…]` rather than a bare `min-[…]`: named
+                  breakpoint variants outrank arbitrary ones in the cascade
+                  whatever their widths, so a plain `min-[1080px]:text-6xl`
+                  loses to `sm:text-5xl` and silently does nothing.
+
+                  Re-derive all of it if the video width, the gap or the face
+                  changes. */}
               <h1
-                className="animate-fade-in-up mt-6 font-display text-4xl font-extrabold leading-[1.1] tracking-tight text-white sm:text-5xl lg:text-6xl"
+                className="animate-fade-in-up mt-6 font-display text-4xl font-extrabold leading-[1.1] tracking-tight text-white sm:text-5xl lg:text-6xl lg:max-[1119px]:text-[3.375rem]"
                 style={{ animationDelay: "0.06s" }}
               >
                 Claude reads{" "}
