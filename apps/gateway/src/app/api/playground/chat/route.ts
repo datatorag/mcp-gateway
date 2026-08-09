@@ -20,7 +20,7 @@ import {
   trackPlaygroundMessage, trackPlaygroundCapHit, trackPlaygroundConfirm,
 } from "@/gateway/track";
 import { FREE_MONTHLY_AGENT_RUNS } from "@/gateway/billing/plans";
-import { claimAgentRun, refundAgentRun } from "@/gateway/usage/period";
+import { capExempt, claimAgentRun, refundAgentRun } from "@/gateway/usage/period";
 import { logAndGenericError } from "@/lib/errors";
 
 /**
@@ -263,15 +263,23 @@ export const POST = withRoute(async (userId, request) => {
     // lifetime column explicitly excluded from billing, which was the right
     // shape for a buried demo and the wrong one for a metered surface: it
     // could only ever run out, never refill.
-    const cap = FREE_MONTHLY_AGENT_RUNS;
+    // Internal accounts are counted but never refused. Dogfooding is the only
+    // sustained use this surface has, so a live allowance would interrupt our
+    // own testing long before it ever met a customer. See `capExempt` for why
+    // that predicate is safe for skipping a cap and unsafe for anything else.
+    const cap = (await capExempt(db, userId)) ? null : FREE_MONTHLY_AGENT_RUNS;
     const claim = await claimAgentRun(db, userId, cap);
     if (!claim.ok) {
       void trackPlaygroundCapHit(db, userId);
       return NextResponse.json({ error: "cap_exceeded", cap }, { status: 429 });
     }
     runsUsed = claim.used;
-    quotaHeaders[RUNS_REMAINING_HEADER] = String(claim.remaining);
-    quotaHeaders[RUNS_CAP_HEADER] = String(cap);
+    // No headers when uncapped: the client raises its paywall off these, and
+    // reporting a cap that does not apply would show one to the exempt.
+    if (cap !== null && claim.remaining !== null) {
+      quotaHeaders[RUNS_REMAINING_HEADER] = String(claim.remaining);
+      quotaHeaders[RUNS_CAP_HEADER] = String(cap);
+    }
     void trackPlaygroundMessage(db, userId);
   }
 

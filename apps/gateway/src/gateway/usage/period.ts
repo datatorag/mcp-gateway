@@ -1,6 +1,9 @@
 import { sql } from "drizzle-orm";
 import type { Database } from "@datatorag-mcp/db";
 
+import { isInternalEmail } from "../../lib/brevo";
+import { resolveUserEmail } from "../user-email";
+
 /**
  * The per-period allowance counters, and the lazy roll that bounds them.
  *
@@ -28,8 +31,34 @@ import type { Database } from "@datatorag-mcp/db";
  * because the roll has to be atomic with the increment it guards. */
 const PERIOD = sql`interval '1 month'`;
 
+/**
+ * Whether this user's allowance is enforced at all.
+ *
+ * NOT AN AUTHORIZATION CHECK, AND MUST NEVER BECOME ONE. Read this before
+ * reusing it anywhere else.
+ *
+ * It is safe HERE because of what failure costs: the worst case is that
+ * somebody at our own domain goes unmetered and we pay for our own usage. That
+ * is the whole risk. The moment the same predicate decides whether a caller may
+ * READ OR WRITE SOMEONE ELSE'S DATA — an admin tool that accepts a user id for
+ * support, say — the failure mode changes from "we absorb a cost" to "anyone
+ * who can get an address at our domain, or onto the exclude list, can act on
+ * another user's account". That needs a real role on the user row and a
+ * server-side check, not an email-shaped heuristic. If you are here because you
+ * want an admin capability, this is not the thing to reuse.
+ *
+ * No new column for it: there is no role or admin concept in the schema, and
+ * one boolean is not the reason to introduce one. This predicate already makes
+ * the same class of decision for lifecycle email, already covers the domain,
+ * and already takes additions through configuration rather than a deploy.
+ */
+export async function capExempt(db: Database, userId: string): Promise<boolean> {
+  const email = await resolveUserEmail(db, userId);
+  return email !== null && isInternalEmail(email);
+}
+
 export type ClaimResult =
-  | { ok: true; used: number; remaining: number }
+  | { ok: true; used: number; remaining: number | null }
   /** At the allowance. Nothing was incremented, so this is safe to retry. */
   | { ok: false; used: number };
 
@@ -48,8 +77,12 @@ export type ClaimResult =
 export async function claimAgentRun(
   db: Database,
   userId: string,
-  cap: number
+  /** `null` counts the run but never refuses it — see {@link capExempt}. The
+   * counter still moves, so the allowance stays readable for someone who is
+   * exempt from it. */
+  cap: number | null
 ): Promise<ClaimResult> {
+  const guard = cap === null ? sql`true` : sql`u.current_period_agent_runs < ${cap}`;
   const rows = await db.execute<{ used: number }>(sql`
     WITH state AS (
       SELECT id, (current_period_start <= now() - ${PERIOD}) AS should_roll
@@ -61,18 +94,19 @@ export async function claimAgentRun(
       current_period_calls      = CASE WHEN s.should_roll THEN 0 ELSE u.current_period_calls END
     FROM state s
     WHERE u.id = s.id
-      AND (s.should_roll OR u.current_period_agent_runs < ${cap})
+      AND (s.should_roll OR ${guard})
     RETURNING u.current_period_agent_runs AS used
   `);
   const used = rows[0]?.used;
   if (used === undefined) {
+    /* c8 ignore next -- unreachable when uncapped: the guard is constant true */
     // No row updated means the guard rejected it, so the counter is at or past
     // the cap. Reported as the cap itself rather than re-reading: the number is
     // only used to render a paywall, and a second round trip on the blocked
     // path buys nothing.
-    return { ok: false, used: cap };
+    return { ok: false, used: cap ?? 0 };
   }
-  return { ok: true, used, remaining: Math.max(0, cap - used) };
+  return { ok: true, used, remaining: cap === null ? null : Math.max(0, cap - used) };
 }
 
 /** Give a claimed run back, for a turn that consumed nothing.
@@ -99,6 +133,13 @@ export async function refundAgentRun(db: Database, userId: string): Promise<void
  * dispatch.
  */
 export async function countToolCall(db: Database, userId: string): Promise<void> {
+  /* UNGUARDED, DELIBERATELY. Do not "fix" this by adding a cap check.
+   *
+   * This runs after the tool call has already executed. Refusing to increment
+   * would not prevent the call, it would only lose the record of it, so a user
+   * over their allowance would appear to stop consuming exactly when they
+   * started consuming most. Whether the NEXT call is permitted is a different
+   * question with a different answer site — see `callsRemaining`. */
   await db.execute(sql`
     WITH state AS (
       SELECT id, (current_period_start <= now() - ${PERIOD}) AS should_roll
@@ -119,6 +160,16 @@ export async function countToolCall(db: Database, userId: string): Promise<void>
  * Rolls rather than merely reading, so a user returning after a gap is not
  * refused on a stale count. `null` means the plan has no hard cap, which the
  * caller must treat as "allow" rather than as zero.
+ */
+/**
+ * Calls left in the period.
+ *
+ * NO CALLER YET, AND THAT IS THE POINT — do not delete it as dead code.
+ * Enforcement of the call allowance is a launch-day switch, held back
+ * deliberately: today the counter protects against nothing, because gateway
+ * calls run on the user's own upstream quota, while a live cap could interrupt
+ * our own use of the product. The moment volume can actually arrive, the
+ * decision flips, and the shape of it should not have to be rediscovered then.
  */
 export async function callsRemaining(
   db: Database,

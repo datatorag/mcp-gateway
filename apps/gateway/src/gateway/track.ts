@@ -75,11 +75,15 @@ export async function trackToolCall(
       });
     }
 
-    // Activation milestone: only real MCP traffic counts — an agent call from
-    // our own dashboard doesn't prove the user's client can reach the gateway.
-    // This stays surface-gated even though metering no longer is: the two ask
-    // different questions, and collapsing them would mark a user activated for
-    // using the thing that was supposed to lead them to activation.
+    // Activation milestone: only real gateway traffic counts.
+    //
+    // STILL SURFACE-GATED THOUGH METERING NO LONGER IS, and that asymmetry is
+    // deliberate rather than a missed edit. Metering asks "should this be
+    // billed", which is true of both surfaces because both consume what the
+    // paid tier sells. Activation asks "can this user's own client reach us",
+    // which a call made from our dashboard does not answer. Collapse the two
+    // and every user is marked activated by the surface that exists to lead
+    // them TO activation, which destroys the funnel step it measures.
     // Skipped once the cache knows the user is activated, so the per-call
     // claim UPDATE runs at most once per user per process.
     if (status === "success" && props.outcome.source === "mcp" && !identity?.activated) {

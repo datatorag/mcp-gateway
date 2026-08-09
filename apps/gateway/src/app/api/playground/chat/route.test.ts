@@ -29,10 +29,12 @@ vi.mock("@datatorag-mcp/config", () => ({ getEnv: () => getEnv() }));
 import { FREE_MONTHLY_AGENT_RUNS as RUN_CAP } from "@/gateway/billing/plans";
 
 const claimAgentRun = vi.fn();
+const capExempt = vi.fn();
 const refundAgentRun = vi.fn();
 vi.mock("@/gateway/usage/period", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/gateway/usage/period")>()),
   claimAgentRun: (...args: unknown[]) => claimAgentRun(...args),
+  capExempt: (...args: unknown[]) => capExempt(...args),
   refundAgentRun: (...args: unknown[]) => refundAgentRun(...args),
 }));
 
@@ -163,6 +165,7 @@ beforeEach(() => {
     PLAYGROUND_MESSAGE_CAP: 20,
   });
   claimAgentRun.mockResolvedValue({ ok: true, used: 1, remaining: 24 });
+  capExempt.mockResolvedValue(false);
   refundAgentRun.mockResolvedValue(undefined);
   handleChatStream.mockResolvedValue(chunkStream([{ type: "start" }, { type: "finish" }]));
 });
@@ -209,6 +212,22 @@ describe("POST /api/playground/chat — the turn cap", () => {
     expect(await response.json()).toEqual({ error: "cap_exceeded", cap: RUN_CAP });
     expect(trackPlaygroundCapHit).toHaveBeenCalledWith({}, USER);
     expect(handleChatStream).not.toHaveBeenCalled();
+  });
+
+  it("counts an internal account's run but never refuses it", async () => {
+    // Dogfooding is the only sustained use this surface has, so a live
+    // allowance would interrupt our own testing long before it met a
+    // customer. Counted, not capped: the counter still has to move or the
+    // allowance stops being readable for the people using it most.
+    capExempt.mockResolvedValue(true);
+    claimAgentRun.mockResolvedValue({ ok: true, used: 900, remaining: null });
+    const response = await POST(post({ messages: USER_TURN }));
+
+    expect(claimAgentRun).toHaveBeenCalledWith({}, USER, null);
+    // No paywall headers, because there is no wall to report.
+    expect(response.headers.get("x-playground-runs-cap")).toBeNull();
+    expect(response.headers.get("x-playground-runs-remaining")).toBeNull();
+    await drain(response);
   });
 
   it("claims and counts one message on a fresh turn", async () => {
