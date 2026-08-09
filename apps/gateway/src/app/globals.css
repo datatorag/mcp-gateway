@@ -156,6 +156,34 @@
   border-radius: 4px;
 }
 
+/* Nothing may widen the document past the viewport.
+ *
+ * `overflow-x: hidden` on <main> does not cover this: it clips in-flow
+ * content, and a `position: fixed` element escapes ancestor overflow
+ * entirely. The StartupBar widget injects a fixed iframe and sizes it from
+ * JavaScript, and on a real phone it came out wider than the layout viewport
+ * — 417px against 390. That is enough to make the whole document pannable,
+ * and panning reveals the page background beside a hero that only ever drew
+ * itself viewport-wide: a white strip down the right of the navy band, on
+ * every phone, since the widget shipped.
+ *
+ * Two rules, because they fail differently. The clamp fixes the offender we
+ * know about, so the bar renders whole at the width it actually has instead
+ * of being cut off. The root clip is the backstop for the one we do not: it
+ * costs nothing, and a third-party script we do not control can change its
+ * sizing whenever it likes. `clip` rather than `hidden` because `hidden`
+ * makes the root a scroll container and breaks `position: sticky` inside it.
+ *
+ * Do not "simplify" this by deleting the root rule because the clamp already
+ * handles it — the vendor is the part that moves. */
+html {
+  overflow-x: clip;
+}
+
+body > iframe {
+  max-width: 100%;
+}
+
 /* Prose — blog article styling */
 .prose {
   color: var(--foreground);
