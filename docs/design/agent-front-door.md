@@ -110,8 +110,8 @@ with it recreates that, and would look like a feature while doing it.
 
 **The post-connect suggestions do not spend a run.** Deterministic read plus
 templated suggestions, no model call. Two reasons, both settled: charging for
-something the user did not ask for starts them below their allowance by our
-choice, and the moment of recognition does not need a model — seeing their own
+something the user did not ask for spends part of their allowance by our
+choice rather than theirs, and the moment of recognition does not need a model — seeing their own
 file names listed is the whole effect. **The load-bearing property is that the
 suggestions name real files**, not that a model wrote them.
 
@@ -123,20 +123,21 @@ must not pretend to work.
 
 ---
 
-## 4. The cap's hard stop has two exits, not one
+## 4. What happens when the allowance runs out
 
-Bring-your-own-key is deferred to its own ticket. An LLM API key is directly
-monetizable by whoever holds it, in a way a scoped Workspace token is not, so
-accepting one is gated on credential-handling work tracked internally and is
-not something to add under deadline. That leaves **upgrade** and **keep going
-in your own client**.
+The allowance itself, what the limit is, and what the user is offered when they
+reach it are all set per HQ decision, see SCRUM-57. They are deliberately not
+restated here: `/pricing` publishes nothing on purpose, and a design note that
+spelled them out would publish a pricing decision through a different door than
+the one that decides it.
 
-The second exit costs us nothing to serve: in their own client the user brings
-their own model subscription, so we handle gateway calls only, against their
-own upstream quota. The hard-stop message must carry both.
-
-Consequence to hold: **no in-product copy may promise an exit that does not
-exist**, so nothing may mention bringing your own key until it ships.
+What belongs here is the engineering consequence. The hard-stop is a real
+product state with its own copy and its own routes out, so it needs the same
+treatment as any other surface: **no in-product copy may offer a route that
+does not exist yet.** Bring-your-own-key in particular is deferred to its own
+ticket — an LLM API key is directly monetizable by whoever holds it, in a way a
+scoped Workspace token is not, so accepting one is gated on credential-handling
+work tracked internally — and nothing may mention it until it ships.
 
 ---
 
@@ -176,8 +177,8 @@ changing a plan confirms before it happens, exactly as editing a sheet does. Do
 not invent a second confirmation mechanism.
 
 **Runs remaining is free now.** Phase 1 wired both counters, so once the
-introspection surface exposes them the agent can state the allowance, which
-turns the cap from a wall into a meter.
+introspection surface exposes them the agent can tell the user where they
+stand, which turns the limit from a wall into a meter.
 
 ---
 
