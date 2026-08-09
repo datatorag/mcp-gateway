@@ -181,7 +181,26 @@ html {
 }
 
 body > iframe {
-  max-width: 100%;
+  /* `min(100%, 100vw)`, and the `100vw` half is the part that works.
+   *
+   * A plain `max-width: 100%` here does nothing, which is how this shipped
+   * broken once. On a `position: fixed` element a percentage resolves against
+   * the initial containing block, and the ICB is NOT the layout viewport:
+   * measured on this page at a 390 layout viewport, the widget's own
+   * `width: 100%` computed to 456. So the clamp was being asked to cap a box
+   * at a number the box had already reached. `vw` is the layout viewport, so
+   * it actually bites — verified against their `width: 100%`, and against a
+   * hypothetical `417px` and `2000px`, all three clamped to 390.
+   *
+   * `min()` with `100%` as well so the desktop scrollbar cannot push this a
+   * few px past the content box; whichever is smaller wins.
+   *
+   * This constrains by SIZING, not by clipping, which matters because the
+   * phone that found the bug runs WebKit and the root `overflow-x: clip`
+   * above was only ever verified in Blink. Confirmed the clamp alone holds
+   * with that root rule disabled. Keep both: this one fixes the box, the
+   * root rule is the backstop for an offender we have not met yet. */
+  max-width: min(100%, 100vw);
 }
 
 /* Prose — blog article styling */
