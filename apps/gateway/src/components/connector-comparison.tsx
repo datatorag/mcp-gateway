@@ -212,8 +212,24 @@ export function ConnectorComparison() {
       </div>
 
       {/* `main` is `overflow-x-hidden`, so a wide table clips instead of
-          scrolling. This wrapper is what lets it scroll on a narrow screen. */}
-      <div className="mt-12 overflow-x-auto">
+          scrolling. This wrapper is what lets it scroll on a narrow screen.
+
+          `relative` is load-bearing and is NOT decoration. `overflow-x-auto`
+          alone does not contain the `sr-only` spans in the cells below:
+          `sr-only` is `position: absolute`, and with no positioned ancestor
+          its containing block was the initial containing block, not this
+          wrapper. An absolutely positioned box whose containing block sits
+          outside an overflow ancestor is not clipped by it, so those spans
+          escaped this scroller, landed at the table's own 480px width, and
+          widened the whole document — the same escape that `position: fixed`
+          makes, which is easy to miss because the element is invisible.
+
+          Measured before the fix: 40 spans at right 456. On a real 445px
+          window that made the document 456 wide and horizontally pannable by
+          11px; at a 390 viewport it overhung by 66. Panning a document wider
+          than the viewport is what shows page background beside a full-bleed
+          band. Removing `relative` brings that straight back. */}
+      <div className="relative mt-12 overflow-x-auto">
         <table className="w-full min-w-[30rem] border-collapse text-left text-sm">
           <thead>
             <tr className="border-b border-border text-xs uppercase tracking-wider text-muted-foreground">
