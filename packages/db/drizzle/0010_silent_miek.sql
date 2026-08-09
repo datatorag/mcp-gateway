@@ -1,0 +1,1 @@
+ALTER TABLE "users" ADD COLUMN "current_period_agent_runs" integer DEFAULT 0 NOT NULL;

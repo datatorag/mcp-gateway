@@ -15,7 +15,18 @@ export const users = pgTable("users", {
   // expensive. Kept in sync by the Stripe webhook handlers (see billing/webhook-handlers.ts).
   plan: text("plan").$type<Plan>().notNull().default("pro_trial"),
   trialEndsAt: timestamp("trial_ends_at", { withTimezone: true }),
+  // Gateway tool calls in the current period, and agent runs in the same
+  // period. Both are COUNTERS, not a ledger: incremented in place, approximate
+  // is fine, a little lag is harmless. Billing needs dedup and an audit trail
+  // and will get its own rows; these exist to enforce an allowance.
+  //
+  // They roll together, lazily, off `currentPeriodStart` — see
+  // `gateway/usage/period.ts`. Nothing schedules the reset, so the roll happens
+  // on the next increment after the period lapses. Two counters sharing one
+  // start is the reason the roll must reset both at once: resetting either on
+  // its own would leave the pair describing different windows.
   currentPeriodCalls: integer("current_period_calls").notNull().default(0),
+  currentPeriodAgentRuns: integer("current_period_agent_runs").notNull().default(0),
   currentPeriodStart: timestamp("current_period_start", { withTimezone: true })
     .notNull()
     .defaultNow(),

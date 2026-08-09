@@ -169,10 +169,23 @@ export async function collectStripe(since: Date): Promise<string[]> {
 export async function collectPosthog(since: Date): Promise<string[]> {
   const { POSTHOG_PERSONAL_API_KEY, POSTHOG_PROJECT_ID } = getEnv();
   if (!POSTHOG_PERSONAL_API_KEY || !POSTHOG_PROJECT_ID) return NOT_CONFIGURED;
+  // THE CUTOVER RULE, stated here once and referenced from elsewhere rather
+  // than restated, because a rule copied into three queries becomes three
+  // rules the first time one of them is edited:
+  //
+  //   Events recorded before the surface attribute existed do not carry it.
+  //   Absent `surface` means "mcp". The agent surface additionally emitted
+  //   under an older event name, so any query spanning the change has to
+  //   union it in. There is no backfill and there will not be one — the
+  //   attribute was never captured, so there is nothing to recover.
+  //
+  // Same shape as the acquisition columns: rows that predate the change are
+  // permanently null and the query carries the knowledge instead.
   const hogql =
     "SELECT event, count() AS n FROM events " +
     "WHERE timestamp >= now() - INTERVAL 1 DAY " +
-    "AND event IN ('$pageview', 'lead_submitted', 'copy_mcp_config', 'connector_added') " +
+    "AND event IN ('$pageview', 'lead_submitted', 'copy_mcp_config', " +
+    "'connector_added', 'agent_run', 'tool_call', 'playground_tool_call') " +
     `${posthogInternalFilterSql()} ` +
     "GROUP BY event ORDER BY event";
   const res = await fetch(
@@ -194,6 +207,11 @@ export async function collectPosthog(since: Date): Promise<string[]> {
     lead_submitted: "Lead form submits",
     copy_mcp_config: "MCP config copies",
     connector_added: "Connectors added",
+    agent_run: "Agent runs",
+    tool_call: "Tool calls",
+    // Kept only so history spanning the rename stays visible. Nothing emits
+    // this any more; when it stops appearing it has aged out, not broken.
+    playground_tool_call: "Tool calls (before the rename)",
   };
   if (!data.results || data.results.length === 0) return [];
   return data.results.map(([event, n]) => `${LABELS[event] ?? event}: ${n}`);

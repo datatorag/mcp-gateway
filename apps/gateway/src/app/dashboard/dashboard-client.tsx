@@ -50,7 +50,6 @@ export function DashboardClient() {
   function runPrompt(prompt: string, i: number) {
     if (!hasConnectedAccount) return;
     playgroundRef.current?.runPrompt(prompt);
-    posthog.capture(EVENTS.PLAYGROUND_PROMPT_RUN, { prompt, index: i });
   }
 
   const fetchConnections = useCallback(async () => {
