@@ -26,15 +26,9 @@ import {
 import { Skeleton } from "@/components/ui/skeleton";
 import { formatConnectedDate } from "@/lib/utils";
 import type { ConnectedAccount, LegacyConnection } from "./connections/types";
+import { AGENT_PROMPTS } from "./agent-prompts";
+import { useSignupConversion } from "./use-signup-conversion";
 
-const EXAMPLE_PROMPTS = [
-  "Summarize my unread emails and draft a status update in Google Docs",
-  "Find the latest sales deck in Drive and update the Q2 numbers in Slides",
-  "Search Gmail for meeting notes from last week and create a summary doc",
-  "Check my calendar for tomorrow and find related prep docs in Drive",
-  "Create a Jira ticket from the action items in my last email thread",
-  "Draft replies to my 5 most recent unanswered emails",
-];
 
 export function DashboardClient() {
   const [accounts, setAccounts] = useState<ConnectedAccount[]>([]);
@@ -66,16 +60,7 @@ export function DashboardClient() {
     fetchConnections();
   }, [fetchConnections]);
 
-  // The OAuth callback redirects first-time users to /dashboard?signup=1.
-  // Fire the Google Ads signup conversion once, then strip the param so a
-  // refresh (or a shared URL) can't re-fire it.
-  useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    if (params.get("signup") === "1") {
-      reportSignupConversion();
-      window.history.replaceState(null, "", window.location.pathname);
-    }
-  }, []);
+  useSignupConversion();
 
   async function disconnectAccount(e: React.MouseEvent, account: ConnectedAccount) {
     e.preventDefault();
@@ -351,7 +336,7 @@ export function DashboardClient() {
           Run one below in the playground, or copy it into your own AI client.
         </p>
         <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-          {EXAMPLE_PROMPTS.map((prompt, i) => (
+          {AGENT_PROMPTS.map((prompt, i) => (
             <div
               key={i}
               className="group flex items-start gap-2 rounded-lg border border-border px-3 py-2.5 text-left transition-colors hover:border-primary/30 hover:bg-secondary/50"
@@ -391,7 +376,7 @@ export function DashboardClient() {
       {/* Live playground chat */}
       <Playground
         ref={playgroundRef}
-        prompts={EXAMPLE_PROMPTS}
+        prompts={AGENT_PROMPTS}
         hasConnectedAccount={hasConnectedAccount}
       />
 

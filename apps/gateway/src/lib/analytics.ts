@@ -31,6 +31,10 @@ export const EVENTS = {
    * can carry `run_id` and so it counts every run rather than only the ones
    * started from a particular button. */
   AGENT_RUN: "agent_run",
+  /** A new user LANDED on the Agent as their post-login destination, rather
+   * than navigating to it. Separates the "landed on Agent" cohort from
+   * pre-launch signups in the funnel. */
+  AGENT_DEFAULT_VIEW_SHOWN: "agent_default_view_shown",
   PLAYGROUND_MESSAGE_SENT: "playground_message_sent",
   PLAYGROUND_CAP_HIT: "playground_cap_hit",
   PLAYGROUND_CONFIRM: "playground_confirm",

@@ -44,7 +44,10 @@ export type AgentDataParts = {
  * wire. Stated once so no call site hand-writes the prefix. */
 export type AgentPartType = `data-${keyof AgentDataParts & string}`;
 
-function ConnectPart({ services }: AgentDataParts["connect"]) {
+/** Exported because the empty state renders the same control before any
+ * message exists: an unconnected user must meet ONE connect affordance, not a
+ * different one depending on whether the agent has spoken yet. */
+export function ConnectPart({ services }: AgentDataParts["connect"]) {
   if (services.length === 0) return null;
   return (
     <div className="rounded-lg border border-border bg-secondary/40 p-3">

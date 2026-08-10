@@ -28,6 +28,8 @@ import {
   PromptInputTools,
 } from "@/components/ai-elements/prompt-input";
 import { Suggestion, Suggestions } from "@/components/ai-elements/suggestion";
+import { ConnectPart } from "./agent-parts";
+import { SERVICES } from "./connections/services";
 import { Button } from "@/components/ui/button";
 import { RUNS_CAP_HEADER, RUNS_REMAINING_HEADER } from "@/gateway/playground/quota-headers";
 import {
@@ -45,6 +47,15 @@ import {
  * string in front of the user. */
 const CAP_EXCEEDED = "cap_exceeded";
 
+/** The connectable services, in the shape the connect control takes. Derived
+ * from the one SERVICES list rather than restated, so a new connector appears
+ * in the thread without anyone remembering to add it here. */
+const CONNECTABLE_SERVICES = SERVICES.map((service) => ({
+  id: service.id,
+  name: service.name,
+  connectHref: service.connectUrl,
+}));
+
 export interface PlaygroundHandle {
   /** Seed the input with `prompt` and submit it immediately. Used by the
    * "What can I do?" prompt cards' Run action in dashboard-client.tsx. */
@@ -54,6 +65,9 @@ export interface PlaygroundHandle {
 interface PlaygroundProps {
   /** Example prompts, offered as quick-start chips in the empty state. */
   prompts: string[];
+  /** Fetch three actions named from the user's real files. Injected rather
+   * than called directly so the presentation stays drivable by canned data. */
+  loadSuggestions?: () => Promise<string[]>;
   /** Whether the user has at least one connected account (any service). */
   hasConnectedAccount: boolean;
 }
@@ -77,7 +91,7 @@ function precedingUserPrompt(
 /* -------------------------------------------------------------------------- */
 
 export const Playground = forwardRef<PlaygroundHandle, PlaygroundProps>(
-  function Playground({ prompts, hasConnectedAccount }, ref) {
+  function Playground({ prompts, hasConnectedAccount, loadSuggestions }, ref) {
     const [input, setInput] = useState("");
     const [capState, setCapState] = useState<{ cap: number } | null>(null);
     const [hidden, setHidden] = useState(false);
@@ -86,6 +100,23 @@ export const Playground = forwardRef<PlaygroundHandle, PlaygroundProps>(
     const [erroredIds, setErroredIds] = useState<ReadonlySet<string>>(
       () => new Set()
     );
+    /** Suggestions naming the user's own files. Empty until the read returns,
+     * and empty forever if it returns nothing usable — a generic suggestion
+     * dressed as a personal one is worse than none. */
+    const [ownFilePrompts, setOwnFilePrompts] = useState<string[]>([]);
+
+    useEffect(() => {
+      if (!hasConnectedAccount || !loadSuggestions) return;
+      let live = true;
+      void loadSuggestions()
+        .then((next) => {
+          if (live) setOwnFilePrompts(next);
+        })
+        .catch(() => {});
+      return () => {
+        live = false;
+      };
+    }, [hasConnectedAccount, loadSuggestions]);
 
     const transport = useMemo(
       () =>
@@ -235,11 +266,15 @@ export const Playground = forwardRef<PlaygroundHandle, PlaygroundProps>(
           busyRef.current ||
           capState ||
           hidden ||
-          !hasConnectedAccount ||
           awaitingConfirm
         ) {
           return;
         }
+        // NOT gated on having a connected account, deliberately. A user
+        // without access gets an honest answer about what the agent cannot do
+        // and the connect control stays in the thread. Refusing to send left
+        // them typing into a dead box, which reads as broken rather than as
+        // blocked.
         // Clear only once the call is actually going out — `runExclusive`
         // drops a re-entrant call, and clearing first would eat the text.
         void runExclusive(async () => {
@@ -251,7 +286,6 @@ export const Playground = forwardRef<PlaygroundHandle, PlaygroundProps>(
         streaming,
         capState,
         hidden,
-        hasConnectedAccount,
         awaitingConfirm,
         runExclusive,
         sendMessage,
@@ -377,34 +411,50 @@ export const Playground = forwardRef<PlaygroundHandle, PlaygroundProps>(
             harness reproducing this exact class structure (see
             conversation-scroll-fix.md). */}
         <div className="relative mt-3 grid max-h-[34rem] min-h-[12rem] grid-rows-[minmax(0,1fr)_auto] rounded-xl border border-border">
-          {!hasConnectedAccount && (
-            <div className="absolute inset-0 z-10 flex items-center justify-center rounded-xl bg-background/90 p-4 text-center backdrop-blur-sm">
-              <p className="text-xs font-medium text-muted-foreground">
-                Connect Google Workspace above to try it
-              </p>
-            </div>
-          )}
-
           <Conversation className="min-h-0">
             {/* gap-0: the message rows carry their own vertical rhythm now
                 (see MessageRow), so the container must not add to it. */}
             <ConversationContent className="gap-0 p-4">
               {messages.length === 0 && (
+                // The agent opens the thread rather than waiting to be
+                // addressed: what it does, why it needs access, and the way to
+                // grant it, all in the conversation. The connect control is
+                // IN here rather than on a card above, because sending someone
+                // out of the thread to come back to it is the shape that made
+                // setup feel like a cliff.
                 <div className="space-y-2">
-                  <p className="text-xs text-muted-foreground">
-                    Ask something about your connected accounts.
-                  </p>
-                  {hasConnectedAccount && (
-                    <Suggestions>
-                      {prompts.slice(0, 3).map((prompt, i) => (
-                        <Suggestion
-                          className="h-auto py-1 text-[11px]"
-                          key={i}
-                          onClick={send}
-                          suggestion={prompt}
-                        />
-                      ))}
-                    </Suggestions>
+                  {hasConnectedAccount ? (
+                    <>
+                      <p className="text-xs text-muted-foreground">
+                        {ownFilePrompts.length > 0
+                          ? "Here are a few things I can do with what you just connected."
+                          : "Ask something about your connected accounts."}
+                      </p>
+                      <Suggestions>
+                        {(ownFilePrompts.length > 0
+                          ? ownFilePrompts
+                          : prompts
+                        )
+                          .slice(0, 3)
+                          .map((prompt, i) => (
+                            <Suggestion
+                              className="h-auto py-1 text-[11px]"
+                              key={i}
+                              onClick={send}
+                              suggestion={prompt}
+                            />
+                          ))}
+                      </Suggestions>
+                    </>
+                  ) : (
+                    <>
+                      <p className="text-xs text-muted-foreground">
+                        I can work with your email, files, calendar and issues,
+                        once you connect an account. You can ask me anything in
+                        the meantime.
+                      </p>
+                      <ConnectPart services={CONNECTABLE_SERVICES} />
+                    </>
                   )}
                 </div>
               )}
@@ -475,7 +525,7 @@ export const Playground = forwardRef<PlaygroundHandle, PlaygroundProps>(
               <PromptInput onSubmit={(message) => send(message.text ?? "")}>
                 <PromptInputTextarea
                   className="min-h-10 text-xs"
-                  disabled={streaming || !hasConnectedAccount || awaitingConfirm}
+                  disabled={streaming || awaitingConfirm}
                   onChange={(e) => setInput(e.target.value)}
                   placeholder={placeholder}
                   value={input}
@@ -487,7 +537,7 @@ export const Playground = forwardRef<PlaygroundHandle, PlaygroundProps>(
                   <PromptInputSubmit
                     disabled={
                       !streaming &&
-                      (!hasConnectedAccount || awaitingConfirm || !input.trim())
+                      (awaitingConfirm || !input.trim())
                     }
                     onStop={stop}
                     status={status}
