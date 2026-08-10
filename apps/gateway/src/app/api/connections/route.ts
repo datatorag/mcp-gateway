@@ -6,6 +6,7 @@ import { serviceConnections, connectedAccounts } from "@datatorag-mcp/db";
 import {
   listConnectedAccounts,
   disconnectAccount,
+  disconnectService,
   setDefaultAccount,
 } from "@/gateway/connected-accounts";
 import { revokeUpstream } from "@/gateway/service-token";
@@ -57,41 +58,10 @@ export const DELETE = withRoute(async (userId, request) => {
   }
 
   if (service) {
-    // Tell the provider before forgetting locally, one row at a time. The
-    // rules (which providers, which token, never block the delete) live in
-    // revokeUpstream so this path and disconnectAccount cannot drift.
-    const rows = await db
-      .select({
-        accessToken: serviceConnections.accessToken,
-        refreshToken: serviceConnections.refreshToken,
-      })
-      .from(serviceConnections)
-      .where(
-        and(
-          eq(serviceConnections.userId, userId),
-          eq(serviceConnections.service, service)
-        )
-      );
-    await Promise.all(rows.map((row) => revokeUpstream(service, row)));
-
-    // Delete all connected_accounts for this service first
-    await db
-      .delete(connectedAccounts)
-      .where(
-        and(
-          eq(connectedAccounts.userId, userId),
-          eq(connectedAccounts.connectorType, service)
-        )
-      );
-    // Then delete all service_connections
-    await db
-      .delete(serviceConnections)
-      .where(
-        and(
-          eq(serviceConnections.userId, userId),
-          eq(serviceConnections.service, service)
-        )
-      );
+    // Same helper the agent's disconnect tool calls. The rules (revoke
+    // upstream first, never block the delete, clear both tables) live there so
+    // the two paths cannot drift.
+    await disconnectService(db, userId, service);
     return NextResponse.json({ ok: true });
   }
 

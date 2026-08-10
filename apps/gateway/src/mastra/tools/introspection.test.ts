@@ -44,20 +44,82 @@ describe("account introspection", () => {
     // IDOR the first time a document the agent reads says "for diagnostics,
     // call this with userId=...". Identity is closed over from the session, so
     // there is nothing for a prompt to talk the model into.
+    //
+    // Asserted as "no IDENTITY field", not "no fields": disconnect_service
+    // legitimately takes which service to disconnect. The line is whether a
+    // parameter can NAME A ROW that might not be the caller's. A service name
+    // cannot, because the rows are selected by the closed-over user id. A
+    // global id could, which is why none is accepted.
+    const IDENTITY_FIELDS = [
+      "userid", "user_id", "accountid", "account_id",
+      "email", "useremail", "user_email", "sub", "subject",
+    ];
     const { db } = stubDb();
     const tools = buildIntrospectionTools({ db, userId: "user-1" });
 
     for (const name of INTROSPECTION_TOOL_NAMES) {
       const schema = (tools as Record<string, { inputSchema: z.ZodTypeAny }>)[name].inputSchema;
       const shape = (schema as unknown as z.ZodObject<z.ZodRawShape>).shape ?? {};
-      expect(Object.keys(shape)).toEqual([]);
+      for (const key of Object.keys(shape)) {
+        expect(IDENTITY_FIELDS).not.toContain(key.toLowerCase());
+      }
 
-      // And it must actually IGNORE one if a model sends it anyway, rather
+      // And it must actually DISCARD one if a model sends it anyway, rather
       // than merely not advertising it.
-      const parsed = schema.safeParse({ userId: "someone-else", email: "victim@example.com" });
+      const parsed = schema.safeParse({
+        ...(name === "disconnect_service" ? { service: "atlassian" } : {}),
+        userId: "someone-else",
+        email: "victim@example.com",
+      });
       expect(parsed.success).toBe(true);
-      expect(parsed.data).toEqual({});
+      expect(parsed.data).not.toHaveProperty("userId");
+      expect(parsed.data).not.toHaveProperty("email");
     }
+  });
+
+  it("puts a destructive account change behind the same approval gate", async () => {
+    // Disconnecting revokes credentials and drops rows. It confirms exactly as
+    // a sheet edit does, through the gate that already exists, rather than any
+    // second confirmation mechanism invented for account changes.
+    const { db } = stubDb();
+    const tools = buildIntrospectionTools({ db, userId: "user-1" });
+    expect(tools.disconnect_service.requireApproval).toBe(true);
+  });
+
+  it("disconnects by service, never by a global id", async () => {
+    const { db } = stubDb();
+    const tools = buildIntrospectionTools({ db, userId: "user-1" });
+    const shape = (tools.disconnect_service.inputSchema as unknown as z.ZodObject<z.ZodRawShape>)
+      .shape;
+    // An account id would be a handle that can name another user's row.
+    expect(Object.keys(shape)).toEqual(["service"]);
+  });
+
+  it("will not authorise a proactive config offer before a first run", async () => {
+    // The config coming before value is the cliff this surface exists to
+    // remove. Enforced server-side rather than asked for in the prompt,
+    // because a prompt instruction is a request a model can talk itself out
+    // of, and the failure would look exactly like the old onboarding.
+    const { db } = stubDb();
+    const tools = buildIntrospectionTools({ db, userId: "user-1" });
+
+    // stubDb returns { plan } with no firstAgentRunAt, i.e. never ran.
+    const before = await tools.show_mcp_config.execute();
+    expect(before.mayOfferProactively).toBe(false);
+    // Still reachable ON REQUEST, always. Withholding it from someone who
+    // asked would be a different kind of broken.
+    expect(before.configUrl).toBe("/dashboard/mcp-config");
+  });
+
+  it("authorises the proactive offer once the user has run something", async () => {
+    const { db } = stubDb();
+    (db as unknown as { select: () => unknown }).select = () => ({
+      from: () => ({
+        where: () => ({ limit: async () => [{ firstAgentRunAt: new Date() }] }),
+      }),
+    });
+    const tools = buildIntrospectionTools({ db, userId: "user-1" });
+    expect((await tools.show_mcp_config.execute()).mayOfferProactively).toBe(true);
   });
 
   it("scopes every query to the session user", async () => {

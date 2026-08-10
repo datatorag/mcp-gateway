@@ -275,10 +275,41 @@ export async function trackAgentRun(
   userId: string,
   props: { runId: string; runsUsed: number }
 ): Promise<void> {
+  // Activation for the agent surface, claimed the same idempotent way as the
+  // gateway's: UPDATE ... WHERE the column IS NULL, so exactly one concurrent
+  // run ever gets a row back and the milestone fires once per user.
+  //
+  // A SEPARATE MARKER FROM first_tool_call_at, deliberately. That one means "a
+  // real MCP client called through the gateway" and the no-activation email and
+  // the digest both key off that meaning; widening it here would change what
+  // those already report without touching their code.
+  void claimFirstAgentRun(db, userId);
   return capturePlaygroundEvent(db, userId, EVENTS.AGENT_RUN, {
     run_id: props.runId,
     runs_used: props.runsUsed,
   });
+}
+
+/** Claim the user's first-agent-run milestone. Never throws: a milestone must
+ * not be able to break the turn it is observing. */
+async function claimFirstAgentRun(db: Database, userId: string): Promise<void> {
+  try {
+    const claimed = await db
+      .update(users)
+      .set({ firstAgentRunAt: new Date() })
+      .where(and(eq(users.id, userId), isNull(users.firstAgentRunAt)))
+      .returning({ id: users.id });
+    if (claimed.length === 0) return;
+    const c = getPosthog();
+    if (!c) return;
+    c.capture({
+      distinctId: userId,
+      event: EVENTS.FIRST_AGENT_RUN,
+      properties: { ...identityProps(await resolveUserEmail(db, userId)) },
+    });
+  } catch (err) {
+    console.warn(`[track] first_agent_run milestone failed for user=${userId}`, err);
+  }
 }
 
 export async function trackPlaygroundCapHit(

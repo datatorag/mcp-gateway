@@ -33,6 +33,20 @@ export const users = pgTable("users", {
   // Activation milestone: set once on the user's first successful tool call
   // (see trackToolCall) so the funnel has a durable first_tool_call marker.
   firstToolCallAt: timestamp("first_tool_call_at", { withTimezone: true }),
+  /** Activation for the AGENT surface, kept separate from `first_tool_call_at`
+   * on purpose.
+   *
+   * `first_tool_call_at` means "a real MCP client called through the gateway",
+   * and the no-activation follow-up email and the digest both key off that
+   * meaning. Widening it to include agent runs would silently change what
+   * every one of those already-shipped consumers reports. So the agent gets
+   * its own marker rather than borrowing one whose definition is load-bearing
+   * elsewhere.
+   *
+   * A column rather than deriving it from `current_period_agent_runs > 0`,
+   * because that counter resets: a user who ran the agent in March and came
+   * back in June would read as never activated. */
+  firstAgentRunAt: timestamp("first_agent_run_at", { withTimezone: true }),
   // Set when the no-activation follow-up email is claimed for sending
   // (see lifecycle.ts) — the IS NULL guard makes double-sends impossible.
   noActivationFollowupSentAt: timestamp("no_activation_followup_sent_at", {

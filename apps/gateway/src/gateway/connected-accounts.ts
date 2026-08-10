@@ -231,3 +231,50 @@ export async function disconnectAccount(
     await promoteNextDefault(db, userId, account.connectorType);
   }
 }
+
+/**
+ * Disconnect every account for one service.
+ *
+ * Extracted so the settings route and the agent's own disconnect tool run the
+ * SAME code. Two copies of "revoke upstream, then delete both tables" would
+ * each get their own passing test and drift invisibly between them, which is
+ * tests concealing duplication rather than catching it.
+ *
+ * SCOPED BY THE SESSION USER, and the service is the only thing the caller
+ * chooses. Deliberately not an account id: an id is a global handle that could
+ * name somebody else's row, and this is reachable by a model.
+ */
+export async function disconnectService(
+  db: Database,
+  userId: string,
+  service: string
+): Promise<{ disconnected: number }> {
+  const rows = await db
+    .select({
+      accessToken: serviceConnections.accessToken,
+      refreshToken: serviceConnections.refreshToken,
+    })
+    .from(serviceConnections)
+    .where(
+      and(eq(serviceConnections.userId, userId), eq(serviceConnections.service, service))
+    );
+  // Tell the provider before forgetting locally. Never blocks the delete: a
+  // provider that is down must not leave the user unable to disconnect.
+  await Promise.all(rows.map((row) => revokeUpstream(service, row)));
+
+  const removed = await db
+    .delete(connectedAccounts)
+    .where(
+      and(
+        eq(connectedAccounts.userId, userId),
+        eq(connectedAccounts.connectorType, service)
+      )
+    )
+    .returning({ id: connectedAccounts.id });
+  await db
+    .delete(serviceConnections)
+    .where(
+      and(eq(serviceConnections.userId, userId), eq(serviceConnections.service, service))
+    );
+  return { disconnected: removed.length };
+}

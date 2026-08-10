@@ -4,6 +4,7 @@ import { connectedAccounts, users } from "@datatorag-mcp/db";
 import { eq } from "drizzle-orm";
 import { FREE_MONTHLY_AGENT_RUNS } from "@/gateway/billing/plans";
 import { capExempt, periodStatus } from "@/gateway/usage/period";
+import { disconnectService } from "@/gateway/connected-accounts";
 
 /**
  * Tools that answer questions about the user's own account.
@@ -99,9 +100,71 @@ export function buildIntrospectionTools({ db, userId }: IntrospectionDeps) {
         };
       },
     },
+
+    show_mcp_config: {
+      requireApproval: false,
+      description:
+        "Where the user can get their MCP config, to use their connected accounts from " +
+        "Claude, Cursor or another MCP client. Call this whenever they ask about using " +
+        "this outside the Agent. The result says whether it is appropriate to bring up " +
+        "unprompted; obey that flag.",
+      inputSchema: NO_ARGS,
+      execute: async () => {
+        const [row] = await db
+          .select({ firstAgentRunAt: users.firstAgentRunAt })
+          .from(users)
+          .where(eq(users.id, userId))
+          .limit(1);
+
+        // THE RULE IS ENFORCED HERE, NOT ASKED FOR IN THE PROMPT. The config
+        // coming before any value is the exact cliff this whole surface exists
+        // to remove, and a prompt instruction is a request a model can talk
+        // itself out of. The server simply does not authorise the proactive
+        // offer until the user has completed a run.
+        return {
+          configUrl: DASHBOARD_LINKS.mcpConfig,
+          mayOfferProactively: row?.firstAgentRunAt != null,
+          links: DASHBOARD_LINKS,
+        };
+      },
+    },
+
+    disconnect_service: {
+      /** DECLARED true. Disconnecting revokes credentials and drops rows, so it
+       * goes through the SAME approval gate a sheet edit does — the user sees a
+       * confirm card and decides. Not a second confirmation mechanism, and not
+       * something the agent may do because it inferred the user wanted it. */
+      requireApproval: true,
+      description:
+        "Disconnect the signed-in user's account for one service, revoking our access. " +
+        "This cannot be undone from here; reconnecting means going through consent again. " +
+        "Only ever affects the signed-in user.",
+      inputSchema: z.object({
+        service: z
+          .enum(["google-workspace", "atlassian"])
+          .describe("Which connected service to disconnect."),
+      }),
+      // A SERVICE, NEVER AN ACCOUNT ID. An id is a global handle that could
+      // name somebody else's row; a service name cannot, because the rows are
+      // selected by the session user id closed over here.
+      execute: async ({ service }: { service: string }) => {
+        const { disconnected } = await disconnectService(db, userId, service);
+        return {
+          service,
+          disconnected,
+          // The dashboard reads the same rows this just changed, so there is
+          // one state and no second copy to go stale.
+          links: DASHBOARD_LINKS,
+        };
+      },
+    },
   };
 }
 
 /** The tool names this module owns. Exported so the agent wiring and the tests
  * agree on the list without either restating it. */
-export const INTROSPECTION_TOOL_NAMES = ["account_status"] as const;
+export const INTROSPECTION_TOOL_NAMES = [
+  "account_status",
+  "show_mcp_config",
+  "disconnect_service",
+] as const;
