@@ -138,10 +138,10 @@ export default function FaqPage() {
   return (
     <div className="min-h-screen bg-background">
       <Navbar />
-      <main className="mx-auto max-w-3xl px-6 py-16">
+      <main className="mx-auto max-w-3xl px-6 pt-32 pb-16 sm:pt-36">
         <script
           type="application/ld+json"
-          dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd).replace(/</g, "\\u003c") }}
         />
 
         <h1 className="text-3xl font-semibold tracking-tight">
@@ -161,19 +161,19 @@ export default function FaqPage() {
             <h2 className="text-xl font-semibold">{group.title}</h2>
             <div className="mt-6 space-y-8">
               {group.faqs.map((faq) => (
-                <div key={faq.id} id={faq.id} className="scroll-mt-24">
+                <div key={faq.id} id={faq.id} className="scroll-mt-28">
                   <h3 className="group font-medium">
                     {faq.q}{" "}
                     <a
                       href={`#${faq.id}`}
-                      className="text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100"
+                      className="text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100"
                       aria-label={`Link to: ${faq.q}`}
                     >
                       #
                     </a>
                   </h3>
                   <div
-                    className="mt-2 text-sm leading-relaxed text-muted-foreground [&_a]:underline [&_a]:underline-offset-2 hover:[&_a]:text-foreground"
+                    className="mt-2 text-sm leading-relaxed text-muted-foreground [&_a]:underline [&_a]:underline-offset-2 [&_a:hover]:text-foreground"
                     dangerouslySetInnerHTML={{ __html: faq.a }}
                   />
                 </div>

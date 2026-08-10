@@ -214,7 +214,9 @@ same commit:
 2. `flatItems` in `apps/gateway/src/components/navbar.tsx` — the single array rendered
    into both desktop nav and the mobile menu. One entry covers both; there's no lint or
    test enforcing this, so a route that's live but missing from `flatItems` is the most
-   common way a page ships with no nav visibility.
+   common way a page ships with no nav visibility. Deliberate exceptions, footer-only by
+   design like `/privacy` and `/terms`: `/faq` (reference page, reached from docs, footer
+   and search rather than the nav; promote it to `flatItems` only as an explicit call).
 3. `apps/gateway/src/app/sitemap.ts` — add the static route, and map the collection's
    entries if it has detail pages (blog/docs/skills all do).
 4. The footer links row in `apps/gateway/src/app/page.tsx` (the home page's `<footer>`,

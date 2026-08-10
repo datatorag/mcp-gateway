@@ -72,11 +72,11 @@ DataToRAG currently supports these services:
 
 **Google Workspace**
 
-- **Gmail** — Search, read, send, reply, forward, draft, and save attachments
+- **Gmail** — Search, read, send, reply, forward, draft, save attachments, and manage labels
 - **Calendar** — List, create, update, delete events, and check availability
 - **Drive** — Search files, read content, and create folders
 - **Docs** — Read, create, write, and batch update documents
-- **Sheets** — Read, create, update, append, and delete spreadsheets
+- **Sheets** — Read, create, update, append, and delete spreadsheets, and manage tabs
 - **Slides** — Read, create, batch update, and delete presentations
 - **Contacts** — Search, list, create, update, delete contacts, and search company directory
 - **Tasks** — List task lists, list tasks, create, update, complete, and delete tasks

@@ -11,11 +11,11 @@ Google Workspace is DataToRAG's flagship connector. One OAuth flow gives your AI
 
 | Service | Summary |
 |---------|---------|
-| [Gmail](/docs/gmail) | Search, read, send, reply, forward, draft, and save attachments |
+| [Gmail](/docs/gmail) | Search, read, send, reply, forward, draft, save attachments, and manage labels |
 | [Calendar](/docs/calendar) | List, create, update, delete events, and check availability |
 | [Drive](/docs/drive) | Search files, read content, and create folders |
 | [Docs](/docs/docs) | Read, create, write, and batch update documents |
-| [Sheets](/docs/sheets) | Read, create, update, append, and delete spreadsheets |
+| [Sheets](/docs/sheets) | Read, create, update, append, and delete spreadsheets, and manage tabs |
 | [Slides](/docs/slides) | Read, create, batch update, and delete presentations |
 | [Contacts](/docs/contacts) | Search, create, update contacts; search company directory |
 | [Tasks](/docs/tasks) | Manage task lists, create, update, complete, delete tasks |
