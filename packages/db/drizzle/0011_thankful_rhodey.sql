@@ -1,0 +1,1 @@
+ALTER TABLE "users" ADD COLUMN "first_agent_run_at" timestamp with time zone;

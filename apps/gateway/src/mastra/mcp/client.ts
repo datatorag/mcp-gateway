@@ -19,6 +19,7 @@ import { trackToolCall } from "@/gateway/track";
 import { RUN_ID_CONTEXT_KEY } from "@/mastra/llm-usage";
 import { EPHEMERAL_CACHE_OPTIONS } from "@/mastra/agents/datatorag";
 import { getDb } from "@/lib/db";
+import { buildIntrospectionTools } from "@/mastra/tools/introspection";
 
 /**
  * The playground agent's connection to our plugin MCP servers.
@@ -634,7 +635,7 @@ export async function resolveUserPluginTools({
     tokensByServer: readPluginTokens(requestContext, servers.map((s) => s.slug)),
   });
 
-  return resolvePluginTools(requestContext, {
+  const pluginTools = await resolvePluginTools(requestContext, {
     client,
     meterDb: db,
     listAllowedToolNames: async (id) => {
@@ -642,4 +643,11 @@ export async function resolveUserPluginTools({
       return new Set(rows.map((row) => row.namespacedName));
     },
   });
+
+  // Introspection tools are OURS, not a plugin's: they read this user's own
+  // account state, they take no identity argument, and their approval
+  // requirement is declared rather than classified from a name. They are added
+  // after the plugin set so the prompt-cache breakpoint stays on a plugin tool
+  // schema, which is the large invariant block worth caching.
+  return { ...pluginTools, ...buildIntrospectionTools({ db, userId }) };
 }

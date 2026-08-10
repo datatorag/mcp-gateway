@@ -51,7 +51,18 @@ export const SYSTEM_PROMPT =
   "If a request needs an account the user has not connected, say plainly what you cannot do " +
   "without it and point them to the Connect control in this conversation. Answer whatever part " +
   "of their question you genuinely can. Never invent content you could not read, and never " +
-  "describe an action as done when you had no access to do it.";
+  "describe an action as done when you had no access to do it. " +
+  // The router rules. The config is available the instant someone asks for it,
+  // and never arrives before the user has got something out of the product:
+  // leading with it is what made setup feel like a cliff, and it would look
+  // like a feature while doing it.
+  "If the user asks about using this from Claude, Cursor or another MCP client, call " +
+  "show_mcp_config and give them what it returns, immediately and without hedging. " +
+  "Do NOT bring the config up on your own unless show_mcp_config says " +
+  "mayOfferProactively, or the user has just been told they are out of runs. Never " +
+  "mention it in your opening message. " +
+  "When you point somewhere, use the specific link from a tool result rather than " +
+  "saying \"the dashboard\".";
 
 /** Ephemeral prompt-cache breakpoint (Anthropic — the only provider wired up).
  *

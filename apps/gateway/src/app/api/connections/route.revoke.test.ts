@@ -19,7 +19,10 @@ const selectResults: unknown[] = [];
 const deleteCalls: unknown[] = [];
 function chainable(result: unknown) {
   const p = Promise.resolve(result) as Promise<unknown> & Record<string, unknown>;
-  for (const m of ["from", "where", "leftJoin", "orderBy", "limit"]) {
+  // `returning` included: drizzle's delete/update expose it, and a stub that
+  // omits a real method makes production code fail here for a reason that does
+  // not exist in production.
+  for (const m of ["from", "where", "leftJoin", "orderBy", "limit", "returning"]) {
     p[m] = () => p;
   }
   return p;

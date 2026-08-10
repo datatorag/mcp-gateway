@@ -203,3 +203,35 @@ export async function callsRemaining(
   const used = rows[0]?.used ?? 0;
   return Math.max(0, cap - used);
 }
+
+/**
+ * Where the user stands, without changing it.
+ *
+ * READ ONLY, AND THAT IS THE ENTIRE POINT. Every other function in this file
+ * moves a counter; this one is for telling a user how many runs they have left
+ * when they ask. Answering that question must never spend one, which it would
+ * if it went through the claim, and must never roll the period, which would
+ * silently reset the very numbers being reported.
+ *
+ * A lapsed period is reported as-is rather than rolled, so a returning user is
+ * told what the row says. The next metered call rolls it, as it always did.
+ */
+export async function periodStatus(
+  db: Database,
+  userId: string
+): Promise<{ agentRuns: number; calls: number; periodStart: Date } | null> {
+  const rows = await db.execute<{
+    agent_runs: number;
+    calls: number;
+    period_start: Date;
+  }>(sql`
+    SELECT current_period_agent_runs AS agent_runs,
+           current_period_calls      AS calls,
+           current_period_start      AS period_start
+    FROM users WHERE id = ${userId}
+  `);
+  const row = rows[0];
+  return row
+    ? { agentRuns: row.agent_runs, calls: row.calls, periodStart: row.period_start }
+    : null;
+}

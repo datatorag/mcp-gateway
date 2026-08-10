@@ -31,6 +31,10 @@ export const EVENTS = {
    * can carry `run_id` and so it counts every run rather than only the ones
    * started from a particular button. */
   AGENT_RUN: "agent_run",
+  /** First ever agent run for this user. Activation for the agent surface,
+   * separate from `first_tool_call` which means a real MCP client reached the
+   * gateway and which lifecycle email and the digest already key off. */
+  FIRST_AGENT_RUN: "first_agent_run",
   /** A new user LANDED on the Agent as their post-login destination, rather
    * than navigating to it. Separates the "landed on Agent" cohort from
    * pre-launch signups in the funnel. */
