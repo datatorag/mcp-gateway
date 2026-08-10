@@ -189,7 +189,7 @@ export async function collectPosthog(since: Date): Promise<string[]> {
     "SELECT event, " +
     "if(event = 'tool_call', coalesce(nullif(JSONExtractString(properties, 'surface'), ''), 'mcp'), '') AS surface, " +
     "count() AS n FROM events " +
-    "WHERE timestamp >= now() - INTERVAL 1 DAY " +
+    `WHERE timestamp >= toDateTime('${since.toISOString().slice(0, 19).replace("T", " ")}') ` +
     "AND event IN ('$pageview', 'lead_submitted', 'copy_mcp_config', " +
     "'connector_added', 'agent_run', 'tool_call', 'playground_tool_call') " +
     `${posthogInternalFilterSql()} ` +
@@ -231,7 +231,7 @@ export async function collectPosthog(since: Date): Promise<string[]> {
   if (toolCalls.length > 0) {
     const total = toolCalls.reduce((sum, [, , n]) => sum + n, 0);
     const split = toolCalls.map(([, surface, n]) => `${n} ${surface}`).join(" / ");
-    lines.push(`Tool calls: ${total} (${split})`);
+    lines.push(`${LABELS.tool_call}: ${total} (${split})`);
   }
   return lines;
 }
