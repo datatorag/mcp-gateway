@@ -91,3 +91,7 @@ Each connector is documented on its own page with available operations, required
 ## Seeing what your assistant is doing
 
 Every tool call shows up in your personal usage dashboard at [datatorag.com/dashboard/usage](https://datatorag.com/dashboard/usage) — call volume, latency, error rates, and a per-tool breakdown. See the [Usage docs](/docs/usage) for what gets tracked and how retention works.
+
+## Common questions
+
+The [FAQ](/faq) covers the questions we hear most: setup order, what the gateway can and cannot do, the approval gate, and how it compares to Claude's native connectors.
