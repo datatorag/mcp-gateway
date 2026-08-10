@@ -56,6 +56,16 @@ const envSchema = z.object({
   ANTHROPIC_API_KEY: z.string().default(""),
   PLAYGROUND_MODEL: z.string().default("claude-sonnet-5"),
   PLAYGROUND_MESSAGE_CAP: z.coerce.number().default(20),
+  /** Whether a NEW user is sent to the Agent after signup.
+   *
+   * Defaults OFF, and that default is the point: the Agent route can be
+   * deployed and observed without anyone being routed to it. The route stays
+   * reachable by direct URL, so it can be exercised deliberately while no user
+   * lands on it by accident.
+   *
+   * A flag rather than a code change so re-enabling is config plus a restart,
+   * which is what makes turning it back off cheap enough to actually do. */
+  AGENT_DEFAULT_VIEW: z.enum(["on", "off"]).default("off"),
   // Slack channel for playground feedback (Dara bot); empty = disabled
   SLACK_CHANNEL_FEEDBACK: z.string().default(""),
 });

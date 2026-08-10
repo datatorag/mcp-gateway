@@ -18,6 +18,7 @@ import {
 } from "./track";
 import { sendWelcomeEmail } from "./lifecycle";
 import { notifySignup } from "./signup-alert";
+import { getEnv } from "@datatorag-mcp/config";
 
 const GWS_SCOPES = [
   "openid",
@@ -190,24 +191,28 @@ export function createAuthRouter(
       expires: expiresAt,
     });
 
-    // A NEW user lands on the Agent; a returning one lands where they always
-    // did. Not a blanket redirect: people who already have a working setup have
-    // their own reason for opening the dashboard, and moving them is a change
-    // to a habit rather than an improvement to onboarding.
+    // Where a NEW user lands, behind a flag that defaults OFF.
+    //
+    // The Agent shipped and had to be rolled back twice: the page rendered but
+    // never became interactive, and the cause is still unidentified. Sending
+    // new users there is the part that exposed them, so that is the part that
+    // is switched off - the route itself is harmless while nobody is routed to
+    // it, and stays reachable by direct URL so the failure can be observed
+    // deliberately instead of by a stranger.
     //
     // ?signup=1 lets the destination fire the Google Ads signup conversion
     // client-side (gtag lives in the browser, not this server callback), and
-    // ?welcome=1 is how the Agent tells "landed here" from "navigated here",
-    // which is the distinction the funnel needs.
+    // ?welcome=1 is how the Agent tells "landed here" from "navigated here".
+    // Both destinations handle the conversion param; see useSignupConversion.
     //
     // The `next` parameter proxy.ts sets on the login URL is still not honoured
-    // here. Doing it means carrying a destination through the OAuth state and
-    // validating it as a same-origin relative path on the way out; done
-    // casually it is an open redirect, so it is deliberately left for its own
-    // change rather than bolted onto this line.
-    res.redirect(
-      isNewUser ? "/dashboard/agent?signup=1&welcome=1" : "/dashboard"
-    );
+    // here. Carrying a destination through the OAuth state needs same-origin
+    // validation on the way out, and done casually it is an open redirect.
+    const newUserDestination =
+      getEnv().AGENT_DEFAULT_VIEW === "on"
+        ? "/dashboard/agent?signup=1&welcome=1"
+        : "/dashboard?signup=1";
+    res.redirect(isNewUser ? newUserDestination : "/dashboard");
   });
 
   // --- Logout ---
