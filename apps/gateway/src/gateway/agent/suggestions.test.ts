@@ -3,12 +3,24 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const executeUserTool = vi.fn();
 vi.mock("@/gateway/playground/tools", () => ({ executeUserTool }));
 
+const listUserToolRows = vi.fn();
+vi.mock("@/gateway/user-tools", () => ({ listUserToolRows }));
+
+/** What the user can actually see, which is what decides the read. */
+function visible(...names: string[]) {
+  listUserToolRows.mockResolvedValue(names.map((namespacedName) => ({ namespacedName })));
+}
+
 const { buildSuggestions, fileNamesFrom } = await import("./suggestions");
 
 const DB = {} as never;
 
 describe("post-connect suggestions", () => {
-  beforeEach(() => executeUserTool.mockReset());
+  beforeEach(() => {
+    executeUserTool.mockReset();
+    listUserToolRows.mockReset();
+    visible("gws-mcp__drive_search");
+  });
 
   it("names the user's real files", async () => {
     // The load-bearing property. A suggestion that says "your documents" is
@@ -41,6 +53,28 @@ describe("post-connect suggestions", () => {
     expect(executeUserTool.mock.calls[0][2]).toBe("gws-mcp__drive_search");
   });
 
+  it("uses the connector the user actually has, not a hardcoded one", async () => {
+    // The gap this closes: an earlier version always searched Drive, so a user
+    // who connected Atlassian first reached the post-connect screen and got
+    // nothing — silently, because no-access correctly returns an empty list.
+    visible("atlassian-mcp__confluence_search");
+    executeUserTool.mockResolvedValue({
+      isError: false,
+      text: JSON.stringify({ results: [{ title: "Runbook" }] }),
+    });
+
+    const out = await buildSuggestions(DB, "user-1");
+
+    expect(executeUserTool.mock.calls[0][2]).toBe("atlassian-mcp__confluence_search");
+    expect(out[0].fileName).toBe("Runbook");
+  });
+
+  it("reads nothing when the user can see no search tool at all", async () => {
+    visible();
+    expect(await buildSuggestions(DB, "user-1")).toEqual([]);
+    expect(executeUserTool).not.toHaveBeenCalled();
+  });
+
   it("returns nothing rather than a generic prompt when the read is empty", async () => {
     executeUserTool.mockResolvedValue({ isError: false, text: '{"files":[]}' });
     expect(await buildSuggestions(DB, "user-1")).toEqual([]);
@@ -71,5 +105,7 @@ describe("post-connect suggestions", () => {
     expect(fileNamesFrom("not json")).toEqual([]);
     expect(fileNamesFrom('{"unexpected":true}')).toEqual([]);
     expect(fileNamesFrom('[{"name":"Bare.doc"}]')).toEqual(["Bare.doc"]);
+    // Drive says `name`, Confluence says `title`.
+    expect(fileNamesFrom('{"results":[{"title":"Page"}]}')).toEqual(["Page"]);
   });
 });

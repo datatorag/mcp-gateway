@@ -105,6 +105,12 @@ export const Playground = forwardRef<PlaygroundHandle, PlaygroundProps>(
      * dressed as a personal one is worse than none. */
     const [ownFilePrompts, setOwnFilePrompts] = useState<string[]>([]);
 
+    /** The user's own files when the read found any, the generic examples
+     * otherwise. Derived once so the copy and the list cannot disagree about
+     * which of the two is on screen. */
+    const personalised = ownFilePrompts.length > 0;
+    const suggestions = personalised ? ownFilePrompts : prompts;
+
     useEffect(() => {
       if (!hasConnectedAccount || !loadSuggestions) return;
       let live = true;
@@ -426,24 +432,19 @@ export const Playground = forwardRef<PlaygroundHandle, PlaygroundProps>(
                   {hasConnectedAccount ? (
                     <>
                       <p className="text-xs text-muted-foreground">
-                        {ownFilePrompts.length > 0
+                        {personalised
                           ? "Here are a few things I can do with what you just connected."
                           : "Ask something about your connected accounts."}
                       </p>
                       <Suggestions>
-                        {(ownFilePrompts.length > 0
-                          ? ownFilePrompts
-                          : prompts
-                        )
-                          .slice(0, 3)
-                          .map((prompt, i) => (
-                            <Suggestion
-                              className="h-auto py-1 text-[11px]"
-                              key={i}
-                              onClick={send}
-                              suggestion={prompt}
-                            />
-                          ))}
+                        {suggestions.slice(0, 3).map((prompt, i) => (
+                          <Suggestion
+                            className="h-auto py-1 text-[11px]"
+                            key={i}
+                            onClick={send}
+                            suggestion={prompt}
+                          />
+                        ))}
                       </Suggestions>
                     </>
                   ) : (

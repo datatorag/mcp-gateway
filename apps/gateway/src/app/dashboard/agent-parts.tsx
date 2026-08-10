@@ -40,13 +40,18 @@ export type AgentDataParts = {
   };
 };
 
-/** The `data-` prefixed part type for a kind, which is what arrives on the
- * wire. Stated once so no call site hand-writes the prefix. */
-export type AgentPartType = `data-${keyof AgentDataParts & string}`;
-
 /** Exported because the empty state renders the same control before any
  * message exists: an unconnected user must meet ONE connect affordance, not a
- * different one depending on whether the agent has spoken yet. */
+ * different one depending on whether the agent has spoken yet.
+ *
+ * NOTE FOR WHOEVER WIRES THE SERVER EMITTER: today this is the ONLY use, and
+ * it is rendered directly rather than travelling through the data-part
+ * pipeline, so the registry is real infrastructure with no producer yet. When
+ * the agent starts emitting `data-connect` mid-conversation ("you asked for
+ * Jira but only connected Google"), decide deliberately whether it replaces
+ * this instance or coexists with it, and note that this one lists ALL services
+ * unconditionally while a server-emitted one should name only what the request
+ * actually needed. */
 export function ConnectPart({ services }: AgentDataParts["connect"]) {
   if (services.length === 0) return null;
   return (

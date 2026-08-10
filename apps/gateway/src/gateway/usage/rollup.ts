@@ -1,5 +1,6 @@
 import type { Database } from "@datatorag-mcp/db";
 import { sql } from "drizzle-orm";
+import { MEASURED_LATENCY_FILTER } from "./exclusions";
 
 export async function runDailyRollup(
   db: Database,
@@ -20,12 +21,13 @@ export async function runDailyRollup(
       count(*) filter (where status = 'user_error')::int AS errors,
       -- Calls and bytes count every row. The percentiles skip rows whose
       -- latency was never measured, so a duration nobody recorded cannot be
-      -- rolled up as if it were zero. See usage/exclusions.ts for what those
-      -- rows are and why they are not backfilled.
+      -- rolled up as if it were zero. The predicate is IMPORTED rather than
+      -- restated: exclusions.ts exists so this rule is written once, and a
+      -- hand-copied clause here is exactly the drift it was created to stop.
       percentile_cont(0.5) within group (order by latency_ms)
-        filter (where connector is not null)::int AS p50_ms,
+        ${MEASURED_LATENCY_FILTER}::int AS p50_ms,
       percentile_cont(0.95) within group (order by latency_ms)
-        filter (where connector is not null)::int AS p95_ms,
+        ${MEASURED_LATENCY_FILTER}::int AS p95_ms,
       coalesce(sum(response_size_bytes), 0)::int AS total_bytes
     FROM usage_events
     WHERE created_at >= ${day}::date

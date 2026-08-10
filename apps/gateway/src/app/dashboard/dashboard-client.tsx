@@ -6,7 +6,6 @@ import posthog from "posthog-js";
 import { Play, Copy, Check } from "lucide-react";
 import { EVENTS } from "@/lib/analytics";
 import { CasaBadge } from "@/components/casa-badge";
-import { reportSignupConversion } from "@/components/google-ads";
 import { SERVICES } from "./connections/services";
 import { ServiceIcon } from "@/components/service-icon";
 import { SetupWizard } from "./setup-wizard";
@@ -28,37 +27,28 @@ import { formatConnectedDate } from "@/lib/utils";
 import type { ConnectedAccount, LegacyConnection } from "./connections/types";
 import { AGENT_PROMPTS } from "./agent-prompts";
 import { useSignupConversion } from "./use-signup-conversion";
+import { useConnections } from "./use-connections";
 
 
 export function DashboardClient() {
-  const [accounts, setAccounts] = useState<ConnectedAccount[]>([]);
-  const [legacyConnections, setLegacyConnections] = useState<
-    LegacyConnection[]
-  >([]);
-  const [loading, setLoading] = useState(true);
+  const {
+    accounts,
+    legacyConnections,
+    setAccounts,
+    setLegacyConnections,
+    loaded,
+    hasConnectedAccount,
+  } = useConnections();
+  const loading = !loaded;
   const [disconnecting, setDisconnecting] = useState<string | null>(null);
   const { copied, copy } = useCopyToClipboard<number>();
   const playgroundRef = useRef<PlaygroundHandle>(null);
-  const hasConnectedAccount = accounts.length > 0 || legacyConnections.length > 0;
 
   function runPrompt(prompt: string) {
     if (!hasConnectedAccount) return;
     playgroundRef.current?.runPrompt(prompt);
   }
 
-  const fetchConnections = useCallback(async () => {
-    const res = await fetch("/api/connections");
-    if (res.ok) {
-      const data = await res.json();
-      setAccounts(data.accounts ?? []);
-      setLegacyConnections(data.connections ?? []);
-    }
-    setLoading(false);
-  }, []);
-
-  useEffect(() => {
-    fetchConnections();
-  }, [fetchConnections]);
 
   useSignupConversion();
 

@@ -13,7 +13,7 @@ import {
   type PluginServerRow,
 } from "@/gateway/user-tools";
 import { PLUGIN_SERVICE_MAP, getServiceToken } from "@/gateway/service-token";
-import { classifyWrite, stripAccountArg } from "@/gateway/playground/tools";
+import { classifyWrite, flattenToolResult, stripAccountArg } from "@/gateway/playground/tools";
 import { capToolOutput } from "@/gateway/playground/cap";
 import { trackToolCall } from "@/gateway/track";
 import { RUN_ID_CONTEXT_KEY } from "@/mastra/llm-usage";
@@ -422,39 +422,32 @@ export function applyToolPolicy(
       const accountEmail = accountArgOf(input);
       try {
         const result = await execute(stripAccountArg(input), context);
+        // Serialized ONCE and reused. Sizing and capping both need the
+        // serialized form, and this runs on every tool call on a pre-cap
+        // result, so a second traversal of a large mailbox or Drive listing is
+        // real synchronous work on the event loop for nothing.
+        const serialized = serialize(result);
         if (meter) {
-          const isError = !!(result as { isError?: boolean }).isError;
-          const errorMessage = isError ? errorTextOf(result) : null;
-          // Fire-and-forget, exactly as the gateway path does it: metering must
-          // never slow a tool response, and trackToolCall never throws.
-          void trackToolCall(meter.db, {
-            userId: meter.userId,
-            toolName: namespacedName,
-            connectorType: meter.connectorType,
-            accountEmail,
-            latencyMs: Date.now() - startTime,
-            responseSizeBytes: serializedLength(result),
-            errorMessage,
-            runId: meter.runId,
+          const { text, isError } = flattenToolResult(
+            result as { content?: Array<{ type: string; text?: string }>; isError?: boolean }
+          );
+          report(meter, namespacedName, accountEmail, startTime, {
+            responseSizeBytes: serialized?.length ?? null,
+            errorMessage: isError ? text : null,
             outcome: {
               thrown: false,
               isError,
-              errorMessage,
+              errorMessage: isError ? text : null,
               source: "agent",
               toolName: namespacedName,
             },
           });
         }
-        return capToolOutput(result);
+        return capToolOutput(result, serialized);
       } catch (error) {
         if (meter) {
           const message = error instanceof Error ? error.message : "Unknown error";
-          void trackToolCall(meter.db, {
-            userId: meter.userId,
-            toolName: namespacedName,
-            connectorType: meter.connectorType,
-            accountEmail,
-            latencyMs: Date.now() - startTime,
+          report(meter, namespacedName, accountEmail, startTime, {
             responseSizeBytes: null,
             errorMessage: message,
             outcome: {
@@ -463,7 +456,6 @@ export function applyToolPolicy(
               source: "agent",
               toolName: namespacedName,
             },
-            runId: meter.runId,
           });
         }
         throw error;
@@ -481,28 +473,45 @@ function accountArgOf(input: unknown): string | undefined {
   return typeof account === "string" && account.length > 0 ? account : undefined;
 }
 
-/** Error text the same way the gateway reads it: the text parts, joined. */
-function errorTextOf(result: unknown): string | null {
-  const content = (result as { content?: Array<{ type: string; text?: string }> }).content;
-  return (
-    content
-      ?.filter((c) => c.type === "text")
-      .map((c) => c.text)
-      .join(" ") ?? null
-  );
+/** Serialize once, for both sizing and capping. Never throws: a result that
+ * will not serialize (circular) must not turn a successful tool call into a
+ * failed one just because we tried to measure it. */
+function serialize(result: unknown): string | undefined {
+  try {
+    return JSON.stringify(result);
+  } catch {
+    return undefined;
+  }
 }
 
-/** Response size measured the same way the gateway measures it, so the two
- * surfaces produce comparable numbers in one table.
+/** One usage row, from either outcome.
  *
- * Never throws: a result that cannot be serialized (circular) must not turn a
- * successful tool call into a failed one just because we tried to size it. */
-function serializedLength(result: unknown): number | null {
-  try {
-    return JSON.stringify(result)?.length ?? null;
-  } catch {
-    return null;
+ * Shared rather than written twice because the two branches differ in three
+ * fields and agree in five, and a field added to one and missed on the other
+ * produces an inconsistent row silently — which is the class of defect the
+ * metering tests exist to catch, so reproducing it inside the fix would be a
+ * poor joke. Fire-and-forget, as the gateway path does it: metering must never
+ * slow a tool response, and trackToolCall never throws. */
+function report(
+  meter: ToolMeter,
+  toolName: string,
+  accountEmail: string | undefined,
+  startTime: number,
+  outcome: {
+    responseSizeBytes: number | null;
+    errorMessage: string | null;
+    outcome: Parameters<typeof trackToolCall>[1]["outcome"];
   }
+): void {
+  void trackToolCall(meter.db, {
+    userId: meter.userId,
+    toolName,
+    connectorType: meter.connectorType,
+    accountEmail,
+    latencyMs: Date.now() - startTime,
+    runId: meter.runId,
+    ...outcome,
+  });
 }
 
 /** Attaches the tool-schema half of the prompt-cache pair to a resolved set.
@@ -585,6 +594,7 @@ export async function resolvePluginTools(
     // Derived once per server rather than per tool: every tool from one plugin
     // shares its connector.
     const connectorType = PLUGIN_SERVICE_MAP[serverSlug] ?? null;
+    const meter = meterBase ? { ...meterBase, connectorType } : undefined;
     for (const [toolName, tool] of Object.entries(serverTools)) {
       const namespacedName = toNamespacedName(serverSlug, toolName);
       if (!allowed.has(namespacedName)) continue;
@@ -594,11 +604,7 @@ export async function resolvePluginTools(
       // Every tool goes through applyToolPolicy — there is no path that puts a
       // tool in front of the model without one, which is the property that
       // makes the gate a gate rather than a habit.
-      resolved[namespacedName] = applyToolPolicy(
-        namespacedName,
-        tool,
-        meterBase ? { ...meterBase, connectorType } : undefined
-      );
+      resolved[namespacedName] = applyToolPolicy(namespacedName, tool, meter);
     }
   }
   return applyPromptCacheBreakpoint(resolved);

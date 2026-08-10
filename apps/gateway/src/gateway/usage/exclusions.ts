@@ -30,11 +30,15 @@ import { usageEvents } from "@datatorag-mcp/db";
  */
 
 /** Rows that can be attributed to a connector. For a view that GROUPS BY
- * connector, where a row without one has nowhere to go. */
+ * connector, where a row without one has nowhere to go.
+ *
+ * Correct for that view whatever the cause: a future plugin with no entry in
+ * PLUGIN_SERVICE_MAP would also report a null connector, and it too has no
+ * bucket in a per-connector breakdown. */
 export const ATTRIBUTABLE_ROWS: SQL = isNotNull(usageEvents.connector);
 
 /**
- * The same rule as an aggregate FILTER, for latency percentiles.
+ * Rows whose latency was actually measured, as an aggregate FILTER.
  *
  * WHY THIS IS SEPARATE FROM THE WHERE CLAUSE, and it is the whole point:
  * these calls really happened. The user made them and they should be COUNTED.
@@ -42,7 +46,20 @@ export const ATTRIBUTABLE_ROWS: SQL = isNotNull(usageEvents.connector);
  * reduce someone's call total to make a latency chart tidier, which trades a
  * cosmetic problem for a wrong number on the figure people actually check.
  *
- * So counts include every row, and only the percentile skips the rows whose
- * latency was never measured.
+ * WHY IT IS NOT SIMPLY "connector is not null", which is what it was first
+ * written as: that conflates two different questions. "Has no connector" is a
+ * permanent, legitimate property of any plugin missing from PLUGIN_SERVICE_MAP,
+ * and such a call would be metered correctly, with a real duration. Keyed on
+ * the connector alone, every one of those would be dropped from latency stats
+ * forever, silently, for a reason nobody would think to look for.
+ *
+ * So this matches the BUG'S SIGNATURE instead: the stream tap set none of the
+ * three fields it could not see. All three being unset together is what
+ * identifies those rows, and a genuine call does not look like that — a real
+ * response has a size even when it is fast.
  */
-export const MEASURED_LATENCY_FILTER: SQL = sql`filter (where ${usageEvents.connector} is not null)`;
+export const MEASURED_LATENCY_FILTER: SQL = sql`filter (where not (
+  ${usageEvents.connector} is null
+  and ${usageEvents.latencyMs} = 0
+  and ${usageEvents.responseSizeBytes} is null
+))`;
