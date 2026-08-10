@@ -28,7 +28,15 @@ import {
   PromptInputTools,
 } from "@/components/ai-elements/prompt-input";
 import { Suggestion, Suggestions } from "@/components/ai-elements/suggestion";
-import { Button } from "@/components/ui/button";
+import Link from "next/link";
+import { Button, buttonVariants } from "@/components/ui/button";
+import {
+  AGENT_CAP_BODY,
+  AGENT_CAP_PRIMARY_ACTION,
+  AGENT_CAP_SECONDARY_ACTION,
+  AGENT_CAP_SECONDARY_HREF,
+  agentCapTitle,
+} from "./agent-cap-copy";
 import { RUNS_CAP_HEADER, RUNS_REMAINING_HEADER } from "@/gateway/playground/quota-headers";
 import {
   errorBubbleText,
@@ -448,21 +456,30 @@ export const Playground = forwardRef<PlaygroundHandle, PlaygroundProps>(
           <div className="shrink-0 border-t border-border p-3">
             {capState ? (
               <div className="rounded-lg bg-secondary/40 p-3 text-center">
-                <p className="text-xs text-foreground">
-                  You&apos;ve used your {capState.cap} playground runs — connect
-                  Claude to keep going
+                <p className="text-xs font-medium text-foreground">
+                  {agentCapTitle(capState.cap)}
                 </p>
-                <Button
-                  className="mt-2"
-                  onClick={() =>
-                    document
-                      .getElementById("setup-wizard")
-                      ?.scrollIntoView({ behavior: "smooth" })
-                  }
-                  size="sm"
-                >
-                  Connect Claude
-                </Button>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  {AGENT_CAP_BODY}
+                </p>
+                <div className="mt-2 flex items-center justify-center gap-2">
+                  <Button
+                    onClick={() =>
+                      document
+                        .getElementById("setup-wizard")
+                        ?.scrollIntoView({ behavior: "smooth" })
+                    }
+                    size="sm"
+                  >
+                    {AGENT_CAP_PRIMARY_ACTION}
+                  </Button>
+                  <Link
+                    href={AGENT_CAP_SECONDARY_HREF}
+                    className={buttonVariants({ variant: "outline", size: "sm" })}
+                  >
+                    {AGENT_CAP_SECONDARY_ACTION}
+                  </Link>
+                </div>
               </div>
             ) : (
               // No `PromptInputBody` wrapper here, deliberately: it renders a
