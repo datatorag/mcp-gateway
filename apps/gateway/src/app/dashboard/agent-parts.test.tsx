@@ -136,6 +136,13 @@ describe("agent data parts render in the thread", () => {
     expect(text).toContain("still here");
   });
 
+  it("does not treat an inherited property as a renderer", () => {
+    // `data-constructor` would resolve to Object.prototype.constructor on a
+    // plain object lookup and be called as a renderer.
+    expect(renderAgentPart("data-constructor", {})).toBeNull();
+    expect(renderAgentPart("data-toString", {})).toBeNull();
+  });
+
   it("returns null for parts that are not data parts", () => {
     expect(renderAgentPart("text", undefined)).toBeNull();
     expect(renderAgentPart("tool-gws-mcp__docs_get", undefined)).toBeNull();

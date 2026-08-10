@@ -122,9 +122,14 @@ const AGENT_PART_RENDERERS: {
  */
 export function renderAgentPart(type: string, data: unknown): ReactNode {
   if (!type.startsWith("data-")) return null;
-  const kind = type.slice("data-".length) as keyof AgentDataParts;
-  const render = AGENT_PART_RENDERERS[kind] as
-    | ((data: unknown) => ReactNode)
-    | undefined;
-  return render ? render(data) : null;
+  const kind = type.slice("data-".length);
+  // hasOwn, not a plain lookup: `data-constructor` and `data-toString` would
+  // otherwise resolve to inherited Object.prototype members and get called as
+  // renderers. Nothing worse than a throw in the sender's own session today,
+  // but it is a free guard on a map keyed by a string off the wire.
+  if (!Object.hasOwn(AGENT_PART_RENDERERS, kind)) return null;
+  const render = AGENT_PART_RENDERERS[kind as keyof AgentDataParts] as (
+    data: unknown
+  ) => ReactNode;
+  return render(data);
 }
