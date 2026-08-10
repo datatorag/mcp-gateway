@@ -183,4 +183,27 @@ describe("account introspection", () => {
     // declare true and go through the same gate a sheet edit does.
     expect(tools.account_status.requireApproval).toBe(false);
   });
+
+  it("makes EVERY tool state its approval requirement explicitly", async () => {
+    // THE FAIL-OPEN THIS CLASS INTRODUCED, closed here. Plugin tools get their
+    // flag from classifyWrite, which defaults to WRITE for a name it does not
+    // recognise, so forgetting one there costs an unnecessary prompt. These
+    // tools bypass that entirely, so a forgotten flag is `undefined` and reads
+    // as false: the tool runs unprompted. The next destructive tool added to
+    // this file is exactly where that would happen, and it would look like
+    // nothing at all.
+    const { db } = stubDb();
+    const tools = buildIntrospectionTools({ db, userId: "user-1" }) as Record<
+      string,
+      { requireApproval?: unknown }
+    >;
+    for (const name of INTROSPECTION_TOOL_NAMES) {
+      expect(typeof tools[name].requireApproval, `${name} must declare requireApproval`).toBe(
+        "boolean"
+      );
+    }
+    // And the list is the whole surface: a tool present but unlisted would
+    // escape the check above.
+    expect(Object.keys(tools).sort()).toEqual([...INTROSPECTION_TOOL_NAMES].sort());
+  });
 });
