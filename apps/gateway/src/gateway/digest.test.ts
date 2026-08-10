@@ -145,6 +145,31 @@ describe("internal-traffic exclusion", () => {
     expect(filter).toContain("AND distinct_id NOT IN ('Abc-123')");
   });
 
+  it("splits the tool_call line by surface, appending the aggregate after the other events", async () => {
+    envState.POSTHOG_PERSONAL_API_KEY = "phx_test";
+    envState.POSTHOG_PROJECT_ID = "123";
+    fetchMock.mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        results: [
+          ["$pageview", "", 120],
+          ["agent_run", "", 3],
+          ["tool_call", "agent", 3],
+          ["tool_call", "mcp", 11],
+        ],
+      }),
+    });
+    const lines = await collectPosthog(new Date());
+    expect(lines).toContain("Pageviews: 120");
+    expect(lines).toContain("Agent runs: 3");
+    // Total first, then per-surface counts in the query's ORDER BY surface order.
+    expect(lines[lines.length - 1]).toBe("Tool calls: 14 (3 agent / 11 mcp)");
+    const body = JSON.parse(fetchMock.mock.calls[0][1].body as string);
+    // Absent surface must read as mcp — rows predating the attribute carry none.
+    expect(body.query.query).toContain("coalesce(nullif(JSONExtractString(properties, 'surface'), ''), 'mcp')");
+    expect(body.query.query).toContain("GROUP BY event, surface");
+  });
+
   it("collectPosthog embeds the exclusion filter in the HogQL it sends", async () => {
     envState.POSTHOG_PERSONAL_API_KEY = "phx_test";
     envState.POSTHOG_PROJECT_ID = "123";

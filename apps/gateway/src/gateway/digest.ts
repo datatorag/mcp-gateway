@@ -181,13 +181,19 @@ export async function collectPosthog(since: Date): Promise<string[]> {
   //
   // Same shape as the acquisition columns: rows that predate the change are
   // permanently null and the query carries the knowledge instead.
+  // The tool_call count is additionally split by surface. Only the event
+  // stream can answer "which door did the traffic come through" —
+  // usage_events has no surface column (see usage/exclusions.ts for why),
+  // so the DB section's total stays unsplit and this line carries the split.
   const hogql =
-    "SELECT event, count() AS n FROM events " +
+    "SELECT event, " +
+    "if(event = 'tool_call', coalesce(nullif(JSONExtractString(properties, 'surface'), ''), 'mcp'), '') AS surface, " +
+    "count() AS n FROM events " +
     "WHERE timestamp >= now() - INTERVAL 1 DAY " +
     "AND event IN ('$pageview', 'lead_submitted', 'copy_mcp_config', " +
     "'connector_added', 'agent_run', 'tool_call', 'playground_tool_call') " +
     `${posthogInternalFilterSql()} ` +
-    "GROUP BY event ORDER BY event";
+    "GROUP BY event, surface ORDER BY event, surface";
   const res = await fetch(
     `https://us.posthog.com/api/projects/${POSTHOG_PROJECT_ID}/query/`,
     {
@@ -201,7 +207,7 @@ export async function collectPosthog(since: Date): Promise<string[]> {
     }
   );
   if (!res.ok) throw new Error(`PostHog query failed: ${res.status}`);
-  const data = (await res.json()) as { results: [string, number][] };
+  const data = (await res.json()) as { results: [string, string, number][] };
   const LABELS: Record<string, string> = {
     $pageview: "Pageviews",
     lead_submitted: "Lead form submits",
@@ -214,7 +220,20 @@ export async function collectPosthog(since: Date): Promise<string[]> {
     playground_tool_call: "Tool calls (before the rename)",
   };
   if (!data.results || data.results.length === 0) return [];
-  return data.results.map(([event, n]) => `${LABELS[event] ?? event}: ${n}`);
+  const lines: string[] = [];
+  for (const [event, , n] of data.results) {
+    if (event === "tool_call") continue; // aggregated below
+    lines.push(`${LABELS[event] ?? event}: ${n}`);
+  }
+  // ORDER BY event puts tool_call rows last, so appending the aggregate here
+  // keeps the line order identical to the unsplit version of this digest.
+  const toolCalls = data.results.filter(([event]) => event === "tool_call");
+  if (toolCalls.length > 0) {
+    const total = toolCalls.reduce((sum, [, , n]) => sum + n, 0);
+    const split = toolCalls.map(([, surface, n]) => `${n} ${surface}`).join(" / ");
+    lines.push(`Tool calls: ${total} (${split})`);
+  }
+  return lines;
 }
 
 function sectionBlock(title: string, lines: string[] | null): unknown {
