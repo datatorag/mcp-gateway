@@ -33,6 +33,10 @@ export const REGISTRY_CLASSIFICATION: ReadonlyArray<readonly [string, "read" | "
   ["atlassian-mcp__jira_add_comment", "write"],
   ["atlassian-mcp__jira_create_issue", "write"],
   ["atlassian-mcp__jira_delete_comment", "write"],
+  // Permanent: Jira does not trash or archive a deleted issue, and the key is
+  // never reused. The plugin declares it destructive and not read-only, and the
+  // classifier agrees independently off the verb.
+  ["atlassian-mcp__jira_delete_issue", "write"],
   ["atlassian-mcp__jira_edit_comment", "write"],
   ["atlassian-mcp__jira_get_attachment", "read"],
   ["atlassian-mcp__jira_get_comments", "read"],

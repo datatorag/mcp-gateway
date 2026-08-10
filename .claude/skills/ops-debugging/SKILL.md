@@ -68,22 +68,120 @@ won't fix the `tools` table, run the full re-discovery recipe. Proven in prod
    await client.connect(transport);
    const { tools } = await client.listTools();
 
-   await sql`DELETE FROM tools WHERE mcp_server_id = ${MCP_SERVER_ID}`;
-   for (const t of tools) {
-     await sql`INSERT INTO tools (mcp_server_id, name, namespaced_name, description, input_schema_json, credits_per_call)
-       VALUES (${MCP_SERVER_ID}, ${t.name}, ${`${SLUG}__${t.name}`}, ${t.description}, ${JSON.stringify(t.inputSchema)}, 1)`;
-     // enabled column defaults to true; no need to set it explicitly
+   // REFUSE TO WRITE A SHORTER LIST THAN THE ONE ALREADY THERE. The DELETE
+   // below is unconditional, so a plugin that answered listTools while half
+   // started would silently strip the registry down to whatever it managed to
+   // report. Ground truth is only ground truth when the plugin is actually up.
+   const [{ count: existing }] = await sql`
+     SELECT count(*)::int FROM tools WHERE mcp_server_id = ${MCP_SERVER_ID}`;
+   if (tools.length < existing) {
+     throw new Error(`refusing: plugin reported ${tools.length}, registry has ${existing}`);
    }
+
+   await sql.begin(async (tx) => {
+     await tx`DELETE FROM tools WHERE mcp_server_id = ${MCP_SERVER_ID}`;
+     for (const t of tools) {
+       await tx`INSERT INTO tools (mcp_server_id, name, namespaced_name, description, input_schema_json, read_only_hint, credits_per_call)
+         VALUES (${MCP_SERVER_ID}, ${t.name}, ${`${SLUG}__${t.name}`}, ${t.description}, ${JSON.stringify(t.inputSchema)}, ${t.annotations?.readOnlyHint ?? null}, 1)`;
+       // enabled column defaults to true; no need to set it explicitly
+     }
+   });
    await sql.end();
    ```
 
-4. **Restart the gateway again** (compose `restart gateway` per deploy skill) so
-   any in-memory tool-list caches pick up the new rows.
-5. **Note the side effect**: MCP client sessions are held in-memory only
-   (see gateway boot behavior) — every restart in this recipe drops all live
-   MCP sessions. This is expected; connected clients simply re-initialize and
-   users re-auth on their next tool call. Don't treat it as a regression.
-6. **Verify** — see Verification patterns below.
+   **`read_only_hint` is not optional, and omitting it fails silently.** An
+   earlier version of this skeleton left the column out, so every re-discovery
+   run through it reset the whole plugin's annotations to NULL. Nothing goes
+   red when that happens: the cross-check in `tool-classification.test.ts`
+   treats NULL as "the plugin said nothing", so wiping the annotations disables
+   the guard that would have caught the divergence rather than tripping it. The
+   canonical writer (`plugin-manager.ts`'s `discoverTools`) has always persisted
+   it; any hand-rolled script must match it column for column.
+
+   The DELETE-and-reinsert runs in one transaction so a mid-loop failure cannot
+   leave the registry emptied.
+
+4. **No gateway restart is needed for the registry.** `listUserToolRows`
+   (`user-tools.ts`) queries `tools` on every ListTools request and caches
+   nothing, so new rows are live to the next request from any session, old or
+   new. An earlier version of this step prescribed a second restart "so
+   in-memory tool-list caches pick up the new rows" — there is no such cache.
+   That mattered: the restart is what made this procedure feel expensive enough
+   to skip, and skipping it is how a tool ships into the container and never
+   reaches the registry. (Step 2's restart is still required — that one is for
+   the plugin child process to pick up new *code*.)
+5. **Note the side effect** of step 2's restart: MCP client sessions are held
+   in-memory only (see gateway boot behavior), so it drops all live MCP
+   sessions. This is expected; connected clients simply re-initialize and users
+   re-auth on their next tool call. Don't treat it as a regression.
+6. **Verify against the plugin, not against the registry** — see the
+   registration-verification leg below. This step is mandatory at rollout.
+
+## Registration verification (mandatory at every rollout)
+
+**Run this at rollout, not only when something looks wrong.** A tool can ship
+into the plugin container and never reach the registry, and nothing anywhere
+goes red.
+
+### Why the obvious checks cannot catch it
+
+The gateway serves `tools/list` from the **registry**, not from the plugin
+(`mcp-server.ts` → `listUserToolRows`). So an unregistered tool is invisible to
+every client, fresh or stale, and reconnecting cannot reveal it. Worse, the two
+checks people reach for first are both **derived from the registry**:
+
+- the `tools` table row count, and
+- the repo's `registry-snapshot.ts`.
+
+They are two views of one source. They agree with each other while both
+disagree with the plugin, so the drift reads as consensus. That is the whole
+trap: the more places you check, the more confident you get, and none of them
+is ground truth.
+
+Nor does "the deploy worked" prove registration. A bundled behaviour fix in the
+same rollout can be live and verifiable — proving the container did update —
+while the tool set silently did not. Code shipping and the registry learning
+are two events, and only one of them has a check.
+
+### The only leg that compares against ground truth
+
+Ask the **plugin** what it has, and diff that against the registry:
+
+```js
+// Same connect-and-listTools as the re-discovery script above.
+const { tools } = await client.listTools();
+const rows = await sql`
+  SELECT name FROM tools WHERE mcp_server_id = ${MCP_SERVER_ID} AND enabled = true`;
+
+const live = new Set(tools.map((t) => t.name));
+const registered = new Set(rows.map((r) => r.name));
+console.log({
+  unregistered: [...live].filter((n) => !registered.has(n)).sort(),  // shipped, invisible
+  stale:        [...registered].filter((n) => !live.has(n)).sort(),  // advertised, gone
+});
+```
+
+Both directions matter. `unregistered` is a capability nobody can reach;
+`stale` is a tool we advertise that the plugin no longer implements, which
+fails at call time after someone has planned around it.
+
+This leg keeps getting skipped because the container has no `PLUGIN_MCP_URLS`
+set, so it has to be run by hand from inside the gateway container. **Getting
+that variable into the container is the durable fix** — until it is there, this
+check depends on someone remembering, which is exactly what failed. Until then,
+run it by hand and treat it as part of the rollout, not as debugging.
+
+### Then confirm from a fresh session
+
+After the registry agrees with the plugin, connect a **fresh** MCP session and
+confirm the new tool appears in `tools/list`. Fresh matters only for the
+client's own cached tool list — the gateway itself has no cache — but it is the
+step that proves the whole chain end to end, from plugin to registry to a real
+client, and it is cheap.
+
+Finish with the tool's own acceptance case (for a destructive tool: create a
+throwaway object, act on it, verify it is gone), so registration is proved by
+use rather than by a row count.
 
 ## Failure modes
 
