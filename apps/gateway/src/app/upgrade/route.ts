@@ -1,5 +1,3 @@
-import { NextResponse } from "next/server";
-
 /**
  * The one upgrade entry point. Every "get more runs" control in the product
  * points here and keeps pointing here.
@@ -17,10 +15,21 @@ import { NextResponse } from "next/server";
  * registered: the code changes and one of the places that references it does
  * not.
  *
- * A route handler rather than a page, deliberately. Starting a checkout session
- * is a server action with a redirect as its result, so the eventual
- * implementation replaces the body of this function and keeps its signature.
+ * A RELATIVE Location, not `new URL("/pricing", request.url)`. That was the
+ * first version and it was broken in production the moment it shipped: behind
+ * the CDN the origin is terminated upstream and `request.url` is the INTERNAL
+ * address, so the redirect resolved to localhost and the control was a dead
+ * link. A relative target is resolved by the browser against the address the
+ * user actually typed, so it cannot leak an internal host and cannot depend on
+ * how many proxies are in front of this process.
+ *
+ * When this becomes a real checkout redirect it will need an ABSOLUTE external
+ * URL, and that one must come from configured origin, never from `request.url`
+ * for the same reason.
  */
-export function GET(request: Request) {
-  return NextResponse.redirect(new URL("/pricing", request.url));
+export function GET() {
+  return new Response(null, {
+    status: 307,
+    headers: { Location: "/pricing" },
+  });
 }
