@@ -19,13 +19,25 @@ export function useConnections() {
   const [loaded, setLoaded] = useState(false);
 
   const refetch = useCallback(async () => {
-    const res = await fetch("/api/connections");
-    if (res.ok) {
-      const data = await res.json();
-      setAccounts(data.accounts ?? []);
-      setLegacyConnections(data.connections ?? []);
+    // `loaded` must be set on EVERY path, including a rejected fetch. It was
+    // set only after the await, so a network failure threw past it and left
+    // the flag false forever - and any surface gated on that flag rendered
+    // nothing at all. A failed account lookup means "we do not know what is
+    // connected", which is the same state as none connected, not a reason to
+    // withhold the page.
+    try {
+      const res = await fetch("/api/connections");
+      if (res.ok) {
+        const data = await res.json();
+        setAccounts(data.accounts ?? []);
+        setLegacyConnections(data.connections ?? []);
+      }
+    } catch {
+      // Left as "nothing connected". The user can still type; the agent
+      // answers honestly about what it cannot reach.
+    } finally {
+      setLoaded(true);
     }
-    setLoaded(true);
   }, []);
 
   useEffect(() => {

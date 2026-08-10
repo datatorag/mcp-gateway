@@ -16,7 +16,7 @@ import { useConnections } from "../use-connections";
  * link to, to land on after login, and to come back to.
  */
 export function AgentClient({ isDefaultView }: { isDefaultView: boolean }) {
-  const { loaded, hasConnectedAccount } = useConnections();
+  const { hasConnectedAccount } = useConnections();
   const ref = useRef<PlaygroundHandle>(null);
 
   // New users now land HERE, so the signup conversion has to fire here too.
@@ -45,7 +45,12 @@ export function AgentClient({ isDefaultView }: { isDefaultView: boolean }) {
       <p className="mt-1 text-sm text-muted-foreground">
         Ask for something and it works across your connected accounts.
       </p>
-      {loaded && (
+      {/* NOT gated on `loaded`. Withholding the composer until an account
+          lookup returns turns a slow or failed request into a page with
+          nothing to type in, which is indistinguishable from the product
+          being broken. `hasConnectedAccount` is false until we know better,
+          and false is the state the empty state already handles. */}
+      {(
         <Playground
           hasConnectedAccount={hasConnectedAccount}
           loadSuggestions={loadSuggestions}
