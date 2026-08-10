@@ -3,6 +3,7 @@ import { and, eq, gte, sql } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { usageEvents } from "@datatorag-mcp/db";
 import { withRoute } from "@/lib/with-route";
+import { MEASURED_LATENCY_FILTER } from "@/gateway/usage/exclusions";
 import { parseUsageRange } from "@/gateway/usage/ranges";
 
 export const dynamic = "force-dynamic";
@@ -16,8 +17,8 @@ export const GET = withRoute(async (userId, req) => {
       connector: usageEvents.connector,
       calls: sql<number>`count(*)::int`,
       errors: sql<number>`count(*) filter (where ${usageEvents.status} = 'user_error')::int`,
-      p50: sql<number>`coalesce(percentile_cont(0.5) within group (order by ${usageEvents.latencyMs}), 0)::int`,
-      p95: sql<number>`coalesce(percentile_cont(0.95) within group (order by ${usageEvents.latencyMs}), 0)::int`,
+      p50: sql<number>`coalesce(percentile_cont(0.5) within group (order by ${usageEvents.latencyMs}) ${MEASURED_LATENCY_FILTER}, 0)::int`,
+      p95: sql<number>`coalesce(percentile_cont(0.95) within group (order by ${usageEvents.latencyMs}) ${MEASURED_LATENCY_FILTER}, 0)::int`,
       avgSize: sql<number>`coalesce(avg(${usageEvents.responseSizeBytes}), 0)::int`,
     })
     .from(usageEvents)

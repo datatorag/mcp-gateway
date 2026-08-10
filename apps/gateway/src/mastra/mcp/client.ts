@@ -15,6 +15,8 @@ import {
 import { PLUGIN_SERVICE_MAP, getServiceToken } from "@/gateway/service-token";
 import { classifyWrite, stripAccountArg } from "@/gateway/playground/tools";
 import { capToolOutput } from "@/gateway/playground/cap";
+import { trackToolCall } from "@/gateway/track";
+import { RUN_ID_CONTEXT_KEY } from "@/mastra/llm-usage";
 import { EPHEMERAL_CACHE_OPTIONS } from "@/mastra/agents/datatorag";
 import { getDb } from "@/lib/db";
 
@@ -377,19 +379,130 @@ export async function resetPluginClientCache(): Promise<void> {
  * boolean form is the floor either way — an input-aware rule may raise a read
  * to needing approval, never lower a write.
  */
+/**
+ * What the agent path needs to report a tool call the way the gateway does.
+ *
+ * METERING BELONGS HERE, NOT AT THE STREAM. The first version of agent
+ * metering watched `tool-output-available` chunks go past on the UI message
+ * stream and called `trackToolCall` from there. That vantage point cannot see
+ * a connector, a latency or an account, so it reported `connectorType: null`
+ * and `latencyMs: 0` into `usage_events` — a table with no surface column that
+ * feeds the customer-facing by-connector and latency views. Agent rows landed
+ * there indistinguishable from gateway traffic and permanently wrong.
+ *
+ * This wrapper has all three: the slug is in the name, the connector follows
+ * from it, the account arrives as an argument, and the clock brackets the real
+ * call. Undefined `meter` means do not meter, which keeps the injectable tests
+ * that build tools without a database working unchanged.
+ */
+export type ToolMeter = {
+  db: Database;
+  userId: string;
+  /** Ties this call to the run that made it, so a turn's calls and its token
+   * cost can be summed into one billable unit. */
+  runId: string | null;
+  /** The connector this tool's plugin maps to, or null for an unmapped one. */
+  connectorType: string | null;
+};
+
 export function applyToolPolicy(
   namespacedName: string,
-  tool: Tool<unknown, unknown, unknown, unknown>
+  tool: Tool<unknown, unknown, unknown, unknown>,
+  meter?: ToolMeter
 ): Tool<unknown, unknown, unknown, unknown> {
   tool.requireApproval = classifyWrite(namespacedName);
 
   const execute = tool.execute;
   if (execute) {
-    tool.execute = async (input, context) =>
-      capToolOutput(await execute(stripAccountArg(input), context));
+    tool.execute = async (input, context) => {
+      const startTime = Date.now();
+      // Read BEFORE the strip: `account` is the caller's chosen mailbox and it
+      // is what makes a usage row attributable to one of several connected
+      // accounts. After stripAccountArg it is gone.
+      const accountEmail = accountArgOf(input);
+      try {
+        const result = await execute(stripAccountArg(input), context);
+        if (meter) {
+          const isError = !!(result as { isError?: boolean }).isError;
+          const errorMessage = isError ? errorTextOf(result) : null;
+          // Fire-and-forget, exactly as the gateway path does it: metering must
+          // never slow a tool response, and trackToolCall never throws.
+          void trackToolCall(meter.db, {
+            userId: meter.userId,
+            toolName: namespacedName,
+            connectorType: meter.connectorType,
+            accountEmail,
+            latencyMs: Date.now() - startTime,
+            responseSizeBytes: serializedLength(result),
+            errorMessage,
+            runId: meter.runId,
+            outcome: {
+              thrown: false,
+              isError,
+              errorMessage,
+              source: "agent",
+              toolName: namespacedName,
+            },
+          });
+        }
+        return capToolOutput(result);
+      } catch (error) {
+        if (meter) {
+          const message = error instanceof Error ? error.message : "Unknown error";
+          void trackToolCall(meter.db, {
+            userId: meter.userId,
+            toolName: namespacedName,
+            connectorType: meter.connectorType,
+            accountEmail,
+            latencyMs: Date.now() - startTime,
+            responseSizeBytes: null,
+            errorMessage: message,
+            outcome: {
+              thrown: true,
+              errorMessage: message,
+              source: "agent",
+              toolName: namespacedName,
+            },
+            runId: meter.runId,
+          });
+        }
+        throw error;
+      }
+    };
   }
 
   return tool;
+}
+
+/** The account the caller addressed, when they named one. */
+function accountArgOf(input: unknown): string | undefined {
+  if (input === null || typeof input !== "object" || Array.isArray(input)) return undefined;
+  const account = (input as Record<string, unknown>).account;
+  return typeof account === "string" && account.length > 0 ? account : undefined;
+}
+
+/** Error text the same way the gateway reads it: the text parts, joined. */
+function errorTextOf(result: unknown): string | null {
+  const content = (result as { content?: Array<{ type: string; text?: string }> }).content;
+  return (
+    content
+      ?.filter((c) => c.type === "text")
+      .map((c) => c.text)
+      .join(" ") ?? null
+  );
+}
+
+/** Response size measured the same way the gateway measures it, so the two
+ * surfaces produce comparable numbers in one table.
+ *
+ * Never throws: a result that cannot be serialized (circular) must not turn a
+ * successful tool call into a failed one just because we tried to size it. */
+function serializedLength(result: unknown): number | null {
+  try {
+    return JSON.stringify(result)?.length ?? null;
+  } catch {
+    return null;
+  }
 }
 
 /** Attaches the tool-schema half of the prompt-cache pair to a resolved set.
@@ -425,6 +538,10 @@ export type PluginToolDeps = {
   /** The namespaced tools this user is allowed to see. Shared policy — a user
    * only gets tools from plugins whose service they have actually connected. */
   listAllowedToolNames: (userId: string) => Promise<Set<string>>;
+  /** Where usage rows go. Omitted by the injectable tests, which build tool
+   * sets with no database; omitting it turns metering off rather than
+   * requiring every caller to supply a stub. */
+  meterDb?: Database;
 };
 
 /**
@@ -451,8 +568,23 @@ export async function resolvePluginTools(
     deps.client.listToolsets(),
   ]);
 
+  // The run id rides the same context the model factory reads it from, so a
+  // tool call and the model calls of the same turn carry one id. Absent on the
+  // paths that do not mint one, and null is a fine value for it.
+  const runId = requestContext?.get(RUN_ID_CONTEXT_KEY);
+  const meterBase = deps.meterDb
+    ? {
+        db: deps.meterDb,
+        userId,
+        runId: typeof runId === "string" && runId.length > 0 ? runId : null,
+      }
+    : null;
+
   const resolved: ToolsInput = {};
   for (const [serverSlug, serverTools] of Object.entries(toolsets)) {
+    // Derived once per server rather than per tool: every tool from one plugin
+    // shares its connector.
+    const connectorType = PLUGIN_SERVICE_MAP[serverSlug] ?? null;
     for (const [toolName, tool] of Object.entries(serverTools)) {
       const namespacedName = toNamespacedName(serverSlug, toolName);
       if (!allowed.has(namespacedName)) continue;
@@ -462,7 +594,11 @@ export async function resolvePluginTools(
       // Every tool goes through applyToolPolicy — there is no path that puts a
       // tool in front of the model without one, which is the property that
       // makes the gate a gate rather than a habit.
-      resolved[namespacedName] = applyToolPolicy(namespacedName, tool);
+      resolved[namespacedName] = applyToolPolicy(
+        namespacedName,
+        tool,
+        meterBase ? { ...meterBase, connectorType } : undefined
+      );
     }
   }
   return applyPromptCacheBreakpoint(resolved);
@@ -494,6 +630,7 @@ export async function resolveUserPluginTools({
 
   return resolvePluginTools(requestContext, {
     client,
+    meterDb: db,
     listAllowedToolNames: async (id) => {
       const rows = await listUserToolRows(db, id);
       return new Set(rows.map((row) => row.namespacedName));

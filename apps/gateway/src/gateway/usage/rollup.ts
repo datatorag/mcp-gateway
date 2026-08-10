@@ -18,8 +18,14 @@ export async function runDailyRollup(
       connector,
       count(*)::int AS calls,
       count(*) filter (where status = 'user_error')::int AS errors,
-      percentile_cont(0.5) within group (order by latency_ms)::int AS p50_ms,
-      percentile_cont(0.95) within group (order by latency_ms)::int AS p95_ms,
+      -- Calls and bytes count every row. The percentiles skip rows whose
+      -- latency was never measured, so a duration nobody recorded cannot be
+      -- rolled up as if it were zero. See usage/exclusions.ts for what those
+      -- rows are and why they are not backfilled.
+      percentile_cont(0.5) within group (order by latency_ms)
+        filter (where connector is not null)::int AS p50_ms,
+      percentile_cont(0.95) within group (order by latency_ms)
+        filter (where connector is not null)::int AS p95_ms,
       coalesce(sum(response_size_bytes), 0)::int AS total_bytes
     FROM usage_events
     WHERE created_at >= ${day}::date

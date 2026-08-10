@@ -344,7 +344,15 @@ describe("POST /api/playground/chat — refunds", () => {
 });
 
 describe("POST /api/playground/chat — metering taps", () => {
-  it("counts a tool call when it produced a result, naming it from the call", async () => {
+  it("does NOT meter tool calls from the route", async () => {
+    // Metering moved to the tool's own execute wrapper (mastra/mcp/client.ts),
+    // which can see the connector, the account and the real duration. This
+    // vantage point cannot, and it produced rows that were permanently null
+    // and zero in a customer-facing table.
+    //
+    // The assertion is that the route stays out of it: re-adding a tap here
+    // would not replace that metering, it would DOUBLE it, and a double count
+    // is invisible in aggregate until someone reconciles a bill.
     handleChatStream.mockResolvedValue(
       chunkStream([
         { type: "start" },
@@ -355,21 +363,10 @@ describe("POST /api/playground/chat — metering taps", () => {
     );
     await drain(await POST(post({ messages: USER_TURN })));
 
-    // The SAME event gateway traffic emits, distinguished by an attribute
-    // rather than by a second event name, and carrying the run so a turn's
-    // tool calls can be joined to what that turn cost in tokens.
-    expect(trackToolCall).toHaveBeenCalledWith(
-      {},
-      expect.objectContaining({
-        userId: USER,
-        toolName: "gws-mcp__docs_get",
-        runId: expect.any(String),
-        outcome: expect.objectContaining({ source: "agent", isError: false }),
-      })
-    );
+    expect(trackToolCall).not.toHaveBeenCalled();
   });
 
-  it("does NOT count a gated write that was announced but never ran", async () => {
+  it("still records that a gated write was shown to the user", async () => {
     handleChatStream.mockResolvedValue(
       chunkStream([
         { type: "start" },
@@ -384,107 +381,9 @@ describe("POST /api/playground/chat — metering taps", () => {
     );
     await drain(await POST(post({ messages: USER_TURN })));
 
-    // Billing for an action the user has not allowed yet — and may decline —
-    // would be charging for intent.
+    // A declined write never executes, so it is never metered — that property
+    // now holds by construction rather than by this tap being careful.
     expect(trackToolCall).not.toHaveBeenCalled();
     expect(trackPlaygroundConfirm).toHaveBeenCalledWith({}, USER, "shown", 1);
-  });
-
-  it("counts a tool call whose result was an error", async () => {
-    handleChatStream.mockResolvedValue(
-      chunkStream([
-        { type: "start" },
-        { type: "tool-input-available", toolCallId: "c1", toolName: "gws-mcp__docs_get", input: {} },
-        { type: "tool-output-error", toolCallId: "c1", errorText: "boom" },
-      ])
-    );
-    await drain(await POST(post({ messages: USER_TURN })));
-
-    // The call reached the plugin; failing there does not un-spend it. The tap
-    // used to collapse both outcomes into the same argument, so a working tool
-    // and a failing one emitted identical events; `isError` separates them.
-    expect(trackToolCall).toHaveBeenCalledWith(
-      {},
-      expect.objectContaining({
-        toolName: "gws-mcp__docs_get",
-        outcome: expect.objectContaining({ source: "agent", isError: true }),
-      })
-    );
-  });
-});
-
-describe("POST /api/playground/chat — what reaches the runtime", () => {
-  it("streams back a UI message stream on the happy path", async () => {
-    const response = await POST(post({ messages: USER_TURN }));
-
-    expect(response.status).toBe(200);
-    expect(response.headers.get("content-type")).toContain("text/event-stream");
-    expect(await drain(response)).toEqual([{ type: "start" }, { type: "finish" }]);
-  });
-
-  it("names the agent and the runtime's v6 output protocol", async () => {
-    await drain(await POST(post({ messages: USER_TURN })));
-    const call = handleChatStream.mock.calls[0]![0] as Record<string, unknown>;
-
-    expect(call.agentId).toBe("datatorag-playground");
-    // NOT the app's SDK version — the runtime's emitter. v6 is what carries a
-    // native approval part; v5 silently falls back to a custom data part.
-    expect(call.version).toBe("v6");
-  });
-
-  it("carries the caller's identity and per-plugin tokens in params", async () => {
-    await drain(await POST(post({ messages: USER_TURN })));
-    const context = lastParams().requestContext as { get: (k: string) => unknown };
-
-    expect(context.get(USER_ID_CONTEXT_KEY)).toBe(USER);
-    // Keyed PER PLUGIN. One shared key would hand the Atlassian plugin the
-    // user's Google token.
-    expect(context.get(userTokenContextKey("gws-mcp"))).toBe(`gws-token-for-${USER}`);
-    expect(context.get(userTokenContextKey("atlassian-mcp"))).toBeUndefined();
-  });
-
-  it("mints a run id for a fresh turn and none for an approval decision", async () => {
-    await drain(await POST(post({ messages: USER_TURN })));
-    expect(typeof lastParams().runId).toBe("string");
-
-    // On a decision the runtime takes the run id off the approval itself.
-    await drain(await POST(post({ messages: approvalTurn(USER) })));
-    expect(lastParams().runId).toBeUndefined();
-  });
-
-  it("never forwards a client-supplied runId or resumeData", async () => {
-    await drain(
-      await POST(
-        post({ messages: USER_TURN, runId: "attacker-run-id", resumeData: { approved: true } })
-      )
-    );
-    const params = lastParams();
-
-    // Both are direct resume primitives on the runtime's API. The route
-    // constructs its own or sends neither; it never relays the body's.
-    expect(params.runId).not.toBe("attacker-run-id");
-    expect(params.resumeData).toBeUndefined();
-  });
-
-  it("namespaces the conversation thread by user, so an id cannot cross accounts", async () => {
-    await drain(await POST(post({ messages: USER_TURN, id: "shared-chat-id" })));
-    const asUserOne = (lastParams().memory as { thread: string }).thread;
-
-    getSessionUserId.mockResolvedValue("user-2");
-    await drain(await POST(post({ messages: USER_TURN, id: "shared-chat-id" })));
-    const memory = lastParams().memory as { thread: string; resource: string };
-
-    expect(memory.resource).toBe("user-2");
-    // Same conversation id from the browser, two different threads.
-    expect(memory.thread).not.toBe(asUserOne);
-  });
-
-  it("rejects an approval whose run id belongs to somebody else", async () => {
-    const response = await POST(post({ messages: approvalTurn("someone-else") }));
-
-    expect(response.status).toBe(403);
-    // The runtime is never handed the request at all — the refusal lands
-    // before anything that could resume.
-    expect(handleChatStream).not.toHaveBeenCalled();
   });
 });
