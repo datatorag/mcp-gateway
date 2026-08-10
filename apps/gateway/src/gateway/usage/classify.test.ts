@@ -48,13 +48,20 @@ describe("classifyOutcome", () => {
     expect(r).toEqual({ status: "server_error", meter: false });
   });
 
-  it("does not meter playground calls regardless of status", () => {
-    const r = classifyOutcome({
-      thrown: false,
-      isError: false,
-      source: "playground",
-    });
-    expect(r.meter).toBe(false);
+  it("meters the agent surface, the same as the gateway", () => {
+    // REVERSED deliberately (SCRUM-57). This surface returned meter:false and
+    // therefore wrote no usage row at all. The paid tier sells volume, so a
+    // surface that does not meter is a volume path that does not count.
+    expect(classifyOutcome({ thrown: false, source: "agent" }).meter).toBe(true);
+    expect(
+      classifyOutcome({ thrown: false, isError: true, source: "agent" }).meter
+    ).toBe(true);
+  });
+
+  it("still never meters a call we broke ourselves, on either surface", () => {
+    for (const source of ["mcp", "agent"] as const) {
+      expect(classifyOutcome({ thrown: true, source }).meter).toBe(false);
+    }
   });
 
   it("does not meter oauth-refresh tool calls", () => {

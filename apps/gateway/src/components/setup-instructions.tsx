@@ -120,9 +120,22 @@ function ClientInstructions({
 
 export function SetupInstructions({
   sourcePrefix,
+  surface = "settings",
 }: {
   /** Analytics surface: "wizard" (dashboard) or "docs" (/docs/getting-started). */
   sourcePrefix: "wizard" | "docs";
+  /** Where the user met this block.
+   *
+   * Same one-event-origin-in-attributes pattern as `tool_call`: the copy event
+   * keeps one name and carries where it came from. A config the agent offered
+   * mid-conversation and a config found on a settings page are different user
+   * states, and the whole reason the agent offers it at all is that the same
+   * block lands differently depending on whether value came first. Reading one
+   * blended number would hide exactly that.
+   *
+   * Defaults to "settings" so every existing mount reports truthfully without
+   * being touched. */
+  surface?: "settings" | "agent";
 }) {
   const [selectedClient, setSelectedClient] = useState<ClientId>("claude-web");
   // Seed with the production URL so statically generated pages (docs) ship the
@@ -144,6 +157,7 @@ export function SetupInstructions({
   function handleCopied() {
     posthog.capture(EVENTS.COPY_MCP_CONFIG, {
       source: `${sourcePrefix}_${selectedClient}`,
+      surface,
     });
   }
 

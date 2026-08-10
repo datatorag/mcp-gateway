@@ -1,4 +1,13 @@
 export const EVENTS = {
+  /** EVERY tool call, from every surface. There is deliberately no second
+   * event name: origin travels as the `surface` property, with `run_id` set
+   * when the call belongs to an agent run. A parallel event would split the
+   * same measurement across two streams that cannot be summed.
+   *
+   * CUTOVER RULE, stated once and referenced rather than repeated: rows from
+   * before this change have no `surface` at all, so a query spanning it must
+   * read absent as "mcp", and the agent surface's old name must be unioned in.
+   * The canonical statement of that rule lives in `gateway/digest.ts`. */
   TOOL_CALL: "tool_call",
   FIRST_TOOL_CALL: "first_tool_call",
   USER_SIGNED_UP: "user_signed_up",
@@ -18,12 +27,14 @@ export const EVENTS = {
   OAUTH_REFRESH_REPLAY: "oauth_refresh_replay",
   OAUTH_REFRESH_EXPIRED: "oauth_refresh_expired",
   OAUTH_TOKEN_REVOKED: "oauth_token_revoked",
+  /** One agent turn. Emitted SERVER-SIDE, where the run id is minted, so it
+   * can carry `run_id` and so it counts every run rather than only the ones
+   * started from a particular button. */
+  AGENT_RUN: "agent_run",
   PLAYGROUND_MESSAGE_SENT: "playground_message_sent",
-  PLAYGROUND_TOOL_CALL: "playground_tool_call",
   PLAYGROUND_CAP_HIT: "playground_cap_hit",
   PLAYGROUND_CONFIRM: "playground_confirm",
   PLAYGROUND_FEEDBACK: "playground_feedback",
-  PLAYGROUND_PROMPT_RUN: "playground_prompt_run",
   WIZARD_CLIENT_SELECTED: "wizard_client_selected",
   WIZARD_STEP_COMPLETED: "wizard_step_completed",
 } as const;

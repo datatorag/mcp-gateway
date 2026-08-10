@@ -108,7 +108,7 @@ describe("first_tool_call milestone", () => {
   it("ignores playground calls", async () => {
     await trackToolCall(
       dbMock,
-      callProps({ outcome: { thrown: false, isError: false, errorMessage: null, source: "playground", toolName: "gmail_search" } })
+      callProps({ outcome: { thrown: false, isError: false, errorMessage: null, source: "agent", toolName: "gmail_search" } })
     );
     expect(update).not.toHaveBeenCalled();
   });

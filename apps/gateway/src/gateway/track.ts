@@ -13,6 +13,7 @@ import { sendSlack } from "../lib/slack";
 import { writeUsageEvent } from "./usage/write";
 import { redactErrorMessage } from "./usage/redact";
 import { classifyOutcome, type ClassifyInput } from "./usage/classify";
+import { countToolCall } from "./usage/period";
 import {
   resolveUserIdentity,
   resolveUserEmail,
@@ -33,6 +34,11 @@ export async function trackToolCall(
     responseSizeBytes: number | null;
     errorMessage: string | null;
     outcome: ClassifyInput;
+    /** The agent run this call belongs to, when it belongs to one. Null for
+     * gateway traffic, which has no run. Carrying it is what lets one join
+     * answer both how many tools a run used and what that run cost, which are
+     * otherwise in two event streams with nothing in common. */
+    runId?: string | null;
   }
 ): Promise<void> {
   // Metering + analytics run fire-and-forget off the tool-response path (see the
@@ -62,13 +68,22 @@ export async function trackToolCall(
           response_size_bytes: props.responseSizeBytes,
           error_message: errorMessage,
           metered: meter,
+          surface: props.outcome.source,
+          run_id: props.runId ?? null,
           ...identityProps(userEmail),
         },
       });
     }
 
-    // Activation milestone: only real MCP traffic counts — a playground call
-    // from the dashboard doesn't prove the user's agent can reach the gateway.
+    // Activation milestone: only real gateway traffic counts.
+    //
+    // STILL SURFACE-GATED THOUGH METERING NO LONGER IS, and that asymmetry is
+    // deliberate rather than a missed edit. Metering asks "should this be
+    // billed", which is true of both surfaces because both consume what the
+    // paid tier sells. Activation asks "can this user's own client reach us",
+    // which a call made from our dashboard does not answer. Collapse the two
+    // and every user is marked activated by the surface that exists to lead
+    // them TO activation, which destroys the funnel step it measures.
     // Skipped once the cache knows the user is activated, so the per-call
     // claim UPDATE runs at most once per user per process.
     if (status === "success" && props.outcome.source === "mcp" && !identity?.activated) {
@@ -83,21 +98,36 @@ export async function trackToolCall(
 
     if (!meter) return;
 
-    const result = await writeUsageEvent(db, {
-      userId: props.userId,
-      toolName: props.toolName,
-      connector: props.connectorType,
-      accountEmail: props.accountEmail ?? null,
-      status,
-      latencyMs: props.latencyMs,
-      responseSizeBytes: props.responseSizeBytes,
-      errorMessage,
-    });
-    if (!result.ok) {
-      console.warn(
-        `[usage] write failed (${result.reason}) for user=${props.userId} tool=${props.toolName}`
-      );
-    }
+    // The allowance counter, incremented for every metered call whatever
+    // surface it came through. Unguarded: the call already happened, so the
+    // only thing refusing to count could achieve is losing the count. Whether
+    // the NEXT one is allowed is decided before dispatch.
+    // Concurrent, not sequential: the counter is an UPDATE on `users` and the
+    // event is an INSERT into `usage_events`, with no data dependency either
+    // way and independent failure handling. Awaiting them in series doubled
+    // the time this held a connection on the tail of every metered call, and
+    // this path now runs for the agent surface too.
+    await Promise.all([
+      countToolCall(db, props.userId).catch((err) =>
+        console.warn(`[usage] counter increment failed for user=${props.userId}`, err)
+      ),
+      writeUsageEvent(db, {
+        userId: props.userId,
+        toolName: props.toolName,
+        connector: props.connectorType,
+        accountEmail: props.accountEmail ?? null,
+        status,
+        latencyMs: props.latencyMs,
+        responseSizeBytes: props.responseSizeBytes,
+        errorMessage,
+      }).then((result) => {
+        if (!result.ok) {
+          console.warn(
+            `[usage] write failed (${result.reason}) for user=${props.userId} tool=${props.toolName}`
+          );
+        }
+      }),
+    ]);
   } catch (err) {
     console.warn(
       `[track] tool_call tracking failed for user=${props.userId} tool=${props.toolName}`,
@@ -197,9 +227,14 @@ export function trackLogin(
 }
 
 /**
- * Playground chat analytics — separate from trackToolCall/usage_events
- * (playground calls stay unmetered; see usage/classify.ts). Never throws:
- * a PostHog capture failure must not break the streaming chat response.
+ * Agent chat analytics. Never throws: a capture failure must not break the
+ * streaming chat response.
+ *
+ * These sit alongside `trackToolCall` rather than replacing it. The agent's
+ * TOOL CALLS go through that, as `tool_call` with `surface: "agent"`, because
+ * they are the same measurement as gateway traffic and now meter the same way.
+ * What is left here is the surface's own lifecycle, which has no gateway
+ * equivalent.
  */
 async function capturePlaygroundEvent(
   db: Database,
@@ -228,13 +263,21 @@ export async function trackPlaygroundMessage(
   return capturePlaygroundEvent(db, userId, EVENTS.PLAYGROUND_MESSAGE_SENT);
 }
 
-export async function trackPlaygroundToolCall(
+/** One agent turn, emitted where the run id is minted.
+ *
+ * SERVER-SIDE, which is a move rather than a rename. The client-side event
+ * this replaces fired only from one set of buttons, so ordinary turns and the
+ * in-thread suggestions were invisible and the run count was an undercount of
+ * unknown size. Here it fires for every turn, and it is the only place that
+ * can attach the run id the tool calls and the token events also carry. */
+export async function trackAgentRun(
   db: Database,
   userId: string,
-  tool: string
+  props: { runId: string; runsUsed: number }
 ): Promise<void> {
-  return capturePlaygroundEvent(db, userId, EVENTS.PLAYGROUND_TOOL_CALL, {
-    tool_name: tool,
+  return capturePlaygroundEvent(db, userId, EVENTS.AGENT_RUN, {
+    run_id: props.runId,
+    runs_used: props.runsUsed,
   });
 }
 

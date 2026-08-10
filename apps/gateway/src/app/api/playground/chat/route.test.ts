@@ -26,23 +26,29 @@ vi.mock("@/lib/session", () => ({ getSessionUserId: () => getSessionUserId() }))
 const getEnv = vi.fn();
 vi.mock("@datatorag-mcp/config", () => ({ getEnv: () => getEnv() }));
 
-const claimPlaygroundMessage = vi.fn();
-const refundPlaygroundMessage = vi.fn();
-vi.mock("@/gateway/playground/cap", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("@/gateway/playground/cap")>()),
-  claimPlaygroundMessage: (...args: unknown[]) => claimPlaygroundMessage(...args),
-  refundPlaygroundMessage: (...args: unknown[]) => refundPlaygroundMessage(...args),
+import { FREE_MONTHLY_AGENT_RUNS as RUN_CAP } from "@/gateway/billing/plans";
+
+const claimAgentRun = vi.fn();
+const capExempt = vi.fn();
+const refundAgentRun = vi.fn();
+vi.mock("@/gateway/usage/period", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/gateway/usage/period")>()),
+  claimAgentRun: (...args: unknown[]) => claimAgentRun(...args),
+  capExempt: (...args: unknown[]) => capExempt(...args),
+  refundAgentRun: (...args: unknown[]) => refundAgentRun(...args),
 }));
 
 const trackPlaygroundMessage = vi.fn();
-const trackPlaygroundToolCall = vi.fn();
 const trackPlaygroundCapHit = vi.fn();
 const trackPlaygroundConfirm = vi.fn();
+const trackAgentRun = vi.fn();
+const trackToolCall = vi.fn();
 vi.mock("@/gateway/track", () => ({
   trackPlaygroundMessage: (...a: unknown[]) => trackPlaygroundMessage(...a),
-  trackPlaygroundToolCall: (...a: unknown[]) => trackPlaygroundToolCall(...a),
   trackPlaygroundCapHit: (...a: unknown[]) => trackPlaygroundCapHit(...a),
   trackPlaygroundConfirm: (...a: unknown[]) => trackPlaygroundConfirm(...a),
+  trackAgentRun: (...a: unknown[]) => trackAgentRun(...a),
+  trackToolCall: (...a: unknown[]) => trackToolCall(...a),
 }));
 
 vi.mock("@/lib/db", () => ({ db: {}, getDb: () => ({}) }));
@@ -158,8 +164,9 @@ beforeEach(() => {
     PLAYGROUND_MODEL: "claude-haiku-4-5",
     PLAYGROUND_MESSAGE_CAP: 20,
   });
-  claimPlaygroundMessage.mockResolvedValue(19);
-  refundPlaygroundMessage.mockResolvedValue(undefined);
+  claimAgentRun.mockResolvedValue({ ok: true, used: 1, remaining: 24 });
+  capExempt.mockResolvedValue(false);
+  refundAgentRun.mockResolvedValue(undefined);
   handleChatStream.mockResolvedValue(chunkStream([{ type: "start" }, { type: "finish" }]));
 });
 
@@ -176,7 +183,7 @@ describe("POST /api/playground/chat — guards", () => {
     expect(response.status).toBe(403);
     expect(await response.json()).toEqual({ error: "playground_disabled" });
     // Nothing charged for a turn that could never have run.
-    expect(claimPlaygroundMessage).not.toHaveBeenCalled();
+    expect(claimAgentRun).not.toHaveBeenCalled();
   });
 
   it("400s on a body with no usable messages", async () => {
@@ -198,28 +205,44 @@ describe("POST /api/playground/chat — guards", () => {
 
 describe("POST /api/playground/chat — the turn cap", () => {
   it("429s with cap_exceeded when the claim fails, and records the hit", async () => {
-    claimPlaygroundMessage.mockResolvedValue(null);
+    claimAgentRun.mockResolvedValue({ ok: false, used: RUN_CAP });
     const response = await POST(post({ messages: USER_TURN }));
 
     expect(response.status).toBe(429);
-    expect(await response.json()).toEqual({ error: "cap_exceeded", cap: 20 });
+    expect(await response.json()).toEqual({ error: "cap_exceeded", cap: RUN_CAP });
     expect(trackPlaygroundCapHit).toHaveBeenCalledWith({}, USER);
     expect(handleChatStream).not.toHaveBeenCalled();
+  });
+
+  it("counts an internal account's run but never refuses it", async () => {
+    // Dogfooding is the only sustained use this surface has, so a live
+    // allowance would interrupt our own testing long before it met a
+    // customer. Counted, not capped: the counter still has to move or the
+    // allowance stops being readable for the people using it most.
+    capExempt.mockResolvedValue(true);
+    claimAgentRun.mockResolvedValue({ ok: true, used: 900, remaining: null });
+    const response = await POST(post({ messages: USER_TURN }));
+
+    expect(claimAgentRun).toHaveBeenCalledWith({}, USER, null);
+    // No paywall headers, because there is no wall to report.
+    expect(response.headers.get("x-playground-runs-cap")).toBeNull();
+    expect(response.headers.get("x-playground-runs-remaining")).toBeNull();
+    await drain(response);
   });
 
   it("claims and counts one message on a fresh turn", async () => {
     await drain(await POST(post({ messages: USER_TURN })));
 
-    expect(claimPlaygroundMessage).toHaveBeenCalledWith({}, USER, 20);
+    expect(claimAgentRun).toHaveBeenCalledWith({}, USER, RUN_CAP);
     expect(trackPlaygroundMessage).toHaveBeenCalledWith({}, USER);
   });
 
   it("reports the runs left on the response of the turn that spent one", async () => {
-    claimPlaygroundMessage.mockResolvedValue(3);
+    claimAgentRun.mockResolvedValue({ ok: true, used: RUN_CAP - 3, remaining: 3 });
     const response = await POST(post({ messages: USER_TURN }));
 
     expect(response.headers.get("x-playground-runs-remaining")).toBe("3");
-    expect(response.headers.get("x-playground-runs-cap")).toBe("20");
+    expect(response.headers.get("x-playground-runs-cap")).toBe(String(RUN_CAP));
     await drain(response);
   });
 
@@ -227,7 +250,7 @@ describe("POST /api/playground/chat — the turn cap", () => {
     // The reason this is a HEADER and not part of the finish payload: a turn
     // gated on a write stops at the approval request, so a stream that legally
     // never finishes must still be able to say the user is out of runs.
-    claimPlaygroundMessage.mockResolvedValue(0);
+    claimAgentRun.mockResolvedValue({ ok: true, used: RUN_CAP, remaining: 0 });
     handleChatStream.mockResolvedValue(
       chunkStream([
         { type: "start" },
@@ -253,7 +276,7 @@ describe("POST /api/playground/chat — the turn cap", () => {
   it("claims nothing on an approval decision — it continues a paid turn", async () => {
     await drain(await POST(post({ messages: approvalTurn(USER) })));
 
-    expect(claimPlaygroundMessage).not.toHaveBeenCalled();
+    expect(claimAgentRun).not.toHaveBeenCalled();
     expect(trackPlaygroundConfirm).toHaveBeenCalledWith({}, USER, "approved", 1);
   });
 
@@ -273,7 +296,7 @@ describe("POST /api/playground/chat — refunds", () => {
     const response = await POST(post({ messages: USER_TURN }));
 
     expect(response.status).toBe(500);
-    expect(refundPlaygroundMessage).toHaveBeenCalledWith({}, USER);
+    expect(refundAgentRun).toHaveBeenCalledWith({}, USER);
   });
 
   it("refunds when the stream fails having delivered only bookkeeping", async () => {
@@ -283,7 +306,7 @@ describe("POST /api/playground/chat — refunds", () => {
     const chunks = await drain(await POST(post({ messages: USER_TURN })));
 
     expect(chunks.some((c) => c.type === "error")).toBe(true);
-    expect(refundPlaygroundMessage).toHaveBeenCalledWith({}, USER);
+    expect(refundAgentRun).toHaveBeenCalledWith({}, USER);
   });
 
   it("does NOT refund once real content has reached the client", async () => {
@@ -298,7 +321,7 @@ describe("POST /api/playground/chat — refunds", () => {
 
     // The tokens were really spent. A failure afterwards is not a reason to
     // hand the turn back.
-    expect(refundPlaygroundMessage).not.toHaveBeenCalled();
+    expect(refundAgentRun).not.toHaveBeenCalled();
   });
 
   it("does NOT refund an aborted request, however early it died", async () => {
@@ -309,14 +332,14 @@ describe("POST /api/playground/chat — refunds", () => {
 
     // Otherwise "POST a large history, abort at once" is a free loop: real
     // provider input tokens burned while the cap never moves.
-    expect(refundPlaygroundMessage).not.toHaveBeenCalled();
+    expect(refundAgentRun).not.toHaveBeenCalled();
   });
 
   it("never refunds on an approval decision — no claim was made to undo", async () => {
     handleChatStream.mockRejectedValue(new Error("nope"));
     await POST(post({ messages: approvalTurn(USER) }));
 
-    expect(refundPlaygroundMessage).not.toHaveBeenCalled();
+    expect(refundAgentRun).not.toHaveBeenCalled();
   });
 });
 
@@ -332,7 +355,18 @@ describe("POST /api/playground/chat — metering taps", () => {
     );
     await drain(await POST(post({ messages: USER_TURN })));
 
-    expect(trackPlaygroundToolCall).toHaveBeenCalledWith({}, USER, "gws-mcp__docs_get");
+    // The SAME event gateway traffic emits, distinguished by an attribute
+    // rather than by a second event name, and carrying the run so a turn's
+    // tool calls can be joined to what that turn cost in tokens.
+    expect(trackToolCall).toHaveBeenCalledWith(
+      {},
+      expect.objectContaining({
+        userId: USER,
+        toolName: "gws-mcp__docs_get",
+        runId: expect.any(String),
+        outcome: expect.objectContaining({ source: "agent", isError: false }),
+      })
+    );
   });
 
   it("does NOT count a gated write that was announced but never ran", async () => {
@@ -352,7 +386,7 @@ describe("POST /api/playground/chat — metering taps", () => {
 
     // Billing for an action the user has not allowed yet — and may decline —
     // would be charging for intent.
-    expect(trackPlaygroundToolCall).not.toHaveBeenCalled();
+    expect(trackToolCall).not.toHaveBeenCalled();
     expect(trackPlaygroundConfirm).toHaveBeenCalledWith({}, USER, "shown", 1);
   });
 
@@ -366,8 +400,16 @@ describe("POST /api/playground/chat — metering taps", () => {
     );
     await drain(await POST(post({ messages: USER_TURN })));
 
-    // The call reached the plugin; failing there does not un-spend it.
-    expect(trackPlaygroundToolCall).toHaveBeenCalledWith({}, USER, "gws-mcp__docs_get");
+    // The call reached the plugin; failing there does not un-spend it. The tap
+    // used to collapse both outcomes into the same argument, so a working tool
+    // and a failing one emitted identical events; `isError` separates them.
+    expect(trackToolCall).toHaveBeenCalledWith(
+      {},
+      expect.objectContaining({
+        toolName: "gws-mcp__docs_get",
+        outcome: expect.objectContaining({ source: "agent", isError: true }),
+      })
+    );
   });
 });
 

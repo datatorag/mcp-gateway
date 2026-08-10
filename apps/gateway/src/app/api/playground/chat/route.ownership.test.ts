@@ -44,16 +44,18 @@ vi.mock("@datatorag-mcp/config", () => ({
 
 vi.mock("@/lib/db", () => ({ db: {}, getDb: () => ({}) }));
 
-vi.mock("@/gateway/playground/cap", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("@/gateway/playground/cap")>()),
-  claimPlaygroundMessage: async () => true,
-  refundPlaygroundMessage: async () => {},
+vi.mock("@/gateway/usage/period", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/gateway/usage/period")>()),
+  claimAgentRun: async () => ({ ok: true, used: 1, remaining: 24 }),
+  refundAgentRun: async () => {},
 }));
 
 vi.mock("@/gateway/track", () => ({
   trackPlaygroundMessage: async () => {},
   trackPlaygroundToolCall: async () => {},
   trackPlaygroundCapHit: async () => {},
+  trackAgentRun: vi.fn(),
+  trackToolCall: vi.fn(),
   trackPlaygroundConfirm: async () => {},
 }));
 

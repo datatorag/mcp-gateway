@@ -5,6 +5,7 @@ import { db } from "@/lib/db";
 import { withRoute } from "@/lib/with-route";
 import { getEnv } from "@datatorag-mcp/config";
 import { getMastra, DATATORAG_AGENT_ID } from "@/mastra";
+import { RUN_ID_CONTEXT_KEY } from "@/mastra/llm-usage";
 import {
   buildPluginRequestContext,
   listPluginServers,
@@ -13,11 +14,13 @@ import {
 import {
   deriveThreadId, findApprovalTargets, mintRunId, ownsRunId,
 } from "@/gateway/playground/run-ownership";
-import { claimPlaygroundMessage, refundPlaygroundMessage } from "@/gateway/playground/cap";
 import { RUNS_CAP_HEADER, RUNS_REMAINING_HEADER } from "@/gateway/playground/quota-headers";
 import {
-  trackPlaygroundMessage, trackPlaygroundToolCall, trackPlaygroundCapHit, trackPlaygroundConfirm,
+  trackAgentRun, trackToolCall,
+  trackPlaygroundMessage, trackPlaygroundCapHit, trackPlaygroundConfirm,
 } from "@/gateway/track";
+import { FREE_MONTHLY_AGENT_RUNS } from "@/gateway/billing/plans";
+import { capExempt, claimAgentRun, refundAgentRun } from "@/gateway/usage/period";
 import { logAndGenericError } from "@/lib/errors";
 
 /**
@@ -110,8 +113,12 @@ const NON_CONTENT_CHUNK_TYPES: Record<UIMessageChunk["type"], boolean> = {
 type StreamTaps = {
   /** First chunk of real assistant output — the refund gate. */
   onDelivered: () => void;
-  /** A tool actually produced a result (or errored) on the server. */
-  onToolResult: (toolName: string) => void;
+  /** A tool actually produced a result on the server.
+   *
+   * Carries whether it errored, which the old signature collapsed: both
+   * outcomes called the same tap with the same argument, so the emitted event
+   * could not tell a working tool from a failing one. */
+  onToolResult: (toolName: string, opts: { isError: boolean }) => void;
   /** A write was gated and is now waiting on the user. */
   onApprovalShown: () => void;
   /** The stream died. Receives the error; returns the text to send on. */
@@ -160,7 +167,9 @@ function instrumentStream(
         case "tool-output-available":
         case "tool-output-error": {
           const name = toolNames.get(chunk.toolCallId);
-          if (name !== undefined) taps.onToolResult(name);
+          if (name !== undefined) {
+            taps.onToolResult(name, { isError: chunk.type === "tool-output-error" });
+          }
           break;
         }
         case "tool-approval-request":
@@ -238,6 +247,9 @@ export const POST = withRoute(async (userId, request) => {
   // nothing and so reports nothing, leaving the client's notion of the quota
   // untouched rather than resetting it.
   const quotaHeaders: Record<string, string> = {};
+  /** Runs spent in the period after this turn's claim. Reported on `agent_run`
+   * so the allowance is readable from the event stream alone. */
+  let runsUsed = 0;
 
   if (isApprovalLeg) {
     void trackPlaygroundConfirm(
@@ -247,14 +259,27 @@ export const POST = withRoute(async (userId, request) => {
       approvals.length
     );
   } else {
-    const cap = env.PLAYGROUND_MESSAGE_CAP;
-    const remaining = await claimPlaygroundMessage(db, userId, cap);
-    if (remaining === null) {
+    // A PERIOD allowance, not a lifetime one. The counter this replaces was a
+    // lifetime column explicitly excluded from billing, which was the right
+    // shape for a buried demo and the wrong one for a metered surface: it
+    // could only ever run out, never refill.
+    // Internal accounts are counted but never refused. Dogfooding is the only
+    // sustained use this surface has, so a live allowance would interrupt our
+    // own testing long before it ever met a customer. See `capExempt` for why
+    // that predicate is safe for skipping a cap and unsafe for anything else.
+    const cap = (await capExempt(db, userId)) ? null : FREE_MONTHLY_AGENT_RUNS;
+    const claim = await claimAgentRun(db, userId, cap);
+    if (!claim.ok) {
       void trackPlaygroundCapHit(db, userId);
       return NextResponse.json({ error: "cap_exceeded", cap }, { status: 429 });
     }
-    quotaHeaders[RUNS_REMAINING_HEADER] = String(remaining);
-    quotaHeaders[RUNS_CAP_HEADER] = String(cap);
+    runsUsed = claim.used;
+    // No headers when uncapped: the client raises its paywall off these, and
+    // reporting a cap that does not apply would show one to the exempt.
+    if (cap !== null && claim.remaining !== null) {
+      quotaHeaders[RUNS_REMAINING_HEADER] = String(claim.remaining);
+      quotaHeaders[RUNS_CAP_HEADER] = String(cap);
+    }
     void trackPlaygroundMessage(db, userId);
   }
 
@@ -268,12 +293,16 @@ export const POST = withRoute(async (userId, request) => {
   let delivered = false;
   const refundIfWasted = () => {
     if (isApprovalLeg || delivered || request.signal.aborted) return;
-    refundPlaygroundMessage(db, userId).catch((err) =>
+    refundAgentRun(db, userId).catch((err) =>
       console.error("[playground] refund failed", err)
     );
   };
 
   let stream: ReadableStream<UIMessageChunk>;
+  /** Hoisted out of the try below because the stream taps close over it: the
+   * tool-call events are emitted while the stream drains, long after this
+   * block returns. */
+  let usageRunId: string | undefined;
   try {
     // Per-request identity for the plugin connections. Built per plugin, not
     // once for the request: a plugin's token is a credential for THAT
@@ -284,6 +313,22 @@ export const POST = withRoute(async (userId, request) => {
       userId,
       tokensByServer: await loadUserPluginTokens(db, userId, servers.map((s) => s.slug)),
     });
+
+    // The run this turn belongs to, so each model call can report its tokens
+    // against it. On an approval leg the runtime resumes the ORIGINAL run, so
+    // the id comes off the approval that was just verified rather than being
+    // minted again — otherwise a run that paused for approval would report as
+    // two runs and halve its own token total.
+    usageRunId = isApprovalLeg ? approvals[0]?.runId : mintRunId(userId);
+    if (usageRunId) requestContext.set(RUN_ID_CONTEXT_KEY, usageRunId);
+
+    // One event per RUN, not per leg. An approval leg resumes a run that was
+    // already counted and already claimed, so emitting here would report two
+    // runs for one turn and overstate exactly the number the allowance is
+    // measured in.
+    if (!isApprovalLeg && usageRunId) {
+      void trackAgentRun(db, userId, { runId: usageRunId, runsUsed });
+    }
 
     stream = (await handleChatStream({
       mastra: getMastra(),
@@ -311,7 +356,7 @@ export const POST = withRoute(async (userId, request) => {
         // ends up inside the approval id the client sends back, and what the
         // gate above verifies. On an approval leg the runtime takes the run id
         // from the approval itself, so supplying one here would be ignored.
-        ...(isApprovalLeg ? {} : { runId: mintRunId(userId) }),
+        ...(isApprovalLeg ? {} : { runId: usageRunId as string }),
       },
       onError: (err) => logAndGenericError("[playground] stream error", err),
     })) as ReadableStream<UIMessageChunk>;
@@ -329,7 +374,22 @@ export const POST = withRoute(async (userId, request) => {
     headers: quotaHeaders,
     stream: instrumentStream(stream, {
       onDelivered: () => { delivered = true; },
-      onToolResult: (toolName) => { void trackPlaygroundToolCall(db, userId, toolName); },
+      onToolResult: (toolName, { isError }) => {
+        // The SAME event gateway traffic emits, distinguished by `surface`
+        // rather than by a second event name, and carrying the run so a
+        // turn's tool calls and its token cost can be joined.
+        void trackToolCall(db, {
+          userId,
+          toolName,
+          connectorType: null,
+          accountEmail: undefined,
+          latencyMs: 0,
+          responseSizeBytes: null,
+          errorMessage: null,
+          runId: usageRunId ?? null,
+          outcome: { thrown: false, isError, source: "agent", toolName },
+        });
+      },
       onApprovalShown: () => { void trackPlaygroundConfirm(db, userId, "shown", 1); },
       onFailure: (err) => {
         refundIfWasted();
