@@ -32,9 +32,20 @@ export function useConnections() {
         setAccounts(data.accounts ?? []);
         setLegacyConnections(data.connections ?? []);
       }
-    } catch {
-      // Left as "nothing connected". The user can still type; the agent
-      // answers honestly about what it cannot reach.
+    } catch (err) {
+      // STATUS ONLY, NEVER THE BODY. A silent catch here is what turned a
+      // transient failure into a rollback and a manual production diagnosis:
+      // the page rendered, nothing errored anywhere we could see, and the
+      // cause was invisible in telemetry. A breadcrumb means the next one
+      // reports itself.
+      //
+      // The response body is deliberately not touched - it carries the user's
+      // connected accounts and email addresses, and a log line is the wrong
+      // place for either.
+      console.warn(
+        "[connections] lookup failed, treating as none connected:",
+        err instanceof Error ? err.name : "unknown"
+      );
     } finally {
       setLoaded(true);
     }
