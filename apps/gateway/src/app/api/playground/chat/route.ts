@@ -16,7 +16,7 @@ import {
 } from "@/gateway/playground/run-ownership";
 import { RUNS_CAP_HEADER, RUNS_REMAINING_HEADER } from "@/gateway/playground/quota-headers";
 import {
-  trackAgentRun, trackToolCall,
+  trackAgentRun,
   trackPlaygroundMessage, trackPlaygroundCapHit, trackPlaygroundConfirm,
 } from "@/gateway/track";
 import { FREE_MONTHLY_AGENT_RUNS } from "@/gateway/billing/plans";
@@ -113,12 +113,6 @@ const NON_CONTENT_CHUNK_TYPES: Record<UIMessageChunk["type"], boolean> = {
 type StreamTaps = {
   /** First chunk of real assistant output — the refund gate. */
   onDelivered: () => void;
-  /** A tool actually produced a result on the server.
-   *
-   * Carries whether it errored, which the old signature collapsed: both
-   * outcomes called the same tap with the same argument, so the emitted event
-   * could not tell a working tool from a failing one. */
-  onToolResult: (toolName: string, opts: { isError: boolean }) => void;
   /** A write was gated and is now waiting on the user. */
   onApprovalShown: () => void;
   /** The stream died. Receives the error; returns the text to send on. */
@@ -128,17 +122,17 @@ type StreamTaps = {
 /** Wraps the runtime's stream so the route can count what went past and notice
  * a failure, without owning the loop that produced it.
  *
- * Tool-call metering fires on the RESULT, not on the call, and that is the
- * behaviour being preserved rather than an accident: a gated write is
- * announced to the client and then may never run, so counting announcements
- * would bill for actions the user declined. The name is carried across from
- * the input chunk because the result chunk identifies the call by id only. */
+ * This no longer meters tool calls. It used to, and the reason it stopped is
+ * that a chunk carries a tool NAME and nothing else: no connector, no account,
+ * no duration. Metering moved to the tool's own `execute` wrapper, which has
+ * all three. What survives here is the property that made the old placement
+ * defensible in the first place, and it survives for free: a gated write that
+ * the user declines never executes, so it is never counted. */
 function instrumentStream(
   source: ReadableStream<UIMessageChunk>,
   taps: StreamTaps
 ): ReadableStream<UIMessageChunk> {
   const reader = source.getReader();
-  const toolNames = new Map<string, string>();
   let delivered = false;
 
   return new ReadableStream<UIMessageChunk>({
@@ -160,22 +154,7 @@ function instrumentStream(
         delivered = true;
         taps.onDelivered();
       }
-      switch (chunk.type) {
-        case "tool-input-available":
-          toolNames.set(chunk.toolCallId, chunk.toolName);
-          break;
-        case "tool-output-available":
-        case "tool-output-error": {
-          const name = toolNames.get(chunk.toolCallId);
-          if (name !== undefined) {
-            taps.onToolResult(name, { isError: chunk.type === "tool-output-error" });
-          }
-          break;
-        }
-        case "tool-approval-request":
-          taps.onApprovalShown();
-          break;
-      }
+      if (chunk.type === "tool-approval-request") taps.onApprovalShown();
       controller.enqueue(chunk);
     },
     cancel(reason) {
@@ -374,22 +353,13 @@ export const POST = withRoute(async (userId, request) => {
     headers: quotaHeaders,
     stream: instrumentStream(stream, {
       onDelivered: () => { delivered = true; },
-      onToolResult: (toolName, { isError }) => {
-        // The SAME event gateway traffic emits, distinguished by `surface`
-        // rather than by a second event name, and carrying the run so a
-        // turn's tool calls and its token cost can be joined.
-        void trackToolCall(db, {
-          userId,
-          toolName,
-          connectorType: null,
-          accountEmail: undefined,
-          latencyMs: 0,
-          responseSizeBytes: null,
-          errorMessage: null,
-          runId: usageRunId ?? null,
-          outcome: { thrown: false, isError, source: "agent", toolName },
-        });
-      },
+      // NO TOOL METERING HERE, DELIBERATELY. It used to live on this tap, and
+      // the vantage point was the problem: a stream chunk knows a tool's name
+      // and nothing else, so every agent row reached `usage_events` with a null
+      // connector and a zero latency. Metering now wraps the tool's `execute`
+      // in `mastra/mcp/client.ts`, where the connector, the account and the
+      // real duration are all in scope. Putting it back here would double-count
+      // every call.
       onApprovalShown: () => { void trackPlaygroundConfirm(db, userId, "shown", 1); },
       onFailure: (err) => {
         refundIfWasted();

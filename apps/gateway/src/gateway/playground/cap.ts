@@ -21,18 +21,27 @@ export const TOOL_OUTPUT_CAP = 20_000;
  *
  * Total by construction: every branch returns, so there is no input for which
  * the cap silently does not apply. */
-export function capToolOutput(output: unknown): unknown {
+export function capToolOutput(output: unknown, precomputed?: string): unknown {
   if (typeof output === "string") {
     return output.length <= TOOL_OUTPUT_CAP ? output : output.slice(0, TOOL_OUTPUT_CAP);
   }
   let serialized: string | undefined;
-  try {
-    serialized = JSON.stringify(output);
-  } catch {
-    // Circular or otherwise unserializable: nothing safe to measure or slice.
-    // Left alone rather than dropped — a tool returning this is a bug to fix
-    // at the tool, not a reason to lose the user's result.
-    return output;
+  if (precomputed !== undefined) {
+    // The caller already serialized this result for another reason (the agent
+    // path sizes it for metering). Serializing again is a second full traversal
+    // of an UNCAPPED result on every tool call, which for a large mailbox or
+    // Drive listing is real synchronous work on the event loop for nothing.
+    // Optional so every other call site is unchanged.
+    serialized = precomputed;
+  } else {
+    try {
+      serialized = JSON.stringify(output);
+    } catch {
+      // Circular or otherwise unserializable: nothing safe to measure or slice.
+      // Left alone rather than dropped — a tool returning this is a bug to fix
+      // at the tool, not a reason to lose the user's result.
+      return output;
+    }
   }
   if (serialized === undefined || serialized.length <= TOOL_OUTPUT_CAP) return output;
   return serialized.slice(0, TOOL_OUTPUT_CAP);

@@ -344,7 +344,15 @@ describe("POST /api/playground/chat — refunds", () => {
 });
 
 describe("POST /api/playground/chat — metering taps", () => {
-  it("counts a tool call when it produced a result, naming it from the call", async () => {
+  it("does NOT meter tool calls from the route", async () => {
+    // Metering moved to the tool's own execute wrapper (mastra/mcp/client.ts),
+    // which can see the connector, the account and the real duration. This
+    // vantage point cannot, and it produced rows that were permanently null
+    // and zero in a customer-facing table.
+    //
+    // The assertion is that the route stays out of it: re-adding a tap here
+    // would not replace that metering, it would DOUBLE it, and a double count
+    // is invisible in aggregate until someone reconciles a bill.
     handleChatStream.mockResolvedValue(
       chunkStream([
         { type: "start" },
@@ -355,21 +363,10 @@ describe("POST /api/playground/chat — metering taps", () => {
     );
     await drain(await POST(post({ messages: USER_TURN })));
 
-    // The SAME event gateway traffic emits, distinguished by an attribute
-    // rather than by a second event name, and carrying the run so a turn's
-    // tool calls can be joined to what that turn cost in tokens.
-    expect(trackToolCall).toHaveBeenCalledWith(
-      {},
-      expect.objectContaining({
-        userId: USER,
-        toolName: "gws-mcp__docs_get",
-        runId: expect.any(String),
-        outcome: expect.objectContaining({ source: "agent", isError: false }),
-      })
-    );
+    expect(trackToolCall).not.toHaveBeenCalled();
   });
 
-  it("does NOT count a gated write that was announced but never ran", async () => {
+  it("still records that a gated write was shown to the user", async () => {
     handleChatStream.mockResolvedValue(
       chunkStream([
         { type: "start" },
@@ -384,32 +381,10 @@ describe("POST /api/playground/chat — metering taps", () => {
     );
     await drain(await POST(post({ messages: USER_TURN })));
 
-    // Billing for an action the user has not allowed yet — and may decline —
-    // would be charging for intent.
+    // A declined write never executes, so it is never metered — that property
+    // now holds by construction rather than by this tap being careful.
     expect(trackToolCall).not.toHaveBeenCalled();
     expect(trackPlaygroundConfirm).toHaveBeenCalledWith({}, USER, "shown", 1);
-  });
-
-  it("counts a tool call whose result was an error", async () => {
-    handleChatStream.mockResolvedValue(
-      chunkStream([
-        { type: "start" },
-        { type: "tool-input-available", toolCallId: "c1", toolName: "gws-mcp__docs_get", input: {} },
-        { type: "tool-output-error", toolCallId: "c1", errorText: "boom" },
-      ])
-    );
-    await drain(await POST(post({ messages: USER_TURN })));
-
-    // The call reached the plugin; failing there does not un-spend it. The tap
-    // used to collapse both outcomes into the same argument, so a working tool
-    // and a failing one emitted identical events; `isError` separates them.
-    expect(trackToolCall).toHaveBeenCalledWith(
-      {},
-      expect.objectContaining({
-        toolName: "gws-mcp__docs_get",
-        outcome: expect.objectContaining({ source: "agent", isError: true }),
-      })
-    );
   });
 });
 

@@ -4,6 +4,7 @@ import { db } from "@/lib/db";
 import { usageEvents } from "@datatorag-mcp/db";
 import { withRoute } from "@/lib/with-route";
 import { parseUsageRange } from "@/gateway/usage/ranges";
+import { ATTRIBUTABLE_ROWS } from "@/gateway/usage/exclusions";
 
 export const dynamic = "force-dynamic";
 
@@ -18,7 +19,13 @@ export const GET = withRoute(async (userId, req) => {
     })
     .from(usageEvents)
     .where(
-      and(eq(usageEvents.userId, userId), gte(usageEvents.createdAt, start))
+      and(
+        eq(usageEvents.userId, userId),
+        gte(usageEvents.createdAt, start),
+        // See ATTRIBUTABLE_ROWS: a grouping BY connector cannot include rows
+        // that have none, and these have none because they were never measured.
+        ATTRIBUTABLE_ROWS
+      )
     )
     .groupBy(truncExpr, usageEvents.connector)
     .orderBy(truncExpr);

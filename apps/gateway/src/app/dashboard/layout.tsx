@@ -8,7 +8,9 @@ import { useDismissable } from "@/lib/use-dismissable";
 
 const navItems = [
   { href: "/dashboard", label: "Dashboard" },
+  { href: "/dashboard/agent", label: "Agent" },
   { href: "/dashboard/usage", label: "Usage" },
+  { href: "/dashboard/mcp-config", label: "MCP config" },
   { href: "/docs", label: "Docs" },
 ];
 

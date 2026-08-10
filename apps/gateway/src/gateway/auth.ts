@@ -190,9 +190,24 @@ export function createAuthRouter(
       expires: expiresAt,
     });
 
-    // ?signup=1 lets the dashboard fire the Google Ads signup conversion
-    // client-side (gtag lives in the browser, not this server callback).
-    res.redirect(isNewUser ? "/dashboard?signup=1" : "/dashboard");
+    // A NEW user lands on the Agent; a returning one lands where they always
+    // did. Not a blanket redirect: people who already have a working setup have
+    // their own reason for opening the dashboard, and moving them is a change
+    // to a habit rather than an improvement to onboarding.
+    //
+    // ?signup=1 lets the destination fire the Google Ads signup conversion
+    // client-side (gtag lives in the browser, not this server callback), and
+    // ?welcome=1 is how the Agent tells "landed here" from "navigated here",
+    // which is the distinction the funnel needs.
+    //
+    // The `next` parameter proxy.ts sets on the login URL is still not honoured
+    // here. Doing it means carrying a destination through the OAuth state and
+    // validating it as a same-origin relative path on the way out; done
+    // casually it is an open redirect, so it is deliberately left for its own
+    // change rather than bolted onto this line.
+    res.redirect(
+      isNewUser ? "/dashboard/agent?signup=1&welcome=1" : "/dashboard"
+    );
   });
 
   // --- Logout ---

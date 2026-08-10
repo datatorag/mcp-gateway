@@ -19,6 +19,7 @@
 
 import { memo } from "react";
 import type { DynamicToolUIPart, ToolUIPart, UIMessage } from "ai";
+import { renderAgentPart, type AgentDataParts } from "./agent-parts";
 import { RefreshCcwIcon, ThumbsDownIcon, ThumbsUpIcon } from "lucide-react";
 
 import {
@@ -50,9 +51,13 @@ import { GENERIC_ERROR_MESSAGE as SERVER_GENERIC_ERROR } from "@/lib/errors";
  * presentation components below accept. Anything that can produce a
  * `PlaygroundMessage[]` (a live chat, a canned script) can drive the UI.
  *
- * Deliberately the SDK's plain `UIMessage`, with no custom data-part map: the
- * playground no longer adds parts of its own. */
-export type PlaygroundMessage = UIMessage;
+ * NO LONGER THE SDK'S PLAIN `UIMessage`. It carries the agent's own data-part
+ * map, because the agent now puts things in the thread that are neither text
+ * nor a tool call: a connect control, the config block, account state. That
+ * widening is the deliberate, bounded cost of the data-part approach, and it
+ * is paid exactly here, once, with a named type. See `agent-parts.tsx` for
+ * what the kinds are and why they are parts rather than rows. */
+export type PlaygroundMessage = UIMessage<unknown, AgentDataParts>;
 
 export type PlaygroundMessagePart = PlaygroundMessage["parts"][number];
 
@@ -430,6 +435,14 @@ export const MessageRow = memo(function MessageRow({
               </div>
             );
           }
+          // One branch for every data part there will ever be. The kinds and
+          // their renderers live in agent-parts.tsx; this asks once and does
+          // not grow when a fourth is added.
+          const agentPart = renderAgentPart(
+            part.type,
+            (part as { data?: unknown }).data
+          );
+          if (agentPart !== null) return <div key={key}>{agentPart}</div>;
           return null;
         })}
       </MessageContent>
