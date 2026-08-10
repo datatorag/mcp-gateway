@@ -107,4 +107,36 @@ describe("the Agent composer", () => {
     await mount(async () => new Response("nope", { status: 500 }));
     expect(container.querySelector("textarea")).not.toBeNull();
   });
+
+  it("SENDS: typing and submitting produces a request to the chat route", async () => {
+    // The property the last round proved was missing: a composer that renders
+    // is not a composer that works. On production the box appeared, the user
+    // typed, and no request ever left the page.
+    await mount(ok({ accounts: [{ id: "a1", connectorType: "google-workspace" }], connections: [] }));
+
+    const textarea = container.querySelector("textarea");
+    expect(textarea, "no composer to type into").not.toBeNull();
+
+    // Type the way React hears it: set the value through the native setter so
+    // the synthetic onChange fires.
+    const setter = Object.getOwnPropertyDescriptor(
+      window.HTMLTextAreaElement.prototype,
+      "value"
+    )!.set!;
+    await act(async () => {
+      setter.call(textarea, "what is in my drive");
+      textarea!.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+
+    const form = textarea!.closest("form");
+    expect(form, "composer is not inside a form, so submit cannot fire").not.toBeNull();
+    await act(async () => {
+      form!.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+      await Promise.resolve();
+    });
+
+    const calls = (globalThis.fetch as unknown as { mock: { calls: unknown[][] } }).mock.calls;
+    const chat = calls.filter((c) => String(c[0]).includes("/api/playground/chat"));
+    expect(chat.length, `no POST to the chat route; fetch saw: ${calls.map((c) => String(c[0])).join(", ")}`).toBeGreaterThan(0);
+  });
 });
