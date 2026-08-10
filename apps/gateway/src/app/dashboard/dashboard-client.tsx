@@ -47,7 +47,7 @@ export function DashboardClient() {
   const playgroundRef = useRef<PlaygroundHandle>(null);
   const hasConnectedAccount = accounts.length > 0 || legacyConnections.length > 0;
 
-  function runPrompt(prompt: string, i: number) {
+  function runPrompt(prompt: string) {
     if (!hasConnectedAccount) return;
     playgroundRef.current?.runPrompt(prompt);
   }
@@ -357,7 +357,7 @@ export function DashboardClient() {
               className="group flex items-start gap-2 rounded-lg border border-border px-3 py-2.5 text-left transition-colors hover:border-primary/30 hover:bg-secondary/50"
             >
               <button
-                onClick={() => runPrompt(prompt, i)}
+                onClick={() => runPrompt(prompt)}
                 disabled={!hasConnectedAccount}
                 title={
                   hasConnectedAccount

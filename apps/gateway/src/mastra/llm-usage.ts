@@ -66,11 +66,12 @@ export const RUN_ID_CONTEXT_KEY = "llmUsageRunId";
 /** PostHog derives `$ai_total_cost_usd` itself from provider, model and token
  * counts, so no price is hard-coded here. That is deliberate: a rate table in
  * this file would be a number that goes stale silently the next time a
- * provider reprices, and we have shipped several of those. */
-/** Hard-coded rather than read off the model, which reports itself as
- * `anthropic.messages`. The pricing lookup matches on the provider NAME, and a
- * qualified variant is not what it indexes, so taking the model's own string
- * would cost nothing at ingest and quietly yield no cost at all. */
+ * provider reprices, and we have shipped several of those.
+ *
+ * The name is hard-coded rather than read off the model, which reports itself
+ * as `anthropic.messages`. That pricing lookup matches on the provider NAME,
+ * and a qualified variant is not what it indexes, so taking the model's own
+ * string would cost nothing at ingest and quietly yield no cost at all. */
 const PROVIDER = "anthropic";
 
 type UsageBuckets = {

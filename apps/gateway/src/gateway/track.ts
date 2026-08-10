@@ -102,25 +102,32 @@ export async function trackToolCall(
     // surface it came through. Unguarded: the call already happened, so the
     // only thing refusing to count could achieve is losing the count. Whether
     // the NEXT one is allowed is decided before dispatch.
-    await countToolCall(db, props.userId).catch((err) =>
-      console.warn(`[usage] counter increment failed for user=${props.userId}`, err)
-    );
-
-    const result = await writeUsageEvent(db, {
-      userId: props.userId,
-      toolName: props.toolName,
-      connector: props.connectorType,
-      accountEmail: props.accountEmail ?? null,
-      status,
-      latencyMs: props.latencyMs,
-      responseSizeBytes: props.responseSizeBytes,
-      errorMessage,
-    });
-    if (!result.ok) {
-      console.warn(
-        `[usage] write failed (${result.reason}) for user=${props.userId} tool=${props.toolName}`
-      );
-    }
+    // Concurrent, not sequential: the counter is an UPDATE on `users` and the
+    // event is an INSERT into `usage_events`, with no data dependency either
+    // way and independent failure handling. Awaiting them in series doubled
+    // the time this held a connection on the tail of every metered call, and
+    // this path now runs for the agent surface too.
+    await Promise.all([
+      countToolCall(db, props.userId).catch((err) =>
+        console.warn(`[usage] counter increment failed for user=${props.userId}`, err)
+      ),
+      writeUsageEvent(db, {
+        userId: props.userId,
+        toolName: props.toolName,
+        connector: props.connectorType,
+        accountEmail: props.accountEmail ?? null,
+        status,
+        latencyMs: props.latencyMs,
+        responseSizeBytes: props.responseSizeBytes,
+        errorMessage,
+      }).then((result) => {
+        if (!result.ok) {
+          console.warn(
+            `[usage] write failed (${result.reason}) for user=${props.userId} tool=${props.toolName}`
+          );
+        }
+      }),
+    ]);
   } catch (err) {
     console.warn(
       `[track] tool_call tracking failed for user=${props.userId} tool=${props.toolName}`,

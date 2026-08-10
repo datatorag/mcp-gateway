@@ -1,4 +1,4 @@
-import { sql } from "drizzle-orm";
+import { sql, type SQL } from "drizzle-orm";
 import type { Database } from "@datatorag-mcp/db";
 
 import { isInternalEmail } from "../../lib/brevo";
@@ -24,12 +24,55 @@ import { resolveUserEmail } from "../user-email";
  *
  * BOTH COUNTERS ROLL TOGETHER, ALWAYS. They share one `current_period_start`,
  * so resetting either alone would leave the pair describing different windows
- * while still looking like a matched set. Every statement below resets both.
+ * while still looking like a matched set. Every statement below goes through
+ * {@link rollAndBump}, which writes both counters on every path — that is the
+ * mechanism holding this up, not a rule each caller has to remember.
  */
 
 /** Period length. One statement's worth of SQL rather than a date library,
  * because the roll has to be atomic with the increment it guards. */
 const PERIOD = sql`interval '1 month'`;
+
+/** Which counter a statement is moving, if any. */
+type Counter = "runs" | "calls";
+
+/**
+ * The lazy roll and the increment, as one statement, written once.
+ *
+ * THIS IS WHERE "BOTH COUNTERS ROLL TOGETHER" IS ENFORCED. Every column is
+ * assigned on every path, so a caller cannot express a statement that rolls
+ * one counter and leaves the other describing the previous period. The three
+ * callers below differ only in which counter they bump and whether they guard,
+ * which is why they are three arguments rather than three copies of the SQL:
+ * an earlier version restated the whole CTE at each call site, and the
+ * invariant the header promises was then upheld only by whoever edited it last
+ * copying nine lines correctly.
+ *
+ * Rolling resets both counters and sets the bumped one to 1, because the call
+ * that triggered the roll belongs to the period it opens. Not rolling
+ * increments the bumped one and leaves the other alone. Bumping nothing
+ * (`null`) makes this a roll-if-lapsed read.
+ */
+function rollAndBump(userId: string, bump: Counter | null, guard?: SQL) {
+  const runsOnRoll = bump === "runs" ? sql`1` : sql`0`;
+  const callsOnRoll = bump === "calls" ? sql`1` : sql`0`;
+  const runsElse =
+    bump === "runs" ? sql`u.current_period_agent_runs + 1` : sql`u.current_period_agent_runs`;
+  const callsElse =
+    bump === "calls" ? sql`u.current_period_calls + 1` : sql`u.current_period_calls`;
+  return sql`
+    WITH state AS (
+      SELECT id, (current_period_start <= now() - ${PERIOD}) AS should_roll
+      FROM users WHERE id = ${userId}
+    )
+    UPDATE users u SET
+      current_period_start      = CASE WHEN s.should_roll THEN now() ELSE u.current_period_start END,
+      current_period_agent_runs = CASE WHEN s.should_roll THEN ${runsOnRoll} ELSE ${runsElse} END,
+      current_period_calls      = CASE WHEN s.should_roll THEN ${callsOnRoll} ELSE ${callsElse} END
+    FROM state s
+    WHERE u.id = s.id${guard === undefined ? sql`` : sql` AND (s.should_roll OR ${guard})`}
+  `;
+}
 
 /**
  * Whether this user's allowance is enforced at all.
@@ -84,17 +127,7 @@ export async function claimAgentRun(
 ): Promise<ClaimResult> {
   const guard = cap === null ? sql`true` : sql`u.current_period_agent_runs < ${cap}`;
   const rows = await db.execute<{ used: number }>(sql`
-    WITH state AS (
-      SELECT id, (current_period_start <= now() - ${PERIOD}) AS should_roll
-      FROM users WHERE id = ${userId}
-    )
-    UPDATE users u SET
-      current_period_start     = CASE WHEN s.should_roll THEN now() ELSE u.current_period_start END,
-      current_period_agent_runs = CASE WHEN s.should_roll THEN 1 ELSE u.current_period_agent_runs + 1 END,
-      current_period_calls      = CASE WHEN s.should_roll THEN 0 ELSE u.current_period_calls END
-    FROM state s
-    WHERE u.id = s.id
-      AND (s.should_roll OR ${guard})
+    ${rollAndBump(userId, "runs", guard)}
     RETURNING u.current_period_agent_runs AS used
   `);
   const used = rows[0]?.used;
@@ -140,18 +173,7 @@ export async function countToolCall(db: Database, userId: string): Promise<void>
    * over their allowance would appear to stop consuming exactly when they
    * started consuming most. Whether the NEXT call is permitted is a different
    * question with a different answer site — see `callsRemaining`. */
-  await db.execute(sql`
-    WITH state AS (
-      SELECT id, (current_period_start <= now() - ${PERIOD}) AS should_roll
-      FROM users WHERE id = ${userId}
-    )
-    UPDATE users u SET
-      current_period_start      = CASE WHEN s.should_roll THEN now() ELSE u.current_period_start END,
-      current_period_calls      = CASE WHEN s.should_roll THEN 1 ELSE u.current_period_calls + 1 END,
-      current_period_agent_runs = CASE WHEN s.should_roll THEN 0 ELSE u.current_period_agent_runs END
-    FROM state s
-    WHERE u.id = s.id
-  `);
+  await db.execute(rollAndBump(userId, "calls"));
 }
 
 /**
@@ -160,9 +182,6 @@ export async function countToolCall(db: Database, userId: string): Promise<void>
  * Rolls rather than merely reading, so a user returning after a gap is not
  * refused on a stale count. `null` means the plan has no hard cap, which the
  * caller must treat as "allow" rather than as zero.
- */
-/**
- * Calls left in the period.
  *
  * NO CALLER YET, AND THAT IS THE POINT — do not delete it as dead code.
  * Enforcement of the call allowance is a launch-day switch, held back
@@ -178,16 +197,7 @@ export async function callsRemaining(
 ): Promise<number | null> {
   if (cap === null) return null;
   const rows = await db.execute<{ used: number }>(sql`
-    WITH state AS (
-      SELECT id, (current_period_start <= now() - ${PERIOD}) AS should_roll
-      FROM users WHERE id = ${userId}
-    )
-    UPDATE users u SET
-      current_period_start      = CASE WHEN s.should_roll THEN now() ELSE u.current_period_start END,
-      current_period_calls      = CASE WHEN s.should_roll THEN 0 ELSE u.current_period_calls END,
-      current_period_agent_runs = CASE WHEN s.should_roll THEN 0 ELSE u.current_period_agent_runs END
-    FROM state s
-    WHERE u.id = s.id
+    ${rollAndBump(userId, null)}
     RETURNING u.current_period_calls AS used
   `);
   const used = rows[0]?.used ?? 0;

@@ -1,55 +1,6 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
-import type { Database } from "@datatorag-mcp/db";
+import { describe, it, expect } from "vitest";
 
-const returning = vi.fn();
-const update = vi.fn(() => ({ set: () => ({ where: () => ({ returning }) }) }));
-const dbMock = { update } as unknown as Database;
-
-import {
-  capToolOutput, claimPlaygroundMessage, refundPlaygroundMessage, TOOL_OUTPUT_CAP,
-} from "./cap";
-
-describe("claimPlaygroundMessage", () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-  });
-
-  it("returns the runs left when the guarded UPDATE claims a row (under cap)", async () => {
-    returning.mockResolvedValue([{ used: 5 }]);
-    const remaining = await claimPlaygroundMessage(dbMock, "user-1", 20);
-    expect(remaining).toBe(15);
-    expect(update).toHaveBeenCalledTimes(1);
-  });
-
-  it("returns 0 — not null — on the claim that spends the last run", async () => {
-    // The difference the header depends on: this turn RAN, and is also the
-    // user's last. Reporting it as a refusal would hide the turn's own output.
-    returning.mockResolvedValue([{ used: 20 }]);
-    expect(await claimPlaygroundMessage(dbMock, "user-1", 20)).toBe(0);
-  });
-
-  it("returns null when the guarded UPDATE claims no row (at cap)", async () => {
-    returning.mockResolvedValue([]);
-    const remaining = await claimPlaygroundMessage(dbMock, "user-1", 20);
-    expect(remaining).toBeNull();
-  });
-});
-
-describe("refundPlaygroundMessage", () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-  });
-
-  it("issues the guarded decrement", async () => {
-    returning.mockResolvedValue(undefined);
-    const set = vi.fn(() => ({ where: () => Promise.resolve(undefined) }));
-    const updateFn = vi.fn(() => ({ set }));
-    const db = { update: updateFn } as unknown as Database;
-    await refundPlaygroundMessage(db, "user-1");
-    expect(updateFn).toHaveBeenCalledTimes(1);
-    expect(set).toHaveBeenCalledTimes(1);
-  });
-});
+import { capToolOutput, TOOL_OUTPUT_CAP } from "./cap";
 
 describe("capToolOutput", () => {
   it("leaves a result that fits exactly as it was", () => {

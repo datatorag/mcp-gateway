@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { MockLanguageModelV4 } from "ai/test";
 
 const capture = vi.fn();
 vi.mock("@/lib/posthog-server", () => ({
@@ -10,19 +11,25 @@ const { withLlmUsageTracking } = await import("./llm-usage");
 /** A model that reports the token buckets the provider spec defines, so the
  * assertions below are about OUR mapping rather than about a stub's shape.
  *
- * `v4` is not cosmetic. Declaring an older spec makes the SDK insert a
- * compatibility shim that treats `usage` as flat numbers and re-wraps whatever
- * it is handed, which silently turned every token count in these assertions
- * into an object. The real Anthropic model reports v4, so the stub must too or
- * the test is exercising a code path production never takes. */
+ * The SDK's own mock, not a hand-rolled object, and the spec version is the
+ * reason. It declares `readonly specificationVersion = "v4"`, so the version
+ * cannot drift here. An earlier hand-written stub said `v2`, which made the
+ * SDK insert a compatibility shim that treats `usage` as flat numbers and
+ * re-wraps whatever it is handed — silently turning every token count in these
+ * assertions into an object while the test still looked like it was passing
+ * judgement on our mapping. The real Anthropic model reports v4; using the
+ * SDK's mock is what keeps the stub and production on the same code path. */
 function stubModel(usage: unknown) {
-  return {
-    specificationVersion: "v4",
+  return new MockLanguageModelV4({
     provider: "anthropic",
     modelId: "claude-test",
-    defaultObjectGenerationMode: "tool",
-    doGenerate: async (_options?: unknown) => ({ content: [], finishReason: "stop", usage, warnings: [] }),
-    doStream: async (_options?: unknown) => ({
+    doGenerate: (async () => ({
+      content: [],
+      finishReason: "stop",
+      usage,
+      warnings: [],
+    })) as never,
+    doStream: (async () => ({
       stream: new ReadableStream({
         start(controller) {
           controller.enqueue({ type: "text-delta", id: "1", delta: "hi" });
@@ -30,8 +37,8 @@ function stubModel(usage: unknown) {
           controller.close();
         },
       }),
-    }),
-  };
+    })) as never,
+  });
 }
 
 const USAGE = {
@@ -117,12 +124,15 @@ describe("llm usage instrumentation", () => {
   });
 
   it("still reports when the model call throws", async () => {
-    const failing = {
-      ...stubModel(USAGE),
-      doGenerate: async (_options?: unknown) => {
+    // Built fresh rather than spread from `stubModel`: spreading a class
+    // instance drops the prototype, and `supportedUrls` lives there.
+    const failing = new MockLanguageModelV4({
+      provider: "anthropic",
+      modelId: "claude-test",
+      doGenerate: async () => {
         throw new Error("upstream exploded");
       },
-    };
+    });
     const model = withLlmUsageTracking(failing, CTX) as typeof failing;
 
     await expect(model.doGenerate({} as never)).rejects.toThrow("upstream exploded");
