@@ -64,6 +64,18 @@ services:
       PLAYGROUND_MESSAGE_CAP: ${PLAYGROUND_MESSAGE_CAP:-20}
       SLACK_CHANNEL_FEEDBACK: ${SLACK_CHANNEL_FEEDBACK:-}
       BREVO_API_KEY: ${BREVO_API_KEY:-}
+      # This service enumerates the container's environment explicitly, so a
+      # var present in .env but missing HERE never reaches the process. That is
+      # how the agent default-view flag came to be unflippable in production:
+      # it was set in SSM, rendered into .env, and silently ignored, while the
+      # deploy reported success and the health check stayed green.
+      #
+      # The `:-off` default is load-bearing, not decoration. The env schema is
+      # an enum of exactly "on" or "off", so an UNSET var falls back to the
+      # schema default and is fine, but an EMPTY one fails validation and exits
+      # the gateway at boot. Bare ${AGENT_DEFAULT_VIEW} would interpolate to
+      # empty whenever the parameter is absent and take production down.
+      AGENT_DEFAULT_VIEW: ${AGENT_DEFAULT_VIEW:-off}
       NODE_ENV: production
     healthcheck:
       test: ["CMD", "node", "-e", "fetch('http://localhost/health').then(r=>{if(!r.ok)throw r.status;process.exit(0)}).catch(()=>process.exit(1))"]
