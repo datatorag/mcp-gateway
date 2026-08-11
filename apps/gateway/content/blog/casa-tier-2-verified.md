@@ -30,7 +30,7 @@ TAC filed the Letter of Validation with Google on June 25. Google approved four 
 
 Google's approval covered every restricted and sensitive scope we use: Calendar, Docs, Drive, Gmail, Contacts, Sheets, Slides, and Tasks.
 
-That last one matters more than it looks. A verification only covers the scopes you submitted. If we'd cut corners and gotten three scopes approved to clear the warning faster, every tool that touched Slides or Tasks or Contacts would still be stuck behind it. Getting all eight through in one pass means the whole product, all 48 Google tools, connects clean. Nothing's half-verified.
+That last one matters more than it looks. A verification only covers the scopes you submitted. If we'd cut corners and gotten three scopes approved to clear the warning faster, every tool that touched Slides or Tasks or Contacts would still be stuck behind it. Getting all eight through in one pass means the whole product, every Google tool we ship, connects clean. Nothing's half-verified.
 
 ## What changes for you
 

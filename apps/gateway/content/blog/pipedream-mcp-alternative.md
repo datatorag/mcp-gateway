@@ -29,7 +29,7 @@ DataToRAG removes the scaffolding because it removes the abstraction. There's no
 |---|---|---|
 | An end user can sign in and use it without writing code | No, a developer builds the integration first | Yes |
 | Self-host the entire platform | No, cloud only | Yes, MIT (Docker + PostgreSQL) |
-| Deep Google Workspace actions out of the box | Broad but shallow per app, with a custom-API fallback | Yes, 48 tools across 8 services |
+| Deep Google Workspace actions out of the box | Broad but shallow per app, with a custom-API fallback | Yes, all eight services |
 | Google and Atlassian behind one endpoint | You wire up each app yourself | Yes, one endpoint |
 | Work and personal Google in a single prompt | Possible, but you build and host it | Yes, from the dashboard |
 | How you're billed | Compute-metered credits | Usage based, pass-through |
@@ -39,7 +39,7 @@ DataToRAG removes the scaffolding because it removes the abstraction. There's no
 
 Pipedream's breadth is real, but breadth and depth aren't the same thing. Its Google coverage is wide and thin. Gmail, for example, exposes a small set of pre-built actions and leans on a generic "make an API request" action for anything past them, which pushes the work of shaping the Gmail API onto your agent. That's fine for a one-off automation. It's frustrating when you want Claude to actually run an inbox.
 
-DataToRAG hand-builds the verbs instead. Gmail alone has `gmail_search`, `gmail_read`, `gmail_send`, `gmail_reply`, `gmail_forward`, `gmail_mark_read`, and `gmail_save_attachment_to_drive`. Docs get `docs_batch_update` for editing a document in place, not just creating one. Sheets get `sheets_update` and `sheets_append`. Slides get `slides_batch_update`. There are full tool sets for `contacts_*` and `tasks_*`, two surfaces a lot of platforms skip entirely. That's 48 tools across Gmail, Calendar, Drive, Docs, Sheets, Slides, Contacts, and Tasks, plus 22 more across Jira and Confluence, all behind one sign-in.
+DataToRAG hand-builds the verbs instead. Gmail alone has `gmail_search`, `gmail_read`, `gmail_send`, `gmail_reply`, `gmail_forward`, `gmail_mark_read`, `gmail_save_attachment_to_drive`, and a full label surface for filing threads once you have acted on them. Docs get `docs_batch_update` for editing a document in place, not just creating one. Sheets get `sheets_update` and `sheets_append`. Slides get `slides_batch_update`. There are full tool sets for `contacts_*` and `tasks_*`, two surfaces a lot of platforms skip entirely. That's Gmail, Calendar, Drive, Docs, Sheets, Slides, Contacts, and Tasks, plus Jira and Confluence, all behind one sign-in.
 
 The responses are tuned for tokens, too. A raw Google API payload is mostly metadata Claude doesn't need. DataToRAG trims it before it reaches the model, so the context window goes to the actual work instead of JSON you'll never read.
 

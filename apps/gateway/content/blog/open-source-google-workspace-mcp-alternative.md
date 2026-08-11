@@ -56,8 +56,8 @@ This isn't open versus closed, and I want to be straight about that. We open-sou
 
 | Capability | Self-host an OSS server | DataToRAG (hosted) | DataToRAG (self-hosted) |
 |---|---|---|---|
-| Google Workspace tools | Broad: 70+ across 12 services | 48 across 8 services | 48 across 8 services |
-| Atlassian (Jira + Confluence) | No | Yes (22 tools) | Yes (22 tools) |
+| Google Workspace tools | Broad: 70+ across 12 services | Deep across 8 services | Deep across 8 services |
+| Atlassian (Jira + Confluence) | No | Yes | Yes |
 | You run a Google Cloud project | Yes | No | Yes |
 | OAuth consent and verification on you | Yes | No, we handle it (Google-verified, CASA Tier 2) | Yes |
 | Multi-account under one endpoint | Yes, you wire it up | Yes | Yes |

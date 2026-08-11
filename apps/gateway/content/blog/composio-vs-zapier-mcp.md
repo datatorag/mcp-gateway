@@ -59,7 +59,7 @@ This is the gap DataToRAG sits in, and it's why we built it.
 
 ## What DataToRAG is
 
-DataToRAG is a Google-verified MCP gateway you sign into, not a platform you build on. One endpoint, one Google sign-in, and Claude gets 48 hand-built tools across all 8 Google Workspace services: `gmail_send` and `gmail_reply` so email workflows finish instead of stopping at a draft, `docs_batch_update` for restructuring documents in place, `slides_create` for building decks, `sheets_update` at the cell and range level, and the full `contacts_*` and `tasks_*` sets that both platforms above skip. Jira and Confluence add 22 more tools behind the same endpoint, so "summarize these tickets into a Confluence page" is one conversation.
+DataToRAG is a Google-verified MCP gateway you sign into, not a platform you build on. One endpoint, one Google sign-in, and Claude gets hand-built tools across all eight Google Workspace services: `gmail_send` and `gmail_reply` so email workflows finish instead of stopping at a draft, `docs_batch_update` for restructuring documents in place, `slides_create` for building decks, `sheets_update` at the cell and range level, and the full `contacts_*` and `tasks_*` sets that both platforms above skip. Jira and Confluence ride behind the same endpoint, so "summarize these tickets into a Confluence page" is one conversation.
 
 Three things you can't easily bolt onto either alternative:
 

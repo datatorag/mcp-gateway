@@ -41,7 +41,7 @@ There are coverage gaps too. Gmail, Docs, Sheets, Drive, and Calendar have genui
 
 ## What DataToRAG's Google tools add
 
-DataToRAG goes the other direction. Instead of one shallow action per app across thousands of apps, it ships 48 tools across the eight Google Workspace services, built to match what the APIs can actually do. A few that matter here:
+DataToRAG goes the other direction. Instead of one shallow action per app across thousands of apps, it ships hand-built tools across the eight Google Workspace services, built to match what the APIs can actually do. A few that matter here:
 
 - `docs_batch_update`: edit a document in place. Insert headings, replace ranges, restyle text, build tables. Not just append to the end.
 - `slides_create` and `slides_batch_update`: build a deck and modify it, slide by slide.
@@ -49,7 +49,7 @@ DataToRAG goes the other direction. Instead of one shallow action per app across
 - the `contacts_*` set for searching, creating and updating your contacts.
 - the full `tasks_*` set, so a workflow can file the follow-ups it just decided on instead of handing them back to you.
 
-And because it's one endpoint, the same prompt can spill over into Atlassian. Jira and Confluence add 22 more tools, so "turn these notes into a Confluence page and open three Jira tickets" is one conversation, not three.
+And because it's one endpoint, the same prompt can spill over into Atlassian. Jira and Confluence ride behind the same endpoint, so "turn these notes into a Confluence page and open three Jira tickets" is one conversation, not three.
 
 Depth has a hidden cost that's worth calling out: deep tools can return enormous payloads. A single Confluence page is tens of kilobytes of markup. A Google Sheet read can dump rows you didn't ask for. DataToRAG's responses are tuned for token efficiency, so Claude gets the content and not the wrapper, and you're not burning context window on API noise. Depth, without the bloat that usually rides along with it.
 
