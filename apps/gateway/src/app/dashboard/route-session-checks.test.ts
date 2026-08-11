@@ -44,9 +44,37 @@ const EXEMPT: Record<string, string> = {
  * therefore passes on a page that copied the EXPLANATION and not the CALL,
  * which is the single most likely way a new route arrives unprotected: someone
  * pastes a neighbouring page as a starting point. The guard would have been
- * satisfied by its own documentation. */
+ * satisfied by its own documentation.
+ *
+ * Line comments are stripped ANYWHERE on a line, not only where one starts the
+ * line. An earlier version anchored to start-of-line, which left a trailing
+ * `const x = 1; // await getSessionUserId();` able to satisfy the matcher —
+ * narrower than the block-comment hole but the same shape, and the same fix.
+ *
+ * The `(^|[^:])` guard is what stops it eating `https://` inside a string, so
+ * a URL in a page cannot truncate the line and hide real code behind it.
+ *
+ * THIS IS A LEXER WRITTEN IN A REGEX AND IT IS NOT SOUND. An earlier version
+ * of this comment claimed over-stripping "can only make the guard reject a
+ * page, never wave one through". That is false, and stating it as an
+ * invariant is worse than not stating it, because the next person reasons
+ * from it. Truncating a line to a prefix leaves the newline, and the
+ * matcher's `\s+`/`\s*` cross newlines, so stripping can splice two lines into
+ * adjacency that matches:
+ *
+ *   const s = "await //";
+ *   getSessionUserId();
+ *
+ * The honest claim is weaker and still worth having: over-stripping is
+ * heavily biased toward rejecting, and every false-pass shape found so far
+ * needs deliberate contrivance. This guard's threat model is OMISSION, a route
+ * that forgot its check, not an author working to defeat it. Anyone who wants
+ * past it can already add unreachable dead code that satisfies both patterns.
+ * Do not upgrade this to a security boundary on the strength of the regex. */
 function stripComments(source: string): string {
-  return source.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
+  return source
+    .replace(/\/\*[\s\S]*?\*\//g, "")
+    .replace(/(^|[^:])\/\/.*$/gm, "$1");
 }
 
 /** Every `page.tsx` under this directory, relative to it. */
@@ -117,6 +145,25 @@ describe("dashboard routes resolve the session for themselves", () => {
     const code = stripComments(commentOnly);
     expect(code).not.toContain("getSessionUserId");
     expect(/await\s+getSessionUserId\s*\(/.test(code)).toBe(false);
+
+    // TRAILING comments too, not only comments that start a line. This was a
+    // real residual: the earlier stripper anchored to start-of-line, so this
+    // exact shape satisfied the matcher.
+    const trailing = stripComments(`
+      export default function Page() {
+        const a = 1; // await getSessionUserId();
+        const b = 2; // if (!userId) redirect("/auth/login");
+        return <div/>;
+      }
+    `);
+    expect(trailing).not.toContain("getSessionUserId");
+    expect(/await\s+getSessionUserId\s*\(/.test(trailing)).toBe(false);
+
+    // ...while a URL inside a string survives, so over-stripping cannot hide
+    // real code behind a truncated line.
+    const withUrl = stripComments(`const doc = "https://example.com/x"; const userId = await getSessionUserId();`);
+    expect(withUrl).toContain("https://example.com/x");
+    expect(/await\s+getSessionUserId\s*\(/.test(withUrl)).toBe(true);
 
     // ...and that a real check still matches, so the tightening did not just
     // make the guard reject everything.

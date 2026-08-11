@@ -44,6 +44,8 @@ import {
   COMPOSER_PLACEHOLDER_AWAITING_CONFIRM,
   COMPOSER_PLACEHOLDER_READY,
   COMPOSER_PLACEHOLDER_UNCONNECTED,
+  PANEL_HEADING,
+  PANEL_STANDFIRST,
 } from "./agent-composer-copy";
 import { RUNS_CAP_HEADER, RUNS_REMAINING_HEADER } from "@/gateway/playground/quota-headers";
 import {
@@ -696,10 +698,10 @@ export const Playground = forwardRef<PlaygroundHandle, PlaygroundProps>(
     return (
       <div className="mt-8">
         <h2 className="font-display text-base font-bold text-foreground">
-          Playground
+          {PANEL_HEADING}
         </h2>
         <p className="mt-0.5 text-xs text-muted-foreground">
-          Chat with your connected accounts, right here.
+          {PANEL_STANDFIRST}
         </p>
         {chat}
       </div>

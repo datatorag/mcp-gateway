@@ -1,8 +1,15 @@
 import { describe, expect, it } from "vitest";
 import {
   ALL_COMPOSER_PLACEHOLDERS,
+  ALL_PANEL_COPY,
   COMPOSER_PLACEHOLDER_UNCONNECTED,
 } from "./agent-composer-copy";
+
+/** Placeholders and panel labels together: the retired-term and em-dash rules
+ * apply to every string a user reads on this surface, not just the ones that
+ * happened to be extracted first. Splitting them is how the panel heading kept
+ * saying the retired word through three passes at retiring it. */
+const ALL_USER_FACING = [...ALL_COMPOSER_PLACEHOLDERS, ...ALL_PANEL_COPY];
 
 describe("agent composer copy", () => {
   it("calls the surface Agent, not playground", () => {
@@ -11,7 +18,7 @@ describe("agent composer copy", () => {
     // and broken elsewhere: the cap panel was clean while the composer sat
     // saying "try the playground" on the surface being promoted to the front
     // door. A rule is only enforced on the strings a test can actually see.
-    for (const line of ALL_COMPOSER_PLACEHOLDERS) {
+    for (const line of ALL_USER_FACING) {
       expect(line.toLowerCase()).not.toContain("playground");
     }
   });
@@ -19,7 +26,7 @@ describe("agent composer copy", () => {
   it("contains no em-dashes", () => {
     // House rule, and worth a test for the same reason as next door: a fixed
     // token is present or it is not, no judgement required.
-    for (const line of ALL_COMPOSER_PLACEHOLDERS) {
+    for (const line of ALL_USER_FACING) {
       expect(line).not.toContain("—");
       expect(line).not.toContain("&mdash;");
     }

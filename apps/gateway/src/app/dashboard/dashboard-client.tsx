@@ -10,6 +10,11 @@ import { SERVICES } from "./connections/services";
 import { ServiceIcon } from "@/components/service-icon";
 import { SetupWizard } from "./setup-wizard";
 import { Playground, type PlaygroundHandle } from "./playground";
+import {
+  PROMPT_CARDS_STANDFIRST,
+  PROMPT_CARD_RUN_LABEL,
+  SERVICE_CARD_TOOLS_LABEL,
+} from "./agent-composer-copy";
 import { useCopyToClipboard } from "@/lib/use-copy-to-clipboard";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -247,7 +252,7 @@ export function DashboardClient() {
                           <Link href={`/dashboard/connections/${service.id}`} />
                         }
                       >
-                        Playground
+                        {SERVICE_CARD_TOOLS_LABEL}
                       </Button>
                       <Button
                         variant="outline"
@@ -323,7 +328,7 @@ export function DashboardClient() {
           What can I do?
         </h2>
         <p className="mt-0.5 text-xs text-muted-foreground">
-          Run one below in the playground, or copy it into your own AI client.
+          {PROMPT_CARDS_STANDFIRST}
         </p>
         <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
           {AGENT_PROMPTS.map((prompt, i) => (
@@ -336,7 +341,7 @@ export function DashboardClient() {
                 disabled={!hasConnectedAccount}
                 title={
                   hasConnectedAccount
-                    ? "Run in playground"
+                    ? PROMPT_CARD_RUN_LABEL
                     : "Connect an account to run this"
                 }
                 className="flex flex-1 items-start gap-1.5 text-left text-xs leading-relaxed text-foreground disabled:cursor-not-allowed disabled:opacity-50"
