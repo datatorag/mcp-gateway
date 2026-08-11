@@ -46,7 +46,7 @@ DataToRAG goes the other direction. Instead of one shallow action per app across
 - `docs_batch_update`: edit a document in place. Insert headings, replace ranges, restyle text, build tables. Not just append to the end.
 - `slides_create` and `slides_batch_update`: build a deck and modify it, slide by slide.
 - `sheets_update`, `sheets_append`, `sheets_read`: work at the cell and range level, not just "add a row."
-- the full `contacts_*` set, including `contacts_directory_search` against your company directory.
+- the `contacts_*` set for searching, creating and updating your contacts.
 - the full `tasks_*` set, so a workflow can file the follow-ups it just decided on instead of handing them back to you.
 
 And because it's one endpoint, the same prompt can spill over into Atlassian. Jira and Confluence add 22 more tools, so "turn these notes into a Confluence page and open three Jira tickets" is one conversation, not three.

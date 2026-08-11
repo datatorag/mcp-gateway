@@ -17,7 +17,7 @@ Google Workspace is DataToRAG's flagship connector. One OAuth flow gives your AI
 | [Docs](/docs/docs) | Read, create, write, and batch update documents |
 | [Sheets](/docs/sheets) | Read, create, update, append, and delete spreadsheets, and manage tabs |
 | [Slides](/docs/slides) | Read, create, batch update, and delete presentations |
-| [Contacts](/docs/contacts) | Search, create, update contacts; search company directory |
+| [Contacts](/docs/contacts) | Search, create, update contacts |
 | [Tasks](/docs/tasks) | Manage task lists, create, update, complete, delete tasks |
 
 ## Connecting

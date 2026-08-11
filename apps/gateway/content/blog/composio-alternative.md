@@ -48,7 +48,7 @@ A note on that last row, because I want to be straight about it: Composio is ahe
 The two coverage gaps in that table are the ones I'd care about if my work lives in Google Workspace. Composio's catalog is enormous, but at the time of writing it has no standalone Slides toolkit and no standalone Contacts toolkit. DataToRAG ships both, with real write verbs:
 
 - `slides_create`, `slides_batch_update`: build a deck and edit it in place, not just read it.
-- `contacts_search`, `contacts_create`, `contacts_update`, `contacts_directory_search`: manage your contacts and search the company directory.
+- `contacts_search`, `contacts_create`, `contacts_update`: manage your contacts.
 - `gmail_send`, `gmail_reply`, `gmail_forward`: finish an email workflow instead of stopping at a draft.
 - `docs_batch_update`, `sheets_update`, `sheets_append`: change documents and spreadsheets, cell by cell, in the same conversation.
 
