@@ -31,14 +31,20 @@ import { Suggestion, Suggestions } from "@/components/ai-elements/suggestion";
 import Link from "next/link";
 import { ConnectPart } from "./agent-parts";
 import { SERVICES } from "./connections/services";
-import { Button, buttonVariants } from "@/components/ui/button";
+import { buttonVariants } from "@/components/ui/button";
 import {
   AGENT_CAP_BODY,
   AGENT_CAP_PRIMARY_ACTION,
+  AGENT_CAP_PRIMARY_HREF,
   AGENT_CAP_SECONDARY_ACTION,
   AGENT_CAP_SECONDARY_HREF,
   agentCapTitle,
 } from "./agent-cap-copy";
+import {
+  COMPOSER_PLACEHOLDER_AWAITING_CONFIRM,
+  COMPOSER_PLACEHOLDER_READY,
+  COMPOSER_PLACEHOLDER_UNCONNECTED,
+} from "./agent-composer-copy";
 import { RUNS_CAP_HEADER, RUNS_REMAINING_HEADER } from "@/gateway/playground/quota-headers";
 import {
   errorBubbleText,
@@ -485,10 +491,10 @@ export const Playground = forwardRef<PlaygroundHandle, PlaygroundProps>(
     if (hidden) return null;
 
     const placeholder = awaitingConfirm
-      ? "Approve or deny the action above to continue"
+      ? COMPOSER_PLACEHOLDER_AWAITING_CONFIRM
       : hasConnectedAccount
-        ? "Ask something…"
-        : "Connect an account to try the playground";
+        ? COMPOSER_PLACEHOLDER_READY
+        : COMPOSER_PLACEHOLDER_UNCONNECTED;
 
     const chat = (
       <div className={style.root}>
@@ -625,16 +631,19 @@ export const Playground = forwardRef<PlaygroundHandle, PlaygroundProps>(
                   {AGENT_CAP_BODY}
                 </p>
                 <div className="mt-2 flex items-center justify-center gap-2">
-                  <Button
-                    onClick={() =>
-                      document
-                        .getElementById("setup-wizard")
-                        ?.scrollIntoView({ behavior: "smooth" })
-                    }
-                    size="sm"
+                  {/* Both exits are links now. The config exit used to scroll
+                      to `#setup-wizard`, an id that only exists on
+                      /dashboard, so on the Agent route the primary control
+                      did nothing at the moment the user had just been
+                      refused. `next/link` is correct for both: these are Next
+                      pages, unlike the `/auth/*` connect controls, which are
+                      Express routes and must stay plain anchors. */}
+                  <Link
+                    href={AGENT_CAP_PRIMARY_HREF}
+                    className={buttonVariants({ size: "sm" })}
                   >
                     {AGENT_CAP_PRIMARY_ACTION}
-                  </Button>
+                  </Link>
                   <Link
                     href={AGENT_CAP_SECONDARY_HREF}
                     className={buttonVariants({ variant: "outline", size: "sm" })}

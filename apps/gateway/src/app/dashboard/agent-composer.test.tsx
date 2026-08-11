@@ -90,6 +90,44 @@ describe("the Agent composer", () => {
     expect(container.querySelector("textarea")).not.toBeNull();
   });
 
+  /** The placeholder actually on the element, plus the guard that a missing
+   * composer cannot masquerade as clean copy. */
+  function renderedPlaceholder(): string {
+    const placeholder =
+      container.querySelector("textarea")?.getAttribute("placeholder") ?? "";
+    expect(placeholder, "composer rendered with no placeholder at all").not.toBe("");
+    return placeholder.toLowerCase();
+  }
+
+  // ONE STATE PER TEST, and not a loop over states, which is what the first
+  // version of this did. `beforeEach` mints a fresh root per test; re-rendering
+  // the same element type into ONE root reconciles instead of remounting, and
+  // `useConnections` only fetches on mount, so a second `mount()` call in the
+  // same test keeps the first call's accounts. Both iterations then asserted on
+  // the identical unconnected DOM and the connected state was never covered,
+  // while reading like it was. Splitting is what makes each state real.
+  //
+  // Asserted on the RENDERED attribute, not on a copy module's exports:
+  // agent-cap-copy.test.ts pinned this same rule and stayed green while the
+  // composer said "try the playground", because the offending string sat inline
+  // in the component where no export list could see it. Reading the DOM is what
+  // catches the next one wherever the string comes from.
+
+  it("never calls the surface a playground: unconnected user", async () => {
+    await mount(ok({ accounts: [], connections: [] }));
+    expect(renderedPlaceholder()).not.toContain("playground");
+  });
+
+  it("never calls the surface a playground: connected user", async () => {
+    await mount(ok({ accounts: [{ id: "a1", connectorType: "google-workspace" }], connections: [] }));
+    const placeholder = renderedPlaceholder();
+    // Proves this test reached the state it claims: the connected placeholder
+    // is a different string from the unconnected one, so a silent fallback to
+    // the unconnected branch fails here rather than passing quietly.
+    expect(placeholder, "did not reach the CONNECTED state").not.toContain("connect your google account");
+    expect(placeholder).not.toContain("playground");
+  });
+
   it("still renders a composer when the connections call fails", async () => {
     // A failed or slow account lookup must not leave the page with no way to
     // type. Gating the whole surface on that response is how a transient

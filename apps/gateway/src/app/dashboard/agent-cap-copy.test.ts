@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   AGENT_CAP_BODY,
   AGENT_CAP_PRIMARY_ACTION,
+  AGENT_CAP_PRIMARY_HREF,
   AGENT_CAP_SECONDARY_ACTION,
   AGENT_CAP_SECONDARY_HREF,
   agentCapTitle,
@@ -53,6 +54,16 @@ describe("agent cap copy", () => {
     // /pricing directly would spread the eventual swap across every call site,
     // and one of them would be missed.
     expect(AGENT_CAP_SECONDARY_HREF).toBe("/upgrade");
+  });
+
+  it("sends the config exit to a route, not to an id on one page", () => {
+    // The regression this pins: the config exit used to scroll to
+    // `#setup-wizard`, which exists only on /dashboard, so on the Agent route
+    // the primary button did nothing. Asserting the href is a real path is what
+    // stops a future change quietly re-coupling this panel to whatever page is
+    // hosting it.
+    expect(AGENT_CAP_PRIMARY_HREF).toMatch(/^\/[a-z0-9/-]+$/);
+    expect(AGENT_CAP_PRIMARY_HREF).not.toContain("#");
   });
 
   it("calls the surface Agent, not playground", () => {

@@ -45,3 +45,16 @@ export const AGENT_CAP_SECONDARY_ACTION = "Get more runs";
  * Stripe URL: `app/upgrade/route.ts` is the single place that decides where a
  * user asking for more runs actually goes. */
 export const AGENT_CAP_SECONDARY_HREF = "/upgrade";
+
+/** Where the config exit actually goes.
+ *
+ * A DESTINATION, NOT A SCROLL. This used to call `scrollIntoView` on
+ * `#setup-wizard`, an id that exists only on `/dashboard`. On the Agent route
+ * there is no such element, so the primary exit did nothing at all, silently,
+ * at the exact moment the product had just refused the user's turn. Of all the
+ * places to put a dead control, that is the worst one.
+ *
+ * A route works from either surface and needs no cooperation from whatever
+ * page happens to be hosting the panel, which is what made the id-coupled
+ * version fragile in the first place. */
+export const AGENT_CAP_PRIMARY_HREF = "/dashboard/mcp-config";
