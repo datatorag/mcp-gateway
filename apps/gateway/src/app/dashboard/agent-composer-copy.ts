@@ -11,10 +11,20 @@
  * module exists to close.
  */
 
-/** Nothing connected yet. Names the account the user is most likely to be
- * bringing and asks for one thing. */
+/** Nothing connected yet.
+ *
+ * SERVICE-NEUTRAL ON PURPOSE. An earlier version named Google specifically,
+ * which read as a precondition rather than an example: the empty state
+ * directly above this offers Google Workspace AND Atlassian as peer buttons,
+ * so singling one out narrows what the product does for an Atlassian-only
+ * user. Staying neutral also sidesteps a naming inconsistency, since the
+ * connector is called "Google Workspace" everywhere else in the product and a
+ * placeholder saying "Google account" disagreed with the button beside it.
+ *
+ * Keep it neutral as connectors are added. The connect controls enumerate the
+ * services; this line only has to ask for one. */
 export const COMPOSER_PLACEHOLDER_UNCONNECTED =
-  "Connect your Google account to get started.";
+  "Connect an account to get started.";
 
 /** The ordinary state. */
 export const COMPOSER_PLACEHOLDER_READY = "Ask something…";

@@ -35,6 +35,7 @@ if (typeof Element !== "undefined" && !("getAnimations" in Element.prototype)) {
 }
 
 const { AgentClient } = await import("./agent/agent-client");
+const { COMPOSER_PLACEHOLDER_UNCONNECTED } = await import("./agent-composer-copy");
 
 let container: HTMLDivElement;
 let root: Root;
@@ -124,7 +125,14 @@ describe("the Agent composer", () => {
     // Proves this test reached the state it claims: the connected placeholder
     // is a different string from the unconnected one, so a silent fallback to
     // the unconnected branch fails here rather than passing quietly.
-    expect(placeholder, "did not reach the CONNECTED state").not.toContain("connect your google account");
+    //
+    // Compared against the CONSTANT, never a copy of its text. A hardcoded
+    // duplicate goes stale the first time the copy is reworded, and a stale
+    // sentinel matches nothing, which turns this guard back into the vacuous
+    // check it was written to replace. That reword has already happened once.
+    expect(placeholder, "did not reach the CONNECTED state").not.toContain(
+      COMPOSER_PLACEHOLDER_UNCONNECTED.toLowerCase()
+    );
     expect(placeholder).not.toContain("playground");
   });
 
