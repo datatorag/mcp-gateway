@@ -21,3 +21,11 @@ docs/architecture/2026-06-22-security-architecture.md
 # Agent worktrees. Untracked full checkouts of this repo live here, so a
 # single `git add -A` would commit an entire second copy into a PUBLIC repo.
 .worktrees/
+
+# Session handoff brief for the Agent full-screen redesign. It names a path
+# inside the private company repo and the unreleased rollout order, neither of
+# which belongs in a PUBLIC repo. It sat untracked and un-ignored, which is one
+# `git add -A` away from being published, so the rule is the guard rather than
+# someone remembering. Named rather than ignoring docs/design/, which holds
+# committed design docs.
+docs/design/agent-fullscreen-redesign-brief.md
