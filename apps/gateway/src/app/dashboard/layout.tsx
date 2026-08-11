@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useState, useRef } from "react";
+import { useFitBelowTopChrome } from "@/lib/use-fit-below-top-chrome";
 import Link from "next/link";
 import Image from "next/image";
 import { usePathname } from "next/navigation";
@@ -25,10 +26,14 @@ const navItems: Array<{ href: string; label: string; icon: LucideIcon }> = [
 ];
 
 /** Routes where the page IS one full-height surface rather than a document
- * that scrolls inside the shell. On these the sidebar drops to an icon rail
- * and the padded content wrapper is removed entirely, so the surface owns the
- * viewport. The dashboard's own conventions lose to that on purpose: a chat
- * boxed inside page chrome was the thing being rejected. */
+ * that scrolls inside the shell. On these the padded content wrapper is
+ * removed, the shell is sized to the viewport, and the surface manages its own
+ * scrolling.
+ *
+ * THIS NO LONGER CHANGES THE CHROME. It used to also switch the sidebar
+ * between an icon rail and a labelled column, which meant the shell changed
+ * shape as you moved between pages. The rail is now unconditional and this set
+ * governs only how a route's CONTENT behaves. */
 const FULL_HEIGHT_ROUTES = new Set(["/dashboard/agent"]);
 
 /** `compact` drops the name next to the avatar, for the icon rail. The menu
@@ -109,15 +114,25 @@ export default function DashboardLayout({
   const user = useCurrentUser();
   const pathname = usePathname();
   const fullHeight = FULL_HEIGHT_ROUTES.has(pathname);
+  const shell = useRef<HTMLDivElement>(null);
+
+  // `h-dvh` alone is wrong whenever anything sits above the app: the shell
+  // keeps a full viewport height, starts below that chrome, and its bottom
+  // goes off-screen by exactly the offset — taking the composer with it. This
+  // measures the space actually left and writes a pixel height over the
+  // `dvh` fallback. See the hook for what pushes it down and why the value
+  // cannot be a constant.
+  useFitBelowTopChrome(shell, fullHeight);
 
   return (
     <div
+      ref={shell}
       className={cn(
         "flex flex-col md:flex-row",
-        // `h-dvh` + `overflow-hidden`, not `min-h-screen`: the document must
-        // not scroll, so the surface inside can. `dvh` rather than `vh`
-        // because mobile browsers shrink the visual viewport when the URL bar
-        // is showing, and `vh` would put the composer under it.
+        // `dvh` rather than `vh` because mobile browsers shrink the visual
+        // viewport when the URL bar shows, and `vh` would put the composer
+        // under it. This is the pre-measurement fallback; the hook above
+        // replaces it with the measured remainder on the client.
         fullHeight ? "h-dvh overflow-hidden" : "min-h-screen"
       )}
     >
@@ -192,50 +207,53 @@ export default function DashboardLayout({
         </nav>
       )}
 
-      {/* Desktop sidebar — sticky so the user menu at the bottom stays
-          reachable while the main column scrolls; h-screen + overflow-y-auto
-          keeps the bottom reachable on short viewports too.
+      {/* ONE RAIL ON EVERY DASHBOARD ROUTE. It used to narrow to icons only on
+          the full-height surface and show labels everywhere else, so the
+          chrome changed shape as you moved between pages. Identical chrome is
+          the point; the routes differ in how their CONTENT behaves, not in
+          what the shell looks like. The labels went with it, so every item
+          carries an aria-label and a native title: an icon rail with no
+          accessible name is a nav only its author can use, and the active
+          state is the only remaining cue for where you are.
 
-          On a full-height route it narrows to an icon rail. The labels go
-          with it, so every item carries an aria-label and a native title:
-          an icon rail with no accessible name is a nav only its author can
-          use, and the active state is the only remaining cue for where you
-          are. */}
+          It must NOT be a scroll container: `overflow-y-auto` forces
+          `overflow-x` to auto too, and the user-menu popup is wider than the
+          rail, so it would be clipped rather than overlapping the page. Five
+          icons never need to scroll.
+
+          THE HEIGHT FOLLOWS THE SHELL ON A FULL-HEIGHT ROUTE, and that is not
+          cosmetic. The shell is no longer a viewport tall there — it is the
+          space left below whatever sits above the app — so an aside asking for
+          `dvh` would be TALLER than its own parent, and the parent clips. The
+          overflow lands at the bottom, which is where `mt-auto` puts the user
+          menu, so the first version of this change fixed a clipped composer by
+          clipping sign-out instead: the same bug, one element over, in the
+          same scenario. `h-full` resolves against the measured height and
+          tracks it.
+
+          Scrolling routes keep `dvh`, because there the shell is
+          `min-h-screen` with no definite height for `h-full` to resolve
+          against, and the rail would collapse to its content. */}
       <aside
         className={cn(
-          "hidden shrink-0 flex-col border-r border-border md:sticky md:top-0 md:flex md:h-screen",
-          // The rail must NOT be a scroll container: `overflow-y-auto` forces
-          // `overflow-x` to auto too, and the user menu popup is wider than
-          // the rail, so it would be clipped instead of overlapping the
-          // thread. The rail is five icons tall and never needs to scroll.
-          fullHeight ? "w-14 md:overflow-visible" : "w-56 md:overflow-y-auto"
+          "hidden w-14 shrink-0 flex-col overflow-visible border-r border-border md:sticky md:top-0 md:flex",
+          fullHeight ? "md:h-full" : "md:h-dvh"
         )}
       >
         <Link
           href="/"
-          className={cn(
-            "flex h-16 items-center gap-3 border-b border-border",
-            fullHeight ? "justify-center px-0" : "px-5"
-          )}
+          className="flex h-16 items-center justify-center border-b border-border"
           aria-label="DataToRAG home"
         >
           <Image
             src="/datatorag-logo-256.png"
-            alt={fullHeight ? "DataToRAG" : ""}
+            alt="DataToRAG"
             width={26}
             height={26}
           />
-          {!fullHeight && (
-            <span className="font-display text-sm font-bold text-foreground">
-              DataToRAG
-            </span>
-          )}
         </Link>
 
-        <nav
-          className={cn("mt-4 space-y-1", fullHeight ? "px-2" : "px-3")}
-          aria-label="Dashboard"
-        >
+        <nav className="mt-4 space-y-1 px-2" aria-label="Dashboard">
           {navItems.map((item) => {
             const active =
               pathname === item.href ||
@@ -246,32 +264,21 @@ export default function DashboardLayout({
                 key={item.href}
                 href={item.href}
                 aria-current={active ? "page" : undefined}
-                aria-label={fullHeight ? item.label : undefined}
-                title={fullHeight ? item.label : undefined}
+                aria-label={item.label}
+                title={item.label}
                 className={cn(
-                  "rounded-lg text-sm transition-colors hover:bg-secondary hover:text-foreground",
-                  active
-                    ? "bg-secondary text-foreground"
-                    : "text-muted-foreground",
-                  fullHeight
-                    ? "flex h-10 items-center justify-center"
-                    : "flex items-center gap-2.5 px-3 py-2"
+                  "flex h-10 items-center justify-center rounded-lg text-sm transition-colors hover:bg-secondary hover:text-foreground",
+                  active ? "bg-secondary text-foreground" : "text-muted-foreground"
                 )}
               >
                 <Icon className="size-4 shrink-0" aria-hidden="true" />
-                {!fullHeight && item.label}
               </Link>
             );
           })}
         </nav>
 
-        <div
-          className={cn(
-            "mt-auto border-t border-border py-3",
-            fullHeight ? "flex justify-center px-1" : "px-3"
-          )}
-        >
-          {user && <UserMenu user={user} compact={fullHeight} />}
+        <div className="mt-auto flex justify-center border-t border-border px-1 py-3">
+          {user && <UserMenu user={user} compact />}
         </div>
       </aside>
 

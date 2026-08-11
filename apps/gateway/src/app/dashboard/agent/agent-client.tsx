@@ -46,9 +46,19 @@ export function AgentClient({ isDefaultView }: { isDefaultView: boolean }) {
 
 
   return (
-    // `h-full min-h-0` so the chat inherits a definite height from the shell's
-    // `h-dvh` line instead of growing past it. Without `min-h-0` the flex item
-    // refuses to shrink below its content and the composer walks off screen.
+    // `h-full` so the chat inherits a definite height rather than growing past
+    // it, and NOT `dvh`: the shell is only a viewport tall when nothing sits
+    // above the app, and at runtime it is a measured pixel height (see
+    // `useFitBelowTopChrome`). Asking for the viewport here would make this
+    // taller than its own parent, which clips, and push the composer off the
+    // bottom — the exact bug the measurement exists to prevent.
+    //
+    // `min-h-0` is defensive here rather than load-bearing, and the comment
+    // that used to claim otherwise was wrong: this is a BLOCK box, since
+    // `main` is `flex-1` (a flex-item property) but not itself `display:flex`,
+    // and a block box's `min-height:auto` is already 0. The content-based
+    // minimum that genuinely needs overriding is one level down, on the chat's
+    // own root, which IS a flex item of this element.
     <div className="flex h-full min-h-0 flex-col">
       {/* NOT gated on `loaded`. Withholding the composer until an account
           lookup returns turns a slow or failed request into a page with
