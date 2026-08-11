@@ -31,7 +31,11 @@ import { CircleCheckIcon, CircleMinusIcon } from "lucide-react";
  * 4. CALENDAR IS NOT A TIE. IT IS FOUR CONCESSIONS. This section called it
  *    parity until 10 August 2026, and that was wrong in the built-in
  *    connector's favour: it does rich event creation, RSVP, meeting-time
- *    suggestions and event search, and we do none of those. The rule the old
+ *    suggestions and calendar listing, and we do none of those. We DO search
+ *    events - calendar_list_events takes a `query` that reaches the API as
+ *    `q` - and an earlier draft of this correction conceded that row by
+ *    mistake. Check our own column against the registry before conceding it;
+ *    a wrong concession is as disprovable as a wrong boast. The rule the old
  *    note was reaching for still holds and is why the correction went the way
  *    it did: a claim anyone can disprove by testing retroactively discredits
  *    every row that is true.
@@ -150,11 +154,12 @@ const GROUPS: Group[] = [
       },
       { capability: "RSVP to an invitation", builtIn: true, ours: false, emphasis: true },
       { capability: "Suggest a meeting time", builtIn: true, ours: false, emphasis: true },
-      { capability: "Search events, list calendars", builtIn: true, ours: false, emphasis: true },
+      { capability: "Search events by keyword", builtIn: true, ours: true },
+      { capability: "List your other calendars", builtIn: true, ours: false, emphasis: true },
       { capability: "Free/busy lookup", builtIn: false, ours: true },
     ],
     note: [
-      "On a single account, the built-in connector is the better calendar tool, and it isn't close. Its event creation does recurring events, room booking, attachments, and custom reminders, where ours creates plain events. It can RSVP, search, and suggest meeting times. Ours can't.",
+      "On a single account, the built-in connector is the better calendar tool, and it isn't close. Its event creation does recurring events, room booking, attachments, and custom reminders, where ours creates plain events. It can RSVP and suggest meeting times, and list the other calendars on the account. Ours can't.",
       "What we add is span: both your calendars reachable in one request, without either account having to share anything with the other. Free/busy runs one lookup per account and the assistant combines them.",
       "One honest caveat: the built-in connector sees every calendar the connected account can see. If you already share your personal calendar with your work account, that covers the cross-account case for you. Our advantage is for calendars you'd rather not share.",
     ],

@@ -12,7 +12,7 @@ The Calendar connector lets your AI assistant manage your Google Calendar — vi
 
 | Tool | Description |
 |------|-------------|
-| `calendar_list_events` | List events in a date range (compact by default: plain-text descriptions, attendee count + your response status, full roster on meetings of 10 or fewer, join links, recurring flag, attachments; `full: true` for the raw payload) |
+| `calendar_list_events` | List events in a date range, or search them with `query` (free-text, matches title, description, location and attendees, within the date range). Compact by default: plain-text descriptions, attendee count + your response status, full roster on meetings of 10 or fewer, join links, recurring flag, attachments; `full: true` for the raw payload) |
 | `calendar_get_event` | Get full details of a specific event, with the description converted to plain text (`full: true` keeps the original HTML) |
 | `calendar_create_event` | Create a new event with attendees, location, and description |
 | `calendar_update_event` | Update an existing event |

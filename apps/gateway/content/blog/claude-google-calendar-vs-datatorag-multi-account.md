@@ -37,7 +37,7 @@ the tool is not on our wire today, not that it is impossible.
 | Delete events | Yes | Yes |
 | Add a Google Meet link | Yes | Yes |
 | Find when people are free | Yes, as suggested slots | Yes, as raw busy blocks |
-| Search your calendar in plain language | Yes | No |
+| Search your calendar by keyword | Yes | Yes |
 | RSVP to an invitation | Yes | No |
 | See which calendars you have | Yes | No, you pass the calendar ID |
 | Recurring events | Yes | No |
