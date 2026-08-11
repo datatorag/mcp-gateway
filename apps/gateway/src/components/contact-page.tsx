@@ -2,6 +2,7 @@ import Link from "next/link";
 import { Navbar } from "@/components/navbar";
 import { ContactForm, type Utm } from "@/components/contact-form";
 import { DemoBento } from "@/components/demo/demo-bento";
+import { DEMO_STANDFIRST } from "@/components/demo/demo-copy";
 
 // Rendered by both /contact (canonical) and /demo (kept for ad destinations
 // and historical analytics continuity) — one source of truth for the form.
@@ -98,12 +99,29 @@ export function ContactPage({ utm }: { utm: Utm }) {
             replacing a talking-head explainer. The windows show the product
             doing the work; the video described it.
 
-            No composer link and no playground CTA, unlike the home page: this
-            page exists to collect the form above, and a second route out of
-            it competes with the one conversion it has. */}
+            STILL NO COMPOSER LINK inside the windows: four routes out of the
+            page, one per row, is what would actually compete with the form
+            this page exists to collect.
+
+            THE CLOSING CTA IS NEW HERE, and it reverses the earlier "no CTA
+            on this page" decision rather than overlooking it (HQ, at Agent
+            launch). The reasoning that changed: a visitor who will not fill
+            in the form is not a conversion being protected, they are one
+            being lost, and the standfirst below the heading answers the
+            objection paid traffic actually arrives with. One route out at the
+            very bottom of the section is a different proposition from one in
+            every row.
+
+            The heading stays this page's own. The launch copy renames "Watch
+            it do the work", which belongs to the home page; this line is
+            message-match for the traffic that lands here. */}
         <section className="border-t border-border bg-secondary/30">
           <div className="mx-auto max-w-6xl px-6 py-16">
-            <DemoBento heading="Watch Claude work inside Google Workspace" />
+            <DemoBento
+              ctaHref="/auth/login"
+              heading="Watch Claude work inside Google Workspace"
+              standfirst={DEMO_STANDFIRST}
+            />
           </div>
         </section>
       </main>

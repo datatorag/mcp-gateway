@@ -10,6 +10,7 @@ import { CasaBadge } from "@/components/casa-badge";
 import { ConnectorComparison } from "@/components/connector-comparison";
 import { StartupBarOffset } from "@/components/startupbar-offset";
 import { DemoBento } from "@/components/demo/demo-bento";
+import { DEMO_HEADING, DEMO_STANDFIRST } from "@/components/demo/demo-copy";
 import { HeroVideo } from "@/components/hero-video";
 import { SkillCard } from "@/components/skill-card";
 import { getAllSkills } from "@/lib/skills";
@@ -82,7 +83,7 @@ export default async function HomePage() {
   // a card that exists only here.
   const homePersonas = getAllPersonas().slice(0, 3);
   const demoPromptLabel = signedIn
-    ? "Open the playground to run your own prompt"
+    ? "Open the Agent to run your own prompt"
     : "Sign in to run your own prompt";
 
   return (
@@ -398,26 +399,30 @@ export default async function HomePage() {
         {/* Scripted demo — its own band: the product working, not more hero.
             The grid, its copy and the sample-data disclosure live in
             DemoBento, shared with the lead page. What stays here is the CTA
-            policy: the home page wants every route into the playground it can
-            get, which is the opposite of what a lead page wants. */}
+            policy: the home page wants every route into the Agent it can get,
+            which is the opposite of what a lead page wants.
+
+            THE ANCHOR ID STAYS `playground` DELIBERATELY. Renaming it would
+            break every inbound /#playground link with no way to fix them: a
+            fragment never reaches the server, so there is nothing to redirect
+            and the failure is silent, just a page that stops scrolling where
+            it used to. Retiring the term is about the words a user READS; an
+            id is plumbing. If it ever matters, the move is a new id plus an
+            empty legacy anchor, not a rename. */}
         <section id="playground" className="scroll-mt-28 bg-background">
           <div className="mx-auto max-w-6xl px-6 py-16 sm:py-20">
+            {/* One closing call to action, not two: this replaced a plain
+                "run it for real" link, and the rows already carry their own
+                composer-shaped affordance, so the section closes once. The
+                CTA itself lives in DemoBento so the lead page renders the
+                identical thing. */}
             <DemoBento
-              heading="Watch it do the work."
+              ctaHref={playgroundHref}
+              heading={DEMO_HEADING}
               promptHref={playgroundHref}
               promptLabel={demoPromptLabel}
+              standfirst={DEMO_STANDFIRST}
             />
-
-            <div className="mt-6 text-center">
-              <Link
-                href={playgroundHref}
-                className="text-sm text-muted-foreground underline underline-offset-4 transition-colors hover:text-foreground"
-              >
-                {signedIn
-                  ? "Run it for real: open your dashboard"
-                  : "Run it for real: sign in and try the playground"}
-              </Link>
-            </div>
           </div>
         </section>
 

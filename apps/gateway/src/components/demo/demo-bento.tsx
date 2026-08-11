@@ -22,11 +22,20 @@
  * the connector that has the limit rather than "Claude" in general.
  */
 
+import Link from "next/link";
 import { CircleCheckIcon, CircleMinusIcon } from "lucide-react";
 import { DemoWindow } from "./demo-section";
+import { DEMO_CTA_ACTION, DEMO_CTA_SUPPORT } from "./demo-copy";
 
+/** ONE WORD CHANGED FROM THE ORIGINAL, AND ONLY ONE: "playground UI" became
+ * "Agent UI", because the surface it named was renamed. Everything else is
+ * untouched on purpose. The sentence is what stops a scripted replay reading
+ * as a live session, and it lives here rather than in a caller's subhead
+ * because a comment asking callers to carry it was, once, the only thing
+ * standing between us and shipping without it. Do not move it, do not shorten
+ * it, and do not let a rename become a rewrite. */
 export const DEMO_DISCLOSURE =
-  "A scripted replay with sample data. This is the real playground UI, approval gate included.";
+  "A scripted replay with sample data. This is the real Agent UI, approval gate included.";
 
 /**
  * One list, in render order, because the order IS the argument: the two edits
@@ -118,15 +127,27 @@ const WEIGHTS: Record<
 
 export function DemoBento({
   heading,
+  standfirst,
   promptHref,
   promptLabel,
+  ctaHref,
 }: {
   heading: string;
+  /** Optional lines between the heading and the disclosure.
+   *
+   * ABOVE THE DISCLOSURE, NEVER INSTEAD OF IT. The disclosure is rendered
+   * unconditionally below whatever goes here, so adding section copy can never
+   * displace it — which is the failure this component was restructured to make
+   * impossible. Optional because the lead page wants the windows without the
+   * home page's pitch. */
+  standfirst?: string[];
   /** Composer-shaped link target. Omit both and the windows render with no
    * composer at all — the lead page does exactly that, because a second route
-   * into the playground competes with the form that page exists to collect. */
+   * into the agent competes with the form that page exists to collect. */
   promptHref?: string;
   promptLabel?: string;
+  /** Target for the closing call to action. Omit it and no CTA renders. */
+  ctaHref?: string;
 }) {
   return (
     <>
@@ -134,6 +155,14 @@ export function DemoBento({
         <h2 className="font-display text-2xl font-bold text-foreground sm:text-3xl">
           {heading}
         </h2>
+        {standfirst?.map((line) => (
+          <p
+            className="mx-auto mt-3 max-w-xl text-base text-muted-foreground"
+            key={line}
+          >
+            {line}
+          </p>
+        ))}
         <p className="mx-auto mt-3 max-w-md text-sm text-muted-foreground">
           {DEMO_DISCLOSURE}
         </p>
@@ -199,6 +228,24 @@ export function DemoBento({
           );
         })}
       </div>
+
+      {/* The closing call to action, rendered here rather than by each caller
+          so both surfaces get the same words and the same shape. It was
+          briefly duplicated in the home page, which is how two surfaces
+          showing "the same" section start disagreeing about it. Opt-in: a
+          caller that wants the windows without a route out of the page passes
+          no href and gets nothing. */}
+      {ctaHref && (
+        <div className="mt-8 text-center">
+          <Link
+            href={ctaHref}
+            className="font-display text-base font-bold text-foreground underline underline-offset-4 transition-colors hover:text-primary"
+          >
+            {DEMO_CTA_ACTION}
+          </Link>
+          <p className="mt-2 text-sm text-muted-foreground">{DEMO_CTA_SUPPORT}</p>
+        </div>
+      )}
     </>
   );
 }
