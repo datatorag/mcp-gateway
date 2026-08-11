@@ -74,6 +74,20 @@ export type AnyToolPart = ToolUIPart | DynamicToolUIPart;
 
 export type FeedbackState = "idle" | "down-pending" | "sending" | "thanks";
 
+/** How large the message text runs.
+ *
+ * `xs` is the embedded widget on the dashboard, where the chat is one block
+ * among several and reads as a preview. `sm` is the full-page Agent, where the
+ * thread is the only thing on screen and 12px prose in a centred column reads
+ * as a widget that got stretched. Only the message body scales — tool cards,
+ * confirm cards and the actions row stay metadata-sized in both. */
+export type MessageTextSize = "xs" | "sm";
+
+const MESSAGE_TEXT_CLASS: Record<MessageTextSize, string> = {
+  xs: "text-xs",
+  sm: "text-sm",
+};
+
 /** The playground's canonical "no useful detail" copy. Also the message the
  * transport throws for transport-level failures, so that the bubble can render
  * `error.message` verbatim (preserving the route's own actionable wording)
@@ -348,6 +362,10 @@ interface MessageRowProps {
   busy: boolean;
   /** True while an unresolved approval gates the conversation. */
   awaitingConfirm: boolean;
+  /** Message-body scale. A constant per surface, so `memo` still bails.
+   * Optional so the scripted demo and any other direct caller keep the
+   * embedded widget's size without restating it. */
+  textSize?: MessageTextSize;
   onDecide: ConfirmCardProps["onDecide"];
   onRegenerate: () => void;
   feedback: Record<string, FeedbackState>;
@@ -369,6 +387,7 @@ export const MessageRow = memo(function MessageRow({
   showActions,
   busy,
   awaitingConfirm,
+  textSize = "xs",
   onDecide,
   onRegenerate,
   feedback,
@@ -377,12 +396,13 @@ export const MessageRow = memo(function MessageRow({
   onCommentChange,
   onSendComment,
 }: MessageRowProps) {
+  const bodyClass = MESSAGE_TEXT_CLASS[textSize];
   return (
     // The rows own the conversation's vertical rhythm (rather than the list
     // container), so every surface that renders them — dashboard playground,
     // landing demo — gets the same turn-by-turn spacing.
     <Message className="mt-5 first:mt-0" from={message.role}>
-      <MessageContent className="gap-3 text-xs">
+      <MessageContent className={`gap-3 ${bodyClass}`}>
         {message.parts.map((part, partIndex) => {
           const key = `${message.id}-${partIndex}`;
           if (part.type === "text") {
@@ -401,7 +421,7 @@ export const MessageRow = memo(function MessageRow({
               <MessageResponse
                 allowedImagePrefixes={[]}
                 allowedLinkPrefixes={["https://"]}
-                className="text-xs"
+                className={bodyClass}
                 key={key}
               >
                 {part.text}
@@ -484,6 +504,9 @@ export interface MessageListProps {
   erroredIds: ReadonlySet<string>;
   /** True while an unresolved approval gates the conversation. */
   awaitingConfirm: boolean;
+  /** Message-body scale. Defaults to the embedded widget's size, so a caller
+   * that does not care keeps exactly what it had. */
+  textSize?: MessageTextSize;
   onDecide: ConfirmCardProps["onDecide"];
   onRegenerate: () => void;
   feedback: Record<string, FeedbackState>;
@@ -499,6 +522,7 @@ export function MessageList({
   lastMessageComplete,
   erroredIds,
   awaitingConfirm,
+  textSize = "xs",
   onDecide,
   onRegenerate,
   feedback,
@@ -538,6 +562,7 @@ export function MessageList({
             onRegenerate={onRegenerate}
             onSendComment={onSendComment}
             showActions={showActions}
+            textSize={textSize}
           />
         );
       })}

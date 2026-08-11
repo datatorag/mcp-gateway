@@ -66,6 +66,7 @@ Three distinct flows — don't conflate them:
 - **Frontmatter contracts** — field-by-field tables with fallbacks live in the `site-content` skill. Headline facts only: blog `readTime` is computed from word count (not frontmatter); changelog `connector` is convention-only, unvalidated; docs `connector` (not `section`) drives sidebar grouping via `src/lib/docs-connectors.ts` `CONNECTORS` registry — URLs stay flat, e.g. `/docs/gmail`.
 - **`/tools/[slug]` is DB-driven**, not markdown: queries `mcpServers`/`tools` directly, 404s unless `status === "active"`, renders the plugin README from the local plugin dir first, then GitHub API fallback (1h revalidate). Home page integrations grid also queries the DB directly.
 - **App-router conventions**: no Navbar in root layout — every top-level page renders its own `<Navbar />`; `/docs` and `/dashboard` have their own nested layouts (no Navbar). `components/navbar.tsx` `flatItems` is the single source for desktop + mobile nav. Shipping a new top-level route = page + `flatItems` entry + footer link in `app/page.tsx` (no lint enforces this). Blog/docs use `generateStaticParams`; dashboard pages fetch client-side from rate-limited `/api/usage/*` routes (via `src/lib/with-route.ts` — session auth + rate limit + generic-500 catch-all; every session-gated JSON route uses it).
+- **The dashboard shell has two modes, keyed by route.** `dashboard/layout.tsx` holds a `FULL_HEIGHT_ROUTES` set (`/dashboard/agent` today). A route in it gets `h-dvh overflow-hidden`, an icon-only 56px sidebar rail, and `children` with NO padded `max-w-5xl` wrapper — the surface owns the viewport and manages its own scrolling. Every other route keeps the labelled 224px sidebar and the padded, document-scrolling main. Consequences worth knowing before editing: a full-height page must not add page padding or a heading of its own, and the rail deliberately is not a scroll container (`overflow-y-auto` would force `overflow-x` to auto and clip the user-menu popup, which is wider than the rail).
 - **`.prose` typography is hand-rolled** in `src/app/globals.css` — not `@tailwindcss/typography`. No `img` rule; code-block colors are hardcoded hex (duplicated in `tools/[slug]/page.tsx`).
 
 ## Key decisions
@@ -168,7 +169,8 @@ multi-file changes where a fresh-eyes sweep genuinely pays for itself.
 | Per-model-call LLM token telemetry, keyed by run id | `apps/gateway/src/mastra/llm-usage.ts` |
 | Playground SSE chat + feedback routes (401/403/429/400 mapping) | `apps/gateway/src/app/api/playground/{chat,feedback}/route.ts` |
 | Playground LLM model factory (Anthropic) | `apps/gateway/src/lib/llm.ts` |
-| Playground chat UI (`PlaygroundHandle.runPrompt`, feedback controls) | `apps/gateway/src/app/dashboard/playground.tsx` |
+| Playground chat UI (`PlaygroundHandle.runPrompt`, feedback controls, `layout="panel" \| "page"`) | `apps/gateway/src/app/dashboard/playground.tsx` |
+| Dashboard shell: sidebar/rail, `FULL_HEIGHT_ROUTES` | `apps/gateway/src/app/dashboard/layout.tsx` |
 | Setup wizard (client picker, config snippets, live status polling) | `apps/gateway/src/app/dashboard/setup-wizard.tsx` |
 | Setup status API (live non-"web" tokens only — not revoked/expired) | `apps/gateway/src/app/api/setup/status/route.ts` |
 | Testcontainers Postgres helper + `isDockerAvailable()` gate | `apps/gateway/src/test-utils/db.ts` |

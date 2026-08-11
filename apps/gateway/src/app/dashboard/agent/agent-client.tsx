@@ -14,6 +14,12 @@ import { useConnections } from "../use-connections";
  * It was previously the last block of a long dashboard page, reachable by
  * scrolling. Giving it a route is what lets it be a destination: something to
  * link to, to land on after login, and to come back to.
+ *
+ * THE CHAT IS THE PAGE. There is no title and no standfirst here on purpose —
+ * the greeting is the empty state's, and a heading above it only stacked three
+ * openings on top of each other. The full-height shell comes from
+ * `dashboard/layout.tsx`, which drops its padded content wrapper on this
+ * route; this component's job is just to fill the box it is handed.
  */
 export function AgentClient({ isDefaultView }: { isDefaultView: boolean }) {
   const { hasConnectedAccount } = useConnections();
@@ -40,24 +46,22 @@ export function AgentClient({ isDefaultView }: { isDefaultView: boolean }) {
 
 
   return (
-    <div>
-      <h1 className="font-display text-2xl font-bold text-foreground">Agent</h1>
-      <p className="mt-1 text-sm text-muted-foreground">
-        Ask for something and it works across your connected accounts.
-      </p>
+    // `h-full min-h-0` so the chat inherits a definite height from the shell's
+    // `h-dvh` line instead of growing past it. Without `min-h-0` the flex item
+    // refuses to shrink below its content and the composer walks off screen.
+    <div className="flex h-full min-h-0 flex-col">
       {/* NOT gated on `loaded`. Withholding the composer until an account
           lookup returns turns a slow or failed request into a page with
           nothing to type in, which is indistinguishable from the product
           being broken. `hasConnectedAccount` is false until we know better,
           and false is the state the empty state already handles. */}
-      {(
-        <Playground
-          hasConnectedAccount={hasConnectedAccount}
-          loadSuggestions={loadSuggestions}
-          prompts={AGENT_PROMPTS}
-          ref={ref}
-        />
-      )}
+      <Playground
+        hasConnectedAccount={hasConnectedAccount}
+        layout="page"
+        loadSuggestions={loadSuggestions}
+        prompts={AGENT_PROMPTS}
+        ref={ref}
+      />
     </div>
   );
 }

@@ -47,8 +47,10 @@ import {
   MessageList,
   messageText,
   type FeedbackState,
+  type MessageTextSize,
   type PlaygroundMessage,
 } from "./playground-presentation";
+import { cn } from "@/lib/utils";
 
 /** Thrown by the transport for a 429, and never shown: the cap panel replaces
  * the composer instead, so rendering this sentinel would put an internal
@@ -64,6 +66,86 @@ const CONNECTABLE_SERVICES = SERVICES.map((service) => ({
   connectHref: service.connectUrl,
 }));
 
+/* -------------------------------------------------------------------------- */
+/* Layout                                                                      */
+/* -------------------------------------------------------------------------- */
+
+/** The two shapes this chat takes.
+ *
+ * `panel` is the dashboard widget: a bordered box with a heading, one block in
+ * a scrolling document, sized by a max-height.
+ *
+ * `page` is the Agent route, where the chat IS the page — full viewport
+ * height, a centred thread column, and a composer anchored to the bottom that
+ * never scrolls away. There is no heading in this variant on purpose: the
+ * greeting lives in the empty state, so the page does not stack a title, a
+ * standfirst and an opening line on top of each other.
+ *
+ * ONLY presentation differs. Both variants run the same `useChat`, the same
+ * send path, the same suggestions read and the same metering, because the
+ * container below is shared and none of it is branched on. */
+export type PlaygroundLayout = "panel" | "page";
+
+const LAYOUT: Record<
+  PlaygroundLayout,
+  {
+    root: string;
+    /** Wraps the scrolling thread's content — this is where the centred
+     * measure comes from in the page variant. */
+    content: string;
+    /** Extra classes applied to that content only while the thread is empty,
+     * so the greeting sits in the middle of the viewport rather than pinned
+     * under the top edge. */
+    contentEmpty: string;
+    /** The composer row. In the page variant this also carries the centring,
+     * on the same measure as the thread, so the two line up. */
+    footer: string;
+    textarea: string;
+    body: MessageTextSize;
+  }
+> = {
+  panel: {
+    // Grid, not flex, on purpose: this panel has only a max-height (it grows
+    // with content up to the cap), never an explicit height. A flex column's
+    // `flex-1` child never gets a *definite* height out of that —
+    // `height:100%` on `use-stick-to-bottom`'s inner scroller (rendered by
+    // <Conversation>) falls back to content height, so it never scrolls and
+    // the outer `overflow-y-hidden` silently clips (verified live: inner grew
+    // to 1131px inside a 429px box). CSS Grid's row-sizing algorithm gives the
+    // `minmax(0,1fr)` row a genuinely definite size even when the grid
+    // container's own height is intrinsic, so the log row — and therefore the
+    // inner scroller's `height:100%` — resolves correctly once content exceeds
+    // the cap, while still shrinking to content (down to min-height) for short
+    // conversations. Verified in a standalone harness reproducing this exact
+    // class structure (see conversation-scroll-fix.md).
+    root: "relative mt-3 grid max-h-[34rem] min-h-[12rem] grid-rows-[minmax(0,1fr)_auto] rounded-xl border border-border",
+    content: "gap-0 p-4",
+    contentEmpty: "",
+    footer: "shrink-0 border-t border-border p-3",
+    textarea: "min-h-10 text-xs",
+    body: "xs",
+  },
+  page: {
+    // Same grid for the same reason, with a definite `h-full` instead of a
+    // cap. Do not "simplify" this to a flex column: the height that
+    // `use-stick-to-bottom` needs comes from the row track.
+    root: "relative grid h-full min-h-0 grid-rows-[minmax(0,1fr)_auto] bg-background",
+    content: "mx-auto w-full max-w-3xl gap-0 px-4 pt-8 pb-6 sm:px-6",
+    contentEmpty: "min-h-full justify-center",
+    footer: "mx-auto w-full max-w-3xl shrink-0 px-4 pb-4 pt-2 sm:px-6",
+    textarea: "min-h-14 text-sm",
+    body: "sm",
+  },
+};
+
+/** The greeting that opens an empty full-page thread.
+ *
+ * This is the standfirst that used to sit above the chat as page copy. It is
+ * the same sentence, moved rather than rewritten — the redesign removes the
+ * stacked heading, it does not make a new claim. */
+const PAGE_GREETING =
+  "Ask for something and it works across your connected accounts.";
+
 export interface PlaygroundHandle {
   /** Seed the input with `prompt` and submit it immediately. Used by the
    * "What can I do?" prompt cards' Run action in dashboard-client.tsx. */
@@ -78,6 +160,9 @@ interface PlaygroundProps {
   loadSuggestions?: () => Promise<string[]>;
   /** Whether the user has at least one connected account (any service). */
   hasConnectedAccount: boolean;
+  /** Which shape to render. Defaults to the embedded dashboard widget, so an
+   * existing caller keeps exactly what it had. */
+  layout?: PlaygroundLayout;
 }
 
 /** Feedback is reported against the prompt that produced the answer, which is
@@ -99,7 +184,12 @@ function precedingUserPrompt(
 /* -------------------------------------------------------------------------- */
 
 export const Playground = forwardRef<PlaygroundHandle, PlaygroundProps>(
-  function Playground({ prompts, hasConnectedAccount, loadSuggestions }, ref) {
+  function Playground(
+    { prompts, hasConnectedAccount, loadSuggestions, layout = "panel" },
+    ref
+  ) {
+    const style = LAYOUT[layout];
+    const isPage = layout === "page";
     const [input, setInput] = useState("");
     const [capState, setCapState] = useState<{ cap: number } | null>(null);
     const [hidden, setHidden] = useState(false);
@@ -400,35 +490,17 @@ export const Playground = forwardRef<PlaygroundHandle, PlaygroundProps>(
         ? "Ask something…"
         : "Connect an account to try the playground";
 
-    return (
-      <div className="mt-8">
-        <h2 className="font-display text-base font-bold text-foreground">
-          Playground
-        </h2>
-        <p className="mt-0.5 text-xs text-muted-foreground">
-          Chat with your connected accounts, right here.
-        </p>
-
-        {/* Grid, not flex, on purpose: this panel has only a max-height (it
-            grows with content up to the cap), never an explicit height. A
-            flex column's `flex-1` child never gets a *definite* height out
-            of that — `height:100%` on `use-stick-to-bottom`'s inner scroller
-            (rendered by <Conversation>) falls back to content height, so it
-            never scrolls and the outer `overflow-y-hidden` silently clips
-            (verified live: inner grew to 1131px inside a 429px box). CSS
-            Grid's row-sizing algorithm gives the `minmax(0,1fr)` row a
-            genuinely definite size even when the grid container's own
-            height is intrinsic, so the log row — and therefore the
-            inner scroller's `height:100%` — resolves correctly once content
-            exceeds the cap, while still shrinking to content (down to
-            min-height) for short conversations. Verified in a standalone
-            harness reproducing this exact class structure (see
-            conversation-scroll-fix.md). */}
-        <div className="relative mt-3 grid max-h-[34rem] min-h-[12rem] grid-rows-[minmax(0,1fr)_auto] rounded-xl border border-border">
+    const chat = (
+      <div className={style.root}>
           <Conversation className="min-h-0">
             {/* gap-0: the message rows carry their own vertical rhythm now
                 (see MessageRow), so the container must not add to it. */}
-            <ConversationContent className="gap-0 p-4">
+            <ConversationContent
+              className={cn(
+                style.content,
+                messages.length === 0 && style.contentEmpty
+              )}
+            >
               {messages.length === 0 && (
                 // The agent opens the thread rather than waiting to be
                 // addressed: what it does, why it needs access, and the way to
@@ -436,28 +508,66 @@ export const Playground = forwardRef<PlaygroundHandle, PlaygroundProps>(
                 // IN here rather than on a card above, because sending someone
                 // out of the thread to come back to it is the shape that made
                 // setup feel like a cliff.
-                <div className="space-y-2">
+                <div className={isPage ? "space-y-5" : "space-y-2"}>
+                  {/* The page variant's greeting. It replaces the page title
+                      and standfirst rather than adding a third line: in this
+                      idiom the empty thread IS the heading, and it goes away
+                      the moment there is a conversation to read instead. */}
+                  {isPage && (
+                    <h1 className="font-display text-xl font-bold text-foreground sm:text-2xl">
+                      {PAGE_GREETING}
+                    </h1>
+                  )}
                   {hasConnectedAccount ? (
                     <>
-                      <p className="text-xs text-muted-foreground">
+                      <p
+                        className={cn(
+                          "text-muted-foreground",
+                          isPage ? "text-sm" : "text-xs"
+                        )}
+                      >
                         {personalised
                           ? "Here are a few things I can do with what you just connected."
                           : "Ask something about your connected accounts."}
                       </p>
-                      <Suggestions>
-                        {suggestions.slice(0, 3).map((prompt, i) => (
-                          <Suggestion
-                            className="h-auto py-1 text-[11px]"
-                            key={i}
-                            onClick={send}
-                            suggestion={prompt}
-                          />
-                        ))}
-                      </Suggestions>
+                      {/* Same three suggestions, same deterministic source,
+                          two arrangements. The panel keeps its pill row. The
+                          page stacks them full-width, because these are whole
+                          sentences and a nowrap pill scroller hides most of
+                          every one of them on the surface where they are the
+                          main thing to read. */}
+                      {isPage ? (
+                        <div className="space-y-2">
+                          {suggestions.slice(0, 3).map((prompt, i) => (
+                            <Suggestion
+                              className="h-auto w-full justify-start whitespace-normal rounded-xl px-4 py-3 text-left text-sm font-normal"
+                              key={i}
+                              onClick={send}
+                              suggestion={prompt}
+                            />
+                          ))}
+                        </div>
+                      ) : (
+                        <Suggestions>
+                          {suggestions.slice(0, 3).map((prompt, i) => (
+                            <Suggestion
+                              className="h-auto py-1 text-[11px]"
+                              key={i}
+                              onClick={send}
+                              suggestion={prompt}
+                            />
+                          ))}
+                        </Suggestions>
+                      )}
                     </>
                   ) : (
                     <>
-                      <p className="text-xs text-muted-foreground">
+                      <p
+                        className={cn(
+                          "text-muted-foreground",
+                          isPage ? "text-sm" : "text-xs"
+                        )}
+                      >
                         I can work with your email, files, calendar and issues,
                         once you connect an account. You can ask me anything in
                         the meantime.
@@ -487,6 +597,7 @@ export const Playground = forwardRef<PlaygroundHandle, PlaygroundProps>(
                 onRate={handleRate}
                 onRegenerate={handleRegenerate}
                 onSendComment={handleSendComment}
+                textSize={style.body}
               />
 
               {/* 429 raises the cap panel instead, and a 403 has already
@@ -504,7 +615,7 @@ export const Playground = forwardRef<PlaygroundHandle, PlaygroundProps>(
             <ConversationScrollButton />
           </Conversation>
 
-          <div className="shrink-0 border-t border-border p-3">
+          <div className={style.footer}>
             {capState ? (
               <div className="rounded-lg bg-secondary/40 p-3 text-center">
                 <p className="text-xs font-medium text-foreground">
@@ -542,7 +653,7 @@ export const Playground = forwardRef<PlaygroundHandle, PlaygroundProps>(
               // horizontal row with the textarea and toolbar side by side.
               <PromptInput onSubmit={(message) => send(message.text ?? "")}>
                 <PromptInputTextarea
-                  className="min-h-10 text-xs"
+                  className={style.textarea}
                   disabled={streaming || awaitingConfirm}
                   onChange={(e) => setInput(e.target.value)}
                   placeholder={placeholder}
@@ -564,7 +675,24 @@ export const Playground = forwardRef<PlaygroundHandle, PlaygroundProps>(
               </PromptInput>
             )}
           </div>
-        </div>
+      </div>
+    );
+
+    // The page variant returns the chat and nothing else: no heading, no
+    // wrapper, no page chrome. The dashboard widget keeps its section
+    // heading, because there it really is one block among several and needs
+    // to say which one it is.
+    if (isPage) return chat;
+
+    return (
+      <div className="mt-8">
+        <h2 className="font-display text-base font-bold text-foreground">
+          Playground
+        </h2>
+        <p className="mt-0.5 text-xs text-muted-foreground">
+          Chat with your connected accounts, right here.
+        </p>
+        {chat}
       </div>
     );
   }
