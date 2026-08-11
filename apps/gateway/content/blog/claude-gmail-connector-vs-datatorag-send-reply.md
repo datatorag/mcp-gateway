@@ -2,17 +2,22 @@
 title: "Claude Can Draft Your Email. It Can't Send It."
 excerpt: "The native Claude Gmail connector writes drafts into your Drafts folder and stops there. It has no tool to send one, and none to delete one either. DataToRAG ships the verbs that finish the job."
 date: "2026-04-21"
-updated: "2026-08-07"
-updatedNote: "Anthropic's Gmail connector has since gained labelling, marking read, and archiving, so the labels section and the comparison table are rewritten. The send gap is unchanged: it still creates drafts it can neither send nor delete."
+updated: "2026-08-11"
+updatedNote: "Two corrections. August 7: Anthropic's Gmail connector gained labelling, marking read, and archiving, so the labels section and the table were rewritten. August 11: the table's label row said Yes for both of us, which overstated our side. Whole-thread labelling is theirs, not ours, and the row is now split into message-level and thread-level. The send gap is unchanged through both: it still creates drafts it can neither send nor delete."
 author: "Manuel Yang"
 category: "Comparison"
 coverImage: "/blog/gmail-comparison.png"
 tags: ["gmail", "claude", "mcp", "comparison", "google-workspace"]
 ---
 
+**Short answer:** no, Claude's native Gmail connector cannot send email. As of August 11,
+2026 it creates drafts and can neither send nor delete them, and it has no reply or forward
+tool. It reads, searches and labels well. DataToRAG adds send, reply, forward, and the two
+verbs that finish a draft.
+
 Every time I've watched someone use Claude with their Gmail, the same moment happens. They ask Claude to write a reply. Claude writes a good reply. They squint at the screen and then say, "okay, how do I… send this?" And the answer is: you can't. Claude put the draft in your Drafts folder. You have to open Gmail, click into Drafts, click Send.
 
-That's not a bug. It's the design intent of Claude's native Gmail connector. The connector reads your inbox and drafts messages into Drafts, and it will not send anything. Ask it to list its own tools and the shape is obvious: `create_draft`, `update_draft`, `list_drafts`, and then the trail ends. No send. No send-draft. No reply. No forward. Not even a delete, so the draft it just wrote for you is one it can neither send nor throw away. We re-enumerated that tool surface on August 7, 2026 and it still reads the same way.
+That's not a bug. It's the design intent of Claude's native Gmail connector. The connector reads your inbox and drafts messages into Drafts, and it will not send anything. Ask it to list its own tools and the shape is obvious: `create_draft`, `update_draft`, `list_drafts`, and then the trail ends. No send. No send-draft. No reply. No forward. Not even a delete, so the draft it just wrote for you is one it can neither send nor throw away. We re-enumerated that tool surface on August 11, 2026 and it still reads the same way.
 
 The design goal is safety: you review every outbound action. The result is that every email workflow ends with Claude handing you a sticky note saying "the draft is waiting in Gmail."
 
@@ -28,15 +33,18 @@ The design goal is safety: you review every outbound action. The result is that 
 | Reply within a thread | No | Yes |
 | Forward a message | No | Yes |
 | Mark messages read or unread | Yes | Yes |
-| Label or archive threads | Yes | Yes |
+| Label or archive individual messages | Yes | Yes |
+| Label or archive a whole thread in one call | Yes | No |
 | Save attachment to Drive server-side | No | Yes |
 | Multi-account (work + personal Gmail) | No | Yes |
 
-The native column is what its connector exposes as tools, enumerated on August 7, 2026. Rows move; the date is there so you can tell how stale this table is when you find it.
+Both columns are what each connector exposes as tools, enumerated on August 11, 2026. Rows move; the date is there so you can tell how stale this table is when you find it.
+
+That thread row is one we got wrong in our own favour until August 11. The native connector has `label_thread` and `unlabel_thread`, which apply to every message in a thread and to any message that lands in it later. Ours labels messages, so "archive this whole conversation" means enumerating the messages first. It is on our list, and until it ships the honest answer is No.
 
 ## What DataToRAG's Gmail connector adds
 
-DataToRAG ships the full set of Gmail verbs:
+DataToRAG ships the outbound verbs the native connector stops short of:
 
 - `gmail_send`: compose and deliver a new message.
 - `gmail_reply`: reply within a thread, keeping the subject and thread context intact.
