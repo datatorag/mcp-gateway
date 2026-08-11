@@ -1,6 +1,6 @@
 ---
 title: "Gmail"
-description: "Search, read, send, reply, forward, and draft emails; manage labels and inspect filters."
+description: "Search, read, send, reply, forward, and draft emails, and manage labels."
 order: 1
 section: "connectors"
 connector: "google-workspace"
@@ -28,7 +28,6 @@ The Gmail connector gives your AI assistant full access to your inbox: searching
 | `gmail_list_labels` | List every label, system and user-created, with its ID, name, and type. Label IDs feed `gmail_label_message`, `gmail_update_label`, and `gmail_delete_label` |
 | `gmail_update_label` | Rename a label or change its visibility. Takes the label ID, not the name. Renaming keeps the label on already-labeled messages |
 | `gmail_delete_label` | Delete a label by ID. The label is removed from every message carrying it; the messages themselves are not deleted. System labels (INBOX, UNREAD, SENT) cannot be deleted |
-| `gmail_list_filters` | List all Gmail filters (Settings > Filters) with their criteria and actions |
 | `gmail_save_attachment_to_drive` | Save an email attachment directly to Google Drive |
 
 ## Required scopes

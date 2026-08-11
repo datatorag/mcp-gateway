@@ -91,7 +91,7 @@ const groups: FaqGroup[] = [
       {
         id: "google-verified",
         q: "Is this Google verified?",
-        a: `Yes. DataToRAG passed Google's CASA Tier 2 security assessment, which is what the sensitive Workspace scopes require. You will not see an unverified app warning when you connect. Here is <a href="/blog/casa-tier-2-verified">what the verification involved</a> and <a href="/blog/unverified-app-warning-and-casa-tier-2">what that warning means</a> on apps that have not done it.`,
+        a: `Yes. DataToRAG passed Google's CASA Tier 2 security assessment, which is what the restricted Workspace scopes require. You will not see an unverified app warning when you connect. Here is <a href="/blog/casa-tier-2-verified">what the verification involved</a> and <a href="/blog/unverified-app-warning-and-casa-tier-2">what that warning means</a> on apps that have not done it.`,
       },
       {
         id: "data-and-tokens",

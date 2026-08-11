@@ -1,5 +1,5 @@
 ---
-title: "Gmail labels and filters"
+title: "Gmail labels"
 date: "2026-08-07"
 tags: ["gmail", "gws-mcp"]
 connector: "google-workspace"
@@ -21,8 +21,3 @@ The workhorse is `gmail_label_message`: add or remove labels on one
 message or several in a single call. Since Gmail treats inbox state as
 labels, this is also how you archive (remove `INBOX`) and mark read
 (remove `UNREAD`).
-
-Alongside the label tools, `gmail_list_filters` lists your Gmail
-filters (the ones under Settings > Filters) with their criteria and
-actions, so your assistant can see how mail is already routed before
-layering labels on top.

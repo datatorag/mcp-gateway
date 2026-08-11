@@ -34,7 +34,7 @@ Not every call is counted the same way:
 - **User errors** — counted. You asked for a message that doesn't exist, a query with bad JQL, a file you don't have access to. The request reached the API and came back with a legitimate "no."
 - **Server errors** — *not* counted. If our gateway is down, a plugin crashes, or an upstream API has a 5xx outage, that's not your problem and we don't meter it.
 
-Calls you make from the dashboard's playground and agent chat are counted under the same rules as calls from an MCP client. Each call is attributed to the surface it came from, so you can tell dashboard usage apart from what your assistant ran through a connected client.
+Calls you make from the dashboard are counted under the same rules as calls from an MCP client.
 
 ## Retention
 
