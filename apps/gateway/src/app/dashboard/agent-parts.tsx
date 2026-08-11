@@ -1,7 +1,6 @@
 "use client";
 
 import type { ReactNode } from "react";
-import Link from "next/link";
 import { SetupInstructions } from "@/components/setup-instructions";
 import { buttonVariants } from "@/components/ui/button";
 
@@ -61,13 +60,20 @@ export function ConnectPart({ services }: AgentDataParts["connect"]) {
       </p>
       <div className="mt-2 flex flex-wrap gap-2">
         {services.map((service) => (
-          <Link
+          // A PLAIN ANCHOR, NOT next/link. These are Express OAuth routes,
+          // not Next pages: Link prefetches them with an `_rsc` param, the
+          // route answers 302 to the provider, and the cross-origin prefetch
+          // dies as a CORS failure. Harmless to the page, but it is a console
+          // error and a wasted request on every render. Every other connect
+          // button in the dashboard is already a plain anchor; this one was
+          // the outlier.
+          <a
             className={buttonVariants({ size: "sm" })}
             href={service.connectHref}
             key={service.id}
           >
             Connect {service.name}
-          </Link>
+          </a>
         ))}
       </div>
     </div>
