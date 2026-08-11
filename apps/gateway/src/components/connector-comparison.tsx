@@ -28,10 +28,13 @@ import { CircleCheckIcon, CircleMinusIcon } from "lucide-react";
  *    rows to one. A reader who sees that believes the Sheets rows. A table
  *    that wins everything reads as an ad and gets discounted whole.
  *
- * 4. CALENDAR IS A TIE AND THEY ARE AHEAD ON TWO COUNTS. Our own published
- *    comparison already calls Calendar parity. Claiming a gap there would be
- *    caught by anyone who tests it, and would retroactively discredit the rows
- *    that are true.
+ * 4. CALENDAR IS NOT A TIE. IT IS FOUR CONCESSIONS. This section called it
+ *    parity until 10 August 2026, and that was wrong in the built-in
+ *    connector's favour: it does rich event creation, RSVP, meeting-time
+ *    suggestions and event search, and we do none of those. The rule the old
+ *    note was reaching for still holds and is why the correction went the way
+ *    it did: a claim anyone can disprove by testing retroactively discredits
+ *    every row that is true.
  *
  * 5. NAME SERVICES, NEVER COUNTS. Every hard-coded tool count we have shipped
  *    went stale without anyone touching it.
@@ -58,6 +61,11 @@ import { CircleCheckIcon, CircleMinusIcon } from "lucide-react";
 /** Rendered, not just recorded. See rule 2. Change it only when the rows have
  * actually been retested. */
 const VERIFIED_ON = "7 August 2026";
+/** The Calendar rows were re-checked separately and later, and the standfirst
+ * says so rather than moving the sitewide date: claiming the whole table was
+ * re-verified when only one section was would be the same kind of overclaim
+ * the correction exists to remove. */
+const CALENDAR_VERIFIED_ON = "10 August 2026";
 
 type Row = {
   capability: string;
@@ -71,7 +79,9 @@ type Group = {
   service: string;
   rows: Row[];
   /** The line that makes the group's rows mean something. Not decoration. */
-  note?: string;
+  /** One paragraph, or several. Arrays render as separate paragraphs; a plain
+   * string stays a single one, so existing entries are untouched. */
+  note?: string | string[];
 };
 
 const GROUPS: Group[] = [
@@ -129,13 +139,25 @@ const GROUPS: Group[] = [
   {
     service: "Google Calendar",
     rows: [
-      { capability: "Read, search, list calendars", builtIn: true, ours: true },
+      { capability: "Read and list events", builtIn: true, ours: true },
       { capability: "Create, update, delete an event", builtIn: true, ours: true },
-      { capability: "RSVP to an invitation", builtIn: true, ours: false },
+      {
+        capability:
+          "Rich event creation: recurrence, rooms, attachments, reminders",
+        builtIn: true,
+        ours: false,
+        emphasis: true,
+      },
+      { capability: "RSVP to an invitation", builtIn: true, ours: false, emphasis: true },
       { capability: "Suggest a meeting time", builtIn: true, ours: false, emphasis: true },
+      { capability: "Search events, list calendars", builtIn: true, ours: false, emphasis: true },
       { capability: "Free/busy lookup", builtIn: false, ours: true },
     ],
-    note: "Calendar is a tie, and the built-in one is ahead on two counts. Anyone telling you Claude cannot manage your calendar is wrong. Our only Calendar advantage is multiple accounts.",
+    note: [
+      "On a single account, the built-in connector is the better calendar tool, and it isn't close. Its event creation does recurring events, room booking, attachments, and custom reminders, where ours creates plain events. It can RSVP, search, and suggest meeting times. Ours can't.",
+      "What we add is span: both your calendars reachable in one request, without either account having to share anything with the other. Free/busy runs one lookup per account and the assistant combines them.",
+      "One honest caveat: the built-in connector sees every calendar the connected account can see. If you already share your personal calendar with your work account, that covers the cross-account case for you. Our advantage is for calendars you'd rather not share.",
+    ],
   },
   {
     service: "Google Drive",
@@ -207,7 +229,7 @@ export function ConnectorComparison() {
         </p>
         <p className="mx-auto mt-3 max-w-xl text-sm text-muted-foreground">
           Everything below was checked by hand against both products on{" "}
-          {VERIFIED_ON}.
+          {VERIFIED_ON}. Calendar section re-verified {CALENDAR_VERIFIED_ON}.
         </p>
       </div>
 
@@ -281,7 +303,13 @@ export function ConnectorComparison() {
                     className="pb-1 pt-3 text-sm leading-relaxed text-muted-foreground"
                     colSpan={3}
                   >
-                    {group.note}
+                    {Array.isArray(group.note)
+                      ? group.note.map((para, i) => (
+                          <p className={i > 0 ? "mt-2" : undefined} key={i}>
+                            {para}
+                          </p>
+                        ))
+                      : group.note}
                   </td>
                 </tr>
               ) : null}
