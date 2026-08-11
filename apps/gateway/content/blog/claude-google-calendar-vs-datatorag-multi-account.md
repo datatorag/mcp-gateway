@@ -43,7 +43,7 @@ the tool is not on our wire today, not that it is impossible.
 | Recurring events | Yes | No |
 | Book a room as a bookable resource | Yes | No, the room name goes in the location text |
 | Attachments, custom reminders, guest permissions | Yes | No |
-| Free / busy across work **and** personal at once | No | Yes |
+| Free / busy on work **and** personal, with no calendar sharing | No | Yes |
 | Create an event on a specific account | No | Yes |
 | Default account with per-call override | No | Yes |
 | Works inside Claude Code | Yes (v2.1.46+) | Yes |
@@ -68,7 +68,8 @@ Our Calendar surface is deliberately narrow, six tools that cover the core of th
 Every one of those tools accepts an optional `account` parameter. At the gateway level we store multiple Google account tokens per user and route each tool call to the right one. You can:
 
 - Connect `work@company.com` AND `personal@gmail.com` under one MCP endpoint.
-- Run `calendar_freebusy` across both to find a genuinely free slot.
+- Run `calendar_freebusy` on each account and read the results together to find a
+  genuinely free slot.
 - Create an event on one calendar without touching the other.
 - Set a default and still override per call.
 
@@ -96,9 +97,10 @@ up and that plenty of Workspace domains restrict, and it gives you the other cal
 events rather than the ability to act as the other account. If sharing covers your case, it
 covers it, and you do not need us for this.
 
-With DataToRAG connected to both accounts, `calendar_freebusy` merges availability across
-both and the answer reflects reality, without either account having to share anything with
-the other.
+With DataToRAG connected to both accounts, `calendar_freebusy` can be run against either
+one, and your assistant reads both answers together. The difference is not that one call
+does the merge, it does not: it is that both accounts are reachable through a single
+endpoint, so neither has to share its calendar with the other to be seen.
 
 ## Try it
 

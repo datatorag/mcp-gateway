@@ -78,7 +78,7 @@ DataToRAG currently supports these services:
 - **Docs**: Read, create, write, and batch update documents
 - **Sheets**: Read, create, update, append, and delete spreadsheets, and manage tabs
 - **Slides**: Read, create, batch update, and delete presentations
-- **Contacts**: Search, list, create, update, delete contacts, and search company directory
+- **Contacts**: Search, list, create, update, and delete contacts
 - **Tasks**: List task lists, list tasks, create, update, complete, and delete tasks
 
 **Atlassian**
