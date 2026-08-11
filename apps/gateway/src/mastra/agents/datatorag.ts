@@ -14,8 +14,35 @@ import { getEnv } from "@datatorag-mcp/config";
 import { USER_ID_CONTEXT_KEY } from "../mcp/client";
 import { usageContextFrom, withLlmUsageTracking } from "../llm-usage";
 
-/** Stable id for the playground agent. The route and any client that names an
- * agent must use this constant rather than a string literal. */
+/** Stable id for this agent. The route and any client that names an agent must
+ * use this constant rather than a string literal.
+ *
+ * The value keeps the retired surface name. It is a REGISTRY KEY: the Mastra
+ * agents map is keyed by it and the chat route looks the agent up by it, so a
+ * rename is a coordinated edit rather than a dangerous one.
+ *
+ * IT IS NOT A THREAD PERSISTENCE KEY, whatever the shape of the name
+ * suggests. Stored conversations are addressed by `deriveThreadId(userId,
+ * clientThreadId)` plus `resource: userId`, and the agent id is not an input
+ * to either. An earlier version of this comment claimed renaming it would
+ * "orphan every thread on disk" — that was invented, and a false warning is
+ * worse than none, because it stops someone doing a change that is actually
+ * safe. Verified by reading the call site, not by assuming from the name.
+ *
+ * What renaming touches: the registry key and the route's lookup, both of
+ * which reference this constant and move together. Nothing in storage.
+ *
+ * What it does NOT touch, though the shared word suggests otherwise: the MCP
+ * `clientName` sent on the wire to plugin servers is a SIBLING LITERAL in
+ * `playground/tools.ts`, not a reference to this constant, so it is something
+ * you must remember to change rather than something that follows. Nothing
+ * here gates auth on it, but plugin-side analytics may key on it, and that
+ * code lives in another repo.
+ *
+ * Also separate, and the one group that is genuinely load-bearing: the
+ * `playground_*` analytics event names. They are their own constants, and
+ * `digest.ts` already carries a "before the rename" bucket for an event that
+ * was renamed once, which is what orphaned history looks like. */
 export const DATATORAG_AGENT_ID = "datatorag-playground";
 
 /** System prompt for the playground assistant.
@@ -122,9 +149,24 @@ function resolveModel() {
   const env = getEnv();
   const key = env.ANTHROPIC_API_KEY;
   if (!key) {
-    throw new Error(
-      "Playground model unavailable — no Anthropic API key is configured."
+    // THE DIAGNOSIS GOES TO THE LOG, THE THROWN STRING SAYS NOTHING.
+    //
+    // This message used to name the missing credential. It was invisible to
+    // users only because the chat route funnels caught errors through a
+    // generic replacement — so its safety was a property of a call site
+    // somewhere else, not of this line. Any future path that forwards a caught
+    // `Error.message` verbatim would have published, in one string, that this
+    // deployment has no Anthropic key configured. That is a configuration
+    // disclosure: it tells an outsider which failure they have induced and
+    // which lever is missing.
+    //
+    // So the operator detail is logged, where operators read, and the thrown
+    // value carries no configuration state. It also no longer carries the
+    // retired surface name.
+    console.error(
+      "[agent] ANTHROPIC_API_KEY is not configured; the agent cannot resolve a model"
     );
+    throw new Error("The agent is unavailable right now.");
   }
   if (cachedModel?.key !== key) {
     cachedModel = { key, model: createAnthropic({ apiKey: key })(env.PLAYGROUND_MODEL) };
@@ -162,7 +204,10 @@ export function createDatatoragAgent(
 ) {
   return new Agent({
     id: DATATORAG_AGENT_ID,
-    name: "DataToRAG Playground",
+    // Internal today, and renamed anyway. It is one agent-listing endpoint
+    // away from being user-visible, and a name that only stays correct while
+    // nothing exposes it is a name that goes wrong silently.
+    name: "DataToRAG Agent",
     description:
       "Demonstrates what an agent can do with a user's connected accounts through the gateway.",
     // The MESSAGE, not the string — see SYSTEM_MESSAGE. This is what carries
