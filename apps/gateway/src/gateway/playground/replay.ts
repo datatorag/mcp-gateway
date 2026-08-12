@@ -20,6 +20,17 @@
  * un-run, which is the truth: nothing was approved.
  */
 
+/** Data parts we are willing to reconstitute from storage.
+ *
+ * Deliberately a list rather than a prefix test: `data-*` is an open namespace
+ * that anything writing to the thread can put a part into, and this converter
+ * is the boundary between stored bytes and rendered UI. */
+const REPLAYABLE_DATA_PARTS = new Set([
+  "data-approval-expired",
+  "data-account-state",
+  "data-mcp-config",
+]);
+
 /** The subset of a stored part this module understands. */
 interface StoredPart {
   type?: string;
@@ -119,10 +130,13 @@ export function replayPart(part: StoredPart): unknown | null {
     return expiredApproval(toolNameFromApproval(part));
   }
 
-  // Any other `data-*` part passes through untouched. The renderer already
-  // ignores kinds it does not know rather than throwing, which is the correct
-  // behaviour for a part written by a newer version of the server.
-  if (type.startsWith("data-")) return part;
+  // ALLOW-LISTED, not passed through. Replayed content is the user's own
+  // today, so a hostile stored part would be self-inflicted — but that stops
+  // being true the first time a thread is shared, exported, or opened by
+  // support, and this is the code that would carry it. An unknown kind renders
+  // as nothing either way, so refusing it here costs nothing and removes the
+  // question.
+  if (type.startsWith("data-") && REPLAYABLE_DATA_PARTS.has(type)) return part;
 
   return null;
 }

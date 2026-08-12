@@ -1,3 +1,5 @@
+import type { MemoryStorage } from "@mastra/core/storage";
+import type { PostgresStore } from "@mastra/pg";
 import { getMemoryStore } from "@/mastra";
 
 /**
@@ -55,29 +57,28 @@ export interface StoredMessage {
   createdAt: string;
 }
 
-interface MemoryDomain {
-  listThreads(args: {
-    filter?: { resourceId?: string };
-    perPage?: number | false;
-    page?: number;
-    orderBy?: { field?: string; direction?: "ASC" | "DESC" };
-  }): Promise<unknown>;
-  getThreadById(args: {
-    threadId: string;
-    resourceId?: string;
-  }): Promise<unknown>;
-  listMessages(args: {
-    threadId: string;
-    resourceId?: string;
-    perPage?: number | false;
-  }): Promise<unknown>;
-  deleteThread(threadId: string): Promise<void>;
-  updateThread?(args: {
-    id: string;
-    title: string;
-    metadata: Record<string, unknown>;
-  }): Promise<unknown>;
-}
+/** The storage contract, DERIVED FROM THE VENDOR rather than described here.
+ *
+ * An earlier version of this file hand-wrote the interface and cast to it. It
+ * was wrong, and the cast is what made it invisible: `deleteThread` takes an
+ * OBJECT, `{ threadId }`, and the hand-written version declared a positional
+ * string. Called that way the destructure yields undefined, the driver turns
+ * that into NULL, the query matches nothing, and the delete reports success
+ * while the conversation stays on disk. tsc could not see any of it, because
+ * the assertion told it not to look.
+ *
+ * That mistake happened to fail closed. The same cast would equally hide
+ * `resourceId` being renamed or dropped from `getThreadById`, and THAT
+ * direction fails open, on the one check standing between a user and someone
+ * else's chat. So the type comes from the package: a signature change now
+ * breaks the build instead of the guarantee. */
+type MemoryDomain = NonNullable<
+  Awaited<ReturnType<PostgresStore["getStore"]>>
+> extends infer S
+  ? S extends { getThreadById: unknown }
+    ? S
+    : MemoryStorage
+  : MemoryStorage;
 
 async function memory(): Promise<MemoryDomain> {
   const store = (await getMemoryStore()) as MemoryDomain | undefined;
@@ -149,14 +150,24 @@ export async function listThreadsForUser(
     perPage: limit,
     orderBy: { field: "updatedAt", direction: "DESC" },
   });
-  return rows<{ id: string; title?: string; updatedAt?: unknown; createdAt?: unknown }>(
-    result,
-    "threads"
-  ).map((t) => ({
-    id: t.id,
-    title: typeof t.title === "string" ? t.title : "",
-    updatedAt: asIso(t.updatedAt) ?? asIso(t.createdAt) ?? new Date(0).toISOString(),
-  }));
+  return rows<{
+    id: string;
+    resourceId?: string;
+    title?: string;
+    updatedAt?: unknown;
+    createdAt?: unknown;
+  }>(result, "threads")
+    // RE-CHECKED HERE, not merely asked for in the filter. Every other
+    // operation in this file proves ownership itself and this one was trusting
+    // storage, which is the inconsistency that lets a filter regression pass
+    // one path while the others hold. What would leak is thread ids and
+    // titles, and a title is the first line of somebody's message.
+    .filter((t) => t.resourceId === undefined || t.resourceId === userId)
+    .map((t) => ({
+      id: t.id,
+      title: typeof t.title === "string" ? t.title : "",
+      updatedAt: asIso(t.updatedAt) ?? asIso(t.createdAt) ?? new Date(0).toISOString(),
+    }));
 }
 
 /** One conversation's messages, or null when it is not this user's. */
@@ -192,7 +203,7 @@ export async function deleteThreadForUser(
 ): Promise<boolean> {
   const thread = await ownedThread(userId, threadId);
   if (!thread) return false;
-  await (await memory()).deleteThread(threadId);
+  await (await memory()).deleteThread({ threadId });
   return true;
 }
 

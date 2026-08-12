@@ -119,6 +119,8 @@ type StreamTaps = {
   onApprovalShown: () => void;
   /** The stream died. Receives the error; returns the text to send on. */
   onFailure: (err: unknown) => string;
+  /** The stream ended, cleanly or not. Fires once. */
+  onClosed?: () => void;
 };
 
 /** Wraps the runtime's stream so the route can count what went past and notice
@@ -145,10 +147,12 @@ function instrumentStream(
       } catch (err) {
         controller.enqueue({ type: "error", errorText: taps.onFailure(err) });
         controller.close();
+        taps.onClosed?.();
         return;
       }
       if (result.done) {
         controller.close();
+        taps.onClosed?.();
         return;
       }
       const chunk = result.value;
@@ -337,6 +341,9 @@ export const POST = withRoute(async (userId, request) => {
   };
 
   let stream: ReadableStream<UIMessageChunk>;
+  // Same lifetime as `stream`: computed inside the try, consumed by the tap on
+  // the response below, which is outside it.
+  let pendingTitle: string | null = null;
   /** Hoisted out of the try below because the stream taps close over it: the
    * tool-call events are emitted while the stream drains, long after this
    * block returns. */
@@ -370,24 +377,17 @@ export const POST = withRoute(async (userId, request) => {
 
     // NAME THE CONVERSATION, ONCE, FROM WHAT THE USER ALREADY TYPED.
     //
-    // Fire-and-forget and never awaited: a title is a label on a list, and no
-    // turn should be delayed or failed by one. `setThreadTitleIfEmpty` is a
-    // no-op when a title exists, so re-running it on every turn costs a read
-    // and changes nothing after the first.
+    // Computed here, WRITTEN WHEN THE STREAM CLOSES. On a brand new
+    // conversation the thread row does not exist until the runtime has written
+    // it, so titling before the turn finds nothing to title, the ownership
+    // check correctly refuses, and a single-turn conversation would sit on the
+    // date fallback forever. Deferring to the close is what makes the first
+    // turn the one that names it.
     //
-    // Placed after the run is claimed rather than at the top, so a turn that
-    // was refused for quota never leaves a titled, empty conversation behind
-    // in the list.
-    const firstUserText = firstUserMessageText(messages);
-    const derivedTitle = threadTitle(firstUserText);
-    if (derivedTitle) {
-      void setThreadTitleIfEmpty(userId, threadForTurn, derivedTitle).catch(
-        () => {
-          // A missing title is a cosmetic loss and the list falls back to the
-          // thread's date. It is not worth surfacing to the user mid-turn.
-        }
-      );
-    }
+    // Fire and forget, never awaited: a label on a list must not be able to
+    // delay or fail a turn. `setThreadTitleIfEmpty` is a no-op once a title
+    // exists, so re-running it on later turns costs a read and changes nothing.
+    pendingTitle = threadTitle(firstUserMessageText(messages));
 
     stream = (await handleChatStream({
       mastra: getMastra(),
@@ -444,6 +444,16 @@ export const POST = withRoute(async (userId, request) => {
       onFailure: (err) => {
         refundIfWasted();
         return logAndGenericError("[playground] turn failed", err);
+      },
+      // The thread row exists by now, which is the whole reason this waits.
+      onClosed: () => {
+        if (!pendingTitle) return;
+        void setThreadTitleIfEmpty(userId, threadForTurn, pendingTitle).catch(
+          () => {
+            // A missing title is cosmetic and the list falls back to the
+            // thread's date. Not worth surfacing to the user.
+          }
+        );
       },
     }),
   });

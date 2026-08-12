@@ -53,6 +53,12 @@ vi.mock("@/gateway/track", () => ({
 
 vi.mock("@/lib/db", () => ({ db: {}, getDb: () => ({}) }));
 
+const userOwnsThread = vi.fn();
+vi.mock("@/gateway/playground/threads", () => ({
+  userOwnsThread: (...args: unknown[]) => userOwnsThread(...args),
+  setThreadTitleIfEmpty: async () => {},
+}));
+
 vi.mock("@/mastra", () => ({
   getMastra: () => ({ mastra: true }),
   DATATORAG_AGENT_ID: "datatorag-playground",
@@ -168,6 +174,51 @@ beforeEach(() => {
   capExempt.mockResolvedValue(false);
   refundAgentRun.mockResolvedValue(undefined);
   handleChatStream.mockResolvedValue(chunkStream([{ type: "start" }, { type: "finish" }]));
+  userOwnsThread.mockResolvedValue(true);
+});
+
+
+describe("resuming a conversation someone else owns", () => {
+  // The by-check half of ownership, on the WRITE path. Without this the only
+  // thing stopping a foreign thread being seeded into a model call and
+  // appended to is a line with no test behind it, in a repo with no CI —
+  // deleting that line left the whole suite green.
+  it("404s, and never reaches the model or the run claim", async () => {
+    userOwnsThread.mockResolvedValue(false);
+    const response = await POST(
+      post({ messages: USER_TURN, threadId: "someone-elses-thread" })
+    );
+    expect(response.status).toBe(404);
+    expect(handleChatStream, "a foreign thread reached the model").not.toHaveBeenCalled();
+    expect(claimAgentRun, "a foreign thread spent a run").not.toHaveBeenCalled();
+  });
+
+  it("answers a foreign thread exactly as it would an unknown one", async () => {
+    // Any difference makes this endpoint an oracle for whether a given
+    // conversation exists on someone else's account, which is the property the
+    // read routes are careful to avoid.
+    userOwnsThread.mockResolvedValue(false);
+    const foreign = await POST(post({ messages: USER_TURN, threadId: "theirs" }));
+    const missing = await POST(post({ messages: USER_TURN, threadId: "never-existed" }));
+    expect(foreign.status).toBe(missing.status);
+    expect(await foreign.text()).toBe(await missing.text());
+  });
+
+  it("proceeds normally for a thread the user does own", async () => {
+    userOwnsThread.mockResolvedValue(true);
+    const response = await POST(post({ messages: USER_TURN, threadId: "mine" }));
+    expect(response.status).toBe(200);
+    expect(handleChatStream).toHaveBeenCalled();
+  });
+
+  it("meters a resumed turn exactly like a fresh one", async () => {
+    userOwnsThread.mockResolvedValue(true);
+    await POST(post({ messages: USER_TURN, threadId: "mine" }));
+    const resumed = claimAgentRun.mock.calls.length;
+    claimAgentRun.mockClear();
+    await POST(post({ messages: USER_TURN }));
+    expect(claimAgentRun.mock.calls.length).toBe(resumed);
+  });
 });
 
 describe("POST /api/playground/chat — guards", () => {

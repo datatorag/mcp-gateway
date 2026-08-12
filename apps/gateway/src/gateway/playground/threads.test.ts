@@ -31,11 +31,15 @@ let updated: Array<{ id: string; title: string }> = [];
 
 /** A storage double that enforces NOTHING, so the gate has to. */
 const store = {
-  listThreads: vi.fn(async ({ filter }: { filter?: { resourceId?: string } }) => ({
+  // DELIBERATELY IGNORES THE FILTER, like every other method on this double.
+  // An earlier version honoured it, which meant the list path was the one
+  // place the gate could lean on storage and still pass. The header claims
+  // this double enforces nothing; it now actually does not.
+  listThreads: vi.fn(async (_args: { filter?: { resourceId?: string } }) => ({
     threads: [
       { id: THREAD, resourceId: OWNER, title: "", updatedAt: new Date("2026-08-01") },
       { id: "other", resourceId: STRANGER, title: "", updatedAt: new Date("2026-08-02") },
-    ].filter((t) => !filter?.resourceId || t.resourceId === filter.resourceId),
+    ],
   })),
   // Ignores resourceId entirely — the point of the double.
   getThreadById: vi.fn(async ({ threadId }: { threadId: string }) =>
@@ -46,8 +50,17 @@ const store = {
   listMessages: vi.fn(async () => ({
     messages: [{ id: "m1", role: "user", content: { parts: [] }, createdAt: new Date("2026-08-01") }],
   })),
-  deleteThread: vi.fn(async (id: string) => {
-    deleted.push(id);
+  // THE VENDOR SIGNATURE, an object and not a positional string. The first
+  // version of this double took a string, matching what the gate wrongly
+  // called, so the test and the bug agreed and the delete silently matched no
+  // rows in production while reporting success. A double written from what the
+  // caller does, rather than from what the dependency declares, tests nothing
+  // but the author's belief.
+  deleteThread: vi.fn(async ({ threadId }: { threadId: string }) => {
+    if (typeof threadId !== "string" || threadId === "") {
+      throw new Error("deleteThread called without a thread id");
+    }
+    deleted.push(threadId);
   }),
   updateThread: vi.fn(async ({ id, title }: { id: string; title: string }) => {
     updated.push({ id, title });

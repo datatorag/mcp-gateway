@@ -55,6 +55,15 @@ export type AgentDataParts = {
  * this instance or coexists with it, and note that this one lists ALL services
  * unconditionally while a server-emitted one should name only what the request
  * actually needed. */
+/** Only these can be a connect target. The hrefs come from our own SERVICES
+ * list today, so this changes nothing now — but this component also renders
+ * from a `data-connect` part, and a part is data rather than code. A
+ * `javascript:` href in one would execute on click, and "the data is ours" is
+ * a property of today's producers, not of the component. */
+function safeConnectHref(href: string): string | null {
+  return /^\/[^/]/.test(href) || /^https:\/\//.test(href) ? href : null;
+}
+
 export function ConnectPart({ services }: AgentDataParts["connect"]) {
   if (services.length === 0) return null;
   return (
@@ -63,7 +72,7 @@ export function ConnectPart({ services }: AgentDataParts["connect"]) {
         Connect an account and I can work with your own files.
       </p>
       <div className="mt-2 flex flex-wrap gap-2">
-        {services.map((service) => (
+        {services.map((service) => safeConnectHref(service.connectHref) && (
           // A PLAIN ANCHOR, NOT next/link. These are Express OAuth routes,
           // not Next pages: Link prefetches them with an `_rsc` param, the
           // route answers 302 to the provider, and the cross-origin prefetch
@@ -73,7 +82,7 @@ export function ConnectPart({ services }: AgentDataParts["connect"]) {
           // the outlier.
           <a
             className={buttonVariants({ size: "sm" })}
-            href={service.connectHref}
+            href={safeConnectHref(service.connectHref) as string}
             key={service.id}
           >
             Connect {service.name}

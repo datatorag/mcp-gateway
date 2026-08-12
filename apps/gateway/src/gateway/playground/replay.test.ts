@@ -98,9 +98,14 @@ describe("the parts that should vanish", () => {
     expect(replayPart({ type: "text", text: "" })).toBeNull();
   });
 
-  it("passes an unknown data part through for the renderer to ignore", () => {
-    const part = { type: "data-something-new", data: { a: 1 } };
-    expect(replayPart(part as never)).toEqual(part);
+  it("replays only allow-listed data parts, and drops anything else", () => {
+    // `data-*` is an open namespace and this converter is the boundary between
+    // stored bytes and rendered UI. An unknown kind renders as nothing either
+    // way, so refusing it here costs nothing and removes the question of what
+    // a hostile stored part could do the day threads are shared or exported.
+    const known = { type: "data-account-state", data: { runsRemaining: 1 } };
+    expect(replayPart(known as never)).toEqual(known);
+    expect(replayPart({ type: "data-something-new", data: { a: 1 } } as never)).toBeNull();
   });
 });
 
