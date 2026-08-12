@@ -15,6 +15,8 @@ import {
   deriveThreadId, findApprovalTargets, mintRunId, ownsRunId,
 } from "@/gateway/playground/run-ownership";
 import { RUNS_CAP_HEADER, RUNS_REMAINING_HEADER } from "@/gateway/playground/quota-headers";
+import { setThreadTitleIfEmpty, userOwnsThread } from "@/gateway/playground/threads";
+import { threadTitle } from "@/gateway/playground/thread-title";
 import {
   trackAgentRun,
   trackPlaygroundMessage, trackPlaygroundCapHit, trackPlaygroundConfirm,
@@ -163,6 +165,35 @@ function instrumentStream(
   });
 }
 
+/** The text of the first user message in the posted conversation, for the
+ * title. Reads the same wire shape the client sends: parts carrying text, with
+ * a flat `content` string as the older fallback. Returns null when there is
+ * nothing readable, and the caller then leaves the thread for the date
+ * fallback rather than inventing a label. */
+function firstUserMessageText(messages: unknown[]): string | null {
+  for (const message of messages) {
+    const m = message as { role?: unknown; parts?: unknown; content?: unknown };
+    if (m?.role !== "user") continue;
+    if (Array.isArray(m.parts)) {
+      const text = m.parts
+        .filter(
+          (p): p is { type: string; text: string } =>
+            typeof p === "object" &&
+            p !== null &&
+            (p as { type?: unknown }).type === "text" &&
+            typeof (p as { text?: unknown }).text === "string"
+        )
+        .map((p) => p.text)
+        .join(" ");
+      if (text.trim() !== "") return text;
+    }
+    if (typeof m.content === "string" && m.content.trim() !== "") {
+      return m.content;
+    }
+  }
+  return null;
+}
+
 /* -------------------------------------------------------------------------- */
 /* The route                                                                   */
 /* -------------------------------------------------------------------------- */
@@ -176,12 +207,40 @@ export const POST = withRoute(async (userId, request) => {
   }
 
   const body = (await request.json().catch(() => null)) as {
-    messages?: unknown; id?: unknown; trigger?: unknown;
+    messages?: unknown; id?: unknown; trigger?: unknown; threadId?: unknown;
   } | null;
   const messages = body?.messages;
   if (!Array.isArray(messages) || messages.length === 0) {
     return NextResponse.json({ error: "Bad request" }, { status: 400 });
   }
+
+  /* WHICH CONVERSATION THIS TURN BELONGS TO.
+   *
+   * Two paths, and the split is forced rather than stylistic.
+   *
+   * A NEW conversation derives its id server-side from the session user, so a
+   * caller cannot write into a thread it does not own: the id it would need is
+   * not something it can supply. That is ownership by construction and it stays.
+   *
+   * RESUMING an existing one cannot work that way. The derivation is a one-way
+   * hash, so the client id behind a stored thread is unrecoverable, and a
+   * resumed turn must land in the SAME thread the user is looking at or it
+   * silently forks a new one. So a resumed turn names its thread and we prove
+   * ownership through the same gate the read routes use, once, before any work
+   * or spend happens. An id that is not this user's is refused as not found,
+   * exactly as reading it would be: answering differently here would turn the
+   * chat endpoint into the existence oracle the read routes are careful not to
+   * be. */
+  const namedThread =
+    typeof body?.threadId === "string" && body.threadId !== ""
+      ? body.threadId
+      : null;
+  if (namedThread && !(await userOwnsThread(userId, namedThread))) {
+    return NextResponse.json({ error: "Not found" }, { status: 404 });
+  }
+  const threadForTurn =
+    namedThread ??
+    deriveThreadId(userId, typeof body?.id === "string" ? body.id : "");
 
   // NOTE what is NOT read off the body: `runId` and `resumeData`. The runtime
   // accepts both and resumes whatever they name, so forwarding a client's copy
@@ -309,6 +368,27 @@ export const POST = withRoute(async (userId, request) => {
       void trackAgentRun(db, userId, { runId: usageRunId, runsUsed });
     }
 
+    // NAME THE CONVERSATION, ONCE, FROM WHAT THE USER ALREADY TYPED.
+    //
+    // Fire-and-forget and never awaited: a title is a label on a list, and no
+    // turn should be delayed or failed by one. `setThreadTitleIfEmpty` is a
+    // no-op when a title exists, so re-running it on every turn costs a read
+    // and changes nothing after the first.
+    //
+    // Placed after the run is claimed rather than at the top, so a turn that
+    // was refused for quota never leaves a titled, empty conversation behind
+    // in the list.
+    const firstUserText = firstUserMessageText(messages);
+    const derivedTitle = threadTitle(firstUserText);
+    if (derivedTitle) {
+      void setThreadTitleIfEmpty(userId, threadForTurn, derivedTitle).catch(
+        () => {
+          // A missing title is a cosmetic loss and the list falls back to the
+          // thread's date. It is not worth surfacing to the user mid-turn.
+        }
+      );
+    }
+
     stream = (await handleChatStream({
       mastra: getMastra(),
       agentId: DATATORAG_AGENT_ID,
@@ -328,7 +408,7 @@ export const POST = withRoute(async (userId, request) => {
         // again, for the same reason as the run id — and here it costs
         // nothing, since the derivation is stable across restarts.
         memory: {
-          thread: deriveThreadId(userId, typeof body?.id === "string" ? body.id : ""),
+          thread: threadForTurn,
           resource: userId,
         },
         // A fresh turn gets a run id minted for THIS user; that id is what

@@ -123,6 +123,19 @@ async function ownedThread(
   return thread;
 }
 
+/** Does this user own this thread?
+ *
+ * For the chat route, which needs the answer before it spends anything on a
+ * resumed turn. It is the SAME check the reads use, exported rather than
+ * reimplemented: a second ownership rule for writes is how the two drift and
+ * one of them ends up wrong. */
+export async function userOwnsThread(
+  userId: string,
+  threadId: string
+): Promise<boolean> {
+  return (await ownedThread(userId, threadId)) !== null;
+}
+
 /** Every conversation this user owns, newest first. */
 export async function listThreadsForUser(
   userId: string,

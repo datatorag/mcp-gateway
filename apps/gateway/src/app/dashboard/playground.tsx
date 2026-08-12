@@ -171,6 +171,19 @@ interface PlaygroundProps {
   /** Which shape to render. Defaults to the embedded dashboard widget, so an
    * existing caller keeps exactly what it had. */
   layout?: PlaygroundLayout;
+  /** The stored conversation this chat is continuing, or null for a new one.
+   *
+   * PASSED WITH `initialMessages` OR NOT AT ALL. Naming a thread without
+   * loading its history gives the user an empty transcript that the assistant
+   * nonetheless remembers: context they cannot see, edit or clear, re-sent and
+   * re-billed on every turn. The caller keys this component on the thread so
+   * the two always change together. */
+  threadId?: string | null;
+  /** History for `threadId`, already converted to what the renderer expects. */
+  initialMessages?: PlaygroundMessage[];
+  /** Fired once a turn has gone out, so a thread list can pick up a new
+   * conversation and its freshly written title. */
+  onConversationChanged?: () => void;
 }
 
 /** Feedback is reported against the prompt that produced the answer, which is
@@ -193,7 +206,15 @@ function precedingUserPrompt(
 
 export const Playground = forwardRef<PlaygroundHandle, PlaygroundProps>(
   function Playground(
-    { prompts, hasConnectedAccount, loadSuggestions, layout = "panel" },
+    {
+      prompts,
+      hasConnectedAccount,
+      loadSuggestions,
+      layout = "panel",
+      threadId = null,
+      initialMessages,
+      onConversationChanged,
+    },
     ref
   ) {
     const style = LAYOUT[layout];
@@ -281,13 +302,24 @@ export const Playground = forwardRef<PlaygroundHandle, PlaygroundProps>(
             }
             return res;
           },
-          // No `prepareSendMessagesRequest`: there is one request shape now.
-          // A decision on a gated write is not a different kind of request —
-          // it is the same messages array with one tool part moved to
+          // A resumed conversation names the thread it belongs to, so the
+          // turn lands in the thread the user is looking at instead of
+          // forking a new one. A new conversation sends nothing here and the
+          // server derives the id from the session user, which keeps
+          // ownership by construction for anything being created.
+          //
+          // Still one request shape otherwise: a decision on a gated write is
+          // the same messages array with one tool part moved to
           // `approval-responded`, which the transport sends by default and the
           // route recognises on arrival.
+          prepareSendMessagesRequest: threadId
+            ? ({ body, ...rest }) => ({
+                ...rest,
+                body: { ...body, threadId },
+              })
+            : undefined,
         }),
-      []
+      [threadId]
     );
 
     const {
@@ -300,6 +332,12 @@ export const Playground = forwardRef<PlaygroundHandle, PlaygroundProps>(
       error,
     } = useChat<PlaygroundMessage>({
       transport,
+      // Seeded with the stored conversation when resuming. The caller keys
+      // this component on the thread, so a switch remounts rather than
+      // merging two conversations into one list.
+      ...(initialMessages && initialMessages.length > 0
+        ? { messages: initialMessages }
+        : {}),
       // NO `id`, SO EVERY PAGE LOAD IS A NEW CONVERSATION — deliberate, and
       // not the same thing as conversations not being saved. The server now
       // persists every turn, keyed by the conversation id the browser sends;
@@ -392,6 +430,11 @@ export const Playground = forwardRef<PlaygroundHandle, PlaygroundProps>(
         void runExclusive(async () => {
           setInput("");
           await sendMessage({ text });
+          // A turn has gone out, so a thread list is now stale: a brand new
+          // conversation did not exist before this and a resumed one just
+          // moved to the top. Fired after the send rather than before, so a
+          // refused turn does not put a phantom row in the list.
+          onConversationChanged?.();
         });
       },
       [
@@ -401,6 +444,7 @@ export const Playground = forwardRef<PlaygroundHandle, PlaygroundProps>(
         awaitingConfirm,
         runExclusive,
         sendMessage,
+        onConversationChanged,
       ]
     );
 
