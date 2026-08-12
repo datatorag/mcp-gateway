@@ -38,6 +38,7 @@ import cron from "node-cron";
 import { runDailyRollup } from "./src/gateway/usage/rollup";
 import { runDailyDigest } from "./src/gateway/digest";
 import { runNoActivationFollowup } from "./src/gateway/lifecycle";
+import { securityHeaders } from "./src/gateway/security-headers";
 
 const dev = process.env.NODE_ENV !== "production";
 
@@ -102,6 +103,11 @@ async function main() {
   process.on("SIGINT", shutdown);
 
   const app = express();
+
+  // FIRST, before anything that can produce a response. The dashboard renders
+  // tool-approval prompts, and an approval gate that can be framed is a
+  // decoration. See the module for why both headers and why 'none'.
+  app.use(securityHeaders);
 
   app.use(cookieParser());
 
