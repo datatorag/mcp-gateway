@@ -38,7 +38,18 @@ export default function RootLayout({
       lang="en"
       className={`${montserrat.variable} ${inter.variable} ${ptMono.variable} h-full antialiased`}
     >
-      <body className="min-h-full flex flex-col font-sans overflow-x-hidden">
+      {/* `overflow-x-clip`, NOT `hidden`. Both stop the document widening, but
+          `hidden` makes this element a scroll container, and then every
+          `position: sticky` descendant sticks to BODY's scrollport instead of
+          the viewport. Body never scrolls — the viewport does — so those
+          elements silently stop sticking and travel with the page.
+
+          That shipped: the dashboard rail and the docs sidebar both scrolled
+          away, and the docs one went unreported for as long as it existed.
+          `globals.css` already makes exactly this distinction on `html`, with
+          a comment explaining it, and the same reasoning was never carried
+          the one file across to `body`. */}
+      <body className="min-h-full flex flex-col font-sans overflow-x-clip">
         {/* Must stay before {children}: effects flush in tree order, so the
             gtag stub exists before page effects (e.g. the dashboard's signup
             conversion) run. */}
