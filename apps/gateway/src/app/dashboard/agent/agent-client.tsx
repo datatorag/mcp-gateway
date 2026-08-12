@@ -77,7 +77,7 @@ export function AgentClient({ isDefaultView }: { isDefaultView: boolean }) {
 
   const openThread = useCallback(async (id: string) => {
     try {
-      const res = await fetch(`/api/playground/threads/${id}`);
+      const res = await fetch(`/api/playground/threads/${encodeURIComponent(id)}`);
       // A thread that is not this user's, or is gone, answers the same 404.
       // Refusing to switch is the honest outcome: switching to an empty view
       // would imply the conversation exists and is simply blank.

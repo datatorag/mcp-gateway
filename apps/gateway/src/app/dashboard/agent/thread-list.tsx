@@ -79,7 +79,13 @@ export function ThreadList({
         // DELETE MEANS GONE. The row leaves the list only after the server
         // says it is deleted, so a failed delete does not show the user a
         // conversation that still exists on the next reload.
-        const res = await fetch(`/api/playground/threads/${id}`, { method: "DELETE" });
+        // Encoded even though ids are server-derived hashes a client cannot
+        // choose today. That is a property of the current id scheme, not of
+        // this call site, and the call site is what would carry a crafted id
+        // the day it stops being true.
+        const res = await fetch(`/api/playground/threads/${encodeURIComponent(id)}`, {
+          method: "DELETE",
+        });
         if (res.ok) {
           setThreads((prev) => prev.filter((t) => t.id !== id));
           if (id === activeId) onNew();
