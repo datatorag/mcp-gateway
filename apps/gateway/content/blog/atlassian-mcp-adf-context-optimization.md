@@ -2,6 +2,8 @@
 title: "Confluence Pages Are 40KB of Markup. Your AI Gets 2KB."
 excerpt: "Confluence storage format is verbose XML that destroys context windows. We convert it to clean text by default, with a format switch for when you need the raw markup back."
 date: "2026-04-06"
+updated: "2026-08-12"
+updatedNote: "Corrected the context arithmetic, which was wrong by roughly ten times and contradicted its own next sentence: it capped a 200K-token window at 60KB of text, then said two 40KB reads cost a third of it, which cannot both be true. The cost is now stated in tokens spent, which does not go stale as window sizes change. Also corrected the Jira field list, which named comments where the response carries a comment count, and omitted several fields it does return."
 author: "Manuel Yang"
 category: "Engineering"
 coverImage: "/blog/adf-context-optimization.png"
@@ -24,7 +26,7 @@ Scale that across a real Confluence page (the kind engineering teams actually bu
 
 We wrote about this problem with Google Docs and Slides in [a previous post](/blog/why-your-mcp-server-is-eating-your-context-window). The same math applies here, possibly worse. Confluence storage format is more verbose than Google's response for equivalent content because every macro, layout column, and rich element adds layers of XML nesting.
 
-A 200K token context window can hold maybe 60KB of raw text. Two Confluence page reads at 40KB each and you've consumed a third of your context on structural markup that the LLM will never use meaningfully. The model spends attention budget parsing XML tags and macro attributes instead of understanding the content.
+Two Confluence page reads at 40KB each burn somewhere around 25 to 40 thousand tokens, and most of that is structural markup the model will never use meaningfully. Whether that is a fifth of your context or a fortieth depends on the model you are on, which is exactly why we count it in tokens spent rather than as a share of a window that keeps moving. Either way it is attention budget going on XML tags and macro attributes instead of on the content.
 
 We saw this in testing. A workflow that read three Confluence pages and summarized them started losing coherence by the second page when using raw storage format. The same workflow with converted text stayed sharp through all three and still had room for follow-up questions.
 
@@ -60,7 +62,7 @@ Storage mode: updating specific sections, changing formatted elements (status ba
 
 Jira issue descriptions also use Atlassian's structured format, though they tend to be shorter. A typical issue description might be 5-10KB for a few paragraphs of text. We apply similar trimming.
 
-The bigger win on the Jira side is cutting the issue metadata. A full Jira issue response includes changelog history, rendered fields, schema definitions, edit metadata, and the full project configuration. We return the fields people actually ask about: summary, status, assignee, priority, description, and comments. The rest is noise.
+The bigger win on the Jira side is cutting the issue metadata. A full Jira issue response includes changelog history, rendered fields, schema definitions, edit metadata, and the full project configuration. We return the fields people actually ask about: key, summary, status, priority, assignee, reporter, description, labels, created and updated dates, a comment count, and attachments. Comment bodies are a separate call, so a summary of an issue does not drag every thread on it into context. The rest is noise.
 
 ## The pattern
 

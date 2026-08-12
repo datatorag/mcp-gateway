@@ -2,6 +2,8 @@
 title: "24-hour re-auth is over"
 excerpt: "DataToRAG MCP now issues OAuth refresh tokens. Your client refreshes silently in the background instead of dragging you back through the Google consent screen every day."
 date: "2026-05-18"
+updated: "2026-08-12"
+updatedNote: "Fixed three links. Two pointed at a spec and an implementation plan that were deliberately moved out of the public repo after this post went up, so both 404ed and the surrounding "checked into the repo" claim was false with them; they are replaced by the OAuth security model record, which is public. The third cited the OAuth 2.0 Security BCP as an Internet-Draft, and it was published as RFC 9700 before this post was written."
 author: "Manuel Yang"
 category: "Engineering"
 coverImage: "/blog/oauth-refresh-tokens.png"
@@ -26,7 +28,7 @@ Three pieces, all part of [the OAuth 2.1 standard shape](https://datatracker.iet
 
 **`/oauth/token` now accepts `grant_type=refresh_token`.** Clients hand us the refresh token, we hand back a new access token (plus a new refresh token; see below). The user's session continues. They notice nothing.
 
-**Rotation with replay revoke.** Every refresh issues a new refresh token and invalidates the old one. If a previously-used refresh token shows up a second time, that's a signal it leaked, so we revoke the entire token family, including the legitimate client's currently-active token. The legitimate user gets bumped back to the OAuth flow once. The attacker gets nothing useful. This is the pattern recommended by [RFC 6749 §10.4](https://datatracker.ietf.org/doc/html/rfc6749#section-10.4) and the [OAuth 2.0 Security Best Current Practice](https://datatracker.ietf.org/doc/html/draft-ietf-oauth-security-topics).
+**Rotation with replay revoke.** Every refresh issues a new refresh token and invalidates the old one. If a previously-used refresh token shows up a second time, that's a signal it leaked, so we revoke the entire token family, including the legitimate client's currently-active token. The legitimate user gets bumped back to the OAuth flow once. The attacker gets nothing useful. This is the pattern recommended by [RFC 6749 §10.4](https://datatracker.ietf.org/doc/html/rfc6749#section-10.4) and the [OAuth 2.0 Security Best Current Practice, RFC 9700](https://datatracker.ietf.org/doc/html/rfc9700).
 
 We also added an [RFC 7009](https://datatracker.ietf.org/doc/html/rfc7009) revocation endpoint at `/oauth/revoke`. Per the spec it always returns 200, even for tokens it doesn't recognize. That prevents the endpoint from being used to enumerate which tokens are valid.
 
@@ -46,9 +48,10 @@ If you're still on a token issued before today, your client will re-auth one mor
 
 ## For developers
 
-The spec and the implementation plan are checked into the repo if you want the full design, threat model, schema, SELECT FOR UPDATE race protection, and rollout order:
+The design record for how tokens are issued, rotated and revoked lives in the repo, with the threat model and the reasoning behind the family-revoke decision:
 
-- [Design spec](https://github.com/DataToRag/mcp-gateway/blob/main/docs/superpowers/specs/2026-05-17-oauth-refresh-tokens-design.md)
-- [Implementation plan](https://github.com/DataToRag/mcp-gateway/blob/main/docs/superpowers/plans/2026-05-17-oauth-refresh-tokens.md)
+- [OAuth security model](https://github.com/datatorag/mcp-gateway/blob/main/docs/architecture/decisions/2026-07-20-oauth-security-model.md)
+
+This post originally linked a spec and an implementation plan that have since moved out of the public repo, so those links are gone rather than left to rot.
 
 If you're building an MCP server of your own, the headline lesson is: don't ship the bare minimum auth shape. The refresh-token grant isn't optional ergonomics, it's the difference between a tool people use and a tool people give up on.

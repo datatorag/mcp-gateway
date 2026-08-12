@@ -2,6 +2,8 @@
 title: "Save Gmail Attachments to Drive with Claude"
 excerpt: "A team was running an Apps Script to save 6 daily report emails to Drive. We replaced it with one prompt."
 date: "2026-03-28"
+updated: "2026-08-12"
+updatedNote: "Two corrections. The base64 arithmetic contradicted itself, calling 6.7MB of text 1.7 million characters when base64 is one byte per character, so the token figure derived from it was wrong too. And gmail_search results are no longer bare message ids: since the July 2026 flattening they carry sender, subject, date and a snippet, so step one now says what you actually get back."
 author: "Manuel Yang"
 category: "Product"
 coverImage: "/blog/gmail-attachment-to-drive.png"
@@ -24,7 +26,7 @@ The actual data never touches the conversation. The attachment is decoded and up
 
 Here's what it looks like in practice, using the Domo report scenario.
 
-**Step 1: Find the emails.** "Search my Gmail for emails from daniel@company.com with attachments from today." Claude calls `gmail_search` with `from:daniel@company.com has:attachment newer_than:1d`. You get back 6 message IDs.
+**Step 1: Find the emails.** "Search my Gmail for emails from daniel@company.com with attachments from today." Claude calls `gmail_search` with `from:daniel@company.com has:attachment newer_than:1d`. You get back 6 matching messages, each with its id, sender, subject, date and a snippet.
 
 **Step 2: Read the attachments.** For each message, Claude calls `gmail_read` to get the full message. The response includes a `parts` array with attachment metadata: filename, MIME type, and an `attachmentId`. No binary data at this point, just metadata.
 
@@ -40,7 +42,7 @@ One prompt triggers the whole thing. No Apps Script. No cron job. No separate in
 
 Before this tool existed, the workaround was: read the email, ask Claude to extract the attachment data, then create a new file in Drive. The problem is that attachment data is base64-encoded, and sending it through the conversation means it lands in your context window.
 
-A 5MB CSV encoded in base64 is about 6.7MB of text. That's roughly 1.7 million characters, or about 500K tokens. Your context window is gone after one attachment.
+A 5MB CSV encoded in base64 is about 6.7MB of text, and since base64 is plain ASCII that is roughly 6.7 million characters. Base64 packs badly into tokens, so you are well over a million of them. Your context window is gone after one attachment.
 
 `gmail_save_attachment_to_drive` bypasses this entirely. The server fetches the attachment, decodes it in memory, uploads to Drive, and cleans up the temp file. The only thing that flows through the conversation is metadata: file IDs, names, and links.
 
