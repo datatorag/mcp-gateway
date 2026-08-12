@@ -2,6 +2,8 @@
 title: "One Prompt, Jira and Confluence Both Move"
 excerpt: "The Atlassian connector isn't two separate integrations. It's the cross-product workflow that always lived in a Google Doc."
 date: "2026-04-20"
+updated: "2026-08-12"
+updatedNote: "Corrected two overstatements of our own surface. Attachments are read-only on both Jira and Confluence, so claiming we manage them promised a write we do not ship, and Confluence comments are add and read only, unlike Jira where they can also be edited and deleted. The status-update walkthrough also had jira_get_issue fetching epic links; a live call shows its response carries no epic or parent field, so the grouping step is now a per-epic search."
 author: "Manuel Yang"
 category: "Product"
 coverImage: "/blog/atlassian-fanout.png"
@@ -18,8 +20,8 @@ The Atlassian connector is about not being that anymore.
 
 Two services, one OAuth flow:
 
-- **Jira**: search with JQL, read/create/update issues, transition workflow states, manage comments and attachments, look up users
-- **Confluence**: search with CQL, list/read/create/edit pages, manage comments and attachments
+- **Jira**: search with JQL, read/create/update issues, transition workflow states, add/edit/delete comments, fetch attachments, look up users
+- **Confluence**: search with CQL, list/read/create/edit pages, add and read comments, fetch attachments
 
 Both are scoped to whichever Atlassian site you connect. You can connect more than one. See the [Jira](/docs/jira) and [Confluence](/docs/confluence) docs for the full tool surface.
 
@@ -66,7 +68,7 @@ The reverse direction is just as useful. You've been closing tickets all week. Y
 
 > "Pull my closed Jira tickets from the last 7 days, group them by epic, and write a status update as a new Confluence page under the Weekly Updates parent."
 
-This one hits every corner of the connector. `jira_search` for the tickets, `jira_get_issue` to fetch epic links, `confluence_search` to locate the parent page ID, `confluence_create_page` to write the summary in storage format. The output is a page URL you can paste into Slack.
+This one hits every corner of the connector. `jira_search` for the tickets, a per-epic `jira_search` with a `parent = EPIC-KEY` filter to group them, `confluence_search` to locate the parent page ID, `confluence_create_page` to write the summary in storage format. The output is a page URL you can paste into Slack.
 
 The payoff isn't speed (though it's faster). It's that this kind of cross-product work is low-priority enough that it often just doesn't get done. Teams don't write status pages because writing status pages is annoying. When the cost drops to a sentence, the pages start showing up.
 

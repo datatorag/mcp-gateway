@@ -2,6 +2,8 @@
 title: "Composio Is for the Developer Shipping an Agent. DataToRAG Is for You."
 excerpt: "Composio is a strong platform for developers wiring tools into agent products. If you just want Claude working in your own Google account, you'd have to write code to get there. DataToRAG is the part you sign into."
 date: "2026-06-29"
+updated: "2026-08-12"
+updatedNote: "Corrected the credentials row, which was the most misleading line on the page. It said credentials are passed through and never stored. They are stored: the hosted service keeps each connection tokens in our database, which is what makes background refresh work at all. Passing through without storing is true of your Workspace CONTENT rather than your credentials, so that claim now has its own row and says what it actually covers."
 author: "Manuel Yang"
 category: "Comparison"
 tags: ["composio", "mcp", "comparison", "ai-agents", "alternative"]
@@ -37,7 +39,8 @@ If you're a founder building an AI assistant for your customers, Composio's shap
 | Standalone Contacts tools | No standalone Contacts toolkit at the time of writing | Yes (`contacts_*`) |
 | Google and Atlassian behind one endpoint | Separate toolkits you wire up yourself | Yes, one endpoint, one sign-in |
 | Self-host on an open-source core | Enterprise plans only, closed core | Yes, MIT, Docker Compose |
-| Where credentials live on self-serve plans | Composio's cloud | Pass-through, never stored |
+| Where credentials live on self-serve plans | Composio's cloud | Our database on hosted plans; self-host and they stay in your own Postgres |
+| Where your Workspace content lives | Varies by toolkit | Passed through, never stored |
 | Total integration count | 1,000+ toolkits | 8 Google services + Jira and Confluence, built deep |
 | Formal attestations | SOC 2 Type II, ISO 27001 | CASA Tier 2 passed, Google-verified (June 2026) |
 

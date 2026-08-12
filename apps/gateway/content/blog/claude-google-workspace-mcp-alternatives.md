@@ -15,9 +15,9 @@ So here's the map. What each option actually does with your Google data, where i
 
 ## Claude's native connectors
 
-Start here, because it's free and you might not need anything else. Claude connects natively to Gmail, Google Calendar, and Google Drive. Everything in this section is what those three connectors expose as tools, enumerated on August 7, 2026, because that surface moves and this post will outlive the check.
+Start here, because it's free and you might not need anything else. Claude connects natively to Gmail, Google Calendar, and Google Drive. Everything in this section is what those three connectors expose as tools, enumerated on August 11, 2026, because that surface moves and this post will outlive the check.
 
-Calendar is the strong one, and it isn't close. Nine tools covering create, update, delete, search, and RSVP, plus a `suggest_time` helper that we don't ship. If calendars are the whole job and one account covers it, native is the answer and you can stop here. Drive can read your files and save things back, including files Claude generates. Gmail reads and searches your inbox, writes drafts, and files threads: it labels, stars, marks read, archives, and trashes.
+Calendar is the strong one, and it isn't close. Nine tools covering create, update, delete, search and RSVP, and that count includes a `suggest_time` helper we don't ship. If calendars are the whole job and one account covers it, native is the answer and you can stop here. Drive can read your files and save things back, including files Claude generates. Gmail reads and searches your inbox, writes drafts, and files threads: it labels, stars, marks read, archives, and trashes.
 
 Then it stops, and where it stops is one verb further on than you'd guess. The native Gmail connector won't send. It drops a draft in your Drafts folder and hands the rest to you, and it has no tool to send that draft or even to delete it. Slides gets as far as an empty deck: Drive will create you a real presentation at a real URL, and it arrives with one slide, a blank title, and a blank subtitle, because nothing in the native surface writes content onto slides. Sheets has no cell-level editing. No Contacts, no Tasks. And you connect one Google account at a time, so if you live in a work inbox and a personal one, you're disconnecting and reconnecting to switch.
 

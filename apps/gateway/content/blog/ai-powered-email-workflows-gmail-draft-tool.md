@@ -2,6 +2,8 @@
 title: "AI-Powered Email Workflows with the Gmail Draft Tool"
 excerpt: "Most AI email tools generate and send in one shot. We built a draft workflow instead, because anything that matters deserves a second look before it leaves your outbox."
 date: "2026-04-04"
+updated: "2026-08-12"
+updatedNote: "Dropped a threading claim that a live test disproved. gmail_create_draft takes recipients, subject and body and has no thread parameter; a draft written as a reply lands as its own draft rather than inside the original conversation. The recipients-and-subject half was always true and stays."
 author: "Manuel Yang"
 category: "Product"
 coverImage: "/blog/gmail-draft-workflow.png"
@@ -22,11 +24,11 @@ It works. Sort of. You lose threading. You have to manually add recipients, subj
 
 Here's what it looks like now:
 
-You tell Claude something like "draft a reply to Sarah's email about the Q2 budget review, push back on the timeline but keep it collaborative." Claude calls `gmail_create_draft`. A real Gmail draft appears in your drafts folder, threaded into the right conversation, with the right recipients already filled in.
+You tell Claude something like "draft a reply to Sarah's email about the Q2 budget review, push back on the timeline but keep it collaborative." Claude calls `gmail_create_draft`. A real Gmail draft appears in your drafts folder, with the recipients and subject already filled in. It lands as its own draft rather than inside Sarah's thread, which is worth knowing before you go looking for it there.
 
 Open Gmail. Read it. Maybe the tone is too soft, or you want to add a specific number. Tell Claude "make the pushback more direct, and mention that we need the revised numbers by April 18th."
 
-Claude calls `gmail_update_draft`. Same draft. Same thread. Just better. You're not starting over, and you're not managing draft IDs yourself (Claude handles that).
+Claude calls `gmail_update_draft`. Same draft, edited in place. Just better. You're not starting over, and you're not managing draft IDs yourself (Claude handles that).
 
 When it reads right, hit send from Gmail. Done.
 
