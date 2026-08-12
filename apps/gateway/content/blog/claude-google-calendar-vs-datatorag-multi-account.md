@@ -3,16 +3,16 @@ title: "Claude's Calendar Connector Works. Unless You Have Two Calendars."
 excerpt: "On a single account, Claude's native Calendar connector does more than ours: it searches events, suggests times, and RSVPs. What it can't do is see two calendars at once."
 date: "2026-04-21"
 updated: "2026-08-11"
-updatedNote: "This post used to claim feature parity on Calendar. That is no longer true, and it is now wrong in our favour: re-enumerating both connectors on August 11, 2026 shows the native one has event search, time suggestion, calendar listing and RSVP, none of which we ship. The comparison table and the parity paragraphs are rewritten around what each side actually does, and the RSVP row, which said Yes for us, now says No."
+updatedNote: "This post used to claim feature parity on Calendar. That is no longer true, and it is now wrong in our favour: re-enumerating both connectors on August 11, 2026 shows the native one has time suggestion, calendar listing and RSVP, none of which we ship, plus semantic event search where ours matches keywords. The comparison table and the parity paragraphs are rewritten around what each side actually does, and the RSVP row, which said Yes for us, now says No."
 author: "Manuel Yang"
 category: "Comparison"
 coverImage: "/blog/calendar-comparison.png"
 tags: ["google-calendar", "claude", "multi-account", "comparison", "google-workspace"]
 ---
 
-**Short answer:** on one Google account, Claude's native Calendar connector is the better tool, and it is not close. It creates, updates and deletes events, searches them, suggests meeting times across attendees, lists your other calendars, and RSVPs to invitations. We do not ship those last four. What it cannot do is hold two accounts at once, which is the whole reason this post exists.
+**Short answer:** on one Google account, Claude's native Calendar connector is the better tool, and it is not close. It creates, updates and deletes events, suggests meeting times across attendees, lists your other calendars, and RSVPs to invitations. We do not ship those last three, and where we both search, its search understands what you meant while ours matches the words you typed. What it cannot do is hold two accounts at once, which is the whole reason this post exists.
 
-I'll give Claude credit, and more of it than this post gave when it went up. The native Google Calendar connector is the most feature-complete piece of the Workspace integration. Enumerating its tools on August 11, 2026: it creates events, updates them, deletes them, searches your calendar in plain language, suggests free slots across a set of attendees, lists every calendar you have access to, and responds to invitations with an accept, a decline or a maybe. Since Claude Code v2.1.46 (February 2026), the same connector works inside Claude Code too.
+I'll give Claude credit, and more of it than this post gave when it went up. The native Google Calendar connector is the most feature-complete piece of the Workspace integration. Enumerating its tools on August 11, 2026: it creates events, updates them, deletes them, searches your calendar in plain language, suggests free slots across a set of attendees, lists every calendar you have access to, and responds to invitations with an accept, a decline or a maybe. Its event search is semantic, so it answers "the review with the design team" without you naming the event. Since Claude Code v2.1.46 (February 2026), the same connector works inside Claude Code too.
 
 So what's the gap?
 
@@ -79,8 +79,8 @@ The architecture behind this is described in a [previous post on multi-account f
 
 If you have exactly one Google account that holds your whole calendar life, use the
 native connector. Not "it's fine" as a consolation: on that one account it does more
-than we do. It searches your events in plain language, suggests times across a group,
-RSVPs for you, and handles recurrence, rooms and attachments we do not touch. The only
+than we do. It suggests times across a group, RSVPs for you, searches by meaning rather than
+by keyword, and handles recurrence, rooms and attachments we do not touch. The only
 question worth asking is whether your scheduling picture is complete with one account.
 
 ## The edge case that isn't edge
