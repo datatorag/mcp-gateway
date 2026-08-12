@@ -35,6 +35,21 @@ function getStore(): PostgresStore {
   return store;
 }
 
+/** The memory storage domain, for reading conversations back out.
+ *
+ * Exported for the thread gate in `gateway/playground/threads.ts` and for
+ * nothing else. It shares the memoised store above deliberately: one instance,
+ * one pool, same connection the agent writes through, so a read can never
+ * disagree with a write by talking to a different place.
+ *
+ * DO NOT REACH FOR THIS FROM A ROUTE. Every thread read and every delete goes
+ * through the gate, because one of the methods behind here takes no owner and
+ * will happily delete another user's conversation if asked politely. The gate
+ * is where that is prevented, once. */
+export async function getMemoryStore() {
+  return getStore().getStore("memory");
+}
+
 /** The single Mastra instance for this process.
  *
  * IMPORTANT: `storage` is set HERE, on the runtime, not only on the agent's

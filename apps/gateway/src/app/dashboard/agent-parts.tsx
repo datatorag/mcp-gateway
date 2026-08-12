@@ -37,6 +37,10 @@ export type AgentDataParts = {
     runsCap: number | null;
     connectedAccounts: string[];
   };
+  /** A write that stopped for approval in a conversation the user has come
+   * back to. The decision cannot be given any more, so this replaces the
+   * buttons rather than replaying them. */
+  "approval-expired": { toolName: string };
 };
 
 /** Exported because the empty state renders the same control before any
@@ -108,6 +112,33 @@ function AccountStatePart({
   );
 }
 
+/** A write that was waiting on a decision when the conversation ended.
+ *
+ * INERT ON PURPOSE, AND HONEST ABOUT WHY. The decision cannot be given now:
+ * the suspended run is consumed on first use and approval ids deliberately do
+ * not survive a restart. Replaying Approve and Deny would put two controls in
+ * front of the user that answer 403, and dead controls are what got this
+ * surface rolled back before. So it says what happened and offers nothing to
+ * press. Nothing ran, which is what "expired" has to mean here. */
+function ApprovalExpiredPart({ toolName }: AgentDataParts["approval-expired"]) {
+  const short = toolName.split("__").pop() || toolName;
+  return (
+    <div className="rounded-lg border border-border bg-secondary/40 p-3 text-xs">
+      <p className="text-muted-foreground">
+        This action needed your approval and the conversation ended before it
+        was given, so it never ran.{" "}
+        {short ? (
+          <>
+            Ask again to run <span className="font-mono">{short}</span>.
+          </>
+        ) : (
+          "Ask again to run it."
+        )}
+      </p>
+    </div>
+  );
+}
+
 /** Every declared kind, rendered. Total by type: adding a key above without a
  * renderer here is a compile error. */
 const AGENT_PART_RENDERERS: {
@@ -116,6 +147,7 @@ const AGENT_PART_RENDERERS: {
   connect: (data) => <ConnectPart {...data} />,
   "mcp-config": () => <McpConfigPart />,
   "account-state": (data) => <AccountStatePart {...data} />,
+  "approval-expired": (data) => <ApprovalExpiredPart {...data} />,
 };
 
 /**
