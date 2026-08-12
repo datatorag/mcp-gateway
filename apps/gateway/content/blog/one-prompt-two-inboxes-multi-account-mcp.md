@@ -2,6 +2,8 @@
 title: "One Prompt, Two Inboxes: Multi-Account Support for MCP"
 excerpt: "Most MCP servers assume one user means one account. We built multi-account support so you can query your work and personal Google accounts in the same conversation."
 date: "2026-04-05"
+updated: "2026-08-12"
+updatedNote: "Three corrections. The services list omitted Slides, Contacts and Tasks. The 'about 30%' saving from lazy tool loading was a figure that moves every time a tool ships, so it is gone rather than restated. And the bar chart with tool counts printed on it is replaced by a table: the counts had gone stale, and a number inside an image cannot be caught by the tests that check the rest of our copy."
 author: "Manuel Yang"
 category: "Product"
 coverImage: "/blog/multi-account-mcp.png"
@@ -34,13 +36,23 @@ For multi-account users, the LLM figures it out from context. If you say "check 
 
 Adding multi-account support raised a question we'd been thinking about anyway: tool sprawl.
 
-DataToRAG connects to Google services (Gmail, Drive, Docs, Sheets, Calendar) and Atlassian services (Jira, Confluence). That's a lot of tools. If you've only connected Gmail, why should your LLM's context window include tool definitions for Jira, Confluence, Sheets, and everything else?
+DataToRAG connects to Google services (Gmail, Calendar, Drive, Docs, Sheets, Slides, Contacts, Tasks) and Atlassian services (Jira, Confluence). That's a lot of tools. If you've only connected Gmail, why should your LLM's context window include tool definitions for Jira, Confluence, Sheets, and everything else?
 
-We added lazy tool loading. Tools for services you haven't connected are hidden from the MCP `ListTools` response entirely. They don't exist as far as the LLM is concerned. For a user who's only connected Google Workspace, this cuts the tool count by about 30% compared to exposing the full catalog.
+We added lazy tool loading. Tools for services you haven't connected are hidden from the MCP `ListTools` response entirely. They don't exist as far as the LLM is concerned. Connect Google Workspace only and every Atlassian tool disappears from the list. Connect Atlassian only and the whole Google surface goes. We deliberately do not put a percentage on it here, because the saving moves every time a tool ships or a connector is added, and a number printed in a blog post does not.
 
 When you connect a new service, its tools appear automatically. Disconnect it, they disappear. The LLM always sees exactly the tools it can actually use.
 
-![Tool Count: All vs Connected Only](/blog/lazy-loading-tool-count.png)
+| What you have connected | What the model sees |
+|---|---|
+| Google Workspace only | Gmail, Calendar, Drive, Docs, Sheets, Slides, Contacts and Tasks tools |
+| Atlassian only | Jira and Confluence tools |
+| Both | All of the above |
+| Nothing yet | Only the tools that help you connect something |
+
+This used to be a bar chart with the tool counts printed on it. The counts went
+stale, the way every figure we have published eventually does, and a number
+baked into an image cannot be caught by the tests that check our copy. The table
+says the same thing and stays true.
 
 ## What this looks like in practice
 
