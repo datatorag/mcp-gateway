@@ -18,6 +18,7 @@ import {
 } from "./track";
 import { sendWelcomeEmail } from "./lifecycle";
 import { notifySignup } from "./signup-alert";
+import { postLoginDestination } from "./post-login-destination";
 import { getEnv } from "@datatorag-mcp/config";
 
 const GWS_SCOPES = [
@@ -191,28 +192,36 @@ export function createAuthRouter(
       expires: expiresAt,
     });
 
-    // Where a NEW user lands, behind a flag that defaults OFF.
+    // Where EVERY login lands, behind a flag that defaults OFF. The flag used
+    // to select a destination for new signups only, so it could not reach a
+    // returning user at all; it now decides the surface for everyone, and the
+    // same rule applies to both (per HQ decision, see SCRUM-70).
     //
     // The Agent shipped and had to be rolled back twice: the page rendered but
-    // never became interactive, and the cause is still unidentified. Sending
-    // new users there is the part that exposed them, so that is the part that
-    // is switched off - the route itself is harmless while nobody is routed to
+    // never became interactive, and the cause is still unidentified. Routing
+    // people there is the part that exposed them, so that is the part the flag
+    // switches off - the route itself is harmless while nobody is routed to
     // it, and stays reachable by direct URL so the failure can be observed
-    // deliberately instead of by a stranger.
+    // deliberately instead of by a stranger. With the flag off, every
+    // destination is exactly what it was before the Agent existed.
     //
     // ?signup=1 lets the destination fire the Google Ads signup conversion
     // client-side (gtag lives in the browser, not this server callback), and
     // ?welcome=1 is how the Agent tells "landed here" from "navigated here".
     // Both destinations handle the conversion param; see useSignupConversion.
+    // Which arm carries which param is the load-bearing part - the table and
+    // the reasoning live with postLoginDestination.
     //
     // The `next` parameter proxy.ts sets on the login URL is still not honoured
     // here. Carrying a destination through the OAuth state needs same-origin
-    // validation on the way out, and done casually it is an open redirect.
-    const newUserDestination =
-      getEnv().AGENT_DEFAULT_VIEW === "on"
-        ? "/dashboard/agent?signup=1&welcome=1"
-        : "/dashboard?signup=1";
-    res.redirect(isNewUser ? newUserDestination : "/dashboard");
+    // validation on the way out, and done casually it is an open redirect -
+    // more so now that a login has a fixed destination worth overriding.
+    res.redirect(
+      postLoginDestination({
+        agentDefaultView: getEnv().AGENT_DEFAULT_VIEW === "on",
+        isNewUser,
+      })
+    );
   });
 
   // --- Logout ---

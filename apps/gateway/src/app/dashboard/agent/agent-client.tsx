@@ -10,6 +10,11 @@ import { useConnections } from "../use-connections";
 import { ThreadList } from "./thread-list";
 import type { PlaygroundMessage } from "../playground-presentation";
 
+/** Which login put the user here: the post-signup landing, or a returning
+ * user's. Travels as the `landed_from` property on
+ * `AGENT_DEFAULT_VIEW_SHOWN`; see the event's note in `lib/analytics.ts`. */
+export type AgentLandedFrom = "signup" | "login";
+
 /**
  * The Agent, on its own route.
  *
@@ -23,11 +28,17 @@ import type { PlaygroundMessage } from "../playground-presentation";
  * `dashboard/layout.tsx`, which drops its padded content wrapper on this
  * route; this component's job is just to fill the box it is handed.
  */
-export function AgentClient({ isDefaultView }: { isDefaultView: boolean }) {
+export function AgentClient({
+  isDefaultView,
+  landedFrom,
+}: {
+  isDefaultView: boolean;
+  landedFrom: AgentLandedFrom;
+}) {
   const { hasConnectedAccount } = useConnections();
   const ref = useRef<PlaygroundHandle>(null);
 
-  // New users now land HERE, so the signup conversion has to fire here too.
+  // New users land HERE, so the signup conversion has to fire here too.
   useSignupConversion();
 
   /** Deterministic read, no model call, no run spent. Stable identity so the
@@ -39,12 +50,22 @@ export function AgentClient({ isDefaultView }: { isDefaultView: boolean }) {
     return (data.suggestions ?? []).map((s) => s.text);
   }, []);
 
-  // Whether a new user actually LANDED here, rather than navigating to it, is
+  // Whether the user actually LANDED here, rather than navigating to it, is
   // what separates a "landed on Agent" cohort from everyone else in the funnel.
   // Fired once per mount, and only when the route was the destination.
+  //
+  // `landed_from` is what keeps the two landings apart now that BOTH a signup
+  // and a plain login end up here. Without it the event silently changes
+  // meaning from "a new user landed" to "anyone landed", and every existing
+  // read of it keeps returning a number while answering a different question.
+  // The event NAME stays put on purpose - see the note in `lib/analytics.ts`.
   useEffect(() => {
-    if (isDefaultView) posthog.capture(EVENTS.AGENT_DEFAULT_VIEW_SHOWN);
-  }, [isDefaultView]);
+    if (isDefaultView) {
+      posthog.capture(EVENTS.AGENT_DEFAULT_VIEW_SHOWN, {
+        landed_from: landedFrom,
+      });
+    }
+  }, [isDefaultView, landedFrom]);
 
   /* WHICH CONVERSATION IS ON SCREEN.
    *

@@ -4,8 +4,15 @@ import { AgentClient } from "./agent-client";
 
 export const dynamic = "force-dynamic";
 
-/** `?welcome=1` is set by the post-login redirect for a new user, and is the
- * only way this page can tell "landed here" from "navigated here".
+/** `?welcome=1` is set by the post-login redirect - for every login, not just
+ * a new user's - and is the only way this page can tell "landed here" from
+ * "navigated here".
+ *
+ * `?signup=1` rides along on the signup landing only, so the pair of params
+ * says WHICH login this was, and that is what `landed_from` carries into the
+ * event. It is read HERE, server-side, rather than in the client: the signup
+ * conversion effect deletes that param from the URL on mount, so a client-side
+ * read would be racing a strip that is meant to happen.
  *
  * THE SESSION CHECK IS NOT REDUNDANT WITH THE MIDDLEWARE. `proxy.ts` gates
  * `/dashboard/*` on the session cookie being PRESENT, not valid, so any
@@ -25,10 +32,15 @@ export const dynamic = "force-dynamic";
 export default async function AgentPage({
   searchParams,
 }: {
-  searchParams: Promise<{ welcome?: string }>;
+  searchParams: Promise<{ welcome?: string; signup?: string }>;
 }) {
   const userId = await getSessionUserId();
   if (!userId) redirect("/auth/login");
-  const { welcome } = await searchParams;
-  return <AgentClient isDefaultView={welcome === "1"} />;
+  const { welcome, signup } = await searchParams;
+  return (
+    <AgentClient
+      isDefaultView={welcome === "1"}
+      landedFrom={signup === "1" ? "signup" : "login"}
+    />
+  );
 }

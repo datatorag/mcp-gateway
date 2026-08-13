@@ -65,7 +65,7 @@ async function mount(connectionsResponse: () => Promise<Response>) {
     })
   );
   await act(async () => {
-    root.render(<AgentClient isDefaultView={false} />);
+    root.render(<AgentClient isDefaultView={false} landedFrom="login" />);
   });
   await act(async () => {
     await Promise.resolve();

@@ -35,9 +35,22 @@ export const EVENTS = {
    * separate from `first_tool_call` which means a real MCP client reached the
    * gateway and which lifecycle email and the digest already key off. */
   FIRST_AGENT_RUN: "first_agent_run",
-  /** A new user LANDED on the Agent as their post-login destination, rather
-   * than navigating to it. Separates the "landed on Agent" cohort from
-   * pre-launch signups in the funnel. */
+  /** A user LANDED on the Agent as their post-login destination, rather than
+   * navigating to it. Separates the "landed on Agent" cohort from everyone
+   * else in the funnel.
+   *
+   * COHORT RULE. This used to fire for new users only, because only a signup
+   * was ever routed here. Every login is now, so the event on its own no
+   * longer answers "how many NEW users landed on the Agent" — the
+   * `landed_from` property does: `"signup"` for a post-signup landing,
+   * `"login"` for a returning user's. Break the event out by that property
+   * rather than reading the raw count, and read rows carrying no
+   * `landed_from` at all (emitted before the property existed) as `"signup"`,
+   * since that was the only case that could fire then.
+   *
+   * The NAME deliberately did not change: it is the join key for everything
+   * already built on this event, and renaming would silently end those series
+   * rather than break them. */
   AGENT_DEFAULT_VIEW_SHOWN: "agent_default_view_shown",
   PLAYGROUND_MESSAGE_SENT: "playground_message_sent",
   PLAYGROUND_CAP_HIT: "playground_cap_hit",

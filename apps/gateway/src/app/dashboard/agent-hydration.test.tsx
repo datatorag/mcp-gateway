@@ -54,7 +54,7 @@ afterEach(() => {
 describe("Agent page hydration", () => {
   it("hydrates the server HTML without a recoverable error", async () => {
     // Step 1: the server pass. This is what Next sends down the wire.
-    const serverHtml = renderToString(<AgentClient isDefaultView={false} />);
+    const serverHtml = renderToString(<AgentClient isDefaultView={false} landedFrom="login" />);
     expect(serverHtml.length, "server render produced nothing").toBeGreaterThan(0);
     container.innerHTML = serverHtml;
 
@@ -63,7 +63,7 @@ describe("Agent page hydration", () => {
     // invisible: nothing crashes, the page simply stops being interactive.
     const recoverable: string[] = [];
     await act(async () => {
-      root = hydrateRoot(container, <AgentClient isDefaultView={false} />, {
+      root = hydrateRoot(container, <AgentClient isDefaultView={false} landedFrom="login" />, {
         onRecoverableError: (err) => {
           recoverable.push(err instanceof Error ? err.message : String(err));
         },
@@ -81,10 +81,10 @@ describe("Agent page hydration", () => {
   });
 
   it("is interactive after hydration: the composer accepts input", async () => {
-    const serverHtml = renderToString(<AgentClient isDefaultView={false} />);
+    const serverHtml = renderToString(<AgentClient isDefaultView={false} landedFrom="login" />);
     container.innerHTML = serverHtml;
     await act(async () => {
-      root = hydrateRoot(container, <AgentClient isDefaultView={false} />, {
+      root = hydrateRoot(container, <AgentClient isDefaultView={false} landedFrom="login" />, {
         onRecoverableError: () => {},
       });
     });
