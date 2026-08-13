@@ -24,6 +24,107 @@ const ACCOUNT_PARAM_SCHEMA = {
     "Optional email address of the connected account to use (e.g. 'user@gmail.com'). If omitted, the default account is used.",
 } as const;
 
+type BuiltinResult = {
+  content: { type: "text"; text: string }[];
+  isError?: boolean;
+};
+
+/**
+ * Gateway built-in tools — served by this process, no plugin behind them.
+ *
+ * This registry IS the metering boundary for built-ins (SCRUM-66 / f-050).
+ * ListTools appends exactly these definitions, and CallTool dispatches every
+ * name found here through one shared path that emits a tool_call event with
+ * `builtin: true` — which classifies to metered:false, so the event reaches
+ * analytics and neither billing sink runs (see usage/classify.ts). Before the
+ * registry, the two built-ins were handled inline and emitted nothing; that
+ * silence was undocumented, so a third built-in would have inherited it by
+ * default. An entry added here inherits emission and non-metering by
+ * construction, and mcp-server.builtins.test.ts iterates the registry, so a
+ * new entry is covered without anyone remembering to cover it.
+ */
+export const BUILT_IN_TOOLS: {
+  definition: {
+    name: string;
+    description: string;
+    inputSchema: Record<string, unknown>;
+  };
+  handler: (
+    args: Record<string, unknown> | undefined,
+    ctx: { db: Database; userId: string }
+  ) => Promise<BuiltinResult>;
+}[] = [
+  {
+    definition: {
+      name: "list_connected_accounts",
+      description:
+        "List the user's connected accounts grouped by service. Use this to discover which accounts are available before passing the 'account' parameter to other tools.",
+      inputSchema: {
+        type: "object" as const,
+        properties: {},
+      },
+    },
+    handler: async (_args, { db, userId }) => {
+      const rows = await listConnectedAccounts(db, userId);
+
+      if (rows.length === 0) {
+        return {
+          content: [
+            {
+              type: "text" as const,
+              text: "No connected accounts. The user can connect accounts at /dashboard/connections.",
+            },
+          ],
+        };
+      }
+
+      const grouped: Record<
+        string,
+        { email: string; label: string | null; is_default: boolean; connected_at: string }[]
+      > = {};
+      for (const row of rows) {
+        const key = row.connectorType;
+        if (!grouped[key]) grouped[key] = [];
+        grouped[key].push({
+          email: row.accountEmail,
+          label: row.label,
+          is_default: row.isDefault,
+          connected_at: row.connectedAt.toISOString().split("T")[0],
+        });
+      }
+
+      return {
+        content: [{ type: "text" as const, text: JSON.stringify(grouped) }],
+      };
+    },
+  },
+  {
+    definition: {
+      name: "echo",
+      description:
+        "Echo back the input message. A built-in test tool to verify the gateway is working.",
+      inputSchema: {
+        type: "object" as const,
+        properties: {
+          message: {
+            type: "string",
+            description: "The message to echo back",
+          },
+        },
+        required: ["message"],
+      },
+    },
+    handler: async (args) => ({
+      content: [
+        {
+          type: "text" as const,
+          text: `[datatorag-mcp echo] ${args?.message ?? "(no message)"}`,
+        },
+      ],
+    }),
+  },
+];
+
 /**
  * Creates a new MCP Server instance for a client session.
  * Dynamically serves tools from the registry and routes calls to backend
@@ -71,32 +172,7 @@ export function createMcpServer(
       }
     }
 
-    toolList.push(
-      {
-        name: "list_connected_accounts",
-        description:
-          "List the user's connected accounts grouped by service. Use this to discover which accounts are available before passing the 'account' parameter to other tools.",
-        inputSchema: {
-          type: "object" as const,
-          properties: {},
-        },
-      },
-      {
-        name: "echo",
-        description:
-          "Echo back the input message. A built-in test tool to verify the gateway is working.",
-        inputSchema: {
-          type: "object" as const,
-          properties: {
-            message: {
-              type: "string",
-              description: "The message to echo back",
-            },
-          },
-          required: ["message"],
-        },
-      }
-    );
+    for (const t of BUILT_IN_TOOLS) toolList.push(t.definition);
 
     // A user who lists tools and then stops is a very different activation
     // signal from one whose client never connected. Count only — never the
@@ -109,52 +185,53 @@ export function createMcpServer(
   server.setRequestHandler(CallToolRequestSchema, async (request) => {
     const { name, arguments: rawArgs } = request.params;
 
-    if (name === "echo") {
-      const message = (rawArgs as Record<string, unknown>)?.message;
-      return {
-        content: [
-          {
-            type: "text" as const,
-            text: `[datatorag-mcp echo] ${message ?? "(no message)"}`,
-          },
-        ],
-      };
-    }
-
-    if (name === "list_connected_accounts") {
-      const rows = await listConnectedAccounts(db, userId);
-
-      if (rows.length === 0) {
+    const builtin = BUILT_IN_TOOLS.find((t) => t.definition.name === name);
+    if (builtin) {
+      const startTime = Date.now();
+      try {
+        const result = await builtin.handler(
+          rawArgs as Record<string, unknown> | undefined,
+          { db, userId }
+        );
+        // Same fire-and-forget shape as the plugin path below. f-050 was
+        // exactly this call missing: built-ins answered on the wire and were
+        // absent from analytics. `builtin: true` classifies to metered:false,
+        // so the event is emitted and the billing sinks never run.
+        void trackToolCall(db, {
+          userId,
+          toolName: name,
+          connectorType: null,
+          accountEmail: undefined,
+          latencyMs: Date.now() - startTime,
+          responseSizeBytes: JSON.stringify(result).length,
+          errorMessage: null,
+          outcome: { thrown: false, isError: false, source: "mcp", toolName: name, builtin: true },
+        });
+        return result;
+      } catch (error) {
+        const message =
+          error instanceof Error ? error.message : "Unknown error";
+        console.error(`[route-error] builtin ${name}:`, message);
+        void trackToolCall(db, {
+          userId,
+          toolName: name,
+          connectorType: null,
+          accountEmail: undefined,
+          latencyMs: Date.now() - startTime,
+          responseSizeBytes: null,
+          errorMessage: message,
+          outcome: { thrown: true, errorMessage: message, source: "mcp", toolName: name, builtin: true },
+        });
         return {
           content: [
             {
               type: "text" as const,
-              text: "No connected accounts. The user can connect accounts at /dashboard/connections.",
+              text: `Error calling ${name}: ${message}`,
             },
           ],
+          isError: true,
         };
       }
-
-      const grouped: Record<
-        string,
-        { email: string; label: string | null; is_default: boolean; connected_at: string }[]
-      > = {};
-      for (const row of rows) {
-        const key = row.connectorType;
-        if (!grouped[key]) grouped[key] = [];
-        grouped[key].push({
-          email: row.accountEmail,
-          label: row.label,
-          is_default: row.isDefault,
-          connected_at: row.connectedAt.toISOString().split("T")[0],
-        });
-      }
-
-      return {
-        content: [
-          { type: "text" as const, text: JSON.stringify(grouped) },
-        ],
-      };
     }
 
     const args = rawArgs as Record<string, unknown>;

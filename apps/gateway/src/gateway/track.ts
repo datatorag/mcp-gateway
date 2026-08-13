@@ -86,7 +86,18 @@ export async function trackToolCall(
     // them TO activation, which destroys the funnel step it measures.
     // Skipped once the cache knows the user is activated, so the per-call
     // claim UPDATE runs at most once per user per process.
-    if (status === "success" && props.outcome.source === "mcp" && !identity?.activated) {
+    //
+    // Built-ins are excluded (SCRUM-66). Before they emitted tool_call at all
+    // they could not reach this claim, and giving them the event must not
+    // widen what activation means: an `echo` proves the client can reach us,
+    // not that the user got value from a real tool, and the no-activation
+    // email keys off the latter.
+    if (
+      status === "success" &&
+      props.outcome.source === "mcp" &&
+      !props.outcome.builtin &&
+      !identity?.activated
+    ) {
       await trackFirstToolCall(
         db,
         props.userId,

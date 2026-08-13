@@ -13,6 +13,15 @@ export interface ClassifyInput {
    * milestone still only counts real gateway traffic. */
   source: Surface;
   toolName?: string;
+  /** True when the tool is a gateway built-in (echo, list_connected_accounts —
+   * served by this process, no plugin behind them). Built-ins EMIT tool_call
+   * like every other tool; their silence was f-050, and the silence was the
+   * defect precisely because it was undocumented — a third built-in inherited
+   * it by default. They never METER: the paid tier sells plugin-tool volume,
+   * and a connectivity probe is not that. A flag rather than a name list here,
+   * so the built-in registry in mcp-server.ts stays the single place that
+   * decides what is a built-in and this file cannot drift from it. */
+  builtin?: boolean;
 }
 
 export interface ClassifyResult {
@@ -38,6 +47,7 @@ export function classifyOutcome(input: ClassifyInput): ClassifyResult {
   const isNonMeteredTool = input.toolName
     ? NON_METERED_TOOLS.has(input.toolName)
     : false;
+  const meterable = !isNonMeteredTool && !input.builtin;
 
   if (input.thrown) {
     return { status: "server_error", meter: false };
@@ -45,11 +55,11 @@ export function classifyOutcome(input: ClassifyInput): ClassifyResult {
   if (input.isError) {
     return {
       status: "user_error",
-      meter: !isNonMeteredTool,
+      meter: meterable,
     };
   }
   return {
     status: "success",
-    meter: !isNonMeteredTool,
+    meter: meterable,
   };
 }
