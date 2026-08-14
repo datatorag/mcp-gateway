@@ -196,6 +196,7 @@ export function createAuthRouter(
         plan: user.plan,
       });
       void notifySignup(db, {
+        id: user.id,
         email: user.email,
         name: user.name,
         createdAt: user.createdAt,
