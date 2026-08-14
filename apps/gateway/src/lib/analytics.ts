@@ -29,6 +29,10 @@ export const EVENTS = {
    * "did they subscribe" signal is `users.plan`, written only by the Stripe
    * webhook. */
   PRICING_CTA_CLICKED: "pricing_cta_clicked",
+  /** The dashboard's "Manage billing" click. A click means intent to reach
+   * the Stripe portal, nothing more; plan changes are reported by the
+   * subscription webhooks, never inferred from this. */
+  BILLING_PORTAL_CLICKED: "billing_portal_clicked",
   OAUTH_REFRESH_SUCCEEDED: "oauth_refresh_succeeded",
   OAUTH_REFRESH_REPLAY: "oauth_refresh_replay",
   OAUTH_REFRESH_EXPIRED: "oauth_refresh_expired",

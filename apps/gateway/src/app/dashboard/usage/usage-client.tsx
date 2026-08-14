@@ -15,6 +15,7 @@ import {
   ResponsiveContainer,
 } from "recharts";
 import { StatCard } from "@/components/stat-card";
+import { BillingCard } from "./billing-card";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -42,7 +43,7 @@ interface ToolRow {
   avgSize: number;
 }
 
-export function UsageClient() {
+export function UsageClient({ plan }: { plan: string }) {
   const [range, setRange] = useState<Range>("7d");
   const [tools, setTools] = useState<ToolRow[]>([]);
 
@@ -59,6 +60,7 @@ export function UsageClient() {
         Tool calls, latency, and error rate across your MCP activity.
       </p>
 
+      <BillingCard plan={plan} />
       <RangeToggle value={range} onChange={setRange} />
       <SummaryCards />
       <TimeseriesChart range={range} />

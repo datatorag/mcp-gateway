@@ -164,7 +164,7 @@ describe("postLoginDestination", () => {
  * authenticates against OUR genuine domain and we hand them to the attacker.
  * Every rejection below is a NAMED case, not a loop — when one fails, the
  * failure says which escape hatch reopened. And the accepts matter as much as
- * the rejects (l-055): a validator that rejects everything passes every
+ * the rejects: a validator that rejects everything passes every
  * rejection test while silently killing the feature, and the first person it
  * blocks deletes it.
  */
