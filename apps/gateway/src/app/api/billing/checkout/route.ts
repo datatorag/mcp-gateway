@@ -75,6 +75,11 @@ export const POST = withRoute(async (userId, req: NextRequest) => {
     customer: customerId,
     client_reference_id: userId,
     line_items: [{ price: priceId, quantity: 1 }],
+    // The hosted page renders a promo-code field. The codes themselves live
+    // in Stripe — nothing here names one — and this is mutually exclusive
+    // with the `discounts` param, which we never pass. Without it a comped
+    // or coupon-holding customer has nowhere to type the code.
+    allow_promotion_codes: true,
     // Belt-and-braces user resolution for the webhook, should the customer-id
     // write above ever be lost to a partial failure.
     subscription_data: { metadata: { user_id: userId } },

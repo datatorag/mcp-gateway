@@ -91,6 +91,17 @@ describe("POST /api/billing/checkout", () => {
     );
   });
 
+  it("always allows promotion codes — the field is how a couponed customer avoids being charged", async () => {
+    // Pinned on its own because this is exactly the param a refactor drops
+    // silently: nothing else fails, the hosted page just stops rendering the
+    // promo-code field, and the first person to notice is a customer with a
+    // code and nowhere to type it.
+    await POST(checkoutRequest({ interval: "monthly" }));
+    expect(sessionsCreate).toHaveBeenCalledWith(
+      expect.objectContaining({ allow_promotion_codes: true })
+    );
+  });
+
   it("uses the yearly price for interval=yearly", async () => {
     await POST(checkoutRequest({ interval: "yearly" }));
     expect(sessionsCreate).toHaveBeenCalledWith(
