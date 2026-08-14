@@ -288,6 +288,21 @@ describe("POST /api/playground/chat — the turn cap", () => {
     expect(trackPlaygroundMessage).toHaveBeenCalledWith({}, USER);
   });
 
+  it("the agent-run cap is IDENTICAL on every tier — a Pro subscription buys call volume, not runs", async () => {
+    // The cost asymmetry: gateway calls run on the user's own upstream quota;
+    // agent runs burn our model budget. So the route never consults the plan —
+    // the ONLY inputs to the cap are the internal exemption and the constant.
+    // This test names that invariant: if someone wires planLimits or a plan
+    // lookup into this claim, the claim argument changes and this goes red.
+    // (plans.test.ts pins the same decision from the other side: PlanLimits
+    // carries no agent-run field for a plan to raise.)
+    capExempt.mockResolvedValue(false); // an ordinary external user…
+    await drain(await POST(post({ messages: USER_TURN })));
+    // …is capped at the flat constant regardless of what plan they're on,
+    // because nothing plan-shaped ever reaches the claim.
+    expect(claimAgentRun).toHaveBeenCalledWith({}, USER, RUN_CAP);
+  });
+
   it("reports the runs left on the response of the turn that spent one", async () => {
     claimAgentRun.mockResolvedValue({ ok: true, used: RUN_CAP - 3, remaining: 3 });
     const response = await POST(post({ messages: USER_TURN }));

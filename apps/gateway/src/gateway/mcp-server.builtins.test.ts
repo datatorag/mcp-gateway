@@ -35,6 +35,12 @@ vi.mock("./user-tools", () => ({
   callPluginToolOnce: vi.fn(),
 }));
 
+// Not the subject here — the allowance gate has its own suite
+// (mcp-server.cap.test.ts); an open gate keeps these tests about metering.
+vi.mock("./billing/enforce", () => ({
+  checkCallAllowance: vi.fn().mockResolvedValue({ allowed: true }),
+}));
+
 import { createMcpServer, BUILT_IN_TOOLS } from "./mcp-server";
 import type { ConnectionPool } from "./pool";
 

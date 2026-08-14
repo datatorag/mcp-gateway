@@ -17,6 +17,7 @@ import {
 import { listConnectedAccounts } from "./connected-accounts";
 import { trackToolCall } from "./track";
 import { trackMcpToolsListed } from "./mcp-analytics";
+import { checkCallAllowance } from "./billing/enforce";
 
 const ACCOUNT_PARAM_SCHEMA = {
   type: "string",
@@ -232,6 +233,19 @@ export function createMcpServer(
           isError: true,
         };
       }
+    }
+
+    // Allowance gate, BEFORE any dispatch work. Built-ins are above this line
+    // on purpose — they are unmetered connectivity probes and must keep
+    // answering for a capped user. A refusal here is a product state, not an
+    // error: the call never dispatches, is never metered, and the message
+    // tells the user what resets and what upgrades.
+    const allowance = await checkCallAllowance(db, userId);
+    if (!allowance.allowed) {
+      return {
+        content: [{ type: "text" as const, text: allowance.message }],
+        isError: true,
+      };
     }
 
     const args = rawArgs as Record<string, unknown>;

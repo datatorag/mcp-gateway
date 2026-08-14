@@ -36,6 +36,12 @@ export function planLimits(plan: Plan): PlanLimits {
       return { monthlyIncluded: PRO_MONTHLY_INCLUDED, hardCap: false, multiAccount: true };
     case "payg":
       return { monthlyIncluded: 0, hardCap: false, multiAccount: true };
+    default:
+      // The column is TEXT, so rows can carry plan values this build no longer
+      // knows (a retired plan, or a value from a newer build during a deploy
+      // window). Least privilege: unknown means free limits, never a crash on
+      // the call path and never accidental Pro.
+      return { monthlyIncluded: FREE_MONTHLY_CAP, hardCap: true, multiAccount: true };
   }
 }
 

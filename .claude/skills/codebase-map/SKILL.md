@@ -49,7 +49,7 @@ plugin child process            spawn("node", entrypoint), ports 40000+
 
 - **Auth** happens once per request at `server.ts` (Bearer lookup). Sessions live only in a process-local Map — a restart drops them all; clients must re-initialize.
 - **Usage tracking**: every CallTool (success or throw) → `trackToolCall` (`track.ts`) → `classifyOutcome` (`usage/classify.ts`) → `writeUsageEvent` (`usage/write.ts`) racing the insert against a **200ms timeout** so metering never slows the response (events can silently drop). Nightly rollup to `usage_events_daily` + 90-day raw retention in `usage/rollup.ts`. Unmetered but still emitted: `gws_auth_*` tools (named in `NON_METERED_TOOLS`) and the gateway built-ins `echo`/`list_connected_accounts` (structurally, via `builtin: true` from the `BUILT_IN_TOOLS` registry dispatch in `mcp-server.ts` — SCRUM-66; before that they emitted nothing, which is f-050). Both surfaces (`mcp`/`agent`) meter; thrown calls never do. Built-ins also never claim `first_tool_call` activation.
-- **Billing**: `src/gateway/billing/plans.ts` defines caps (`FREE_MONTHLY_CAP` etc.) and is tested — but it is **not wired into the request path**. No cap enforcement gates traffic today.
+- **Billing**: plans are binary `free`/`pro` (`payg` reserved for metered Stage 2; the trial plan was retired — the free tier IS the trial, and `users.plan` defaults to `free`). `src/gateway/billing/plans.ts` defines caps; `billing/enforce.ts` (`checkCallAllowance`) ENFORCES the free tier's hard stop in the CallTool path before dispatch — free = 250 calls hard cap, pro = 2,000 with no hard stop (metered overage is Stage 2, deliberately unbuilt). Internal accounts are exempt (`capExempt`). The AGENT-RUN cap is plan-independent on purpose (cost asymmetry: gateway calls ride the user's own upstream quota, agent runs burn our model budget) — pinned by tests in `plans.test.ts` and the chat route suite. Stripe: `/api/billing/checkout` + `/api/billing/portal` (session-gated), `/api/stripe/webhook` (signature-verified, idempotent via the `stripe_events` claim table — see `billing/webhook-handlers.ts` for what each event does to `users.plan`).
 - Cron jobs run in-process via node-cron, registered in `server.ts`: daily usage rollup (UTC), Slack digest, no-activation follow-up email (both America/Los_Angeles).
 
 ## Auth & OAuth flows
@@ -99,7 +99,7 @@ the quick reference; the ADRs carry context + alternatives-considered.
 - **`discoverTools()` deletes all `tools` rows for a server, then reinserts** — and `tools.enabled` defaults `true` (`packages/db/src/schema/tools.ts`), so reinstalling a plugin resets any manually-disabled tool to enabled. Mid-reinstall, ListTools can briefly see an empty tool set for that server.
 - **`/api/servers` is session-auth-gated** (GET included); the public POST/DELETE install/uninstall endpoints no longer exist. Plugin reinstalls require SSH to the gateway host (see the `deploy` skill).
 - **Dev server port comes from the root `.env`** (`GATEWAY_PORT`) — `pnpm dev` runs `node --env-file=../../.env`. It is NOT Next's default 3000 (dev compose publishes 8285).
-- **Billing caps are defined but unenforced** — `billing/plans.ts` is referenced only by its own test. Don't assume free-tier limits gate traffic.
+- **The free-tier call cap IS enforced now** — `checkCallAllowance` (`billing/enforce.ts`) gates plugin-tool dispatch in `mcp-server.ts` (built-ins deliberately keep answering for a capped user). A blocked call is an `isError` result, never dispatched, never metered. `planLimits` treats an unknown runtime plan value as free limits (least privilege), never a crash.
 - **MCP sessions are in-memory only** — every deploy/restart drops all live client sessions.
 - **`ConnectionPool` is per-server, shared across all users** — it must never carry a per-user credential; that's the whole reason for the one-shot-client bypass. Preserve this split when touching plugin call paths.
 - **Date rendering convention**: always parse `YYYY-MM-DD` frontmatter dates as `new Date(\`${date}T00:00:00\`)` (never bare `new Date(date)`, which is UTC midnight and shows the previous day west of UTC). Changelog, blog listing, and blog post pages all follow this now — keep any new date-rendering page consistent.
@@ -162,7 +162,9 @@ edit means the design-time check was skipped.
 | Per-user service token resolution + refresh (`PLUGIN_SERVICE_MAP`, `REFRESH_FN`) | `apps/gateway/src/gateway/service-token.ts` |
 | Multi-account list/default/disconnect | `apps/gateway/src/gateway/connected-accounts.ts` |
 | Dashboard page gating (`dtrmcp_session`) | `apps/gateway/src/proxy.ts` |
-| Plan caps (unwired) | `apps/gateway/src/gateway/billing/plans.ts` |
+| Plan caps + free-tier hard-stop gate | `apps/gateway/src/gateway/billing/{plans,enforce}.ts` |
+| Stripe webhook lifecycle + idempotency claim | `apps/gateway/src/gateway/billing/webhook-handlers.ts`, `apps/gateway/src/app/api/stripe/webhook/route.ts` |
+| Stripe Checkout / Billing Portal routes | `apps/gateway/src/app/api/billing/{checkout,portal}/route.ts` |
 | Usage: classify / write / redact / rollup / ranges / rate-limit | `apps/gateway/src/gateway/usage/` |
 | PostHog events, signup/first-call tracking | `apps/gateway/src/gateway/track.ts` |
 | Identity cache + `identityProps` for captures | `apps/gateway/src/gateway/user-email.ts` |
