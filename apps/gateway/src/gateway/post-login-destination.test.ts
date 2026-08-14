@@ -105,6 +105,39 @@ describe("postLoginDestination", () => {
         })
       ).toBe("/dashboard?signup=1");
     });
+
+    it("falls back — never off-origin — when dot-segments collapse to a protocol-relative path", () => {
+      // The escape the raw check cannot see: `/..//evil.com` and its %2e forms
+      // pass resolveNextPath, then `new URL(...).pathname` collapses to
+      // `//evil.com`. The composed path is what must be validated, so these
+      // must land on the table, and the result must never begin with `//`.
+      for (const evil of [
+        "/..//evil.com",
+        "/.//evil.com",
+        "/%2e%2e//evil.com",
+        "/..//..//evil.com",
+      ]) {
+        const dest = postLoginDestination({
+          agentDefaultView: false,
+          isNewUser: false,
+          requestedPath: evil,
+        });
+        expect(dest, evil).toBe("/dashboard");
+        expect(dest.startsWith("//"), evil).toBe(false);
+      }
+    });
+
+    it("strips a caller-supplied signup/welcome from next so it cannot forge a conversion", () => {
+      // A returning user is NOT a signup; a next carrying signup=1 would fire
+      // the Ads conversion falsely. Our composition owns those params.
+      expect(
+        postLoginDestination({
+          agentDefaultView: false,
+          isNewUser: false,
+          requestedPath: "/dashboard/usage?signup=1&welcome=1",
+        })
+      ).toBe("/dashboard/usage");
+    });
   });
 
   describe("query-param rules for a returning user", () => {
@@ -180,6 +213,17 @@ describe("resolveNextPath", () => {
     expect(resolveNextPath("/%2F%2Fevil.com")).toBeNull();
     expect(resolveNextPath("/%2f%2fevil.com")).toBeNull();
     expect(resolveNextPath("/%5Cevil.com")).toBeNull();
+  });
+
+  it("passes the raw dot-segment forms through (the OUTPUT guard is what stops them)", () => {
+    // resolveNextPath deliberately does NOT reject these — they read as a
+    // single-slash path here, and the leading `//` only appears after URL
+    // normalisation. This documents that the output guard in
+    // postLoginDestination, not this function, is the check that catches the
+    // collapse; a test asserting these return null here would be asserting a
+    // defence that lives one layer up, and would go stale if it moved.
+    expect(resolveNextPath("/..//evil.com")).toBe("/..//evil.com");
+    expect(resolveNextPath("/%2e%2e//evil.com")).toBe("/%2e%2e//evil.com");
   });
 
   it("rejects control characters, non-strings, empty, and the absurdly long", () => {

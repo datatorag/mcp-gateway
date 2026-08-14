@@ -43,21 +43,39 @@ export function postLoginDestination(opts: {
 
   const next = resolveNextPath(opts.requestedPath);
   if (next !== null) {
-    // The params ride along because their meaning is about the LOGIN, not the
-    // route: a new user is a new user wherever they asked to land, and
-    // signup=1 is the sole gate on the Ads signup conversion. welcome=1 only
-    // attaches when the destination IS the agent — it is how that page tells
-    // "landed here" from "navigated here", and putting it on other routes
-    // would be a meaningless param nothing reads.
     const url = new URL(next, "http://placeholder.invalid");
-    if (isNewUser) url.searchParams.set("signup", "1");
-    if (
-      url.pathname === "/dashboard/agent" ||
-      url.pathname.startsWith("/dashboard/agent/")
-    ) {
-      url.searchParams.set("welcome", "1");
+
+    // THE VALIDATED THING MUST BE THE COMPOSED THING. resolveNextPath checked
+    // the raw string, but the value handed to res.redirect is
+    // `url.pathname + url.search`, and URL normalisation can make that differ
+    // from the input in the one way that matters: WHATWG dot-segment collapse
+    // turns `/..//evil.com` (and its `%2e` forms) into a pathname of
+    // `//evil.com`, a protocol-relative URL the browser resolves off-origin.
+    // The raw check never sees it because the `..` hid the leading `//`. So
+    // re-validate the OUTPUT: a same-origin path is a single leading slash and
+    // no more. Anything else falls through to the table below.
+    if (url.pathname.startsWith("/") && !url.pathname.startsWith("//")) {
+      // Our params are authoritative: a `next` carrying its own signup/welcome
+      // must not fire a false Ads conversion (signup=1 is the sole gate) or a
+      // false landing event. Clear them before we set our own.
+      url.searchParams.delete("signup");
+      url.searchParams.delete("welcome");
+
+      // The params ride along because their meaning is about the LOGIN, not
+      // the route: a new user is a new user wherever they asked to land.
+      // welcome=1 only attaches when the destination IS the agent — it is how
+      // that page tells "landed here" from "navigated here", and elsewhere it
+      // is a meaningless param nothing reads.
+      if (isNewUser) url.searchParams.set("signup", "1");
+      if (
+        url.pathname === "/dashboard/agent" ||
+        url.pathname.startsWith("/dashboard/agent/")
+      ) {
+        url.searchParams.set("welcome", "1");
+      }
+      return url.pathname + url.search;
     }
-    return url.pathname + url.search;
+    // else: the composed path escaped same-origin — fall through to the table.
   }
 
   if (agentDefaultView) {

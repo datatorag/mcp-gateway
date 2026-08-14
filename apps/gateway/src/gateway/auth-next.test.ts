@@ -198,11 +198,15 @@ describe("the redemption: GET /auth/google/callback", () => {
   it("an off-origin value planted in the cookie falls back to the table, never off-origin", async () => {
     // The redemption-side validation is not redundant with the stash-side
     // one: this cookie arrives WITHOUT ever passing the stash. Weaken
-    // resolveNextPath and THIS is the test that goes red.
+    // resolveNextPath and THIS is the test that goes red. Includes the
+    // dot-segment collapse (`/..//evil.com` → pathname `//evil.com`), which
+    // the raw check passes and only the output guard catches.
     for (const evil of [
       encodeURIComponent("//evil.com"),
       encodeURIComponent("https://evil.com/dashboard"),
       encodeURIComponent("/\\evil.com"),
+      encodeURIComponent("/..//evil.com"),
+      encodeURIComponent("/%2e%2e//evil.com"),
     ]) {
       const res = await rawGet(
         "/auth/google/callback?code=x",
