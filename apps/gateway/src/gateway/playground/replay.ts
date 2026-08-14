@@ -29,6 +29,10 @@ const REPLAYABLE_DATA_PARTS = new Set([
   "data-approval-expired",
   "data-account-state",
   "data-mcp-config",
+  // The inline Connect offer (SCRUM-78). It MUST replay: the connect flow is
+  // a full-page OAuth round trip, so the one moment this part matters most is
+  // when the thread is being rehydrated after the user comes back.
+  "data-connect",
 ]);
 
 /** The subset of a stored part this module understands. */

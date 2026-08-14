@@ -1,10 +1,15 @@
 import { z } from "zod";
+import { createTool } from "@mastra/core/tools";
 import type { Database } from "@datatorag-mcp/db";
 import { connectedAccounts, users } from "@datatorag-mcp/db";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { FREE_MONTHLY_AGENT_RUNS } from "@/gateway/billing/plans";
 import { capExempt, periodStatus } from "@/gateway/usage/period";
 import { disconnectService } from "@/gateway/connected-accounts";
+import {
+  CONNECTABLE_SERVICES,
+  getConnectableService,
+} from "@/app/dashboard/connections/service-registry";
 
 /**
  * Tools that answer questions about the user's own account.
@@ -95,7 +100,11 @@ export function buildIntrospectionTools({ db, userId }: IntrospectionDeps) {
           runsRemaining: cap === null ? null : Math.max(0, cap - used),
           runsCap: cap,
           toolCallsThisPeriod: status?.calls ?? 0,
-          periodStartedAt: status?.periodStart?.toISOString() ?? null,
+          // Tolerate a string here: some driver paths hand timestamps back
+          // unparsed, and a crashed status tool derails the whole turn.
+          periodStartedAt: status?.periodStart
+            ? new Date(status.periodStart).toISOString()
+            : null,
           links: DASHBOARD_LINKS,
         };
       },
@@ -128,6 +137,106 @@ export function buildIntrospectionTools({ db, userId }: IntrospectionDeps) {
         };
       },
     },
+
+    /** SCRUM-78: the producer for the thread's `data-connect` part.
+     *
+     * A MASTRA TOOL (createTool), not a plain object like its siblings, and
+     * the difference is load-bearing: the runtime routes a plain object down
+     * its Vercel-tool path, whose execute options carry NO stream writer, so
+     * the connect part could never be emitted — verified live, the tool
+     * "succeeded" with nothing on screen. A Mastra tool's execute receives
+     * the full execution context, writer included.
+     *
+     * The part is written into the STREAM (and therefore into the stored
+     * message) via the tool writer, so it renders where the agent put it,
+     * survives replay, and needs no client-side placement rule — see
+     * agent-parts.tsx for why a data part and not a synthetic row. The OAuth
+     * round trip returns into this same thread via the redirect machinery
+     * (post-connect-destination.ts has the popup-vs-redirect decision), and
+     * the client then continues the conversation. */
+    request_connection: createTool({
+      id: "request_connection",
+      /** A read: it changes nothing about the user's account, it puts a
+       * control in front of them. The CONNECTING is the user's own act, on
+       * Google's consent screen, so there is nothing here to gate. */
+      requireApproval: false,
+      description:
+        "Show the user an inline Connect control for a service they have not " +
+        "connected, right here in the conversation. Call this whenever their " +
+        "request needs a service (google-workspace or atlassian) you have no " +
+        "tools for. After calling it, tell the user plainly what you cannot do " +
+        "until they connect, and that once they connect you will continue " +
+        "their request. Do not send them to any other page.",
+      inputSchema: z.object({
+        service: z
+          .enum(
+            CONNECTABLE_SERVICES.map((s) => s.id) as [string, ...string[]]
+          )
+          .describe("The service the user's request needs."),
+      }),
+      execute: async (
+        { service }: { service: string },
+        context?: {
+          writer?: {
+            custom: (chunk: {
+              type: `data-${string}`;
+              data: unknown;
+            }) => Promise<void>;
+          };
+        }
+      ) => {
+        const entry = getConnectableService(service);
+        if (!entry) {
+          return { error: `Unknown service: ${service}` };
+        }
+
+        const [existing] = await db
+          .select({ id: connectedAccounts.id })
+          .from(connectedAccounts)
+          .where(
+            and(
+              eq(connectedAccounts.userId, userId),
+              eq(connectedAccounts.connectorType, service)
+            )
+          )
+          .limit(1);
+        if (existing) {
+          return {
+            service,
+            alreadyConnected: true,
+            note:
+              "The user already has this service connected. Its tools are " +
+              "available on your next turn if they are not in this one.",
+          };
+        }
+
+        // The href deliberately carries no return path: the CLIENT composes
+        // `?next=` at click time, because only it knows which thread the user
+        // is looking at, and a stored part must not pin a stale destination.
+        const controlShown = context?.writer !== undefined;
+        if (controlShown) {
+          await context.writer!.custom({
+            type: "data-connect",
+            data: {
+              services: [
+                { id: entry.id, name: entry.name, connectHref: entry.connectUrl },
+              ],
+            },
+          });
+        }
+        return {
+          service,
+          alreadyConnected: false,
+          controlShown,
+          note: controlShown
+            ? "A Connect control is now visible in this conversation. Tell " +
+              "the user to use it; when they finish connecting, the " +
+              "conversation continues automatically."
+            : "The control could not be shown here; point the user to the " +
+              "Connect control on the dashboard instead.",
+        };
+      },
+    }),
 
     disconnect_service: {
       /** DECLARED true. Disconnecting revokes credentials and drops rows, so it
@@ -166,5 +275,6 @@ export function buildIntrospectionTools({ db, userId }: IntrospectionDeps) {
 export const INTROSPECTION_TOOL_NAMES = [
   "account_status",
   "show_mcp_config",
+  "request_connection",
   "disconnect_service",
 ] as const;

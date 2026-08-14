@@ -22,6 +22,7 @@ import {
   postLoginDestination,
   resolveNextPath,
 } from "./post-login-destination";
+import { postConnectDestination } from "./post-connect-destination";
 import { getEnv } from "@datatorag-mcp/config";
 
 /** Where the requested route (`?next=` on the login URL) survives the trip
@@ -37,6 +38,14 @@ const NEXT_COOKIE = "dtr_next";
  * Its own cookie per flow, so concurrent connects cannot consume each
  * other's binding. */
 const GWS_CONNECT_NONCE_COOKIE = "gws_connect_nonce";
+
+/** Where the service-CONNECT flows park the validated return path (SCRUM-78):
+ * the agent offers an inline Connect control, and the OAuth round trip has to
+ * land back in that conversation rather than on the connections page. A
+ * SEPARATE cookie from both `dtr_next` and the CSRF nonce above — the return
+ * path and the CSRF binding are independent concerns, and a login `next` may
+ * be parked at the same time, so no two of these may consume each other. */
+const CONNECT_NEXT_COOKIE = "dtr_connect_next";
 
 const GWS_SCOPES = [
   "openid",
@@ -287,6 +296,7 @@ export function createAuthRouter(
     }
 
     stashAttribution(req, res, cookiesAreSecure);
+    stashConnectNext(req, res);
 
     // CSRF (SCRUM-86): bind the round trip to the browser that began it, the
     // same way every other OAuth-initiating flow here already does (Atlassian
@@ -333,6 +343,7 @@ export function createAuthRouter(
     // callback and be replayed within its TTL.
     res.clearCookie(GWS_CONNECT_NONCE_COOKIE, { path: "/" });
     const attribution = takeAttribution(req, res);
+    const requestedPath = takeConnectNext(req, res);
 
     if (!sessionToken) {
       res.redirect("/auth/login");
@@ -344,13 +355,27 @@ export function createAuthRouter(
     // exchange. A rejected callback must never spend the code it carried:
     // exchanging first and rejecting after would still burn a victim's
     // session into validating an attacker's code.
+    //
+    // The rejection routes through postConnectDestination like every other
+    // failure (SCRUM-78), so a connect started from a thread returns to that
+    // thread with its inline error notice rather than a bare page — the parked
+    // next was same-origin-validated and already cleared by takeConnectNext
+    // above, and an attacker forcing this callback never controls it (it was
+    // set on the LEGITIMATE session that began the flow), so honouring it only
+    // ever returns the real user to where they actually were. A connect
+    // started elsewhere has no parked next and still falls to the connections
+    // page — that page's retired-route handling is SCRUM-92, out of scope here.
     if (!nonceMatches(cookieNonce, state)) {
-      res.redirect("/dashboard/connections?error=invalid_state");
+      res.redirect(
+        postConnectDestination({ requestedPath, error: "invalid_state" })
+      );
       return;
     }
 
     if (!googleCode) {
-      res.redirect("/dashboard/connections?error=missing_code");
+      res.redirect(
+        postConnectDestination({ requestedPath, error: "missing_code" })
+      );
       return;
     }
 
@@ -382,7 +407,9 @@ export function createAuthRouter(
     );
 
     if (!tokenResponse.ok) {
-      res.redirect("/dashboard/connections?error=token_exchange_failed");
+      res.redirect(
+        postConnectDestination({ requestedPath, error: "token_exchange_failed" })
+      );
       return;
     }
 
@@ -414,7 +441,10 @@ export function createAuthRouter(
 
     if (!accountEmail) {
       res.redirect(
-        "/dashboard/connections?error=could_not_resolve_account_email"
+        postConnectDestination({
+          requestedPath,
+          error: "could_not_resolve_account_email",
+        })
       );
       return;
     }
@@ -437,7 +467,12 @@ export function createAuthRouter(
       attribution
     );
 
-    res.redirect(`/dashboard/connections?connected=${PROVIDERS.GOOGLE_WORKSPACE}`);
+    res.redirect(
+      postConnectDestination({
+        requestedPath,
+        provider: PROVIDERS.GOOGLE_WORKSPACE,
+      })
+    );
   });
 
   // --- Atlassian connection (Jira + Confluence) ---
@@ -491,6 +526,7 @@ export function createAuthRouter(
     // leak a live bearer credential into the URL, referrer, and Atlassian's
     // logs). The nonce is echoed back and matched against an httpOnly cookie.
     stashAttribution(req, res, cookiesAreSecure);
+    stashConnectNext(req, res);
 
     const nonce = randomBytes(16).toString("base64url");
     res.cookie("atl_connect_nonce", nonce, {
@@ -524,6 +560,7 @@ export function createAuthRouter(
     const cookieNonce = req.cookies?.atl_connect_nonce as string | undefined;
     res.clearCookie("atl_connect_nonce", { path: "/" });
     const attribution = takeAttribution(req, res);
+    const requestedPath = takeConnectNext(req, res);
 
     if (!sessionToken) {
       res.redirect("/auth/login");
@@ -532,12 +569,16 @@ export function createAuthRouter(
 
     // CSRF: the echoed state must match the nonce cookie from initiation.
     if (!nonceMatches(cookieNonce, state)) {
-      res.redirect("/dashboard/connections?error=invalid_state");
+      res.redirect(
+        postConnectDestination({ requestedPath, error: "invalid_state" })
+      );
       return;
     }
 
     if (!code) {
-      res.redirect("/dashboard/connections?error=missing_code");
+      res.redirect(
+        postConnectDestination({ requestedPath, error: "missing_code" })
+      );
       return;
     }
 
@@ -568,7 +609,9 @@ export function createAuthRouter(
     );
 
     if (!tokenResponse.ok) {
-      res.redirect("/dashboard/connections?error=token_exchange_failed");
+      res.redirect(
+        postConnectDestination({ requestedPath, error: "token_exchange_failed" })
+      );
       return;
     }
 
@@ -599,7 +642,10 @@ export function createAuthRouter(
 
     if (!accountEmail) {
       res.redirect(
-        "/dashboard/connections?error=could_not_resolve_account_email"
+        postConnectDestination({
+          requestedPath,
+          error: "could_not_resolve_account_email",
+        })
       );
       return;
     }
@@ -622,8 +668,41 @@ export function createAuthRouter(
       attribution
     );
 
-    res.redirect(`/dashboard/connections?connected=${PROVIDERS.ATLASSIAN}`);
+    res.redirect(
+      postConnectDestination({ requestedPath, provider: PROVIDERS.ATLASSIAN })
+    );
   });
+
+  /** Park a validated `?next=` for the length of one connect round trip.
+   * Validated BEFORE stashing — an off-origin value never reaches the cookie
+   * jar — and validated again on the way out inside postConnectDestination. */
+  function stashConnectNext(
+    req: { query: Record<string, unknown> },
+    res: {
+      cookie: (name: string, value: string, opts: object) => unknown;
+    }
+  ): void {
+    const next = resolveNextPath(req.query.next);
+    if (next === null) return;
+    res.cookie(CONNECT_NEXT_COOKIE, next, {
+      httpOnly: true,
+      secure: cookiesAreSecure,
+      sameSite: "lax",
+      path: "/",
+      maxAge: OAUTH_STATE_TTL_MS,
+    });
+  }
+
+  /** Read and clear the parked `next`. Always cleared, on every callback
+   * outcome, so a stale destination cannot attach itself to a later flow. */
+  function takeConnectNext(
+    req: { cookies?: Record<string, unknown> },
+    res: { clearCookie: (name: string, opts: object) => unknown }
+  ): unknown {
+    const value = req.cookies?.[CONNECT_NEXT_COOKIE];
+    res.clearCookie(CONNECT_NEXT_COOKIE, { path: "/" });
+    return value;
+  }
 
   return router;
 }

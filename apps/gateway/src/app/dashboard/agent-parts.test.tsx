@@ -18,7 +18,7 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 
 import { MessageList, type PlaygroundMessage } from "./playground-presentation";
-import { renderAgentPart } from "./agent-parts";
+import { ConnectReturnContext, renderAgentPart } from "./agent-parts";
 
 vi.mock("@/components/setup-instructions", () => ({
   // The config block is a large component with its own analytics; this suite
@@ -83,6 +83,54 @@ describe("agent data parts render in the thread", () => {
     expect(text).toContain("Connect Google");
     const link = container.querySelector('a[href="/auth/google/connect"]');
     expect(link).not.toBeNull();
+  });
+
+  it("routes the connect through the current thread when one is known (SCRUM-78)", () => {
+    // The OAuth round trip is a full navigation; the `next` composed here is
+    // what brings the user back into the conversation they left. Encoded, so
+    // the thread's own query string survives the trip.
+    const messages = [
+      {
+        id: "m1",
+        role: "assistant",
+        parts: [
+          {
+            type: "data-connect",
+            data: {
+              services: [
+                { id: "google-workspace", name: "Google", connectHref: "/auth/google/connect" },
+              ],
+            },
+          },
+        ],
+      },
+    ] as unknown as PlaygroundMessage[];
+    act(() => {
+      root.render(
+        <ConnectReturnContext.Provider
+          value={{ nextPath: "/dashboard/agent?thread=t-9" }}
+        >
+          <MessageList
+            awaitingConfirm={false}
+            busy={false}
+            comments={{}}
+            erroredIds={new Set()}
+            feedback={{}}
+            lastMessageComplete
+            messages={messages}
+            onCommentChange={() => {}}
+            onDecide={() => {}}
+            onRate={() => {}}
+            onRegenerate={() => {}}
+            onSendComment={() => {}}
+          />
+        </ConnectReturnContext.Provider>
+      );
+    });
+    const link = container.querySelector("a");
+    expect(link?.getAttribute("href")).toBe(
+      `/auth/google/connect?next=${encodeURIComponent("/dashboard/agent?thread=t-9")}`
+    );
   });
 
   it("renders account state as a meter, not a wall", () => {

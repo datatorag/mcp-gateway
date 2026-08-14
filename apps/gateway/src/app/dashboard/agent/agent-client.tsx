@@ -9,6 +9,11 @@ import { useSignupConversion } from "../use-signup-conversion";
 import { useConnections } from "../use-connections";
 import { ThreadList } from "./thread-list";
 import type { PlaygroundMessage } from "../playground-presentation";
+import { getConnectableService } from "../connections/service-registry";
+import {
+  CONNECT_ERROR_NOTICE,
+  connectContinuationMessage,
+} from "../agent-connect-copy";
 
 /** Which login put the user here: the post-signup landing, or a returning
  * user's. Travels as the `landed_from` property on
@@ -31,9 +36,18 @@ export type AgentLandedFrom = "signup" | "login";
 export function AgentClient({
   isDefaultView,
   landedFrom,
+  resumeThreadId = null,
+  connectedService = null,
+  connectError = null,
 }: {
   isDefaultView: boolean;
   landedFrom: AgentLandedFrom;
+  /** Thread to reopen on mount — the connect round trip's return leg. */
+  resumeThreadId?: string | null;
+  /** Registry id of the service the user just connected, when they did. */
+  connectedService?: string | null;
+  /** Error code from a connect that did not finish. */
+  connectError?: string | null;
 }) {
   const { hasConnectedAccount } = useConnections();
   const ref = useRef<PlaygroundHandle>(null);
@@ -114,6 +128,54 @@ export function AgentClient({
     }
   }, []);
 
+  /* THE CONNECT ROUND TRIP'S RETURN LEG (SCRUM-78).
+   *
+   * The inline Connect control sent the user to Google with
+   * `next=/dashboard/agent?thread=<id>`; the OAuth callback validated that
+   * path and appended `connected=<service>` (or `connect_error=<code>`). This
+   * is where the loop closes: reopen the conversation the user left, and once
+   * its history is on screen, post the continuation message so the agent
+   * picks the original request back up. That message is VISIBLE, as the user,
+   * on purpose — a hidden trigger would be context they cannot see or clear,
+   * persisted into the thread forever (see agent-connect-copy.ts).
+   *
+   * The params are stripped from the URL immediately (same pattern as the
+   * signup conversion), so a reload or a shared URL cannot re-post the
+   * continuation into the thread. The one-shot ref guards the same thing
+   * within this mount. */
+  const continuation =
+    connectedService && resumeThreadId
+      ? getConnectableService(connectedService)?.name ?? null
+      : null;
+  const [pendingContinue, setPendingContinue] = useState<string | null>(
+    continuation
+  );
+  useEffect(() => {
+    if (!resumeThreadId && !connectedService && !connectError) return;
+    const params = new URLSearchParams(window.location.search);
+    params.delete("thread");
+    params.delete("connected");
+    params.delete("connect_error");
+    const rest = params.toString();
+    window.history.replaceState(
+      null,
+      "",
+      rest ? `${window.location.pathname}?${rest}` : window.location.pathname
+    );
+    if (resumeThreadId) void openThread(resumeThreadId);
+  }, [resumeThreadId, connectedService, connectError, openThread]);
+
+  useEffect(() => {
+    if (!pendingContinue) return;
+    // Wait until the conversation the user left is actually the one on
+    // screen; a continuation posted into a fresh empty thread would orphan
+    // the original request in a conversation nobody is looking at.
+    if (thread.id !== resumeThreadId) return;
+    const handle = ref.current;
+    if (!handle) return;
+    setPendingContinue(null);
+    handle.runPrompt(connectContinuationMessage(pendingContinue));
+  }, [pendingContinue, thread.id, resumeThreadId]);
 
   return (
     // `h-full` so the chat inherits a definite height rather than growing past
@@ -143,6 +205,13 @@ export function AgentClient({
       </div>
 
       <div className="flex h-full min-h-0 flex-1 flex-col">
+        {connectError && (
+          // The connect came back without finishing. Say so where the user
+          // landed; the control they used is still in the thread below.
+          <div className="mx-4 mt-3 shrink-0 rounded-2xl border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700 sm:mx-6">
+            {CONNECT_ERROR_NOTICE}
+          </div>
+        )}
         {/* NOT gated on `loaded`. Withholding the composer until an account
             lookup returns turns a slow or failed request into a page with
             nothing to type in, which is indistinguishable from the product
@@ -151,18 +220,24 @@ export function AgentClient({
 
             KEYED ON THE CONVERSATION. Remounting on a switch is what keeps the
             thread id and its history inseparable: React cannot hand the next
-            conversation a list left over from the last one. */}
-        <Playground
-          hasConnectedAccount={hasConnectedAccount}
-          initialMessages={thread.history}
-          key={`${thread.id ?? "new"}:${thread.epoch}`}
-          layout="page"
-          loadSuggestions={loadSuggestions}
-          onConversationChanged={refreshList}
-          prompts={AGENT_PROMPTS}
-          ref={ref}
-          threadId={thread.id}
-        />
+            conversation a list left over from the last one.
+
+            The wrapper gives the chat its height as a FLEX ITEM (`flex-1
+            min-h-0`) rather than `h-full`, so the error notice above can take
+            its row without pushing the composer below the fold. */}
+        <div className="min-h-0 flex-1">
+          <Playground
+            hasConnectedAccount={hasConnectedAccount}
+            initialMessages={thread.history}
+            key={`${thread.id ?? "new"}:${thread.epoch}`}
+            layout="page"
+            loadSuggestions={loadSuggestions}
+            onConversationChanged={refreshList}
+            prompts={AGENT_PROMPTS}
+            ref={ref}
+            threadId={thread.id}
+          />
+        </div>
       </div>
     </div>
   );

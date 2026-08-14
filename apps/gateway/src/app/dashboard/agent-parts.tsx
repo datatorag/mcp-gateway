@@ -1,8 +1,21 @@
 "use client";
 
-import type { ReactNode } from "react";
+import { createContext, useContext, type ReactNode } from "react";
 import { SetupInstructions } from "@/components/setup-instructions";
 import { buttonVariants } from "@/components/ui/button";
+
+/** Where the connect flow should RETURN to — the thread the user is looking
+ * at (SCRUM-78). A context rather than a prop because ConnectPart renders
+ * deep inside the memoized message list, via a renderer map that takes only
+ * the part's own data; threading a return path through every row for the one
+ * part that needs it would put thread identity into components that have no
+ * business knowing it. Null until the first turn's response names the thread
+ * (or outside any provider), in which case the connect returns to the Agent
+ * page's default view — which still lands IN the agent, just without a
+ * conversation to resume. */
+export const ConnectReturnContext = createContext<{ nextPath: string | null }>({
+  nextPath: null,
+});
 
 /**
  * Things the agent can put in the thread that are not text and not a tool call.
@@ -47,14 +60,12 @@ export type AgentDataParts = {
  * message exists: an unconnected user must meet ONE connect affordance, not a
  * different one depending on whether the agent has spoken yet.
  *
- * NOTE FOR WHOEVER WIRES THE SERVER EMITTER: today this is the ONLY use, and
- * it is rendered directly rather than travelling through the data-part
- * pipeline, so the registry is real infrastructure with no producer yet. When
- * the agent starts emitting `data-connect` mid-conversation ("you asked for
- * Jira but only connected Google"), decide deliberately whether it replaces
- * this instance or coexists with it, and note that this one lists ALL services
- * unconditionally while a server-emitted one should name only what the request
- * actually needed. */
+ * TWO PRODUCERS NOW, DELIBERATELY COEXISTING (SCRUM-78). The empty state
+ * renders this directly and lists ALL services, because before a request
+ * exists nothing says which one is needed. Mid-conversation, the agent's
+ * request_connection tool emits a `data-connect` part naming ONLY the service
+ * the request actually needed. Same component, so the two affordances cannot
+ * drift apart. */
 /** Only these can be a connect target. The hrefs come from our own SERVICES
  * list today, so this changes nothing now — but this component also renders
  * from a `data-connect` part, and a part is data rather than code. A
@@ -65,7 +76,18 @@ function safeConnectHref(href: string): string | null {
 }
 
 export function ConnectPart({ services }: AgentDataParts["connect"]) {
+  const { nextPath } = useContext(ConnectReturnContext);
   if (services.length === 0) return null;
+
+  // The return path is composed HERE, at render time, not stored in the part:
+  // the part persists in the thread, and a baked-in destination would go stale
+  // the moment the same conversation is reopened under a different id (it is
+  // not) or the control is rendered outside a thread (the empty state). The
+  // `next` value is validated server-side either way (resolveNextPath), so
+  // this composition is a convenience, not a trust boundary.
+  const withReturn = (href: string): string =>
+    nextPath ? `${href}?next=${encodeURIComponent(nextPath)}` : href;
+
   return (
     <div className="rounded-lg border border-border bg-secondary/40 p-3">
       <p className="text-xs text-foreground">
@@ -82,7 +104,7 @@ export function ConnectPart({ services }: AgentDataParts["connect"]) {
           // the outlier.
           <a
             className={buttonVariants({ size: "sm" })}
-            href={safeConnectHref(service.connectHref) as string}
+            href={withReturn(safeConnectHref(service.connectHref) as string)}
             key={service.id}
           >
             Connect {service.name}

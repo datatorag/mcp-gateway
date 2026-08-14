@@ -47,10 +47,11 @@ export const DATATORAG_AGENT_ID = "datatorag-playground";
 
 /** System prompt for the playground assistant.
  *
- * Copied WORD FOR WORD from the hand-rolled engine this agent replaces. It has
- * been tuned against real sessions, and rewording it in the same change that
- * swaps the agent runtime would make any behaviour regression impossible to
- * attribute. Change the runtime first, then the prompt, in separate commits.
+ * Originally copied word for word from the hand-rolled engine this agent
+ * replaced, so the runtime swap could not be confused with a prompt change.
+ * That swap has shipped; the prompt has since gained the SCRUM-78 connect
+ * rules (marked inline below). Keep prompt edits in their own commits so a
+ * behaviour change stays attributable.
  *
  * The text only. What actually reaches the provider is {@link SYSTEM_MESSAGE}
  * below, which wraps this in the message form that can carry a cache
@@ -75,10 +76,22 @@ export const SYSTEM_PROMPT =
   // reach. Answering honestly is the requirement; erroring or pretending are
   // both failures, and pretending is the worse one because it is discovered
   // later, by the user, on something they relied on.
-  "If a request needs an account the user has not connected, say plainly what you cannot do " +
-  "without it and point them to the Connect control in this conversation. Answer whatever part " +
-  "of their question you genuinely can. Never invent content you could not read, and never " +
-  "describe an action as done when you had no access to do it. " +
+  //
+  // SCRUM-78: the Connect control the agent points at is one IT PUTS THERE,
+  // by calling request_connection — before that tool existed, this prompt
+  // pointed at "the Connect control in this conversation", which only exists
+  // in the empty state and had usually scrolled away or never rendered. The
+  // continuation rule below is the other half of the same design: the OAuth
+  // round trip returns into this thread and the client posts a message saying
+  // the account is connected, and the agent must pick the original request
+  // back up rather than making the user repeat it.
+  "If a request needs a service the user has not connected, call request_connection for that " +
+  "service so a Connect control appears right here in the conversation, then say plainly what " +
+  "you cannot do until it is connected. Answer whatever part of their question you genuinely " +
+  "can. Never invent content you could not read, and never describe an action as done when you " +
+  "had no access to do it. " +
+  "When the user tells you they have just connected an account, continue their original " +
+  "request immediately with the tools that are now available, without making them repeat it. " +
   // The router rules. The config is available the instant someone asks for it,
   // and never arrives before the user has got something out of the product:
   // leading with it is what made setup feel like a cliff, and it would look

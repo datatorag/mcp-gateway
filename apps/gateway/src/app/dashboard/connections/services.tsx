@@ -1,17 +1,23 @@
-export interface ServiceConfig {
-  id: string;
-  name: string;
+import {
+  CONNECTABLE_SERVICES,
+  type ConnectableService,
+} from "./service-registry";
+
+export interface ServiceConfig extends ConnectableService {
   description: string;
   /** One line per capability, tagged with the ServiceIcon keys it covers. */
   capabilities: { text: string; services: string[] }[];
-  connectUrl: string;
   icon: React.ReactNode;
 }
 
-export const SERVICES: ServiceConfig[] = [
-  {
-    id: "google-workspace",
-    name: "Google Workspace",
+/** The presentation each service adds on top of the shared registry entry.
+ * Keyed by registry id so a connector added to the registry without a row
+ * here fails loudly below instead of silently rendering without an icon. */
+const SERVICE_PRESENTATION: Record<
+  string,
+  Omit<ServiceConfig, keyof ConnectableService>
+> = {
+  "google-workspace": {
     description:
       "Gmail, Drive, Calendar, Docs, Sheets, Slides, Contacts, and Tasks",
     capabilities: [
@@ -32,7 +38,6 @@ export const SERVICES: ServiceConfig[] = [
         services: ["calendar", "contacts", "tasks"],
       },
     ],
-    connectUrl: "/auth/google/connect",
     icon: (
       <svg viewBox="0 0 24 24" className="h-8 w-8">
         <path
@@ -54,9 +59,7 @@ export const SERVICES: ServiceConfig[] = [
       </svg>
     ),
   },
-  {
-    id: "atlassian",
-    name: "Atlassian",
+  atlassian: {
     description: "Jira and Confluence — issues, pages, comments, and search",
     capabilities: [
       {
@@ -72,7 +75,6 @@ export const SERVICES: ServiceConfig[] = [
         services: ["jira", "confluence"],
       },
     ],
-    connectUrl: "/auth/atlassian/connect",
     icon: (
       <svg viewBox="0 0 24 24" className="h-8 w-8">
         <path
@@ -86,7 +88,18 @@ export const SERVICES: ServiceConfig[] = [
       </svg>
     ),
   },
-];
+};
+
+export const SERVICES: ServiceConfig[] = CONNECTABLE_SERVICES.map((service) => {
+  const presentation = SERVICE_PRESENTATION[service.id];
+  if (!presentation) {
+    // A registry entry with no presentation row means someone added a
+    // connector to service-registry.ts and stopped. Failing here is louder
+    // than a card with no icon and no capabilities.
+    throw new Error(`No presentation defined for service "${service.id}"`);
+  }
+  return { ...service, ...presentation };
+});
 
 export function getService(id: string): ServiceConfig | undefined {
   return SERVICES.find((s) => s.id === id);

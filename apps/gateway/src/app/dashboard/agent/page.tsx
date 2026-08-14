@@ -32,15 +32,35 @@ export const dynamic = "force-dynamic";
 export default async function AgentPage({
   searchParams,
 }: {
-  searchParams: Promise<{ welcome?: string; signup?: string }>;
+  searchParams: Promise<{
+    welcome?: string;
+    signup?: string;
+    thread?: string;
+    connected?: string;
+    connect_error?: string;
+  }>;
 }) {
   const userId = await getSessionUserId();
   if (!userId) redirect("/auth/login");
-  const { welcome, signup } = await searchParams;
+  const { welcome, signup, thread, connected, connect_error } =
+    await searchParams;
   return (
     <AgentClient
       isDefaultView={welcome === "1"}
       landedFrom={signup === "1" ? "signup" : "login"}
+      // The connect round trip's return leg (SCRUM-78): which conversation to
+      // reopen, and whether the connect finished. The ids are validated
+      // client-side against the service registry / the user's own threads, so
+      // a mangled param degrades to a normal landing rather than an error.
+      resumeThreadId={typeof thread === "string" && thread !== "" ? thread : null}
+      connectedService={
+        typeof connected === "string" && connected !== "" ? connected : null
+      }
+      connectError={
+        typeof connect_error === "string" && connect_error !== ""
+          ? connect_error
+          : null
+      }
     />
   );
 }

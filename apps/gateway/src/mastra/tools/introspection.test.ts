@@ -58,7 +58,7 @@ describe("account introspection", () => {
     const tools = buildIntrospectionTools({ db, userId: "user-1" });
 
     for (const name of INTROSPECTION_TOOL_NAMES) {
-      const schema = (tools as Record<string, { inputSchema: z.ZodTypeAny }>)[name].inputSchema;
+      const schema = (tools as unknown as Record<string, { inputSchema: z.ZodTypeAny }>)[name].inputSchema;
       const shape = (schema as unknown as z.ZodObject<z.ZodRawShape>).shape ?? {};
       for (const key of Object.keys(shape)) {
         expect(IDENTITY_FIELDS).not.toContain(key.toLowerCase());
@@ -67,7 +67,9 @@ describe("account introspection", () => {
       // And it must actually DISCARD one if a model sends it anyway, rather
       // than merely not advertising it.
       const parsed = schema.safeParse({
-        ...(name === "disconnect_service" ? { service: "atlassian" } : {}),
+        ...(name === "disconnect_service" || name === "request_connection"
+          ? { service: "atlassian" }
+          : {}),
         userId: "someone-else",
         email: "victim@example.com",
       });
@@ -205,5 +207,88 @@ describe("account introspection", () => {
     // And the list is the whole surface: a tool present but unlisted would
     // escape the check above.
     expect(Object.keys(tools).sort()).toEqual([...INTROSPECTION_TOOL_NAMES].sort());
+  });
+});
+
+describe("request_connection (SCRUM-78)", () => {
+  /** The execute under test, freed from the Mastra Tool generic soup: the
+   * suite calls it directly, as the runtime does, with an optional writer. */
+  type RequestConnectionExecute = (
+    input: { service: string },
+    context?: { writer?: { custom: (chunk: unknown) => Promise<void> } }
+  ) => Promise<Record<string, unknown>>;
+  function requestConnection(db: never): RequestConnectionExecute {
+    const tools = buildIntrospectionTools({ db, userId: "user-1" });
+    return tools.request_connection.execute as unknown as RequestConnectionExecute;
+  }
+
+  /** A db whose connected-accounts lookup returns what the test says, and a
+   * writer that records every chunk written into the stream. */
+  function connectStub(connectedRows: unknown[]) {
+    const db = {
+      select: () => ({
+        from: () => ({
+          where: () => ({ limit: async () => connectedRows }),
+        }),
+      }),
+    } as never;
+    const written: unknown[] = [];
+    const writer = {
+      custom: async (chunk: unknown) => {
+        written.push(chunk);
+      },
+    };
+    return { db, writer, written };
+  }
+
+  it("writes a data-connect part naming ONLY the requested service", async () => {
+    const { db, writer, written } = connectStub([]);
+    const out = await requestConnection(db)({ service: "google-workspace" }, { writer });
+
+    expect(written).toEqual([
+      {
+        type: "data-connect",
+        data: {
+          services: [
+            {
+              id: "google-workspace",
+              name: "Google Workspace",
+              connectHref: "/auth/google/connect",
+            },
+          ],
+        },
+      },
+    ]);
+    expect(out).toMatchObject({ alreadyConnected: false, controlShown: true });
+  });
+
+  it("emits nothing and says so when the service is already connected", async () => {
+    const { db, writer, written } = connectStub([{ id: "acct-1" }]);
+    const out = await requestConnection(db)({ service: "google-workspace" }, { writer });
+
+    expect(written).toEqual([]);
+    expect(out).toMatchObject({ alreadyConnected: true });
+  });
+
+  it("degrades honestly when no writer is available", async () => {
+    // A tool result claiming a control is on screen when nothing was written
+    // would be the fails-while-appearing-to-succeed shape this whole feature
+    // exists to remove.
+    const { db } = connectStub([]);
+    const out = await requestConnection(db)({ service: "google-workspace" }, {});
+
+    expect(out).toMatchObject({ alreadyConnected: false, controlShown: false });
+  });
+
+  it("refuses a service the registry does not know", async () => {
+    const { db, writer, written } = connectStub([]);
+
+    // createTool validates input against the schema BEFORE execute runs, so a
+    // nonsense target is refused at the boundary (the returned object flags an
+    // error); the registry guard inside execute backstops direct calls. Either
+    // way, the property that matters: no control is written for it.
+    const out = await requestConnection(db)({ service: "not-a-service" }, { writer });
+    expect(out.error).toBeTruthy();
+    expect(written).toEqual([]);
   });
 });

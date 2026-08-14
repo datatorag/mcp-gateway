@@ -107,6 +107,26 @@ describe("the parts that should vanish", () => {
     expect(replayPart(known as never)).toEqual(known);
     expect(replayPart({ type: "data-something-new", data: { a: 1 } } as never)).toBeNull();
   });
+
+  it("replays the inline connect offer (SCRUM-78)", () => {
+    // The connect flow is a full-page OAuth round trip, so the one moment
+    // this part matters most is when the thread is rehydrated on return. If
+    // it dropped out of the allow-list, the user would come back to a
+    // conversation whose connect control had silently vanished.
+    const connect = {
+      type: "data-connect",
+      data: {
+        services: [
+          {
+            id: "google-workspace",
+            name: "Google Workspace",
+            connectHref: "/auth/google/connect",
+          },
+        ],
+      },
+    };
+    expect(replayPart(connect as never)).toEqual(connect);
+  });
 });
 
 describe("whole messages", () => {
