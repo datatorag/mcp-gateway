@@ -47,6 +47,15 @@ code reviewer. Do not flag style, performance, or non-security bugs.
    - Auth/crypto weakening: disabled token expiry checks, weakened CORS,
      `NODE_TLS_REJECT_UNAUTHORIZED=0`, disabled signature verification
    - Overly broad OAuth scopes or IAM policies added to code/config
+   - **Post-login redirects outside `postLoginDestination()`** — that
+     function (`apps/gateway/src/gateway/post-login-destination.ts`) is the
+     SOLE producer of post-login redirect targets, and its internal
+     same-origin validation is the only thing standing between the `next`
+     param / `dtr_next` cookie and an open redirect (a phishing primitive:
+     the victim authenticates on our real domain and is handed to the
+     attacker). BLOCK any change that makes a login/callback path call
+     `res.redirect` with a user-influenced value that did not pass through
+     this function, or that adds a second reader of `next`/`dtr_next`.
 4. **History awareness** — a secret deleted in a later commit of the same
    unpushed range is still in the range's history. If a secret exists in
    ANY commit being pushed, BLOCK and say the history must be rewritten
