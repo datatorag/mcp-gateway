@@ -31,13 +31,13 @@ describe("openBillingPortal", () => {
     });
   });
 
-  it("sends an expired session through login and back to the usage page", async () => {
+  it("sends an expired session through login and back to the billing page", async () => {
     const outcome = await openBillingPortal(
       vi.fn().mockResolvedValue(response(401, { error: "Unauthorized" }))
     );
     expect(outcome).toEqual({
       kind: "redirect",
-      url: "/auth/login?next=%2Fdashboard%2Fusage",
+      url: "/auth/login?next=%2Fdashboard%2Fbilling",
     });
   });
 

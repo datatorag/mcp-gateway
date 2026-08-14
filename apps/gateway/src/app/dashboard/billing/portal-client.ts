@@ -5,6 +5,10 @@
  * browser goes next. Nothing here changes plan state — cancellation happens
  * inside Stripe's portal, and the subscription webhooks are the only writer
  * of users.plan.
+ *
+ * Lives on the billing page (moved from the usage page when billing got its
+ * own route in SCRUM-82 — the usage section is now a summary that links
+ * here, and this is the only consumer).
  */
 
 import { isStripeHostedUrl } from "@/lib/stripe-hosted-url";
@@ -30,14 +34,15 @@ export async function openBillingPortal(
   if (res.status === 401) {
     return {
       kind: "redirect",
-      url: `/auth/login?next=${encodeURIComponent("/dashboard/usage")}`,
+      url: `/auth/login?next=${encodeURIComponent("/dashboard/billing")}`,
     };
   }
 
-  // 400 = no Stripe customer on record. The button only renders for plan=pro,
-  // and the webhook that sets pro requires the customer link, so reaching
-  // this means something is genuinely wrong on our side — say so instead of
-  // pretending a retry will fix it.
+  // 400 = no Stripe customer on record. The button only renders when the
+  // account HAS a billing relationship (SCRUM-81: the precondition is
+  // stripe_customer_id, not plan), so reaching this means something is
+  // genuinely wrong on our side — say so instead of pretending a retry
+  // will fix it.
   if (res.status === 400) {
     return {
       kind: "error",

@@ -8,8 +8,11 @@ import { usePathname } from "next/navigation";
 import {
   BarChart3,
   BookOpen,
+  CreditCard,
   LayoutDashboard,
   MessageSquare,
+  PanelLeftClose,
+  PanelLeftOpen,
   Plug,
   type LucideIcon,
 } from "lucide-react";
@@ -21,6 +24,7 @@ const navItems: Array<{ href: string; label: string; icon: LucideIcon }> = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/dashboard/agent", label: "Agent", icon: MessageSquare },
   { href: "/dashboard/usage", label: "Usage", icon: BarChart3 },
+  { href: "/dashboard/billing", label: "Billing", icon: CreditCard },
   { href: "/dashboard/mcp-config", label: "MCP config", icon: Plug },
   { href: "/docs", label: "Docs", icon: BookOpen },
 ];
@@ -41,6 +45,8 @@ const navItems: Array<{ href: string; label: string; icon: LucideIcon }> = [
  * you find yourself adding a third thing to this branch, that is the smell
  * that put the two defects above in production. */
 const FULL_HEIGHT_ROUTES = new Set(["/dashboard/agent"]);
+
+const RAIL_EXPANDED_KEY = "dtr_rail_expanded";
 
 /** `compact` drops the name next to the avatar, for the icon rail. The menu
  * itself is unchanged — it already carries the name and email, so nothing is
@@ -117,6 +123,30 @@ export default function DashboardLayout({
   children: React.ReactNode;
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
+  // Expanded rail (SCRUM-83). Plain state survives navigation because this
+  // layout stays mounted across dashboard routes; localStorage carries it
+  // across reloads. Collapsed is the SSR-deterministic default — the stored
+  // preference is applied in an effect, so a returning expanded-rail user
+  // sees one collapsed frame on a hard reload rather than a hydration
+  // mismatch.
+  const [railExpanded, setRailExpanded] = useState(false);
+  useEffect(() => {
+    try {
+      if (localStorage.getItem(RAIL_EXPANDED_KEY) === "1") setRailExpanded(true);
+    } catch {
+      // Storage blocked — the toggle still works for the session.
+    }
+  }, []);
+  const toggleRail = useCallback(() => {
+    setRailExpanded((prev) => {
+      try {
+        localStorage.setItem(RAIL_EXPANDED_KEY, prev ? "0" : "1");
+      } catch {
+        // Storage blocked — state alone still carries the session.
+      }
+      return !prev;
+    });
+  }, []);
   const user = useCurrentUser();
   const pathname = usePathname();
   const fullHeight = FULL_HEIGHT_ROUTES.has(pathname);
@@ -278,12 +308,26 @@ export default function DashboardLayout({
           this element simply never moves. Do not add `sticky` back: it would
           be inert on every route and would read as the thing keeping the rail
           in place. */}
+      {/* EXPANDABLE (SCRUM-83): the rail widens to show each item's title and
+          collapses back to icons. The width flips INSTANTLY, no transition,
+          deliberately: this element must stay overflow-visible for the
+          user-menu popup, so an animating width would spill the nowrap
+          labels over `main` for the duration of the tween. Labels stay in
+          the accessibility tree in BOTH states via aria-label; the native
+          `title` tooltip only exists while collapsed (it needs no portal —
+          the browser draws it outside the clip). */}
       <aside
-        className="hidden w-14 shrink-0 flex-col overflow-visible border-r border-border md:flex md:h-full"
+        className={cn(
+          "hidden shrink-0 flex-col overflow-visible border-r border-border md:flex md:h-full",
+          railExpanded ? "w-52" : "w-14"
+        )}
       >
         <Link
           href="/"
-          className="flex h-16 items-center justify-center border-b border-border"
+          className={cn(
+            "flex h-16 items-center border-b border-border",
+            railExpanded ? "gap-3 px-4" : "justify-center"
+          )}
           aria-label="DataToRAG home"
         >
           <Image
@@ -292,9 +336,42 @@ export default function DashboardLayout({
             width={26}
             height={26}
           />
+          {railExpanded && (
+            <span className="whitespace-nowrap font-display text-sm font-bold text-foreground">
+              DataToRAG
+            </span>
+          )}
         </Link>
 
-        <nav className="mt-4 space-y-1 px-2" aria-label="Dashboard">
+        <div className="mt-2 px-2">
+          <button
+            type="button"
+            onClick={toggleRail}
+            aria-expanded={railExpanded}
+            aria-controls="dashboard-rail-nav"
+            aria-label={railExpanded ? "Collapse navigation" : "Expand navigation"}
+            title={railExpanded ? undefined : "Expand navigation"}
+            className={cn(
+              "flex h-10 w-full items-center rounded-lg text-sm text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground",
+              railExpanded ? "justify-start gap-3 px-3" : "justify-center"
+            )}
+          >
+            {railExpanded ? (
+              <PanelLeftClose className="size-4 shrink-0" aria-hidden="true" />
+            ) : (
+              <PanelLeftOpen className="size-4 shrink-0" aria-hidden="true" />
+            )}
+            {railExpanded && (
+              <span className="whitespace-nowrap">Collapse</span>
+            )}
+          </button>
+        </div>
+
+        <nav
+          id="dashboard-rail-nav"
+          className="mt-2 space-y-1 px-2"
+          aria-label="Dashboard"
+        >
           {navItems.map((item) => {
             const active =
               pathname === item.href ||
@@ -306,20 +383,29 @@ export default function DashboardLayout({
                 href={item.href}
                 aria-current={active ? "page" : undefined}
                 aria-label={item.label}
-                title={item.label}
+                title={railExpanded ? undefined : item.label}
                 className={cn(
-                  "flex h-10 items-center justify-center rounded-lg text-sm transition-colors hover:bg-secondary hover:text-foreground",
+                  "flex h-10 items-center rounded-lg text-sm transition-colors hover:bg-secondary hover:text-foreground",
+                  railExpanded ? "justify-start gap-3 px-3" : "justify-center",
                   active ? "bg-secondary text-foreground" : "text-muted-foreground"
                 )}
               >
                 <Icon className="size-4 shrink-0" aria-hidden="true" />
+                {railExpanded && (
+                  <span className="whitespace-nowrap">{item.label}</span>
+                )}
               </Link>
             );
           })}
         </nav>
 
-        <div className="mt-auto flex justify-center border-t border-border px-1 py-3">
-          {user && <UserMenu user={user} compact />}
+        <div
+          className={cn(
+            "mt-auto flex border-t border-border py-3",
+            railExpanded ? "justify-start px-3" : "justify-center px-1"
+          )}
+        >
+          {user && <UserMenu user={user} compact={!railExpanded} />}
         </div>
       </aside>
 
