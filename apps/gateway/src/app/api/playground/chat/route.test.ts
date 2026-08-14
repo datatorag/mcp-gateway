@@ -70,8 +70,9 @@ vi.mock("@/mastra/mcp/client", async (importOriginal) => ({
     { slug: "gws-mcp", containerPort: 1, githubRepoUrl: null },
     { slug: "atlassian-mcp", containerPort: 2, githubRepoUrl: null },
   ],
-  loadUserPluginTokens: async (_db: unknown, userId: string) => ({
-    "gws-mcp": `gws-token-for-${userId}`,
+  loadUserPluginCredentials: async (_db: unknown, userId: string) => ({
+    tokensByServer: { "gws-mcp": `gws-token-for-${userId}` },
+    accountsByServer: { "gws-mcp": `${userId}@example.com` },
   }),
 }));
 
@@ -81,7 +82,11 @@ vi.mock("@mastra/ai-sdk", () => ({
 }));
 
 import { mintRunId } from "@/gateway/playground/run-ownership";
-import { USER_ID_CONTEXT_KEY, userTokenContextKey } from "@/mastra/mcp/client";
+import {
+  USER_ID_CONTEXT_KEY,
+  userAccountContextKey,
+  userTokenContextKey,
+} from "@/mastra/mcp/client";
 import { POST } from "./route";
 
 const USER = "user-1";
@@ -482,6 +487,19 @@ describe("POST /api/playground/chat — what reaches the runtime", () => {
     // user's Google token.
     expect(context.get(userTokenContextKey("gws-mcp"))).toBe(`gws-token-for-${USER}`);
     expect(context.get(userTokenContextKey("atlassian-mcp"))).toBeUndefined();
+    // The account each token was resolved for rides beside it, so metering
+    // stamps the identity the call actually runs as.
+    expect(context.get(userAccountContextKey("gws-mcp"))).toBe(`${USER}@example.com`);
+  });
+
+  it("names the thread on every turn's response, so the client can route a connect back into it", async () => {
+    const response = await POST(post({ messages: USER_TURN, id: "conv-1" }));
+    const threadHeader = response.headers.get("x-playground-thread-id");
+    // The value is the server-derived thread id — opaque to this test, but it
+    // must exist on the FIRST turn of a new conversation, which is exactly
+    // when the client cannot compute it.
+    expect(threadHeader).toBeTruthy();
+    await drain(response);
   });
 
   it("mints a run id for a fresh turn and none for an approval decision", async () => {

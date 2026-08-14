@@ -9,12 +9,16 @@ import { RUN_ID_CONTEXT_KEY } from "@/mastra/llm-usage";
 import {
   buildPluginRequestContext,
   listPluginServers,
-  loadUserPluginTokens,
+  loadUserPluginCredentials,
 } from "@/mastra/mcp/client";
 import {
   deriveThreadId, findApprovalTargets, mintRunId, ownsRunId,
 } from "@/gateway/playground/run-ownership";
-import { RUNS_CAP_HEADER, RUNS_REMAINING_HEADER } from "@/gateway/playground/quota-headers";
+import {
+  RUNS_CAP_HEADER,
+  RUNS_REMAINING_HEADER,
+  THREAD_ID_HEADER,
+} from "@/gateway/playground/quota-headers";
 import { setThreadTitleIfEmpty, userOwnsThread } from "@/gateway/playground/threads";
 import { threadTitle } from "@/gateway/playground/thread-title";
 import {
@@ -288,7 +292,13 @@ export const POST = withRoute(async (userId, request) => {
   // Quota headers ride on the streaming response; an approval leg claims
   // nothing and so reports nothing, leaving the client's notion of the quota
   // untouched rather than resetting it.
-  const quotaHeaders: Record<string, string> = {};
+  //
+  // The thread id rides on EVERY turn, because the first turn of a new
+  // conversation is exactly when the client does not know it — and the inline
+  // Connect control needs it to route the OAuth round trip back here.
+  const quotaHeaders: Record<string, string> = {
+    [THREAD_ID_HEADER]: threadForTurn,
+  };
   /** Runs spent in the period after this turn's claim. Reported on `agent_run`
    * so the allowance is readable from the event stream alone. */
   let runsUsed = 0;
@@ -354,9 +364,17 @@ export const POST = withRoute(async (userId, request) => {
     // plugin's upstream, and one shared key would post every plugin every
     // other plugin's token.
     const servers = await listPluginServers(db);
+    const credentials = await loadUserPluginCredentials(
+      db,
+      userId,
+      servers.map((s) => s.slug)
+    );
     const requestContext = buildPluginRequestContext({
       userId,
-      tokensByServer: await loadUserPluginTokens(db, userId, servers.map((s) => s.slug)),
+      tokensByServer: credentials.tokensByServer,
+      // The account each token was resolved for rides beside it, so tool
+      // metering can stamp the identity the call actually runs as.
+      accountsByServer: credentials.accountsByServer,
     });
 
     // The run this turn belongs to, so each model call can report its tokens

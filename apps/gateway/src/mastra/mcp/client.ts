@@ -12,7 +12,7 @@ import {
   listUserToolRows,
   type PluginServerRow,
 } from "@/gateway/user-tools";
-import { PLUGIN_SERVICE_MAP, getServiceToken } from "@/gateway/service-token";
+import { PLUGIN_SERVICE_MAP, resolveServiceToken } from "@/gateway/service-token";
 import { classifyWrite, flattenToolResult, stripAccountArg } from "@/gateway/playground/tools";
 import { capToolOutput } from "@/gateway/playground/cap";
 import { trackToolCall } from "@/gateway/track";
@@ -70,6 +70,19 @@ export function userTokenContextKey(serverSlug: string): string {
   return `userToken:${serverSlug}`;
 }
 
+/** Request-context key holding the ACCOUNT a plugin's token was resolved for.
+ *
+ * Travels beside the token because they are two halves of one resolution:
+ * the playground always acts as the default account (the token is bound at
+ * session open, and `stripAccountArg` removes any account argument before the
+ * call), so the only truthful `account_email` a usage row can carry is the
+ * one the resolution chose — not whatever the model happened to type. Before
+ * this, the field echoed the caller's argument, so every agent-surface row
+ * carried null on exactly the field metered billing would bill on. */
+export function userAccountContextKey(serverSlug: string): string {
+  return `userAccount:${serverSlug}`;
+}
+
 /** Builds the per-request identity the plugin connections read from.
  *
  * Must be a real RequestContext, not a plain object that looks like one: the
@@ -80,32 +93,50 @@ export function buildPluginRequestContext(opts: {
   /** Plugin slug → that plugin's access token for this user. Slugs with no
    * connected account are simply absent. */
   tokensByServer: Record<string, string>;
+  /** Plugin slug → the account email the token above was resolved for. Only
+   * feeds usage attribution; absent entries stamp null, never a guess. */
+  accountsByServer?: Record<string, string>;
 }): RequestContext {
   const requestContext = new RequestContext();
   requestContext.set(USER_ID_CONTEXT_KEY, opts.userId);
   for (const [slug, token] of Object.entries(opts.tokensByServer)) {
     requestContext.set(userTokenContextKey(slug), token);
   }
+  for (const [slug, account] of Object.entries(opts.accountsByServer ?? {})) {
+    requestContext.set(userAccountContextKey(slug), account);
+  }
   return requestContext;
 }
 
-/** Current access token per plugin slug for one user, refreshing where needed.
- * Plugins the user has not connected are omitted rather than mapped to an
- * empty string, so a missing token is never mistaken for a valid one. */
-export async function loadUserPluginTokens(
+/** Current access token per plugin slug for one user, refreshing where
+ * needed, each with the account it was resolved for. Plugins the user has not
+ * connected are omitted rather than mapped to an empty string, so a missing
+ * token is never mistaken for a valid one. */
+export async function loadUserPluginCredentials(
   db: Database,
   userId: string,
   serverSlugs: string[]
-): Promise<Record<string, string>> {
+): Promise<{
+  tokensByServer: Record<string, string>;
+  accountsByServer: Record<string, string>;
+}> {
   const entries = await Promise.all(
     serverSlugs.map(async (slug) => {
       const service = PLUGIN_SERVICE_MAP[slug];
       if (!service) return null;
-      const token = await getServiceToken(db, userId, service);
-      return token ? ([slug, token] as const) : null;
+      const resolved = await resolveServiceToken(db, userId, service);
+      return resolved ? ([slug, resolved] as const) : null;
     })
   );
-  return Object.fromEntries(entries.filter((e): e is [string, string] => e !== null));
+  const tokensByServer: Record<string, string> = {};
+  const accountsByServer: Record<string, string> = {};
+  for (const entry of entries) {
+    if (!entry) continue;
+    const [slug, resolved] = entry;
+    tokensByServer[slug] = resolved.token;
+    if (resolved.accountEmail) accountsByServer[slug] = resolved.accountEmail;
+  }
+  return { tokensByServer, accountsByServer };
 }
 
 /* -------------------------------------------------------------------------- */
@@ -404,6 +435,11 @@ export type ToolMeter = {
   runId: string | null;
   /** The connector this tool's plugin maps to, or null for an unmapped one. */
   connectorType: string | null;
+  /** The account the plugin session was opened as — the identity the call
+   * actually runs with, since `stripAccountArg` removes any account argument
+   * before dispatch. This, not the argument, is what usage rows stamp. Null
+   * when resolution reported no account (legacy connections, tests). */
+  resolvedAccountEmail: string | null;
 };
 
 export function applyToolPolicy(
@@ -417,10 +453,13 @@ export function applyToolPolicy(
   if (execute) {
     tool.execute = async (input, context) => {
       const startTime = Date.now();
-      // Read BEFORE the strip: `account` is the caller's chosen mailbox and it
-      // is what makes a usage row attributable to one of several connected
-      // accounts. After stripAccountArg it is gone.
-      const accountEmail = accountArgOf(input);
+      // The account STAMPED on the usage row is the one the session actually
+      // runs as (resolved at token time), because `stripAccountArg` below
+      // removes any account argument before the call — an argument-derived
+      // stamp recorded a mailbox the call never touched, or (the common
+      // case) nothing at all. The argument is kept only as a fallback for
+      // meters built without resolution, i.e. injected test doubles.
+      const accountEmail = meter?.resolvedAccountEmail ?? accountArgOf(input);
       try {
         const result = await execute(stripAccountArg(input), context);
         // Serialized ONCE and reused. Sizing and capping both need the
@@ -593,9 +632,17 @@ export async function resolvePluginTools(
   const resolved: ToolsInput = {};
   for (const [serverSlug, serverTools] of Object.entries(toolsets)) {
     // Derived once per server rather than per tool: every tool from one plugin
-    // shares its connector.
+    // shares its connector — and its account, which was resolved alongside the
+    // token this server's session was opened with.
     const connectorType = PLUGIN_SERVICE_MAP[serverSlug] ?? null;
-    const meter = meterBase ? { ...meterBase, connectorType } : undefined;
+    const contextAccount = requestContext?.get(userAccountContextKey(serverSlug));
+    const resolvedAccountEmail =
+      typeof contextAccount === "string" && contextAccount.length > 0
+        ? contextAccount
+        : null;
+    const meter = meterBase
+      ? { ...meterBase, connectorType, resolvedAccountEmail }
+      : undefined;
     for (const [toolName, tool] of Object.entries(serverTools)) {
       const namespacedName = toNamespacedName(serverSlug, toolName);
       if (!allowed.has(namespacedName)) continue;

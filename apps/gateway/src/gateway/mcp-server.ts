@@ -8,7 +8,7 @@ import type { Database } from "@datatorag-mcp/db";
 import { mcpServers, pluginConnections } from "@datatorag-mcp/db";
 import type { ConnectionPool } from "./pool";
 import { NAMESPACE_SEPARATOR } from "./plugin-manager";
-import { PLUGIN_SERVICE_MAP, getServiceToken } from "./service-token";
+import { PLUGIN_SERVICE_MAP, resolveServiceToken } from "./service-token";
 import {
   listUserToolRows,
   buildPluginServerUrl,
@@ -294,18 +294,28 @@ export function createMcpServer(
     const requiredService = PLUGIN_SERVICE_MAP[mcpServer.slug];
     let accountEmail: string | undefined;
     if (requiredService) {
-      accountEmail = args.account as string | undefined;
+      const requestedAccount = args.account as string | undefined;
       delete args.account;
 
-      userToken = await getServiceToken(
+      const resolved = await resolveServiceToken(
         db,
         userId,
         requiredService,
-        accountEmail
+        requestedAccount
       );
+      userToken = resolved?.token ?? null;
+      // The account STAMPED on the usage event is the one the resolution
+      // actually chose, not the caller's argument:
+      // with the argument omitted the gateway still picks the default
+      // account, and discarding that identity left every argument-less call
+      // unattributable — the exact field metered billing would bill on. When
+      // an argument was given, resolution only succeeds on that same account,
+      // so the two agree; the legacy path has no account and reports the
+      // request as made.
+      accountEmail = resolved?.accountEmail ?? requestedAccount;
       if (!userToken) {
-        const msg = accountEmail
-          ? `No connected account found for ${accountEmail}. Please connect it from the dashboard at /dashboard/connections.`
+        const msg = requestedAccount
+          ? `No connected account found for ${requestedAccount}. Please connect it from the dashboard at /dashboard/connections.`
           : `${requiredService} is not connected. Please connect it from the dashboard at /dashboard/connections before using ${serverSlug} tools.`;
         return {
           content: [{ type: "text" as const, text: msg }],

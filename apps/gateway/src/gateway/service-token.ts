@@ -164,17 +164,32 @@ export async function revokeUpstream(
   return revoke(token);
 }
 
+/** A token together with the ACCOUNT it belongs to.
+ *
+ * The account half exists for usage attribution (SCRUM-78): when
+ * the caller names no account, the gateway still resolves one — the default —
+ * and discarding that identity left every agent-surface usage row with a null
+ * `account_email`, which is exactly the field metered billing would bill on.
+ * Whoever resolves the token is the only party that knows which account it
+ * came from, so it says so here. `accountEmail` is null only on the legacy
+ * un-migrated path, where the row genuinely has no account attached. */
+export type ResolvedServiceToken = {
+  token: string;
+  accountEmail: string | null;
+};
+
 /**
- * Get a valid access token for a user's service connection.
+ * Get a valid access token for a user's service connection, together with the
+ * account it was resolved for.
  * Routes through connected_accounts when available, with fallback to direct lookup.
  * Refreshes if expired and refresh token is available.
  */
-export async function getServiceToken(
+export async function resolveServiceToken(
   db: Database,
   userId: string,
   service: string,
   accountEmail?: string
-): Promise<string | null> {
+): Promise<ResolvedServiceToken | null> {
   // Route through connected_accounts via single join
   const accountConditions = [
     eq(connectedAccounts.userId, userId),
@@ -187,31 +202,42 @@ export async function getServiceToken(
     accountConditions.push(eq(connectedAccounts.isDefault, true));
   }
 
-  let [conn] = await db
-    .select({
-      id: serviceConnections.id,
-      accessToken: serviceConnections.accessToken,
-      refreshToken: serviceConnections.refreshToken,
-      tokenExpiresAt: serviceConnections.tokenExpiresAt,
-      service: serviceConnections.service,
-    })
-    .from(connectedAccounts)
-    .innerJoin(
-      serviceConnections,
-      eq(connectedAccounts.serviceConnectionId, serviceConnections.id)
-    )
-    .where(and(...accountConditions))
-    .limit(1);
+  type ConnRow = {
+    id: string;
+    accessToken: string;
+    refreshToken: string | null;
+    tokenExpiresAt: Date | null;
+    /** Null only on the legacy path, where no connected_accounts row exists
+     * and there is genuinely no account identity to report. */
+    accountEmail: string | null;
+  };
 
-  // Fallback: direct lookup for un-migrated rows (no explicit account requested)
-  if (!conn && !accountEmail) {
-    [conn] = await db
+  let conn: ConnRow | undefined = (
+    await db
       .select({
         id: serviceConnections.id,
         accessToken: serviceConnections.accessToken,
         refreshToken: serviceConnections.refreshToken,
         tokenExpiresAt: serviceConnections.tokenExpiresAt,
-        service: serviceConnections.service,
+        accountEmail: connectedAccounts.accountEmail,
+      })
+      .from(connectedAccounts)
+      .innerJoin(
+        serviceConnections,
+        eq(connectedAccounts.serviceConnectionId, serviceConnections.id)
+      )
+      .where(and(...accountConditions))
+      .limit(1)
+  )[0];
+
+  // Fallback: direct lookup for un-migrated rows (no explicit account requested)
+  if (!conn && !accountEmail) {
+    const [legacy] = await db
+      .select({
+        id: serviceConnections.id,
+        accessToken: serviceConnections.accessToken,
+        refreshToken: serviceConnections.refreshToken,
+        tokenExpiresAt: serviceConnections.tokenExpiresAt,
       })
       .from(serviceConnections)
       .where(
@@ -221,22 +247,35 @@ export async function getServiceToken(
         )
       )
       .limit(1);
+    if (legacy) conn = { ...legacy, accountEmail: null };
   }
 
   if (!conn) return null;
+  const resolvedEmail = conn.accountEmail;
 
   const isExpired =
     conn.tokenExpiresAt && conn.tokenExpiresAt.getTime() < Date.now();
 
-  if (!isExpired) return conn.accessToken;
+  if (!isExpired) return { token: conn.accessToken, accountEmail: resolvedEmail };
 
   if (conn.refreshToken) {
     const refreshFn = REFRESH_FN[service];
     if (refreshFn) {
       const newToken = await refreshFn(db, conn.id, conn.refreshToken);
-      if (newToken) return newToken;
+      if (newToken) return { token: newToken, accountEmail: resolvedEmail };
     }
   }
 
   return null;
+}
+
+/** The token alone, for call sites that do not report usage. */
+export async function getServiceToken(
+  db: Database,
+  userId: string,
+  service: string,
+  accountEmail?: string
+): Promise<string | null> {
+  const resolved = await resolveServiceToken(db, userId, service, accountEmail);
+  return resolved?.token ?? null;
 }

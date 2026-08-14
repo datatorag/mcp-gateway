@@ -21,7 +21,17 @@ const { applyToolPolicy } = await import("./client");
  */
 
 const DB = { tag: "db" } as never;
-const METER = { db: DB, userId: "user-1", runId: "run-abc", connectorType: "google-workspace" };
+const METER = {
+  db: DB,
+  userId: "user-1",
+  runId: "run-abc",
+  connectorType: "google-workspace",
+  // The account the plugin session was actually opened as. This, not any
+  // account argument the model types, is what rows must stamp (SCRUM-78):
+  // the argument is stripped before the call, so it names a mailbox the call
+  // never touches.
+  resolvedAccountEmail: "default@example.com",
+};
 
 /** A tool whose execute returns whatever it is told to, and records the input
  * it actually received, so the account-strip can be asserted from the tool's
@@ -44,7 +54,7 @@ describe("agent tool metering", () => {
     const { tool } = toolReturning({ content: [{ type: "text", text: "ok" }] });
     const wrapped = applyToolPolicy("gws-mcp__docs_get", tool, METER);
 
-    await wrapped.execute!({ account: "me@datatorag.com", docId: "d1" } as never, {} as never);
+    await wrapped.execute!({ account: "me@example.com", docId: "d1" } as never, {} as never);
 
     expect(trackToolCall).toHaveBeenCalledTimes(1);
     const [db, props] = trackToolCall.mock.calls[0];
@@ -54,7 +64,9 @@ describe("agent tool metering", () => {
       toolName: "gws-mcp__docs_get",
       // The three fields the stream tap could not see. Null/0 here is the bug.
       connectorType: "google-workspace",
-      accountEmail: "me@datatorag.com",
+      // The RESOLVED account, not the argument: the arg is stripped before
+      // the call, so the session's own account is the only truthful stamp.
+      accountEmail: "default@example.com",
       runId: "run-abc",
       outcome: { source: "agent", thrown: false, isError: false },
     });
@@ -62,17 +74,34 @@ describe("agent tool metering", () => {
     expect(props.responseSizeBytes).toBeGreaterThan(0);
   });
 
-  it("reads the account before stripping it, and the tool never sees it", async () => {
+  it("strips the account arg, and stamps the account the call actually ran as", async () => {
     // Both halves matter: the arg is ours, not the plugin's, so it must not
-    // reach the plugin; and it is the only thing that attributes a row to one
-    // of several connected accounts, so it must not be lost before metering.
+    // reach the plugin; and since the strip means every call runs as the
+    // session's own account, stamping the ARGUMENT would record a mailbox
+    // the call never touched. The row carries the resolved account even when
+    // the model asked for another.
     const { tool, seen } = toolReturning({ ok: true });
     const wrapped = applyToolPolicy("gws-mcp__gmail_read", tool, METER);
 
-    await wrapped.execute!({ account: "work@datatorag.com", id: "m1" } as never, {} as never);
+    await wrapped.execute!({ account: "work@example.com", id: "m1" } as never, {} as never);
 
     expect(seen[0]).toEqual({ id: "m1" });
-    expect(trackToolCall.mock.calls[0][1].accountEmail).toBe("work@datatorag.com");
+    expect(trackToolCall.mock.calls[0][1].accountEmail).toBe("default@example.com");
+  });
+
+  it("falls back to the argument only when resolution reported no account", async () => {
+    // A meter with no resolved account (legacy connections, injected test
+    // doubles) keeps the old argument-derived stamp rather than losing the
+    // only attribution it has.
+    const { tool } = toolReturning({ ok: true });
+    const wrapped = applyToolPolicy("gws-mcp__gmail_read", tool, {
+      ...METER,
+      resolvedAccountEmail: null,
+    });
+
+    await wrapped.execute!({ account: "work@example.com", id: "m1" } as never, {} as never);
+
+    expect(trackToolCall.mock.calls[0][1].accountEmail).toBe("work@example.com");
   });
 
   it("separates a tool that failed from one that worked", async () => {

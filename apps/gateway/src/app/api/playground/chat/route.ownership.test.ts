@@ -65,7 +65,10 @@ vi.mock("@/gateway/track", () => ({
 vi.mock("@/mastra/mcp/client", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/mastra/mcp/client")>()),
   listPluginServers: async () => [{ slug: "gws-mcp", containerPort: 1, githubRepoUrl: null }],
-  loadUserPluginTokens: async () => ({ "gws-mcp": "test-token" }),
+  loadUserPluginCredentials: async () => ({
+    tokensByServer: { "gws-mcp": "test-token" },
+    accountsByServer: {},
+  }),
 }));
 
 const getMastra = vi.fn();
