@@ -29,7 +29,7 @@ import {
 } from "@/components/ai-elements/prompt-input";
 import { Suggestion, Suggestions } from "@/components/ai-elements/suggestion";
 import Link from "next/link";
-import { ConnectPart } from "./agent-parts";
+import { ConnectPart, ConnectReturnContext } from "./agent-parts";
 import { SERVICES } from "./connections/services";
 import { buttonVariants } from "@/components/ui/button";
 import {
@@ -47,7 +47,11 @@ import {
   PANEL_HEADING,
   PANEL_STANDFIRST,
 } from "./agent-composer-copy";
-import { RUNS_CAP_HEADER, RUNS_REMAINING_HEADER } from "@/gateway/playground/quota-headers";
+import {
+  RUNS_CAP_HEADER,
+  RUNS_REMAINING_HEADER,
+  THREAD_ID_HEADER,
+} from "@/gateway/playground/quota-headers";
 import {
   errorBubbleText,
   GENERIC_ERROR,
@@ -231,6 +235,16 @@ export const Playground = forwardRef<PlaygroundHandle, PlaygroundProps>(
      * and empty forever if it returns nothing usable — a generic suggestion
      * dressed as a personal one is worse than none. */
     const [ownFilePrompts, setOwnFilePrompts] = useState<string[]>([]);
+    /** The stored thread this conversation lives in, as the server named it
+     * on the last turn's response (SCRUM-78). Starts as the resumed thread's
+     * id; a NEW conversation learns it from the first response, because the
+     * server derives it and the client cannot. It feeds ONLY the connect
+     * control's return path — it must never feed the component key or the
+     * transport, which stay on the `threadId` prop so the conversation does
+     * not remount mid-stream. */
+    const [serverThreadId, setServerThreadId] = useState<string | null>(
+      threadId
+    );
 
     /** The user's own files when the read found any, the generic examples
      * otherwise. Derived once so the copy and the list cannot disagree about
@@ -300,6 +314,10 @@ export const Playground = forwardRef<PlaygroundHandle, PlaygroundProps>(
             if (remaining !== null && cap !== null && Number(remaining) <= 0) {
               setCapState({ cap: Number(cap) });
             }
+            // Headers are available the moment the response starts, so the
+            // thread is known before the connect control could ever stream in.
+            const turnThread = res.headers.get(THREAD_ID_HEADER);
+            if (turnThread) setServerThreadId(turnThread);
             return res;
           },
           // A resumed conversation names the thread it belongs to, so the
@@ -312,10 +330,17 @@ export const Playground = forwardRef<PlaygroundHandle, PlaygroundProps>(
           // the same messages array with one tool part moved to
           // `approval-responded`, which the transport sends by default and the
           // route recognises on arrival.
+          //
+          // THE RETURNED `body` IS THE WHOLE REQUEST BODY, not a patch. The
+          // `body` argument is only the transport's extra-body option, so the
+          // default fields (`id`, `messages`, `trigger`, `messageId`) must be
+          // restated here or they are silently dropped. An earlier version
+          // spread them into the returned CONFIG instead of the body, which
+          // sent `{threadId}` alone and 400'd every message posted into a
+          // resumed thread — the exact turn the connect round trip ends on.
           prepareSendMessagesRequest: threadId
-            ? ({ body, ...rest }) => ({
-                ...rest,
-                body: { ...body, threadId },
+            ? ({ id, messages, trigger, messageId, body }) => ({
+                body: { id, messages, trigger, messageId, ...body, threadId },
               })
             : undefined,
         }),
@@ -532,6 +557,21 @@ export const Playground = forwardRef<PlaygroundHandle, PlaygroundProps>(
       void runExclusive(() => regenerate());
     }, [streaming, awaitingConfirm, runExclusive, regenerate]);
 
+    /** Where a connect started from this conversation should land on return.
+     * With a known thread: back into that exact conversation, which the
+     * agent-client resumes and continues. Before the first turn names one
+     * (the empty state): the Agent page itself, so connecting still ends in
+     * the agent rather than on the connections page. Memoized so the context
+     * does not re-render every message row per streamed token. */
+    const connectReturn = useMemo(
+      () => ({
+        nextPath: serverThreadId
+          ? `/dashboard/agent?thread=${encodeURIComponent(serverThreadId)}`
+          : "/dashboard/agent",
+      }),
+      [serverThreadId]
+    );
+
     // 403 playground_disabled — hide the section entirely rather than show a
     // dead chat box.
     if (hidden) return null;
@@ -543,6 +583,7 @@ export const Playground = forwardRef<PlaygroundHandle, PlaygroundProps>(
         : COMPOSER_PLACEHOLDER_UNCONNECTED;
 
     const chat = (
+      <ConnectReturnContext.Provider value={connectReturn}>
       <div className={style.root}>
           <Conversation className="min-h-0">
             {/* gap-0: the message rows carry their own vertical rhythm now
@@ -731,6 +772,7 @@ export const Playground = forwardRef<PlaygroundHandle, PlaygroundProps>(
             )}
           </div>
       </div>
+      </ConnectReturnContext.Provider>
     );
 
     // The page variant returns the chat and nothing else: no heading, no
