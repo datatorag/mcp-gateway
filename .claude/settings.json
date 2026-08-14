@@ -12,6 +12,16 @@
             "command": "node \"$CLAUDE_PROJECT_DIR/scripts/hooks/pattern-check-on-push.mjs\""
           }
         ]
+      },
+      {
+        "matcher": "mcp__plugin_neon_neon__.*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"$CLAUDE_PROJECT_DIR/scripts/hooks/db-guard.py\"",
+            "statusMessage": "DB guard: classifying SQL"
+          }
+        ]
       }
     ]
   }
