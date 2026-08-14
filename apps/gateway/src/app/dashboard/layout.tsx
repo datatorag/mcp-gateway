@@ -343,33 +343,9 @@ export default function DashboardLayout({
           )}
         </Link>
 
-        <div className="mt-2 px-2">
-          <button
-            type="button"
-            onClick={toggleRail}
-            aria-expanded={railExpanded}
-            aria-controls="dashboard-rail-nav"
-            aria-label={railExpanded ? "Collapse navigation" : "Expand navigation"}
-            title={railExpanded ? undefined : "Expand navigation"}
-            className={cn(
-              "flex h-10 w-full items-center rounded-lg text-sm text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground",
-              railExpanded ? "justify-start gap-3 px-3" : "justify-center"
-            )}
-          >
-            {railExpanded ? (
-              <PanelLeftClose className="size-4 shrink-0" aria-hidden="true" />
-            ) : (
-              <PanelLeftOpen className="size-4 shrink-0" aria-hidden="true" />
-            )}
-            {railExpanded && (
-              <span className="whitespace-nowrap">Collapse</span>
-            )}
-          </button>
-        </div>
-
         <nav
           id="dashboard-rail-nav"
-          className="mt-2 space-y-1 px-2"
+          className="mt-4 space-y-1 px-2"
           aria-label="Dashboard"
         >
           {navItems.map((item) => {
@@ -399,13 +375,44 @@ export default function DashboardLayout({
           })}
         </nav>
 
-        <div
-          className={cn(
-            "mt-auto flex border-t border-border py-3",
-            railExpanded ? "justify-start px-3" : "justify-center px-1"
-          )}
-        >
-          {user && <UserMenu user={user} compact={!railExpanded} />}
+        {/* Footer stack (SCRUM-90): the collapse toggle sits at the BOTTOM,
+            directly above the pinned user control — Manuel's ruled order is
+            logo → nav → toggle → profile. `mt-auto` moved from the user row
+            to this wrapper so both pin together; the below-the-fold risk of
+            a taller footer is checked behaviourally (both controls inside
+            the viewport, marketing entry path, both rail states). */}
+        <div className="mt-auto">
+          <div className="px-2 pb-2">
+            <button
+              type="button"
+              onClick={toggleRail}
+              aria-expanded={railExpanded}
+              aria-controls="dashboard-rail-nav"
+              aria-label={railExpanded ? "Collapse navigation" : "Expand navigation"}
+              title={railExpanded ? undefined : "Expand navigation"}
+              className={cn(
+                "flex h-10 w-full items-center rounded-lg text-sm text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground",
+                railExpanded ? "justify-start gap-3 px-3" : "justify-center"
+              )}
+            >
+              {railExpanded ? (
+                <PanelLeftClose className="size-4 shrink-0" aria-hidden="true" />
+              ) : (
+                <PanelLeftOpen className="size-4 shrink-0" aria-hidden="true" />
+              )}
+              {railExpanded && (
+                <span className="whitespace-nowrap">Collapse</span>
+              )}
+            </button>
+          </div>
+          <div
+            className={cn(
+              "flex border-t border-border py-3",
+              railExpanded ? "justify-start px-3" : "justify-center px-1"
+            )}
+          >
+            {user && <UserMenu user={user} compact={!railExpanded} />}
+          </div>
         </div>
       </aside>
 

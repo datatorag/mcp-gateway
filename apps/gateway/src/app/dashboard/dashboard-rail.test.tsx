@@ -149,4 +149,22 @@ describe("dashboard rail", () => {
     expect(toggle().tagName).toBe("BUTTON");
     expect(toggle().getAttribute("type")).toBe("button");
   });
+
+  it("the toggle sits BELOW the nav and ABOVE the pinned user control (SCRUM-90)", () => {
+    // Manuel's ruled order: logo -> nav -> toggle -> user profile. DOM order
+    // is what screen readers and tab order follow, so it is the thing to pin.
+    const nav = rail().querySelector("nav")!;
+    const userButton = Array.from(
+      rail().querySelectorAll("button")
+    ).find((b) => !b.hasAttribute("aria-expanded"))!;
+    expect(
+      nav.compareDocumentPosition(toggle()) & Node.DOCUMENT_POSITION_FOLLOWING,
+      "toggle must come after the nav"
+    ).toBeTruthy();
+    expect(
+      toggle().compareDocumentPosition(userButton) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+      "user control must come after the toggle"
+    ).toBeTruthy();
+  });
 });
