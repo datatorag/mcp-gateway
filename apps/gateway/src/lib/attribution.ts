@@ -72,14 +72,39 @@ function normalize(raw: unknown): string | null {
   return trimmed.slice(0, MAX_VALUE_LENGTH);
 }
 
+export interface ParseAttributionOptions {
+  /**
+   * Host serving the current request (e.g. express `req.hostname`). When
+   * known, a referring domain on our own site is treated exactly like the
+   * `$direct` sentinel: the analytics SDK stamps its "initial" referrer at
+   * first boot in a storage context, which can happen on an interior page
+   * after an internal navigation — and an internal navigation must never
+   * establish acquisition (SCRUM-87). The filter lives here, not in the
+   * client snapshot, because this parse is the single choke point every
+   * producer goes through and a modified or stale client cannot bypass it.
+   */
+  ownHost?: string | null;
+}
+
+/** Same site when the hosts are equal or one is a subdomain of the other
+ *  (`www.datatorag.com` vs `datatorag.com`, either way around). */
+function isOwnDomain(domain: string, ownHost: string): boolean {
+  const a = domain.toLowerCase().replace(/\.$/, "");
+  const b = ownHost.toLowerCase().replace(/:\d+$/, "").replace(/\.$/, "");
+  if (!a || !b) return false;
+  return a === b || a.endsWith(`.${b}`) || b.endsWith(`.${a}`);
+}
+
 /**
  * Read an attribution snapshot out of any string-keyed bag — an express
  * `req.query`, a parsed cookie payload, a `URLSearchParams`. Absent, blank,
  * non-string and sentinel values all normalise to null, so a caller never
- * has to distinguish "missing" from "junk".
+ * has to distinguish "missing" from "junk". A same-origin referring domain
+ * normalises to null too, when the caller can name its own host.
  */
 export function parseAttribution(
-  source: Record<string, unknown> | URLSearchParams | null | undefined
+  source: Record<string, unknown> | URLSearchParams | null | undefined,
+  opts?: ParseAttributionOptions
 ): Attribution {
   if (!source) return { ...EMPTY };
   const get =
@@ -89,6 +114,13 @@ export function parseAttribution(
   const out = { ...EMPTY };
   for (const field of ATTRIBUTION_FIELDS) {
     out[field] = normalize(get(ATTRIBUTION_PARAMS[field]));
+  }
+  if (
+    out.referringDomain &&
+    opts?.ownHost &&
+    isOwnDomain(out.referringDomain, opts.ownHost)
+  ) {
+    out.referringDomain = null;
   }
   return out;
 }

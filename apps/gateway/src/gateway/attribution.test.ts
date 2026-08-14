@@ -15,8 +15,12 @@ function fakeRes() {
   } as unknown as Response & { cookie: ReturnType<typeof vi.fn>; clearCookie: ReturnType<typeof vi.fn> };
 }
 
-function fakeReq(parts: { query?: unknown; cookies?: unknown }) {
-  return { query: parts.query ?? {}, cookies: parts.cookies ?? {} } as unknown as Request;
+function fakeReq(parts: { query?: unknown; cookies?: unknown; hostname?: string }) {
+  return {
+    query: parts.query ?? {},
+    cookies: parts.cookies ?? {},
+    hostname: parts.hostname,
+  } as unknown as Request;
 }
 
 const SIGNUP_QUERY = {
@@ -57,6 +61,19 @@ describe("stashAttribution", () => {
     stashAttribution(fakeReq({ query: { code: "abc" } }), res, true);
     expect(res.cookie).not.toHaveBeenCalled();
   });
+
+  it("does not let a self-referral count as a usable signal", () => {
+    const res = fakeRes();
+    stashAttribution(
+      fakeReq({
+        query: { a_ref_domain: "datatorag.com" },
+        hostname: "datatorag.com",
+      }),
+      res,
+      true
+    );
+    expect(res.cookie).not.toHaveBeenCalled();
+  });
 });
 
 describe("takeAttribution", () => {
@@ -94,6 +111,23 @@ describe("takeAttribution", () => {
     expect(
       takeAttribution(fakeReq({ cookies: { dtr_attr: "{}" } }), fakeRes())
     ).toBeNull();
+  });
+
+  it("drops a same-origin referrer on the way out, even from an old cookie", () => {
+    const payload = JSON.stringify({
+      a_sid: "s1",
+      a_ref_domain: "datatorag.com",
+      a_entry_url: "https://datatorag.com/auth/login",
+    });
+    const taken = takeAttribution(
+      fakeReq({
+        cookies: { dtr_attr: payload },
+        hostname: "datatorag.com",
+      }),
+      fakeRes()
+    );
+    expect(taken?.sessionId).toBe("s1");
+    expect(taken?.referringDomain).toBeNull();
   });
 
   it("re-normalises the cookie instead of trusting what came back", () => {

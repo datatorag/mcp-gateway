@@ -32,7 +32,9 @@ const COOKIE_TTL_MS = 15 * 60 * 1000;
  * doesn't get a pointless empty cookie.
  */
 export function stashAttribution(req: Request, res: Response, secure: boolean): void {
-  const attribution = parseAttribution(req.query as Record<string, unknown>);
+  const attribution = parseAttribution(req.query as Record<string, unknown>, {
+    ownHost: req.hostname,
+  });
   if (isEmptyAttribution(attribution)) return;
   // Stored under the wire names so reading it back is the same parse as a
   // fresh query string — one mapping, not two that can drift.
@@ -60,9 +62,12 @@ export function takeAttribution(req: Request, res: Response): Attribution | null
     const parsed: unknown = JSON.parse(raw);
     if (!parsed || typeof parsed !== "object") return null;
     // Re-normalise rather than trusting the cookie: it round-tripped through
-    // the client, so it gets the same truncation and sentinel handling as a
-    // fresh query string.
-    const attribution = parseAttribution(parsed as Record<string, unknown>);
+    // the client, so it gets the same truncation, sentinel and same-origin
+    // handling as a fresh query string (covers cookies stashed before the
+    // same-origin filter existed).
+    const attribution = parseAttribution(parsed as Record<string, unknown>, {
+      ownHost: req.hostname,
+    });
     return isEmptyAttribution(attribution) ? null : attribution;
   } catch {
     return null;

@@ -45,6 +45,58 @@ describe("parseAttribution", () => {
     expect(deriveChannel(a)).toBe("Direct");
   });
 
+  it("treats a same-origin referring domain like the no-referrer sentinel", () => {
+    const a = parseAttribution(
+      { a_ref_domain: "datatorag.com", a_sid: "s1" },
+      { ownHost: "datatorag.com" }
+    );
+    expect(a.referringDomain).toBeNull();
+    // An internal navigation must establish no channel — without the filter
+    // this reads "Referral", a confident lie about our own domain.
+    expect(deriveChannel(a)).toBe("Direct");
+  });
+
+  it("matches subdomain variants of our own host in both directions", () => {
+    expect(
+      parseAttribution(
+        { a_ref_domain: "www.datatorag.com" },
+        { ownHost: "datatorag.com" }
+      ).referringDomain
+    ).toBeNull();
+    expect(
+      parseAttribution(
+        { a_ref_domain: "datatorag.com" },
+        { ownHost: "www.datatorag.com" }
+      ).referringDomain
+    ).toBeNull();
+  });
+
+  it("keeps a cross-origin referrer intact when our own host is known", () => {
+    const a = parseAttribution(
+      { a_ref_domain: "someblog.dev" },
+      { ownHost: "datatorag.com" }
+    );
+    expect(a.referringDomain).toBe("someblog.dev");
+    expect(deriveChannel(a)).toBe("Referral");
+    // A lookalike suffix is not our domain.
+    expect(
+      parseAttribution(
+        { a_ref_domain: "evil-datatorag.com" },
+        { ownHost: "datatorag.com" }
+      ).referringDomain
+    ).toBe("evil-datatorag.com");
+  });
+
+  it("leaves the referrer alone when the caller cannot name its own host", () => {
+    expect(
+      parseAttribution({ a_ref_domain: "datatorag.com" }).referringDomain
+    ).toBe("datatorag.com");
+    expect(
+      parseAttribution({ a_ref_domain: "datatorag.com" }, { ownHost: null })
+        .referringDomain
+    ).toBe("datatorag.com");
+  });
+
   it("normalises blanks, whitespace and non-strings to null", () => {
     const a = parseAttribution({
       a_sid: "   ",
