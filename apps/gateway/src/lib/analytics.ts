@@ -23,6 +23,12 @@ export const EVENTS = {
   MCP_TOOLS_LISTED: "mcp_tools_listed",
   DOCS_VIEWED: "docs_viewed",
   DOCS_CTA_CLICKED: "docs_cta_clicked",
+  /** A pricing-page CTA click. `cta` says which ("free" | "pro"), and for
+   * "pro" the `interval` property carries the selected billing interval. A
+   * click is the start of the funnel, not a subscription: the authoritative
+   * "did they subscribe" signal is `users.plan`, written only by the Stripe
+   * webhook. */
+  PRICING_CTA_CLICKED: "pricing_cta_clicked",
   OAUTH_REFRESH_SUCCEEDED: "oauth_refresh_succeeded",
   OAUTH_REFRESH_REPLAY: "oauth_refresh_replay",
   OAUTH_REFRESH_EXPIRED: "oauth_refresh_expired",

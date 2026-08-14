@@ -4,24 +4,40 @@ import { eq, sql } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { mcpServers, tools } from "@datatorag-mcp/db";
 import { Navbar } from "@/components/navbar";
+import {
+  FREE_MONTHLY_CAP,
+  PRO_MONTHLY_INCLUDED,
+} from "@/gateway/billing/plans";
+import {
+  FreeCta,
+  PricingConversionListener,
+  ProCheckout,
+} from "./pricing-ctas";
 
 export const dynamic = "force-dynamic";
 
+// Call allowances render from the same constants enforcement reads
+// (billing/plans.ts), so the page cannot say one number while the gateway
+// enforces another. The dollar amounts live in pricing-ctas.tsx next to the
+// checkout that charges them.
+const FREE_CALLS = FREE_MONTHLY_CAP.toLocaleString("en-US");
+const PRO_CALLS = PRO_MONTHLY_INCLUDED.toLocaleString("en-US");
+
+const description = `Free tier with ${FREE_CALLS} tool calls a month, no card required. Pro is $20 a month or $200 a year with ${PRO_CALLS} calls included. Every tier gets all connectors, multi-account, and the approval gate on writes.`;
+
 export const metadata: Metadata = {
   title: "Pricing | DataToRAG",
-  description:
-    "Every tier gets the full gateway: all connectors, multi-account, and the approval gate on writes. We're setting prices with our early customers — talk to us and we'll figure out where you fit.",
+  description,
   alternates: { canonical: "https://datatorag.com/pricing" },
   openGraph: {
     title: "Pricing | DataToRAG",
-    description:
-      "Every tier gets the full gateway: all connectors, multi-account, and the approval gate on writes. We're setting prices with our early customers — talk to us and we'll figure out where you fit.",
+    description,
     type: "website",
     url: "https://datatorag.com/pricing",
   },
 };
 
-// All pricing CTAs land on the contact form tagged as pricing-originated
+// All quote-path CTAs land on the contact form tagged as pricing-originated
 // (?from=pricing → utm_source "pricing_page" on the lead + analytics event),
 // so these conversations stay separable from ad-driven form fills.
 const CONTACT_HREF = "/contact?from=pricing";
@@ -44,7 +60,9 @@ interface Tier {
   name: string;
   blurb: string;
   features: string[];
-  note?: string;
+  /** Static price line; Pro renders its own inside the checkout component. */
+  price?: { amount: string; per?: string };
+  cta: "free" | "checkout" | "contact";
   highlighted?: boolean;
 }
 
@@ -56,28 +74,32 @@ const tiers: Tier[] = [
       "Every connector and every tool",
       "Multi-account: work and personal side by side",
       "Approval gate on every write",
-      "Monthly usage allowance",
+      `${FREE_CALLS} tool calls a month, then a hard stop, never a surprise bill`,
     ],
+    price: { amount: "$0" },
+    cta: "free",
   },
   {
     name: "Pro",
     blurb: "For people who run real work through their agent every day.",
     features: [
       "Everything in Free",
-      "Higher usage ceiling",
-      "Starts with a full-featured, time-boxed trial",
+      `${PRO_CALLS} tool calls a month included`,
+      "No feature gates, just a bigger allowance",
     ],
-    note: "Free trial included",
+    cta: "checkout",
     highlighted: true,
   },
   {
-    name: "Scale",
-    blurb: "For teams and heavy automation, priced by what you actually use.",
+    name: "Enterprise",
+    blurb: "For teams committing to volume. Quoted directly, by a person.",
     features: [
       "Everything in Pro",
-      "Usage-based beyond included volume",
+      "Committed volume at a negotiated rate",
       "Hosted by us, or self-host the open-source gateway",
     ],
+    price: { amount: "Custom" },
+    cta: "contact",
   },
 ];
 
@@ -87,6 +109,7 @@ export default async function PricingPage() {
   return (
     <>
       <Navbar />
+      <PricingConversionListener />
       <main>
         <div className="mx-auto max-w-6xl px-6 pb-16 pt-32 sm:pt-36">
           <div className="mx-auto max-w-2xl text-center">
@@ -97,10 +120,8 @@ export default async function PricingPage() {
               Every tier gets the full gateway
             </h1>
             <p className="mt-5 text-base leading-relaxed text-muted-foreground">
-              We&apos;re setting prices with our early customers instead of
-              guessing at a number and walking it back later. The tiers below
-              are the shape of what you&apos;d pay for. Tell us what
-              you&apos;re running and we&apos;ll tell you where you fit.
+              Free to start, no card required. One flat price when you outgrow
+              the free allowance, and a straight quote for committed volume.
             </p>
           </div>
 
@@ -114,11 +135,6 @@ export default async function PricingPage() {
                     : "border-border bg-background"
                 }`}
               >
-                {tier.note && (
-                  <span className="absolute -top-3 left-6 rounded-full border border-primary/40 bg-background px-3 py-1 text-xs font-medium text-primary">
-                    {tier.note}
-                  </span>
-                )}
                 <h2 className="font-display text-xl font-semibold text-foreground">
                   {tier.name}
                 </h2>
@@ -133,12 +149,27 @@ export default async function PricingPage() {
                     </li>
                   ))}
                 </ul>
-                <Link
-                  href={CONTACT_HREF}
-                  className={tier.highlighted ? ctaPrimary : ctaSecondary}
-                >
-                  Talk to us
-                </Link>
+                {tier.price && (
+                  <div className="mt-6">
+                    <span className="font-display text-3xl font-bold text-foreground">
+                      {tier.price.amount}
+                    </span>
+                    {tier.price.per && (
+                      <span className="ml-1 text-sm text-muted-foreground">
+                        {tier.price.per}
+                      </span>
+                    )}
+                  </div>
+                )}
+                {tier.cta === "checkout" ? (
+                  <ProCheckout className={ctaPrimary} />
+                ) : tier.cta === "free" ? (
+                  <FreeCta className={ctaSecondary} />
+                ) : (
+                  <Link href={CONTACT_HREF} className={ctaSecondary}>
+                    Talk to us
+                  </Link>
+                )}
               </div>
             ))}
           </div>
@@ -168,20 +199,17 @@ export default async function PricingPage() {
 
           <div className="mx-auto mt-14 max-w-2xl text-center">
             <h2 className="font-display text-2xl font-bold text-foreground">
-              Why no numbers yet?
+              Not sure where you fit?
             </h2>
             <p className="mt-4 text-base leading-relaxed text-muted-foreground">
-              Because we&apos;d rather quote you a price we can stand behind
-              than publish one we&apos;d have to change. Early conversations
-              are literally how these tiers get their numbers. Ask us, and
-              you&apos;ll get a straight answer for your usage, not a sales
-              funnel.
+              Tell us what you&apos;re running and you&apos;ll get a straight
+              answer for your usage, not a sales funnel.
             </p>
             <Link
               href={CONTACT_HREF}
               className="mt-8 inline-block rounded-[var(--radius)] bg-primary px-8 py-3 text-sm font-medium text-primary-foreground transition-all hover:bg-primary/90"
             >
-              Ask about pricing
+              Talk to us
             </Link>
           </div>
         </div>

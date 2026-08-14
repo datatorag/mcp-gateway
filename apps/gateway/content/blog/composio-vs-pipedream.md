@@ -2,8 +2,8 @@
 title: "Composio vs Pipedream Connect: Same Pitch, Different Plumbing"
 excerpt: "Both sell developers a way to wire their users' apps into an agent product. Composio leans on per-user MCP URLs, Pipedream on external user IDs and Connect Links. Here's how they differ, and the question to ask before you pick either."
 date: "2026-07-23"
-updated: "2026-08-12"
-updatedNote: "Two corrections. The tool count is gone rather than restated, since every figure we publish eventually rots. And the claim that there is no per-call meter no longer holds: tiers now carry a monthly usage allowance and the Scale tier prices usage beyond the included volume, so the honest contrast with prepaid credits is that there is nothing to buy up front, not that nothing is counted."
+updated: "2026-08-14"
+updatedNote: "Corrected as pricing firmed up. The tool count is gone rather than restated, since every figure we publish eventually rots. The claim that there is no per-call meter no longer holds: tiers carry a monthly allowance of tool calls, so the honest contrast with prepaid credits is that there is nothing to buy up front, not that nothing is counted. And the pricing page now carries published numbers, so this post points there instead of describing tiers that have since been renamed."
 author: "Manuel Yang"
 category: "Comparison"
 tags: ["composio", "pipedream", "mcp", "comparison", "ai-agents"]
@@ -58,7 +58,7 @@ What's behind the endpoint is the part I'd stack against either platform's Googl
 
 Then the parts that are hard to bolt on later. Multi-account: a work Gmail, a personal one, and a shared inbox behind one endpoint, addressable in a single prompt. Pass-through architecture: requests go to Google on your behalf and results come straight back, so there's no copy of your data on our servers to leak. An MIT-licensed core, so self-hosting on Docker and Postgres is a clone, not an enterprise contract. And on the Google-specific security bar, we passed CASA Tier 2 with zero findings, and Google verified the app in June 2026, which is why you see a normal consent screen instead of an "unverified app" warning.
 
-There's no prepaid credit pack to model or top up. Tiers carry a monthly usage allowance, with usage-based pricing beyond the included volume on the Scale tier, so a chatty Claude session draws on an allowance rather than burning credits you bought in advance. The [pricing page](/pricing) carries the current shape.
+There's no prepaid credit pack to model or top up. Every tier includes a monthly allowance of tool calls, so a chatty Claude session draws on an allowance rather than burning credits you bought in advance. The [pricing page](/pricing) carries the current numbers.
 
 ## How I'd choose
 
