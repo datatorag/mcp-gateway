@@ -1,7 +1,23 @@
 import Image from "next/image";
 import { CasaBadge } from "@/components/casa-badge";
+import { resolveNextPath } from "@/gateway/post-login-destination";
 
-export default function LoginPage() {
+/** The middle link of the `next` chain (SCRUM-71): proxy.ts puts the
+ * requested route on this page's URL, and this href is the only thing that
+ * carries it onward to /auth/google — a static href here is where the value
+ * used to silently die. Validated before embedding so junk never propagates,
+ * and validated again at the redirect itself. */
+export default async function LoginPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ next?: string }>;
+}) {
+  const { next } = await searchParams;
+  const validNext = resolveNextPath(next);
+  const googleHref =
+    validNext !== null
+      ? `/auth/google?next=${encodeURIComponent(validNext)}`
+      : "/auth/google";
   return (
     <div className="flex min-h-screen items-center justify-center bg-background px-4">
       <div className="animate-fade-in-up w-full max-w-sm">
@@ -24,7 +40,7 @@ export default function LoginPage() {
 
           <div className="mt-8">
             <a
-              href="/auth/google"
+              href={googleHref}
               className="flex w-full items-center justify-center gap-3 rounded-[var(--radius)] border border-border bg-background px-4 py-3 text-sm font-medium text-foreground transition-all hover:bg-secondary"
             >
               <svg className="h-5 w-5" viewBox="0 0 24 24">

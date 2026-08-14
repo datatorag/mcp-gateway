@@ -18,8 +18,19 @@ import {
 } from "./track";
 import { sendWelcomeEmail } from "./lifecycle";
 import { notifySignup } from "./signup-alert";
-import { postLoginDestination } from "./post-login-destination";
+import {
+  postLoginDestination,
+  resolveNextPath,
+} from "./post-login-destination";
 import { getEnv } from "@datatorag-mcp/config";
+
+/** Where the requested route (`?next=` on the login URL) survives the trip
+ * through Google's consent screen, which loses the query string — the same
+ * mechanism attribution already uses. httpOnly, short-lived, and holding
+ * only an already-validated same-origin path; the callback validates AGAIN
+ * on the way out (inside postLoginDestination), because the redirect is the
+ * moment an open redirect becomes real. */
+const NEXT_COOKIE = "dtr_next";
 
 const GWS_SCOPES = [
   "openid",
@@ -65,6 +76,20 @@ export function createAuthRouter(
     // click time; park them where the callback can read them, since the trip
     // through Google's consent screen loses the query string.
     stashAttribution(req, res, cookiesAreSecure);
+
+    // Same parking for the requested route (SCRUM-71). Validated BEFORE
+    // stashing — an off-origin value never even reaches the cookie jar — and
+    // rejected values simply fall back to the normal destination table.
+    const next = resolveNextPath(req.query.next);
+    if (next !== null) {
+      res.cookie(NEXT_COOKIE, next, {
+        httpOnly: true,
+        secure: cookiesAreSecure,
+        sameSite: "lax",
+        path: "/",
+        maxAge: OAUTH_STATE_TTL_MS,
+      });
+    }
 
     const googleAuthUrl = new URL(
       "https://accounts.google.com/o/oauth2/v2/auth"
@@ -212,14 +237,20 @@ export function createAuthRouter(
     // Which arm carries which param is the load-bearing part - the table and
     // the reasoning live with postLoginDestination.
     //
-    // The `next` parameter proxy.ts sets on the login URL is still not honoured
-    // here. Carrying a destination through the OAuth state needs same-origin
-    // validation on the way out, and done casually it is an open redirect -
-    // more so now that a login has a fixed destination worth overriding.
+    // The requested route (`?next=` on the login URL, parked in a cookie at
+    // /auth/google) is honoured here — SCRUM-71. The cookie value is treated
+    // as untrusted even though we validated it before stashing:
+    // postLoginDestination validates it again internally, and rejects to the
+    // table below rather than sanitising, because an unvalidated post-login
+    // redirect is a phishing primitive (the victim authenticates against OUR
+    // real domain and lands on the attacker's).
+    const requestedPath = req.cookies?.[NEXT_COOKIE];
+    res.clearCookie(NEXT_COOKIE, { path: "/" });
     res.redirect(
       postLoginDestination({
         agentDefaultView: getEnv().AGENT_DEFAULT_VIEW === "on",
         isNewUser,
+        requestedPath,
       })
     );
   });

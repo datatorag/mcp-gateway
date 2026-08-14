@@ -31,12 +31,74 @@ export function postLoginDestination(opts: {
   /** `AGENT_DEFAULT_VIEW === "on"`. */
   agentDefaultView: boolean;
   isNewUser: boolean;
+  /** The RAW `next` value carried through the login flow (SCRUM-71) — the
+   * route the user asked for before being bounced to login. Untrusted:
+   * validated HERE, inside the only function that produces post-login
+   * redirects, so no caller can forget the validation and hand an attacker a
+   * post-login open redirect. Rejected or absent → the table below, exactly
+   * as before; `next` is a case in FRONT of the table, not a change to it. */
+  requestedPath?: unknown;
 }): string {
   const { agentDefaultView, isNewUser } = opts;
+
+  const next = resolveNextPath(opts.requestedPath);
+  if (next !== null) {
+    // The params ride along because their meaning is about the LOGIN, not the
+    // route: a new user is a new user wherever they asked to land, and
+    // signup=1 is the sole gate on the Ads signup conversion. welcome=1 only
+    // attaches when the destination IS the agent — it is how that page tells
+    // "landed here" from "navigated here", and putting it on other routes
+    // would be a meaningless param nothing reads.
+    const url = new URL(next, "http://placeholder.invalid");
+    if (isNewUser) url.searchParams.set("signup", "1");
+    if (
+      url.pathname === "/dashboard/agent" ||
+      url.pathname.startsWith("/dashboard/agent/")
+    ) {
+      url.searchParams.set("welcome", "1");
+    }
+    return url.pathname + url.search;
+  }
+
   if (agentDefaultView) {
     return isNewUser
       ? "/dashboard/agent?signup=1&welcome=1"
       : "/dashboard/agent?welcome=1";
   }
   return isNewUser ? "/dashboard?signup=1" : "/dashboard";
+}
+
+/**
+ * Validate a `next` value as a same-origin PATH, or return null.
+ *
+ * An unvalidated post-login redirect is a phishing primitive: the victim
+ * authenticates against our genuine domain and we hand them to the attacker.
+ * So this REJECTS AND FALLS BACK — it never sanitises, because a sanitiser is
+ * a second parser that has to agree with every browser's, and the fallback
+ * (the normal post-login destination) costs the user one click.
+ *
+ * Accepted: a path starting with a single "/", optionally carrying a query.
+ * Rejected, each for a reason:
+ * - anything not a plain non-empty string, or over 512 chars;
+ * - no leading "/" (absolute URLs, `https://evil.com`, and anything
+ *   percent-mangled into not-a-path);
+ * - a second leading "/" or "\" (protocol-relative `//evil.com` and its
+ *   backslash twin `/\evil.com` — browsers treat "\" as "/" in URLs);
+ * - a "\" anywhere (same browser normalisation, later in the string);
+ * - an encoded "/" or "\" anywhere (`%2f`, `%5c`): Express has already
+ *   decoded once, so a survivor is a double-encoding trick aimed at whatever
+ *   decodes next;
+ * - control characters (header/URL injection).
+ */
+export function resolveNextPath(raw: unknown): string | null {
+  if (typeof raw !== "string" || raw.length === 0 || raw.length > 512) {
+    return null;
+  }
+  if (!raw.startsWith("/")) return null;
+  if (raw[1] === "/" || raw[1] === "\\") return null;
+  if (raw.includes("\\")) return null;
+  if (/%2f|%5c/i.test(raw)) return null;
+  // eslint-disable-next-line no-control-regex
+  if (/[\u0000-\u001f\u007f]/.test(raw)) return null;
+  return raw;
 }
