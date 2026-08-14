@@ -32,6 +32,12 @@ import { getEnv } from "@datatorag-mcp/config";
  * moment an open redirect becomes real. */
 const NEXT_COOKIE = "dtr_next";
 
+/** The Google Workspace connect flow's one-shot CSRF nonce (SCRUM-86), the
+ * sibling of `atl_connect_nonce` and the plugin flow's `dtr_connect_nonce`.
+ * Its own cookie per flow, so concurrent connects cannot consume each
+ * other's binding. */
+const GWS_CONNECT_NONCE_COOKIE = "gws_connect_nonce";
+
 const GWS_SCOPES = [
   "openid",
   "email",
@@ -281,6 +287,22 @@ export function createAuthRouter(
 
     stashAttribution(req, res, cookiesAreSecure);
 
+    // CSRF (SCRUM-86): bind the round trip to the browser that began it, the
+    // same way every other OAuth-initiating flow here already does (Atlassian
+    // connect, plugin connect, the gateway's own authorize endpoint). Without
+    // `state`, the callback would exchange ANY code arriving on a valid
+    // session, which is an account-linking CSRF (threat detail in the private
+    // tracker). The nonce is random, one-shot, and never the session token
+    // (which must not leak into URLs, referrers, or Google's logs).
+    const nonce = randomBytes(16).toString("base64url");
+    res.cookie(GWS_CONNECT_NONCE_COOKIE, nonce, {
+      httpOnly: true,
+      secure: cookiesAreSecure,
+      sameSite: "lax",
+      path: "/",
+      maxAge: OAUTH_STATE_TTL_MS,
+    });
+
     const googleAuthUrl = new URL(
       "https://accounts.google.com/o/oauth2/v2/auth"
     );
@@ -293,17 +315,36 @@ export function createAuthRouter(
     googleAuthUrl.searchParams.set("scope", GWS_SCOPES);
     googleAuthUrl.searchParams.set("access_type", "offline");
     googleAuthUrl.searchParams.set("prompt", "consent select_account");
+    googleAuthUrl.searchParams.set("state", nonce);
 
     res.redirect(googleAuthUrl.toString());
   });
 
   router.get("/auth/google/connect/callback", async (req, res) => {
     const googleCode = req.query.code as string | undefined;
+    const state = req.query.state as string | undefined;
+    // Identity comes from the session cookie only — never from `state`.
     const sessionToken = req.cookies?.dtrmcp_session;
+    const cookieNonce = req.cookies?.[GWS_CONNECT_NONCE_COOKIE] as
+      | string
+      | undefined;
+    // One-shot: cleared on EVERY outcome, so a nonce cannot survive a failed
+    // callback and be replayed within its TTL.
+    res.clearCookie(GWS_CONNECT_NONCE_COOKIE, { path: "/" });
     const attribution = takeAttribution(req, res);
 
     if (!sessionToken) {
       res.redirect("/auth/login");
+      return;
+    }
+
+    // CSRF (SCRUM-86): the echoed state must match the nonce cookie from
+    // initiation — BEFORE the code is looked at and long before any token
+    // exchange. A rejected callback must never spend the code it carried:
+    // exchanging first and rejecting after would still burn a victim's
+    // session into validating an attacker's code.
+    if (!nonceMatches(cookieNonce, state)) {
+      res.redirect("/dashboard/connections?error=invalid_state");
       return;
     }
 
