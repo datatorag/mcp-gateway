@@ -1,9 +1,9 @@
 # Keeping generated code on this repo's patterns
 
 - **Date:** 2026-08-13
-- **Who:** proposed by the product session; the automation half needs a decision
-- **Status:** proposed — the skill is built and tested; **no hook is wired**
-- **Log line:** Repo-aware pattern review ships as an invoked skill; only the deterministic half is proposed for automation, beside the existing pre-push gate.
+- **Who:** proposed by the product session, reviewed and approved
+- **Status:** accepted — skill invoked, deterministic hook wired advisory-only
+- **Log line:** Repo-aware pattern review ships as an invoked skill; only the deterministic half is automated, advisory and non-blocking, beside the existing pre-push gate.
 
 ## Context
 
@@ -135,14 +135,20 @@ completely different economics.**
    one. That is cheap enough to run automatically and specific enough not to cry
    wolf.
 
-3. **No hook is wired.** The exact wiring is written down and ready to apply in
-   `docs/architecture/pattern-check-hook-wiring.md`, pending a decision.
+3. **The hook is wired advisory-only** — a `PreToolUse` hook on `Bash` in
+   `.claude/settings.json` that fires on `git push`, runs only the deterministic
+   check, and exits 0 on every path. Details in
+   `docs/architecture/pattern-check-hook-wiring.md`.
 
-The load-bearing reason for the split: **automate the check that cannot be
-wrong, invoke the one that can.** A deterministic grep that exits 0/1/2 has no
-false-positive budget to spend, so automating it costs nothing in credibility.
-A model pass has a real false-positive rate, and every false finding it produces
-is drawn from the same trust account the security gate spends from.
+The load-bearing reason for the split, and it generalises past this task:
+**automate the check that cannot be wrong; invoke the one that can. A model
+pass has a real false-positive rate, and every false finding spends the same
+trust the security gate needs. If a quality finding can block a push, people
+bypass both.** A deterministic check that exits 0/1/2 has no false-positive
+budget to spend, so automating it costs nothing in credibility.
+
+That ruling is also what makes the SCOPE of a deterministic rule a correctness
+question rather than a tuning preference — see below.
 
 Corollaries that are part of the decision, not implementation detail:
 
@@ -154,6 +160,45 @@ Corollaries that are part of the decision, not implementation detail:
   finds something trains people to ignore it.
 - **A recurring finding graduates** into a `pattern-check.mjs` rule, or into a
   structural guard test beside the existing five — not into a longer skill.
+
+## Two things review found that the build had not
+
+**1. Diff-scoping hid a scope defect; only a full-history run exposed it.**
+Review ran all five rules against every line of `main` rather than against a
+clean diff — 11 findings, of which 5 were false. The `applies` filters matched
+`^apps/gateway/.*\.tsx?$`, sweeping in contexts where the rules' shared premise
+("this file runs inside the gateway server process") does not hold: the vitest
+config, which *sets* `process.env.DATABASE_URL` for the test bootstrap and
+cannot use `getEnv()` because it runs before the app exists; and a standalone
+`scripts/` runner, where `createDb()` is correct because there is no pooled
+singleton to share and a `.js` specifier is plausibly required by tsx.
+
+Diff-scoping is why this stayed invisible: existing violations never surface,
+so the first *new* script or config file anyone added would have been the first
+false positive. Under the trust ruling above that is disqualifying rather than
+untidy — a rule that fires on test config is a rule that can be wrong, and a
+rule that can be wrong does not qualify for automation.
+
+Fixed by making the premise explicit as a boundary (`isApplicationCode`) rather
+than by listing files, and by pinning that boundary with `scope` self-tests in
+both directions alongside the existing known-bad/known-good matcher pairs — an
+exclusion nobody tests is one somebody deletes. Mutation-proven: breaking the
+boundary makes the self-test exit 2 naming each affected rule and check nothing.
+**Full history went 11 findings → 6.**
+
+A second, independent precision bug surfaced while verifying: the env rule
+matched an *assignment to* `process.env`, which is definitionally not "reading a
+value that should come from `getEnv()`". Writes are now excluded.
+
+**2. A non-blocking hook has no channel to the agent, so the report is a file.**
+Measured on this build: a `PreToolUse` hook exiting 0 surfaces nothing to the
+agent — not stderr, not `systemMessage`, not an `allow` decision's
+`permissionDecisionReason`; all three were probed. The only reliably
+model-visible channel is exit code 2, which blocks, and blocking is forbidden
+here. Left at stderr alone the hook would have been decoration: running
+correctly, finding real things, telling nobody. It now writes its report to
+`<git-dir>/pattern-check-last.txt` — including on a clean run, so a fixed
+finding cannot linger and read as current.
 
 ## Consequences
 
@@ -208,3 +253,20 @@ Reported, not fixed — they are outside this branch's scope.
 Run against `6d3cf9f` (digest fix, 2 files) the verdict was **CLEAN** on both
 halves, which is the result that matters most: the pass is only worth having if
 it can say a diff is fine.
+
+### Pre-existing findings on `main` — reported, not fixed
+
+The full-history run leaves 6 findings after the scope fix, all in application
+code where the rule's premise holds, all mechanical, all pre-dating this work.
+Recorded here for triage and deliberately not repaired on this branch:
+
+- `src/gateway/service-token.ts` ×4 — reads `GOOGLE_GWS_CLIENT_ID`,
+  `GOOGLE_GWS_CLIENT_SECRET`, `ATLASSIAN_CLIENT_ID` and `ATLASSIAN_CLIENT_SECRET`
+  from `process.env` although all four are declared in the zod env schema.
+- `src/app/api/servers/[slug]/connect/route.ts` and its `callback/route.ts` —
+  each reads `process.env.GATEWAY_BASE_URL ?? "http://localhost:8285"`, and that
+  literal is *also* the schema's default for the same variable. Two places to
+  change one value, currently agreeing, which is exactly what makes the drift
+  invisible.
+
+Whether these are worth changing is a product call, not this decision's.

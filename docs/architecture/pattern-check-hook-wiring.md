@@ -1,13 +1,13 @@
-# Pattern-check hook — exact wiring, NOT applied
+# Pattern-check hook — wiring, and what it was verified to do
 
 Companion to `decisions/2026-08-13-generated-code-quality-pass.md`. That decision
-recommends automating **only** the deterministic half of the pattern review, and
-recommends it sit beside the pre-push security gate rather than on commit or on
-every edit. This file is the wiring, ready to apply once that is agreed.
+automates **only** the deterministic half of the pattern review, advisory and
+non-blocking, beside the pre-push security gate rather than on commit or on
+every edit.
 
-**Nothing here is installed.** `.claude/settings.json` has no `hooks` key, and
-`scripts/hooks/pattern-check-on-push.mjs` is referenced by nothing, so it never
-runs. Applying this is one edit; reverting it is deleting that edit.
+**This is applied.** `.claude/settings.json` carries the `hooks` key below.
+Reverting it is deleting that key; the script then goes inert, since nothing
+else references it.
 
 ## Why a Claude Code hook and not a git hook
 
@@ -63,6 +63,23 @@ the command string.
 - **It does not run the model half.** Reuse, source-of-truth, altitude and
   efficiency stay with the invoked `pattern-review` skill.
 
+## Where the findings actually appear
+
+**Read `<git-dir>/pattern-check-last.txt`.** `git rev-parse --git-dir` resolves
+it, which matters because this repo is developed in worktrees where `.git` is a
+file rather than a directory.
+
+That file is not a convenience. Measured on this build: **a `PreToolUse` hook
+that exits 0 surfaces nothing to the agent** — stderr is not shown in the tool
+result, and neither `systemMessage` nor an `allow` decision's
+`permissionDecisionReason` appeared either. All three were probed directly. The
+only reliably model-visible channel is exit code 2, which blocks, and blocking
+is the one thing this hook must never do. Without the file the hook would run
+correctly, find real things, and tell nobody.
+
+The file is rewritten on **every** push, including clean ones, so a finding that
+has since been fixed cannot sit there looking current under a fresh timestamp.
+
 ## Verifying it after you apply it
 
 A hook that silently does nothing is indistinguishable from a hook that ran and
@@ -95,12 +112,19 @@ echo '{"tool_input":{"command":"git push -u origin x"}}' | node scripts/hooks/pa
 echo 'not json'                                  | node scripts/hooks/pattern-check-on-push.mjs; echo $?  # 0, silent
 ```
 
-**Tested so far:** the script's dispatch, its findings path, and its exit code,
-by piping payloads directly (above). **Not tested:** the harness integration —
-whether this Claude Code build passes `tool_input.command` in that shape and
-honours the entry as written. That cannot be tested without wiring it, which is
-the thing being held for approval. Treat the harness half as unverified until
-step 1 above has actually printed.
+**Verified end to end, wired**, on 2026-08-13:
+
+- The harness fires the hook on `git push` and passes `tool_input.command` in
+  exactly the shape the script reads — confirmed by capturing the raw payload.
+- Hooks take effect **without a session restart**; confirmed with a marker file
+  rather than assumed.
+- A planted `route.ts` without `withRoute` produced the expected advisory report
+  in `<git-dir>/pattern-check-last.txt`, and **the push was not blocked**.
+- Removing the planted file and pushing again overwrote the report with a clean
+  one, so a stale finding cannot linger.
+- Non-push commands, malformed JSON and empty stdin all exit 0 silently.
+
+Use `git push --dry-run` for this: it triggers `PreToolUse` without pushing.
 
 ## Removing it
 

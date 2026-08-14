@@ -1,5 +1,18 @@
 {
   "enabledPlugins": {
     "interface-design@interface-design": true
+  },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$CLAUDE_PROJECT_DIR/scripts/hooks/pattern-check-on-push.mjs\""
+          }
+        ]
+      }
+    ]
   }
 }

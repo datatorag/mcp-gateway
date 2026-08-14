@@ -81,6 +81,55 @@ function configSchemaKeys() {
 }
 
 // ---------------------------------------------------------------------------
+// THE BOUNDARY. Most rules below share one premise: **this file runs inside the
+// long-lived gateway server process.** Everything they assert follows from it --
+// use the pooled db singleton, read env through the validated schema, rely on
+// Next/Turbopack module resolution. Three kinds of file break that premise, and
+// a rule applied to them is not strict, it is WRONG:
+//
+//   1. Build and test configuration (`*.config.*`). Runs in the tooling's
+//      process, around the app rather than inside it, and often to SET
+//      environment rather than consume it. getEnv() is not even available --
+//      it runs before the app exists.
+//   2. Standalone entrypoints (anything under a `scripts/` dir). A separate
+//      short-lived process with its own module resolver (tsx), its own
+//      lifecycle, and NO pooled singleton to share -- which is the entire
+//      premise of the createDb rule. Calling createDb() there is correct.
+//   3. Test files, which mock their config by design.
+//
+// A fourth kind exists and has NO reliable structural signal: a one-shot
+// maintenance entrypoint that lives under `src/` instead of `scripts/`. There
+// is one today and it is a named exemption with its reason. Do not invent a
+// naming heuristic for it -- one file is not a convention. If a second appears,
+// the fix is to move them under `scripts/`, which makes the boundary structural
+// again, rather than to grow an exemption list that quietly becomes the rule.
+//
+// This boundary is the deliverable, not the list. A new script or config file
+// must fall outside these rules automatically; if the next one has to be added
+// by hand, the boundary is wrong rather than the file. Pinned in both
+// directions by the `scope` self-tests -- an exclusion nobody tests is one
+// somebody deletes.
+//
+// Found by running all rules against the full history of main rather than
+// against a clean diff. Diff-scoping hid it completely: existing violations
+// never surface, so the first NEW script anyone added would have been the
+// first false positive, which is exactly the finding that spends the trust
+// this check needs to keep.
+// ---------------------------------------------------------------------------
+
+const NON_APPLICATION = [
+  /(^|\/)scripts\//,
+  /\.config\.[cm]?[jt]sx?$/,
+  /\.test\.[cm]?[jt]sx?$/,
+  /(^|\/)test-utils\//,
+];
+
+/** Does this file run inside the gateway server process? */
+function isApplicationCode(file) {
+  return !NON_APPLICATION.some((re) => re.test(file));
+}
+
+// ---------------------------------------------------------------------------
 // Rules
 //
 // mode: "added"  -> only lines this range ADDS are considered
@@ -92,7 +141,14 @@ const RULES = [
   {
     id: "js-relative-import",
     mode: "added",
-    applies: (f) => /^apps\/gateway\/.*\.tsx?$/.test(f),
+    // Application code only: a standalone `scripts/` runner is executed by tsx,
+    // where a `.js` specifier for a `.ts` file is the NodeNext convention and
+    // may be REQUIRED. The rule's premise is Next/Turbopack resolution.
+    applies: (f) => /^apps\/gateway\/.*\.tsx?$/.test(f) && isApplicationCode(f),
+    scope: {
+      inScope: ["apps/gateway/src/gateway/mcp-server.ts"],
+      outOfScope: ["apps/gateway/scripts/run-digest.ts", "apps/gateway/vitest.config.ts"],
+    },
     test: (line) => /from\s+["']\.\.?\/[^"']*\.js["']/.test(line),
     message:
       'relative import carries a ".js" extension. Relative specifiers in apps/gateway are ' +
@@ -109,11 +165,24 @@ const RULES = [
   {
     id: "env-second-source",
     mode: "added",
-    applies: (f) => /^(apps|packages)\/.*\.tsx?$/.test(f) && !/\.test\.tsx?$/.test(f),
+    applies: (f) => /^(apps|packages)\/.*\.tsx?$/.test(f) && isApplicationCode(f),
+    scope: {
+      inScope: ["apps/gateway/src/gateway/service-token.ts"],
+      outOfScope: [
+        "apps/gateway/vitest.config.ts",
+        "apps/gateway/scripts/run-digest.ts",
+        "packages/db/src/backfill-connected-accounts.ts",
+      ],
+    },
     // Built lazily so the schema is read once, at run time, from packages/config.
     build: (ctx) => (line) => {
+      // An ASSIGNMENT to process.env is not a read, and this rule is about
+      // reads. A test bootstrap that SETS process.env.DATABASE_URL is supplying
+      // the value getEnv() would later validate, not bypassing it -- flagging
+      // it inverts the rule. `==`/`===` are comparisons and stay in scope.
       const m = line.match(/process\.env\.([A-Z][A-Z0-9_]*)/);
       if (!m) return false;
+      if (new RegExp(`process\\.env\\.${m[1]}\\s*=(?!=)`).test(line)) return false;
       const key = m[1];
       // NEXT_PUBLIC_* must be process.env -- Next inlines them at build time and
       // getEnv() runs server-side only. NODE_ENV likewise. Neither is a finding.
@@ -124,6 +193,11 @@ const RULES = [
       "apps/gateway/src/lib/db.ts":
         "The db singleton is imported by packages that must not depend on @datatorag-mcp/config; " +
         "it reads DATABASE_URL directly on purpose.",
+      "packages/db/src/backfill-connected-accounts.ts":
+        "Self-described one-time backfill entrypoint, run directly via tsx. A separate short-lived " +
+        "process that builds its own client on purpose. It lives under src/ rather than scripts/, " +
+        "so no structural signal separates it -- see the boundary note above; if a second one " +
+        "appears, move them under scripts/ rather than growing this list.",
     },
     message:
       "reads a variable directly from process.env that packages/config already declares in the " +
@@ -141,7 +215,11 @@ const RULES = [
   {
     id: "client-ip-order",
     mode: "file",
-    applies: (f) => /^apps\/gateway\/.*\.tsx?$/.test(f) && !/\.test\.tsx?$/.test(f),
+    applies: (f) => /^apps\/gateway\/.*\.tsx?$/.test(f) && isApplicationCode(f),
+    scope: {
+      inScope: ["apps/gateway/src/app/api/leads/route.ts"],
+      outOfScope: ["apps/gateway/scripts/run-digest.ts"],
+    },
     test: (src) => {
       const stripped = stripComments(src);
       if (!/x-forwarded-for/i.test(stripped)) return false;
@@ -165,7 +243,14 @@ const RULES = [
   {
     id: "createdb-outside-singleton",
     mode: "added",
-    applies: (f) => /^apps\/gateway\/.*\.tsx?$/.test(f) && !/\.test\.tsx?$/.test(f),
+    // The premise is "there is a pooled singleton to share". A standalone
+    // `scripts/` runner is its own process and has none, so createDb() there is
+    // CORRECT -- and `@/lib/db` would not even resolve outside Next.
+    applies: (f) => /^apps\/gateway\/.*\.tsx?$/.test(f) && isApplicationCode(f),
+    scope: {
+      inScope: ["apps/gateway/src/gateway/digest.ts"],
+      outOfScope: ["apps/gateway/scripts/run-digest.ts"],
+    },
     test: (line) => /\bcreateDb\s*\(/.test(line),
     exempt: {
       "apps/gateway/src/lib/db.ts": "This file IS the singleton.",
@@ -184,7 +269,12 @@ const RULES = [
   {
     id: "session-route-wrapper",
     mode: "file",
-    applies: (f) => /^apps\/gateway\/src\/app\/api\/.*\/route\.tsx?$/.test(f),
+    applies: (f) =>
+      /^apps\/gateway\/src\/app\/api\/.*\/route\.tsx?$/.test(f) && isApplicationCode(f),
+    scope: {
+      inScope: ["apps/gateway/src/app/api/usage/summary/route.ts"],
+      outOfScope: ["apps/gateway/src/app/api/usage/summary/route.test.ts"],
+    },
     test: (src) => {
       const code = stripComments(src);
       // Only routes that export an HTTP verb handler are in scope.
@@ -228,8 +318,18 @@ function stripComments(source) {
   return source.replace(/\/\*[\s\S]*?\*\//g, "").replace(/(^|[^:])\/\/.*$/gm, "$1");
 }
 
+/** Is this rule live for this file? ONE definition, used by both the scope
+ *  self-test and the real run -- a self-test asserting a different predicate
+ *  from the one that runs would certify a boundary nobody uses. */
+function inScope(rule, file) {
+  if (!rule.applies(file)) return false;
+  if (rule.exempt && rule.exempt[file]) return false;
+  return true;
+}
+
 // ---------------------------------------------------------------------------
-// Self-test. Runs before any real work; a blind matcher exits 2.
+// Self-test. Runs before any real work; a blind matcher or an unpinned
+// boundary exits 2.
 // ---------------------------------------------------------------------------
 function runSelfTests(ctx) {
   const broken = [];
@@ -240,6 +340,22 @@ function runSelfTests(ctx) {
     // matches nothing, and it is the version that gets the whole check deleted
     // by whoever it blocks.
     if (fn(rule.selfTest.good)) broken.push(`${rule.id}: matches its known-good string`);
+
+    // THE BOUNDARY IS TESTED THE SAME WAY THE MATCHER IS. A correct regex
+    // pointed at the wrong files is still a false positive, and it is the
+    // failure mode diff-scoping hides longest: existing violations never
+    // surface, so the first NEW config or script file is the first symptom.
+    // An exclusion nobody tests is one somebody deletes.
+    if (!rule.scope) {
+      broken.push(`${rule.id}: has no scope self-test, so its boundary is unpinned`);
+      continue;
+    }
+    for (const f of rule.scope.inScope) {
+      if (!inScope(rule, f)) broken.push(`${rule.id}: no longer applies to ${f}, which it must`);
+    }
+    for (const f of rule.scope.outOfScope) {
+      if (inScope(rule, f)) broken.push(`${rule.id}: applies to ${f}, which is out of its premise`);
+    }
   }
   if (broken.length) {
     process.stderr.write(
@@ -366,8 +482,7 @@ const findings = [];
 
 for (const file of files) {
   for (const rule of RULES) {
-    if (!rule.applies(file)) continue;
-    if (rule.exempt && rule.exempt[file]) continue;
+    if (!inScope(rule, file)) continue;
     const fn = rule.build ? rule.build(ctx) : rule.test;
 
     if (rule.mode === "added") {

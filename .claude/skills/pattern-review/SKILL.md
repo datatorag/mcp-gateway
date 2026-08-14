@@ -85,6 +85,20 @@ blind exits 2 instead of reporting clean.
 Exit codes mean different things and must not be collapsed: **0** clean, **1**
 findings, **2** the check itself is broken.
 
+The same check runs automatically on `git push` (advisory, never blocking) and
+writes its report to **`<git-dir>/pattern-check-last.txt`** — read that rather
+than expecting output on screen; a hook that exits 0 surfaces nothing to the
+agent on this build. The file is rewritten on every push, clean runs included.
+
+**Rule scope is a correctness question, not a preference.** These rules share a
+premise — the file runs inside the gateway server process — and applying one
+outside that premise is a false positive, not strictness. Build configs,
+`scripts/` entrypoints and tests sit outside it and are excluded structurally,
+pinned by `scope` self-tests. If you add a rule, run it against full history
+(`<root-commit>..origin/main`), not just a clean diff: diff-scoping hides a
+bad boundary completely, because existing violations never surface and the
+first NEW file of that kind is the first symptom.
+
 Do not ask the model to look for those five things. It is slower, costs tokens,
 and can be talked out of a correct grep.
 
