@@ -64,6 +64,13 @@ services:
       PLAYGROUND_MESSAGE_CAP: ${PLAYGROUND_MESSAGE_CAP:-20}
       SLACK_CHANNEL_FEEDBACK: ${SLACK_CHANNEL_FEEDBACK:-}
       BREVO_API_KEY: ${BREVO_API_KEY:-}
+      # Billing (Stage 1). All four must be present for checkout + webhooks;
+      # the webhook route deliberately 503s without its secret rather than
+      # accepting unverifiable events, so a gap here is loud at the route.
+      STRIPE_API_KEY: ${STRIPE_API_KEY:-}
+      STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET:-}
+      STRIPE_PRO_MONTHLY_PRICE_ID: ${STRIPE_PRO_MONTHLY_PRICE_ID:-}
+      STRIPE_PRO_YEARLY_PRICE_ID: ${STRIPE_PRO_YEARLY_PRICE_ID:-}
       # This service enumerates the container's environment explicitly, so a
       # var present in .env but missing HERE never reaches the process. That is
       # how the agent default-view flag came to be unflippable in production:
