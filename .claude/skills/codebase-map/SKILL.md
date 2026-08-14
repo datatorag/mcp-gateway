@@ -140,6 +140,14 @@ answers shape the code:
 Reserve the agent fan-out review for when the user asks for it, or for large
 multi-file changes where a fresh-eyes sweep genuinely pays for itself.
 
+Once a diff already exists, the `pattern-review` skill is the post-hoc form of
+the same four questions — one pass, scoped to the diff, no fan-out. It runs
+`scripts/pattern-check.mjs` (deterministic rules, self-tested, exit 0/1/2) before
+spending any model judgement, and it proposes rather than rewrites. It does not
+restate this map; it consumes it. The rule above is unchanged: the design-time
+check is still the cheap one, and reaching for the review pass on every small
+edit means the design-time check was skipped.
+
 ## Where things live
 
 | Task | Path |
