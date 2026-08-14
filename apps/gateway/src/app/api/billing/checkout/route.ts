@@ -15,6 +15,15 @@ const bodySchema = z.object({ interval: z.enum(["monthly", "yearly"]) });
  * Start a Stripe Checkout session for Pro. Returns the hosted checkout URL;
  * the plan flips to `pro` only when the subscription webhook lands — nothing
  * here grants anything.
+ *
+ * SERVER-CREATED SESSION, DELIBERATELY — not a Payment Link, even though the
+ * card page is 100% Stripe-hosted either way (no Stripe.js ships from this
+ * repo). The difference is who establishes the user↔customer mapping: a
+ * Payment Link carries `client_reference_id` in a user-visible URL, where it
+ * can be edited to attach a subscription to someone else's account. Here the
+ * mapping comes from the authenticated session and cannot be forged. Same
+ * principle as the login `next` validation: a user-controllable value that
+ * decides an outcome must be established server-side.
  */
 export const POST = withRoute(async (userId, req: NextRequest) => {
   const parsed = bodySchema.safeParse(await req.json().catch(() => null));
