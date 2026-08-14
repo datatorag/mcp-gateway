@@ -34,15 +34,16 @@ export const users = pgTable("users", {
   // Activation milestone: set once on the user's first successful tool call
   // (see trackToolCall) so the funnel has a durable first_tool_call marker.
   firstToolCallAt: timestamp("first_tool_call_at", { withTimezone: true }),
-  /** Activation for the AGENT surface, kept separate from `first_tool_call_at`
-   * on purpose.
+  /** First AGENT RUN, kept separate from `first_tool_call_at` on purpose.
    *
-   * `first_tool_call_at` means "a real MCP client called through the gateway",
-   * and the no-activation follow-up email and the digest both key off that
-   * meaning. Widening it to include agent runs would silently change what
-   * every one of those already-shipped consumers reports. So the agent gets
-   * its own marker rather than borrowing one whose definition is load-bearing
-   * elsewhere.
+   * The two markers answer different questions. `first_tool_call_at` means "a
+   * real (non-builtin) plugin tool call succeeded for this user" — since
+   * SCRUM-78 on EITHER surface, because an agent that read the user's own
+   * mailbox is activation by any honest reading, and the no-activation email
+   * must not nag a user it happened to. This one means only "an agent turn
+   * ran", which a model can do with no connected account and no tool call at
+   * all — the exact fails-while-appearing-to-succeed state SCRUM-78 exists to
+   * close — so it must never be read as activation.
    *
    * A column rather than deriving it from `current_period_agent_runs > 0`,
    * because that counter resets: a user who ran the agent in March and came

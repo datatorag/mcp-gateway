@@ -75,26 +75,31 @@ export async function trackToolCall(
       });
     }
 
-    // Activation milestone: only real gateway traffic counts.
+    // Activation milestone: a real (non-builtin) tool call succeeded on the
+    // user's own data, on EITHER surface.
     //
-    // STILL SURFACE-GATED THOUGH METERING NO LONGER IS, and that asymmetry is
-    // deliberate rather than a missed edit. Metering asks "should this be
-    // billed", which is true of both surfaces because both consume what the
-    // paid tier sells. Activation asks "can this user's own client reach us",
-    // which a call made from our dashboard does not answer. Collapse the two
-    // and every user is marked activated by the surface that exists to lead
-    // them TO activation, which destroys the funnel step it measures.
+    // THE SURFACE GATE WAS WIDENED DELIBERATELY (SCRUM-78). It used to count
+    // only `mcp`, on the reading that activation meant "the user's own MCP
+    // client can reach us" — and under that reading the metric was
+    // structurally blind to the funnel the product actually has: the agent is
+    // the front door, a user whose agent reads their own mailbox has plainly
+    // gotten value from their own data, and the inline-connect flow built to
+    // produce exactly that outcome could never have moved the number it is
+    // measured by. Widening also fixes what keys off the flag: the
+    // no-activation follow-up email must not nag a user whose agent already
+    // did real work for them. The event carries `surface`, so the narrower
+    // "own MCP client connected" cohort remains a filter away.
+    //
     // Skipped once the cache knows the user is activated, so the per-call
     // claim UPDATE runs at most once per user per process.
     //
-    // Built-ins are excluded (SCRUM-66). Before they emitted tool_call at all
-    // they could not reach this claim, and giving them the event must not
-    // widen what activation means: an `echo` proves the client can reach us,
-    // not that the user got value from a real tool, and the no-activation
-    // email keys off the latter.
+    // Built-ins stay excluded (SCRUM-66): an `echo` proves the client can
+    // reach us, not that the user got value from a real tool. Introspection
+    // tools never reach this function at all, so an agent turn that merely
+    // offered a connect control cannot claim activation either — only a real
+    // plugin tool call can.
     if (
       status === "success" &&
-      props.outcome.source === "mcp" &&
       !props.outcome.builtin &&
       !identity?.activated
     ) {
@@ -103,6 +108,7 @@ export async function trackToolCall(
         props.userId,
         props.toolName,
         props.connectorType,
+        props.outcome.source,
         userEmail
       );
     }
@@ -159,6 +165,7 @@ async function trackFirstToolCall(
   userId: string,
   toolName: string,
   connectorType: string | null,
+  surface: string,
   userEmail: string | null
 ): Promise<void> {
   try {
@@ -178,6 +185,9 @@ async function trackFirstToolCall(
       properties: {
         tool_name: toolName,
         connector_type: connectorType,
+        // Which surface activated this user (SCRUM-78 widened the claim to
+        // both), so the old "own MCP client" cohort stays one filter away.
+        surface,
         ...identityProps(userEmail),
       },
     });

@@ -8,9 +8,9 @@ export interface ClassifyInput {
   thrown: boolean;
   isError?: boolean;
   errorMessage?: string | null;
-  /** Which surface the call came through. Both meter; this survives because
-   * it travels onto the event as `surface` and because the activation
-   * milestone still only counts real gateway traffic. */
+  /** Which surface the call came through. Both meter and (SCRUM-78) both can
+   * claim activation; this survives because it travels onto the event as
+   * `surface`, which is what keeps the per-surface cohorts distinguishable. */
   source: Surface;
   toolName?: string;
   /** True when the tool is a gateway built-in (echo, list_connected_accounts —

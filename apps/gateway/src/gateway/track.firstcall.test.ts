@@ -105,10 +105,33 @@ describe("first_tool_call milestone", () => {
     expect(update).not.toHaveBeenCalled();
   });
 
-  it("ignores playground calls", async () => {
+  it("claims activation for a successful AGENT-surface plugin call (SCRUM-78)", async () => {
+    // The agent is the activation front door: a user whose agent read their
+    // own mailbox has gotten value from their own data, and the inline-connect
+    // flow is measured by exactly this metric. The event says which surface
+    // did it, so the old mcp-only cohort stays a filter away.
+    returning.mockResolvedValue([{ id: "user-1" }]);
     await trackToolCall(
       dbMock,
       callProps({ outcome: { thrown: false, isError: false, errorMessage: null, source: "agent", toolName: "gmail_search" } })
+    );
+    expect(capture).toHaveBeenCalledWith(
+      expect.objectContaining({
+        event: "first_tool_call",
+        properties: expect.objectContaining({ surface: "agent" }),
+      })
+    );
+  });
+
+  it("never claims activation for a built-in, on either surface", async () => {
+    // An `echo` proves the client can reach us, not that the user got value
+    // from a real tool. Widening the surface gate must not widen this.
+    await trackToolCall(
+      dbMock,
+      callProps({
+        toolName: "echo",
+        outcome: { thrown: false, isError: false, errorMessage: null, source: "mcp", toolName: "echo", builtin: true },
+      })
     );
     expect(update).not.toHaveBeenCalled();
   });
