@@ -77,7 +77,7 @@ describe("sendWelcomeEmail", () => {
     await sendWelcomeEmail({
       email: "ada@example.com",
       name: "Ada Lovelace",
-      plan: "pro_trial",
+      plan: "free",
       createdAt: new Date("2026-07-18T01:00:00Z"),
     });
     expect(upsert).toHaveBeenCalledWith(

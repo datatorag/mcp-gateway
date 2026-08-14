@@ -59,7 +59,7 @@ describe("brevo client", () => {
       email: "a@b.com",
       firstName: "Ada",
       signupDate: new Date("2026-07-18T05:00:00Z"),
-      plan: "pro_trial",
+      plan: "free",
     });
     expect(ok).toBe(true);
     const [url, init] = fetchMock.mock.calls[0];
@@ -69,7 +69,7 @@ describe("brevo client", () => {
       email: "a@b.com",
       updateEnabled: true,
       listIds: [BREVO_LIST_PRODUCT_USERS],
-      attributes: { FIRSTNAME: "Ada", SIGNUP_DATE: "2026-07-18", PLAN: "pro_trial" },
+      attributes: { FIRSTNAME: "Ada", SIGNUP_DATE: "2026-07-18", PLAN: "free" },
     });
   });
 

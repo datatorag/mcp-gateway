@@ -1,6 +1,8 @@
 import { boolean, integer, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
 
-export const PLAN_VALUES = ["free", "pro_trial", "pro", "payg"] as const;
+// Binary by decision: the free tier IS the trial. A time-boxed trial plan
+// existed here once and was retired — it promised an expiry nothing enforced.
+export const PLAN_VALUES = ["free", "pro", "payg"] as const;
 export type Plan = (typeof PLAN_VALUES)[number];
 
 export const users = pgTable("users", {
@@ -13,8 +15,7 @@ export const users = pgTable("users", {
   // Denormalized from subscriptions.status for hot-path reads — every tool call
   // checks plan in the tier gate, and joining to subscriptions per call is too
   // expensive. Kept in sync by the Stripe webhook handlers (see billing/webhook-handlers.ts).
-  plan: text("plan").$type<Plan>().notNull().default("pro_trial"),
-  trialEndsAt: timestamp("trial_ends_at", { withTimezone: true }),
+  plan: text("plan").$type<Plan>().notNull().default("free"),
   // Gateway tool calls in the current period, and agent runs in the same
   // period. Both are COUNTERS, not a ledger: incremented in place, approximate
   // is fine, a little lag is harmless. Billing needs dedup and an audit trail

@@ -1,7 +1,5 @@
 import type { Plan } from "@datatorag-mcp/db";
 
-export const TRIAL_DAYS = 30;
-
 /** Free tool calls per period.
  *
  * This module went a long time with nothing importing it outside its own test,
@@ -30,8 +28,10 @@ export interface PlanLimits {
 export function planLimits(plan: Plan): PlanLimits {
   switch (plan) {
     case "free":
-      return { monthlyIncluded: FREE_MONTHLY_CAP, hardCap: true, multiAccount: false };
-    case "pro_trial":
+      // multiAccount is true on Free BY DECISION (2026-08-07): the pricing
+      // page advertises multi-account in every tier, twice. Flipping this to
+      // false makes the published claim a lie — see the test pinning it.
+      return { monthlyIncluded: FREE_MONTHLY_CAP, hardCap: true, multiAccount: true };
     case "pro":
       return { monthlyIncluded: PRO_MONTHLY_INCLUDED, hardCap: false, multiAccount: true };
     case "payg":
