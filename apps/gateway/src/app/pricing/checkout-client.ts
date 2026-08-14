@@ -8,6 +8,8 @@
  * and the plan only ever changes when the subscription webhook lands.
  */
 
+import { isStripeHostedUrl } from "@/lib/stripe-hosted-url";
+
 export type CheckoutInterval = "monthly" | "yearly";
 
 export type CheckoutOutcome =
@@ -52,7 +54,7 @@ export async function startProCheckout(
   }
 
   const body = (await res.json().catch(() => null)) as { url?: unknown } | null;
-  if (body && typeof body.url === "string" && body.url) {
+  if (body && typeof body.url === "string" && isStripeHostedUrl(body.url)) {
     return { kind: "redirect", url: body.url };
   }
   return { kind: "error", message: TRY_AGAIN };

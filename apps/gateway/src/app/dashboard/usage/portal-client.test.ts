@@ -73,4 +73,11 @@ describe("openBillingPortal", () => {
     );
     expect(outcome.kind).toBe("error");
   });
+
+  it("refuses a 200 whose url is not Stripe-hosted — the server response is trusted, not obeyed", async () => {
+    const outcome = await openBillingPortal(
+      vi.fn().mockResolvedValue(response(200, { url: "https://evil.com/portal" }))
+    );
+    expect(outcome.kind).toBe("error");
+  });
 });

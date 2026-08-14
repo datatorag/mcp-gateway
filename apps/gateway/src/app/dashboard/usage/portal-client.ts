@@ -7,6 +7,8 @@
  * of users.plan.
  */
 
+import { isStripeHostedUrl } from "@/lib/stripe-hosted-url";
+
 export type PortalOutcome =
   | { kind: "redirect"; url: string }
   | { kind: "error"; message: string };
@@ -49,7 +51,7 @@ export async function openBillingPortal(
   }
 
   const body = (await res.json().catch(() => null)) as { url?: unknown } | null;
-  if (body && typeof body.url === "string" && body.url) {
+  if (body && typeof body.url === "string" && isStripeHostedUrl(body.url)) {
     return { kind: "redirect", url: body.url };
   }
   return { kind: "error", message: TRY_AGAIN };

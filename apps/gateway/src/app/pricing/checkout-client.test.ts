@@ -72,4 +72,12 @@ describe("startProCheckout", () => {
     );
     expect(outcome.kind).toBe("error");
   });
+
+  it("refuses a 200 whose url is not Stripe-hosted — the server response is trusted, not obeyed", async () => {
+    const outcome = await startProCheckout(
+      "monthly",
+      vi.fn().mockResolvedValue(response(200, { url: "https://evil.com/pay" }))
+    );
+    expect(outcome.kind).toBe("error");
+  });
 });
