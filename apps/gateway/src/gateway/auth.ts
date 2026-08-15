@@ -332,6 +332,19 @@ export function createAuthRouter(
   });
 
   router.get("/auth/google/connect/callback", async (req, res) => {
+    // INVARIANT — READ THIS BEFORE ADDING AN EARLY RETURN.
+    //
+    // Three one-shot cookies are consumed at the very top of this handler and
+    // MUST run before ANY response is issued, on every path including the
+    // rejections: the CSRF nonce clear, `takeAttribution` (SCRUM-87), and
+    // `takeConnectNext` (SCRUM-78). Each was added by a different feature, and
+    // each is correct only because it sits ABOVE every `res.redirect` below.
+    // An early return added above any of them would leave its cookie alive to
+    // attach to a LATER, unrelated flow — mis-attributing acquisition or
+    // mis-routing a connect for some other user, days later, with no error and
+    // nothing pointing back here. Add new early returns BELOW this block, or
+    // move a consumer up with it. `auth-callback-ordering.test.ts` pins this
+    // by source order so a violation fails the suite instead of shipping quiet.
     const googleCode = req.query.code as string | undefined;
     const state = req.query.state as string | undefined;
     // Identity comes from the session cookie only — never from `state`.
