@@ -116,7 +116,26 @@ function buttonLabelled(label: string): HTMLButtonElement {
 beforeEach(() => {
   posted = [];
   fetchMock.mockReset();
-  fetchMock.mockImplementation((_url: unknown, init?: RequestInit) => {
+  fetchMock.mockImplementation((url: unknown, init?: RequestInit) => {
+    // The meter (SCRUM-94) reads these two on mount and after each turn;
+    // they are not chat traffic and must not be counted as turns.
+    const target = String(url);
+    if (target.includes("/api/playground/quota")) {
+      return Promise.resolve(
+        new Response(
+          JSON.stringify({ runsUsed: 0, runsCap: 25, runsRemaining: 25 }),
+          { status: 200, headers: { "content-type": "application/json" } }
+        )
+      );
+    }
+    if (target.includes("/api/connections")) {
+      return Promise.resolve(
+        new Response(JSON.stringify({ accounts: [], connections: [] }), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        })
+      );
+    }
     posted.push(JSON.parse(String(init?.body ?? "{}")) as Record<string, unknown>);
     return Promise.resolve(
       sseResponse(posted.length === 1 ? SUSPENDED_TURN : RESUMED_TURN)
@@ -196,7 +215,9 @@ describe("delivering the user's decision on a gated write", () => {
     // The whole point. Recording the decision is not delivering it; without
     // `sendAutomaticallyWhen` this stays at 1 and the suspended run is stranded
     // on the server while the UI shows a perfectly happy conversation.
-    expect(fetchMock).toHaveBeenCalledTimes(2);
+    // Counted as CHAT posts, not raw fetches — the meter's quota/connections
+    // reads share the same global fetch and are filtered out above.
+    expect(posted).toHaveLength(2);
 
     const approvals = approvalPartsIn(posted[1]!);
     expect(approvals).toHaveLength(1);
@@ -214,7 +235,7 @@ describe("delivering the user's decision on a gated write", () => {
     });
     await settle();
 
-    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(posted).toHaveLength(2);
     const approvals = approvalPartsIn(posted[1]!);
     expect(approvals).toHaveLength(1);
     expect(approvals[0]!.approval).toMatchObject({ id: APPROVAL_ID, approved: false });

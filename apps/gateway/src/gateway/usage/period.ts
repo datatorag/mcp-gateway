@@ -1,8 +1,9 @@
 import { sql, type SQL } from "drizzle-orm";
-import type { Database } from "@datatorag-mcp/db";
+import type { Database, Plan } from "@datatorag-mcp/db";
 
 import { isInternalEmail } from "../../lib/brevo";
 import { resolveUserEmail } from "../user-email";
+import { planLimits } from "../billing/plans";
 
 /**
  * The per-period allowance counters, and the lazy roll that bounds them.
@@ -98,6 +99,29 @@ function rollAndBump(userId: string, bump: Counter | null, guard?: SQL) {
 export async function capExempt(db: Database, userId: string): Promise<boolean> {
   const email = await resolveUserEmail(db, userId);
   return email !== null && isInternalEmail(email);
+}
+
+/**
+ * The one place the effective agent-run cap is decided: `null` for exempt
+ * internal accounts (counted, never refused), otherwise the plan's allowance
+ * from planLimits.
+ *
+ * EVERY READER OF THE CAP GOES THROUGH HERE OR THROUGH planLimits DIRECTLY —
+ * the enforcing claim in the chat route, the agent's introspection answer,
+ * and the chat panel's meter. SCRUM-84 existed because a second copy of this
+ * number drifted, and SCRUM-94 added the meter as a third, PERSISTENT reader;
+ * a helper is what makes "the panel and the agent cannot disagree" a property
+ * of the code rather than a discipline.
+ */
+export async function agentRunCap(
+  db: Database,
+  userId: string
+): Promise<number | null> {
+  if (await capExempt(db, userId)) return null;
+  const rows = await db.execute<{ plan: Plan }>(sql`
+    SELECT plan FROM users WHERE id = ${userId}
+  `);
+  return planLimits(rows[0]?.plan ?? "free").agentRuns;
 }
 
 export type ClaimResult =

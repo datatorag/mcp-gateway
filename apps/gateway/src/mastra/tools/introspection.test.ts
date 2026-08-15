@@ -2,8 +2,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 
 const periodStatus = vi.fn();
-const capExempt = vi.fn();
-vi.mock("@/gateway/usage/period", () => ({ periodStatus, capExempt }));
+const agentRunCap = vi.fn();
+vi.mock("@/gateway/usage/period", () => ({ periodStatus, agentRunCap }));
 
 const { buildIntrospectionTools, INTROSPECTION_TOOL_NAMES } = await import("./introspection");
 
@@ -33,9 +33,9 @@ function stubDb(plan = "free", services: string[] = ["google-workspace"]) {
 describe("account introspection", () => {
   beforeEach(() => {
     periodStatus.mockReset();
-    capExempt.mockReset();
+    agentRunCap.mockReset();
     periodStatus.mockResolvedValue({ agentRuns: 7, calls: 40, periodStart: new Date(0) });
-    capExempt.mockResolvedValue(false);
+    agentRunCap.mockResolvedValue(25);
   });
 
   it("takes NO identity argument the model could supply", async () => {
@@ -134,7 +134,7 @@ describe("account introspection", () => {
     // every one was handed the id the tool was built with.
     expect(scopedTo.length).toBeGreaterThanOrEqual(2);
     expect(periodStatus).toHaveBeenCalledWith(db, "user-1");
-    expect(capExempt).toHaveBeenCalledWith(db, "user-1");
+    expect(agentRunCap).toHaveBeenCalledWith(db, "user-1");
   });
 
   it("reports runs as remaining, so the limit is a meter and not a wall", async () => {
@@ -148,7 +148,7 @@ describe("account introspection", () => {
   });
 
   it("reports no cap for an exempt account rather than a fake one", async () => {
-    capExempt.mockResolvedValue(true);
+    agentRunCap.mockResolvedValue(null);
     const { db } = stubDb();
     const out = await buildIntrospectionTools({ db, userId: "user-1" }).account_status.execute();
 

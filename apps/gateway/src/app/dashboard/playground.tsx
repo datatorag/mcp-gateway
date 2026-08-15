@@ -10,6 +10,8 @@ import {
   useState,
 } from "react";
 import { useChat } from "@ai-sdk/react";
+import { AgentMeter, type AgentQuota } from "./agent-meter";
+import { useConnections } from "./use-connections";
 import {
   DefaultChatTransport,
   lastAssistantMessageIsCompleteWithApprovalResponses,
@@ -225,6 +227,15 @@ export const Playground = forwardRef<PlaygroundHandle, PlaygroundProps>(
     const isPage = layout === "page";
     const [input, setInput] = useState("");
     const [capState, setCapState] = useState<{ cap: number } | null>(null);
+    /** The meter's view of the run allowance (SCRUM-94). Seeded and refreshed
+     * from /api/playground/quota, nudged instantly by the per-turn quota
+     * headers when they arrive. `cap: null` is the exempt state, rendered in
+     * its own words by the meter. */
+    const [quota, setQuota] = useState<AgentQuota | null>(null);
+    /** The meter's connector half — the SHARED hook, so its notion of "what
+     * is connected" cannot drift from the other surfaces reading it. */
+    const { accounts: meterAccounts, loaded: meterAccountsLoaded } =
+      useConnections();
     const [hidden, setHidden] = useState(false);
     const [feedback, setFeedback] = useState<Record<string, FeedbackState>>({});
     const [comments, setComments] = useState<Record<string, string>>({});
@@ -314,6 +325,20 @@ export const Playground = forwardRef<PlaygroundHandle, PlaygroundProps>(
             if (remaining !== null && cap !== null && Number(remaining) <= 0) {
               setCapState({ cap: Number(cap) });
             }
+            // Same headers feed the meter, instantly. Absent headers (an
+            // approval leg, or an exempt account that never gets them) leave
+            // the meter alone; the status-settled refetch below covers those.
+            if (remaining !== null && cap !== null) {
+              const capN = Number(cap);
+              const remainingN = Number(remaining);
+              if (Number.isFinite(capN) && Number.isFinite(remainingN)) {
+                setQuota({
+                  used: Math.max(0, capN - remainingN),
+                  cap: capN,
+                  remaining: remainingN,
+                });
+              }
+            }
             // Headers are available the moment the response starts, so the
             // thread is known before the connect control could ever stream in.
             const turnThread = res.headers.get(THREAD_ID_HEADER);
@@ -389,6 +414,39 @@ export const Playground = forwardRef<PlaygroundHandle, PlaygroundProps>(
     });
 
     const streaming = status === "submitted" || status === "streaming";
+
+    // Meter refresh, keyed on the stream settling: fires on mount (status
+    // starts settled) and again after every turn, which is what keeps the
+    // exempt account honest — its turns carry no quota headers, but each one
+    // still counts a run, and only a re-read shows it. Errors leave the last
+    // known state on screen rather than blanking a working meter.
+    useEffect(() => {
+      if (streaming) return;
+      let cancelled = false;
+      void (async () => {
+        try {
+          const res = await fetch("/api/playground/quota");
+          if (!res.ok || cancelled) return;
+          const data = (await res.json()) as {
+            runsUsed?: number;
+            runsCap?: number | null;
+            runsRemaining?: number | null;
+          };
+          if (typeof data.runsUsed !== "number") return;
+          setQuota({
+            used: data.runsUsed,
+            cap: typeof data.runsCap === "number" ? data.runsCap : null,
+            remaining:
+              typeof data.runsRemaining === "number" ? data.runsRemaining : null,
+          });
+        } catch {
+          // Best-effort meter: a failed read keeps the previous state.
+        }
+      })();
+      return () => {
+        cancelled = true;
+      };
+    }, [streaming]);
 
     // `status` is a render snapshot, so two synchronous calls (e.g. two rapid
     // runPrompt clicks) would both pass the streaming guard and fire two
@@ -770,6 +828,14 @@ export const Playground = forwardRef<PlaygroundHandle, PlaygroundProps>(
                 </PromptInputFooter>
               </PromptInput>
             )}
+            {/* One glanceable line under the composer (SCRUM-94): a few px of
+                footer height, so the thread flexes and the composer stays
+                pinned exactly where it was. */}
+            <AgentMeter
+              quota={quota}
+              accounts={meterAccounts}
+              accountsLoaded={meterAccountsLoaded}
+            />
           </div>
       </div>
       </ConnectReturnContext.Provider>
