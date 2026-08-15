@@ -340,6 +340,17 @@ export async function trackPlaygroundCapHit(
   return capturePlaygroundEvent(db, userId, EVENTS.PLAYGROUND_CAP_HIT);
 }
 
+/** A run stopped at the per-run token ceiling (SCRUM-84). Separate from
+ * `playground_cap_hit`, which is the RUN allowance refusing a new run; this
+ * is one run's SIZE bound stopping its next step. Summing them as one series
+ * would blur two different product walls. */
+export async function trackPlaygroundRunCeilingHit(
+  db: Database,
+  userId: string
+): Promise<void> {
+  return capturePlaygroundEvent(db, userId, EVENTS.PLAYGROUND_RUN_CEILING_HIT);
+}
+
 /** Write-confirmation gate: "shown" when a turn pauses for approval,
  * "approved"/"denied" on the user's decision. `writeCount` = pending writes. */
 export async function trackPlaygroundConfirm(

@@ -13,6 +13,7 @@ import { getEnv } from "@datatorag-mcp/config";
 
 import { USER_ID_CONTEXT_KEY } from "../mcp/client";
 import { usageContextFrom, withLlmUsageTracking } from "../llm-usage";
+import { withRunTokenCeiling } from "../run-token-budget";
 
 /** Stable id for this agent. The route and any client that names an agent must
  * use this constant rather than a string literal.
@@ -230,12 +231,18 @@ export function createDatatoragAgent(
     // against the run that made it. The ids come off the request context for
     // the same reason the tools do: they are per-caller, and a process-wide
     // value would attribute one user's tokens to another. With no run id the
-    // wrapper is a pass-through, so this cannot break a turn.
-    model: ({ requestContext }) =>
-      withLlmUsageTracking(
-        resolveModel(),
-        usageContextFrom(requestContext, USER_ID_CONTEXT_KEY)
-      ),
+    // wrappers are pass-throughs, so this cannot break a turn.
+    //
+    // The ceiling wrapper sits OUTSIDE the usage tracker, so a refused call
+    // never reaches the provider or the analytics tap — a refusal is not a
+    // generation and must not be counted as one.
+    model: ({ requestContext }) => {
+      const ctx = usageContextFrom(requestContext, USER_ID_CONTEXT_KEY);
+      return withRunTokenCeiling(
+        withLlmUsageTracking(resolveModel(), ctx),
+        ctx.runId
+      );
+    },
     // Tools are resolved per request, from the request context, for the same
     // reason the model is: a static list would be wrong for everyone. Two users
     // hitting this agent in the same process see different tools, and each

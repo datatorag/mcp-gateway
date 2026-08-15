@@ -1,6 +1,13 @@
 import { describe, it, expect } from "vitest";
 import { PLAN_VALUES } from "@datatorag-mcp/db";
-import { planLimits, isOverage, FREE_MONTHLY_CAP, PRO_MONTHLY_INCLUDED } from "./plans";
+import {
+  planLimits,
+  isOverage,
+  FREE_MONTHLY_CAP,
+  PRO_MONTHLY_INCLUDED,
+  FREE_MONTHLY_AGENT_RUNS,
+  RUN_TOKEN_CEILING,
+} from "./plans";
 
 describe("planLimits", () => {
   it("free has a hard cap", () => {
@@ -8,6 +15,7 @@ describe("planLimits", () => {
       monthlyIncluded: FREE_MONTHLY_CAP,
       hardCap: true,
       multiAccount: true,
+      agentRuns: FREE_MONTHLY_AGENT_RUNS,
     });
   });
   it("multi-account is included on Free — ruled 2026-08-07, advertised on /pricing", () => {
@@ -22,29 +30,37 @@ describe("planLimits", () => {
     expect(planLimits("pro").monthlyIncluded).toBe(PRO_MONTHLY_INCLUDED);
     expect(planLimits("pro").hardCap).toBe(false);
   });
-  it("payg has 0 included, no hard cap", () => {
+  it("payg has 0 included, no hard cap, and the free run allowance", () => {
     expect(planLimits("payg")).toEqual({
       monthlyIncluded: 0,
       hardCap: false,
       multiAccount: true,
+      agentRuns: FREE_MONTHLY_AGENT_RUNS,
     });
   });
-  it("plan limits carry NO agent-run allowance — the run cap is plan-independent", () => {
-    // The cost asymmetry: gateway calls run on the user's own upstream quota
-    // and cost us almost nothing, while agent runs burn our model budget. Pro
-    // therefore raises the CALL allowance only; the agent-run cap is the same
-    // number on every tier (see FREE_MONTHLY_AGENT_RUNS and the playground
-    // chat route, which deliberately never consults the plan). If a per-plan
-    // agent allowance ever lands here, that is an unbounded per-subscriber
-    // cost with no measured ceiling behind it — this test is meant to make
-    // that a decision, not a drift.
-    for (const plan of PLAN_VALUES) {
-      expect(Object.keys(planLimits(plan)).sort()).toEqual([
-        "hardCap",
-        "monthlyIncluded",
-        "multiAccount",
-      ]);
-    }
+  it("the agent-run allowance is PER PLAN: free 25, pro 100, everything else free (SCRUM-84)", () => {
+    // This REVERSES the earlier "no per-plan agent allowance" pin, on the
+    // terms that pin set for itself: it existed to make a per-plan allowance
+    // a decision rather than a drift, and the blocker it named — "no measured
+    // ceiling behind it" — is gone. The per-run token distribution was
+    // measured (SCRUM-55) and RUN_TOKEN_CEILING now bounds the tail, so
+    // allowance x ceiling bounds each subscriber's worst-case model cost.
+    // Before this, Pro shipped capped at the SAME 25 runs as Free — a paying
+    // subscriber getting exactly what the free tier gets, which is a broken
+    // promise rather than generosity.
+    expect(planLimits("free").agentRuns).toBe(FREE_MONTHLY_AGENT_RUNS);
+    expect(planLimits("pro").agentRuns).toBe(100);
+    // Least privilege everywhere else: nothing that is not "pro" may claim
+    // like Pro, unknown values included.
+    expect(planLimits("payg").agentRuns).toBe(FREE_MONTHLY_AGENT_RUNS);
+    expect(
+      planLimits("plan-from-the-future" as (typeof PLAN_VALUES)[number]).agentRuns
+    ).toBe(FREE_MONTHLY_AGENT_RUNS);
+  });
+  it("the per-run token ceiling is the ruled 150k, just above the measured p95", () => {
+    // The number the cost bound was computed with. If this changes, the
+    // allowance math in the pro branch comment changes with it — move both.
+    expect(RUN_TOKEN_CEILING).toBe(150_000);
   });
 });
 

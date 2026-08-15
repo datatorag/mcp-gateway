@@ -3,7 +3,7 @@ import { createTool } from "@mastra/core/tools";
 import type { Database } from "@datatorag-mcp/db";
 import { connectedAccounts, users } from "@datatorag-mcp/db";
 import { and, eq } from "drizzle-orm";
-import { FREE_MONTHLY_AGENT_RUNS } from "@/gateway/billing/plans";
+import { planLimits } from "@/gateway/billing/plans";
 import { capExempt, periodStatus } from "@/gateway/usage/period";
 import { disconnectService } from "@/gateway/connected-accounts";
 import {
@@ -88,7 +88,10 @@ export function buildIntrospectionTools({ db, userId }: IntrospectionDeps) {
 
         const status = await periodStatus(db, userId);
         const exempt = await capExempt(db, userId);
-        const cap = exempt ? null : FREE_MONTHLY_AGENT_RUNS;
+        // Plan-aware (SCRUM-84), same lookup the chat route enforces with —
+        // the number this tool tells the user and the number the claim
+        // refuses at must be the same number, from the same table.
+        const cap = exempt ? null : planLimits(row?.plan ?? "free").agentRuns;
         const used = status?.agentRuns ?? 0;
 
         return {

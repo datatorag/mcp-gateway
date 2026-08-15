@@ -42,7 +42,18 @@ vi.mock("@datatorag-mcp/config", () => ({
   }),
 }));
 
-vi.mock("@/lib/db", () => ({ db: {}, getDb: () => ({}) }));
+// The route reads users.plan for the plan-aware run allowance (SCRUM-84);
+// this suite's users are all free, which the chain below answers.
+vi.mock("@/lib/db", () => {
+  const chain = {
+    select: () => ({
+      from: () => ({
+        where: () => ({ limit: async () => [{ plan: "free" }] }),
+      }),
+    }),
+  };
+  return { db: chain, getDb: () => chain };
+});
 
 vi.mock("@/gateway/usage/period", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/gateway/usage/period")>()),

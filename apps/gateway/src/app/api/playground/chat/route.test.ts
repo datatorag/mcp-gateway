@@ -26,7 +26,11 @@ vi.mock("@/lib/session", () => ({ getSessionUserId: () => getSessionUserId() }))
 const getEnv = vi.fn();
 vi.mock("@datatorag-mcp/config", () => ({ getEnv: () => getEnv() }));
 
-import { FREE_MONTHLY_AGENT_RUNS as RUN_CAP } from "@/gateway/billing/plans";
+import { FREE_MONTHLY_AGENT_RUNS as RUN_CAP, planLimits } from "@/gateway/billing/plans";
+import {
+  RunTokenCeilingError,
+  RUN_CEILING_MESSAGE,
+} from "@/mastra/run-token-budget";
 
 const claimAgentRun = vi.fn();
 const capExempt = vi.fn();
@@ -41,17 +45,32 @@ vi.mock("@/gateway/usage/period", async (importOriginal) => ({
 const trackPlaygroundMessage = vi.fn();
 const trackPlaygroundCapHit = vi.fn();
 const trackPlaygroundConfirm = vi.fn();
+const trackPlaygroundRunCeilingHit = vi.fn();
 const trackAgentRun = vi.fn();
 const trackToolCall = vi.fn();
 vi.mock("@/gateway/track", () => ({
   trackPlaygroundMessage: (...a: unknown[]) => trackPlaygroundMessage(...a),
   trackPlaygroundCapHit: (...a: unknown[]) => trackPlaygroundCapHit(...a),
   trackPlaygroundConfirm: (...a: unknown[]) => trackPlaygroundConfirm(...a),
+  trackPlaygroundRunCeilingHit: (...a: unknown[]) =>
+    trackPlaygroundRunCeilingHit(...a),
   trackAgentRun: (...a: unknown[]) => trackAgentRun(...a),
   trackToolCall: (...a: unknown[]) => trackToolCall(...a),
 }));
 
-vi.mock("@/lib/db", () => ({ db: {}, getDb: () => ({}) }));
+/** The route reads users.plan for the plan-aware run allowance (SCRUM-84);
+ * the db mock answers exactly that select chain and nothing else. The
+ * reference to `planRows` stays inside an arrow, same deferral as every
+ * other hoisted mock in this file. */
+const planRows = vi.fn();
+vi.mock("@/lib/db", () => {
+  const chain = {
+    select: () => ({
+      from: () => ({ where: () => ({ limit: async () => planRows() }) }),
+    }),
+  };
+  return { db: chain, getDb: () => chain };
+});
 
 const userOwnsThread = vi.fn();
 vi.mock("@/gateway/playground/threads", () => ({
@@ -177,6 +196,7 @@ beforeEach(() => {
   });
   claimAgentRun.mockResolvedValue({ ok: true, used: 1, remaining: 24 });
   capExempt.mockResolvedValue(false);
+  planRows.mockResolvedValue([{ plan: "free" }]);
   refundAgentRun.mockResolvedValue(undefined);
   handleChatStream.mockResolvedValue(chunkStream([{ type: "start" }, { type: "finish" }]));
   userOwnsThread.mockResolvedValue(true);
@@ -266,7 +286,7 @@ describe("POST /api/playground/chat — the turn cap", () => {
 
     expect(response.status).toBe(429);
     expect(await response.json()).toEqual({ error: "cap_exceeded", cap: RUN_CAP });
-    expect(trackPlaygroundCapHit).toHaveBeenCalledWith({}, USER);
+    expect(trackPlaygroundCapHit).toHaveBeenCalledWith(expect.anything(), USER);
     expect(handleChatStream).not.toHaveBeenCalled();
   });
 
@@ -279,7 +299,7 @@ describe("POST /api/playground/chat — the turn cap", () => {
     claimAgentRun.mockResolvedValue({ ok: true, used: 900, remaining: null });
     const response = await POST(post({ messages: USER_TURN }));
 
-    expect(claimAgentRun).toHaveBeenCalledWith({}, USER, null);
+    expect(claimAgentRun).toHaveBeenCalledWith(expect.anything(), USER, null);
     // No paywall headers, because there is no wall to report.
     expect(response.headers.get("x-playground-runs-cap")).toBeNull();
     expect(response.headers.get("x-playground-runs-remaining")).toBeNull();
@@ -289,23 +309,77 @@ describe("POST /api/playground/chat — the turn cap", () => {
   it("claims and counts one message on a fresh turn", async () => {
     await drain(await POST(post({ messages: USER_TURN })));
 
-    expect(claimAgentRun).toHaveBeenCalledWith({}, USER, RUN_CAP);
-    expect(trackPlaygroundMessage).toHaveBeenCalledWith({}, USER);
+    expect(claimAgentRun).toHaveBeenCalledWith(expect.anything(), USER, RUN_CAP);
+    expect(trackPlaygroundMessage).toHaveBeenCalledWith(expect.anything(), USER);
   });
 
-  it("the agent-run cap is IDENTICAL on every tier — a Pro subscription buys call volume, not runs", async () => {
-    // The cost asymmetry: gateway calls run on the user's own upstream quota;
-    // agent runs burn our model budget. So the route never consults the plan —
-    // the ONLY inputs to the cap are the internal exemption and the constant.
-    // This test names that invariant: if someone wires planLimits or a plan
-    // lookup into this claim, the claim argument changes and this goes red.
-    // (plans.test.ts pins the same decision from the other side: PlanLimits
-    // carries no agent-run field for a plan to raise.)
-    capExempt.mockResolvedValue(false); // an ordinary external user…
+  it("the run allowance is PLAN-AWARE — Pro claims against the allowance Pro paid for", async () => {
+    // This REVERSES the earlier plan-independent pin, on the terms that pin
+    // itself set: it existed to make a per-plan allowance "a decision, not a
+    // drift", and the decision has now been made (SCRUM-84, ruled with a
+    // measured per-run token ceiling bounding the cost). The route reads
+    // users.plan and claims against planLimits(plan).agentRuns; the era of a
+    // paying subscriber hitting the free wall is what this test now forbids.
+    planRows.mockResolvedValue([{ plan: "pro" }]);
     await drain(await POST(post({ messages: USER_TURN })));
-    // …is capped at the flat constant regardless of what plan they're on,
-    // because nothing plan-shaped ever reaches the claim.
-    expect(claimAgentRun).toHaveBeenCalledWith({}, USER, RUN_CAP);
+    expect(claimAgentRun).toHaveBeenCalledWith(
+      expect.anything(),
+      USER,
+      planLimits("pro").agentRuns
+    );
+    expect(planLimits("pro").agentRuns).toBeGreaterThan(RUN_CAP);
+  });
+
+  it("a free user still claims against the free allowance", async () => {
+    planRows.mockResolvedValue([{ plan: "free" }]);
+    await drain(await POST(post({ messages: USER_TURN })));
+    expect(claimAgentRun).toHaveBeenCalledWith(expect.anything(), USER, RUN_CAP);
+  });
+
+  it("an unknown plan value falls to the free allowance, and a missing row does too", async () => {
+    // Least privilege, matching planLimits' own default branch: a plan value
+    // this build does not know must never claim like Pro.
+    planRows.mockResolvedValue([{ plan: "plan-from-the-future" }]);
+    await drain(await POST(post({ messages: USER_TURN })));
+    expect(claimAgentRun).toHaveBeenCalledWith(expect.anything(), USER, RUN_CAP);
+
+    planRows.mockResolvedValue([]);
+    await drain(await POST(post({ messages: USER_TURN })));
+    expect(claimAgentRun).toHaveBeenLastCalledWith(
+      expect.anything(),
+      USER,
+      RUN_CAP
+    );
+  });
+
+  it("a run stopped at the token ceiling reads as a product state, not a generic error", async () => {
+    // The ceiling refuses the NEXT model call mid-run (SCRUM-84); by then the
+    // stream is live, so the refusal surfaces through the failure tap. The
+    // user must read the ceiling message, not the generic error line — a run
+    // dying silently at a token limit looks like a product bug. And the
+    // claim STANDS: the run really spent its budget, so no refund.
+    let sent = 0;
+    handleChatStream.mockResolvedValue(
+      new ReadableStream<UIMessageChunk>({
+        pull(controller) {
+          if (sent === 0) {
+            sent++;
+            controller.enqueue({ type: "text-delta", id: "t1", delta: "partial" } as UIMessageChunk);
+            return;
+          }
+          controller.error(new RunTokenCeilingError(150_000));
+        },
+      })
+    );
+
+    const chunks = await drain(await POST(post({ messages: USER_TURN })));
+    const errorChunk = chunks.find((c) => c.type === "error");
+    expect(errorChunk?.errorText).toBe(RUN_CEILING_MESSAGE);
+    expect(trackPlaygroundRunCeilingHit).toHaveBeenCalledWith(
+      expect.anything(),
+      USER
+    );
+    expect(refundAgentRun).not.toHaveBeenCalled();
   });
 
   it("reports the runs left on the response of the turn that spent one", async () => {
@@ -348,7 +422,7 @@ describe("POST /api/playground/chat — the turn cap", () => {
     await drain(await POST(post({ messages: approvalTurn(USER) })));
 
     expect(claimAgentRun).not.toHaveBeenCalled();
-    expect(trackPlaygroundConfirm).toHaveBeenCalledWith({}, USER, "approved", 1);
+    expect(trackPlaygroundConfirm).toHaveBeenCalledWith(expect.anything(), USER, "approved", 1);
   });
 
   it("records a decision of 'denied' when nothing in the batch was approved", async () => {
@@ -357,7 +431,7 @@ describe("POST /api/playground/chat — the turn cap", () => {
       .approval.approved = false;
     await drain(await POST(post({ messages })));
 
-    expect(trackPlaygroundConfirm).toHaveBeenCalledWith({}, USER, "denied", 1);
+    expect(trackPlaygroundConfirm).toHaveBeenCalledWith(expect.anything(), USER, "denied", 1);
   });
 });
 
@@ -367,7 +441,7 @@ describe("POST /api/playground/chat — refunds", () => {
     const response = await POST(post({ messages: USER_TURN }));
 
     expect(response.status).toBe(500);
-    expect(refundAgentRun).toHaveBeenCalledWith({}, USER);
+    expect(refundAgentRun).toHaveBeenCalledWith(expect.anything(), USER);
   });
 
   it("refunds when the stream fails having delivered only bookkeeping", async () => {
@@ -377,7 +451,7 @@ describe("POST /api/playground/chat — refunds", () => {
     const chunks = await drain(await POST(post({ messages: USER_TURN })));
 
     expect(chunks.some((c) => c.type === "error")).toBe(true);
-    expect(refundAgentRun).toHaveBeenCalledWith({}, USER);
+    expect(refundAgentRun).toHaveBeenCalledWith(expect.anything(), USER);
   });
 
   it("does NOT refund once real content has reached the client", async () => {
@@ -455,7 +529,7 @@ describe("POST /api/playground/chat — metering taps", () => {
     // A declined write never executes, so it is never metered — that property
     // now holds by construction rather than by this tap being careful.
     expect(trackToolCall).not.toHaveBeenCalled();
-    expect(trackPlaygroundConfirm).toHaveBeenCalledWith({}, USER, "shown", 1);
+    expect(trackPlaygroundConfirm).toHaveBeenCalledWith(expect.anything(), USER, "shown", 1);
   });
 });
 

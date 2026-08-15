@@ -24,9 +24,16 @@ import { threadTitle } from "@/gateway/playground/thread-title";
 import {
   trackAgentRun,
   trackPlaygroundMessage, trackPlaygroundCapHit, trackPlaygroundConfirm,
+  trackPlaygroundRunCeilingHit,
 } from "@/gateway/track";
-import { FREE_MONTHLY_AGENT_RUNS } from "@/gateway/billing/plans";
+import { planLimits } from "@/gateway/billing/plans";
+import {
+  isRunTokenCeilingError,
+  RUN_CEILING_MESSAGE,
+} from "@/mastra/run-token-budget";
 import { capExempt, claimAgentRun, refundAgentRun } from "@/gateway/usage/period";
+import { eq } from "drizzle-orm";
+import { users } from "@datatorag-mcp/db";
 import { logAndGenericError } from "@/lib/errors";
 
 /**
@@ -319,7 +326,20 @@ export const POST = withRoute(async (userId, request) => {
     // sustained use this surface has, so a live allowance would interrupt our
     // own testing long before it ever met a customer. See `capExempt` for why
     // that predicate is safe for skipping a cap and unsafe for anything else.
-    const cap = (await capExempt(db, userId)) ? null : FREE_MONTHLY_AGENT_RUNS;
+    //
+    // PLAN-AWARE (SCRUM-84): the allowance comes from planLimits, so a Pro
+    // subscriber gets the allowance they paid for. This route was plan-blind
+    // once, which shipped Pro capped at the free allowance — the plan read is
+    // one indexed row and is what keeps the promise on the pricing page's
+    // side of true. Unknown plans read as free, same as planLimits itself.
+    const [planRow] = await db
+      .select({ plan: users.plan })
+      .from(users)
+      .where(eq(users.id, userId))
+      .limit(1);
+    const cap = (await capExempt(db, userId))
+      ? null
+      : planLimits(planRow?.plan ?? "free").agentRuns;
     const claim = await claimAgentRun(db, userId, cap);
     if (!claim.ok) {
       void trackPlaygroundCapHit(db, userId);
@@ -435,7 +455,15 @@ export const POST = withRoute(async (userId, request) => {
         // from the approval itself, so supplying one here would be ignored.
         ...(isApprovalLeg ? {} : { runId: usageRunId as string }),
       },
-      onError: (err) => logAndGenericError("[playground] stream error", err),
+      onError: (err) => {
+        // The token ceiling is a PRODUCT STATE, not a failure: say what
+        // happened in the user's terms instead of the generic error line.
+        if (isRunTokenCeilingError(err)) {
+          void trackPlaygroundRunCeilingHit(db, userId);
+          return RUN_CEILING_MESSAGE;
+        }
+        return logAndGenericError("[playground] stream error", err);
+      },
     })) as ReadableStream<UIMessageChunk>;
   } catch (err) {
     // Failed before a single chunk existed — refund, since the claim landed
@@ -460,6 +488,13 @@ export const POST = withRoute(async (userId, request) => {
       // every call.
       onApprovalShown: () => { void trackPlaygroundConfirm(db, userId, "shown", 1); },
       onFailure: (err) => {
+        // A ceiling stop is not a wasted turn: the run really consumed its
+        // budget, so the claim stands and no refund applies. Everything the
+        // run finished before the stop was already streamed.
+        if (isRunTokenCeilingError(err)) {
+          void trackPlaygroundRunCeilingHit(db, userId);
+          return RUN_CEILING_MESSAGE;
+        }
         refundIfWasted();
         return logAndGenericError("[playground] turn failed", err);
       },

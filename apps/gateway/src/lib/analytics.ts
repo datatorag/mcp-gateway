@@ -64,6 +64,10 @@ export const EVENTS = {
   AGENT_DEFAULT_VIEW_SHOWN: "agent_default_view_shown",
   PLAYGROUND_MESSAGE_SENT: "playground_message_sent",
   PLAYGROUND_CAP_HIT: "playground_cap_hit",
+  /** One run's token ceiling stopped its next step (SCRUM-84). Distinct from
+   * PLAYGROUND_CAP_HIT, which is the per-period RUN allowance refusing a new
+   * run. */
+  PLAYGROUND_RUN_CEILING_HIT: "playground_run_ceiling_hit",
   PLAYGROUND_CONFIRM: "playground_confirm",
   PLAYGROUND_FEEDBACK: "playground_feedback",
   WIZARD_CLIENT_SELECTED: "wizard_client_selected",
