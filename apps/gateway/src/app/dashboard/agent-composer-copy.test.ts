@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   ALL_COMPOSER_PLACEHOLDERS,
   ALL_PANEL_COPY,
-  COMPOSER_PLACEHOLDER_UNCONNECTED,
+  COMPOSER_PLACEHOLDER_AWAITING_CONFIRM,
 } from "./agent-composer-copy";
 
 /** Placeholders and panel labels together: the retired-term and em-dash rules
@@ -32,11 +32,26 @@ describe("agent composer copy", () => {
     }
   });
 
-  it("asks an unconnected user for exactly one thing", () => {
-    // The empty state directly above already carries the connect controls and
-    // the explanation. The placeholder's whole job is a single next step, so it
-    // must not grow into a second sentence of instructions.
-    expect(COMPOSER_PLACEHOLDER_UNCONNECTED.split(". ").length).toBe(1);
+  it("only the awaiting-confirm placeholder describes a lock (SCRUM-98)", () => {
+    // A placeholder may only describe a restriction the component actually
+    // enforces. The composer's `disabled` is `streaming || awaitingConfirm`,
+    // and connection state is not in it — so of the placeholders that exist,
+    // exactly one is allowed to read as "you cannot type until X", and it is
+    // the one for the state where typing is genuinely locked. The retired
+    // "Connect an account to get started" failed this rule: it told an
+    // unconnected user the box was gated while the box sat enabled beneath
+    // it, and it kept doing so after the agent had already rendered its own
+    // connect ask in the thread. This is a structural pin, not a wording one:
+    // a placeholder added back for a connection state lands in
+    // ALL_COMPOSER_PLACEHOLDERS (the module exists so no placeholder can hide
+    // from the guard) and this assertion goes red until someone re-argues the
+    // gate. The rendered-DOM half of the rule lives in
+    // agent-composer.test.tsx, which proves the ENABLED composer never wears
+    // a lock placeholder.
+    const lockShaped = ALL_COMPOSER_PLACEHOLDERS.filter((line) =>
+      /\b(connect|approve|deny)\b/i.test(line)
+    );
+    expect(lockShaped).toEqual([COMPOSER_PLACEHOLDER_AWAITING_CONFIRM]);
   });
 
   it("keeps its own rules honest", () => {
@@ -46,5 +61,9 @@ describe("agent composer copy", () => {
     const bad = "Connect an account to try the playground";
     expect(bad.toLowerCase()).toContain("playground");
     expect("a — b").toContain("—");
+    // The lock-shaped pattern must still catch the string it retired: if it
+    // stops matching "Connect an account to get started", the SCRUM-98 guard
+    // above is passing by failing to look.
+    expect(/\b(connect|approve|deny)\b/i.test("Connect an account to get started.")).toBe(true);
   });
 });

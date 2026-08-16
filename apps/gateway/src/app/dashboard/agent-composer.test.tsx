@@ -35,7 +35,7 @@ if (typeof Element !== "undefined" && !("getAnimations" in Element.prototype)) {
 }
 
 const { AgentClient } = await import("./agent/agent-client");
-const { COMPOSER_PLACEHOLDER_UNCONNECTED } = await import("./agent-composer-copy");
+const { COMPOSER_PLACEHOLDER_READY } = await import("./agent-composer-copy");
 
 let container: HTMLDivElement;
 let root: Root;
@@ -121,19 +121,40 @@ describe("the Agent composer", () => {
 
   it("never calls the surface a playground: connected user", async () => {
     await mount(ok({ accounts: [{ id: "a1", connectorType: "google-workspace" }], connections: [] }));
-    const placeholder = renderedPlaceholder();
-    // Proves this test reached the state it claims: the connected placeholder
-    // is a different string from the unconnected one, so a silent fallback to
-    // the unconnected branch fails here rather than passing quietly.
-    //
-    // Compared against the CONSTANT, never a copy of its text. A hardcoded
-    // duplicate goes stale the first time the copy is reworded, and a stale
-    // sentinel matches nothing, which turns this guard back into the vacuous
-    // check it was written to replace. That reword has already happened once.
-    expect(placeholder, "did not reach the CONNECTED state").not.toContain(
-      COMPOSER_PLACEHOLDER_UNCONNECTED.toLowerCase()
+    // Proves this test reached the state it claims. The placeholder can no
+    // longer prove it (SCRUM-98 made it identical across connection states,
+    // deliberately), so the proof moved to the empty-state copy, which still
+    // branches: the connected greeting invites a question about connected
+    // accounts, and the unconnected connect pitch must be absent.
+    const body = container.textContent?.toLowerCase() ?? "";
+    expect(body, "did not reach the CONNECTED state").toContain(
+      "connected accounts"
     );
-    expect(placeholder).not.toContain("playground");
+    expect(body, "unconnected empty state leaked into the connected render").not.toContain(
+      "anything in the meantime"
+    );
+    expect(renderedPlaceholder()).not.toContain("playground");
+  });
+
+  it("an ENABLED composer never wears a lock placeholder (SCRUM-98)", async () => {
+    // The deliverable of SCRUM-98, as a behavioural pin rather than a copy
+    // one: the placeholder must not describe a restriction the control does
+    // not enforce. The composer's `disabled` does not consult connection
+    // state, so its placeholder must not either. Production shipped the
+    // opposite: an enabled, typeable box captioned "Connect an account to
+    // get started", contradicting the empty state one line above it and
+    // still telling a user who had ALREADY asked to go get started.
+    await mount(ok({ accounts: [], connections: [] }));
+    const textarea = container.querySelector("textarea");
+    expect(textarea, "no composer rendered").not.toBeNull();
+    // The premise, asserted rather than assumed: with nothing connected the
+    // box is enabled. If someone gates the composer on connections for real,
+    // this fails and the placeholder question reopens honestly.
+    expect(textarea!.hasAttribute("disabled")).toBe(false);
+    // And an enabled box carries the ordinary invitation, compared against
+    // the CONSTANT so a reword cannot go stale, identical to what a
+    // connected user sees because the enablement is identical too.
+    expect(renderedPlaceholder()).toBe(COMPOSER_PLACEHOLDER_READY.toLowerCase());
   });
 
   it("still renders a composer when the connections call fails", async () => {

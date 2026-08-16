@@ -11,22 +11,21 @@
  * module exists to close.
  */
 
-/** Nothing connected yet.
+/** The ordinary state, connected or not.
  *
- * SERVICE-NEUTRAL ON PURPOSE. An earlier version named Google specifically,
- * which read as a precondition rather than an example: the empty state
- * directly above this offers Google Workspace AND Atlassian as peer buttons,
- * so singling one out narrows what the product does for an Atlassian-only
- * user. Staying neutral also sidesteps a naming inconsistency, since the
- * connector is called "Google Workspace" everywhere else in the product and a
- * placeholder saying "Google account" disagreed with the button beside it.
- *
- * Keep it neutral as connectors are added. The connect controls enumerate the
- * services; this line only has to ask for one. */
-export const COMPOSER_PLACEHOLDER_UNCONNECTED =
-  "Connect an account to get started.";
-
-/** The ordinary state. */
+ * There is deliberately NO unconnected variant (SCRUM-98). The composer is
+ * enabled with nothing connected: the user can ask, the agent notices the
+ * missing connection itself and offers the connect control in its reply, and
+ * that in-conversation ask is the whole design of this surface. A previous
+ * placeholder said "Connect an account to get started", which described a
+ * lock the control does not have, contradicted the empty state one line above
+ * it ("You can ask me anything in the meantime"), and kept saying "get
+ * started" under a thread the user had already started. An earlier pass had
+ * made that string service-neutral so it would stop reading as a
+ * precondition; neutrality was the wrong axis, because the problem was that
+ * it described a gate at all. A placeholder may only describe a restriction
+ * the component actually enforces, so the connection-dependent placeholder is
+ * gone rather than reworded. */
 export const COMPOSER_PLACEHOLDER_READY = "Ask something…";
 
 /** A gated write is waiting on a decision, and the composer is locked until it
@@ -36,7 +35,6 @@ export const COMPOSER_PLACEHOLDER_AWAITING_CONFIRM =
 
 /** Every placeholder, for the rules that apply to all of them. */
 export const ALL_COMPOSER_PLACEHOLDERS = [
-  COMPOSER_PLACEHOLDER_UNCONNECTED,
   COMPOSER_PLACEHOLDER_READY,
   COMPOSER_PLACEHOLDER_AWAITING_CONFIRM,
 ];

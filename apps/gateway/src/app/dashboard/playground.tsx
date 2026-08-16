@@ -45,7 +45,6 @@ import {
 import {
   COMPOSER_PLACEHOLDER_AWAITING_CONFIRM,
   COMPOSER_PLACEHOLDER_READY,
-  COMPOSER_PLACEHOLDER_UNCONNECTED,
   PANEL_HEADING,
   PANEL_STANDFIRST,
 } from "./agent-composer-copy";
@@ -634,11 +633,14 @@ export const Playground = forwardRef<PlaygroundHandle, PlaygroundProps>(
     // dead chat box.
     if (hidden) return null;
 
+    // The placeholder tracks the composer's ACTUAL enablement and nothing
+    // else. `disabled` below is `streaming || awaitingConfirm`; connection
+    // state is not in it, so it must not be in the placeholder either — an
+    // unconnected user is invited to ask, and the agent handles the missing
+    // connection in its reply (SCRUM-78, SCRUM-98).
     const placeholder = awaitingConfirm
       ? COMPOSER_PLACEHOLDER_AWAITING_CONFIRM
-      : hasConnectedAccount
-        ? COMPOSER_PLACEHOLDER_READY
-        : COMPOSER_PLACEHOLDER_UNCONNECTED;
+      : COMPOSER_PLACEHOLDER_READY;
 
     const chat = (
       <ConnectReturnContext.Provider value={connectReturn}>
