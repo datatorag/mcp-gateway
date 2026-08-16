@@ -20,6 +20,7 @@
 import { memo } from "react";
 import type { DynamicToolUIPart, ToolUIPart, UIMessage } from "ai";
 import { renderAgentPart, type AgentDataParts } from "./agent-parts";
+import { internalToolIcon, toolDisplayName } from "./agent-tool-copy";
 import { RefreshCcwIcon, ThumbsDownIcon, ThumbsUpIcon } from "lucide-react";
 
 import {
@@ -215,15 +216,30 @@ export function messageText(message: PlaygroundMessage): string {
  * standard part, per call rather than per batch. */
 export function ToolCard({ part }: { part: AnyToolPart }) {
   const name = shortToolName(toolPartName(part));
+  // Internal gateway tools show what happened in the user's words and wear a
+  // per-action glyph; everything else keeps its literal name and its derived
+  // mark (service brand icon, wrench fallback). The split and its reasons
+  // live in agent-tool-copy.ts (SCRUM-100).
+  const display = toolDisplayName(name);
+  const InternalIcon = internalToolIcon(name);
+  const icon = InternalIcon ? (
+    <InternalIcon className="size-4 text-muted-foreground" />
+  ) : undefined;
   return (
     <Tool className="mb-0 text-xs">
       {/* `title` overrides the header's own name derivation, which would
           otherwise show the full `<slug>__<tool>` type. The two branches exist
           because the header's props are a discriminated union on `type`. */}
       {part.type === "dynamic-tool" ? (
-        <ToolHeader state={part.state} toolName={name} type="dynamic-tool" />
+        <ToolHeader
+          icon={icon}
+          state={part.state}
+          title={display}
+          toolName={name}
+          type="dynamic-tool"
+        />
       ) : (
-        <ToolHeader state={part.state} title={name} type={part.type} />
+        <ToolHeader icon={icon} state={part.state} title={display} type={part.type} />
       )}
       <ToolContent>
         <ToolInput input={part.input ?? {}} />

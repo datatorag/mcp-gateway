@@ -296,3 +296,84 @@ describe("after the decision", () => {
     expect(text).not.toContain("Denied");
   });
 });
+
+describe("internal tool cards wear human labels (SCRUM-100)", () => {
+  /** A first-message turn as the runtime actually emits it: the agent checks
+   * the account, finds nothing connected, and asks. These two internal ids
+   * used to be the first things a brand-new user ever saw in the thread. */
+  const INTERNAL_TURN: UIMessageChunk[] = [
+    { type: "start", messageId: "assistant-3" },
+    { type: "start-step" },
+    { type: "tool-input-start", toolCallId: "call-a", toolName: "account_status" },
+    {
+      type: "tool-input-available",
+      toolCallId: "call-a",
+      toolName: "account_status",
+      input: {},
+    },
+    { type: "tool-output-available", toolCallId: "call-a", output: { plan: "free" } },
+    { type: "tool-input-start", toolCallId: "call-b", toolName: "request_connection" },
+    {
+      type: "tool-input-available",
+      toolCallId: "call-b",
+      toolName: "request_connection",
+      input: { service: "google-workspace" },
+    },
+    { type: "tool-output-available", toolCallId: "call-b", output: { ok: true } },
+    { type: "finish-step" },
+    { type: "finish" },
+  ];
+
+  it("shows what happened, never the internal id", async () => {
+    render([await assemble(INTERNAL_TURN)], false);
+    const text = visibleText();
+
+    // Both directions (present AND absent): the label alone could render
+    // beside a raw id and this would still look fixed at a glance.
+    expect(text).toContain("Checking your connected accounts");
+    expect(text).toContain("Asking for a connection");
+    expect(text).not.toContain("account_status");
+    expect(text).not.toContain("request_connection");
+  });
+
+  it("connector cards keep the literal name and the service mark", async () => {
+    // The ruled split, pinned at the DOM: humanising is for the gateway's own
+    // plumbing only. A user auditing what the agent touched reads the exact
+    // connector tool name, and the brand mark stays.
+    render([await assemble(SUSPENDED_TURN)], true);
+    expect(visibleText()).toContain("gmail_search");
+    expect(
+      container.querySelector('img[src*="/icons/services/gmail"]')
+    ).not.toBeNull();
+  });
+
+  it("internal cards wear their own glyph, not the generic wrench", async () => {
+    // First prove the selector can see a wrench at all, on a card that should
+    // have one: an unmapped, unbranded tool. A selector that matches nothing
+    // would make the absence assertion below pass vacuously.
+    const UNKNOWN_TOOL_TURN: UIMessageChunk[] = [
+      { type: "start", messageId: "assistant-4" },
+      { type: "start-step" },
+      { type: "tool-input-start", toolCallId: "call-c", toolName: "echo" },
+      {
+        type: "tool-input-available",
+        toolCallId: "call-c",
+        toolName: "echo",
+        input: { text: "hi" },
+      },
+      { type: "tool-output-available", toolCallId: "call-c", output: "hi" },
+      { type: "finish-step" },
+      { type: "finish" },
+    ];
+    render([await assemble(UNKNOWN_TOOL_TURN)], false);
+    expect(
+      container.querySelector("svg.lucide-wrench"),
+      "selector cannot see a wrench even where one belongs - fix the selector before trusting the next assertion"
+    ).not.toBeNull();
+
+    render([await assemble(INTERNAL_TURN)], false);
+    expect(container.querySelector("svg.lucide-wrench")).toBeNull();
+    // And no borrowed brand mark either: internal tools have no service.
+    expect(container.querySelector('img[src*="/icons/services/"]')).toBeNull();
+  });
+});
