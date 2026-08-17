@@ -171,6 +171,7 @@ async function mountAndSuspend(): Promise<void> {
   act(() => {
     root.render(
       <Playground
+        connectionsLoaded
         hasConnectedAccount
         prompts={["do a thing"]}
         ref={(instance: PlaygroundHandle | null) => {

@@ -373,6 +373,7 @@ export function DashboardClient() {
         ref={playgroundRef}
         prompts={AGENT_PROMPTS}
         hasConnectedAccount={hasConnectedAccount}
+        connectionsLoaded={loaded}
       />
 
       {/* Agent setup wizard + live connection status */}

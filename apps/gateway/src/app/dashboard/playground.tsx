@@ -173,6 +173,16 @@ interface PlaygroundProps {
   loadSuggestions?: () => Promise<string[]>;
   /** Whether the user has at least one connected account (any service). */
   hasConnectedAccount: boolean;
+  /** Whether the connection lookup has RESOLVED. Before it has,
+   * `hasConnectedAccount` is a default, not a fact (SCRUM-114): the shared
+   * hook starts every user at "nothing connected" and finds out
+   * asynchronously, so branching on the boolean alone told every connected
+   * user they were not connected for one fetch round trip per load. The
+   * empty state renders NEITHER branch until this is true. The COMPOSER is
+   * deliberately not gated on it, which is a different decision made where
+   * the composer is rendered: a page with nothing to type in is
+   * indistinguishable from a broken one. */
+  connectionsLoaded: boolean;
   /** Which shape to render. Defaults to the embedded dashboard widget, so an
    * existing caller keeps exactly what it had. */
   layout?: PlaygroundLayout;
@@ -214,6 +224,7 @@ export const Playground = forwardRef<PlaygroundHandle, PlaygroundProps>(
     {
       prompts,
       hasConnectedAccount,
+      connectionsLoaded,
       loadSuggestions,
       layout = "panel",
       threadId = null,
@@ -258,9 +269,21 @@ export const Playground = forwardRef<PlaygroundHandle, PlaygroundProps>(
 
     /** The user's own files when the read found any, the generic examples
      * otherwise. Derived once so the copy and the list cannot disagree about
-     * which of the two is on screen. */
+     * which of the two is on screen.
+     *
+     * TOPPED UP TO THREE (SCRUM-114). The render below promises three
+     * suggestions and the personalised read guarantees no count at all: it
+     * returns whatever it found, and a one-file account collapsed the row to
+     * a single stale-looking entry. The personalised prompts lead and the
+     * generic list fills the remainder, so the promised three is enforced
+     * here rather than asserted in a comment. */
     const personalised = ownFilePrompts.length > 0;
-    const suggestions = personalised ? ownFilePrompts : prompts;
+    const suggestions = personalised
+      ? [
+          ...ownFilePrompts,
+          ...prompts.filter((p) => !ownFilePrompts.includes(p)),
+        ]
+      : prompts;
 
     useEffect(() => {
       if (!hasConnectedAccount || !loadSuggestions) return;
@@ -671,7 +694,16 @@ export const Playground = forwardRef<PlaygroundHandle, PlaygroundProps>(
                       {PAGE_GREETING}
                     </h1>
                   )}
-                  {hasConnectedAccount ? (
+                  {/* THREE states, not two (SCRUM-114): until the connection
+                      lookup resolves, connection state is unknown, and
+                      unknown renders as NEITHER branch. Branching on the
+                      boolean alone showed every connected user the connect
+                      card for one fetch round trip per load, and since the
+                      empty-state card is click-instrumented, a click during
+                      that flash would log connect intent from an
+                      already-connected user. The greeting above stays;
+                      claims about connection state wait until there is one. */}
+                  {connectionsLoaded && (hasConnectedAccount ? (
                     <>
                       <p
                         className={cn(
@@ -680,7 +712,9 @@ export const Playground = forwardRef<PlaygroundHandle, PlaygroundProps>(
                         )}
                       >
                         {personalised
-                          ? "Here are a few things I can do with what you just connected."
+                          ? suggestions.slice(0, 3).length === 1
+                            ? "Here is something I can do with what you have connected."
+                            : "Here are a few things I can do with what you have connected."
                           : "Ask something about your connected accounts."}
                       </p>
                       {/* Same three suggestions, same deterministic source,
@@ -730,7 +764,7 @@ export const Playground = forwardRef<PlaygroundHandle, PlaygroundProps>(
                         source="empty_state"
                       />
                     </>
-                  )}
+                  ))}
                 </div>
               )}
 

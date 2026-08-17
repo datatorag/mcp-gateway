@@ -49,7 +49,7 @@ export function AgentClient({
   /** Error code from a connect that did not finish. */
   connectError?: string | null;
 }) {
-  const { hasConnectedAccount } = useConnections();
+  const { hasConnectedAccount, loaded: connectionsLoaded } = useConnections();
   const ref = useRef<PlaygroundHandle>(null);
 
   // New users land HERE, so the signup conversion has to fire here too.
@@ -227,6 +227,7 @@ export function AgentClient({
             its row without pushing the composer below the fold. */}
         <div className="min-h-0 flex-1">
           <Playground
+            connectionsLoaded={connectionsLoaded}
             hasConnectedAccount={hasConnectedAccount}
             initialMessages={thread.history}
             key={`${thread.id ?? "new"}:${thread.epoch}`}
