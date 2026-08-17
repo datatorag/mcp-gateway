@@ -58,7 +58,8 @@ describe("agent cap copy", () => {
 
   it("sends the config exit to a route, not to an id on one page", () => {
     // The regression this pins: the config exit used to scroll to
-    // `#setup-wizard`, which exists only on /dashboard, so on the Agent route
+    // `#setup-wizard`, an id that existed only on the old /dashboard page
+    // (and exists nowhere since the wizard retired), so on the Agent route
     // the primary button did nothing. Asserting the href is a real path is what
     // stops a future change quietly re-coupling this panel to whatever page is
     // hosting it.

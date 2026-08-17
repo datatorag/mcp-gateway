@@ -353,7 +353,7 @@ export default function DashboardLayout({
         <nav
           id="dashboard-rail-nav"
           className="mt-4 space-y-1 px-2"
-          aria-label="Dashboard"
+          aria-label="Main"
         >
           {navItems.map((item) => {
             const active =

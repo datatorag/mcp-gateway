@@ -11,7 +11,7 @@ import {
 } from "react";
 import { useChat } from "@ai-sdk/react";
 import { AgentMeter, type AgentQuota } from "./agent-meter";
-import { useConnections } from "./use-connections";
+import type { ConnectedAccount } from "./connections/types";
 import {
   DefaultChatTransport,
   lastAssistantMessageIsCompleteWithApprovalResponses,
@@ -173,6 +173,13 @@ interface PlaygroundProps {
   loadSuggestions?: () => Promise<string[]>;
   /** Whether the user has at least one connected account (any service). */
   hasConnectedAccount: boolean;
+  /** The connected accounts themselves, for the meter's connector half.
+   * PASSED DOWN, NOT FETCHED HERE (SCRUM-122): this component's only caller
+   * already runs `useConnections`, and a second instance in here issued a
+   * second /api/connections request on every agent-page load, both counting
+   * against the same rate limiter. One hook instance, one fetch, and the
+   * meter cannot disagree with the surface hosting it. */
+  accounts: ConnectedAccount[];
   /** Whether the connection lookup has RESOLVED. Before it has,
    * `hasConnectedAccount` is a default, not a fact (SCRUM-114): the shared
    * hook starts every user at "nothing connected" and finds out
@@ -224,6 +231,7 @@ export const Playground = forwardRef<PlaygroundHandle, PlaygroundProps>(
     {
       prompts,
       hasConnectedAccount,
+      accounts,
       connectionsLoaded,
       loadSuggestions,
       layout = "panel",
@@ -242,10 +250,6 @@ export const Playground = forwardRef<PlaygroundHandle, PlaygroundProps>(
      * headers when they arrive. `cap: null` is the exempt state, rendered in
      * its own words by the meter. */
     const [quota, setQuota] = useState<AgentQuota | null>(null);
-    /** The meter's connector half — the SHARED hook, so its notion of "what
-     * is connected" cannot drift from the other surfaces reading it. */
-    const { accounts: meterAccounts, loaded: meterAccountsLoaded } =
-      useConnections();
     const [hidden, setHidden] = useState(false);
     const [feedback, setFeedback] = useState<Record<string, FeedbackState>>({});
     const [comments, setComments] = useState<Record<string, string>>({});
@@ -815,12 +819,13 @@ export const Playground = forwardRef<PlaygroundHandle, PlaygroundProps>(
                 </p>
                 <div className="mt-2 flex items-center justify-center gap-2">
                   {/* Both exits are links now. The config exit used to scroll
-                      to `#setup-wizard`, an id that only exists on
-                      /dashboard, so on the Agent route the primary control
-                      did nothing at the moment the user had just been
-                      refused. `next/link` is correct for both: these are Next
-                      pages, unlike the `/auth/*` connect controls, which are
-                      Express routes and must stay plain anchors. */}
+                      to `#setup-wizard`, an id that existed only on the old
+                      /dashboard page (and exists nowhere since the wizard
+                      retired), so on the Agent route the primary control did
+                      nothing at the moment the user had just been refused.
+                      `next/link` is correct for both: these are Next pages,
+                      unlike the `/auth/*` connect controls, which are Express
+                      routes and must stay plain anchors. */}
                   <Link
                     href={AGENT_CAP_PRIMARY_HREF}
                     className={buttonVariants({ size: "sm" })}
@@ -871,8 +876,8 @@ export const Playground = forwardRef<PlaygroundHandle, PlaygroundProps>(
                 pinned exactly where it was. */}
             <AgentMeter
               quota={quota}
-              accounts={meterAccounts}
-              accountsLoaded={meterAccountsLoaded}
+              accounts={accounts}
+              accountsLoaded={connectionsLoaded}
             />
           </div>
       </div>

@@ -56,7 +56,8 @@ export function AgentClient({
    * into an auto-submitted turn. */
   seedPrompt?: string | null;
 }) {
-  const { hasConnectedAccount, loaded: connectionsLoaded } = useConnections();
+  const { accounts, hasConnectedAccount, loaded: connectionsLoaded } =
+    useConnections();
   const ref = useRef<PlaygroundHandle>(null);
 
   /** Run the seeded prompt exactly once, stripping the param first so a
@@ -253,6 +254,7 @@ export function AgentClient({
             its row without pushing the composer below the fold. */}
         <div className="min-h-0 flex-1">
           <Playground
+            accounts={accounts}
             connectionsLoaded={connectionsLoaded}
             hasConnectedAccount={hasConnectedAccount}
             initialMessages={thread.history}

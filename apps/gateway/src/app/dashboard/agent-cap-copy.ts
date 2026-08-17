@@ -49,8 +49,9 @@ export const AGENT_CAP_SECONDARY_HREF = "/upgrade";
 /** Where the config exit actually goes.
  *
  * A DESTINATION, NOT A SCROLL. This used to call `scrollIntoView` on
- * `#setup-wizard`, an id that exists only on `/dashboard`. On the Agent route
- * there is no such element, so the primary exit did nothing at all, silently,
+ * `#setup-wizard`, an id that existed only on the old `/dashboard` page and,
+ * since the wizard's retirement (SCRUM-118/122), exists nowhere. On the Agent
+ * route there was no such element, so the primary exit did nothing, silently,
  * at the exact moment the product had just refused the user's turn. Of all the
  * places to put a dead control, that is the worst one.
  *

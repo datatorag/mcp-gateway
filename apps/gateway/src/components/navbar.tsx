@@ -37,8 +37,11 @@ export function Navbar() {
   const [productOpen, setProductOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const user = useCurrentUser();
-  const ctaHref = user ? "/dashboard" : "/auth/login";
-  const ctaLabel = user ? "Dashboard" : "Get Started";
+  // A signed-in visitor's CTA re-enters the product where login lands: the
+  // Agent is the front door (SCRUM-70), and the old "Dashboard" label pointed
+  // at a page whose heading now says Connections (SCRUM-118).
+  const ctaHref = user ? "/dashboard/agent" : "/auth/login";
+  const ctaLabel = user ? "Open Agent" : "Get Started";
 
   const closeProduct = useCallback(() => setProductOpen(false), []);
   useDismissable(dropdownRef, productOpen, closeProduct);
