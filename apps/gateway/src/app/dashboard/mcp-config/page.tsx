@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { getSessionUserId } from "@/lib/session";
 import { SetupInstructions } from "@/components/setup-instructions";
+import { ConnectionStatus } from "./connection-status";
 
 export const dynamic = "force-dynamic";
 
@@ -42,6 +43,9 @@ export default async function McpConfigPage() {
       <div className="mt-6">
         <SetupInstructions sourcePrefix="wizard" />
       </div>
+      {/* One flow, one page: the config above says what to paste, the live
+          status below says whether pasting worked (SCRUM-122). */}
+      <ConnectionStatus />
     </div>
   );
 }
