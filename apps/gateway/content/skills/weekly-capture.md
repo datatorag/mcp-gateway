@@ -3,7 +3,7 @@ title: "Turn your week into a document you would actually send"
 order: 9
 situation: "Every Friday someone asks what I got done this week, and I rebuild the answer from memory."
 produces: "A written weekly update in Google Docs, built from your own calendar and sent mail, with a Sheet that indexes every week."
-tools: [calendar_list_events, gmail_search, docs_create, docs_batch_update, sheets_read, sheets_append]
+tools: [calendar_list_events, gmail_search, gmail_read, docs_create, docs_get, docs_batch_update, sheets_read, sheets_append]
 accounts: multiple
 ---
 
