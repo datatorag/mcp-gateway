@@ -46,7 +46,9 @@ if (!("scrollTo" in Element.prototype)) {
 const { default: DashboardLayout } = await import("./layout");
 
 const EXPECTED_ITEMS = [
-  "Dashboard",
+  // "Connections", not "Dashboard" (SCRUM-118): the label says what the page
+  // is; the /dashboard PATH deliberately did not move.
+  "Connections",
   "Agent",
   "Usage",
   "Billing",

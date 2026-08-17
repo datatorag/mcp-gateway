@@ -49,6 +49,9 @@ const NO_CONNECT_RETURN = {
   resumeThreadId: null,
   connectedService: null,
   connectError: null,
+  // A plain landing seeds nothing (SCRUM-118); the seeding contract itself
+  // is pinned in page.seed-prompt.test.ts.
+  seedPrompt: null,
 };
 
 describe("agent page landing props", () => {

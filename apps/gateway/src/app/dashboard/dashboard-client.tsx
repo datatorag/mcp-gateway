@@ -8,8 +8,7 @@ import { EVENTS } from "@/lib/analytics";
 import { CasaBadge } from "@/components/casa-badge";
 import { SERVICES } from "./connections/services";
 import { ServiceIcon } from "@/components/service-icon";
-import { SetupWizard } from "./setup-wizard";
-import { Playground, type PlaygroundHandle } from "./playground";
+import { useRouter } from "next/navigation";
 import {
   PROMPT_CARDS_STANDFIRST,
   PROMPT_CARD_RUN_LABEL,
@@ -47,11 +46,18 @@ export function DashboardClient() {
   const loading = !loaded;
   const [disconnecting, setDisconnecting] = useState<string | null>(null);
   const { copied, copy } = useCopyToClipboard<number>();
-  const playgroundRef = useRef<PlaygroundHandle>(null);
+  const router = useRouter();
 
-  function runPrompt(prompt: string) {
+  /** Run means run (SCRUM-118): the button's own label has always said "Run
+   * in the Agent", and with the embedded panel gone it navigates there,
+   * carrying the prompt AS AN INDEX into the shared list - never as text.
+   * The agent page resolves the index server-side from the same
+   * AGENT_PROMPTS constant these cards render, so there is no free-text
+   * parameter for a crafted link to abuse, and an index that does not
+   * resolve seeds nothing. */
+  function runPrompt(index: number) {
     if (!hasConnectedAccount) return;
-    playgroundRef.current?.runPrompt(prompt);
+    router.push(`/dashboard/agent?prompt=${index}`);
   }
 
 
@@ -85,7 +91,7 @@ export function DashboardClient() {
     <div>
       <div>
         <h1 className="font-display text-2xl font-bold text-foreground">
-          Dashboard
+          Connections
         </h1>
         <p className="mt-1 text-sm text-muted-foreground">
           Connect your accounts and start using AI with your data. New here?
@@ -337,7 +343,7 @@ export function DashboardClient() {
               className="group flex items-start gap-2 rounded-lg border border-border px-3 py-2.5 text-left transition-colors hover:border-primary/30 hover:bg-secondary/50"
             >
               <button
-                onClick={() => runPrompt(prompt)}
+                onClick={() => runPrompt(i)}
                 disabled={!hasConnectedAccount}
                 title={
                   hasConnectedAccount
@@ -368,18 +374,7 @@ export function DashboardClient() {
         </div>
       </div>
 
-      {/* Live playground chat */}
-      <Playground
-        ref={playgroundRef}
-        prompts={AGENT_PROMPTS}
-        hasConnectedAccount={hasConnectedAccount}
-        connectionsLoaded={loaded}
-      />
 
-      {/* Agent setup wizard + live connection status */}
-      <div id="setup-wizard">
-        <SetupWizard />
-      </div>
     </div>
   );
 }

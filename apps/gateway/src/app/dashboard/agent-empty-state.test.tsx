@@ -57,7 +57,8 @@ function deferred<T>() {
 
 function mountWith(
   connections: () => Promise<Response>,
-  suggestions: string[] = []
+  suggestions: string[] = [],
+  seedPrompt: string | null = null
 ) {
   vi.stubGlobal(
     "fetch",
@@ -72,7 +73,13 @@ function mountWith(
     })
   );
   act(() => {
-    root.render(<AgentClient isDefaultView={false} landedFrom="login" />);
+    root.render(
+      <AgentClient
+        isDefaultView={false}
+        landedFrom="login"
+        seedPrompt={seedPrompt}
+      />
+    );
   });
 }
 
@@ -171,6 +178,64 @@ describe("the empty state and the unknown connection state (SCRUM-114)", () => {
       firstPrompt.compareDocumentPosition(card!) &
         Node.DOCUMENT_POSITION_FOLLOWING
     ).toBeTruthy();
+  });
+
+  it("a server-resolved seed prompt SUBMITS on arrival, exactly once (SCRUM-118)", async () => {
+    // The Connections page's Run action, end to end from this component's
+    // side: a seedPrompt prop (only ever a string the server resolved from
+    // AGENT_PROMPTS, or null) is auto-submitted into the chat.
+    //
+    // The URL carries the param the server just consumed, so the STRIP can
+    // be pinned below. The strip is the only thing standing between a
+    // shared or reloaded URL and a repeated submission - the one-shot ref
+    // covers a mount, not a reload - and an untested line guarding a
+    // security-adjacent property is the line a refactor deletes unnoticed.
+    window.history.replaceState(null, "", "/dashboard/agent?prompt=0&welcome=1");
+    mountWith(
+      async () =>
+        new Response(
+          JSON.stringify({
+            accounts: [{ id: "a1", connectorType: "google-workspace" }],
+            connections: [],
+          }),
+          { status: 200 }
+        ),
+      [],
+      "Summarize my unread emails and draft a status update in Google Docs"
+    );
+    await flush();
+    await flush();
+
+    const calls = (globalThis.fetch as unknown as { mock: { calls: unknown[][] } })
+      .mock.calls;
+    const chat = calls.filter((c) => String(c[0]).includes("/api/playground/chat"));
+    expect(chat.length, "seeded prompt did not submit").toBe(1);
+    const body = String((chat[0]![1] as { body?: unknown })?.body ?? "");
+    expect(body).toContain("Summarize my unread emails");
+    // The pin, both directions: the prompt param is gone, and the strip
+    // removed ONLY its own param rather than flattening the query string.
+    expect(window.location.search).not.toContain("prompt=");
+    expect(window.location.search).toContain("welcome=1");
+  });
+
+  it("no seed prompt means no submission on arrival", async () => {
+    mountWith(
+      async () =>
+        new Response(
+          JSON.stringify({
+            accounts: [{ id: "a1", connectorType: "google-workspace" }],
+            connections: [],
+          }),
+          { status: 200 }
+        )
+    );
+    await flush();
+    await flush();
+    const calls = (globalThis.fetch as unknown as { mock: { calls: unknown[][] } })
+      .mock.calls;
+    expect(
+      calls.filter((c) => String(c[0]).includes("/api/playground/chat"))
+    ).toHaveLength(0);
   });
 
   it("tops a thin personalised read up to three suggestions", async () => {

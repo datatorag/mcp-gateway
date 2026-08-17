@@ -9,7 +9,7 @@ import {
   BarChart3,
   BookOpen,
   CreditCard,
-  LayoutDashboard,
+  Cable,
   MessageSquare,
   PanelLeftClose,
   PanelLeftOpen,
@@ -21,7 +21,14 @@ import { useDismissable } from "@/lib/use-dismissable";
 import { cn } from "@/lib/utils";
 
 const navItems: Array<{ href: string; label: string; icon: LucideIcon }> = [
-  { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
+  // "Connections", because that is what the page IS (SCRUM-118): the
+  // connector cards are the real connections surface, and the legacy
+  // /dashboard/connections URL redirects HERE. The PATH stays /dashboard on
+  // purpose - the label renames, the route does not, because the route move
+  // would invert that redirect and shift a session-check boundary. The icon
+  // renames with the label: the rail is icon-only when compact, and a grid
+  // glyph labelled Connections would say the old name to anyone hovering.
+  { href: "/dashboard", label: "Connections", icon: Cable },
   { href: "/dashboard/agent", label: "Agent", icon: MessageSquare },
   { href: "/dashboard/usage", label: "Usage", icon: BarChart3 },
   { href: "/dashboard/billing", label: "Billing", icon: CreditCard },

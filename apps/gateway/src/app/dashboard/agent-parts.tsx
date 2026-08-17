@@ -146,7 +146,13 @@ export function ConnectPart({
             {mark && (
               <span
                 aria-hidden
-                className="mr-2 flex size-5 shrink-0 items-center justify-center rounded-sm bg-white"
+                // The [&_svg]:size-4 is the tile constraining its OWN
+                // content (SCRUM-118, carried from the SCRUM-97 gate): the
+                // registry icons ship with h-8 w-8 classes and previously
+                // rendered at 16px only because the button's svg-sizing rule
+                // happened to reach them. A mark added to the registry
+                // without that shape would have clipped here silently.
+                className="mr-2 flex size-5 shrink-0 items-center justify-center rounded-sm bg-white [&_svg]:size-4"
               >
                 {mark}
               </span>

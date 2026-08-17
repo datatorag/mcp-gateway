@@ -39,6 +39,7 @@ export function AgentClient({
   resumeThreadId = null,
   connectedService = null,
   connectError = null,
+  seedPrompt = null,
 }: {
   isDefaultView: boolean;
   landedFrom: AgentLandedFrom;
@@ -48,9 +49,34 @@ export function AgentClient({
   connectedService?: string | null;
   /** Error code from a connect that did not finish. */
   connectError?: string | null;
+  /** A prompt to run on arrival, RESOLVED SERVER-SIDE from the shared list
+   * by index (SCRUM-118) — the Connections page's Run action. Never raw URL
+   * text: the server hands this component either a string from
+   * AGENT_PROMPTS or null, so there is no payload a crafted link can carry
+   * into an auto-submitted turn. */
+  seedPrompt?: string | null;
 }) {
   const { hasConnectedAccount, loaded: connectionsLoaded } = useConnections();
   const ref = useRef<PlaygroundHandle>(null);
+
+  /** Run the seeded prompt exactly once, stripping the param first so a
+   * reload or a shared URL cannot re-submit it (same pattern as the connect
+   * return leg below and the signup conversion). The one-shot ref guards the
+   * same thing within this mount. */
+  const seededRef = useRef(false);
+  useEffect(() => {
+    if (!seedPrompt || seededRef.current) return;
+    seededRef.current = true;
+    const params = new URLSearchParams(window.location.search);
+    params.delete("prompt");
+    const rest = params.toString();
+    window.history.replaceState(
+      null,
+      "",
+      rest ? `${window.location.pathname}?${rest}` : window.location.pathname
+    );
+    ref.current?.runPrompt(seedPrompt);
+  }, [seedPrompt]);
 
   // New users land HERE, so the signup conversion has to fire here too.
   useSignupConversion();

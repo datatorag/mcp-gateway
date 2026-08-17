@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 import { getSessionUserId } from "@/lib/session";
+import { AGENT_PROMPTS } from "../agent-prompts";
 import { AgentClient } from "./agent-client";
 
 export const dynamic = "force-dynamic";
@@ -38,12 +39,25 @@ export default async function AgentPage({
     thread?: string;
     connected?: string;
     connect_error?: string;
+    prompt?: string;
   }>;
 }) {
   const userId = await getSessionUserId();
   if (!userId) redirect("/auth/login");
-  const { welcome, signup, thread, connected, connect_error } =
+  const { welcome, signup, thread, connected, connect_error, prompt } =
     await searchParams;
+
+  // SEED BY IDENTIFIER, NEVER BY CONTENT (SCRUM-118). The Connections page's
+  // prompt cards link here with an INDEX into the shared AGENT_PROMPTS list,
+  // and the text is resolved HERE, server-side, from that constant. A free
+  // string in this parameter is IGNORED, not sanitised: the seeded prompt is
+  // auto-submitted to an agent holding write scopes on the user's accounts,
+  // so a crafted link must have no payload to carry - an id that does not
+  // resolve seeds nothing at all. Sanitising instead would invite widening.
+  const seedPrompt =
+    typeof prompt === "string" && /^\d{1,2}$/.test(prompt)
+      ? AGENT_PROMPTS[Number(prompt)] ?? null
+      : null;
   return (
     <AgentClient
       isDefaultView={welcome === "1"}
@@ -61,6 +75,7 @@ export default async function AgentPage({
           ? connect_error
           : null
       }
+      seedPrompt={seedPrompt}
     />
   );
 }
