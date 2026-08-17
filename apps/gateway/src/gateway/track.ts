@@ -13,7 +13,7 @@ import { sendSlack } from "../lib/slack";
 import { writeUsageEvent } from "./usage/write";
 import { redactErrorMessage } from "./usage/redact";
 import { classifyOutcome, type ClassifyInput } from "./usage/classify";
-import { countToolCall } from "./usage/period";
+import { countToolCall, periodStatus } from "./usage/period";
 import {
   resolveUserIdentity,
   resolveUserEmail,
@@ -338,6 +338,54 @@ export async function trackPlaygroundCapHit(
   userId: string
 ): Promise<void> {
   return capturePlaygroundEvent(db, userId, EVENTS.PLAYGROUND_CAP_HIT);
+}
+
+/** The in-thread connect ask reached its decision point (SCRUM-112). Fired
+ * from `request_connection`'s execute, once per ask, whichever branch ran —
+ * see the event's doc in `lib/analytics.ts` for why this is server-side and
+ * what each `outcome` means.
+ *
+ * The first-run derivation lives HERE, behind this function's never-throw
+ * contract, so the tool's branches stay a single fire-and-forget call and a
+ * telemetry read can never break the ask it is observing. `first_agent_run`
+ * means the account's first run EVER: the run claim has already stamped
+ * `firstAgentRunAt` by the time any tool executes, so on the true first turn
+ * that stamp is fresh and this period's run count is 1; a later period's
+ * first run has count 1 but an old stamp, and both facts travel so the
+ * derivation can be re-checked from the raw event. */
+export async function trackConnectCardShown(
+  db: Database,
+  userId: string,
+  props: {
+    service: string;
+    outcome: "shown" | "already_connected" | "no_writer";
+  }
+): Promise<void> {
+  try {
+    const status = await periodStatus(db, userId);
+    const [row] = await db
+      .select({ firstAgentRunAt: users.firstAgentRunAt })
+      .from(users)
+      .where(eq(users.id, userId))
+      .limit(1);
+    const runs = status?.agentRuns ?? 0;
+    const periodStart = status?.periodStart
+      ? new Date(status.periodStart)
+      : null;
+    const firstAt = row?.firstAgentRunAt ?? null;
+    const firstAgentRun =
+      runs <= 1 &&
+      firstAt !== null &&
+      (periodStart === null || firstAt >= periodStart);
+    return capturePlaygroundEvent(db, userId, EVENTS.CONNECT_CARD_SHOWN, {
+      service: props.service,
+      outcome: props.outcome,
+      first_agent_run: firstAgentRun,
+      agent_runs_this_period: runs,
+    });
+  } catch (err) {
+    console.warn(`[track] connect_card_shown failed for user=${userId}`, err);
+  }
 }
 
 /** A run stopped at the per-run token ceiling (SCRUM-84). Separate from

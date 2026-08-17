@@ -5,6 +5,9 @@ const periodStatus = vi.fn();
 const agentRunCap = vi.fn();
 vi.mock("@/gateway/usage/period", () => ({ periodStatus, agentRunCap }));
 
+const trackConnectCardShown = vi.fn();
+vi.mock("@/gateway/track", () => ({ trackConnectCardShown }));
+
 const { buildIntrospectionTools, INTROSPECTION_TOOL_NAMES } = await import("./introspection");
 
 /** A db stub that records which user id every query was scoped to. The
@@ -211,6 +214,10 @@ describe("account introspection", () => {
 });
 
 describe("request_connection (SCRUM-78)", () => {
+  beforeEach(() => {
+    trackConnectCardShown.mockClear();
+  });
+
   /** The execute under test, freed from the Mastra Tool generic soup: the
    * suite calls it directly, as the runtime does, with an optional writer. */
   type RequestConnectionExecute = (
@@ -290,5 +297,54 @@ describe("request_connection (SCRUM-78)", () => {
     const out = await requestConnection(db)({ service: "not-a-service" }, { writer });
     expect(out.error).toBeTruthy();
     expect(written).toEqual([]);
+  });
+
+  /* SCRUM-112: every branch of the ask is observed, or the data cannot tell
+   * "the card was declined" from "the card never appeared" — the ambiguity
+   * this event exists to remove. One test per branch, and the negative case
+   * (an unknown service emits NOTHING) pinned alongside, so the event stays
+   * a measurement of real asks rather than of every call. */
+
+  it("reports the ask as shown when the card was placed (SCRUM-112)", async () => {
+    const { db, writer } = connectStub([]);
+    await requestConnection(db)({ service: "google-workspace" }, { writer });
+
+    expect(trackConnectCardShown).toHaveBeenCalledTimes(1);
+    expect(trackConnectCardShown).toHaveBeenCalledWith(db, "user-1", {
+      service: "google-workspace",
+      outcome: "shown",
+    });
+  });
+
+  it("reports a redundant ask as already_connected (SCRUM-112)", async () => {
+    const { db, writer } = connectStub([{ id: "acct-1" }]);
+    await requestConnection(db)({ service: "google-workspace" }, { writer });
+
+    expect(trackConnectCardShown).toHaveBeenCalledTimes(1);
+    expect(trackConnectCardShown).toHaveBeenCalledWith(db, "user-1", {
+      service: "google-workspace",
+      outcome: "already_connected",
+    });
+  });
+
+  it("reports the silent-failure branch as no_writer (SCRUM-112)", async () => {
+    // The branch where the agent asked and no card could appear. Without
+    // this outcome the event would answer "did the agent ask" while claiming
+    // to answer "did the user see a card".
+    const { db } = connectStub([]);
+    await requestConnection(db)({ service: "google-workspace" }, {});
+
+    expect(trackConnectCardShown).toHaveBeenCalledTimes(1);
+    expect(trackConnectCardShown).toHaveBeenCalledWith(db, "user-1", {
+      service: "google-workspace",
+      outcome: "no_writer",
+    });
+  });
+
+  it("emits no telemetry for a service the registry refuses (SCRUM-112)", async () => {
+    const { db, writer } = connectStub([]);
+    await requestConnection(db)({ service: "not-a-service" }, { writer });
+
+    expect(trackConnectCardShown).not.toHaveBeenCalled();
   });
 });

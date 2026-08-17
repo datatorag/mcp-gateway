@@ -70,6 +70,29 @@ export const EVENTS = {
   PLAYGROUND_RUN_CEILING_HIT: "playground_run_ceiling_hit",
   PLAYGROUND_CONFIRM: "playground_confirm",
   PLAYGROUND_FEEDBACK: "playground_feedback",
+  /** The agent's in-thread connect ask reached a decision point (SCRUM-112).
+   *
+   * EMITTED SERVER-SIDE at the moment the `request_connection` tool places
+   * (or fails to place) the card into the stream, for the same reason
+   * `agent_run` moved server-side: the stored part re-renders on every
+   * thread revisit, so a client-side "shown" would count reopenings and
+   * inflate the denominator, while placement happens exactly once per ask.
+   * `outcome` says which branch ran, one event rather than three:
+   * `"shown"` (card written to the stream and the stored message),
+   * `"already_connected"` (the agent asked redundantly, no card),
+   * `"no_writer"` (the agent asked but the runtime could not place the card;
+   * this is the silent-failure branch that has shipped before).
+   * Also carries `service`, `first_agent_run` and `agent_runs_this_period`,
+   * so the ask can be split by whether it was the account's first run.
+   * Behaviour only: no request text, no user content. */
+  CONNECT_CARD_SHOWN: "connect_card_shown",
+  /** A click on a connect control (SCRUM-112). Client-side because the click
+   * is a client fact. `source` says which affordance: `"thread"` for the
+   * card the agent placed mid-conversation, `"empty_state"` for the standing
+   * control an unconnected user sees before any message. The funnel reads:
+   * connect_card_shown → connect_card_clicked is the card's copy/trust gap;
+   * connect_card_clicked → account_connected is OAuth drop-off. */
+  CONNECT_CARD_CLICKED: "connect_card_clicked",
   WIZARD_CLIENT_SELECTED: "wizard_client_selected",
   WIZARD_STEP_COMPLETED: "wizard_step_completed",
 } as const;

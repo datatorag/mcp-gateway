@@ -725,7 +725,10 @@ export const Playground = forwardRef<PlaygroundHandle, PlaygroundProps>(
                         once you connect an account. You can ask me anything in
                         the meantime.
                       </p>
-                      <ConnectPart services={CONNECTABLE_SERVICES} />
+                      <ConnectPart
+                        services={CONNECTABLE_SERVICES}
+                        source="empty_state"
+                      />
                     </>
                   )}
                 </div>

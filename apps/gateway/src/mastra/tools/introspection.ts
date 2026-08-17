@@ -5,6 +5,7 @@ import { connectedAccounts, users } from "@datatorag-mcp/db";
 import { and, eq } from "drizzle-orm";
 import { agentRunCap, periodStatus } from "@/gateway/usage/period";
 import { disconnectService } from "@/gateway/connected-accounts";
+import { trackConnectCardShown } from "@/gateway/track";
 import {
   CONNECTABLE_SERVICES,
   getConnectableService,
@@ -203,6 +204,14 @@ export function buildIntrospectionTools({ db, userId }: IntrospectionDeps) {
           )
           .limit(1);
         if (existing) {
+          // SCRUM-112: every branch of this ask is observed, one event with
+          // an outcome, because absence of a card and absence of an ask were
+          // previously indistinguishable in the data. Fire-and-forget; the
+          // track function owns the never-throw contract.
+          void trackConnectCardShown(db, userId, {
+            service,
+            outcome: "already_connected",
+          });
           return {
             service,
             alreadyConnected: true,
@@ -226,6 +235,14 @@ export function buildIntrospectionTools({ db, userId }: IntrospectionDeps) {
             },
           });
         }
+        // SCRUM-112: emitted AFTER the placement attempt, so "shown" means
+        // the part is in the stream and the stored message, and "no_writer"
+        // names the branch where the agent asked but no card could appear —
+        // the failure mode that once shipped silently.
+        void trackConnectCardShown(db, userId, {
+          service,
+          outcome: controlShown ? "shown" : "no_writer",
+        });
         return {
           service,
           alreadyConnected: false,

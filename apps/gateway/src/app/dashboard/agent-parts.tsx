@@ -1,8 +1,10 @@
 "use client";
 
 import { createContext, useContext, type ReactNode } from "react";
+import posthog from "posthog-js";
 import { SetupInstructions } from "@/components/setup-instructions";
 import { buttonVariants } from "@/components/ui/button";
+import { EVENTS } from "@/lib/analytics";
 
 /** Where the connect flow should RETURN to — the thread the user is looking
  * at (SCRUM-78). A context rather than a prop because ConnectPart renders
@@ -75,7 +77,16 @@ function safeConnectHref(href: string): string | null {
   return /^\/[^/]/.test(href) || /^https:\/\//.test(href) ? href : null;
 }
 
-export function ConnectPart({ services }: AgentDataParts["connect"]) {
+export function ConnectPart({
+  services,
+  source = "thread",
+}: AgentDataParts["connect"] & {
+  /** Which affordance this render is (SCRUM-112): the card the agent placed
+   * mid-conversation, or the standing empty-state control. A render-site
+   * fact, so it is a prop and NOT part of the stored `data-connect` payload —
+   * the part must stay exactly what the server emitted. */
+  source?: "thread" | "empty_state";
+}) {
   const { nextPath } = useContext(ConnectReturnContext);
   if (services.length === 0) return null;
 
@@ -106,6 +117,17 @@ export function ConnectPart({ services }: AgentDataParts["connect"]) {
             className={buttonVariants({ size: "sm" })}
             href={withReturn(safeConnectHref(service.connectHref) as string)}
             key={service.id}
+            // SCRUM-112: the click is a client fact, captured as one. The
+            // capture does not gate navigation (no preventDefault): losing an
+            // event to an ad-blocker is acceptable, delaying an OAuth
+            // redirect on telemetry is not. Behaviour only — the service id
+            // and the affordance, never content.
+            onClick={() =>
+              posthog.capture(EVENTS.CONNECT_CARD_CLICKED, {
+                service: service.id,
+                source,
+              })
+            }
           >
             Connect {service.name}
           </a>
@@ -175,7 +197,7 @@ function ApprovalExpiredPart({ toolName }: AgentDataParts["approval-expired"]) {
 const AGENT_PART_RENDERERS: {
   [K in keyof AgentDataParts]: (data: AgentDataParts[K]) => ReactNode;
 } = {
-  connect: (data) => <ConnectPart {...data} />,
+  connect: (data) => <ConnectPart {...data} source="thread" />,
   "mcp-config": () => <McpConfigPart />,
   "account-state": (data) => <AccountStatePart {...data} />,
   "approval-expired": (data) => <ApprovalExpiredPart {...data} />,

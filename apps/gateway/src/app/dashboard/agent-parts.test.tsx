@@ -18,7 +18,10 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 
 import { MessageList, type PlaygroundMessage } from "./playground-presentation";
-import { ConnectReturnContext, renderAgentPart } from "./agent-parts";
+import { ConnectPart, ConnectReturnContext, renderAgentPart } from "./agent-parts";
+
+const { capture } = vi.hoisted(() => ({ capture: vi.fn() }));
+vi.mock("posthog-js", () => ({ default: { capture } }));
 
 vi.mock("@/components/setup-instructions", () => ({
   // The config block is a large component with its own analytics; this suite
@@ -194,5 +197,81 @@ describe("agent data parts render in the thread", () => {
   it("returns null for parts that are not data parts", () => {
     expect(renderAgentPart("text", undefined)).toBeNull();
     expect(renderAgentPart("tool-gws-mcp__docs_get", undefined)).toBeNull();
+  });
+});
+
+describe("connect control click telemetry (SCRUM-112)", () => {
+  beforeEach(() => capture.mockClear());
+
+  const SERVICES = [
+    { id: "google-workspace", name: "Google Workspace", connectHref: "/auth/google/connect" },
+  ];
+
+  function renderConnect(source?: "thread" | "empty_state") {
+    act(() => {
+      root.render(<ConnectPart services={SERVICES} source={source} />);
+    });
+    const anchor = container.querySelector("a");
+    expect(anchor, "no connect control rendered").not.toBeNull();
+    return anchor as HTMLAnchorElement;
+  }
+
+  it("captures a click with the service and the affordance", () => {
+    const anchor = renderConnect("thread");
+    act(() => {
+      // preventDefault by the TEST, not the component: jsdom would otherwise
+      // attempt the navigation. The component must not prevent it — the
+      // capture rides the click and never gates the OAuth redirect, which is
+      // asserted separately below.
+      anchor.addEventListener("click", (e) => e.preventDefault());
+      anchor.click();
+    });
+
+    expect(capture).toHaveBeenCalledTimes(1);
+    const [event, props] = capture.mock.calls[0] as [string, Record<string, unknown>];
+    expect(event).toBe("connect_card_clicked");
+    // BEHAVIOUR, NOT CONTENT, pinned exactly: the property set is closed, so
+    // a future edit cannot quietly add request text or an email address to a
+    // public analytics event. That closure is a standing rule and a public
+    // product claim, which is why this is a strict equality on the keys.
+    expect(props).toEqual({ service: "google-workspace", source: "thread" });
+  });
+
+  it("labels the empty-state affordance as its own source", () => {
+    const anchor = renderConnect("empty_state");
+    act(() => {
+      anchor.addEventListener("click", (e) => e.preventDefault());
+      anchor.click();
+    });
+    expect(capture).toHaveBeenCalledWith(
+      "connect_card_clicked",
+      expect.objectContaining({ source: "empty_state" })
+    );
+  });
+
+  it("does not gate navigation on the capture", () => {
+    // The click handler must leave the event's default alone: a telemetry
+    // call that blocks or delays the OAuth redirect would trade the
+    // measurement for the thing being measured.
+    const anchor = renderConnect("thread");
+    let defaultPrevented = true;
+    act(() => {
+      anchor.addEventListener(
+        "click",
+        (e) => {
+          defaultPrevented = e.defaultPrevented;
+          e.preventDefault(); // stop jsdom navigating, AFTER reading the flag
+        },
+        // Runs after the component's own bubble-phase handler.
+        { capture: false }
+      );
+      anchor.click();
+    });
+    expect(defaultPrevented).toBe(false);
+  });
+
+  it("captures nothing on mere render", () => {
+    renderConnect("thread");
+    expect(capture).not.toHaveBeenCalled();
   });
 });
