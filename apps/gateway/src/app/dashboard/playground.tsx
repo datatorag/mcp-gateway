@@ -694,36 +694,41 @@ export const Playground = forwardRef<PlaygroundHandle, PlaygroundProps>(
                       {PAGE_GREETING}
                     </h1>
                   )}
-                  {/* THREE states, not two (SCRUM-114): until the connection
-                      lookup resolves, connection state is unknown, and
-                      unknown renders as NEITHER branch. Branching on the
-                      boolean alone showed every connected user the connect
-                      card for one fetch round trip per load, and since the
-                      empty-state card is click-instrumented, a click during
-                      that flash would log connect intent from an
-                      already-connected user. The greeting above stays;
-                      claims about connection state wait until there is one. */}
-                  {connectionsLoaded && (hasConnectedAccount ? (
-                    <>
-                      <p
-                        className={cn(
-                          "text-muted-foreground",
-                          isPage ? "text-sm" : "text-xs"
-                        )}
-                      >
-                        {personalised
+                  {/* CLAIMS are gated, PROMPTS are not (SCRUM-114, SCRUM-117).
+                      Until the connection lookup resolves, connection state
+                      is unknown and unknown makes no claim: neither the
+                      connection-state copy nor the connect card renders,
+                      because the card is click-instrumented and a flash
+                      would log connect intent from an already-connected
+                      user. The PROMPTS below are outside that gate on
+                      purpose - they depend on nothing about the user's
+                      connections, and what is possible should be visible
+                      before anything resolves. An unconnected user who runs
+                      one lands exactly in the in-thread connect flow, which
+                      is the flow the product wants them in. */}
+                  {connectionsLoaded && (
+                    <p
+                      className={cn(
+                        "text-muted-foreground",
+                        isPage ? "text-sm" : "text-xs"
+                      )}
+                    >
+                      {hasConnectedAccount
+                        ? personalised
                           ? suggestions.slice(0, 3).length === 1
                             ? "Here is something I can do with what you have connected."
                             : "Here are a few things I can do with what you have connected."
-                          : "Ask something about your connected accounts."}
-                      </p>
-                      {/* Same three suggestions, same deterministic source,
-                          two arrangements. The panel keeps its pill row. The
-                          page stacks them full-width, because these are whole
-                          sentences and a nowrap pill scroller hides most of
-                          every one of them on the surface where they are the
-                          main thing to read. */}
-                      {isPage ? (
+                          : "Ask something about your connected accounts."
+                        : "I can work with your email, files, calendar and issues, once you connect an account. You can ask me anything in the meantime."}
+                    </p>
+                  )}
+                  {/* Three suggestions, enforced by the top-up above, two
+                      arrangements. The panel keeps its pill row. The page
+                      stacks them full-width, because these are whole
+                      sentences and a nowrap pill scroller hides most of
+                      every one of them on the surface where they are the
+                      main thing to read. */}
+                  {isPage ? (
                         <div className="space-y-2">
                           {suggestions.slice(0, 3).map((prompt, i) => (
                             <Suggestion
@@ -746,25 +751,19 @@ export const Playground = forwardRef<PlaygroundHandle, PlaygroundProps>(
                           ))}
                         </Suggestions>
                       )}
-                    </>
-                  ) : (
-                    <>
-                      <p
-                        className={cn(
-                          "text-muted-foreground",
-                          isPage ? "text-sm" : "text-xs"
-                        )}
-                      >
-                        I can work with your email, files, calendar and issues,
-                        once you connect an account. You can ask me anything in
-                        the meantime.
-                      </p>
-                      <ConnectPart
-                        services={CONNECTABLE_SERVICES}
-                        source="empty_state"
-                      />
-                    </>
-                  ))}
+                  {/* The connect card: only once the state is KNOWN to be
+                      unconnected, below the prompts so what is possible
+                      reads before what is asked for. The card itself - copy,
+                      hrefs, source property - is byte-identical to what
+                      SCRUM-112 instrumented; this change moves WHERE it
+                      sits, never what it is, so the telemetry series stays
+                      comparable across the deploy boundary. */}
+                  {connectionsLoaded && !hasConnectedAccount && (
+                    <ConnectPart
+                      services={CONNECTABLE_SERVICES}
+                      source="empty_state"
+                    />
+                  )}
                 </div>
               )}
 

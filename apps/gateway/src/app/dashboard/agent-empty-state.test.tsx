@@ -111,6 +111,14 @@ describe("the empty state and the unknown connection state (SCRUM-114)", () => {
     // before the lookup returns and these two may not.
     expect(text()).not.toContain("Ask something about your connected accounts");
     expect(text()).not.toContain("things I can do");
+    // The PROMPTS are outside the gate (SCRUM-117): what is possible depends
+    // on nothing about this user's connections, so it renders before the
+    // lookup returns. Only the claims wait.
+    expect(
+      Array.from(container.querySelectorAll("button")).filter(
+        (b) => (b.textContent ?? "").length > 30
+      ).length
+    ).toBe(3);
     // The composer is deliberately NOT withheld - that decision predates
     // this fix and stands. Asserted so this gate can never quietly widen
     // into the withhold-the-page bug it must not become.
@@ -147,6 +155,22 @@ describe("the empty state and the unknown connection state (SCRUM-114)", () => {
     await flush();
     expect(text()).toContain("Connect Google Workspace");
     expect(text()).toContain("anything in the meantime");
+    // SCRUM-117: the unconnected state shows what is POSSIBLE alongside the
+    // ask - prompts and card together, prompts first in the document.
+    const buttons = Array.from(container.querySelectorAll("button")).filter(
+      (b) => (b.textContent ?? "").length > 30
+    );
+    expect(buttons.length).toBe(3);
+    const firstPrompt = buttons[0]!;
+    const card = Array.from(container.querySelectorAll("a")).find((a) =>
+      (a.textContent ?? "").includes("Connect Google Workspace")
+    );
+    expect(card).toBeTruthy();
+    expect(
+      // eslint-disable-next-line no-bitwise
+      firstPrompt.compareDocumentPosition(card!) &
+        Node.DOCUMENT_POSITION_FOLLOWING
+    ).toBeTruthy();
   });
 
   it("tops a thin personalised read up to three suggestions", async () => {
