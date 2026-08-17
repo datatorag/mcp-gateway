@@ -13,7 +13,7 @@ tags: ["agent", "mcp", "google-workspace", "onboarding", "product"]
 
 There is a failure mode in AI agents that looks exactly like success.
 
-You ask the agent to do something real. It replies. The reply is articulate, well-organised, and completely empty — because the agent has no connection to your data, so the only thing it can actually do is talk about what it would do if it did.
+You ask the agent to do something real. It replies. The reply is articulate, well-organised, and completely empty, because the agent has no connection to your data, so the only thing it can actually do is talk about what it would do if it did.
 
 Nothing errors. Nothing warns you. You get a confident paragraph instead of the work.
 
@@ -31,7 +31,7 @@ The usual fix is a checklist, or a setup wizard, or a modal that blocks the inte
 
 Now when the agent needs a connection it doesn't have, three things happen.
 
-**It says so plainly.** Not an error, not a silent shrug — it names the specific thing it needs and why the request can't proceed without it.
+**It says so plainly.** Not an error, not a silent shrug. It names the specific thing it needs and why the request can't proceed without it.
 
 **The connect control appears inline, as a message in the thread.** Not a modal over the conversation. Not a redirect to a settings screen. A card in the conversation you were already having, where the request you made is still sitting on screen above it.
 
@@ -43,15 +43,15 @@ Now when the agent needs a connection it doesn't have, three things happen.
 
 Building a card that says "connect your account" is trivial. The difficulty is everything around it.
 
-**Google's consent screen is a full page navigation away from your app.** You leave, you authorise, you come back — and by default you come back to a fresh page with no memory of what you were doing. The request that triggered the whole thing is gone, and the user is left looking at an empty agent wondering whether it worked.
+**Google's consent screen is a full page navigation away from your app.** You leave, you authorise, you come back, and by default you come back to a fresh page with no memory of what you were doing. The request that triggered the whole thing is gone, and the user is left looking at an empty agent wondering whether it worked.
 
 So the interesting engineering is in the return trip:
 
 - **Persistent threads**, so there is something to come back *to*.
-- **A validated return path**, so the round trip lands you in the same conversation rather than a generic dashboard — and validated carefully, because "send the user wherever this parameter says" is one of the oldest ways to build an open redirect.
+- **A validated return path**, so the round trip lands you in the same conversation rather than a generic dashboard, and validated carefully, because "send the user wherever this parameter says" is one of the oldest ways to build an open redirect.
 - **A continuation that fires exactly once**, so the agent resumes your request without you asking twice, and without it looping.
 
-We chose a full redirect over a popup, deliberately. Popups get blocked, behave differently on mobile Safari, and can lose their handle to the opener depending on browser policy — all of which fail on a stranger's browser you cannot test. A redirect has none of those failure modes. It costs one page load, and the thread rehydrates on the other side.
+We chose a full redirect over a popup, deliberately. Popups get blocked, behave differently on mobile Safari, and can lose their handle to the opener depending on browser policy, all of which fail on a stranger's browser you cannot test. A redirect has none of those failure modes. It costs one page load, and the thread rehydrates on the other side.
 
 ## What it does now
 
@@ -59,7 +59,7 @@ Asked to summarise unread email and draft a status document, on an account with 
 
 1. The agent checked what was connected, found nothing, and said so.
 2. It rendered the connect card inline.
-3. On connecting, it resumed **the original request** — not a fresh one.
+3. On connecting, it resumed **the original request**, not a fresh one.
 4. It read the inbox, summarised it, created the document, and wrote the content.
 
 **Both halves of a two-part request survived the OAuth round trip.** That was the acceptance test, and it is the part most likely to break quietly: it is easy to resume a conversation and lose what was actually being asked.
