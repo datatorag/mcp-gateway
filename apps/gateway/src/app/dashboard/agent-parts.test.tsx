@@ -275,3 +275,45 @@ describe("connect control click telemetry (SCRUM-112)", () => {
     expect(capture).not.toHaveBeenCalled();
   });
 });
+
+describe("connect control marks (SCRUM-97)", () => {
+  it("each known service's control carries its mark AND its label", () => {
+    act(() => {
+      root.render(
+        <ConnectPart
+          services={[
+            { id: "google-workspace", name: "Google Workspace", connectHref: "/auth/google/connect" },
+            { id: "atlassian", name: "Atlassian", connectHref: "/auth/atlassian/connect" },
+          ]}
+          source="empty_state"
+        />
+      );
+    });
+    const anchors = Array.from(container.querySelectorAll("a"));
+    expect(anchors).toHaveLength(2);
+    for (const anchor of anchors) {
+      // Mark PLUS label: the vendor mark is present and the readable name
+      // survives beside it. Never mark alone.
+      expect(anchor.querySelector("svg"), "control lost its mark").not.toBeNull();
+      expect(anchor.textContent).toContain("Connect ");
+    }
+    expect(anchors[0]?.textContent).toContain("Google Workspace");
+    expect(anchors[1]?.textContent).toContain("Atlassian");
+  });
+
+  it("an unknown service id renders the label with no mark, never a broken image", () => {
+    act(() => {
+      root.render(
+        <ConnectPart
+          services={[{ id: "not-a-service", name: "Mystery", connectHref: "/auth/mystery/connect" }]}
+          source="thread"
+        />
+      );
+    });
+    const anchor = container.querySelector("a");
+    expect(anchor).not.toBeNull();
+    expect(anchor!.textContent).toContain("Connect Mystery");
+    expect(anchor!.querySelector("svg")).toBeNull();
+    expect(anchor!.querySelector("img")).toBeNull();
+  });
+});

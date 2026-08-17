@@ -5,6 +5,7 @@ import posthog from "posthog-js";
 import { SetupInstructions } from "@/components/setup-instructions";
 import { buttonVariants } from "@/components/ui/button";
 import { EVENTS } from "@/lib/analytics";
+import { getService } from "./connections/services";
 
 /** Where the connect flow should RETURN to — the thread the user is looking
  * at (SCRUM-78). A context rather than a prop because ConnectPart renders
@@ -105,7 +106,20 @@ export function ConnectPart({
         Connect an account and I can work with your own files.
       </p>
       <div className="mt-2 flex flex-wrap gap-2">
-        {services.map((service) => safeConnectHref(service.connectHref) && (
+        {services.map((service) => {
+          // The same official marks the connector cards carry (SCRUM-97):
+          // resolved HERE by service id because the data-connect part
+          // arrives over the wire with id/name/href only - a stored part
+          // cannot carry a React node, and duplicating the artwork would
+          // let the two surfaces drift. Full-colour marks sit on a WHITE
+          // TILE because these buttons are bg-primary in both themes and
+          // the vendors' guidelines want the marks on a plain ground; the
+          // tile is what makes one asset correct in light and dark alike.
+          // Mark PLUS label, never mark alone - the label text is
+          // untouched. An id the registry does not know renders the label
+          // without a mark rather than a broken image.
+          const mark = getService(service.id)?.icon;
+          return safeConnectHref(service.connectHref) && (
           // A PLAIN ANCHOR, NOT next/link. These are Express OAuth routes,
           // not Next pages: Link prefetches them with an `_rsc` param, the
           // route answers 302 to the provider, and the cross-origin prefetch
@@ -129,9 +143,18 @@ export function ConnectPart({
               })
             }
           >
+            {mark && (
+              <span
+                aria-hidden
+                className="mr-2 flex size-5 shrink-0 items-center justify-center rounded-sm bg-white"
+              >
+                {mark}
+              </span>
+            )}
             Connect {service.name}
           </a>
-        ))}
+          );
+        })}
       </div>
     </div>
   );
