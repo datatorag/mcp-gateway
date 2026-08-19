@@ -28,19 +28,25 @@ describe("trackPlaygroundFeedback", () => {
     ]);
   });
 
-  it("fires the playground_feedback PostHog event with rating/comment", async () => {
+  it("fires playground_feedback with a CLOSED property set — behaviour and comment, never the prompt", async () => {
+    // SCRUM-125: the user's prompt is their own content and must not leave to
+    // a third-party processor for a rating action. The pin is STRICT equality,
+    // not objectContaining, precisely so a future change that re-adds `prompt`
+    // (or any other content field) to the payload turns this red rather than
+    // sliding in unnoticed — the exact way it got there the first time. The
+    // prompt IS passed to the function (the Slack line below still uses it),
+    // so this proves the omission is deliberate, not an argument that never
+    // arrived.
     await trackPlaygroundFeedback(dbMock, "user-1", "up", "loved it", "what is x?");
-    expect(capture).toHaveBeenCalledWith(
-      expect.objectContaining({
-        distinctId: "user-1",
-        event: "playground_feedback",
-        properties: expect.objectContaining({
-          rating: "up",
-          comment: "loved it",
-          user_email: "user@example.com",
-        }),
-      })
-    );
+    const props = capture.mock.calls[0][0].properties;
+    expect(props).toEqual({
+      rating: "up",
+      comment: "loved it",
+      user_email: "user@example.com",
+      $set: { email: "user@example.com" },
+    });
+    // Said plainly for the next reader: no content key of any name is present.
+    expect(props).not.toHaveProperty("prompt");
   });
 
   it("posts a thumbs-up Slack message with the user's email and comment", async () => {
