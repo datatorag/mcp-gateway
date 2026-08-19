@@ -5,6 +5,7 @@ import Image from "next/image";
 import { getAllPosts, getPostBySlug, getRelatedPosts } from "@/lib/blog";
 import { Navbar } from "@/components/navbar";
 import { ZoomableImage } from "@/components/zoomable-image";
+import { formatContentDate } from "@/lib/utils";
 
 interface Props {
   params: Promise<{ slug: string }>;
@@ -186,11 +187,7 @@ export default async function BlogArticlePage({ params }: Props) {
                   dateTime={post.date}
                   className="text-muted-foreground"
                 >
-                  {new Date(`${post.date}T00:00:00`).toLocaleDateString("en-US", {
-                    year: "numeric",
-                    month: "long",
-                    day: "numeric",
-                  })}
+                  {formatContentDate(post.date)}
                 </time>
                 <span className="text-border">·</span>
                 <span className="text-muted-foreground">{post.readTime}</span>
@@ -207,10 +204,7 @@ export default async function BlogArticlePage({ params }: Props) {
               <span className="font-medium text-foreground">
                 Edited{" "}
                 <time dateTime={post.updated}>
-                  {new Date(`${post.updated}T00:00:00`).toLocaleDateString(
-                    "en-US",
-                    { year: "numeric", month: "long", day: "numeric" }
-                  )}
+                  {formatContentDate(post.updated)}
                 </time>
               </span>
               {post.updatedNote && <>: {post.updatedNote}</>}

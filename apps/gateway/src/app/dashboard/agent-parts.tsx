@@ -118,8 +118,13 @@ export function ConnectPart({
           // Mark PLUS label, never mark alone - the label text is
           // untouched. An id the registry does not know renders the label
           // without a mark rather than a broken image.
+          // Validated once: an id with no safe connect href renders nothing
+          // (the map already drops filtered items), and the single local
+          // removes the second regex pass and the non-null cast below.
+          const href = safeConnectHref(service.connectHref);
+          if (!href) return null;
           const mark = getService(service.id)?.icon;
-          return safeConnectHref(service.connectHref) && (
+          return (
           // A PLAIN ANCHOR, NOT next/link. These are Express OAuth routes,
           // not Next pages: Link prefetches them with an `_rsc` param, the
           // route answers 302 to the provider, and the cross-origin prefetch
@@ -129,7 +134,7 @@ export function ConnectPart({
           // the outlier.
           <a
             className={buttonVariants({ size: "sm" })}
-            href={withReturn(safeConnectHref(service.connectHref) as string)}
+            href={withReturn(href)}
             key={service.id}
             // SCRUM-112: the click is a client fact, captured as one. The
             // capture does not gate navigation (no preventDefault): losing an

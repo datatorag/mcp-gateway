@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import type { ConnectedAccount, LegacyConnection } from "../types";
 import { ServiceIcon, serviceFromToolName } from "@/components/service-icon";
 import { CasaBadge } from "@/components/casa-badge";
+import { formatConnectedDate } from "@/lib/utils";
 
 interface Tool {
   name: string;
@@ -249,12 +250,7 @@ export function ConnectionDetailClient({
                   )}
                 </div>
                 <p className="text-xs text-muted-foreground">
-                  Connected{" "}
-                  {new Date(account.connectedAt).toLocaleDateString("en-US", {
-                    month: "short",
-                    day: "numeric",
-                    year: "numeric",
-                  })}
+                  Connected {formatConnectedDate(account.connectedAt)}
                   {account.scopes && (
                     <span className="ml-2">
                       {account.scopes.split(" ").length} scopes
@@ -287,11 +283,7 @@ export function ConnectionDetailClient({
         {accounts.length === 0 && legacyConnection && (
           <div className="flex items-center justify-between px-3 py-2.5">
             <p className="text-xs text-muted-foreground">
-              Connected{" "}
-              {new Date(legacyConnection.connectedAt).toLocaleDateString(
-                "en-US",
-                { month: "short", day: "numeric", year: "numeric" }
-              )}
+              Connected {formatConnectedDate(legacyConnection.connectedAt)}
             </p>
             <button
               onClick={disconnectLegacy}

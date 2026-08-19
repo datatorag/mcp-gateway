@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { getAllEntries } from "@/lib/changelog";
 import { Navbar } from "@/components/navbar";
+import { formatContentDate } from "@/lib/utils";
 
 export const metadata: Metadata = {
   title: "Changelog | DataToRAG",
@@ -16,13 +17,6 @@ export const metadata: Metadata = {
   },
 };
 
-function formatDate(date: string): string {
-  return new Date(`${date}T00:00:00`).toLocaleDateString("en-US", {
-    year: "numeric",
-    month: "long",
-    day: "numeric",
-  });
-}
 
 export default function ChangelogPage() {
   const entries = getAllEntries();
@@ -55,7 +49,7 @@ export default function ChangelogPage() {
                   className="scroll-mt-28 border-b border-border pb-12 last:border-b-0"
                 >
                   <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
-                    <time dateTime={entry.date}>{formatDate(entry.date)}</time>
+                    <time dateTime={entry.date}>{formatContentDate(entry.date)}</time>
                     {entry.tags.map((tag) => (
                       <span
                         key={tag}
