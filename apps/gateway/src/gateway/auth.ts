@@ -39,6 +39,17 @@ const NEXT_COOKIE = "dtr_next";
  * other's binding. */
 const GWS_CONNECT_NONCE_COOKIE = "gws_connect_nonce";
 
+/** The dashboard LOGIN flow's one-shot CSRF nonce (SCRUM-124). Login was the
+ * one OAuth-initiating flow here that bound nothing: it built the Google URL
+ * with no `state` and the callback exchanged any code arriving on the
+ * redirect, so an attacker could complete Google auth as themselves, withhold
+ * the callback, and hand the URL to a victim, whose browser would then plant a
+ * session cookie bound to the ATTACKER's account. A subsequent Workspace
+ * connect would store the victim's Gmail and Drive tokens under the attacker's
+ * user, readable through /mcp. Its own cookie, like every sibling flow, so
+ * concurrent flows cannot consume each other's binding. */
+const LOGIN_NONCE_COOKIE = "login_state_nonce";
+
 /** Where the service-CONNECT flows park the validated return path (SCRUM-78):
  * the agent offers an inline Connect control, and the OAuth round trip has to
  * land back in that conversation rather than on the connections page. A
@@ -106,6 +117,20 @@ export function createAuthRouter(
       });
     }
 
+    // CSRF (SCRUM-124): bind the round trip to the browser that began it, the
+    // same one-shot-nonce-as-state pattern every other OAuth-initiating flow
+    // here already uses. Without it the callback exchanges ANY code, which is
+    // the login-CSRF that lets an attacker seat a victim in the attacker's
+    // account. Random, single-use, never the session token.
+    const nonce = randomBytes(16).toString("base64url");
+    res.cookie(LOGIN_NONCE_COOKIE, nonce, {
+      httpOnly: true,
+      secure: cookiesAreSecure,
+      sameSite: "lax",
+      path: "/",
+      maxAge: OAUTH_STATE_TTL_MS,
+    });
+
     const googleAuthUrl = new URL(
       "https://accounts.google.com/o/oauth2/v2/auth"
     );
@@ -117,15 +142,37 @@ export function createAuthRouter(
     googleAuthUrl.searchParams.set("response_type", "code");
     googleAuthUrl.searchParams.set("scope", "openid email profile");
     googleAuthUrl.searchParams.set("prompt", "select_account");
+    googleAuthUrl.searchParams.set("state", nonce);
 
     res.redirect(googleAuthUrl.toString());
   });
 
   router.get("/auth/google/callback", async (req, res) => {
     const googleCode = req.query.code as string | undefined;
-    // Read before any early return so a failed exchange still clears the
-    // stash rather than leaving it to attach to a later, unrelated flow.
+    const state = req.query.state as string | undefined;
+    const cookieNonce = req.cookies?.[LOGIN_NONCE_COOKIE] as string | undefined;
+    // One-shot: cleared on EVERY outcome, so a nonce cannot survive a failed
+    // callback and be replayed within its TTL.
+    res.clearCookie(LOGIN_NONCE_COOKIE, { path: "/" });
+    // Read-and-clear the one-shot stashes BEFORE any early return, so the new
+    // state-rejection path below cannot leave a cookie behind to attach to a
+    // later, unrelated flow — the same one-shot discipline the connect
+    // callback already keeps (SCRUM-87/78). The requested route is validated
+    // again at redemption inside postLoginDestination regardless.
     const attribution = takeAttribution(req, res);
+    const requestedPath = req.cookies?.[NEXT_COOKIE];
+    res.clearCookie(NEXT_COOKIE, { path: "/" });
+
+    // CSRF (SCRUM-124): the echoed state must be PRESENT and MATCH the nonce
+    // cookie from initiation, BEFORE the code is looked at or exchanged. A
+    // missing state is a rejection, never "no binding requested" — falling
+    // through on absence would leave the whole guard bypassable by simply
+    // omitting the parameter. Exchanging first and rejecting after would still
+    // burn the code, so the check gates the exchange, not just the response.
+    if (!nonceMatches(cookieNonce, state)) {
+      res.redirect("/auth/login?error=invalid_state");
+      return;
+    }
 
     if (!googleCode) {
       res.status(400).send("Missing code from Google");
@@ -260,8 +307,6 @@ export function createAuthRouter(
     // table below rather than sanitising, because an unvalidated post-login
     // redirect is a phishing primitive (the victim authenticates against OUR
     // real domain and lands on the attacker's).
-    const requestedPath = req.cookies?.[NEXT_COOKIE];
-    res.clearCookie(NEXT_COOKIE, { path: "/" });
     res.redirect(
       postLoginDestination({
         agentDefaultView: getEnv().AGENT_DEFAULT_VIEW === "on",

@@ -129,6 +129,20 @@ function rawGet(path: string, cookie?: string) {
   });
 }
 
+/** A login callback carrying a VALID state binding (SCRUM-124), so these
+ * `next`-redemption tests exercise the redemption rather than the CSRF gate
+ * that now sits in front of it. The binding itself is proven separately in
+ * auth-login-csrf.test.ts; here it is just satisfied. `query` is the part
+ * after the path, e.g. "?code=x". */
+const LOGIN_NONCE = "test-login-nonce";
+function callbackGet(query: string, cookie?: string) {
+  const url = `/auth/google/callback${query}&state=${LOGIN_NONCE}`;
+  const withNonce = cookie
+    ? `${cookie}; login_state_nonce=${LOGIN_NONCE}`
+    : `login_state_nonce=${LOGIN_NONCE}`;
+  return rawGet(url, withNonce);
+}
+
 describe("the stash: GET /auth/google", () => {
   it("parks a valid next in the dtr_next cookie for the callback", async () => {
     const res = await rawGet("/auth/google?next=%2Fdashboard%2Fagent");
@@ -153,8 +167,8 @@ describe("the stash: GET /auth/google", () => {
 
 describe("the redemption: GET /auth/google/callback", () => {
   it("lands the login where the email link asked, and clears the stash", async () => {
-    const res = await rawGet(
-      "/auth/google/callback?code=x",
+    const res = await callbackGet(
+      "?code=x",
       "dtr_next=%2Fdashboard%2Fagent"
     );
     expect(res.status).toBe(302);
@@ -168,8 +182,8 @@ describe("the redemption: GET /auth/google/callback", () => {
     // (flag on, returning user), so on its own it stays green with the
     // redemption wiring deleted — proven by mutation, not conjectured. This
     // path only comes out of the cookie.
-    const res = await rawGet(
-      "/auth/google/callback?code=x",
+    const res = await callbackGet(
+      "?code=x",
       "dtr_next=%2Fdashboard%2Fusage"
     );
     expect(res.headers.get("location")).toBe("/dashboard/usage");
@@ -177,8 +191,8 @@ describe("the redemption: GET /auth/google/callback", () => {
 
   it("a new user's next that differs from the default still carries signup=1", async () => {
     selectLimit.mockResolvedValue([]);
-    const res = await rawGet(
-      "/auth/google/callback?code=x",
+    const res = await callbackGet(
+      "?code=x",
       "dtr_next=%2Fdashboard%2Fusage"
     );
     expect(res.headers.get("location")).toBe("/dashboard/usage?signup=1");
@@ -186,8 +200,8 @@ describe("the redemption: GET /auth/google/callback", () => {
 
   it("a new user arriving via next still gets signup=1 — conversion reporting intact", async () => {
     selectLimit.mockResolvedValue([]); // no such user yet -> signup path
-    const res = await rawGet(
-      "/auth/google/callback?code=x",
+    const res = await callbackGet(
+      "?code=x",
       "dtr_next=%2Fdashboard%2Fagent"
     );
     expect(res.headers.get("location")).toBe(
@@ -208,10 +222,7 @@ describe("the redemption: GET /auth/google/callback", () => {
       encodeURIComponent("/..//evil.com"),
       encodeURIComponent("/%2e%2e//evil.com"),
     ]) {
-      const res = await rawGet(
-        "/auth/google/callback?code=x",
-        `dtr_next=${evil}`
-      );
+      const res = await callbackGet("?code=x", `dtr_next=${evil}`);
       const location = res.headers.get("location") ?? "";
       expect(location).toBe("/dashboard/agent?welcome=1");
       expect(location).not.toContain("evil.com");
@@ -219,7 +230,7 @@ describe("the redemption: GET /auth/google/callback", () => {
   });
 
   it("no stash at all falls through to the unchanged table", async () => {
-    const res = await rawGet("/auth/google/callback?code=x");
+    const res = await callbackGet("?code=x");
     expect(res.headers.get("location")).toBe("/dashboard/agent?welcome=1");
   });
 });
