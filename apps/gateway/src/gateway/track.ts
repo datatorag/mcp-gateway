@@ -435,10 +435,16 @@ export async function trackPlaygroundFeedback(
       c.capture({
         distinctId: userId,
         event: EVENTS.PLAYGROUND_FEEDBACK,
+        // BEHAVIOUR AND AUTHORED-FOR-US CONTENT ONLY (SCRUM-125). The user's
+        // own PROMPT is deliberately NOT here: they consented to rate a
+        // response, not to export their question — often about their own
+        // mailbox — to a third-party processor with their identity attached.
+        // `comment` stays because it is written FOR us, a different consent
+        // case. The property set is pinned CLOSED by strict equality in
+        // track.feedback.test.ts, so content cannot quietly rejoin the payload.
         properties: {
           rating,
           comment: comment ?? null,
-          prompt: prompt ?? null,
           ...identityProps(email),
         },
       });
