@@ -183,10 +183,13 @@ skill operates over, not a strict call list.
 - **Date formatting — always parse with a `T00:00:00` suffix.** `new Date(rawDate)` on a
   bare `YYYY-MM-DD` string parses as UTC midnight, which renders as the *previous* day in
   any browser west of UTC. The correct pattern is
-  `` new Date(`${date}T00:00:00`).toLocaleDateString(...) `` — `app/changelog/page.tsx`'s
-  `formatDate()`, `app/blog/page.tsx`, and `app/blog/[slug]/page.tsx` all do this now
-  (blog inlines it; changelog wraps it in a local helper). Any new date-rendering page
-  must use the same `T00:00:00` pattern — never a bare `new Date(date)`.
+  `` new Date(`${date}T00:00:00`).toLocaleDateString(...) ``. The long-form content date
+  ("August 18, 2026") lives in one place — `formatContentDate(date)` in `lib/utils.ts`,
+  used by `app/changelog/page.tsx` and `app/blog/[slug]/page.tsx`. The blog LISTING
+  (`app/blog/page.tsx`) deliberately renders a shorter month form and still inlines the
+  `T00:00:00` parse (it wants the compact date next to each list item). Any new
+  date-rendering page must go through `formatContentDate` or keep the `T00:00:00` parse —
+  never a bare `new Date(date)`.
 - **Anchor + `scroll-mt-28` pattern**: give a linkable block both `id={slug}` and
   `className="... scroll-mt-28"` on the wrapping element (so a fixed navbar doesn't
   cover the heading when jumped to), plus a self-link `<a href="#${slug}">` on the

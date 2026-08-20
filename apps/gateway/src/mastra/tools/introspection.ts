@@ -269,7 +269,12 @@ export function buildIntrospectionTools({ db, userId }: IntrospectionDeps) {
         "Only ever affects the signed-in user.",
       inputSchema: z.object({
         service: z
-          .enum(["google-workspace", "atlassian"])
+          // Derived from the registry, exactly as request_connection does
+          // above, so a third connector is disconnectable the moment it is
+          // connectable rather than rejected here by a stale hardcoded list.
+          .enum(
+            CONNECTABLE_SERVICES.map((s) => s.id) as [string, ...string[]]
+          )
           .describe("Which connected service to disconnect."),
       }),
       // A SERVICE, NEVER AN ACCOUNT ID. An id is a global handle that could
