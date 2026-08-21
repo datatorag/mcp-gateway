@@ -29,6 +29,7 @@ import {
 import { Skeleton } from "@/components/ui/skeleton";
 import { formatConnectedDate } from "@/lib/utils";
 import type { ConnectedAccount, LegacyConnection } from "./connections/types";
+import { getConnectableService } from "./connections/service-registry";
 import { AGENT_PROMPTS } from "./agent-prompts";
 import { useSignupConversion } from "./use-signup-conversion";
 import { useConnections } from "./use-connections";
@@ -62,6 +63,37 @@ export function DashboardClient() {
 
 
   useSignupConversion();
+
+  /** SCRUM-136: services whose DEFAULT account is connected but short — the
+   * user unticked scopes on the consent screen. Derived from the API's
+   * scopeStatus rather than the post-connect redirect params, because the
+   * fallback leg drops its query string and the state is true whenever it is
+   * true, not only just after a connect. One entry per service. */
+  const shortGrants = (() => {
+    const byService = new Map<string, string[]>();
+    for (const a of accounts) {
+      if (a.isDefault && a.scopeStatus && !a.scopeStatus.complete) {
+        byService.set(
+          a.connectorType,
+          a.scopeStatus.missing.map((m) => m.displayName)
+        );
+      }
+    }
+    for (const c of legacyConnections) {
+      if (c.scopeStatus && !c.scopeStatus.complete && !byService.has(c.service)) {
+        byService.set(
+          c.service,
+          c.scopeStatus.missing.map((m) => m.displayName)
+        );
+      }
+    }
+    return [...byService.entries()].map(([service, missing]) => ({
+      service,
+      name: getConnectableService(service)?.name ?? service,
+      connectUrl: getConnectableService(service)?.connectUrl ?? null,
+      missing,
+    }));
+  })();
 
   async function disconnectAccount(e: React.MouseEvent, account: ConnectedAccount) {
     e.preventDefault();
@@ -108,6 +140,31 @@ export function DashboardClient() {
 
       {/* Shown before the consent-screen step the Connect buttons lead to. */}
       <CasaBadge className="mt-4" />
+
+      {/* SCRUM-136: connected-but-short. One line per affected service; the
+          Reconnect link re-runs the same consent flow, which re-prompts with
+          the full scope set. The full per-service at-rest view is SCRUM-106. */}
+      {!loading &&
+        shortGrants.map(({ service, name, connectUrl, missing }) => (
+          <div
+            key={service}
+            className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm"
+          >
+            <span className="text-amber-900">
+              {name} is connected, but {missing.join(", ")}{" "}
+              {missing.length === 1 ? "was" : "were"} not granted, so those
+              tools cannot run.
+            </span>
+            {connectUrl && (
+              <a
+                href={connectUrl}
+                className="shrink-0 rounded-[var(--radius)] border border-amber-300 px-3 py-1.5 text-sm font-medium text-amber-900 transition-colors hover:bg-amber-100"
+              >
+                Reconnect and grant access
+              </a>
+            )}
+          </div>
+        ))}
 
       {/* Service cards */}
       <div className="mt-6 grid gap-4 sm:grid-cols-2">
