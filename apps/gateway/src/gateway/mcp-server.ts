@@ -18,6 +18,11 @@ import { listConnectedAccounts } from "./connected-accounts";
 import { trackToolCall } from "./track";
 import { trackMcpToolsListed } from "./mcp-analytics";
 import { checkCallAllowance } from "./billing/enforce";
+import {
+  checkScopeForTool,
+  rewriteScopeError,
+  MISSING_SCOPE_ERROR_MARKER,
+} from "./scope-grant";
 
 const ACCOUNT_PARAM_SCHEMA = {
   type: "string",
@@ -134,8 +139,14 @@ export const BUILT_IN_TOOLS: {
 export function createMcpServer(
   userId: string,
   db: Database,
-  pool: ConnectionPool
+  pool: ConnectionPool,
+  opts?: {
+    /** Absolute origin for links in user-facing tool errors (SCRUM-136).
+     * Optional so tests and legacy call sites fall back to a relative path. */
+    baseUrl?: string;
+  }
 ): Server {
+  const connectionsUrl = `${opts?.baseUrl ?? ""}/dashboard/connections`;
   const server = new Server(
     { name: "datatorag-mcp", version: "0.1.0" },
     { capabilities: { tools: {} } }
@@ -322,6 +333,44 @@ export function createMcpServer(
           isError: true,
         };
       }
+
+      // SCRUM-136/107: refuse BEFORE dispatch when the scope this tool needs
+      // is known-missing from the account the call would run as. The user
+      // reads which access they did not grant and where to grant it, never a
+      // raw Google 403. Fail-open by construction: unmapped tools and legacy
+      // rows fall through to the call (the post-call rewrite is their net).
+      const scopeCheck = checkScopeForTool({
+        toolName,
+        service: requiredService,
+        granted: resolved?.scopes ?? null,
+        surface: "mcp",
+        connectionsUrl,
+      });
+      if (!scopeCheck.ok) {
+        // Metered with a distinct marker: a refusal the instrumentation
+        // cannot see would be a one-sided measurement of exactly the failure
+        // this exists to fix.
+        void trackToolCall(db, {
+          userId,
+          toolName: name,
+          connectorType: requiredService,
+          accountEmail,
+          latencyMs: 0,
+          responseSizeBytes: null,
+          errorMessage: `${MISSING_SCOPE_ERROR_MARKER} ${scopeCheck.missing.displayName} not granted`,
+          outcome: {
+            thrown: false,
+            isError: true,
+            errorMessage: `${MISSING_SCOPE_ERROR_MARKER} ${scopeCheck.missing.displayName} not granted`,
+            source: "mcp",
+            toolName: name,
+          },
+        });
+        return {
+          content: [{ type: "text" as const, text: scopeCheck.message }],
+          isError: true,
+        };
+      }
     } else if (mcpServer.githubRepoUrl) {
       // Legacy: check pluginConnections table
       const [conn] = await db
@@ -376,6 +425,26 @@ export function createMcpServer(
             .map((c) => c.text)
             .join(" ") ?? null
         : null;
+
+      // SCRUM-136: the at-failure net behind the pre-call check. A Google
+      // insufficient-scope 403 that slipped through (unmapped tool, stale
+      // row) reaches the user in words with a reconnect path; the RAW error
+      // is what the usage row and the server log keep — the truth is metered,
+      // the words are served.
+      const scopeRewrite = rewriteScopeError({
+        toolName,
+        service: requiredService ?? null,
+        errorText: errorMessage,
+        surface: "mcp",
+        connectionsUrl,
+      });
+      if (scopeRewrite) {
+        console.warn(`[scope-error] ${name}: ${errorMessage}`);
+        result = {
+          ...(result as Record<string, unknown>),
+          content: [{ type: "text" as const, text: scopeRewrite }],
+        };
+      }
       // Fire-and-forget: metering must never slow the tool response. Latency
       // and sizes are already captured into the props here; trackToolCall is
       // self-contained (never throws) so the floating promise is safe.

@@ -322,7 +322,7 @@ async function main() {
         }
       };
 
-      const server = createMcpServer(auth.userId, db, pool);
+      const server = createMcpServer(auth.userId, db, pool, { baseUrl });
       await server.connect(transport);
 
       await transport.handleRequest(req, res, req.body);

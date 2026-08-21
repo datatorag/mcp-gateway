@@ -13,6 +13,11 @@ import {
   type PluginServerRow,
 } from "@/gateway/user-tools";
 import { PLUGIN_SERVICE_MAP, resolveServiceToken } from "@/gateway/service-token";
+import {
+  checkScopeForTool,
+  rewriteScopeError,
+  MISSING_SCOPE_ERROR_MARKER,
+} from "@/gateway/scope-grant";
 import { classifyWrite, flattenToolResult, stripAccountArg } from "@/gateway/playground/tools";
 import { capToolOutput } from "@/gateway/playground/cap";
 import { trackToolCall } from "@/gateway/track";
@@ -83,6 +88,15 @@ export function userAccountContextKey(serverSlug: string): string {
   return `userAccount:${serverSlug}`;
 }
 
+/** Request-context key holding the granted-scopes string of the account a
+ * plugin's token was resolved for (SCRUM-136). The third half of the same
+ * resolution as the token and account above: the scope gate must judge the
+ * account the call actually runs as. Absent entries make no claim — the
+ * gate fails open to the call. */
+export function userScopesContextKey(serverSlug: string): string {
+  return `userScopes:${serverSlug}`;
+}
+
 /** Builds the per-request identity the plugin connections read from.
  *
  * Must be a real RequestContext, not a plain object that looks like one: the
@@ -96,6 +110,9 @@ export function buildPluginRequestContext(opts: {
   /** Plugin slug → the account email the token above was resolved for. Only
    * feeds usage attribution; absent entries stamp null, never a guess. */
   accountsByServer?: Record<string, string>;
+  /** Plugin slug → the granted-scopes string of that account (SCRUM-136).
+   * Feeds the pre-call scope gate; absent entries make no claim. */
+  scopesByServer?: Record<string, string>;
 }): RequestContext {
   const requestContext = new RequestContext();
   requestContext.set(USER_ID_CONTEXT_KEY, opts.userId);
@@ -104,6 +121,9 @@ export function buildPluginRequestContext(opts: {
   }
   for (const [slug, account] of Object.entries(opts.accountsByServer ?? {})) {
     requestContext.set(userAccountContextKey(slug), account);
+  }
+  for (const [slug, scopes] of Object.entries(opts.scopesByServer ?? {})) {
+    requestContext.set(userScopesContextKey(slug), scopes);
   }
   return requestContext;
 }
@@ -119,6 +139,7 @@ export async function loadUserPluginCredentials(
 ): Promise<{
   tokensByServer: Record<string, string>;
   accountsByServer: Record<string, string>;
+  scopesByServer: Record<string, string>;
 }> {
   const entries = await Promise.all(
     serverSlugs.map(async (slug) => {
@@ -130,13 +151,15 @@ export async function loadUserPluginCredentials(
   );
   const tokensByServer: Record<string, string> = {};
   const accountsByServer: Record<string, string> = {};
+  const scopesByServer: Record<string, string> = {};
   for (const entry of entries) {
     if (!entry) continue;
     const [slug, resolved] = entry;
     tokensByServer[slug] = resolved.token;
     if (resolved.accountEmail) accountsByServer[slug] = resolved.accountEmail;
+    if (resolved.scopes) scopesByServer[slug] = resolved.scopes;
   }
-  return { tokensByServer, accountsByServer };
+  return { tokensByServer, accountsByServer, scopesByServer };
 }
 
 /* -------------------------------------------------------------------------- */
@@ -445,7 +468,12 @@ export type ToolMeter = {
 export function applyToolPolicy(
   namespacedName: string,
   tool: Tool<unknown, unknown, unknown, unknown>,
-  meter?: ToolMeter
+  meter?: ToolMeter,
+  /** SCRUM-136: the connector and granted-scopes string of the account this
+   * session's calls run as, so the gate can refuse a call whose scope was
+   * never granted BEFORE it burns a round trip on a guaranteed 403. Absent
+   * (tests, legacy paths) means no static claim — fail-open to the call. */
+  scopeInfo?: { service: string | null; granted: string | null }
 ): Tool<unknown, unknown, unknown, unknown> {
   tool.requireApproval = classifyWrite(namespacedName);
 
@@ -460,6 +488,39 @@ export function applyToolPolicy(
       // case) nothing at all. The argument is kept only as a fallback for
       // meters built without resolution, i.e. injected test doubles.
       const accountEmail = meter?.resolvedAccountEmail ?? accountArgOf(input);
+
+      // SCRUM-136/107: refuse before dispatch when the needed scope is
+      // known-missing. The message instructs the model to say so in words
+      // and offer the reconnect card via request_connection — the user never
+      // reads a raw Google error. Metered with the distinct marker so a
+      // refusal is never invisible to instrumentation.
+      const scopeCheck = checkScopeForTool({
+        toolName: namespacedName,
+        service: scopeInfo?.service,
+        granted: scopeInfo?.granted,
+        surface: "agent",
+      });
+      if (!scopeCheck.ok) {
+        const marker = `${MISSING_SCOPE_ERROR_MARKER} ${scopeCheck.missing.displayName} not granted`;
+        if (meter) {
+          report(meter, namespacedName, accountEmail, startTime, {
+            responseSizeBytes: null,
+            errorMessage: marker,
+            outcome: {
+              thrown: false,
+              isError: true,
+              errorMessage: marker,
+              source: "agent",
+              toolName: namespacedName,
+            },
+          });
+        }
+        return {
+          content: [{ type: "text", text: scopeCheck.message }],
+          isError: true,
+        };
+      }
+
       try {
         const result = await execute(stripAccountArg(input), context);
         // Serialized ONCE and reused. Sizing and capping both need the
@@ -467,21 +528,42 @@ export function applyToolPolicy(
         // result, so a second traversal of a large mailbox or Drive listing is
         // real synchronous work on the event loop for nothing.
         const serialized = serialize(result);
+        const { text: flatText, isError: flatIsError } = flattenToolResult(
+          result as { content?: Array<{ type: string; text?: string }>; isError?: boolean }
+        );
         if (meter) {
-          const { text, isError } = flattenToolResult(
-            result as { content?: Array<{ type: string; text?: string }>; isError?: boolean }
-          );
           report(meter, namespacedName, accountEmail, startTime, {
             responseSizeBytes: serialized?.length ?? null,
-            errorMessage: isError ? text : null,
+            errorMessage: flatIsError ? flatText : null,
             outcome: {
               thrown: false,
-              isError,
-              errorMessage: isError ? text : null,
+              isError: flatIsError,
+              errorMessage: flatIsError ? flatText : null,
               source: "agent",
               toolName: namespacedName,
             },
           });
+        }
+
+        // SCRUM-136: the at-failure net behind the pre-call check above. A
+        // Google insufficient-scope 403 that slipped through (unmapped tool,
+        // stale row) reaches the model as instructions to explain and offer
+        // reconnect; the RAW error was metered above — truth in the usage
+        // row, words in the conversation.
+        if (flatIsError) {
+          const rewritten = rewriteScopeError({
+            toolName: namespacedName,
+            service: scopeInfo?.service,
+            errorText: flatText,
+            surface: "agent",
+          });
+          if (rewritten) {
+            console.warn(`[scope-error] ${namespacedName}: ${flatText}`);
+            return {
+              ...(result as Record<string, unknown>),
+              content: [{ type: "text", text: rewritten }],
+            };
+          }
         }
         return capToolOutput(result, serialized);
       } catch (error) {
@@ -643,6 +725,17 @@ export async function resolvePluginTools(
     const meter = meterBase
       ? { ...meterBase, connectorType, resolvedAccountEmail }
       : undefined;
+    // SCRUM-136: the granted scopes of the account this server's session was
+    // opened with, resolved alongside the token. Absent means no claim; the
+    // scope gate inside applyToolPolicy fails open to the call.
+    const contextScopes = requestContext?.get(userScopesContextKey(serverSlug));
+    const scopeInfo = {
+      service: connectorType,
+      granted:
+        typeof contextScopes === "string" && contextScopes.length > 0
+          ? contextScopes
+          : null,
+    };
     for (const [toolName, tool] of Object.entries(serverTools)) {
       const namespacedName = toNamespacedName(serverSlug, toolName);
       if (!allowed.has(namespacedName)) continue;
@@ -652,7 +745,12 @@ export async function resolvePluginTools(
       // Every tool goes through applyToolPolicy — there is no path that puts a
       // tool in front of the model without one, which is the property that
       // makes the gate a gate rather than a habit.
-      resolved[namespacedName] = applyToolPolicy(namespacedName, tool, meter);
+      resolved[namespacedName] = applyToolPolicy(
+        namespacedName,
+        tool,
+        meter,
+        scopeInfo
+      );
     }
   }
   return applyPromptCacheBreakpoint(resolved);

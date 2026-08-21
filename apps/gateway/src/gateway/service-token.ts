@@ -176,6 +176,11 @@ export async function revokeUpstream(
 export type ResolvedServiceToken = {
   token: string;
   accountEmail: string | null;
+  /** The granted-scopes string of the resolved connection row (SCRUM-136).
+   * Travels with the token because the scope check must judge the account
+   * the call will actually run as, not "the" connection. Null on legacy rows
+   * that never stored one. */
+  scopes: string | null;
 };
 
 /**
@@ -207,6 +212,7 @@ export async function resolveServiceToken(
     accessToken: string;
     refreshToken: string | null;
     tokenExpiresAt: Date | null;
+    scopes: string | null;
     /** Null only on the legacy path, where no connected_accounts row exists
      * and there is genuinely no account identity to report. */
     accountEmail: string | null;
@@ -219,6 +225,7 @@ export async function resolveServiceToken(
         accessToken: serviceConnections.accessToken,
         refreshToken: serviceConnections.refreshToken,
         tokenExpiresAt: serviceConnections.tokenExpiresAt,
+        scopes: serviceConnections.scopes,
         accountEmail: connectedAccounts.accountEmail,
       })
       .from(connectedAccounts)
@@ -238,6 +245,7 @@ export async function resolveServiceToken(
         accessToken: serviceConnections.accessToken,
         refreshToken: serviceConnections.refreshToken,
         tokenExpiresAt: serviceConnections.tokenExpiresAt,
+        scopes: serviceConnections.scopes,
       })
       .from(serviceConnections)
       .where(
@@ -256,13 +264,20 @@ export async function resolveServiceToken(
   const isExpired =
     conn.tokenExpiresAt && conn.tokenExpiresAt.getTime() < Date.now();
 
-  if (!isExpired) return { token: conn.accessToken, accountEmail: resolvedEmail };
+  if (!isExpired)
+    return {
+      token: conn.accessToken,
+      accountEmail: resolvedEmail,
+      scopes: conn.scopes,
+    };
 
   if (conn.refreshToken) {
     const refreshFn = REFRESH_FN[service];
     if (refreshFn) {
       const newToken = await refreshFn(db, conn.id, conn.refreshToken);
-      if (newToken) return { token: newToken, accountEmail: resolvedEmail };
+      // A refresh never widens the grant, so the stored scopes still hold.
+      if (newToken)
+        return { token: newToken, accountEmail: resolvedEmail, scopes: conn.scopes };
     }
   }
 
