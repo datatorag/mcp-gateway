@@ -191,18 +191,43 @@ describe("rewriteScopeError", () => {
     }
   });
 
+  /** The EXACT production error text, byte-identical from two independent
+   * sources (see SCRUM-136):
+   *
+   *  1. Captured 2026-08-20 through the deployed plugin by calling
+   *     gmail_search under a production grant that lacks gmail.modify — the
+   *     HQ-directed live repro; no user identifiers involved.
+   *  2. Recorded organically in our own message store: mastra_messages
+   *     thread z7RAdi-WrFWpwuCKR-BMmu9fHkyQTw95 holds a real user's
+   *     drive_search failing with this same string verbatim.
+   *
+   * This string, not documentation, is what SCOPE_ERROR_PATTERNS is pinned
+   * against — a rewrite that never matches would be the at-failure behaviour
+   * silently not shipping. DO NOT loosen the patterns without re-deriving
+   * from a source like these. RE-VERIFICATION TRAP: usage_events is the
+   * wrong corpus — it stores this message REDACTED ("[redacted-content]"),
+   * so searching there returns a confident false negative that reads as "we
+   * have no scope errors". mastra_messages keeps the raw text. */
+  const PRODUCTION_SCOPE_403 =
+    'Error: API error: {"error":{"code":403,"message":"Request had insufficient authentication scopes.","reason":"insufficientPermissions"}}';
+
   it("rewrites the EXACT error a real short grant produced (captured live)", () => {
-    // Captured 2026-08-20 through the deployed plugin by calling gmail_search
-    // under a production grant that lacks gmail.modify — the HQ-directed live
-    // repro (see SCRUM-136; no user identifiers involved). This string, not
-    // documentation, is what the patterns are pinned against: a rewrite that
-    // never matches would be the at-failure behaviour silently not shipping.
-    const captured =
-      'Error: API error: {"error":{"code":403,"message":"Request had insufficient authentication scopes.","reason":"insufficientPermissions"}}';
-    const rewritten = rewriteScopeError({ ...base, errorText: captured });
+    const rewritten = rewriteScopeError({ ...base, errorText: PRODUCTION_SCOPE_403 });
     expect(rewritten).toContain("Gmail access");
     expect(rewritten).toContain("https://datatorag.com/dashboard");
     expect(rewritten).not.toContain("insufficientPermissions");
+  });
+
+  it("rewrites the same text on the tool it organically hit: drive_search", () => {
+    // The message-store occurrence (source 2 above) was a drive_search call,
+    // so the organic shape resolves to Drive, not Gmail.
+    const rewritten = rewriteScopeError({
+      ...base,
+      toolName: "gws-mcp__drive_search",
+      errorText: PRODUCTION_SCOPE_403,
+    });
+    expect(rewritten).toContain("Drive access");
+    expect(rewritten).not.toContain("insufficient authentication scopes");
   });
 
   it("returns null for errors that are not scope errors — the check can go red", () => {
