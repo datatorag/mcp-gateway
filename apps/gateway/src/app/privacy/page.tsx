@@ -5,7 +5,7 @@ export const dynamic = "force-static";
 
 export const metadata: Metadata = {
   title: "Privacy Policy | DataToRAG",
-  description: "DataToRAG privacy policy — how we handle your data.",
+  description: "DataToRAG privacy policy: how we handle your data.",
   alternates: { canonical: "https://datatorag.com/privacy" },
 };
 
