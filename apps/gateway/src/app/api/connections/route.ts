@@ -10,10 +10,21 @@ import {
   setDefaultAccount,
 } from "@/gateway/connected-accounts";
 import { revokeUpstream } from "@/gateway/service-token";
+import { scopeDelta } from "@/gateway/scope-grant";
 
 // GET /api/connections — list connected accounts for the logged-in user
 export const GET = withRoute(async (userId) => {
-  const accounts = await listConnectedAccounts(db, userId);
+  const rawAccounts = await listConnectedAccounts(db, userId);
+
+  // SCRUM-136 (the SCRUM-105 shape): callers get the finished DELTA, not a
+  // scope array to re-derive "is this enough" from — the comparison lives in
+  // scope-grant.ts and nowhere else.
+  const accounts = rawAccounts.map((a) => ({
+    ...a,
+    scopeStatus: (({ missing, complete }) => ({ missing, complete }))(
+      scopeDelta(a.connectorType, a.scopes)
+    ),
+  }));
 
   // Legacy: un-migrated service_connections (no connected_accounts row yet)
   const migratedSet = accounts.map((a) => a.serviceConnectionId);
@@ -44,7 +55,14 @@ export const GET = withRoute(async (userId) => {
           .from(serviceConnections)
           .where(eq(serviceConnections.userId, userId));
 
-  return NextResponse.json({ accounts, connections: legacyConnections });
+  const connections = legacyConnections.map((c) => ({
+    ...c,
+    scopeStatus: (({ missing, complete }) => ({ missing, complete }))(
+      scopeDelta(c.service, c.scopes)
+    ),
+  }));
+
+  return NextResponse.json({ accounts, connections });
 });
 
 // DELETE /api/connections?accountId=xxx or ?service=xxx (legacy)

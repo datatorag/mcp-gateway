@@ -1,10 +1,11 @@
 import { z } from "zod";
 import { createTool } from "@mastra/core/tools";
 import type { Database } from "@datatorag-mcp/db";
-import { connectedAccounts, users } from "@datatorag-mcp/db";
+import { connectedAccounts, serviceConnections, users } from "@datatorag-mcp/db";
 import { and, eq } from "drizzle-orm";
 import { agentRunCap, periodStatus } from "@/gateway/usage/period";
 import { disconnectService } from "@/gateway/connected-accounts";
+import { scopeDelta } from "@/gateway/scope-grant";
 import { trackConnectCardShown } from "@/gateway/track";
 import {
   CONNECTABLE_SERVICES,
@@ -86,6 +87,38 @@ export function buildIntrospectionTools({ db, userId }: IntrospectionDeps) {
           .from(connectedAccounts)
           .where(eq(connectedAccounts.userId, userId));
 
+        // SCRUM-136: "connected" alone can be a lie — the consent screen lets
+        // a user untick scopes, and tool calls run as the DEFAULT account, so
+        // that account's grant is the one this answer reports on. The agent
+        // gets the finished delta in display words, never scope URLs.
+        const defaultGrants = await db
+          .select({
+            connectorType: connectedAccounts.connectorType,
+            scopes: serviceConnections.scopes,
+          })
+          .from(connectedAccounts)
+          .innerJoin(
+            serviceConnections,
+            eq(connectedAccounts.serviceConnectionId, serviceConnections.id)
+          )
+          .where(
+            and(
+              eq(connectedAccounts.userId, userId),
+              eq(connectedAccounts.isDefault, true)
+            )
+          );
+        const serviceScopeStatus = defaultGrants.map((row) => {
+          const delta = scopeDelta(row.connectorType, row.scopes);
+          return {
+            service: row.connectorType,
+            grantComplete: delta.complete,
+            missingServices: delta.missing.map((m) => m.displayName),
+            reconnectUrl: delta.complete
+              ? null
+              : (getConnectableService(row.connectorType)?.connectUrl ?? null),
+          };
+        });
+
         const status = await periodStatus(db, userId);
         // The one shared cap decider (SCRUM-84/94): the enforcing claim, this
         // answer, and the chat panel's meter all resolve the cap through the
@@ -97,6 +130,11 @@ export function buildIntrospectionTools({ db, userId }: IntrospectionDeps) {
         return {
           plan: row?.plan ?? "free",
           connectedServices: accounts.map((a) => a.connectorType),
+          // Per-service grant honesty (SCRUM-136). A service listed above with
+          // grantComplete false here is connected-but-short: name what is
+          // missing and point at reconnectUrl rather than promising tools
+          // that will 403.
+          serviceScopeStatus,
           // Reported as remaining rather than used, because that is the
           // question people actually ask, and because a limit you can see
           // coming is a meter rather than a wall.
@@ -204,20 +242,82 @@ export function buildIntrospectionTools({ db, userId }: IntrospectionDeps) {
           )
           .limit(1);
         if (existing) {
-          // SCRUM-112: every branch of this ask is observed, one event with
-          // an outcome, because absence of a card and absence of an ask were
-          // previously indistinguishable in the data. Fire-and-forget; the
-          // track function owns the never-throw contract.
+          // SCRUM-136: "connected" is not enough — the grant may be short.
+          // Tool calls run as the DEFAULT account, so its scopes decide. A
+          // short grant gets the card anyway: re-consent runs through the
+          // same connect URL (it already re-prompts with the full set), and
+          // this card is the recovery path the ticket exists for.
+          const [defaultAccount] = await db
+            .select({ scopes: serviceConnections.scopes })
+            .from(connectedAccounts)
+            .innerJoin(
+              serviceConnections,
+              eq(connectedAccounts.serviceConnectionId, serviceConnections.id)
+            )
+            .where(
+              and(
+                eq(connectedAccounts.userId, userId),
+                eq(connectedAccounts.connectorType, service),
+                eq(connectedAccounts.isDefault, true)
+              )
+            )
+            .limit(1);
+          const delta = scopeDelta(service, defaultAccount?.scopes ?? null);
+
+          if (delta.complete) {
+            // SCRUM-112: every branch of this ask is observed, one event with
+            // an outcome, because absence of a card and absence of an ask were
+            // previously indistinguishable in the data. Fire-and-forget; the
+            // track function owns the never-throw contract.
+            void trackConnectCardShown(db, userId, {
+              service,
+              outcome: "already_connected",
+            });
+            return {
+              service,
+              alreadyConnected: true,
+              note:
+                "The user already has this service connected. Its tools are " +
+                "available on your next turn if they are not in this one.",
+            };
+          }
+
+          const missingServices = delta.missing.map((m) => m.displayName);
+          const reconsentShown = context?.writer !== undefined;
+          if (reconsentShown) {
+            await context.writer!.custom({
+              type: "data-connect",
+              data: {
+                services: [
+                  {
+                    id: entry.id,
+                    name: entry.name,
+                    connectHref: entry.connectUrl,
+                  },
+                ],
+              },
+            });
+          }
           void trackConnectCardShown(db, userId, {
             service,
-            outcome: "already_connected",
+            outcome: reconsentShown ? "reconsent_shown" : "no_writer",
           });
           return {
             service,
             alreadyConnected: true,
+            grantComplete: false,
+            missingServices,
+            controlShown: reconsentShown,
             note:
-              "The user already has this service connected. Its tools are " +
-              "available on your next turn if they are not in this one.",
+              `The service is connected, but the user did not grant ` +
+              `${missingServices.join(", ")} on the consent screen, so those ` +
+              `tools cannot run. ` +
+              (reconsentShown
+                ? "A Reconnect control is now visible in this conversation; " +
+                  "tell the user which access is missing and to use it, " +
+                  "ticking every permission this time."
+                : "The control could not be shown here; point the user to " +
+                  "the Connect control on the dashboard instead."),
           };
         }
 
