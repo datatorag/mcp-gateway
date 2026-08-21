@@ -35,7 +35,16 @@ export function postConnectDestination(opts: {
   provider?: string;
   /** Error code, when the connect failed. Wins over `provider`. */
   error?: string;
+  /** SCRUM-136: display names of scopes the user did NOT grant. Present only
+   * when the connect succeeded but the grant came back short; the landing
+   * surface names them and offers re-consent. */
+  partialMissing?: string[];
 }): string {
+  const partial =
+    !opts.error && opts.partialMissing && opts.partialMissing.length > 0
+      ? opts.partialMissing
+      : null;
+
   const next = resolveNextPath(opts.requestedPath);
   if (next !== null) {
     const url = new URL(next, "http://placeholder.invalid");
@@ -45,10 +54,16 @@ export function postConnectDestination(opts: {
       // produce (the client auto-continues the conversation off `connected`).
       url.searchParams.delete("connected");
       url.searchParams.delete("connect_error");
+      url.searchParams.delete("partial");
+      url.searchParams.delete("missing");
       if (opts.error) {
         url.searchParams.set("connect_error", opts.error);
       } else {
         url.searchParams.set("connected", opts.provider ?? "");
+        if (partial) {
+          url.searchParams.set("partial", opts.provider ?? "");
+          url.searchParams.set("missing", partial.join(","));
+        }
       }
       return url.pathname + url.search;
     }
@@ -59,7 +74,11 @@ export function postConnectDestination(opts: {
   // The error param keeps its legacy `error` name here because the
   // connections page already reads it; `connect_error` exists only on the
   // requested-path leg, where a generic `error` would be too broad to claim.
-  return opts.error
-    ? `/dashboard/connections?error=${encodeURIComponent(opts.error)}`
-    : `/dashboard/connections?connected=${encodeURIComponent(opts.provider ?? "")}`;
+  if (opts.error) {
+    return `/dashboard/connections?error=${encodeURIComponent(opts.error)}`;
+  }
+  const base = `/dashboard/connections?connected=${encodeURIComponent(opts.provider ?? "")}`;
+  return partial
+    ? `${base}&partial=${encodeURIComponent(opts.provider ?? "")}&missing=${encodeURIComponent(partial.join(","))}`
+    : base;
 }
