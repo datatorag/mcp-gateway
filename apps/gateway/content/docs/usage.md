@@ -48,7 +48,8 @@ Dashboard API requests are limited to 120 per minute per user. If you hit that, 
 
 ## Privacy
 
-- We never log request arguments or tool responses
+- Usage records store the tool name, connected account, outcome, timing and request/response sizes. They do not store request arguments or response bodies.
 - Error messages are redacted for emails, IDs, and quoted content before storage
-- Every row is scoped to your user ID — other users can't see your data
-- If you delete your account, all your usage rows go with it
+- Every row is scoped to your user ID, other users cannot see your data
+- Conversations in the in-product agent are stored separately and DO include your messages and tool results. Delete a thread to remove it.
+- To delete your account and everything with it, email support@datatorag.com
