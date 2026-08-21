@@ -358,7 +358,9 @@ export async function trackConnectCardShown(
   userId: string,
   props: {
     service: string;
-    outcome: "shown" | "already_connected" | "no_writer";
+    /** `reconsent_shown` (SCRUM-136, additive): the card was placed for a
+     * connected-but-short grant — a reconnect ask, not a first connect. */
+    outcome: "shown" | "already_connected" | "no_writer" | "reconsent_shown";
   }
 ): Promise<void> {
   try {

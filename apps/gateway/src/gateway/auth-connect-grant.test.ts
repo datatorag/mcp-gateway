@@ -32,7 +32,7 @@ import type { Database } from "@datatorag-mcp/db";
 vi.mock("@datatorag-mcp/config", () => ({
   getEnv: () => ({ AGENT_DEFAULT_VIEW: "on" }),
 }));
-const trackOAuthCompleted = vi.fn(async () => undefined);
+const trackOAuthCompleted = vi.fn(async (..._args: unknown[]) => undefined);
 vi.mock("./track", () => ({
   trackLogin: vi.fn(),
   trackSignup: vi.fn(),
@@ -49,7 +49,7 @@ vi.mock("./lifecycle", () => ({
 vi.mock("./signup-alert", () => ({
   notifySignup: vi.fn(async () => undefined),
 }));
-const upsertServiceAccount = vi.fn(async () => undefined);
+const upsertServiceAccount = vi.fn(async (..._args: unknown[]) => undefined);
 vi.mock("./connected-accounts", () => ({
   upsertServiceAccount: (...args: unknown[]) => upsertServiceAccount(...args),
 }));
