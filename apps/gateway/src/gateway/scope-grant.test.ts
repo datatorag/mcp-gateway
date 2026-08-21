@@ -191,6 +191,20 @@ describe("rewriteScopeError", () => {
     }
   });
 
+  it("rewrites the EXACT error a real short grant produced (captured live)", () => {
+    // Captured 2026-08-20 through the deployed plugin by calling gmail_search
+    // under a production grant that lacks gmail.modify — the HQ-directed live
+    // repro (see SCRUM-136; no user identifiers involved). This string, not
+    // documentation, is what the patterns are pinned against: a rewrite that
+    // never matches would be the at-failure behaviour silently not shipping.
+    const captured =
+      'Error: API error: {"error":{"code":403,"message":"Request had insufficient authentication scopes.","reason":"insufficientPermissions"}}';
+    const rewritten = rewriteScopeError({ ...base, errorText: captured });
+    expect(rewritten).toContain("Gmail access");
+    expect(rewritten).toContain("https://datatorag.com/dashboard");
+    expect(rewritten).not.toContain("insufficientPermissions");
+  });
+
   it("returns null for errors that are not scope errors — the check can go red", () => {
     // File-level sharing refusals and everything else keep their own message.
     expect(

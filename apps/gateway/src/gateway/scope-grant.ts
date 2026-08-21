@@ -113,6 +113,14 @@ export function scopeDelta(
  * falls through to the call itself; the 403 rewrite below is the net for
  * those. Fail-open on purpose: a wrong block here refuses work the user
  * could do, while a missed block just reproduces today's behaviour.
+ *
+ * THE MAP UNDER-BLOCKS BY DESIGN — do not "fix" it into a multi-scope check.
+ * A cross-service tool (`gmail_save_attachment_to_drive` needs Gmail AND
+ * Drive) is checked on its prefix scope only; if the second scope is the
+ * missing one, the 403 rewrite catches it after the fact. Making this map
+ * fail-closed would mean a wrong or stale entry blocks calls that would have
+ * worked — the one failure mode worse than the bug this module fixes.
+ * Ruled by HQ, see SCRUM-136.
  */
 const TOOL_PREFIX_SCOPE: ReadonlyArray<{ prefix: string; scope: string }> = [
   { prefix: "gmail_", scope: "https://www.googleapis.com/auth/gmail.modify" },
@@ -219,9 +227,18 @@ export function checkScopeForTool(opts: {
 export const MISSING_SCOPE_ERROR_MARKER = "[missing-scope]";
 
 /** Google's insufficient-scope shapes, as they surface through the plugin.
- * PERMISSION_DENIED alone is deliberately absent: that also covers file-level
- * sharing refusals, which are not scope problems and must keep their own
- * message. */
+ *
+ * VERIFIED LIVE 2026-08-20: a tool call under a real short grant returned
+ * `Error: API error: {"error":{"code":403,"message":"Request had
+ * insufficient authentication scopes.","reason":"insufficientPermissions"}}`
+ * through the plugin, matched by two of the three alternatives below (the
+ * captured string is pinned in scope-grant.test.ts). The third,
+ * ACCESS_TOKEN_SCOPE_INSUFFICIENT, is Google's documented detail-reason for
+ * the same condition and kept as belt-and-braces.
+ *
+ * PERMISSION_DENIED alone is deliberately absent: that also covers
+ * file-level sharing refusals, which are not scope problems and must keep
+ * their own message. */
 const SCOPE_ERROR_PATTERNS =
   /insufficient authentication scopes|ACCESS_TOKEN_SCOPE_INSUFFICIENT|insufficientPermissions/i;
 
