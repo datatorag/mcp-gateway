@@ -358,7 +358,9 @@ export async function trackConnectCardShown(
   userId: string,
   props: {
     service: string;
-    outcome: "shown" | "already_connected" | "no_writer";
+    /** `reconsent_shown` (SCRUM-136, additive): the card was placed for a
+     * connected-but-short grant — a reconnect ask, not a first connect. */
+    outcome: "shown" | "already_connected" | "no_writer" | "reconsent_shown";
   }
 ): Promise<void> {
   try {
@@ -466,7 +468,12 @@ export async function trackOAuthCompleted(
   userId: string,
   provider: ProviderId,
   accountEmail: string,
-  attribution?: Attribution | null
+  attribution?: Attribution | null,
+  /** SCRUM-136: what the consent screen actually granted. ADDITIVE properties
+   * on an era event — the event still fires on a partial grant so the funnel
+   * count keeps its meaning; `grant_complete` carries the split. Optional so
+   * providers without per-scope consent (Atlassian) stamp complete. */
+  grant?: { complete: boolean; missing: Array<{ displayName: string }> }
 ): Promise<void> {
   const c = getPosthog();
   if (!c) return;
@@ -477,6 +484,8 @@ export async function trackOAuthCompleted(
     properties: {
       provider,
       account_email: accountEmail,
+      grant_complete: grant?.complete ?? true,
+      missing_scopes: grant?.missing.map((m) => m.displayName) ?? [],
       ...identityProps(email),
       ...sessionProps(attribution),
     },

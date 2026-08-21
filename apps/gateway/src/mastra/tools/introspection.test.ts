@@ -16,16 +16,17 @@ const { buildIntrospectionTools, INTROSPECTION_TOOL_NAMES } = await import("./in
  * wrong row, and that is precisely the bug this file exists to prevent. */
 function stubDb(plan = "free", services: string[] = ["google-workspace"]) {
   const scopedTo: unknown[] = [];
-  const chain = (rows: unknown[]) => ({
-    from: () => ({
-      where: (cond: unknown) => {
-        scopedTo.push(cond);
-        return Object.assign(Promise.resolve(rows), {
-          limit: () => Promise.resolve(rows),
-        });
-      },
-    }),
-  });
+  const chain = (rows: unknown[]) => {
+    const where = (cond: unknown) => {
+      scopedTo.push(cond);
+      return Object.assign(Promise.resolve(rows), {
+        limit: () => Promise.resolve(rows),
+      });
+    };
+    return {
+      from: () => ({ where, innerJoin: () => ({ where }) }),
+    };
+  };
   const db = {
     select: () => chain([{ plan }]),
     selectDistinct: () => chain(services.map((connectorType) => ({ connectorType }))),
@@ -230,14 +231,18 @@ describe("request_connection (SCRUM-78)", () => {
   }
 
   /** A db whose connected-accounts lookup returns what the test says, and a
-   * writer that records every chunk written into the stream. */
-  function connectStub(connectedRows: unknown[]) {
+   * writer that records every chunk written into the stream. `scopesRows`
+   * feeds the SECOND query (the default account's grant, SCRUM-136); rows
+   * without a scopes field read as complete, which keeps the pre-136 cases
+   * meaning what they always meant. */
+  function connectStub(connectedRows: unknown[], scopesRows?: unknown[]) {
+    let call = 0;
     const db = {
-      select: () => ({
-        from: () => ({
-          where: () => ({ limit: async () => connectedRows }),
-        }),
-      }),
+      select: () => {
+        const rows = call++ === 0 ? connectedRows : (scopesRows ?? connectedRows);
+        const where = () => ({ limit: async () => rows });
+        return { from: () => ({ where, innerJoin: () => ({ where }) }) };
+      },
     } as never;
     const written: unknown[] = [];
     const writer = {
@@ -346,5 +351,99 @@ describe("request_connection (SCRUM-78)", () => {
     await requestConnection(db)({ service: "not-a-service" }, { writer });
 
     expect(trackConnectCardShown).not.toHaveBeenCalled();
+  });
+
+  /* SCRUM-136: connected-but-short. "Already connected" used to end the
+   * conversation for a user whose grant was missing the very scope their
+   * request needs — the exact population the ticket exists for. A short
+   * default-account grant now gets the reconnect card instead of a refusal. */
+
+  const IDENTITY_ONLY =
+    "https://www.googleapis.com/auth/userinfo.email openid";
+
+  it("shows the reconnect card when connected but the grant is short (SCRUM-136)", async () => {
+    const { db, writer, written } = connectStub(
+      [{ id: "acct-1" }],
+      [{ scopes: IDENTITY_ONLY }]
+    );
+    const out = await requestConnection(db)(
+      { service: "google-workspace" },
+      { writer }
+    );
+
+    // The SAME card the not-connected branch writes — one control, one flow.
+    expect(written).toEqual([
+      {
+        type: "data-connect",
+        data: {
+          services: [
+            {
+              id: "google-workspace",
+              name: "Google Workspace",
+              connectHref: "/auth/google/connect",
+            },
+          ],
+        },
+      },
+    ]);
+    expect(out).toMatchObject({
+      alreadyConnected: true,
+      grantComplete: false,
+      controlShown: true,
+    });
+    expect(out.missingServices).toContain("Gmail");
+    expect(trackConnectCardShown).toHaveBeenCalledWith(db, "user-1", {
+      service: "google-workspace",
+      outcome: "reconsent_shown",
+    });
+  });
+
+  it("still refuses as already_connected when the grant is complete (SCRUM-136)", async () => {
+    // A row with no scopes field reads complete (fail-open) — asserted by the
+    // pre-136 cases above. This one pins the REAL full-grant string too, in
+    // the spelling Google returns it.
+    const fullGrant = [
+      "openid",
+      "https://www.googleapis.com/auth/userinfo.email",
+      "https://www.googleapis.com/auth/gmail.modify",
+      "https://www.googleapis.com/auth/drive",
+      "https://www.googleapis.com/auth/calendar",
+      "https://www.googleapis.com/auth/documents",
+      "https://www.googleapis.com/auth/spreadsheets",
+      "https://www.googleapis.com/auth/presentations",
+      "https://www.googleapis.com/auth/contacts",
+      "https://www.googleapis.com/auth/tasks",
+    ].join(" ");
+    const { db, writer, written } = connectStub(
+      [{ id: "acct-1" }],
+      [{ scopes: fullGrant }]
+    );
+    const out = await requestConnection(db)(
+      { service: "google-workspace" },
+      { writer }
+    );
+
+    expect(written).toEqual([]);
+    expect(out).toMatchObject({ alreadyConnected: true });
+    expect(out).not.toHaveProperty("grantComplete");
+    expect(trackConnectCardShown).toHaveBeenCalledWith(db, "user-1", {
+      service: "google-workspace",
+      outcome: "already_connected",
+    });
+  });
+
+  it("reports the short-grant no-writer branch honestly (SCRUM-136)", async () => {
+    const { db } = connectStub([{ id: "acct-1" }], [{ scopes: IDENTITY_ONLY }]);
+    const out = await requestConnection(db)({ service: "google-workspace" }, {});
+
+    expect(out).toMatchObject({
+      alreadyConnected: true,
+      grantComplete: false,
+      controlShown: false,
+    });
+    expect(trackConnectCardShown).toHaveBeenCalledWith(db, "user-1", {
+      service: "google-workspace",
+      outcome: "no_writer",
+    });
   });
 });

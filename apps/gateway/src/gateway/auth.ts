@@ -23,6 +23,7 @@ import {
   resolveNextPath,
 } from "./post-login-destination";
 import { postConnectDestination } from "./post-connect-destination";
+import { GWS_SCOPE_LIST, scopeDelta } from "./scope-grant";
 import { getEnv } from "@datatorag-mcp/config";
 
 /** Where the requested route (`?next=` on the login URL) survives the trip
@@ -58,18 +59,9 @@ const LOGIN_NONCE_COOKIE = "login_state_nonce";
  * be parked at the same time, so no two of these may consume each other. */
 const CONNECT_NEXT_COOKIE = "dtr_connect_next";
 
-const GWS_SCOPES = [
-  "openid",
-  "email",
-  "https://www.googleapis.com/auth/gmail.modify",
-  "https://www.googleapis.com/auth/drive",
-  "https://www.googleapis.com/auth/calendar",
-  "https://www.googleapis.com/auth/documents",
-  "https://www.googleapis.com/auth/spreadsheets",
-  "https://www.googleapis.com/auth/presentations",
-  "https://www.googleapis.com/auth/contacts",
-  "https://www.googleapis.com/auth/tasks",
-].join(" ");
+// The list itself lives in scope-grant.ts, next to the code that compares a
+// user's grant against it — one list, not a string here and a copy there.
+const GWS_SCOPES = GWS_SCOPE_LIST.join(" ");
 
 /**
  * Dashboard authentication and service connection routes.
@@ -507,6 +499,15 @@ export function createAuthRouter(
       return;
     }
 
+    // SCRUM-136: the consent screen lets the user untick individual scopes,
+    // and Google reports what actually came back in `tokens.scope`. The row
+    // is upserted EITHER WAY — it is the token store, and the granted subset
+    // genuinely works — but a short grant is never recorded as a clean
+    // connection: the event carries the delta and the redirect names it, so
+    // the landing surface can offer re-consent (the connect URL already sends
+    // prompt=consent with the full set, so Google re-prompts).
+    const grantDelta = scopeDelta(PROVIDERS.GOOGLE_WORKSPACE, tokens.scope ?? null);
+
     await upsertServiceAccount(
       db,
       session.userId,
@@ -522,13 +523,17 @@ export function createAuthRouter(
       session.userId,
       PROVIDERS.GOOGLE_WORKSPACE,
       accountEmail,
-      attribution
+      attribution,
+      grantDelta
     );
 
     res.redirect(
       postConnectDestination({
         requestedPath,
         provider: PROVIDERS.GOOGLE_WORKSPACE,
+        partialMissing: grantDelta.complete
+          ? undefined
+          : grantDelta.missing.map((m) => m.displayName),
       })
     );
   });

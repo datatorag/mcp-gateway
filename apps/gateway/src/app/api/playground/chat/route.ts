@@ -395,6 +395,9 @@ export const POST = withRoute(async (userId, request) => {
       // The account each token was resolved for rides beside it, so tool
       // metering can stamp the identity the call actually runs as.
       accountsByServer: credentials.accountsByServer,
+      // And that account's granted scopes (SCRUM-136), so the scope gate can
+      // refuse a call whose permission was never granted before it 403s.
+      scopesByServer: credentials.scopesByServer,
     });
 
     // The run this turn belongs to, so each model call can report its tokens
