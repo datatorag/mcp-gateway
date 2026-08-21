@@ -80,7 +80,11 @@ export default function TermsPage() {
           <h2 className="text-xl font-semibold">9. Termination</h2>
           <p>
             We may suspend or terminate your access if you violate these terms. You may stop using
-            the Service and delete your account at any time.
+            the Service at any time, and you may ask us to delete your account by emailing{" "}
+            <a href="mailto:support@datatorag.com" className="text-blue-600 underline">
+              support@datatorag.com
+            </a>
+            .
           </p>
 
           <h2 className="text-xl font-semibold">10. Changes to Terms</h2>
