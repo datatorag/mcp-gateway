@@ -7,6 +7,22 @@ export const BREVO_LIST_PRODUCT_USERS = 4;
 export const BREVO_TEMPLATE_WELCOME = 2;
 export const BREVO_TEMPLATE_NO_ACTIVATION = 3;
 
+/**
+ * The no-activation follow-up is one email per user, but three different
+ * emails depending on WHY they stalled (SCRUM-140): never connected, connected
+ * with a grant the product cannot use, or connected and never tried anything.
+ * Template 3 gave everyone client-configuration instructions, which is the
+ * wrong advice for two of those three. It stays defined because it is the
+ * live template until this branch deploys; nothing new should send it.
+ *
+ * Same kind of console reference as the ids above. A send to an id that does
+ * not exist fails the POST, which drops the email and alerts ops, so a wrong
+ * id here fails in the safe direction.
+ */
+export const BREVO_TEMPLATE_FOLLOWUP_CONNECT = 4;
+export const BREVO_TEMPLATE_FOLLOWUP_PERMISSIONS = 5;
+export const BREVO_TEMPLATE_FOLLOWUP_TRY_THIS = 6;
+
 // Founder/test accounts come from INTERNAL_EXCLUDE_EMAILS (comma-separated,
 // SSM → server .env — the same env-side list the digest's internal exclusion
 // reads, mirroring the PostHog test-account filters). Anyone @datatorag.com
