@@ -31,7 +31,11 @@ import {
 } from "@/components/ai-elements/prompt-input";
 import { Suggestion, Suggestions } from "@/components/ai-elements/suggestion";
 import Link from "next/link";
-import { ConnectPart, ConnectReturnContext } from "./agent-parts";
+import {
+  ConnectGrantContext,
+  ConnectPart,
+  ConnectReturnContext,
+} from "./agent-parts";
 import { SERVICES } from "./connections/services";
 import { buttonVariants } from "@/components/ui/button";
 import {
@@ -656,6 +660,32 @@ export const Playground = forwardRef<PlaygroundHandle, PlaygroundProps>(
       [serverThreadId]
     );
 
+    /** What each service's DEFAULT account actually granted (SCRUM-106).
+     *
+     * Built from the accounts this component is ALREADY given rather than
+     * from a second fetch, for the reason recorded on the `accounts` prop:
+     * one hook instance, one /api/connections request, and a card that cannot
+     * disagree with the page hosting it.
+     *
+     * The DEFAULT account is the right one because tool calls run as it. A
+     * non-default account's grant would answer a question nobody asked, and
+     * would say "Calendar is missing" about an account the failing call never
+     * touched. The first-account fallback covers a row set with no default
+     * flagged, where saying nothing is worse than saying something true. */
+    const connectGrant = useMemo(() => {
+      const scopeStatusByService: Record<
+        string,
+        ConnectedAccount["scopeStatus"] | undefined
+      > = {};
+      for (const account of accounts) {
+        const existing = scopeStatusByService[account.connectorType];
+        if (existing === undefined || account.isDefault) {
+          scopeStatusByService[account.connectorType] = account.scopeStatus;
+        }
+      }
+      return { scopeStatusByService };
+    }, [accounts]);
+
     // 403 playground_disabled — hide the section entirely rather than show a
     // dead chat box.
     if (hidden) return null;
@@ -671,6 +701,7 @@ export const Playground = forwardRef<PlaygroundHandle, PlaygroundProps>(
 
     const chat = (
       <ConnectReturnContext.Provider value={connectReturn}>
+      <ConnectGrantContext.Provider value={connectGrant}>
       <div className={style.root}>
           <Conversation className="min-h-0">
             {/* gap-0: the message rows carry their own vertical rhythm now
@@ -881,6 +912,7 @@ export const Playground = forwardRef<PlaygroundHandle, PlaygroundProps>(
             />
           </div>
       </div>
+      </ConnectGrantContext.Provider>
       </ConnectReturnContext.Provider>
     );
 

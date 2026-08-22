@@ -18,7 +18,13 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 
 import { MessageList, type PlaygroundMessage } from "./playground-presentation";
-import { ConnectPart, ConnectReturnContext, renderAgentPart } from "./agent-parts";
+import {
+  ConnectGrantContext,
+  ConnectPart,
+  ConnectReturnContext,
+  renderAgentPart,
+} from "./agent-parts";
+import type { ScopeStatus } from "./connections/types";
 
 const { capture } = vi.hoisted(() => ({ capture: vi.fn() }));
 vi.mock("posthog-js", () => ({ default: { capture } }));
@@ -315,5 +321,98 @@ describe("connect control marks (SCRUM-97)", () => {
     expect(anchor!.textContent).toContain("Connect Mystery");
     expect(anchor!.querySelector("svg")).toBeNull();
     expect(anchor!.querySelector("img")).toBeNull();
+  });
+});
+
+/** SCRUM-106: the same `data-connect` part renders DIFFERENTLY depending on
+ * what the user's default account actually granted, and that state comes
+ * from context at render time, never from the stored part. */
+describe("connect part on a connected-but-short account", () => {
+  const ALL = ["Gmail", "Drive", "Calendar", "Docs", "Sheets", "Slides", "Contacts", "Tasks"];
+  const shortStatus = (granted: string[]): ScopeStatus => {
+    const services = ALL.map((displayName) => ({
+      displayName,
+      iconKey: displayName.toLowerCase(),
+      granted: granted.includes(displayName),
+    }));
+    return {
+      complete: granted.length === ALL.length,
+      missing: services
+        .filter((s) => !s.granted)
+        .map((s) => ({ scope: `scope:${s.iconKey}`, displayName: s.displayName })),
+      services,
+    };
+  };
+  const part = {
+    type: "data-connect",
+    data: {
+      services: [
+        { id: "google-workspace", name: "Google Workspace", connectHref: "/auth/google/connect" },
+      ],
+    },
+  };
+  function renderWithGrant(status: ScopeStatus | undefined) {
+    const messages = [
+      { id: "m1", role: "assistant", parts: [part] },
+    ] as unknown as PlaygroundMessage[];
+    act(() => {
+      root.render(
+        <ConnectGrantContext.Provider
+          value={{ scopeStatusByService: { "google-workspace": status } }}
+        >
+          <ConnectReturnContext.Provider value={{ nextPath: "/dashboard/agent?thread=t-9" }}>
+            <MessageList
+              awaitingConfirm={false}
+              busy={false}
+              comments={{}}
+              erroredIds={new Set()}
+              feedback={{}}
+              lastMessageComplete
+              messages={messages}
+              onCommentChange={() => {}}
+              onDecide={() => {}}
+              onRate={() => {}}
+              onRegenerate={() => {}}
+              onSendComment={() => {}}
+            />
+          </ConnectReturnContext.Provider>
+        </ConnectGrantContext.Provider>
+      );
+    });
+    return (container.textContent ?? "").replace(/\s+/g, " ");
+  }
+
+  it("swaps the connect pitch for the grant panel, with one reconnect anchor", () => {
+    const text = renderWithGrant(shortStatus([]));
+    // The old card told an already-connected user to "Connect". Gone.
+    expect(text).not.toContain("Connect an account");
+    expect(text).not.toContain("Connect Google Workspace");
+    expect(text).toContain("No Google services were granted");
+    const links = container.querySelectorAll("a");
+    expect(links).toHaveLength(1);
+    expect(links[0].textContent).toBe("Reconnect and grant access");
+    // Same return-path composition the connect button uses.
+    expect(links[0].getAttribute("href")).toBe(
+      `/auth/google/connect?next=${encodeURIComponent("/dashboard/agent?thread=t-9")}`
+    );
+  });
+
+  it("names the missing services with their marks on a partial grant", () => {
+    const text = renderWithGrant(shortStatus(["Gmail", "Drive"]));
+    expect(text).toContain("Not granted");
+    expect(text).toContain("Calendar");
+    expect(
+      container.querySelectorAll("img[src^='/icons/services/']")
+    ).toHaveLength(6);
+    // Compact: never the raw-scope disclosure on the agent surface.
+    expect(container.querySelector("details")).toBeNull();
+  });
+
+  it("keeps the plain connect card when the grant is complete or unknown", () => {
+    for (const status of [shortStatus(ALL), undefined]) {
+      const text = renderWithGrant(status);
+      expect(text).toContain("Connect Google Workspace");
+      expect(text).not.toContain("Reconnect");
+    }
   });
 });

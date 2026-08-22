@@ -28,8 +28,14 @@ import {
 } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { formatConnectedDate } from "@/lib/utils";
-import type { ConnectedAccount, LegacyConnection } from "./connections/types";
-import { getConnectableService } from "./connections/service-registry";
+import type { ConnectedAccount } from "./connections/types";
+import { GrantPanel } from "./connections/grant-panel";
+import {
+  GRANT_STATE_LABEL,
+  GRANT_STATE_VARIANT,
+  grantState,
+  type GrantState,
+} from "./connections/grant-state";
 import { AGENT_PROMPTS } from "./agent-prompts";
 import { useSignupConversion } from "./use-signup-conversion";
 import { useConnections } from "./use-connections";
@@ -63,37 +69,6 @@ export function DashboardClient() {
 
 
   useSignupConversion();
-
-  /** SCRUM-136: services whose DEFAULT account is connected but short — the
-   * user unticked scopes on the consent screen. Derived from the API's
-   * scopeStatus rather than the post-connect redirect params, because the
-   * fallback leg drops its query string and the state is true whenever it is
-   * true, not only just after a connect. One entry per service. */
-  const shortGrants = (() => {
-    const byService = new Map<string, string[]>();
-    for (const a of accounts) {
-      if (a.isDefault && a.scopeStatus && !a.scopeStatus.complete) {
-        byService.set(
-          a.connectorType,
-          a.scopeStatus.missing.map((m) => m.displayName)
-        );
-      }
-    }
-    for (const c of legacyConnections) {
-      if (c.scopeStatus && !c.scopeStatus.complete && !byService.has(c.service)) {
-        byService.set(
-          c.service,
-          c.scopeStatus.missing.map((m) => m.displayName)
-        );
-      }
-    }
-    return [...byService.entries()].map(([service, missing]) => ({
-      service,
-      name: getConnectableService(service)?.name ?? service,
-      connectUrl: getConnectableService(service)?.connectUrl ?? null,
-      missing,
-    }));
-  })();
 
   async function disconnectAccount(e: React.MouseEvent, account: ConnectedAccount) {
     e.preventDefault();
@@ -141,30 +116,17 @@ export function DashboardClient() {
       {/* Shown before the consent-screen step the Connect buttons lead to. */}
       <CasaBadge className="mt-4" />
 
-      {/* SCRUM-136: connected-but-short. One line per affected service; the
-          Reconnect link re-runs the same consent flow, which re-prompts with
-          the full scope set. The full per-service at-rest view is SCRUM-106. */}
-      {!loading &&
-        shortGrants.map(({ service, name, connectUrl, missing }) => (
-          <div
-            key={service}
-            className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm"
-          >
-            <span className="text-amber-900">
-              {name} is connected, but {missing.join(", ")}{" "}
-              {missing.length === 1 ? "was" : "were"} not granted, so those
-              tools cannot run.
-            </span>
-            {connectUrl && (
-              <a
-                href={connectUrl}
-                className="shrink-0 rounded-[var(--radius)] border border-amber-300 px-3 py-1.5 text-sm font-medium text-amber-900 transition-colors hover:bg-amber-100"
-              >
-                Reconnect and grant access
-              </a>
-            )}
-          </div>
-        ))}
+      {/* SCRUM-106 ABSORBED THE SCRUM-136 BANNER THAT USED TO SIT HERE.
+          It derived a per-SERVICE missing list off the DEFAULT account only
+          and rendered one amber line above the cards. `GrantPanel` renders the
+          same data per ACCOUNT, inside the card that account already lives in,
+          which is strictly more informative and closes a gap the banner had: a
+          user whose second Google account was short got no signal at all.
+          Keeping both would have said the same thing twice on one screen.
+
+          The card badge now carries the state (see `grantState`), and that is
+          the part that mattered most: a green "Connected" on an account that
+          granted nothing is the claim this ticket exists to retract. */}
 
       {/* Service cards */}
       <div className="mt-6 grid gap-4 sm:grid-cols-2">
@@ -197,6 +159,26 @@ export function DashboardClient() {
             const hasAccounts = serviceAccounts.length > 0;
             const isConnected = hasAccounts || !!legacyConn;
 
+            /** SCRUM-106: the card's badge answers "what can this actually
+             * do", not "does a row exist". Worst state across the accounts
+             * wins, because a card claiming Connected while one of its
+             * accounts grants nothing is the same overclaim at a smaller
+             * scale. Legacy rows carry their own status and join in. */
+            const cardState = ((): GrantState => {
+              const states = [
+                ...serviceAccounts.map((a) =>
+                  grantState(a.scopeStatus, true)
+                ),
+                ...(legacyConn ? [grantState(legacyConn.scopeStatus, true)] : []),
+              ];
+              if (states.length === 0) return "disconnected";
+              return (
+                (["none", "partial"] as const).find((s) =>
+                  states.includes(s)
+                ) ?? "complete"
+              );
+            })();
+
             return (
               <Card key={service.id}>
                 <CardHeader>
@@ -214,17 +196,23 @@ export function DashboardClient() {
                     </div>
                   </div>
                   <CardAction>
-                    {isConnected ? (
-                      <Badge variant="success">
-                        <span className="size-1.5 rounded-full bg-current" />
-                        Connected
-                      </Badge>
-                    ) : (
-                      <Badge variant="secondary" className="text-muted-foreground">
-                        <span className="size-1.5 rounded-full bg-muted-foreground/40" />
-                        Not connected
-                      </Badge>
-                    )}
+                    <Badge
+                      variant={GRANT_STATE_VARIANT[cardState]}
+                      className={
+                        cardState === "disconnected"
+                          ? "text-muted-foreground"
+                          : undefined
+                      }
+                    >
+                      <span
+                        className={
+                          cardState === "disconnected"
+                            ? "size-1.5 rounded-full bg-muted-foreground/40"
+                            : "size-1.5 rounded-full bg-current"
+                        }
+                      />
+                      {GRANT_STATE_LABEL[cardState]}
+                    </Badge>
                   </CardAction>
                 </CardHeader>
 
@@ -249,10 +237,10 @@ export function DashboardClient() {
 
                 {/* Connected accounts (compact) */}
                 {hasAccounts && (
-                  <CardContent className="space-y-1 border-t pt-4">
+                  <CardContent className="space-y-3 border-t pt-4">
                     {serviceAccounts.map((account) => (
+                      <div key={account.id} className="space-y-2">
                       <div
-                        key={account.id}
                         className="flex items-center justify-between gap-2"
                       >
                         <div className="flex min-w-0 items-center gap-2">
@@ -281,13 +269,26 @@ export function DashboardClient() {
                           {disconnecting === account.id ? "..." : "Disconnect"}
                         </Button>
                       </div>
+                      {/* SCRUM-106. Renders nothing for a complete grant (the
+                          badge above already carries that), so a healthy
+                          account keeps exactly the compact row it had. */}
+                      <GrantPanel
+                        scopeStatus={account.scopeStatus}
+                        rawScopes={account.scopes}
+                        connectUrl={service.connectUrl}
+                        service={service.id}
+                        source="connections_page"
+                        nextPath="/dashboard"
+                      />
+                      </div>
                     ))}
                   </CardContent>
                 )}
 
                 {/* Legacy connection */}
                 {!hasAccounts && legacyConn && (
-                  <CardContent className="flex items-center justify-between border-t pt-4">
+                  <CardContent className="space-y-2 border-t pt-4">
+                    <div className="flex items-center justify-between">
                     <p className="text-[11px] text-muted-foreground">
                       Connected {formatConnectedDate(legacyConn.connectedAt)}
                     </p>
@@ -300,6 +301,17 @@ export function DashboardClient() {
                     >
                       {disconnecting === service.id ? "..." : "Disconnect"}
                     </Button>
+                    </div>
+                    {/* Legacy rows carry a grant too, and a legacy Google row
+                        can be just as short as a migrated one. */}
+                    <GrantPanel
+                      scopeStatus={legacyConn.scopeStatus}
+                      rawScopes={legacyConn.scopes}
+                      connectUrl={service.connectUrl}
+                      service={service.id}
+                      source="connections_page"
+                      nextPath="/dashboard"
+                    />
                   </CardContent>
                 )}
 

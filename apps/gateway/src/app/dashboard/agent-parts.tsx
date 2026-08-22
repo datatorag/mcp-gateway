@@ -6,6 +6,9 @@ import { SetupInstructions } from "@/components/setup-instructions";
 import { buttonVariants } from "@/components/ui/button";
 import { EVENTS } from "@/lib/analytics";
 import { getService } from "./connections/services";
+import { GrantPanel } from "./connections/grant-panel";
+import { grantState } from "./connections/grant-state";
+import type { ScopeStatus } from "./connections/types";
 
 /** Where the connect flow should RETURN to — the thread the user is looking
  * at (SCRUM-78). A context rather than a prop because ConnectPart renders
@@ -19,6 +22,23 @@ import { getService } from "./connections/services";
 export const ConnectReturnContext = createContext<{ nextPath: string | null }>({
   nextPath: null,
 });
+
+/** What each service's DEFAULT account actually granted, keyed by service id
+ * (SCRUM-106).
+ *
+ * A CONTEXT, AND NOT PART OF THE `data-connect` PAYLOAD, for exactly the
+ * reason the return path above is not: a data part PERSISTS in the thread and
+ * replays on every reopen. Grant state baked into a stored part would keep
+ * telling a user that Calendar is missing long after they reconnected and
+ * granted it, and the older the thread the more confidently wrong it would be.
+ * Resolved at render time, from the same `/api/connections` response the
+ * connections page reads, so the two surfaces cannot disagree.
+ *
+ * Empty by default, which reads as "we do not know" and renders the plain
+ * connect card, i.e. exactly today's behaviour. */
+export const ConnectGrantContext = createContext<{
+  scopeStatusByService: Record<string, ScopeStatus | undefined>;
+}>({ scopeStatusByService: {} });
 
 /**
  * Things the agent can put in the thread that are not text and not a tool call.
@@ -89,7 +109,29 @@ export function ConnectPart({
   source?: "thread" | "empty_state";
 }) {
   const { nextPath } = useContext(ConnectReturnContext);
+  const { scopeStatusByService } = useContext(ConnectGrantContext);
   if (services.length === 0) return null;
+
+  /** SCRUM-106. `request_connection` emits this same part for a
+   * CONNECTED-BUT-SHORT account as for one that was never connected, so the
+   * card used to say "Connect an account and I can work with your own files"
+   * to somebody who had already connected. What was actually missing reached
+   * the user only through the model's prose, which is neither guaranteed nor
+   * scannable, on the surface where the failure is happening.
+   *
+   * One service is the interesting case here: the agent asks about the
+   * service the user's request needed, so a re-consent card names one thing. */
+  const shortService =
+    services.length === 1
+      ? (() => {
+          const id = services[0].id;
+          const status = scopeStatusByService[id];
+          const state = grantState(status, !!status);
+          return state === "partial" || state === "none"
+            ? { id, status }
+            : null;
+        })()
+      : null;
 
   // The return path is composed HERE, at render time, not stored in the part:
   // the part persists in the thread, and a baked-in destination would go stale
@@ -99,6 +141,31 @@ export function ConnectPart({
   // this composition is a convenience, not a trust boundary.
   const withReturn = (href: string): string =>
     nextPath ? `${href}?next=${encodeURIComponent(nextPath)}` : href;
+
+  // A connected-but-short account gets the grant panel INSTEAD of the connect
+  // control: it names what is missing, carries each service's mark, and its
+  // own single anchor is the same one-click re-consent the connect button was.
+  // Offering both would put two controls pointing at the same URL under two
+  // different labels, one of which ("Connect") is untrue.
+  if (shortService) {
+    return (
+      <div className="rounded-lg border border-border bg-secondary/40 p-3">
+        <GrantPanel
+          scopeStatus={shortService.status}
+          // Through the same guard the connect buttons use: the href comes off
+          // a stored part, and "the data is ours" is a property of today's
+          // producers, not of this component.
+          connectUrl={safeConnectHref(services[0].connectHref)}
+          service={shortService.id}
+          density="compact"
+          source={source}
+          nextPath={nextPath}
+          // No rawScopes: compact renders no disclosure, and scope strings
+          // have no business travelling to the agent surface at all.
+        />
+      </div>
+    );
+  }
 
   return (
     <div className="rounded-lg border border-border bg-secondary/40 p-3">

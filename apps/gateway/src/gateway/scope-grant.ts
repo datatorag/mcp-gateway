@@ -49,16 +49,28 @@ const GRANTED_ALIASES: Record<string, string> = {
  * called in front of a user. Scope URLs never reach a user; these names do.
  * The identity scopes (`openid`, `email`) are not on Google's untickable
  * list, so they can never be "missing" here — and the connect callback fails
- * earlier anyway if it cannot resolve the account email. */
-const API_SCOPES: ReadonlyArray<{ scope: string; displayName: string }> = [
-  { scope: "https://www.googleapis.com/auth/gmail.modify", displayName: "Gmail" },
-  { scope: "https://www.googleapis.com/auth/drive", displayName: "Drive" },
-  { scope: "https://www.googleapis.com/auth/calendar", displayName: "Calendar" },
-  { scope: "https://www.googleapis.com/auth/documents", displayName: "Docs" },
-  { scope: "https://www.googleapis.com/auth/spreadsheets", displayName: "Sheets" },
-  { scope: "https://www.googleapis.com/auth/presentations", displayName: "Slides" },
-  { scope: "https://www.googleapis.com/auth/contacts", displayName: "Contacts" },
-  { scope: "https://www.googleapis.com/auth/tasks", displayName: "Tasks" },
+ * earlier anyway if it cannot resolve the account email.
+ *
+ * `iconKey` is STATED, not derived from `displayName.toLowerCase()`
+ * (SCRUM-106). The lowercase form happens to match every `ServiceIcon` key
+ * today, and a display name is copy: renaming "Docs" to "Google Docs" is a
+ * copy edit that would silently swap eight brand marks for the fallback
+ * glyph. An explicit column makes that a type error instead, and
+ * `scope-grant.icons.test.ts` pins the join against the icon component's own
+ * known-service set. */
+const API_SCOPES: ReadonlyArray<{
+  scope: string;
+  displayName: string;
+  iconKey: string;
+}> = [
+  { scope: "https://www.googleapis.com/auth/gmail.modify", displayName: "Gmail", iconKey: "gmail" },
+  { scope: "https://www.googleapis.com/auth/drive", displayName: "Drive", iconKey: "drive" },
+  { scope: "https://www.googleapis.com/auth/calendar", displayName: "Calendar", iconKey: "calendar" },
+  { scope: "https://www.googleapis.com/auth/documents", displayName: "Docs", iconKey: "docs" },
+  { scope: "https://www.googleapis.com/auth/spreadsheets", displayName: "Sheets", iconKey: "sheets" },
+  { scope: "https://www.googleapis.com/auth/presentations", displayName: "Slides", iconKey: "slides" },
+  { scope: "https://www.googleapis.com/auth/contacts", displayName: "Contacts", iconKey: "contacts" },
+  { scope: "https://www.googleapis.com/auth/tasks", displayName: "Tasks", iconKey: "tasks" },
 ];
 
 export type MissingScope = { scope: string; displayName: string };
@@ -71,8 +83,49 @@ export type ScopeDelta = {
   complete: boolean;
 };
 
+/** One service, and whether this grant covers it. SCRUM-106 renders these;
+ * nothing recomputes "is this enough" from them. */
+export type ServiceGrantState = {
+  displayName: string;
+  /** `ServiceIcon` key for the brand mark (SCRUM-97). Never a scope URL. */
+  iconKey: string;
+  granted: boolean;
+};
+
 function normalize(scope: string): string {
   return GRANTED_ALIASES[scope] ?? scope;
+}
+
+/**
+ * Every service the product asks for, each marked granted or not (SCRUM-106).
+ *
+ * `scopeDelta` answers "what is MISSING", which is the whole question for a
+ * banner and for the pre-call gate. A per-service view needs the other half
+ * too: you cannot render "Gmail and Drive work, Calendar does not" from a
+ * missing-list alone, because nothing outside this module knows what the full
+ * set even is. Rather than export `API_SCOPES` and let each caller re-derive
+ * the join — the exact drift this module exists to prevent — the finished
+ * per-service answer is computed here, off the same list and the same
+ * normalization `scopeDelta` uses.
+ *
+ * Empty for anything that is not Google Workspace: no other connector has a
+ * per-scope opt-out, so there is no per-service state to show. Callers render
+ * nothing rather than a fabricated all-green list.
+ */
+export function serviceGrantStates(
+  service: string,
+  granted: string | null | undefined
+): ServiceGrantState[] {
+  if (service !== GOOGLE_WORKSPACE_SERVICE) return [];
+  // Deliberately reuses scopeDelta rather than re-splitting the string: one
+  // parse, one alias table, one definition of "granted" (SCRUM-136).
+  const { missing } = scopeDelta(service, granted);
+  const missingScopes = new Set(missing.map((m) => m.scope));
+  return API_SCOPES.map(({ displayName, iconKey, scope }) => ({
+    displayName,
+    iconKey,
+    granted: !missingScopes.has(scope),
+  }));
 }
 
 /**
@@ -99,7 +152,13 @@ export function scopeDelta(
   }
 
   const grantedSet = new Set(grantedList);
-  const missing = API_SCOPES.filter((s) => !grantedSet.has(s.scope));
+  // Projected to {scope, displayName}, NOT spread. `API_SCOPES` also carries
+  // `iconKey`, which is presentation for SCRUM-106's panel and has no business
+  // in the payload the agent reads or the MCP surface relays. Spreading would
+  // have widened a shipped contract as a side effect of adding a column.
+  const missing = API_SCOPES.filter((s) => !grantedSet.has(s.scope)).map(
+    ({ scope, displayName }) => ({ scope, displayName })
+  );
   return { granted: grantedList, missing, complete: missing.length === 0 };
 }
 

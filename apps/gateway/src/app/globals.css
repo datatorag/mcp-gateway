@@ -376,6 +376,13 @@ body > iframe {
   --sidebar-accent-foreground: oklch(0.985 0 0);
   --sidebar-border: oklch(1 0 0 / 10%);
   --sidebar-ring: oklch(0.556 0 0);
+  /* SCRUM-106: the semantic status tokens were never redefined for dark, so
+     the light values (#16A34A / #D97706) inherited against a near-black
+     ground. Lifted one step for contrast on the grant badges and the
+     reconnect control, which are the first surfaces to lean on them in
+     dark. */
+  --success: #4ADE80;
+  --warning: #FBBF24;
 }
 
 @layer base {

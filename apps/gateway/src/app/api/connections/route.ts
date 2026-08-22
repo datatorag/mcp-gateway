@@ -10,7 +10,16 @@ import {
   setDefaultAccount,
 } from "@/gateway/connected-accounts";
 import { revokeUpstream } from "@/gateway/service-token";
-import { scopeDelta } from "@/gateway/scope-grant";
+import { scopeDelta, serviceGrantStates } from "@/gateway/scope-grant";
+
+/** The finished grant answer for one row, in the shape consumers render
+ * (SCRUM-136 + SCRUM-106). Both halves come out of scope-grant.ts, so the
+ * account rows and the legacy rows cannot describe the same grant two
+ * different ways — they used to run the same inline projection twice. */
+function scopeStatusFor(service: string, scopes: string | null) {
+  const { missing, complete } = scopeDelta(service, scopes);
+  return { missing, complete, services: serviceGrantStates(service, scopes) };
+}
 
 // GET /api/connections — list connected accounts for the logged-in user
 export const GET = withRoute(async (userId) => {
@@ -21,9 +30,7 @@ export const GET = withRoute(async (userId) => {
   // scope-grant.ts and nowhere else.
   const accounts = rawAccounts.map((a) => ({
     ...a,
-    scopeStatus: (({ missing, complete }) => ({ missing, complete }))(
-      scopeDelta(a.connectorType, a.scopes)
-    ),
+    scopeStatus: scopeStatusFor(a.connectorType, a.scopes),
   }));
 
   // Legacy: un-migrated service_connections (no connected_accounts row yet)
@@ -57,9 +64,7 @@ export const GET = withRoute(async (userId) => {
 
   const connections = legacyConnections.map((c) => ({
     ...c,
-    scopeStatus: (({ missing, complete }) => ({ missing, complete }))(
-      scopeDelta(c.service, c.scopes)
-    ),
+    scopeStatus: scopeStatusFor(c.service, c.scopes),
   }));
 
   return NextResponse.json({ accounts, connections });

@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import type { ConnectedAccount, LegacyConnection } from "../types";
+import { GrantPanel } from "../grant-panel";
 import { ServiceIcon, serviceFromToolName } from "@/components/service-icon";
 import { CasaBadge } from "@/components/casa-badge";
 import { formatConnectedDate } from "@/lib/utils";
@@ -225,10 +226,8 @@ export function ConnectionDetailClient({
         </div>
 
         {accounts.map((account) => (
-          <div
-            key={account.id}
-            className="flex items-center justify-between rounded-lg px-3 py-2.5 hover:bg-secondary/50"
-          >
+          <div key={account.id} className="rounded-lg hover:bg-secondary/50">
+            <div className="flex items-center justify-between px-3 py-2.5">
             <div className="flex items-center gap-3">
               <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary/10 text-xs font-medium text-primary">
                 {account.accountEmail[0].toUpperCase()}
@@ -249,13 +248,13 @@ export function ConnectionDetailClient({
                     </span>
                   )}
                 </div>
+                {/* SCRUM-106: a scope COUNT used to sit here ("10 scopes").
+                    It is the same non-answer this ticket exists to replace:
+                    it does not say WHICH services work, and the commonest
+                    short grant reads as a perfectly healthy "2 scopes". The
+                    per-service panel below says what the count could not. */}
                 <p className="text-xs text-muted-foreground">
                   Connected {formatConnectedDate(account.connectedAt)}
-                  {account.scopes && (
-                    <span className="ml-2">
-                      {account.scopes.split(" ").length} scopes
-                    </span>
-                  )}
                 </p>
               </div>
             </div>
@@ -276,22 +275,47 @@ export function ConnectionDetailClient({
                 {disconnecting === account.id ? "..." : "Disconnect"}
               </button>
             </div>
+            </div>
+            {/* The audit view, so a full grant is CONFIRMED here rather than
+                merely un-warned. */}
+            <GrantPanel
+              scopeStatus={account.scopeStatus}
+              rawScopes={account.scopes}
+              connectUrl={connectUrl}
+              service={service}
+              source="service_detail"
+              nextPath={`/dashboard/connections/${service}`}
+              reassureWhenComplete
+              className="px-3 pb-3"
+            />
           </div>
         ))}
 
         {/* Legacy connection fallback */}
         {accounts.length === 0 && legacyConnection && (
-          <div className="flex items-center justify-between px-3 py-2.5">
-            <p className="text-xs text-muted-foreground">
-              Connected {formatConnectedDate(legacyConnection.connectedAt)}
-            </p>
-            <button
-              onClick={disconnectLegacy}
-              disabled={disconnecting === "legacy"}
-              className="rounded-[var(--radius)] border border-border px-3 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground disabled:opacity-50"
-            >
-              {disconnecting === "legacy" ? "..." : "Disconnect"}
-            </button>
+          <div>
+            <div className="flex items-center justify-between px-3 py-2.5">
+              <p className="text-xs text-muted-foreground">
+                Connected {formatConnectedDate(legacyConnection.connectedAt)}
+              </p>
+              <button
+                onClick={disconnectLegacy}
+                disabled={disconnecting === "legacy"}
+                className="rounded-[var(--radius)] border border-border px-3 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground disabled:opacity-50"
+              >
+                {disconnecting === "legacy" ? "..." : "Disconnect"}
+              </button>
+            </div>
+            <GrantPanel
+              scopeStatus={legacyConnection.scopeStatus}
+              rawScopes={legacyConnection.scopes}
+              connectUrl={connectUrl}
+              service={service}
+              source="service_detail"
+              nextPath={`/dashboard/connections/${service}`}
+              reassureWhenComplete
+              className="px-3 pb-3"
+            />
           </div>
         )}
       </div>
