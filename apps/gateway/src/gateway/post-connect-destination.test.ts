@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { postConnectDestination } from "./post-connect-destination";
+import {
+  connectionsForwardPath,
+  postConnectDestination,
+} from "./post-connect-destination";
 
 /**
  * Where a connect round trip lands. The validation cases mirror the login
@@ -105,5 +108,31 @@ describe("postConnectDestination", () => {
         provider: "atlassian",
       })
     ).toBe("/dashboard/connections?connected=atlassian");
+  });
+});
+
+/**
+ * SCRUM-149: the retired connections index forwards its query string. The
+ * redirect used to drop it, so a connect outcome landing on the fallback leg
+ * rendered as nothing at all — a refused connect deserves a screen, and this
+ * is the seam that was eating it.
+ */
+describe("connectionsForwardPath", () => {
+  it("forwards outcome params to the dashboard", () => {
+    expect(
+      connectionsForwardPath({ error: "no_services_granted" })
+    ).toBe("/dashboard?error=no_services_granted");
+    expect(
+      connectionsForwardPath({ connected: "google-workspace" })
+    ).toBe("/dashboard?connected=google-workspace");
+  });
+
+  it("stays a bare dashboard redirect with nothing to carry", () => {
+    expect(connectionsForwardPath({})).toBe("/dashboard");
+    expect(connectionsForwardPath({ only: undefined })).toBe("/dashboard");
+  });
+
+  it("drops repeated keys — an outcome param is written once by the callback", () => {
+    expect(connectionsForwardPath({ error: ["a", "b"] })).toBe("/dashboard");
   });
 });

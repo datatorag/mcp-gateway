@@ -33,10 +33,12 @@ vi.mock("@datatorag-mcp/config", () => ({
   getEnv: () => ({ AGENT_DEFAULT_VIEW: "on" }),
 }));
 const trackOAuthCompleted = vi.fn(async (..._args: unknown[]) => undefined);
+const trackConnectRefused = vi.fn(async (..._args: unknown[]) => undefined);
 vi.mock("./track", () => ({
   trackLogin: vi.fn(),
   trackSignup: vi.fn(),
   trackOAuthCompleted: (...args: unknown[]) => trackOAuthCompleted(...args),
+  trackConnectRefused: (...args: unknown[]) => trackConnectRefused(...args),
 }));
 vi.mock("./attribution", () => ({
   stashAttribution: vi.fn(),
@@ -148,33 +150,53 @@ function trackedGrant():
     | undefined;
 }
 
-describe("the pin: a partial grant is not recorded clean", () => {
-  it("identity-only grant: event carries grant_complete=false naming all eight, redirect names them", async () => {
+describe("the SCRUM-149 gate: a zero-service grant is a failed connect, not a connection", () => {
+  it("identity-only grant: nothing is written, no connected event, distinct error code", async () => {
     grantedScope = "https://www.googleapis.com/auth/userinfo.email openid";
     const res = await callback(BOUND);
 
     expect(res.status).toBe(302);
     const location = res.headers.get("location") ?? "";
+    // A grant that can serve zero tools is refused outright. Recording it as
+    // a connection is what SCRUM-136 documented and SCRUM-149 ends: the row
+    // poisoned the connections page, the lifecycle cron and the follow-up
+    // email, and (SCRUM-145) could hold the default forever.
+    expect(location).toContain("error=no_services_granted");
+    expect(location).not.toContain("connected=");
+    expect(location).not.toContain("partial=");
+    expect(upsertServiceAccount).not.toHaveBeenCalled();
+    // The funnel event keeps its meaning: a refused connect is not a
+    // connection, so account_connected must not fire — the refusal has its
+    // own event so instrumentation still sees it.
+    expect(trackOAuthCompleted).not.toHaveBeenCalled();
+    expect(trackConnectRefused).toHaveBeenCalledTimes(1);
+  });
+
+  it("a refused connect started from a thread returns to that thread with the code", async () => {
+    grantedScope = "https://www.googleapis.com/auth/userinfo.email openid";
+    const res = await callback(
+      `${BOUND}; dtr_connect_next=${encodeURIComponent("/dashboard/agent?thread=t1")}`
+    );
+
+    const location = res.headers.get("location") ?? "";
+    expect(location).toContain("/dashboard/agent");
+    expect(location).toContain("thread=t1");
+    expect(location).toContain("connect_error=no_services_granted");
+    expect(upsertServiceAccount).not.toHaveBeenCalled();
+  });
+
+  it("a single granted service is NOT refused — the gate is for zero, never for narrow", async () => {
+    grantedScope =
+      "https://www.googleapis.com/auth/userinfo.email openid " +
+      "https://www.googleapis.com/auth/gmail.modify";
+    const res = await callback(BOUND);
+
+    const location = res.headers.get("location") ?? "";
     expect(location).toContain("connected=google-workspace");
-    expect(location).toContain("partial=google-workspace");
-    expect(location).toContain("missing=");
-
-    const grant = trackedGrant();
-    expect(grant?.complete).toBe(false);
-    expect(grant?.missing.map((m) => m.displayName).sort()).toEqual([
-      "Calendar",
-      "Contacts",
-      "Docs",
-      "Drive",
-      "Gmail",
-      "Sheets",
-      "Slides",
-      "Tasks",
-    ]);
-
-    // The row IS still stored: the granted subset genuinely works, and the
-    // tokens have to live somewhere for it to.
+    // Stored: the granted subset genuinely works, and the tokens have to
+    // live somewhere for it to.
     expect(upsertServiceAccount).toHaveBeenCalled();
+    expect(trackConnectRefused).not.toHaveBeenCalled();
   });
 
   it("one unticked scope: exactly that scope is named", async () => {
@@ -211,12 +233,17 @@ describe("the pin: a partial grant is not recorded clean", () => {
     expect(grant?.missing).toEqual([]);
   });
 
-  it("no scope field at all reads complete — fail-open, never a false nag", async () => {
+  it("no scope field at all reads complete — fail-open, never a false nag, never refused", async () => {
     grantedScope = undefined;
     const res = await callback(BOUND);
     expect(res.headers.get("location")).toBe(
       "/dashboard/connections?connected=google-workspace"
     );
     expect(trackedGrant()?.complete).toBe(true);
+    // The SCRUM-149 gate refuses only a grant POSITIVELY OBSERVED to cover
+    // zero services. A response we could not read is stored, exactly as
+    // before — refusing it would lock out working connections.
+    expect(upsertServiceAccount).toHaveBeenCalled();
+    expect(trackConnectRefused).not.toHaveBeenCalled();
   });
 });

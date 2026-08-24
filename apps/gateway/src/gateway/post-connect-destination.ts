@@ -1,5 +1,30 @@
 import { resolveNextPath } from "./post-login-destination";
 
+/** SCRUM-149: the error code for a consent that granted ZERO services. One
+ * exported constant because three parties speak it — the callback that
+ * refuses, the agent page and the dashboard notice that render it — and a
+ * string repeated three times is a typo away from a refusal nobody sees. */
+export const CONNECT_ERROR_NO_SERVICES = "no_services_granted";
+
+/**
+ * Where the retired `/dashboard/connections` index forwards to (SCRUM-149).
+ *
+ * The redirect used to drop the query string, which silently swallowed every
+ * connect outcome that landed on the fallback leg — a failed connect rendered
+ * as nothing at all. Single-valued params only: an outcome param is written
+ * once by the callback, so a repeated key is noise, not data.
+ */
+export function connectionsForwardPath(
+  params: Record<string, string | string[] | undefined>
+): string {
+  const qs = new URLSearchParams();
+  for (const [key, value] of Object.entries(params)) {
+    if (typeof value === "string") qs.set(key, value);
+  }
+  const s = qs.toString();
+  return s ? `/dashboard?${s}` : "/dashboard";
+}
+
 /**
  * Where a service-connect OAuth round trip lands, for every combination of
  * requested path and outcome.

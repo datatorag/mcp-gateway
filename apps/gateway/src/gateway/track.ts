@@ -463,6 +463,32 @@ export async function trackPlaygroundFeedback(
   });
 }
 
+/** SCRUM-149: a connect callback whose consent granted ZERO services was
+ * refused — nothing written, nothing connected. Its own event rather than an
+ * `account_connected` variant, so the funnel count keeps meaning a
+ * connection exists; a refusal invisible to instrumentation would be a
+ * one-sided measurement of exactly the drop-off this gate is about. */
+export async function trackConnectRefused(
+  db: Database,
+  userId: string,
+  provider: ProviderId,
+  attribution?: Attribution | null
+): Promise<void> {
+  const c = getPosthog();
+  if (!c) return;
+  const email = await resolveUserEmail(db, userId);
+  c.capture({
+    distinctId: userId,
+    event: EVENTS.CONNECT_REFUSED,
+    properties: {
+      provider,
+      reason: "no_services_granted",
+      ...identityProps(email),
+      ...sessionProps(attribution),
+    },
+  });
+}
+
 export async function trackOAuthCompleted(
   db: Database,
   userId: string,

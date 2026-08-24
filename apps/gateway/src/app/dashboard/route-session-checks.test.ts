@@ -115,9 +115,13 @@ describe("dashboard routes resolve the session for themselves", () => {
     if (EXEMPT[page]) {
       // An exemption that has quietly started rendering is worse than no
       // exemption, because the list says it was considered. Checked against
-      // comment-stripped source so a `<` in prose cannot trip it.
+      // comment-stripped source so a `<` in prose cannot trip it. The
+      // detector looks for JSX (`</` or `/>`), not a bare `<`: a bare `<` is
+      // also every generic type annotation (`Promise<Record<...>>`, which the
+      // page's typed searchParams legitimately carries since SCRUM-149),
+      // while any JSX body must close a tag one of these two ways.
       expect(
-        code.includes("<"),
+        code.includes("</") || code.includes("/>"),
         `${page} is exempt as a non-rendering redirect but now returns markup; re-check it`
       ).toBe(false);
       return;
@@ -178,6 +182,23 @@ describe("dashboard routes resolve the session for themselves", () => {
     expect(
       /if\s*\(\s*!\s*\w+\s*\)\s*redirect\(\s*["']\/auth\/login["']\s*\)/.test(real)
     ).toBe(true);
+  });
+
+  it("still catches an exempt page that starts rendering", () => {
+    // The markup detector's own self-check (a pattern guard can go blind): a
+    // JSX return must trip it, a generic type annotation must not.
+    const rendering = stripComments(
+      `export default function Page() { return <div/>; }`
+    );
+    expect(rendering.includes("</") || rendering.includes("/>")).toBe(true);
+    const closingTag = stripComments(
+      `export default function Page() { return <p>hi</p>; }`
+    );
+    expect(closingTag.includes("</") || closingTag.includes("/>")).toBe(true);
+    const typedOnly = stripComments(
+      `export default async function Page(p: { searchParams: Promise<Record<string, string | string[] | undefined>> }) { redirect("/dashboard"); }`
+    );
+    expect(typedOnly.includes("</") || typedOnly.includes("/>")).toBe(false);
   });
 
   it("has no stale exemptions", () => {
