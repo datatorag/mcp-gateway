@@ -27,6 +27,7 @@ import {
   CONNECT_ERROR_NO_SERVICES,
   postConnectDestination,
 } from "./post-connect-destination";
+import { renderConnectInterstitial } from "./connect-interstitial";
 import { GWS_SCOPE_LIST, grantedServiceCount, scopeDelta } from "./scope-grant";
 import { getEnv } from "@datatorag-mcp/config";
 
@@ -333,6 +334,18 @@ export function createAuthRouter(
     const sessionToken = req.cookies?.dtrmcp_session;
     if (!sessionToken) {
       res.redirect("/auth/login");
+      return;
+    }
+
+    // SCRUM-150: the instruction page before the handoff. Google's granular
+    // consent brings the service checkboxes up unticked, and the moment
+    // before the redirect is the only lever we hold — held HERE, at the one
+    // route every connect control links to, so no render site needs to know
+    // it exists. The proceed leg below is byte-identical to the old flow;
+    // nothing one-shot (nonce, attribution, next) is stashed for a page view.
+    if (req.query.proceed !== "1") {
+      const next = typeof req.query.next === "string" ? req.query.next : null;
+      res.status(200).type("html").send(renderConnectInterstitial(next));
       return;
     }
 

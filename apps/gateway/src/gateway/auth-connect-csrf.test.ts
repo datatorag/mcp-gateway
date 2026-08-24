@@ -55,6 +55,7 @@ vi.mock("./connected-accounts", () => ({
 }));
 
 import { createAuthRouter } from "./auth";
+import { GWS_SCOPE_LIST } from "./scope-grant";
 
 const selectLimit = vi.fn();
 const dbMock = {
@@ -142,7 +143,7 @@ const SESSION = "dtrmcp_session=sess-1";
 
 describe("the binding: GET /auth/google/connect", () => {
   it("sends a state nonce to Google and parks the SAME nonce in an httpOnly cookie", async () => {
-    const res = await rawGet("/auth/google/connect", SESSION);
+    const res = await rawGet("/auth/google/connect?proceed=1", SESSION);
     expect(res.status).toBe(302);
     const location = new URL(res.headers.get("location") ?? "");
     expect(location.hostname).toBe("accounts.google.com");
@@ -156,12 +157,74 @@ describe("the binding: GET /auth/google/connect", () => {
 
   it("mints a fresh nonce per initiation, never a fixed value", async () => {
     const first = new URL(
-      (await rawGet("/auth/google/connect", SESSION)).headers.get("location") ?? ""
+      (await rawGet("/auth/google/connect?proceed=1", SESSION)).headers.get("location") ?? ""
     ).searchParams.get("state");
     const second = new URL(
-      (await rawGet("/auth/google/connect", SESSION)).headers.get("location") ?? ""
+      (await rawGet("/auth/google/connect?proceed=1", SESSION)).headers.get("location") ?? ""
     ).searchParams.get("state");
     expect(first).not.toBe(second);
+  });
+});
+
+/**
+ * SCRUM-150: the interstitial before the handoff to Google. The failure it
+ * exists to prevent happens on Google's screen, where we control nothing —
+ * granular consent brings the service checkboxes up unticked, and the
+ * Continue gesture that sign-in just taught grants zero services (the state
+ * SCRUM-149 now refuses to record). The moment before the redirect is the
+ * only lever we hold, so every path to Google passes through this page.
+ */
+describe("the interstitial: GET /auth/google/connect without proceed", () => {
+  it("renders the instruction page instead of redirecting, naming Select all", async () => {
+    const res = await rawGet("/auth/google/connect", SESSION);
+    expect(res.status).toBe(200);
+    const html = await res.text();
+    // The single control that separates a working connection from a dead one
+    // is called out by name.
+    expect(html).toContain("Select all");
+    // The continue control carries the proceed flag.
+    expect(html).toContain("/auth/google/connect?proceed=1");
+    // No OAuth state is minted for a page view: the nonce is one-shot and
+    // belongs to the actual handoff.
+    expect(res.headers.get("set-cookie") ?? "").not.toContain(
+      "gws_connect_nonce"
+    );
+  });
+
+  it("carries the next path through to the proceed leg, encoded", async () => {
+    const res = await rawGet(
+      `/auth/google/connect?next=${encodeURIComponent("/dashboard/agent?thread=t1")}`,
+      SESSION
+    );
+    const html = await res.text();
+    expect(html).toContain(
+      `/auth/google/connect?proceed=1&next=${encodeURIComponent("/dashboard/agent?thread=t1")}`
+    );
+  });
+
+  it("still requires a session, exactly like the redirect leg", async () => {
+    const res = await rawGet("/auth/google/connect");
+    expect(res.status).toBe(302);
+    expect(res.headers.get("location")).toBe("/auth/login");
+  });
+
+  it("the proceed leg still requests the FULL scope set — the gate is never 'ask for less'", async () => {
+    // Per HQ decision on the SCRUM-136 dispatch, reaffirmed on SCRUM-149:
+    // the fix for consent drop-off is instruction and honest recording,
+    // never silently narrowing the request.
+    const res = await rawGet("/auth/google/connect?proceed=1", SESSION);
+    const location = new URL(res.headers.get("location") ?? "");
+    const scope = location.searchParams.get("scope") ?? "";
+    for (const s of GWS_SCOPE_LIST) {
+      expect(scope).toContain(s);
+    }
+  });
+
+  it("Atlassian connect is untouched: no interstitial, straight to the provider", async () => {
+    const res = await rawGet("/auth/atlassian/connect", SESSION);
+    expect(res.status).toBe(302);
+    const location = new URL(res.headers.get("location") ?? "");
+    expect(location.hostname).toBe("auth.atlassian.com");
   });
 });
 
