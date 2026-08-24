@@ -20,8 +20,10 @@ vi.mock("./track", () => ({
 vi.mock("./mcp-analytics", () => ({
   trackMcpToolsListed: vi.fn().mockResolvedValue(undefined),
 }));
+const accountsGrantingScope = vi.fn();
 vi.mock("./connected-accounts", () => ({
   listConnectedAccounts: vi.fn().mockResolvedValue([]),
+  accountsGrantingScope: (...args: unknown[]) => accountsGrantingScope(...args),
 }));
 const callPluginToolOnce = vi.fn();
 vi.mock("./user-tools", () => ({
@@ -88,6 +90,8 @@ beforeEach(() => {
   selectLimit.mockResolvedValue([
     { id: "srv-1", slug: "gws-mcp", containerPort: 40000, githubRepoUrl: null },
   ]);
+  // No alternate accounts unless a test says otherwise.
+  accountsGrantingScope.mockResolvedValue([]);
 });
 
 describe("pre-call scope gate (SCRUM-107)", () => {
@@ -118,6 +122,59 @@ describe("pre-call scope gate (SCRUM-107)", () => {
     const [, props] = trackToolCall.mock.calls[0];
     expect(props.errorMessage).toContain("[missing-scope]");
     expect(props.errorMessage).toContain("Drive");
+  });
+
+  it("names the judged account and the alternate that CAN serve (SCRUM-145)", async () => {
+    resolveServiceToken.mockResolvedValue({
+      token: "tok",
+      accountEmail: "narrow@example.com",
+      scopes: IDENTITY_ONLY,
+    });
+    accountsGrantingScope.mockResolvedValue(["granted@example.com"]);
+    const client = await connectedClient("https://gw.example.test");
+
+    const result = await client.callTool({
+      name: "gws-mcp__gmail_search",
+      arguments: {},
+    });
+
+    expect(result.isError).toBe(true);
+    const text = textOf(result);
+    // "Gmail not granted" alone is misleading to a user who just granted
+    // Gmail on another account — the refusal must say which account it
+    // used and which one would work.
+    expect(text).toContain("narrow@example.com");
+    expect(text).toContain("granted@example.com");
+    expect(text).toContain("https://gw.example.test/dashboard/connections");
+    // The lookup excluded the account the call ran as.
+    expect(accountsGrantingScope).toHaveBeenCalledWith(
+      expect.anything(),
+      "user-1",
+      "google-workspace",
+      "https://www.googleapis.com/auth/gmail.modify",
+      "narrow@example.com"
+    );
+    expect(callPluginToolOnce).not.toHaveBeenCalled();
+  });
+
+  it("still refuses in words when the alternate lookup itself fails", async () => {
+    resolveServiceToken.mockResolvedValue({
+      token: "tok",
+      accountEmail: "narrow@example.com",
+      scopes: IDENTITY_ONLY,
+    });
+    accountsGrantingScope.mockRejectedValue(new Error("db down"));
+    const client = await connectedClient("https://gw.example.test");
+
+    const result = await client.callTool({
+      name: "gws-mcp__gmail_search",
+      arguments: {},
+    });
+
+    expect(result.isError).toBe(true);
+    // Enrichment failure falls back to the plain refusal, never a crash.
+    expect(textOf(result)).toContain("Gmail access");
+    expect(callPluginToolOnce).not.toHaveBeenCalled();
   });
 
   it("dispatches normally when the scope IS granted", async () => {

@@ -163,6 +163,24 @@ export function scopeDelta(
 }
 
 /**
+ * How many of the product's API scopes this grant covers — the ranking behind
+ * SCRUM-145's default-account rule. Zero means the grant can serve NO tool at
+ * all (an identity-only consent), which is the one state a default account is
+ * allowed to be moved off: nobody chooses a default that cannot do anything,
+ * so yielding it to a usable grant restores intent rather than overriding it.
+ * Any non-zero count is treated as a possible deliberate choice and left
+ * alone. Fail-open like the rest of this module: legacy null scopes and
+ * non-Google services count as fully covered, so nothing built on this can
+ * demote a connection it knows nothing about.
+ */
+export function grantedServiceCount(
+  service: string,
+  granted: string | null | undefined
+): number {
+  return API_SCOPES.length - scopeDelta(service, granted).missing.length;
+}
+
+/**
  * Tool-name prefix → the API scope that tool cannot run without.
  *
  * Only ever consulted for Google Workspace tools (the caller passes the
@@ -219,26 +237,64 @@ export type Surface = "mcp" | "agent";
  * client, so it carries the absolute reconnect URL. On the agent surface the
  * text instructs OUR model, which has `request_connection` to render an
  * inline reconnect control — a link would be the weaker path there.
+ *
+ * SCRUM-145 taught this message honesty about accounts: "Gmail not granted"
+ * is actively misleading to a user who just granted Gmail on a DIFFERENT
+ * account, because the sentence survives them complying with it. So when the
+ * caller knows which account the check judged (`accountEmail`) the message
+ * names it, and when another connected account holds the scope (`alternates`)
+ * the message says so and gives the way to use it. On the MCP surface that is
+ * the `account` parameter or switching the default; the agent surface cannot
+ * switch accounts mid-session (the account argument is stripped by design),
+ * so there the model is told to point the user at the default switch.
  */
 export function missingScopeMessage(opts: {
   displayName: string | null;
   surface: Surface;
   /** Absolute connections URL; required for the MCP surface. */
   connectionsUrl?: string;
+  /** The account the scope check judged — the one the call would run as. */
+  accountEmail?: string | null;
+  /** Other connected accounts whose grant DOES cover the scope. */
+  alternates?: string[];
 }): string {
   const what = opts.displayName
     ? `${opts.displayName} access`
     : "a Google permission this tool needs";
+  const alt = opts.alternates?.[0];
   if (opts.surface === "mcp") {
     const url = opts.connectionsUrl ?? "the DataToRAG dashboard";
+    const asAccount = opts.accountEmail ? ` as ${opts.accountEmail}` : "";
+    if (alt) {
+      return (
+        `Google Workspace is connected${asAccount}, but that account was ` +
+        `not granted ${what} on its consent screen, so this tool cannot ` +
+        `run. Your connected account ${alt} does have ${what}: pass ` +
+        `account "${alt}" on the call, or make it the default at ${url}.`
+      );
+    }
     return (
-      `Google Workspace is connected, but ${what} was not granted on the ` +
-      `consent screen, so this tool cannot run. To grant it, reconnect ` +
-      `Google Workspace at ${url} and allow it there, then try again.`
+      `Google Workspace is connected${asAccount}, but ${what} was not ` +
+      `granted on the consent screen, so this tool cannot run. To grant ` +
+      `it, reconnect Google Workspace at ${url} and allow it there, then ` +
+      `try again.`
+    );
+  }
+  const forAccount = opts.accountEmail ? ` (${opts.accountEmail})` : "";
+  if (alt) {
+    return (
+      `The user's Google Workspace account${forAccount} does not include ` +
+      `${what}; they did not grant that permission on its consent screen. ` +
+      `Their connected account ${alt} does have it, but this session ` +
+      `always acts as the default account. Tell the user plainly which ` +
+      `account is missing what, and that they can make ${alt} the default ` +
+      `on the connections page, or call the request_connection tool with ` +
+      `service "${GOOGLE_WORKSPACE_SERVICE}" so they get a reconnect ` +
+      `control. Do not show them a raw error message.`
     );
   }
   return (
-    `The user's Google Workspace connection does not include ${what}; ` +
+    `The user's Google Workspace connection${forAccount} does not include ${what}; ` +
     `they did not grant that permission on the consent screen. Tell the ` +
     `user plainly what is not granted, then call the request_connection ` +
     `tool with service "${GOOGLE_WORKSPACE_SERVICE}" so they get a ` +

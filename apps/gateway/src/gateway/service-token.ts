@@ -1,4 +1,4 @@
-import { eq, and } from "drizzle-orm";
+import { eq, and, desc, sql } from "drizzle-orm";
 import type { Database } from "@datatorag-mcp/db";
 import { serviceConnections, connectedAccounts } from "@datatorag-mcp/db";
 import { revokeGoogleToken } from "@/lib/google-revoke";
@@ -253,6 +253,14 @@ export async function resolveServiceToken(
           eq(serviceConnections.userId, userId),
           eq(serviceConnections.service, service)
         )
+      )
+      // A token lookup must never depend on heap order (SCRUM-145): widest
+      // grant first, then most recent, then id so the pick can never flap
+      // between two calls for the same user.
+      .orderBy(
+        sql`length(${serviceConnections.scopes}) DESC NULLS LAST`,
+        desc(serviceConnections.connectedAt),
+        serviceConnections.id
       )
       .limit(1);
     if (legacy) conn = { ...legacy, accountEmail: null };

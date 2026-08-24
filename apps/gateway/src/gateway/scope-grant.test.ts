@@ -3,6 +3,7 @@ import {
   GWS_SCOPE_LIST,
   GOOGLE_WORKSPACE_SERVICE,
   scopeDelta,
+  grantedServiceCount,
   requiredScopeForTool,
   checkScopeForTool,
   rewriteScopeError,
@@ -281,5 +282,111 @@ describe("missingScopeMessage copy rules", () => {
     const msg = missingScopeMessage({ displayName: "Drive", surface: "agent" });
     expect(msg).toContain("request_connection");
     expect(msg).toContain('"google-workspace"');
+  });
+});
+
+/**
+ * SCRUM-145: the refusal must be honest about ACCOUNTS. "Gmail not granted"
+ * alone survives the user complying with it — they grant Gmail on a second
+ * account and read the identical sentence again. With the judged account and
+ * a granting alternate named, the sentence cannot survive compliance.
+ */
+describe("missingScopeMessage account honesty (SCRUM-145)", () => {
+  const URL = "https://datatorag.com/dashboard/connections";
+
+  it("mcp surface names the account it judged", () => {
+    const msg = missingScopeMessage({
+      displayName: "Gmail",
+      surface: "mcp",
+      connectionsUrl: URL,
+      accountEmail: "narrow@example.com",
+    });
+    expect(msg).toContain("narrow@example.com");
+    expect(msg).toContain("Gmail access");
+    expect(msg).toContain(URL);
+  });
+
+  it("mcp surface names the alternate that CAN serve, with both ways to use it", () => {
+    const msg = missingScopeMessage({
+      displayName: "Gmail",
+      surface: "mcp",
+      connectionsUrl: URL,
+      accountEmail: "narrow@example.com",
+      alternates: ["granted@example.com"],
+    });
+    expect(msg).toContain("narrow@example.com");
+    expect(msg).toContain("granted@example.com");
+    // The two escape hatches an MCP caller actually has: the account
+    // parameter, or moving the default.
+    expect(msg).toContain('account "granted@example.com"');
+    expect(msg).toContain("default");
+    expect(msg).toContain(URL);
+    expect(msg).not.toContain("—");
+    expect(msg).not.toContain("googleapis.com");
+  });
+
+  it("agent surface names both accounts but never suggests the stripped account argument", () => {
+    const msg = missingScopeMessage({
+      displayName: "Gmail",
+      surface: "agent",
+      accountEmail: "narrow@example.com",
+      alternates: ["granted@example.com"],
+    });
+    expect(msg).toContain("narrow@example.com");
+    expect(msg).toContain("granted@example.com");
+    // The agent session always runs as the default account (the account
+    // argument is stripped before dispatch), so the model must steer the
+    // user to the default switch, not to a parameter that will be ignored.
+    expect(msg).toContain("default");
+    expect(msg).not.toContain('pass account');
+    expect(msg).toContain("request_connection");
+    expect(msg).not.toContain("—");
+  });
+
+  it("without account knowledge the original sentences stand unchanged", () => {
+    const msg = missingScopeMessage({
+      displayName: "Gmail",
+      surface: "mcp",
+      connectionsUrl: URL,
+    });
+    expect(msg).toContain("Google Workspace is connected, but Gmail access");
+  });
+});
+
+/**
+ * SCRUM-145: the ranking behind the default-account rule. Zero is the only
+ * score that permits moving a default, so the boundary cases are the test.
+ */
+describe("grantedServiceCount", () => {
+  const IDENTITY_ONLY =
+    "openid https://www.googleapis.com/auth/userinfo.email";
+
+  it("scores an identity-only grant as zero — it can serve nothing", () => {
+    expect(grantedServiceCount(GOOGLE_WORKSPACE_SERVICE, IDENTITY_ONLY)).toBe(0);
+  });
+
+  it("scores a single-service grant above zero — a possible deliberate choice", () => {
+    const gmailOnly = `${IDENTITY_ONLY} https://www.googleapis.com/auth/gmail.modify`;
+    expect(grantedServiceCount(GOOGLE_WORKSPACE_SERVICE, gmailOnly)).toBe(1);
+  });
+
+  it("scores a full grant highest", () => {
+    const full = grantedServiceCount(
+      GOOGLE_WORKSPACE_SERVICE,
+      FULL_GRANT_AS_GOOGLE_RETURNS_IT
+    );
+    expect(full).toBeGreaterThan(1);
+    expect(
+      grantedServiceCount(GOOGLE_WORKSPACE_SERVICE, IDENTITY_ONLY)
+    ).toBeLessThan(full);
+  });
+
+  it("fails open: legacy null scopes and non-Google services score as fully usable", () => {
+    const full = grantedServiceCount(
+      GOOGLE_WORKSPACE_SERVICE,
+      FULL_GRANT_AS_GOOGLE_RETURNS_IT
+    );
+    expect(grantedServiceCount(GOOGLE_WORKSPACE_SERVICE, null)).toBe(full);
+    expect(grantedServiceCount("atlassian", "read:jira-work")).toBe(full);
   });
 });

@@ -15,9 +15,11 @@ import {
 import { PLUGIN_SERVICE_MAP, resolveServiceToken } from "@/gateway/service-token";
 import {
   checkScopeForTool,
+  missingScopeMessage,
   rewriteScopeError,
   MISSING_SCOPE_ERROR_MARKER,
 } from "@/gateway/scope-grant";
+import { accountsGrantingScope } from "@/gateway/connected-accounts";
 import { classifyWrite, flattenToolResult, stripAccountArg } from "@/gateway/playground/tools";
 import { capToolOutput } from "@/gateway/playground/cap";
 import { trackToolCall } from "@/gateway/track";
@@ -501,6 +503,31 @@ export function applyToolPolicy(
         surface: "agent",
       });
       if (!scopeCheck.ok) {
+        // SCRUM-145: with a database on hand, the refusal names the account
+        // this session runs as and any other connected account that DOES
+        // hold the scope, so the model can tell the user the truth instead
+        // of a sentence that survives them fixing their grant. Enrichment
+        // only — a failed lookup leaves the plain refusal standing.
+        let refusalText = scopeCheck.message;
+        if (meter && scopeInfo?.service) {
+          try {
+            const alternates = await accountsGrantingScope(
+              meter.db,
+              meter.userId,
+              scopeInfo.service,
+              scopeCheck.missing.scope,
+              meter.resolvedAccountEmail
+            );
+            refusalText = missingScopeMessage({
+              displayName: scopeCheck.missing.displayName,
+              surface: "agent",
+              accountEmail: meter.resolvedAccountEmail,
+              alternates,
+            });
+          } catch {
+            // scopeCheck.message stands.
+          }
+        }
         const marker = `${MISSING_SCOPE_ERROR_MARKER} ${scopeCheck.missing.displayName} not granted`;
         if (meter) {
           report(meter, namespacedName, accountEmail, startTime, {
@@ -516,7 +543,7 @@ export function applyToolPolicy(
           });
         }
         return {
-          content: [{ type: "text", text: scopeCheck.message }],
+          content: [{ type: "text", text: refusalText }],
           isError: true,
         };
       }

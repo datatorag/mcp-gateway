@@ -14,12 +14,16 @@ import {
   buildPluginServerUrl,
   callPluginToolOnce,
 } from "./user-tools";
-import { listConnectedAccounts } from "./connected-accounts";
+import {
+  accountsGrantingScope,
+  listConnectedAccounts,
+} from "./connected-accounts";
 import { trackToolCall } from "./track";
 import { trackMcpToolsListed } from "./mcp-analytics";
 import { checkCallAllowance } from "./billing/enforce";
 import {
   checkScopeForTool,
+  missingScopeMessage,
   rewriteScopeError,
   MISSING_SCOPE_ERROR_MARKER,
 } from "./scope-grant";
@@ -347,6 +351,30 @@ export function createMcpServer(
         connectionsUrl,
       });
       if (!scopeCheck.ok) {
+        // SCRUM-145: the refusal names the account it judged and, when
+        // another connected account holds the scope, names that too — "Gmail
+        // not granted" alone is actively misleading to a user who just
+        // granted Gmail on a different account. Enrichment only: a failed
+        // lookup falls back to the plain refusal, never to a crash.
+        let refusalText = scopeCheck.message;
+        try {
+          const alternates = await accountsGrantingScope(
+            db,
+            userId,
+            requiredService,
+            scopeCheck.missing.scope,
+            accountEmail ?? null
+          );
+          refusalText = missingScopeMessage({
+            displayName: scopeCheck.missing.displayName,
+            surface: "mcp",
+            connectionsUrl,
+            accountEmail,
+            alternates,
+          });
+        } catch {
+          // scopeCheck.message stands.
+        }
         // Metered with a distinct marker: a refusal the instrumentation
         // cannot see would be a one-sided measurement of exactly the failure
         // this exists to fix.
@@ -367,7 +395,7 @@ export function createMcpServer(
           },
         });
         return {
-          content: [{ type: "text" as const, text: scopeCheck.message }],
+          content: [{ type: "text" as const, text: refusalText }],
           isError: true,
         };
       }

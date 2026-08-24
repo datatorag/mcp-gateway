@@ -12,6 +12,15 @@ import type { Tool } from "@mastra/core/tools";
 const trackToolCall = vi.fn();
 vi.mock("@/gateway/track", () => ({ trackToolCall }));
 
+// SCRUM-145: the refusal enrichment looks up which OTHER accounts hold the
+// missing scope. Mocked so the fake meter DB is never queried for real.
+const accountsGrantingScope = vi.fn();
+vi.mock("@/gateway/connected-accounts", () => ({
+  accountsGrantingScope: (...args: unknown[]) => accountsGrantingScope(...args),
+  // client.ts pulls in the introspection tools, which import this too.
+  disconnectService: vi.fn(),
+}));
+
 const { applyToolPolicy } = await import("./client");
 
 const DB = { tag: "db" } as never;
@@ -44,7 +53,11 @@ function textOf(result: unknown): string {
 }
 
 describe("pre-call scope gate (SCRUM-107, agent surface)", () => {
-  beforeEach(() => trackToolCall.mockClear());
+  beforeEach(() => {
+    trackToolCall.mockClear();
+    accountsGrantingScope.mockReset();
+    accountsGrantingScope.mockResolvedValue([]);
+  });
 
   it("refuses without executing when the needed scope is missing", async () => {
     const { tool, seen } = toolReturning({ content: [] });
@@ -68,6 +81,51 @@ describe("pre-call scope gate (SCRUM-107, agent surface)", () => {
     expect(trackToolCall).toHaveBeenCalledTimes(1);
     const [, props] = trackToolCall.mock.calls[0];
     expect(props.errorMessage).toContain("[missing-scope]");
+  });
+
+  it("names the session's account and a granting alternate, steering to the default switch (SCRUM-145)", async () => {
+    accountsGrantingScope.mockResolvedValue(["granted@example.com"]);
+    const { tool, seen } = toolReturning({ content: [] });
+    const wrapped = applyToolPolicy("gws-mcp__gmail_search", tool, METER, {
+      service: "google-workspace",
+      granted: IDENTITY_ONLY,
+    });
+
+    const result = await wrapped.execute!({} as never, {} as never);
+
+    expect(seen).toEqual([]);
+    const text = textOf(result);
+    expect(text).toContain("default@example.com");
+    expect(text).toContain("granted@example.com");
+    // The agent session always runs as the default account (the account
+    // argument is stripped), so the model must point the user at the
+    // default switch, never at a parameter that will be ignored.
+    expect(text).toContain("default");
+    expect(text).not.toContain("pass account");
+    expect(text).toContain("request_connection");
+    // Excluding the account the session runs as.
+    expect(accountsGrantingScope).toHaveBeenCalledWith(
+      METER.db,
+      "user-1",
+      "google-workspace",
+      "https://www.googleapis.com/auth/gmail.modify",
+      "default@example.com"
+    );
+  });
+
+  it("still refuses in words when the alternate lookup fails", async () => {
+    accountsGrantingScope.mockRejectedValue(new Error("db down"));
+    const { tool, seen } = toolReturning({ content: [] });
+    const wrapped = applyToolPolicy("gws-mcp__gmail_search", tool, METER, {
+      service: "google-workspace",
+      granted: IDENTITY_ONLY,
+    });
+
+    const result = await wrapped.execute!({} as never, {} as never);
+
+    expect(seen).toEqual([]);
+    expect((result as { isError?: boolean }).isError).toBe(true);
+    expect(textOf(result)).toContain("Gmail");
   });
 
   it("executes normally when the scope is granted or unknown", async () => {
