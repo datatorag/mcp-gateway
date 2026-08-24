@@ -15,6 +15,13 @@ const BASE = "https://datatorag.com";
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const staticRoutes: MetadataRoute.Sitemap = [
     { url: BASE, changeFrequency: "weekly", priority: 1 },
+    {
+      // The phrase-owning landing page. Priority 0.9 because it is the page
+      // we most need found, and it is not linked from the nav.
+      url: `${BASE}/hosted-google-workspace-mcp`,
+      changeFrequency: "monthly",
+      priority: 0.9,
+    },
     { url: `${BASE}/blog`, changeFrequency: "weekly", priority: 0.8 },
     { url: `${BASE}/docs`, changeFrequency: "weekly", priority: 0.8 },
     { url: `${BASE}/skills`, changeFrequency: "weekly", priority: 0.8 },
