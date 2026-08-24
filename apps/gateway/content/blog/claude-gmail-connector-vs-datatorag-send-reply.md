@@ -1,88 +1,118 @@
 ---
-title: "Claude Can Draft Your Email. It Can't Send It."
-excerpt: "The native Claude Gmail connector writes drafts into your Drafts folder and stops there. It has no tool to send one, and none to delete one either. DataToRAG ships the verbs that finish the job."
+title: "We Said Claude Couldn't Send Email. It Can Now."
+excerpt: "This post used to argue that Claude's native Gmail connector drafts but never sends. As of August 24, 2026 that is wrong: it sends, replies, and forwards. Here is the corrected comparison, and the one Gmail gap that is still real."
 date: "2026-04-21"
-updated: "2026-08-11"
-updatedNote: "Two corrections. August 7: Anthropic's Gmail connector gained labelling, marking read, and archiving, so the labels section and the table were rewritten. August 11: the table's label row said Yes for both of us, which overstated our side. Whole-thread labelling is theirs, not ours, and the row is now split into message-level and thread-level. The send gap is unchanged through both: it still creates drafts it can neither send nor delete."
+updated: "2026-08-24"
+updatedNote: "MAJOR CORRECTION, August 24: the central claim of this post is no longer true. Claude's native Gmail connector now exposes send_message (including sending an existing draft), reply with reply-all, and forward. The original title was 'Claude Can Draft Your Email. It Can't Send It.' We have rewritten the post rather than retitling around the edges, because the gap it was built on has closed. Earlier corrections on August 7 and August 11 covered labelling and thread-level filing."
 author: "Manuel Yang"
 category: "Comparison"
 coverImage: "/blog/gmail-comparison.png"
 tags: ["gmail", "claude", "mcp", "comparison", "google-workspace"]
 ---
 
-**Short answer:** no, Claude's native Gmail connector cannot send email. As of August 11,
-2026 it creates drafts and can neither send nor delete them, and it has no reply or forward
-tool. It reads, searches and labels well. DataToRAG adds send, reply, forward, and the two
-verbs that finish a draft.
+**Short answer, as of August 24, 2026:** Claude's native Gmail connector sends email. It also
+replies, replies-all, and forwards. For four months this post said the opposite, and it was
+right when we wrote it. It is wrong now, so here is the correction and the honest current
+picture.
 
-Every time I've watched someone use Claude with their Gmail, the same moment happens. They ask Claude to write a reply. Claude writes a good reply. They squint at the screen and then say, "okay, how do I… send this?" And the answer is: you can't. Claude put the draft in your Drafts folder. You have to open Gmail, click into Drafts, click Send.
+We could have quietly edited a few sentences. We are not going to, because the whole argument
+of this post was one capability gap, and that gap is gone. A comparison post that survives the
+thing it compares is not a comparison, it is an advertisement.
 
-That's not a bug. It's the design intent of Claude's native Gmail connector. The connector reads your inbox and drafts messages into Drafts, and it will not send anything. Ask it to list its own tools and the shape is obvious: `create_draft`, `update_draft`, `list_drafts`, and then the trail ends. No send. No send-draft. No reply. No forward. Not even a delete, so the draft it just wrote for you is one it can neither send nor throw away. We re-enumerated that tool surface on August 11, 2026 and it still reads the same way.
+## What actually changed
 
-The design goal is safety: you review every outbound action. The result is that every email workflow ends with Claude handing you a sticky note saying "the draft is waiting in Gmail."
+When this went up in April, the native connector's tool surface ended at drafts.
+`create_draft`, `update_draft`, `list_drafts`, and nothing after it. No send, no reply, no
+forward. We re-checked on August 7 and again on August 11 and it still read that way both times.
 
-## Feature comparison
+On August 24 we enumerated it again and it reads:
+
+- `send_message`, which sends a new message **and** sends an existing draft when you pass it a
+  `draftId`
+- `reply`, with a `replyAll` flag
+- `forward`, with an optional comment
+- plus trash, untrash, spam, unspam, and the sensitive-label tools
+
+So the exact sentence this post was named after, "it has no tool to send that draft", is now
+false. Anthropic shipped the verbs. That is a real improvement and it closes the most
+frequently cited limitation of the native connector.
+
+## The corrected comparison
 
 | Capability | Claude native Gmail | DataToRAG Gmail |
 |---|---|---|
 | Search and read messages | Yes | Yes |
-| Create a draft in Drafts folder | Yes | Yes |
-| Send that draft | No | Yes |
-| Delete that draft | No | Yes |
-| Send a new message | No | Yes |
-| Reply within a thread | No | Yes |
-| Forward a message | No | Yes |
+| Create a draft | Yes | Yes |
+| **Send a new message** | **Yes** | Yes |
+| **Send an existing draft** | **Yes**, via `send_message` with a draft id | Yes, `gmail_send_draft` |
+| **Reply within a thread** | **Yes**, including reply-all | Yes |
+| **Forward a message** | **Yes** | Yes |
+| Delete a draft | No | Yes |
 | Mark messages read or unread | Yes | Yes |
 | Label or archive individual messages | Yes | Yes |
 | Label or archive a whole thread in one call | Yes | No |
+| Trash, untrash, mark spam | Yes | Partial |
 | Save attachment to Drive server-side | No | Yes |
 | Multi-account (work + personal Gmail) | No | Yes |
 
-Both columns are what each connector exposes as tools, enumerated on August 11, 2026. Rows move; the date is there so you can tell how stale this table is when you find it.
+Both columns are what each connector exposes as tools, enumerated on August 24, 2026. Rows
+move. The date is there so you can tell how stale this table is when you find it, and this
+particular table has now moved twice in a month.
 
-That thread row is one we got wrong in our own favour until August 11. The native connector has `label_thread` and `unlabel_thread`, which apply to every message in a thread and to any message that lands in it later. Ours labels messages, so "archive this whole conversation" means enumerating the messages first. It is on our list, and until it ships the honest answer is No.
+## What is left, stated without inflation
 
-## What DataToRAG's Gmail connector adds
+Three rows. That is the honest count.
 
-DataToRAG ships the outbound verbs the native connector stops short of:
+**Deleting a draft.** The native connector still has no way to remove a draft it created. If
+your workflow generates drafts speculatively, it accumulates them and you clean up by hand.
+This is a small gap and we are not going to pretend otherwise.
 
-- `gmail_send`: compose and deliver a new message.
-- `gmail_reply`: reply within a thread, keeping the subject and thread context intact.
-- `gmail_forward`: forward a message with an optional note.
-- `gmail_create_draft`, `gmail_update_draft`, `gmail_send_draft`, `gmail_delete_draft`: when you do want the review gate, including the two verbs that end it.
-- `gmail_mark_read`: close inbox items after acting on them.
-- `gmail_save_attachment_to_drive`: move attachments server-side so the binary doesn't touch your conversation context.
+**Attachments.** Ours saves an attachment straight to Drive server-side, so the binary never
+enters the conversation. The native connector hands attachments back through the context
+window, which on a large PDF is the difference between a working session and a full one.
 
-The LLM already requires your approval before calling a tool. Making the tool not actually do the thing isn't an extra layer of safety; it's extra friction for the same outcome.
+**Multi-account, which is the one that actually matters.** The native connector authorizes one
+Google account. If you live in a work inbox and a personal one, you disconnect and reconnect to
+move between them. Ours holds several at once and routes per call, so "check both inboxes and
+reply from the right one" is a single prompt.
 
-## What Claude's Gmail connector is genuinely good at
+That is the current Gmail story. One meaningful differentiator, two small ones. If Gmail alone
+is your use case and one account covers it, **use the native connector.** It is free, it is
+first-party, and it now finishes the job.
 
-Reading, searching, and filing. If you ask "what did my director email me about last week," Claude's Gmail connector finds the thread, cites it, and summarizes it, and it can now file that thread under a label when it's done. Nothing wrong with any of that. The limitation isn't "Claude can't see Gmail." It's "Claude can't finish the workflow."
+## Where the gap is still wide
 
-## Where the gap bites
+Gmail is no longer where we win, and it would be dishonest to keep implying it is. The gap has
+moved to the services the native connectors do not cover at all:
 
-Consider a common customer-support loop: read incoming customer emails, draft replies, send them. With the Gmail connector that looks like this: Claude reads (fine), Claude drafts (fine), you open Gmail, you click into Drafts one by one, you click Send on each. Claude did the hard part (drafting) and you did the repetitive part (the clicking).
+- **Sheets.** No native cell-level editing. Ours reads, updates, appends, and manages tabs.
+- **Slides.** Native Drive creates an empty deck. Nothing native writes content onto slides.
+- **Docs.** Native reads. Ours creates, writes, and batch-updates.
+- **Contacts and Tasks.** No native connector at all.
 
-With DataToRAG: Claude reads, drafts, sends. Same conversation. One approval per message if you want checkpoints, or an approved-by-default workflow if you trust it.
+If your workflow ends in a spreadsheet or a deck, that is the comparison worth reading, not
+this one.
 
-## Labels used to be the second gap
+## The part we want to keep from the original post
 
-When this post went up in April, "label these threads 'needs-follow-up' and archive the rest" was a prompt the native connector could not finish. That has changed, and it's worth saying so in the post rather than quietly deleting the sentence.
+This post already contained the method that caught it, which is why we are keeping the section.
 
-We enumerated the connector's tools again on August 7, 2026 and counted seven for labels alone: create, update and delete a label, then add or remove one on a message or on a whole thread. Two more handle the sensitive ones, Trash and Spam. And because Gmail models read state and archiving as labels rather than as separate concepts, the same tools cover more than filing: removing `UNREAD` marks a message read, removing `INBOX` archives it, adding `STARRED` stars it. So the native connector labels, stars, marks read, archives and trashes. Anthropic shipped that, and it's a real improvement.
+We originally blamed a missing `gmail.modify` scope for the send gap, and
+[the bug report we cited](https://github.com/anthropics/claude-code/issues/46206) said the same.
+That was wrong reasoning even when the conclusion was right. A scope is invisible from the
+outside, inferred rather than observed, and it moves without an announcement. That same report
+listed "manage drafts and send emails" among the granted scopes, on a connector that at the
+time had no send tool. **Scope and capability come apart in both directions, and neither
+predicts the other.**
 
-Here's the part we got wrong even while the conclusion held. We had blamed a missing `gmail.modify` scope, and [the bug report we cited](https://github.com/anthropics/claude-code/issues/46206) said the same. But a scope is invisible from the outside, inferred rather than observed, and it moves without an announcement. Worse, that same report lists "manage drafts and send emails" among the scopes the connector was granted, on a connector that has never exposed a send tool. Scope and capability come apart in both directions, and neither one predicts the other.
+So we stopped reasoning from scopes and started enumerating tools, and writing down the date we
+checked. That is the only reason this correction took thirteen days instead of six months. The
+method worked. We just have to keep running it.
 
-The tool list is the thing you can actually enumerate, and it's what a prompt actually hits. So that's what we check now, and we write down the date we checked it.
+## What we would tell you to do
 
-## The minute that should exist
+Connect the native Gmail connector first. It is free and for a lot of people it is now enough.
 
-Try this prompt on your setup: "Read the last five emails from our biggest customer and reply to each with a short acknowledgement."
-
-On the Gmail connector, Claude drafts five emails and leaves them in Drafts. You spend the next three minutes clicking through Gmail sending them.
-
-On DataToRAG, the replies are sent before you finish reading Claude's confirmation message.
-
-## Try it
-
-Connect your Google account at [datatorag.com/dashboard](https://datatorag.com/dashboard). The switch is worth two minutes.
+Come to [DataToRAG](https://datatorag.com/dashboard) when you hit one of the walls that is
+still real: more than one Google account, or a workflow that has to write into Sheets, Docs, or
+Slides.

@@ -2,6 +2,8 @@
 title: "Looking for an Open-Source Composio Alternative? Check Which Part Is Actually Open."
 excerpt: "Composio's SDKs are open source. The runtime that holds your tokens and executes your calls is not, and self-hosting it is an enterprise-plan conversation. If 'open source' means 'I can run the whole thing myself', the license on the SDK isn't the license that matters."
 date: "2026-07-23"
+updated: "2026-08-24"
+updatedNote: "August 24, 2026: narrowed an overbroad privacy claim. The pass-through statement used to end 'there's no copy at all'; the gateway keeps nothing, but the hosted agent on our own site stores its conversation threads. The privacy policy is now linked from the paragraph."
 author: "Manuel Yang"
 category: "Comparison"
 tags: ["composio", "open-source", "self-hosted", "mcp", "alternative"]
@@ -23,7 +25,9 @@ None of this is a scandal. It's a normal commercial architecture, and Composio b
 
 DataToRAG's core is MIT-licensed, and self-hosting is a supported path, not an enterprise upsell. The whole thing runs on Docker Compose with your own Postgres. You clone the repo, bring your own Google OAuth client, point Claude at your own endpoint, and the tokens sit in a database you control on a box you control.
 
-And in either mode, hosted or self-hosted, the gateway is pass-through. When Claude calls `gmail_search`, the request goes to Google on your behalf and the result comes straight back. We don't store your messages, files, or calendar. There's no copy of your inbox in anyone's database to leak later, because there's no copy at all.
+And in either mode, hosted or self-hosted, the gateway is pass-through. When Claude calls `gmail_search`, the request goes to Google on your behalf and the result comes straight back. We don't retain your messages, files, or calendar, and there's no copy of your inbox in anyone's database to leak later.
+
+Corrected August 24, 2026: this paragraph used to end "because there's no copy at all", which overstated it. The gateway itself keeps nothing, but the **hosted agent on our site** stores its own conversation threads, including anything the agent quoted into them. Connect your own client to the gateway and that does not apply. The [privacy policy](/privacy) has the specifics.
 
 So the layering works out like this:
 

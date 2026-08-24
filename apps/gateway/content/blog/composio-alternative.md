@@ -2,8 +2,8 @@
 title: "Composio Is for the Developer Shipping an Agent. DataToRAG Is for You."
 excerpt: "Composio is a strong platform for developers wiring tools into agent products. If you just want Claude working in your own Google account, you'd have to write code to get there. DataToRAG is the part you sign into."
 date: "2026-06-29"
-updated: "2026-08-12"
-updatedNote: "Corrected the credentials row, which was the most misleading line on the page. It said credentials are passed through and never stored. They are stored: the hosted service keeps each connection tokens in our database, which is what makes background refresh work at all. Passing through without storing is true of your Workspace CONTENT rather than your credentials, so that claim now has its own row and says what it actually covers."
+updated: "2026-08-24"
+updatedNote: "August 24, 2026: narrowed an overbroad privacy claim. The pass-through statement used to end 'there's no copy at all'; the gateway keeps nothing, but the hosted agent on our own site stores its conversation threads. The privacy policy is now linked from the paragraph. EARLIER: Corrected the credentials row, which was the most misleading line on the page. It said credentials are passed through and never stored. They are stored: the hosted service keeps each connection tokens in our database, which is what makes background refresh work at all. Passing through without storing is true of your Workspace CONTENT rather than your credentials, so that claim now has its own row and says what it actually covers."
 author: "Manuel Yang"
 category: "Comparison"
 tags: ["composio", "mcp", "comparison", "ai-agents", "alternative"]
@@ -63,7 +63,9 @@ Two more differences that don't show up until you care about them, at which poin
 
 The first is the open-source core. DataToRAG is MIT-licensed and built to be self-hosted. If you don't want a vendor in the middle of your Google data, you clone the repo, run it on Docker Compose with your own Postgres, point Claude at your own endpoint, and you're done. Composio's SDKs are open source, which is good, but the runtime that stores credentials and executes the calls is closed. Self-hosting that runtime is an enterprise-plan conversation, and on the self-serve plans your users' tokens live on Composio's cloud. I dug into exactly which layer of Composio is open and which isn't in [the open-source Composio alternative post](/blog/open-source-composio-alternative), if that's the requirement that brought you here.
 
-The second is what happens to your data in flight. DataToRAG is pass-through. When Claude calls `gmail_search`, the request goes to Google on your behalf and the result comes straight back. We don't store your messages, your files, or your calendar. There's no copy of your inbox sitting in our database to leak later, because there's no copy at all. For a lot of teams I've talked to, "the vendor never holds my Workspace data" is the line that decides it, ahead of any single feature in the table above.
+The second is what happens to your data in flight. DataToRAG is pass-through. When Claude calls `gmail_search`, the request goes to Google on your behalf and the result comes straight back. We don't retain your messages, your files, or your calendar, and we don't index or mine them. There's no copy of your inbox sitting in our database to leak later.
+
+One honest caveat, because the version of this paragraph that ran until August 24 said "there's no copy at all" and that was too broad. If you use the **hosted agent** on our own site, that conversation is stored so the thread persists, and whatever the agent quoted into it is stored with it. That is a chat log, not a mirror of your Workspace, and it does not apply when you connect Claude or another client straight to the gateway. The [privacy policy](/privacy) states exactly what is kept and for how long. For a lot of teams I've talked to, "the vendor never holds a copy of my Workspace" is the line that decides it, ahead of any single feature in the table above.
 
 ## What Composio is genuinely great at
 
