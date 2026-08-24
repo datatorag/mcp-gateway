@@ -2,8 +2,11 @@ import { describe, expect, it } from "vitest";
 import {
   ALL_CONNECT_COPY,
   CONNECT_ERROR_NOTICE,
+  CONNECT_ZERO_GRANT_NOTICE,
   connectContinuationMessage,
+  connectErrorNotice,
 } from "./agent-connect-copy";
+import { CONNECT_ERROR_NO_SERVICES } from "@/gateway/post-connect-destination";
 
 describe("agent connect copy", () => {
   it("calls the surface Agent, not playground", () => {
@@ -42,5 +45,27 @@ describe("agent connect copy", () => {
     const bad = "try the playground — now";
     expect(bad.toLowerCase()).toContain("playground");
     expect(bad).toContain("—");
+  });
+
+  /** SCRUM-149: the zero-grant refusal gets its own words on every surface —
+   * a generic "didn't finish" hides that the fix is a specific gesture on
+   * Google's screen. */
+  it("gives the zero-grant code its own notice, naming the gesture that fixes it", () => {
+    expect(connectErrorNotice(CONNECT_ERROR_NO_SERVICES)).toBe(
+      CONNECT_ZERO_GRANT_NOTICE
+    );
+    expect(CONNECT_ZERO_GRANT_NOTICE).toContain("Select all");
+    expect(CONNECT_ZERO_GRANT_NOTICE.toLowerCase()).toContain("tick");
+    // And it must say the honest outcome, not soften it to a hiccup.
+    expect(CONNECT_ZERO_GRANT_NOTICE.toLowerCase()).toContain(
+      "no access was granted"
+    );
+  });
+
+  it("every other code keeps the generic notice", () => {
+    expect(connectErrorNotice("token_exchange_failed")).toBe(
+      CONNECT_ERROR_NOTICE
+    );
+    expect(connectErrorNotice(null)).toBe(CONNECT_ERROR_NOTICE);
   });
 });

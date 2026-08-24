@@ -11,8 +11,8 @@ import { ThreadList } from "./thread-list";
 import type { PlaygroundMessage } from "../playground-presentation";
 import { getConnectableService } from "../connections/service-registry";
 import {
-  CONNECT_ERROR_NOTICE,
   connectContinuationMessage,
+  connectErrorNotice,
 } from "../agent-connect-copy";
 
 /** Which login put the user here: the post-signup landing, or a returning
@@ -234,9 +234,11 @@ export function AgentClient({
       <div className="flex h-full min-h-0 flex-1 flex-col">
         {connectError && (
           // The connect came back without finishing. Say so where the user
-          // landed; the control they used is still in the thread below.
+          // landed; the control they used is still in the thread below. The
+          // zero-grant code (SCRUM-149) earns its own words — "didn't finish"
+          // would hide that the fix is ticking the boxes on Google's screen.
           <div className="mx-4 mt-3 shrink-0 rounded-2xl border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700 sm:mx-6">
-            {CONNECT_ERROR_NOTICE}
+            {connectErrorNotice(connectError)}
           </div>
         )}
         {/* NOT gated on `loaded`. Withholding the composer until an account

@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import { connectionsForwardPath } from "@/gateway/post-connect-destination";
 
 /** THE ONE DASHBOARD ROUTE WITHOUT A SESSION CHECK, and deliberately so.
  *
@@ -13,6 +14,13 @@ import { redirect } from "next/navigation";
  * is otherwise uniform reads as an oversight, and the next person to audit
  * this either "fixes" it or has to work out why it is here.
  */
-export default function ConnectionsPage() {
-  redirect("/dashboard");
+export default async function ConnectionsPage({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
+  // SCRUM-149: forward the query string. This redirect used to drop it, which
+  // silently swallowed every connect outcome landing on the fallback leg — a
+  // refused connect rendered as nothing at all.
+  redirect(connectionsForwardPath(await searchParams));
 }

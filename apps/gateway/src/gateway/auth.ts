@@ -12,6 +12,7 @@ import {
 import { upsertServiceAccount } from "./connected-accounts";
 import { PROVIDERS } from "../lib/analytics";
 import {
+  trackConnectRefused,
   trackLogin,
   trackOAuthCompleted,
   trackSignup,
@@ -22,8 +23,11 @@ import {
   postLoginDestination,
   resolveNextPath,
 } from "./post-login-destination";
-import { postConnectDestination } from "./post-connect-destination";
-import { GWS_SCOPE_LIST, scopeDelta } from "./scope-grant";
+import {
+  CONNECT_ERROR_NO_SERVICES,
+  postConnectDestination,
+} from "./post-connect-destination";
+import { GWS_SCOPE_LIST, grantedServiceCount, scopeDelta } from "./scope-grant";
 import { getEnv } from "@datatorag-mcp/config";
 
 /** Where the requested route (`?next=` on the login URL) survives the trip
@@ -474,6 +478,41 @@ export function createAuthRouter(
       ? new Date(Date.now() + tokens.expires_in * 1000)
       : null;
 
+    // SCRUM-149: a consent that granted ZERO services is a failed connect,
+    // not a connection. Google's granular consent brings the service
+    // checkboxes up unticked, so "Continue" alone comes back with identity
+    // scopes only — a grant that can serve no tool ever. Storing it poisoned
+    // every downstream surface (the connections page, the lifecycle cron, the
+    // follow-up email) and, before SCRUM-145, could hold the default account
+    // forever. Nothing is written and the user lands on a distinct error code
+    // with a retry path. Gated BEFORE the userinfo fetch: we do not resolve
+    // an identity for a connection we refuse.
+    //
+    // The refusal requires POSITIVE observation: `tokens.scope` present and
+    // covering zero services. A response with no scope field stays fail-open
+    // and is stored exactly as before — refusing what we could not read would
+    // lock out working connections. Google-only by construction: this is the
+    // Google callback, and only Google has a per-scope opt-out.
+    const grantDelta = scopeDelta(PROVIDERS.GOOGLE_WORKSPACE, tokens.scope ?? null);
+    if (
+      tokens.scope != null &&
+      grantedServiceCount(PROVIDERS.GOOGLE_WORKSPACE, tokens.scope) === 0
+    ) {
+      void trackConnectRefused(
+        db,
+        session.userId,
+        PROVIDERS.GOOGLE_WORKSPACE,
+        attribution
+      );
+      res.redirect(
+        postConnectDestination({
+          requestedPath,
+          error: CONNECT_ERROR_NO_SERVICES,
+        })
+      );
+      return;
+    }
+
     // Fetch the email of the connected Google account
     let accountEmail: string | null = null;
     try {
@@ -500,14 +539,13 @@ export function createAuthRouter(
     }
 
     // SCRUM-136: the consent screen lets the user untick individual scopes,
-    // and Google reports what actually came back in `tokens.scope`. The row
-    // is upserted EITHER WAY — it is the token store, and the granted subset
-    // genuinely works — but a short grant is never recorded as a clean
-    // connection: the event carries the delta and the redirect names it, so
-    // the landing surface can offer re-consent (the connect URL already sends
-    // prompt=consent with the full set, so Google re-prompts).
-    const grantDelta = scopeDelta(PROVIDERS.GOOGLE_WORKSPACE, tokens.scope ?? null);
-
+    // and Google reports what actually came back in `tokens.scope`. A PARTIAL
+    // grant is upserted — the granted subset genuinely works, and the tokens
+    // have to live somewhere for it to — but never recorded as clean: the
+    // event carries the delta and the redirect names it, so the landing
+    // surface can offer re-consent (the connect URL already sends
+    // prompt=consent with the full set, so Google re-prompts). The ZERO case
+    // never reaches this line — the SCRUM-149 gate above refused it.
     await upsertServiceAccount(
       db,
       session.userId,

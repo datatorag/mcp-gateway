@@ -6,6 +6,7 @@ import posthog from "posthog-js";
 import { Play, Copy, Check } from "lucide-react";
 import { EVENTS } from "@/lib/analytics";
 import { CasaBadge } from "@/components/casa-badge";
+import { ConnectOutcomeNotice } from "./connect-outcome-notice";
 import { SERVICES } from "./connections/services";
 import { ServiceIcon } from "@/components/service-icon";
 import { useRouter } from "next/navigation";
@@ -120,6 +121,10 @@ export function DashboardClient() {
 
       {/* Shown before the consent-screen step the Connect buttons lead to. */}
       <CasaBadge className="mt-4" />
+
+      {/* SCRUM-149: a refused zero-grant connect landing here says so, with
+          the retry path, instead of vanishing into the cards. */}
+      <ConnectOutcomeNotice />
 
       {/* SCRUM-106 ABSORBED THE SCRUM-136 BANNER THAT USED TO SIT HERE.
           It derived a per-SERVICE missing list off the DEFAULT account only

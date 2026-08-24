@@ -13,6 +13,11 @@ export const EVENTS = {
   USER_SIGNED_UP: "user_signed_up",
   USER_LOGGED_IN: "user_logged_in",
   ACCOUNT_CONNECTED: "account_connected",
+  /** SCRUM-149: a connect whose consent granted zero services, refused before
+   * anything was written. Deliberately not an `account_connected` property:
+   * that event firing means a connection exists, and a refusal is the
+   * opposite claim. */
+  CONNECT_REFUSED: "account_connect_refused",
   CONNECTOR_ADDED: "connector_added",
   CONNECTOR_REMOVED: "connector_removed",
   /** SCRUM-147: the default-account switch. `service` says which connector,
