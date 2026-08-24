@@ -15,6 +15,11 @@ export const EVENTS = {
   ACCOUNT_CONNECTED: "account_connected",
   CONNECTOR_ADDED: "connector_added",
   CONNECTOR_REMOVED: "connector_removed",
+  /** SCRUM-147: the default-account switch. `service` says which connector,
+   * `source` which surface offered the control (same values as the
+   * CONNECT_CARD_CLICKED series). The write itself is the PATCH; this is the
+   * click that confirmed it. */
+  DEFAULT_ACCOUNT_CHANGED: "default_account_changed",
   COPY_MCP_CONFIG: "copy_mcp_config",
   SKILL_COPIED: "skill_copied",
   MCP_REQUEST_RECEIVED: "mcp_request_received",

@@ -14,6 +14,7 @@ import {
   GRANT_NOT_GRANTED_LABEL,
   GRANT_PARTIAL_CONSEQUENCE,
   GRANT_RECONNECT_LABEL,
+  GRANT_UNRECORDED,
 } from "./grant-copy";
 import { grantState } from "./grant-state";
 import type { ScopeStatus, ServiceGrantState } from "./types";
@@ -98,9 +99,12 @@ export function GrantPanel({
   if (state === "disconnected") return null;
   if (state === "complete") {
     if (density === "compact" || !reassureWhenComplete) return null;
+    // SCRUM-147: "complete" for a null-scope row is fail-open POLICY, not a
+    // reading of the grant. The audit surface says so instead of laundering
+    // the policy into a positive claim nobody can verify.
     return (
       <p className={cn("text-xs text-muted-foreground", className)}>
-        {GRANT_ALL_GRANTED}
+        {rawScopes == null ? GRANT_UNRECORDED : GRANT_ALL_GRANTED}
       </p>
     );
   }

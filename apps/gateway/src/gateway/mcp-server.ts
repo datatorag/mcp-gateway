@@ -307,6 +307,13 @@ export function createMcpServer(
     let userToken: string | null = null;
 
     const requiredService = PLUGIN_SERVICE_MAP[mcpServer.slug];
+    // SCRUM-147: scope refusals link the SERVICE page, because that is where
+    // the account controls live — the bare connections URL redirects to the
+    // overview, which cannot switch a default. An error that names a fix has
+    // to land on the page that offers it.
+    const grantFixUrl = requiredService
+      ? `${connectionsUrl}/${requiredService}`
+      : connectionsUrl;
     let accountEmail: string | undefined;
     if (requiredService) {
       const requestedAccount = args.account as string | undefined;
@@ -330,8 +337,8 @@ export function createMcpServer(
       accountEmail = resolved?.accountEmail ?? requestedAccount;
       if (!userToken) {
         const msg = requestedAccount
-          ? `No connected account found for ${requestedAccount}. Please connect it from the dashboard at /dashboard/connections.`
-          : `${requiredService} is not connected. Please connect it from the dashboard at /dashboard/connections before using ${serverSlug} tools.`;
+          ? `No connected account found for ${requestedAccount}. Please connect it from the dashboard at ${grantFixUrl}.`
+          : `${requiredService} is not connected. Please connect it from the dashboard at ${grantFixUrl} before using ${serverSlug} tools.`;
         return {
           content: [{ type: "text" as const, text: msg }],
           isError: true,
@@ -348,7 +355,7 @@ export function createMcpServer(
         service: requiredService,
         granted: resolved?.scopes ?? null,
         surface: "mcp",
-        connectionsUrl,
+        connectionsUrl: grantFixUrl,
       });
       if (!scopeCheck.ok) {
         // SCRUM-145: the refusal names the account it judged and, when
@@ -368,7 +375,7 @@ export function createMcpServer(
           refusalText = missingScopeMessage({
             displayName: scopeCheck.missing.displayName,
             surface: "mcp",
-            connectionsUrl,
+            connectionsUrl: grantFixUrl,
             accountEmail,
             alternates,
           });
@@ -464,7 +471,7 @@ export function createMcpServer(
         service: requiredService ?? null,
         errorText: errorMessage,
         surface: "mcp",
-        connectionsUrl,
+        connectionsUrl: grantFixUrl,
       });
       if (scopeRewrite) {
         console.warn(`[scope-error] ${name}: ${errorMessage}`);

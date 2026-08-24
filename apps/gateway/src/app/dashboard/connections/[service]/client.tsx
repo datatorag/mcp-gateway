@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import type { ConnectedAccount, LegacyConnection } from "../types";
 import { GrantPanel } from "../grant-panel";
+import { BetterDefaultSuggestion, SetDefaultControl } from "../default-control";
 import { ServiceIcon, serviceFromToolName } from "@/components/service-icon";
 import { CasaBadge } from "@/components/casa-badge";
 import { formatConnectedDate } from "@/lib/utils";
@@ -100,17 +101,6 @@ export function ConnectionDetailClient({
     setDisconnecting("legacy");
     await fetch(`/api/connections?service=${service}`, { method: "DELETE" });
     router.push("/dashboard");
-  }
-
-  async function setDefault(accountId: string) {
-    await fetch("/api/connections", {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ accountId, setDefault: true }),
-    });
-    setAccounts((prev) =>
-      prev.map((a) => ({ ...a, isDefault: a.id === accountId }))
-    );
   }
 
   function selectTool(tool: Tool) {
@@ -227,7 +217,7 @@ export function ConnectionDetailClient({
 
         {accounts.map((account) => (
           <div key={account.id} className="rounded-lg hover:bg-secondary/50">
-            <div className="flex items-center justify-between px-3 py-2.5">
+            <div className="flex flex-wrap items-center justify-between gap-2 px-3 py-2.5">
             <div className="flex items-center gap-3">
               <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary/10 text-xs font-medium text-primary">
                 {account.accountEmail[0].toUpperCase()}
@@ -258,14 +248,15 @@ export function ConnectionDetailClient({
                 </p>
               </div>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center justify-end gap-2">
               {!account.isDefault && accounts.length > 1 && (
-                <button
-                  onClick={() => setDefault(account.id)}
-                  className="rounded-[var(--radius)] border border-border px-3 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
-                >
-                  Set default
-                </button>
+                <SetDefaultControl
+                  accountId={account.id}
+                  accountEmail={account.accountEmail}
+                  service={service}
+                  source="service_detail"
+                  onChanged={fetchConnection}
+                />
               )}
               <button
                 onClick={() => disconnectAccount(account.id)}
@@ -288,6 +279,18 @@ export function ConnectionDetailClient({
               reassureWhenComplete
               className="px-3 pb-3"
             />
+            {/* SCRUM-147: under the DEFAULT account, because that is the row
+                whose brokenness the suggestion is about. Renders nothing
+                unless the default grants zero and a full sibling exists. */}
+            {account.isDefault && (
+              <BetterDefaultSuggestion
+                accounts={accounts}
+                service={service}
+                source="service_detail"
+                onChanged={fetchConnection}
+                className="mx-3 mb-3"
+              />
+            )}
           </div>
         ))}
 

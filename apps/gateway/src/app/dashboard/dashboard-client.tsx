@@ -31,6 +31,10 @@ import { formatConnectedDate } from "@/lib/utils";
 import type { ConnectedAccount } from "./connections/types";
 import { GrantPanel } from "./connections/grant-panel";
 import {
+  BetterDefaultSuggestion,
+  SetDefaultControl,
+} from "./connections/default-control";
+import {
   GRANT_STATE_LABEL,
   GRANT_STATE_VARIANT,
   grantState,
@@ -48,6 +52,7 @@ export function DashboardClient() {
     setAccounts,
     setLegacyConnections,
     loaded,
+    refetch,
     hasConnectedAccount,
   } = useConnections();
   const loading = !loaded;
@@ -241,7 +246,7 @@ export function DashboardClient() {
                     {serviceAccounts.map((account) => (
                       <div key={account.id} className="space-y-2">
                       <div
-                        className="flex items-center justify-between gap-2"
+                        className="flex flex-wrap items-center justify-between gap-2"
                       >
                         <div className="flex min-w-0 items-center gap-2">
                           <div className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-primary/10 text-[10px] font-medium text-primary">
@@ -259,15 +264,28 @@ export function DashboardClient() {
                             </Badge>
                           )}
                         </div>
-                        <Button
-                          variant="ghost"
-                          size="xs"
-                          onClick={(e) => disconnectAccount(e, account)}
-                          disabled={disconnecting === account.id}
-                          className="text-muted-foreground"
-                        >
-                          {disconnecting === account.id ? "..." : "Disconnect"}
-                        </Button>
+                        <div className="flex flex-wrap items-center justify-end gap-1.5">
+                          {/* SCRUM-147: the state shown here has to be
+                              actionable where it is shown, not one page away. */}
+                          {!account.isDefault && serviceAccounts.length > 1 && (
+                            <SetDefaultControl
+                              accountId={account.id}
+                              accountEmail={account.accountEmail}
+                              service={service.id}
+                              source="connections_page"
+                              onChanged={refetch}
+                            />
+                          )}
+                          <Button
+                            variant="ghost"
+                            size="xs"
+                            onClick={(e) => disconnectAccount(e, account)}
+                            disabled={disconnecting === account.id}
+                            className="text-muted-foreground"
+                          >
+                            {disconnecting === account.id ? "..." : "Disconnect"}
+                          </Button>
+                        </div>
                       </div>
                       {/* SCRUM-106. Renders nothing for a complete grant (the
                           badge above already carries that), so a healthy
@@ -280,6 +298,16 @@ export function DashboardClient() {
                         source="connections_page"
                         nextPath="/dashboard"
                       />
+                      {/* SCRUM-147: switching beats re-consenting when a full
+                          sibling exists; renders nothing otherwise. */}
+                      {account.isDefault && (
+                        <BetterDefaultSuggestion
+                          accounts={serviceAccounts}
+                          service={service.id}
+                          source="connections_page"
+                          onChanged={refetch}
+                        />
+                      )}
                       </div>
                     ))}
                   </CardContent>
