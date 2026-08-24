@@ -21,7 +21,22 @@ import Script from "next/script";
 
 export const dynamic = "force-dynamic";
 
-const HOME_TITLE = "Let Claude edit your Google Sheets - DataToRAG";
+/* LEADS WITH THE SEARCH TERM ON PURPOSE, changed 2026-08-24. The previous
+   title, "Let Claude edit your Google Sheets - DataToRAG", is a better
+   sentence and it cost us the category: asked to list hosted Google Workspace
+   MCP servers, an assistant returned Google's official servers and four
+   self-hosted GitHub projects and did not reach us until we were named. Not an
+   ad-placement problem and not a ranking problem — nothing on the front door
+   matched the phrase at all. "MCP", "hosted" and "Google Workspace MCP" appear
+   in no title on the site outside one blog post.
+
+   THE H1 IS DELIBERATELY UNCHANGED. A title is read by a search engine and by
+   a model; an h1 is read by a person who already arrived. They do not have to
+   be the same string, and trading a line that converts for a line that gets
+   found would be the wrong half of the trade. 57 characters, inside the ~60
+   search results truncate at. */
+const HOME_TITLE =
+  "Hosted Google Workspace MCP with write access - DataToRAG";
 /* Makes no quantity claim at all, which is why it cannot go stale. This string
    is static metadata, so unlike the body below it cannot read the live number,
    and every exact count we hard-coded drifted as the registry moved.
@@ -194,6 +209,29 @@ export default async function HomePage() {
                   Talk to Us
                 </Link>
               </div>
+
+              {/* THE TRUST SIGNAL BELONGS NEXT TO THE ASK, added 2026-08-24.
+                  It already existed on this page, ~760 lines further down, in
+                  a footer link nobody scrolls to. The obvious objection to a
+                  hosted gateway is "I am giving a third party access to my
+                  Gmail", and the answer to it was filed below the fold while
+                  the question was being asked at the button. Same fact, moved
+                  to where it is load-bearing. Deliberately plain text plus one
+                  link rather than a badge graphic: a self-drawn badge reads as
+                  decoration, the sentence reads as a claim we will be held to. */}
+              <p
+                className="animate-fade-in-up mt-4 text-xs text-white/50 lg:text-left"
+                style={{ animationDelay: "0.22s" }}
+              >
+                Google-verified since June 2026 ·{" "}
+                <Link
+                  href="/blog/casa-tier-2-verified"
+                  className="underline decoration-white/30 underline-offset-2 hover:text-white/80"
+                >
+                  CASA Tier 2 assessed
+                </Link>{" "}
+                · Open source, self-host it if you prefer
+              </p>
 
               {/* Accuracy constraint: rows must stay create-vs-change (the
                   built-in Drive connector can create new files) — never a
