@@ -8,6 +8,7 @@ import {
   GRANT_STATE_LABEL,
   GRANT_STATE_VARIANT,
   grantState,
+  suggestBetterDefault,
 } from "./grant-state";
 import type { ScopeStatus } from "./types";
 
@@ -147,5 +148,65 @@ describe("grantState", () => {
     expect(GRANT_STATE_VARIANT.none).not.toBe("success");
     expect(GRANT_STATE_VARIANT.partial).not.toBe("success");
     expect(GRANT_STATE_LABEL.complete).toBe("Connected");
+  });
+});
+
+/**
+ * SCRUM-147: the UI half of the SCRUM-145 default rule, same boundaries. A
+ * suggestion appears ONLY when the default can serve nothing and a sibling
+ * with a RECORDED full grant exists — a partial default may be a deliberate
+ * choice, and an unreadable grant must never be advertised as full.
+ */
+describe("suggestBetterDefault", () => {
+  let seq = 0;
+  const account = (over: {
+    isDefault?: boolean;
+    granted?: string[];
+    scopes?: string | null;
+    connectedAt?: string;
+  }) => ({
+    id: `acct-${seq++}`,
+    accountEmail: `acct-${seq}@example.com`,
+    isDefault: over.isDefault ?? false,
+    scopes: over.scopes === undefined ? "recorded" : over.scopes,
+    connectedAt: over.connectedAt ?? "2026-08-01T00:00:00Z",
+    scopeStatus: status(over.granted ?? []),
+  });
+
+  it("suggests the fully-granted sibling when the default grants nothing", () => {
+    const broken = account({ isDefault: true, granted: [] });
+    const full = account({ granted: ALL });
+    expect(suggestBetterDefault([broken, full])?.id).toBe(full.id);
+  });
+
+  it("never suggests moving off a partial default — that may be a choice", () => {
+    const narrow = account({ isDefault: true, granted: ["Gmail"] });
+    const full = account({ granted: ALL });
+    expect(suggestBetterDefault([narrow, full])).toBeNull();
+  });
+
+  it("suggests nothing when the broken default is the only account", () => {
+    expect(suggestBetterDefault([account({ isDefault: true, granted: [] })])).toBeNull();
+  });
+
+  it("never advertises a sibling whose grant was not recorded", () => {
+    const broken = account({ isDefault: true, granted: [] });
+    // Fail-open reads null scopes as complete, but a suggestion is a positive
+    // claim and needs positive knowledge — same rule as the server side.
+    const unreadable = account({ granted: ALL, scopes: null });
+    expect(suggestBetterDefault([broken, unreadable])).toBeNull();
+  });
+
+  it("leaves a default with no scope record alone", () => {
+    const unreadableDefault = account({ isDefault: true, granted: ALL, scopes: null });
+    const full = account({ granted: ALL });
+    expect(suggestBetterDefault([unreadableDefault, full])).toBeNull();
+  });
+
+  it("prefers the most recently connected of two full siblings", () => {
+    const broken = account({ isDefault: true, granted: [] });
+    const older = account({ granted: ALL, connectedAt: "2026-01-01T00:00:00Z" });
+    const newer = account({ granted: ALL, connectedAt: "2026-08-01T00:00:00Z" });
+    expect(suggestBetterDefault([broken, older, newer])?.id).toBe(newer.id);
   });
 });

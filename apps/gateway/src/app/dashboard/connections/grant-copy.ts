@@ -52,7 +52,41 @@ export const GRANT_DISCLOSURE_LABEL = "Show what was granted";
  * "we did not write it down". */
 export const GRANT_DISCLOSURE_EMPTY = "No scope record was stored for this connection.";
 
-/** Every line above that a user reads, for the rules that apply to all of it. */
+/** SCRUM-147: the reassure-mode line for a connection whose grant predates
+ * scope recording. "Complete" for a null-scope row is fail-open POLICY (see
+ * scopeDelta), and the audit surface must not launder that policy into the
+ * positive claim that every service was granted, which nobody can read off
+ * the row. */
+export const GRANT_UNRECORDED =
+  "This connection predates grant recording, so what it covers cannot be shown here. Reconnecting refreshes the record.";
+
+/** SCRUM-147: the default switch. The confirmation exists because the default
+ * decides which account EVERY tool call with no account named runs as,
+ * writes included, and being silently wrong about that identity is the exact
+ * failure class this surface exists to end. One step, in flow, naming the
+ * account and the consequence. */
+export const SET_DEFAULT_LABEL = "Set default";
+export const SET_DEFAULT_CONFIRM_LABEL = "Confirm";
+export const SET_DEFAULT_CANCEL_LABEL = "Cancel";
+export const SET_DEFAULT_CONSEQUENCE =
+  "Tool calls that do not name an account will use it from now on.";
+export const SET_DEFAULT_ERROR =
+  "Could not change the default account. Try again.";
+export function setDefaultConfirm(email: string): string {
+  return `Make ${email} the default account?`;
+}
+
+/** SCRUM-147: the suggestion over the same control when the default account
+ * granted nothing and a sibling holds the recorded full grant — the one case
+ * where switching beats re-consenting. */
+export function suggestDefaultLine(email: string): string {
+  return `Your account ${email} already granted full access.`;
+}
+export const SUGGEST_DEFAULT_ACTION = "Make it the default";
+
+/** Every line above that a user reads, for the rules that apply to all of it.
+ * The two functions contribute a sample rendering, so the rules cover their
+ * fixed text too. */
 export const ALL_GRANT_COPY = [
   GRANT_ALL_GRANTED,
   GRANT_NONE_GRANTED,
@@ -62,4 +96,13 @@ export const ALL_GRANT_COPY = [
   GRANT_RECONNECT_LABEL,
   GRANT_DISCLOSURE_LABEL,
   GRANT_DISCLOSURE_EMPTY,
+  GRANT_UNRECORDED,
+  SET_DEFAULT_LABEL,
+  SET_DEFAULT_CONFIRM_LABEL,
+  SET_DEFAULT_CANCEL_LABEL,
+  SET_DEFAULT_CONSEQUENCE,
+  SET_DEFAULT_ERROR,
+  setDefaultConfirm("account@example.com"),
+  suggestDefaultLine("account@example.com"),
+  SUGGEST_DEFAULT_ACTION,
 ];

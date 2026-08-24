@@ -111,7 +111,7 @@ describe("pre-call scope gate (SCRUM-107)", () => {
     expect(result.isError).toBe(true);
     const text = textOf(result);
     expect(text).toContain("Drive access");
-    expect(text).toContain("https://gw.example.test/dashboard/connections");
+    expect(text).toContain("https://gw.example.test/dashboard/connections/google-workspace");
     expect(text).not.toContain("googleapis.com");
     // Refused BEFORE dispatch: the plugin was never spoken to.
     expect(callPluginToolOnce).not.toHaveBeenCalled();
@@ -145,7 +145,7 @@ describe("pre-call scope gate (SCRUM-107)", () => {
     // used and which one would work.
     expect(text).toContain("narrow@example.com");
     expect(text).toContain("granted@example.com");
-    expect(text).toContain("https://gw.example.test/dashboard/connections");
+    expect(text).toContain("https://gw.example.test/dashboard/connections/google-workspace");
     // The lookup excluded the account the call ran as.
     expect(accountsGrantingScope).toHaveBeenCalledWith(
       expect.anything(),
@@ -246,7 +246,7 @@ describe("the 403 rewrite (the net behind the gate)", () => {
     expect(result.isError).toBe(true);
     const text = textOf(result);
     expect(text).toContain("Gmail access");
-    expect(text).toContain("https://gw.example.test/dashboard/connections");
+    expect(text).toContain("https://gw.example.test/dashboard/connections/google-workspace");
     expect(text).not.toContain("insufficient authentication scopes");
 
     // The usage row keeps the truth: the RAW error, not the words.

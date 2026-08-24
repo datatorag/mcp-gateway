@@ -34,6 +34,43 @@ export function grantState(
   return "partial";
 }
 
+/**
+ * SCRUM-147: the UI half of the SCRUM-145 default rule, with the same
+ * boundaries. Suggest switching the default ONLY when the current default can
+ * serve nothing (grantState "none" — never anyone's deliberate choice) and a
+ * sibling account holds a RECORDED complete grant. A partial default may be a
+ * choice and is left alone; a null-scope grant reads as complete by fail-open
+ * policy, but a suggestion is a positive claim and needs positive knowledge,
+ * so unreadable rows are neither moved off nor advertised — the same two
+ * refusals `ensureUsableDefault` and `accountsGrantingScope` make server-side.
+ * Among several full siblings, the most recently connected wins: the account
+ * the user just added is the one they mean.
+ */
+export function suggestBetterDefault<
+  A extends {
+    isDefault: boolean;
+    scopes: string | null;
+    connectedAt: string;
+    scopeStatus: ScopeStatus;
+  },
+>(accounts: A[]): A | null {
+  const current = accounts.find((a) => a.isDefault);
+  if (!current || current.scopes == null) return null;
+  if (grantState(current.scopeStatus, true) !== "none") return null;
+  const candidates = accounts
+    .filter(
+      (a) =>
+        !a.isDefault &&
+        a.scopes != null &&
+        grantState(a.scopeStatus, true) === "complete"
+    )
+    .sort(
+      (a, b) =>
+        new Date(b.connectedAt).getTime() - new Date(a.connectedAt).getTime()
+    );
+  return candidates[0] ?? null;
+}
+
 /** The badge label for each state. Deliberately not "Connected" for anything
  * short: that word is what this ticket exists to stop overclaiming. */
 export const GRANT_STATE_LABEL: Record<GrantState, string> = {

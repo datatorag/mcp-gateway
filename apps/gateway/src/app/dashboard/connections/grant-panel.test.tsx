@@ -19,6 +19,7 @@ import {
   GRANT_ALL_GRANTED,
   GRANT_NONE_GRANTED,
   GRANT_RECONNECT_LABEL,
+  GRANT_UNRECORDED,
 } from "./grant-copy";
 import type { ScopeStatus } from "./types";
 
@@ -142,10 +143,33 @@ describe("GrantPanel, the healthy cases", () => {
   it("collapses a full grant to one line where the surface asks for it", () => {
     const text = render({
       scopeStatus: status(ALL),
+      rawScopes: "https://www.googleapis.com/auth/gmail.modify",
       reassureWhenComplete: true,
     });
     expect(text).toContain(GRANT_ALL_GRANTED);
     expect(container.querySelectorAll("a")).toHaveLength(0);
+  });
+
+  /** SCRUM-147: "complete" for a null-scope row is fail-open POLICY, not a
+   * reading of the grant. The audit surface must not turn that policy into
+   * the positive claim that every service was granted — a claim nobody can
+   * actually read off the row. */
+  it("does not claim every service was granted when no scope record exists", () => {
+    const text = render({
+      scopeStatus: status(ALL),
+      rawScopes: null,
+      reassureWhenComplete: true,
+    });
+    expect(text).not.toContain(GRANT_ALL_GRANTED);
+    expect(text).toContain(GRANT_UNRECORDED);
+  });
+
+  /** And the honesty line is reassure-mode only: on surfaces that say nothing
+   * for a healthy row, an unreadable row stays silent too (fail-open, no
+   * nagging). */
+  it("stays silent for a null-scope row outside the audit surface", () => {
+    const text = render({ scopeStatus: status(ALL), rawScopes: null });
+    expect(text).toBe("");
   });
 
   it("renders nothing at all when the service is not connected", () => {
