@@ -82,8 +82,9 @@ Calendar connector exposes the same nine, by the same names.
 Three of them: **Gmail, Calendar, Drive. That is the entire native Google surface.** No Sheets,
 no Docs, no Slides, no Contacts, no Tasks. Not thin versions, none at all.
 
-Gmail is 27 tools and, as of August, sends. Calendar is 9 and is excellent. Drive is 11,
-including share, permissions, copy and trash.
+Gmail is the big one and, as of August, it sends. Calendar is excellent. Drive covers share,
+permissions, copy and trash. Exact counts are in the table below, next to the date they were
+taken, because a competitor's tool count rots exactly as fast as our own.
 
 **Both are better than ours at what they cover.** Our Calendar has 6 tools against their 9: we
 ship no `suggest_time` and no `respond_to_event`. Our Drive has 3 against their 11, because our
