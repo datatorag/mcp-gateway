@@ -196,6 +196,7 @@ edit means the design-time check was skipped.
 | Blog / changelog / docs parsers | `apps/gateway/src/lib/{blog,changelog,docs}.ts` |
 | Docs connector grouping registry | `apps/gateway/src/lib/docs-connectors.ts` |
 | Content markdown | `apps/gateway/content/{blog,changelog,docs}/*.md` |
+| Short share links `/r/<slug>` — the slug→target map (one line per link; targets pinned to real routes by its test) + resolver; the route is `src/app/r/[slug]/route.ts` (307, relative Location, noindex) | `apps/gateway/src/lib/share-links.ts` |
 | Tool detail page (DB + README fallback) | `apps/gateway/src/app/tools/[slug]/page.tsx` |
 | Home page (DB-driven integrations grid, footer links) | `apps/gateway/src/app/page.tsx` |
 | Navbar (`flatItems` — desktop + mobile nav source of truth) | `apps/gateway/src/components/navbar.tsx` |

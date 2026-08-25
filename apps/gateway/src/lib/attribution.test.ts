@@ -173,6 +173,22 @@ describe("deriveChannel", () => {
     );
   });
 
+  it("reads a social medium as Organic Social even when the referrer is stripped", () => {
+    // Our own /r/<slug> share links tag utm_medium=social. Reddit does not
+    // reliably send a referrer, and without this branch the link we minted
+    // to make Reddit measurable would attribute as "Other".
+    expect(
+      deriveChannel(attribution({ a_utm_medium: "social", a_utm_source: "reddit" }))
+    ).toBe("Organic Social");
+    expect(
+      deriveChannel(attribution({ a_utm_medium: "social-media", a_utm_source: "x" }))
+    ).toBe("Organic Social");
+    // Paid still wins: a paid medium is a paid medium.
+    expect(
+      deriveChannel(attribution({ a_utm_medium: "cpc", a_utm_source: "reddit" }))
+    ).toBe("Paid Social");
+  });
+
   it("recognises email campaigns", () => {
     expect(
       deriveChannel(attribution({ a_utm_medium: "email", a_utm_source: "brevo" }))

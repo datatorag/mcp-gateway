@@ -98,6 +98,12 @@ export const EVENTS = {
    * connect_card_shown → connect_card_clicked is the card's copy/trust gap;
    * connect_card_clicked → account_connected is OAuth drop-off. */
   CONNECT_CARD_CLICKED: "connect_card_clicked",
+  /** One hit on a `/r/<slug>` share link (SCRUM-152), counted server-side at
+   * the redirect so it is independent of whether the landing page's script
+   * ran. `slug`, `known` and `campaign` only — no request data. `known:false`
+   * is the count of typos in comments we cannot edit; the landing itself is
+   * measured by the utm tags the redirect attaches, not by this event. */
+  SHARE_LINK_HIT: "share_link_hit",
   WIZARD_CLIENT_SELECTED: "wizard_client_selected",
   WIZARD_STEP_COMPLETED: "wizard_step_completed",
 } as const;

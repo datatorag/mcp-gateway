@@ -187,6 +187,20 @@ const PAID_SOCIAL_SOURCES = [
   "reddit",
 ];
 
+// utm_medium values that mean an unpaid social post, matched whole. Same set
+// the analytics vendor uses for its Organic Social bucket. Needed because our
+// own /r/<slug> share links tag `social`, and Reddit does not reliably send a
+// referrer — without this the links minted to make Reddit measurable would
+// attribute as "Other".
+const SOCIAL_MEDIUMS = [
+  "social",
+  "social-network",
+  "social-media",
+  "sm",
+  "social network",
+  "social media",
+];
+
 const PAID_MEDIUMS = ["cpc", "ppc", "paid", "paidsearch", "paid_search", "cpm", "cpv", "retargeting"];
 const EMAIL_MEDIUMS = ["email", "e-mail", "newsletter"];
 
@@ -220,6 +234,8 @@ export function deriveChannel(a: Attribution): string {
   }
 
   if (EMAIL_MEDIUMS.includes(medium) || source === "email") return "Email";
+
+  if (SOCIAL_MEDIUMS.includes(medium)) return "Organic Social";
 
   if (domain) {
     if (matchesDomain(domain, SEARCH_DOMAINS)) return "Organic Search";

@@ -79,5 +79,8 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     console.warn("[sitemap] tools query failed, omitting /tools URLs", err);
   }
 
+  // `/r/<slug>` share links (src/lib/share-links.ts) are deliberately absent:
+  // they are redirects, not content, and must not compete with their targets.
+  // `sitemap.test.ts` pins this.
   return [...staticRoutes, ...posts, ...docs, ...skills, ...personas, ...tools];
 }
