@@ -40,7 +40,7 @@ If you're a founder building an AI assistant for your customers, Composio's shap
 | Google and Atlassian behind one endpoint | Separate toolkits you wire up yourself | Yes, one endpoint, one sign-in |
 | Self-host on an open-source core | Enterprise plans only, closed core | Yes, MIT, Docker Compose |
 | Where credentials live on self-serve plans | Composio's cloud | Our database on hosted plans; self-host and they stay in your own Postgres |
-| Where your Workspace content lives | Varies by toolkit | Passed through, never stored |
+| Where your Workspace content lives | Varies by toolkit | Passed through; the gateway stores nothing ([privacy](/privacy)) |
 | Total integration count | 1,000+ toolkits | 8 Google services + Jira and Confluence, built deep |
 | Formal attestations | SOC 2 Type II, ISO 27001 | CASA Tier 2 passed, Google-verified (June 2026) |
 

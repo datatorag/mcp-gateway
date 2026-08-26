@@ -3,6 +3,7 @@ title: "You Can Self-Host a Google Workspace MCP for Free. The OAuth Verificatio
 excerpt: "The open-source Google Workspace MCP servers are genuinely good. The cost isn't the code. It's the Google Cloud project, the consent screen, and the verification that comes after."
 date: "2026-06-29"
 updated: "2026-07-30"
+updatedNote: "August 26, 2026: narrowed an overbroad privacy claim. The pass-through statement implied nothing is stored anywhere; the gateway keeps nothing, but the hosted agent on our own site stores its conversation threads. The privacy policy is now linked from the paragraph."
 author: "Manuel Yang"
 category: "Comparison"
 tags: ["self-hosting", "google-workspace", "mcp", "open-source", "oauth", "alternative"]
@@ -63,7 +64,7 @@ This isn't open versus closed, and I want to be straight about that. We open-sou
 | Multi-account under one endpoint | Yes, you wire it up | Yes | Yes |
 | Token storage and rotation on you | Yes | No | Yes, on your infra |
 | Hosting and uptime on you | Yes | No | Yes |
-| Data never leaves your servers | Yes | No (pass-through, never stored) | Yes |
+| Data never leaves your servers | Yes | No (pass-through; the gateway stores nothing, [see privacy](/privacy)) | Yes |
 | Open source (MIT) | Yes | Yes (same code) | Yes |
 
 Notice the OSS server actually covers more Google surface than we do. It has Forms and Apps Script. We don't. I'm not going to spin that. If raw Google service count is your metric, the OSS project wins. Our argument was never tool count.

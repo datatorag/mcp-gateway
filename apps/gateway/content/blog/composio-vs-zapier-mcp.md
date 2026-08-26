@@ -2,6 +2,7 @@
 title: "Composio vs Zapier MCP: Two Different Bets (and the Question Neither Answers)"
 excerpt: "Composio is integration infrastructure for developers shipping agents. Zapier MCP is automation breadth for people who already live in Zaps. If the actual question is 'how do I get Claude working deep in my Google Workspace', both answers come up short."
 date: "2026-07-23"
+updatedNote: "August 26, 2026: narrowed an overbroad privacy claim. The pass-through statement implied nothing is stored anywhere; the gateway keeps nothing, but the hosted agent on our own site stores its conversation threads. The privacy policy is now linked from the paragraph."
 author: "Manuel Yang"
 category: "Comparison"
 tags: ["composio", "zapier", "mcp", "comparison", "ai-agents"]
@@ -65,7 +66,9 @@ Three things you can't easily bolt onto either alternative:
 
 Multi-account in one prompt. A work Gmail, a personal one, and a shared team inbox all connect under one endpoint, and Claude can target one or search across all of them.
 
-Nothing stored. The gateway is pass-through: requests go to Google on your behalf and results come straight back. There's no copy of your inbox on our servers, because there's no copy at all. And it's Google-verified: we passed CASA Tier 2, the security review Google requires for restricted Gmail and Drive scopes, with zero findings, verified June 2026.
+Nothing stored. The gateway is pass-through: requests go to Google on your behalf and results come straight back. There's no copy of your inbox on our servers. And it's Google-verified: we passed CASA Tier 2, the security review Google requires for restricted Gmail and Drive scopes, with zero findings, verified June 2026.
+
+One honest caveat, because this paragraph used to stop at the pass-through claim. The gateway keeps nothing, but if you use the **hosted agent** on our own site, that conversation is stored so the thread persists, and whatever the agent quoted into it is stored with it. The [privacy policy](/privacy) is the full statement.
 
 Self-hosting that isn't an enterprise upsell. The core is MIT-licensed and runs on Docker Compose with your own Postgres. If your security team wants the data on infrastructure they control, that's a clone, not a contract.
 
