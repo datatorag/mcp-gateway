@@ -145,9 +145,12 @@ for reading, copy from source.
 **Treat `content/skills/*.md` as security-relevant content, not marketing copy.** The
 fenced block is copied verbatim by readers and then executed by their agent against
 their own OAuth-scoped mailbox, calendar and files. An edit here ships instructions that
-run with every reader's tokens, so the rails inside each skill ("read and mark-read
-only, never delete, archive or send") are load-bearing and must survive edits. Review a
-change to this directory like code, not like prose. Also note `marked` output is not
+run with every reader's tokens, so the rails inside each skill are load-bearing and must
+survive edits. Rails are stated as the NARROWEST true claim, and widening one is a
+deliberate act, never a side effect: inbox-triage's rails moved from "it never sends" to
+"it sends exactly one message, self-addressed, and nothing else" (SCRUM-159) because the
+narrow specific claim is what a reader deciding whether to grant scopes actually needs.
+Review a change to this directory like code, not like prose. Also note `marked` output is not
 sanitised (same as blog/docs), so raw HTML in a skill file would render as-is.
 
 `getRelatedSkills` ranks by shared connector (derived from tool-name prefixes via
