@@ -294,6 +294,29 @@ export function ConnectorComparison() {
                   {group.service}
                 </th>
               </tr>
+              {/* The column labels REPEATED under every service heading.
+                  The table is 58 rows across nine services, so the real
+                  header at the top is off screen for almost all of it, and a
+                  reader partway down has two unlabelled columns of ticks and
+                  has to remember which side is ours. Worse on mobile, where
+                  the viewport shows a handful of rows at a time.
+
+                  aria-hidden because these are a VISUAL aid only: the thead
+                  above already associates every cell with its column for a
+                  screen reader, and announcing the same two labels nine more
+                  times would be noise, not help. */}
+              <tr
+                aria-hidden="true"
+                className="border-b border-border text-[10px] uppercase tracking-wider text-muted-foreground"
+              >
+                <td className="py-2 pr-4" />
+                <td className="px-1 py-2 text-center font-medium sm:px-2">
+                  Built-in
+                </td>
+                <td className="px-1 py-2 text-center font-medium text-primary sm:px-2">
+                  DataToRAG
+                </td>
+              </tr>
               {group.rows.map((row) => (
                 <tr className="border-b border-border/60" key={row.capability}>
                   <th
