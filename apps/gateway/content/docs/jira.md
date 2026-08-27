@@ -25,10 +25,24 @@ The Jira tools let your AI assistant search, create, update, and move issues thr
 | `jira_get_attachment` | Get attachment metadata by ID: filename, size, MIME type, content URL |
 | `jira_list_fields` | List all available fields (system + custom) to discover field IDs for creates/updates |
 | `jira_search_users` | Search users by name, username, or email. Returns display names and account IDs |
+| `jira_delete_issue` | Permanently delete an issue. See the warning below before using it |
 
 ## Required scopes
 
 - `read:jira-work`, `write:jira-work`, `read:jira-user`
+
+## Deleting an issue
+
+`jira_delete_issue` cannot be undone through the API. Deleted issues do not go
+to a trash or an archive, and Jira does not reuse the key, so every link,
+branch name and comment pointing at it breaks permanently.
+
+Prefer transitioning the issue to Done or Won't Do, which keeps its history and
+leaves the key resolvable.
+
+If you do delete: an issue with subtasks is rejected outright unless
+`delete_subtasks` is true, and passing that destroys the subtasks along with
+the parent. Linked issues are not deleted, only subtasks.
 
 ## Multiple accounts
 
