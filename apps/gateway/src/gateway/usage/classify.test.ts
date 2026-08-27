@@ -65,7 +65,7 @@ describe("classifyOutcome", () => {
   });
 
   it("emits-but-never-meters gateway built-ins, on success AND user_error", () => {
-    // SCRUM-66 / f-050: built-ins get the tool_call event (their silence was
+    // SCRUM-66: built-ins get the tool_call event (their silence was
     // the defect) but must never reach a billing sink. Both non-thrown paths
     // pinned — a builtin user_error metering would be the same hole reopened
     // one branch over.

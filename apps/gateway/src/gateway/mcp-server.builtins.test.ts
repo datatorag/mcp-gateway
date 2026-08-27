@@ -1,5 +1,5 @@
 /**
- * Built-in tools emit tool_call (SCRUM-66 / f-050).
+ * Built-in tools emit tool_call (SCRUM-66).
  *
  * The defect was an OMISSION: echo and list_connected_accounts answered on
  * the wire and emitted nothing, and nothing alarmed because the silence was

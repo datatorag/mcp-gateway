@@ -1,5 +1,5 @@
 /**
- * Built-in outcomes through trackToolCall (SCRUM-66 / f-050): the event is
+ * Built-in outcomes through trackToolCall (SCRUM-66): the event is
  * emitted with metered:false and the SAME property set as a plugin event,
  * and nothing billing reads is touched.
  *

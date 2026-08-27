@@ -15,7 +15,7 @@ export interface ClassifyInput {
   toolName?: string;
   /** True when the tool is a gateway built-in (echo, list_connected_accounts —
    * served by this process, no plugin behind them). Built-ins EMIT tool_call
-   * like every other tool; their silence was f-050, and the silence was the
+   * like every other tool; their silence was a real regression, and the silence was the
    * defect precisely because it was undocumented — a third built-in inherited
    * it by default. They never METER: the paid tier sells plugin-tool volume,
    * and a connectivity probe is not that. A flag rather than a name list here,
