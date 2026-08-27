@@ -2,6 +2,8 @@
 title: "Zapier MCP Connects 9,000 Apps. We Went Deep on Google Workspace Instead."
 excerpt: "Zapier MCP is the widest way to hand Claude tools. Its Google Workspace actions stay shallow, though. Here's the tradeoff, and where a focused gateway wins."
 date: "2026-06-29"
+updated: "2026-08-27"
+updatedNote: "August 27, 2026: narrowed an overbroad privacy claim. The pass-through statement said we do not store your data, unqualified. The gateway keeps nothing, but the hosted agent on our own site stores its conversation threads. The privacy policy is now linked from the paragraph."
 author: "Manuel Yang"
 category: "Comparison"
 tags: ["zapier", "mcp", "comparison", "google-workspace", "alternative"]
@@ -85,7 +87,7 @@ The tell is what happens at the handoff. With Zapier MCP, Claude does the thinki
 
 There's a quieter difference worth naming. Every successful Zapier MCP call spends tasks from your plan's shared budget. For a person clicking through Zaps now and then, that's a non-issue. For an agent that fires a dozen tool calls to finish one request, it adds up faster than you'd guess, and it draws down the same budget your other automations use.
 
-DataToRAG passes requests straight through to Google on your behalf and doesn't store your data on the way. The economics are different because the architecture is different.
+DataToRAG passes requests straight through to Google on your behalf, and the gateway keeps nothing on the way. One caveat, because the unqualified version of this line was too broad: if you use the **hosted agent** on our own site, that conversation is stored so the thread persists, and whatever the agent quoted into it is stored with it. Connect your own client straight to the gateway and that does not apply. The [privacy policy](/privacy) states what is kept and for how long. The economics are different because the architecture is different.
 
 ![A 10-call task two ways: Zapier MCP draws down a shared plan task budget on every call, while DataToRAG passes each call straight through to Google with no per-call meter](/blog/zapier-task-cost-vs-passthrough.png)
 
