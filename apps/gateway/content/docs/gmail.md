@@ -8,6 +8,8 @@ connector: "google-workspace"
 
 The Gmail connector gives your AI assistant full access to your inbox: searching, reading, composing, labeling, and organizing messages.
 
+![A gmail_send call with its to, subject and body arguments, and the message id, thread id and SENT label it returned](/docs/gmail-send.png)
+
 ## Available operations
 
 | Tool | Description |

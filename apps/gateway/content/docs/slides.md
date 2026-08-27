@@ -8,6 +8,8 @@ connector: "google-workspace"
 
 The Slides connector lets your AI assistant read presentation content, create new decks, and apply batch updates to slides.
 
+![A slides_batch_update call inserting text into an existing slide's body placeholder, with the revision id it returned](/docs/slides-batch-update.png)
+
 ## Available operations
 
 | Tool | Description |

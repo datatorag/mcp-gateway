@@ -7,6 +7,8 @@ section: "general"
 
 Google Workspace is DataToRAG's flagship connector. One OAuth flow gives your AI assistant access to all eight core services — with multi-account support and tools tuned for token efficiency.
 
+![Two gmail_search calls in one turn, one against a work account and one against a personal account, each naming the account it targeted](/docs/gmail-two-accounts.png)
+
 ## Services
 
 | Service | Summary |

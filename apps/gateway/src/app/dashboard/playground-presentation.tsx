@@ -214,7 +214,32 @@ export function messageText(message: PlaygroundMessage): string {
  * `approval-responded` ("Responded") and one that was never decided stays at
  * `approval-requested` ("Awaiting Approval"). Three distinct badges, from the
  * standard part, per call rather than per batch. */
-export function ToolCard({ part }: { part: AnyToolPart }) {
+/** Whether a given tool card renders expanded. `true` expands every card;
+ * a list expands only the named ones, matched on the SHORT name (the one
+ * the card shows), so a caller never has to know the `<slug>__<tool>`
+ * namespacing the gateway serves. */
+export function shouldExpandTool(
+  expand: boolean | readonly string[] | undefined,
+  part: AnyToolPart
+): boolean {
+  if (!expand) return false;
+  if (expand === true) return true;
+  return expand.includes(shortToolName(toolPartName(part)));
+}
+
+export function ToolCard({
+  part,
+  defaultOpen = false,
+}: {
+  part: AnyToolPart;
+  /** Render the card already expanded. Defaults to false, which is the
+   * playground's and the landing demo's behaviour and is unchanged. Exists
+   * for docs/marketing captures, where the arguments and result ARE the
+   * subject: a collapsed card documents only that a tool ran. The expanded
+   * state is a real one a reader reaches by clicking, not a capture-only
+   * rendering, which is the condition for showing it in a screenshot. */
+  defaultOpen?: boolean;
+}) {
   const name = shortToolName(toolPartName(part));
   // Internal gateway tools show what happened in the user's words and wear a
   // per-action glyph; everything else keeps its literal name and its derived
@@ -226,7 +251,7 @@ export function ToolCard({ part }: { part: AnyToolPart }) {
     <InternalIcon className="size-4 text-muted-foreground" />
   ) : undefined;
   return (
-    <Tool className="mb-0 text-xs">
+    <Tool className="mb-0 text-xs" defaultOpen={defaultOpen}>
       {/* `title` overrides the header's own name derivation, which would
           otherwise show the full `<slug>__<tool>` type. The two branches exist
           because the header's props are a discriminated union on `type`. */}
@@ -382,6 +407,11 @@ interface MessageRowProps {
    * Optional so the scripted demo and any other direct caller keep the
    * embedded widget's size without restating it. */
   textSize?: MessageTextSize;
+  /** Render tool cards already expanded. `false` everywhere in the product.
+   * A LIST of short tool names expands only those, which is what docs
+   * captures actually want: expanding every card buries the one call the
+   * page is about under the setup calls around it. */
+  expandTools?: boolean | readonly string[];
   onDecide: ConfirmCardProps["onDecide"];
   onRegenerate: () => void;
   feedback: Record<string, FeedbackState>;
@@ -404,6 +434,7 @@ export const MessageRow = memo(function MessageRow({
   busy,
   awaitingConfirm,
   textSize = "xs",
+  expandTools = false,
   onDecide,
   onRegenerate,
   feedback,
@@ -452,7 +483,10 @@ export const MessageRow = memo(function MessageRow({
               // the parent: space-y puts its margin on the ToolCard, whose
               // mb-0 silently cancels it.
               <div key={key}>
-                <ToolCard part={part} />
+                <ToolCard
+                  defaultOpen={shouldExpandTool(expandTools, part)}
+                  part={part}
+                />
                 {/* The confirm card is bound to the SAME part: an approval
                     request is a state of the tool call, not a message of its
                     own, so the card appears under the tool it gates and
@@ -523,6 +557,11 @@ export interface MessageListProps {
   /** Message-body scale. Defaults to the embedded widget's size, so a caller
    * that does not care keeps exactly what it had. */
   textSize?: MessageTextSize;
+  /** Render tool cards already expanded. `false` everywhere in the product.
+   * A LIST of short tool names expands only those, which is what docs
+   * captures actually want: expanding every card buries the one call the
+   * page is about under the setup calls around it. */
+  expandTools?: boolean | readonly string[];
   onDecide: ConfirmCardProps["onDecide"];
   onRegenerate: () => void;
   feedback: Record<string, FeedbackState>;
@@ -539,6 +578,7 @@ export function MessageList({
   erroredIds,
   awaitingConfirm,
   textSize = "xs",
+  expandTools = false,
   onDecide,
   onRegenerate,
   feedback,
@@ -568,6 +608,7 @@ export function MessageList({
             awaitingConfirm={awaitingConfirm}
             busy={busy}
             comments={comments}
+            expandTools={expandTools}
             feedback={feedback}
             isLast={isLast}
             key={message.id}

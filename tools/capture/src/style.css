@@ -1,11 +1,19 @@
-/* The product's real stylesheet — tokens, shadcn theme, prose — so captures
+/* The product's real stylesheet, tokens, shadcn theme, prose, so captures
    are styled by the same CSS as production, not an approximation of it. */
 @import "../../../apps/gateway/src/app/globals.css";
 
-/* Tailwind v4 auto-detects sources relative to the imported stylesheet's
-   project (the gateway). Shots in THIS project also use utility classes, so
-   register this tree as a source too. */
+/* Tailwind v4's automatic source detection does NOT reach the gateway from
+   here, despite globals.css being imported from it: detection is rooted at
+   THIS project, so utilities used only inside gateway components were never
+   generated. The failure is silent and asymmetric, which is what made it
+   survive, classes written in a shot file work, so layout looks right,
+   while the imported components lose their chrome (Card lost its border,
+   background and padding; Badge rendered as bare text in an unstyled box).
+   A capture that renders the real components but not their real styles is
+   the exact drift this project exists to prevent, so BOTH trees are
+   registered explicitly and neither is left to detection. */
 @source "../src";
+@source "../../../apps/gateway/src";
 
 /* next/font injects these variables in the app; outside Next the same faces
    are loaded by src/lib/fonts.ts and bound to their family names here. */
@@ -17,11 +25,28 @@
 
 /* Remotion seeks its own frame clock; CSS animations and transitions run on
    wall-clock time and desynchronize from it (a spinner mid-spin in one frame,
-   snapped elsewhere in the next). Kill all wall-clock motion globally — any
+   snapped elsewhere in the next). Kill all wall-clock motion globally, any
    motion a capture needs is driven from useCurrentFrame() instead. */
 *,
 *::before,
 *::after {
   animation: none !important;
   transition: none !important;
+}
+
+/* A STILL CANNOT SCROLL, so anything the product reveals by scrolling has to
+   wrap instead or it is simply absent from the capture. Tool-call payloads
+   are the worst case: an id or a long query runs past the card edge and the
+   clipped line reads as a rendering fault rather than as a value that
+   continues. Wrapping shows the whole value the product also shows, just
+   without the horizontal scroll a reader would use to get there.
+
+   Deliberately scoped to .capture-wrap-code, set by the docs shot, so the
+   social formats keep the product's exact line behaviour. This is the same
+   judgement as expanding a tool card: render a state the product genuinely
+   reaches, never one it cannot. */
+.capture-wrap-code pre,
+.capture-wrap-code code {
+  white-space: pre-wrap !important;
+  overflow-wrap: anywhere !important;
 }
