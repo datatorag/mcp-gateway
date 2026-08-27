@@ -42,7 +42,7 @@ type BuiltinResult = {
 /**
  * Gateway built-in tools — served by this process, no plugin behind them.
  *
- * This registry IS the metering boundary for built-ins (SCRUM-66 / f-050).
+ * This registry IS the metering boundary for built-ins (SCRUM-66).
  * ListTools appends exactly these definitions, and CallTool dispatches every
  * name found here through one shared path that emits a tool_call event with
  * `builtin: true` — which classifies to metered:false, so the event reaches
@@ -209,10 +209,12 @@ export function createMcpServer(
           rawArgs as Record<string, unknown> | undefined,
           { db, userId }
         );
-        // Same fire-and-forget shape as the plugin path below. f-050 was
-        // exactly this call missing: built-ins answered on the wire and were
-        // absent from analytics. `builtin: true` classifies to metered:false,
-        // so the event is emitted and the billing sinks never run.
+        // Same fire-and-forget shape as the plugin path below. This call
+        // going missing is a real regression we have shipped before: built-ins
+        // answered on the wire and were absent from analytics entirely, which
+        // reads as nobody using them rather than as a hole in the
+        // instrumentation. `builtin: true` classifies to metered:false, so the
+        // event is emitted and the billing sinks never run.
         void trackToolCall(db, {
           userId,
           toolName: name,
