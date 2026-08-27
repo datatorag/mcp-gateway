@@ -14,15 +14,22 @@ The Slides connector lets your AI assistant read presentation content, create ne
 
 | Tool | Description |
 |------|-------------|
-| `slides_get` | Read the content and structure of a presentation |
-| `slides_create` | Create a new presentation |
-| `slides_batch_update` | Apply multiple updates — add slides, insert text, replace content, modify layout |
+| `slides_get` | Read a presentation's content: slide `objectId`s, placeholder types (TITLE/BODY/SUBTITLE) and text, stripped of layout and styling data so a large deck still fits in context. Feed the returned `objectId`s to `slides_batch_update` |
+| `slides_create` | Create a presentation. Returns the `presentationId` and a `placeholder_map` per slide, mapping TITLE/BODY/SUBTITLE to their `objectId`s, so the first `insertText` needs no lookup |
+| `slides_batch_update` | Insert or replace text, add slides, delete objects and other edits, in the Google Slides API `batchUpdate` format. One call, applied in order |
 | `slides_delete` | Delete a presentation |
 
 ## Required scopes
 
 - `https://www.googleapis.com/auth/presentations`
 - `https://www.googleapis.com/auth/drive` (for create/delete)
+
+## Multiple accounts
+
+Every tool on this page takes an optional `account` argument: the email address
+of the connected Google account to act on. Omit it and the default account is
+used. Connect a personal and a work account and your assistant can read from
+one and write to the other in the same turn, without you switching profiles.
 
 ## Example prompts
 
