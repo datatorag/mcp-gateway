@@ -5,6 +5,7 @@ import { getAllDocs, getDocBySlug } from "@/lib/docs";
 import { SetupInstructions } from "@/components/setup-instructions";
 import { ServiceIcon, serviceFromSlug } from "@/components/service-icon";
 import { DocViewTracker } from "./view-tracker";
+import { DocsCta } from "../cta";
 
 // A doc's markdown can place `<!--setup-instructions-->` on its own line to
 // render the shared SetupInstructions component (the same client picker +
@@ -77,6 +78,13 @@ export default async function DocPage({ params }: Props) {
           />
         </>
       )}
+
+      {/* The conversion moment: the reader has just finished the page. The
+          sidebar CTA is always on screen and therefore easy to stop seeing;
+          this one is not. Placed ABOVE prev/next on purpose, because
+          prev/next offers more reading and would otherwise be the last
+          thing on the page. */}
+      <DocsCta variant="inline" />
 
       {/* Prev / Next navigation */}
       {(prev || next) && (
