@@ -257,16 +257,28 @@ export function ConnectorComparison() {
           than the viewport is what shows page background beside a full-bleed
           band. Removing `relative` brings that straight back. */}
       <div className="relative mt-12 overflow-x-auto">
-        <table className="w-full min-w-[30rem] border-collapse text-left text-sm">
+        {/* NO min-width below `sm`. The table used to be `min-w-[30rem]` (480px)
+            at every width, against a 342px wrapper on a 390px phone. Measured
+            before this change: Capability 100% visible, Built-in 77%,
+            DataToRAG 0% — the COMPETITOR column was the one on screen and ours
+            was entirely off it, on the table whose whole job is the comparison.
+            The scroll existed, but a reader has to discover it, and the default
+            view argued against us.
+
+            Below `sm` the table fits the wrapper and both value columns are
+            visible without scrolling; the capability label wraps instead, which
+            it can afford (longest is 27 characters). The 480px floor is kept
+            from `sm` up, where it fits comfortably. */}
+        <table className="w-full border-collapse text-left text-sm sm:min-w-[30rem]">
           <thead>
             <tr className="border-b border-border text-xs uppercase tracking-wider text-muted-foreground">
               <th className="py-3 pr-4 font-medium" scope="col">
                 <span className="sr-only">Capability</span>
               </th>
-              <th className="w-28 px-2 py-3 text-center font-medium" scope="col">
+              <th className="w-20 px-1 py-3 text-center font-medium sm:w-28 sm:px-2" scope="col">
                 Built-in
               </th>
-              <th className="w-28 px-2 py-3 text-center font-medium text-primary" scope="col">
+              <th className="w-20 px-1 py-3 text-center font-medium text-primary sm:w-28 sm:px-2" scope="col">
                 DataToRAG
               </th>
             </tr>
@@ -294,10 +306,10 @@ export function ConnectorComparison() {
                   >
                     {row.capability}
                   </th>
-                  <td className="px-2 py-3 text-center">
+                  <td className="px-1 py-3 text-center sm:px-2">
                     <Mark yes={row.builtIn} />
                   </td>
-                  <td className="px-2 py-3 text-center">
+                  <td className="px-1 py-3 text-center sm:px-2">
                     <Mark yes={row.ours} />
                   </td>
                 </tr>
