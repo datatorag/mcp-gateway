@@ -24,6 +24,7 @@ consensus that never existed.
 | Tests gaining a database dependency? | Avoided (a DB-free reading of the register) | **Accepted**, with the corollary that a DB-gated test that silently skips reports the passing value on failure, so skipping must become failing under validation | Ruling. `REQUIRE_DB=1` moves from bridge to design |
 | `credits_per_call` | Preserved as policy, optionally seeded from the plugin manifest | **Dropped.** All 88 rows at default, nothing reads it, built ahead of a billing model that never arrived | Ruling |
 | `enabled` | Preserved | **Kept** | Agreed |
+| The soft-delete column | `retired_at` (draft's coinage) | **`deleted_at`** — soft-delete is the conventional name; a nullable timestamp, never a boolean | Amendment, same day. Name only; the semantics were already a timestamp and already separate from `enabled` |
 | `read_only_hint` | A plugin fact, not gateway policy (disagreeing with the brief) | Verified from source and accepted | Draft's correction stands |
 | Failure history by leg | Registry leg has held since 08-11; snapshot leg never had a checklist | Verified and accepted as a genuine re-weighting of the problem | Draft's correction stands; it does not change the ordering, see above |
 
@@ -37,7 +38,7 @@ the design section and marked **(ruled)**.
 1. **The register is filled by the plugin process, on every start.** `startAll()`
    syncs each plugin's tools after its health check: UPSERT on
    `namespaced_name` refreshing **name, description and input schema** on every
-   row, gateway-owned columns untouched, a vanished tool soft-retired in its own
+   row, gateway-owned columns untouched, a vanished tool soft-deleted in its own
    column, and a hard refusal to act on a zero-tool answer. A plugin rollout is
    then exactly what it already has to be for the code to run — pull, build,
    restart — and the register learns as a consequence of the restart. "Code
@@ -174,10 +175,10 @@ two deliberate paths.
 | `listTools()` over the same Streamable HTTP transport the gateway already uses | Only the plugin is ground truth; this is the one call that asks it |
 | **(ruled)** UPSERT on `namespaced_name` (already `UNIQUE`): on every row, existing or new, write `name`, `description`, `input_schema_json`, `read_only_hint`, `updated_at` — **the whole shape, not the row set** | A tool can keep its name and change its shape while every count stays still. `sheets_read` gained `value_render_option`, the plugin shipped it, no user could reach it, and all three counts agreed throughout. A sync that reconciles names reproduces that exactly |
 | **Never touch `enabled` on an existing row** | The one policy column. It is the register's own opinion, and the plugin has none |
-| **(ruled)** A row for this server absent from the plugin's answer is **retired**: `retired_at = now()`. **Separate column from `enabled`.** `listUserToolRows` filters `enabled = true AND retired_at IS NULL`; `/tools/[slug]` hides retired rows the same way | `enabled = false` means *we chose to hide this*; `retired_at` means *the plugin no longer offers this*. Same visible result, opposite causes. Collapsed into one column, a re-enable resurrects a tool that no longer exists. Kept apart, a re-enable of a retired tool changes nothing, which is correct |
-| A retired tool that reappears is un-retired (`retired_at = NULL`); `enabled` is whatever it was | Reversible by construction. This is what makes delete-and-reinsert unnecessary and removes the current "refuse to shrink" guard's reason to exist |
-| **(ruled)** **A zero-tool answer aborts the sync for that server. Nothing is written.** Same for a transport error or a `listTools` that throws. Alert to Slack `alerts` | "Every tool was removed" and "the plugin is half-started, crashed, or answered before it finished loading" are indistinguishable by absence. A sync that trusted absence would retire the entire surface while the gateway reported itself healthy. The guard is explicit, not implied by the health check |
-| Any retire is logged with the names and posted to Slack `alerts` | Retiring is the only outcome that removes capability from a user, so it is the only one that must be impossible to miss. Both plugins answer `ListTools` from a static `allTools` array, so a *partial* answer is not possible today — see the falsification list for what changes if that stops being true |
+| **(ruled)** A row for this server absent from the plugin's answer is **soft-deleted**: `deleted_at = now()`. **Separate column from `enabled`.** `listUserToolRows` filters `enabled = true AND deleted_at IS NULL`; `/tools/[slug]` hides soft-deleted rows the same way | `enabled = false` means *we chose to hide this*; `deleted_at` means *the plugin no longer offers this*. Same visible result, opposite causes. Collapsed into one column, a re-enable resurrects a tool that no longer exists. Kept apart, a re-enable of a soft-deleted tool changes nothing, which is correct. **A nullable timestamp, not a boolean**: null is live; a value records *when* the plugin stopped offering the tool, which the alert needs and which separates a tool that vanished an hour ago from one that went months ago. A boolean throws that away for no saving |
+| A soft-deleted tool that reappears is undeleted (`deleted_at = NULL`); `enabled` is whatever it was | Reversible by construction. This is what makes delete-and-reinsert unnecessary and removes the current "refuse to shrink" guard's reason to exist |
+| **(ruled)** **A zero-tool answer aborts the sync for that server. Nothing is written.** Same for a transport error or a `listTools` that throws. Alert to Slack `alerts` | "Every tool was removed" and "the plugin is half-started, crashed, or answered before it finished loading" are indistinguishable by absence. A sync that trusted absence would soft-delete the entire surface while the gateway reported itself healthy. The guard is explicit, not implied by the health check |
+| Any soft-delete is logged with the names and posted to Slack `alerts` | Soft-deleting is the only outcome that removes capability from a user, so it is the only one that must be impossible to miss. Both plugins answer `ListTools` from a static `allTools` array, so a *partial* answer is not possible today — see the falsification list for what changes if that stops being true |
 | Record `mcp_servers.last_commit_sha` (`git rev-parse HEAD` in the checkout — the column exists and has never been written) and a new `mcp_servers.tools_synced_at` | The register then names *which plugin commit* it reflects, and *when it last asked*. Both are what every verification leg currently reconstructs by hand, and `tools_synced_at` is what the test-side freshness check reads |
 
 What this removes from the runbook: the in-container script, the "refuse to
@@ -212,7 +213,7 @@ snapshot. The snapshot's write-side comments are all of the form "why this is
 NOT a read", so they belong next to the read list too.
 
 The snapshot's two consumers, rewired to the register (`tools ⋈ mcp_servers
-WHERE status = 'active' AND enabled AND retired_at IS NULL`):
+WHERE status = 'active' AND enabled AND deleted_at IS NULL`):
 
 - **`lib/skills.test.ts`** — a published skill may only name tools in the
   register. Same assertion, different source. Becomes DB-gated.
@@ -271,7 +272,7 @@ overage", not "priced tools".
 | plugin annotations | yes, compile-enforced | the plugin's own claim about itself, recorded not trusted |
 | `KNOWN_READ_TOOLS` | yes | gateway policy: what runs unasked. Must never derive from anything the plugin controls |
 | `tools.enabled` | yes, in the DB | the register's own opinion: what is available. The plugin has none |
-| `tools` mirrored columns, `retired_at` | **derived, at plugin start** | — |
+| `tools` mirrored columns, `deleted_at` | **derived, at plugin start** | — |
 | `registry-snapshot.ts` | **deleted** | — |
 | `credits_per_call` | **deleted** | — |
 
@@ -280,7 +281,7 @@ overage", not "priced tools".
 | Placement | What it would mean here | Failure mode | Verdict |
 |---|---|---|---|
 | **Build time** (plugin build emits a manifest the gateway reads) | `tsc` in the plugin writes `tools.json`; gateway reads it from the checkout | The build can succeed while the running process serves something else (a stale `server/` dir, a failed binary download). The gateway would trust a file about a process instead of the process | rejected; the running process is the truth |
-| **Deploy time / process start** (the gateway asks the running plugin) | `syncTools` after health, on `startAll` and install | A plugin that boots wrong-but-non-empty is mirrored faithfully. Mitigated by health-before-sync, zero-answer refusal, soft retire, Slack alert. Moves the review point to before the restart, where the plugin's suite already sits | **chosen** |
+| **Deploy time / process start** (the gateway asks the running plugin) | `syncTools` after health, on `startAll` and install | A plugin that boots wrong-but-non-empty is mirrored faithfully. Mitigated by health-before-sync, zero-answer refusal, soft delete, Slack alert. Moves the review point to before the restart, where the plugin's suite already sits | **chosen** |
 | **Migration** (a drizzle migration inserts rows) | Tool rows as SQL in `packages/db/drizzle/` | Ties tool changes to gateway deploys — the lockstep the ticket forbids. Puts plugin facts under the gateway's migration journal, so a plugin rollback becomes a migration rollback | rejected |
 | **On demand, committed** (`registry:pull` → a generated file) | The first draft's leg 3 | Stale until someone runs it; a back-office list by another name | rejected by ruling |
 
@@ -347,15 +348,15 @@ Why it lost, in two parts — the draft's and the ruling's:
 
 ## Rollout order — gateway only, no lockstep
 
-1. **Migration**: add `tools.retired_at timestamptz NULL` and
+1. **Migration**: add `tools.deleted_at timestamptz NULL` and
    `mcp_servers.tools_synced_at timestamptz NULL`; drop
    `tools.credits_per_call`. Additive except the drop, and the drop removes a
    column nothing reads.
 2. **`syncTools`** replaces `discoverTools`; `startAll()` calls it after
-   health; `listUserToolRows` and `/tools/[slug]` filter `retired_at IS NULL`.
+   health; `listUserToolRows` and `/tools/[slug]` filter `deleted_at IS NULL`.
    Tested on the testcontainers harness: upsert refreshes description and
    schema on a row whose name did not change; upsert preserves `enabled =
-   false`; an absent tool is retired and un-retired on return, `enabled`
+   false`; an absent tool is soft-deleted and undeleted on return, `enabled`
    untouched either way; a zero-tool answer writes nothing and alerts; a
    transport error writes nothing; a second identical sync writes only
    `updated_at` and `tools_synced_at`; the crash-respawn path does not sync.
@@ -386,7 +387,7 @@ any order.
 
 Add the snapshot leg to the rollout checklist as the third system, in words
 that say it is a gateway commit. This is the cheap option, it is the right
-thing for the weeks between now and the deploy, and it is retired by step 4.
+thing for the weeks between now and the deploy, and it is removed by step 4.
 
 ## What would change this design — re-checked against the ruled shape
 
@@ -399,12 +400,12 @@ they are higher than in the first draft.
   spreads two arrays) and answer `ListTools` from it, so an answer is either
   complete or absent, and absence is refused. **Does not fire.** If a plugin
   ever registers tools lazily, the zero-answer guard is no longer sufficient:
-  the retire rule must then require the same absence on two consecutive syncs.
+  the soft-delete rule must then require the same absence on two consecutive syncs.
   Design that in before such a plugin is installed, not after.
 - **A second gateway instance.** Production compose runs one `gateway`
   service; the `deploy` block is a memory limit, not replicas. **Does not
   fire.** Two instances syncing one server row is fine for upserts and a race
-  for retires; horizontal scaling would need a per-server advisory lock or the
+  for soft-deletes; horizontal scaling would need a per-server advisory lock or the
   sync moved out of `startAll` into a single job.
 - **A hot-reload path for plugins.** The only respawn is crash-recovery, which
   runs the same checkout and is deliberately excluded from sync. **Does not
