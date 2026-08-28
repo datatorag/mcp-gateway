@@ -5,6 +5,7 @@ situation: "The spreadsheet is the system. Everything real about how we operate 
 order: 4
 skills:
   - sheet-as-knowledge-base
+  - reddit-harvester
   - weekly-capture
   - gmail-attachments-to-drive
   - document-to-deck
