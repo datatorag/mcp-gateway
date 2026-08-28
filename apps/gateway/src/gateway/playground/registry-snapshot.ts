@@ -110,7 +110,7 @@ export const REGISTRY_CLASSIFICATION: ReadonlyArray<readonly [string, "read" | "
   ["gws-mcp__sheets_create", "write"],
   ["gws-mcp__sheets_delete", "write"],
   ["gws-mcp__sheets_delete_tab", "write"],
-  ["gws-mcp__sheets_find_rows", "write"],
+  ["gws-mcp__sheets_find_rows", "read"],
   ["gws-mcp__sheets_format_range", "write"],
   ["gws-mcp__sheets_format_table", "write"],
   ["gws-mcp__sheets_read", "read"],
