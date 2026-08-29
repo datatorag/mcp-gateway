@@ -25,10 +25,11 @@ consensus that never existed.
 | `credits_per_call` | Preserved as policy, optionally seeded from the plugin manifest | **Dropped.** All 88 rows at default, nothing reads it, built ahead of a billing model that never arrived | Ruling |
 | `enabled` | Preserved | **Kept** | Agreed |
 | The soft-delete column | `retired_at` (draft's coinage) | **`deleted_at`** — soft-delete is the conventional name; a nullable timestamp, never a boolean | Amendment, same day. Name only; the semantics were already a timestamp and already separate from `enabled` |
+| When is a tool soft-deleted? | Absent once; correct today because both plugins serve a static `allTools`, flagged as a coupling to a plugin property | **Absent on two consecutive syncs.** Ruled for the *partial-answer* case available today, not the lazy-plugin hypothetical the draft raised: the zero guard cannot see a plugin that answers 60 of 67 | Ruling, same day. Mechanism (`last_seen_at`) left to this document; chosen and argued in the design section |
 | `read_only_hint` | A plugin fact, not gateway policy (disagreeing with the brief) | Verified from source and accepted | Draft's correction stands |
 | Failure history by leg | Registry leg has held since 08-11; snapshot leg never had a checklist | Verified and accepted as a genuine re-weighting of the problem | Draft's correction stands; it does not change the ordering, see above |
 
-Three mechanics the ruling settled, each with an incident behind it, are in
+Four mechanics the ruling settled, each with an incident or a live failure behind it, are in
 the design section and marked **(ruled)**.
 
 ## Recommendation
@@ -39,7 +40,8 @@ the design section and marked **(ruled)**.
    syncs each plugin's tools after its health check: UPSERT on
    `namespaced_name` refreshing **name, description and input schema** on every
    row, gateway-owned columns untouched, a vanished tool soft-deleted in its own
-   column, and a hard refusal to act on a zero-tool answer. A plugin rollout is
+   column only after two consecutive absences, and a hard refusal to act on a
+   zero-tool answer. A plugin rollout is
    then exactly what it already has to be for the code to run — pull, build,
    restart — and the register learns as a consequence of the restart. "Code
    live in the container, invisible to every client" stops being a reachable
@@ -175,11 +177,29 @@ two deliberate paths.
 | `listTools()` over the same Streamable HTTP transport the gateway already uses | Only the plugin is ground truth; this is the one call that asks it |
 | **(ruled)** UPSERT on `namespaced_name` (already `UNIQUE`): on every row, existing or new, write `name`, `description`, `input_schema_json`, `read_only_hint`, `updated_at` — **the whole shape, not the row set** | A tool can keep its name and change its shape while every count stays still. `sheets_read` gained `value_render_option`, the plugin shipped it, no user could reach it, and all three counts agreed throughout. A sync that reconciles names reproduces that exactly |
 | **Never touch `enabled` on an existing row** | The one policy column. It is the register's own opinion, and the plugin has none |
-| **(ruled)** A row for this server absent from the plugin's answer is **soft-deleted**: `deleted_at = now()`. **Separate column from `enabled`.** `listUserToolRows` filters `enabled = true AND deleted_at IS NULL`; `/tools/[slug]` hides soft-deleted rows the same way | `enabled = false` means *we chose to hide this*; `deleted_at` means *the plugin no longer offers this*. Same visible result, opposite causes. Collapsed into one column, a re-enable resurrects a tool that no longer exists. Kept apart, a re-enable of a soft-deleted tool changes nothing, which is correct. **A nullable timestamp, not a boolean**: null is live; a value records *when* the plugin stopped offering the tool, which the alert needs and which separates a tool that vanished an hour ago from one that went months ago. A boolean throws that away for no saving |
+| **(ruled)** A row for this server absent from the plugin's answer on **two consecutive syncs** is **soft-deleted**: `deleted_at = now()`. Mechanism: every tool the plugin reports gets `last_seen_at = now()`; a tool it does not report is soft-deleted only if its `last_seen_at` is older than the **previous** successful sync (`mcp_servers.tools_synced_at` as it stood before this run). A first absence writes nothing to the row and posts a warning naming the tool. **Separate column from `enabled`.** `listUserToolRows` filters `enabled = true AND deleted_at IS NULL`; `/tools/[slug]` hides soft-deleted rows the same way | `enabled = false` means *we chose to hide this*; `deleted_at` means *the plugin no longer offers this*. Same visible result, opposite causes. Collapsed into one column, a re-enable resurrects a tool that no longer exists. Kept apart, a re-enable of a soft-deleted tool changes nothing, which is correct. **A nullable timestamp, not a boolean**: null is live; a value records *when* the plugin stopped offering the tool, which the alert needs and which separates a tool that vanished an hour ago from one that went months ago. A boolean throws that away for no saving |
 | A soft-deleted tool that reappears is undeleted (`deleted_at = NULL`); `enabled` is whatever it was | Reversible by construction. This is what makes delete-and-reinsert unnecessary and removes the current "refuse to shrink" guard's reason to exist |
 | **(ruled)** **A zero-tool answer aborts the sync for that server. Nothing is written.** Same for a transport error or a `listTools` that throws. Alert to Slack `alerts` | "Every tool was removed" and "the plugin is half-started, crashed, or answered before it finished loading" are indistinguishable by absence. A sync that trusted absence would soft-delete the entire surface while the gateway reported itself healthy. The guard is explicit, not implied by the health check |
-| Any soft-delete is logged with the names and posted to Slack `alerts` | Soft-deleting is the only outcome that removes capability from a user, so it is the only one that must be impossible to miss. Both plugins answer `ListTools` from a static `allTools` array, so a *partial* answer is not possible today — see the falsification list for what changes if that stops being true |
+| **(ruled)** **Why two absences and not one: the zero guard is blind to a short answer.** A plugin answering mid-startup returns 60 of 67 far more often than it returns 0 of 67, so the partial answer is the likelier failure, and under a one-absence rule seven tools would be soft-deleted with nothing objecting. Cost of the stricter rule: one sync window of delay on a genuine removal, and `deleted_at` self-heals if the tool reappears | The first draft's one-absence rule was correct only because both current plugins answer `ListTools` from a static `allTools` array — a property of the *plugins*, not of the *sync*, and an undocumented coupling to code we do not control in a gateway whose point is hosting other people's plugins. That assumption breaks exactly when the product succeeds. The two-absence rule removes the coupling: the sync is now correct for any plugin that answers completely at least once per two restarts |
+| Any soft-delete is logged with the names and posted to Slack `alerts`; a first absence posts a warning ("missing once; will be soft-deleted if absent on the next sync") | Soft-deleting is the only outcome that removes capability from a user, so it must be impossible to miss. The first-absence warning is the observable signal for a partial answer, and it arrives while a restart can still prevent the deletion |
 | Record `mcp_servers.last_commit_sha` (`git rev-parse HEAD` in the checkout — the column exists and has never been written) and a new `mcp_servers.tools_synced_at` | The register then names *which plugin commit* it reflects, and *when it last asked*. Both are what every verification leg currently reconstructs by hand, and `tools_synced_at` is what the test-side freshness check reads |
+
+**Why `last_seen_at` rather than a `missing_since` marker.** Both give the
+two-absence rule. `last_seen_at` is chosen because it is a fact about the tool
+("when did the plugin last offer this"), it is written on the common path (every
+sync, every present tool) rather than the rare one, and it answers the alert's
+question directly. A `missing_since` marker is state about the *sync*, written
+only on the rare path, cleared on the other rare path, and it can be wrong in
+a way `last_seen_at` cannot: a marker set and never cleared lies, whereas a
+stale `last_seen_at` is simply old. Two properties fall out for free. An
+aborted sync (zero answer, transport error) writes neither `last_seen_at` nor
+`tools_synced_at`, so it does not count as an absence — a plugin that fails to
+answer twice in a row loses nothing. And a partial answer followed by a full
+one leaves a visible gap in `last_seen_at` and no deletion, which is exactly
+the audit trail wanted. In practice a "sync window" is the interval between
+two gateway restarts: minutes under merge-triggered deploys, possibly days
+today. A genuine removal therefore stays advertised until the second restart
+after it; that is the stated cost, and it is the right side to err on.
 
 What this removes from the runbook: the in-container script, the "refuse to
 shrink" guard, the "no gateway restart is needed for the register" paragraph,
@@ -348,7 +368,10 @@ Why it lost, in two parts — the draft's and the ruling's:
 
 ## Rollout order — gateway only, no lockstep
 
-1. **Migration**: add `tools.deleted_at timestamptz NULL` and
+1. **Migration**: add `tools.deleted_at timestamptz NULL`,
+   `tools.last_seen_at timestamptz NOT NULL DEFAULT now()` (the default
+   backfills every existing row as seen at migration time, so no row can be
+   soft-deleted on the first sync after deploy), and
    `mcp_servers.tools_synced_at timestamptz NULL`; drop
    `tools.credits_per_call`. Additive except the drop, and the drop removes a
    column nothing reads.
@@ -356,10 +379,15 @@ Why it lost, in two parts — the draft's and the ruling's:
    health; `listUserToolRows` and `/tools/[slug]` filter `deleted_at IS NULL`.
    Tested on the testcontainers harness: upsert refreshes description and
    schema on a row whose name did not change; upsert preserves `enabled =
-   false`; an absent tool is soft-deleted and undeleted on return, `enabled`
-   untouched either way; a zero-tool answer writes nothing and alerts; a
-   transport error writes nothing; a second identical sync writes only
-   `updated_at` and `tools_synced_at`; the crash-respawn path does not sync.
+   false`; a present tool gets `last_seen_at` bumped; **a tool absent once is
+   NOT soft-deleted and its row is unchanged, and a warning is emitted; absent
+   on two consecutive syncs it is soft-deleted; absent once then present, it
+   is untouched apart from `last_seen_at`; an aborted sync between two
+   absences does not count, so absent / aborted / absent does not delete**;
+   a soft-deleted tool is undeleted on return, `enabled` untouched either way;
+   a zero-tool answer writes nothing and alerts; a transport error writes
+   nothing; a second identical sync writes only `updated_at`, `last_seen_at`
+   and `tools_synced_at`; the crash-respawn path does not sync.
 3. **Deploy the gateway.** On boot, `startAll` syncs both plugins. Expected
    effect on production: 88 rows refreshed in place (description/schema
    identical today, so only timestamps move), plus two new rows for the held
@@ -397,11 +425,14 @@ they are higher than in the first draft.
 
 - **A plugin whose `ListTools` is dynamic or partial at boot.** Both plugins
   export a static `allTools` (`gws-mcp` flattens a module list; `atlassian-mcp`
-  spreads two arrays) and answer `ListTools` from it, so an answer is either
-  complete or absent, and absence is refused. **Does not fire.** If a plugin
-  ever registers tools lazily, the zero-answer guard is no longer sufficient:
-  the soft-delete rule must then require the same absence on two consecutive syncs.
-  Design that in before such a plugin is installed, not after.
+  spreads two arrays) and answer `ListTools` from it. **Does not fire — and,
+  since the two-absence ruling, no longer needs to be watched**: the design is
+  correct for any plugin that answers completely at least once in every two
+  consecutive syncs, whether or not its list is static. What remains on this
+  item is narrower: a plugin that answers *partially on two consecutive
+  restarts* would lose the tools it omitted both times, until it next answers
+  fully (self-healing via `deleted_at = NULL`). The first-absence warning is
+  the signal that this is happening before the second sync deletes anything.
 - **A second gateway instance.** Production compose runs one `gateway`
   service; the `deploy` block is a memory limit, not replicas. **Does not
   fire.** Two instances syncing one server row is fine for upserts and a race
@@ -424,20 +455,25 @@ they are higher than in the first draft.
 Recorded per instruction, so it is argued now rather than discovered in code
 review.
 
-- **Zero-only refusal is the right hard guard today and will not be tomorrow.**
-  The ruling names zero. This document agrees because a partial answer is
-  impossible from either current plugin, and refusing on "fewer than before"
-  would make a genuine removal need a manual override. But the guard is
-  correct *because of* a property of the plugins, not of the sync; the
-  falsification item above is the standing note that the guard has a
-  precondition.
+- **Zero-only refusal — RESOLVED by ruling, two-absence rule adopted.** The
+  first draft raised this as "correct today because of a property of the
+  plugins, not of the sync", and justified the stricter rule by a hypothetical
+  lazy-registering plugin. The ruling took the stricter rule for a stronger
+  reason available today: the zero guard is blind to a short answer, and a
+  short answer is the likelier failure. The draft's observation about the
+  coupling is preserved in the design table because it generalises past this
+  feature — an undocumented dependency on a property of code we do not control,
+  in a product whose point is hosting other people's code, breaks exactly when
+  the product succeeds.
 - **Deleting the snapshot deletes the DB-free half of the safety net.** The
   ruling accepts DB-gated tests; this document agrees and designed `REQUIRE_DB`
-  in. The residual it wants named: on a laptop without a database, `pnpm
-  vitest run` no longer says anything about skills naming real tools or about
-  `KNOWN_READ_TOOLS` naming real tools. Validation catches both. A contributor
-  without production credentials does not. That is the price, and it is
-  accepted.
+  in. The residual, named as a stated cost and accepted as framed: on a laptop
+  without a database, `pnpm vitest run` no longer says anything about skills
+  naming real tools or about `KNOWN_READ_TOOLS` naming real tools. Validation
+  catches both before merge. A contributor without production credentials does
+  not — and since the skill pages live in this repo, that contributor is
+  realistically one of us without a network, not an outsider. That is the
+  price. It is not softened here and should not be softened later.
 - **The ordering.** This document's evidence — the register leg holding since
   08-11, the snapshot leg never having a checklist — is intact and recorded
   above. The ruling's answer is a principle, and the document accepts that a
