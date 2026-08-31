@@ -19,6 +19,8 @@ the conversation to be read.
 | `drive_search` | Search files using Drive query syntax, e.g. `name contains 'report'` or `mimeType='application/vnd.google-apps.spreadsheet'`. Returns names, IDs, types and modification dates. `page_size` defaults to 20 |
 | `drive_read_file` | Read a file's text content by file ID. Handles Google Docs, Sheets and Slides, Office `.docx`/`.xlsx`/`.pptx` (converted automatically), and `.txt`/`.csv`. Returns the extracted text directly, with no local download |
 | `drive_create_folder` | Create a new folder, optionally inside a parent folder |
+| `drive_rename_file` | Rename a file or folder by ID. Changes the name only: content, location and sharing are untouched. Works on Docs, Sheets, Slides and folders |
+| `drive_copy_file` | Copy a file and name the copy in the same call, optionally into another folder with `parent_id`. The copy carries the original's tabs, formatting and formulas. **Folders cannot be copied** |
 
 ## What `drive_read_file` can and cannot read
 
@@ -49,3 +51,13 @@ one and write to the other in the same turn, without you switching profiles.
 - "Read the contents of the onboarding checklist doc and summarize it"
 - "Create a new folder called 'April Reports' inside my Reports folder"
 - "Search Drive for all spreadsheets modified in the last week"
+
+## Copying beats rebuilding
+
+`drive_copy_file` exists mainly for templates. Asking Claude to rebuild a document from
+scratch gives you something that looks close and drifts a little each time. Copying gives you
+the original's tabs, formatting and formulas exactly, because it is the same file. Copy first,
+then fill in the copy.
+
+Drive refuses to copy a **folder**, answering with a 403 that reads like a permissions problem.
+It is not one, and retrying with wider access will not change it.
