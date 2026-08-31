@@ -81,12 +81,31 @@ describe("redactErrorMessage", () => {
   it("still destroys document text carried inside a diagnostic (SCRUM-176)", () => {
     // A message that embeds a quoted run of user content: the envelope is
     // recognised, the diagnostic prose survives, the quoted content does not.
+    // This is the canary half of the pair below — read them together.
     const input =
       "Error: API error: {\"error\":{\"code\":400,\"message\":\"Invalid replacement text 'the entire confidential quarterly board memo pasted here as one string' in request\",\"reason\":\"badRequest\"}}";
     const out = redactErrorMessage(input);
     expect(out).not.toContain("confidential quarterly board memo");
     expect(out).toContain("[redacted-content]");
     expect(out).toContain('"code":400');
+  });
+
+  it("lets an UNQUOTED short user-ish token inside a diagnostic survive — an accepted trade (SCRUM-176)", () => {
+    // THE PIN FOR A DELIBERATE DECISION, not a hole. An unquoted value echoed
+    // inside a recognised diagnostic message (here: a spreadsheet tab name in
+    // a range-parse error) SURVIVES redaction. That is the accepted trade of
+    // SCRUM-176: keeping the message field diagnosable and destroying every
+    // unquoted fragment inside it are mutually exclusive, and the trade is
+    // bounded — only allowlisted fields survive at all, provider-quoted
+    // echoes still die (see the canary test above, its counterpart), emails
+    // and long ids still die inside kept values, and output is capped.
+    // If you are reading this because survival looks like a bug to close:
+    // closing it silently reverts the diagnosability this ticket exists for,
+    // with every other guard still green. Change it only with a ruling.
+    const input =
+      'Error: API error: {"error":{"code":400,"message":"Unable to parse range: MyProjects!A1:B2","reason":"badRequest"}}';
+    const out = redactErrorMessage(input);
+    expect(out).toContain("Unable to parse range: MyProjects!A1:B2");
   });
 
   it("drops fields that are not on the diagnostic allowlist (SCRUM-176)", () => {
