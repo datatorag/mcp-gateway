@@ -5,7 +5,7 @@ order: 0
 section: "general"
 ---
 
-DataToRAG gives your AI assistant access to Google Workspace (Gmail, Drive, Calendar, Docs, Sheets, Slides, Contacts, Tasks) and Atlassian (Jira, Confluence) through a single MCP server. Want to see it in action first? Try the [playground](https://datatorag.com/dashboard) — a built-in chat in your dashboard that runs real tools against your connected accounts, no client setup needed.
+DataToRAG gives your AI assistant access to Google Workspace (Gmail, Drive, Calendar, Docs, Sheets, Slides, Contacts, Tasks) and Atlassian (Jira, Confluence) through a single MCP server. Want to see it in action first? Try the [playground](https://datatorag.com/dashboard), a built-in chat in your dashboard that runs real tools against your connected accounts, no client setup needed.
 
 ![DataToRAG dashboard with Google Workspace and Atlassian connected, example prompts, and the built-in playground](/docs/dashboard-connections.png)
 
@@ -40,9 +40,15 @@ https://datatorag.com/mcp
 
 ![Add custom connector dialog with the name DataToRAG and the URL https://datatorag.com/mcp filled in, advanced OAuth fields left empty](/docs/claude-web-connector-url.png)
 
-**3. Complete the sign-in.** Click Add, and Claude redirects you to sign in with the same Google account you used on the DataToRAG dashboard. Approve the access request when prompted.
+**3. Complete the sign-in, and tick the boxes.** Click Add, and Claude redirects you to sign in with the same Google account you used on the DataToRAG dashboard.
 
-<!-- screenshot placeholder: claude-web-oauth-consent.png -->
+**Google's consent screen arrives with every box unchecked, and the Continue button works anyway.** If you click straight through, the connection succeeds, DataToRAG shows as connected, and not one tool will work, because you granted permission to nothing. There is no error at any point. This is the single most common way a setup goes wrong.
+
+**Tick "Select all"**, or tick just the services you want, then click Continue.
+
+![Google's consent screen for DataToRAG MCP. Every permission checkbox is unchecked by default, including Select all at the top, and the Continue button is still clickable. Select all and Continue are both circled.](/docs/claude-web-oauth-consent.png)
+
+You can grant a subset and come back later, and connecting more services afterwards re-runs this same screen. If tools are missing in Claude, this is the first thing to check: open the DataToRAG dashboard, look at what your account actually granted, and reconnect if it is short.
 
 **4. Check the tools are available.** Back in a chat, DataToRAG appears in Claude's connector list and its tools (like `gmail_search` and `jira_search`) are available to the conversation.
 
@@ -90,7 +96,7 @@ Each connector is documented on its own page with available operations, required
 
 ## Seeing what your assistant is doing
 
-Every tool call shows up in your personal usage dashboard at [datatorag.com/dashboard/usage](https://datatorag.com/dashboard/usage) — call volume, latency, error rates, and a per-tool breakdown. See the [Usage docs](/docs/usage) for what gets tracked and how retention works.
+Every tool call shows up in your personal usage dashboard at [datatorag.com/dashboard/usage](https://datatorag.com/dashboard/usage): call volume, latency, error rates, and a per-tool breakdown. See the [Usage docs](/docs/usage) for what gets tracked and how retention works.
 
 ## Common questions
 
