@@ -3,7 +3,6 @@ import { createTool } from "@mastra/core/tools";
 import type { Database } from "@datatorag-mcp/db";
 import { connectedAccounts, serviceConnections, users } from "@datatorag-mcp/db";
 import { and, eq } from "drizzle-orm";
-import { agentRunCap, periodStatus } from "@/gateway/usage/period";
 import { disconnectService } from "@/gateway/connected-accounts";
 import { scopeDelta } from "@/gateway/scope-grant";
 import { trackConnectCardShown } from "@/gateway/track";
@@ -63,94 +62,14 @@ export const DASHBOARD_LINKS = {
  * carries fields the runtime's tool type rejects. The structural shape below
  * is what it accepts. */
 export function buildIntrospectionTools({ db, userId }: IntrospectionDeps) {
+  // account_status is GONE (SCRUM-188), deliberately deleted rather than
+  // patched: it was a second, older copy of "what am I connected to" that
+  // collapsed accounts to service names and reported the default account's
+  // grant as the service's. The agent now consumes the gateway's own MCP,
+  // where list_connected_accounts answers the account question through the
+  // one tool path every client shares. What remains here are UI actions,
+  // not data reads.
   return {
-    account_status: {
-      /** Declared, not classified. See the note above: these bypass the
-       * name-based write gate because they are not plugin tools, so a read
-       * says so here. */
-      requireApproval: false,
-      description:
-        "The user's own account state: which services are connected, their plan, " +
-        "and how many agent runs they have left this period. Takes no arguments; " +
-        "it always reports the signed-in user. Use it when the user asks what is " +
-        "connected, what plan they are on, or how many runs remain.",
-      inputSchema: NO_ARGS,
-      execute: async () => {
-        const [row] = await db
-          .select({ plan: users.plan })
-          .from(users)
-          .where(eq(users.id, userId))
-          .limit(1);
-
-        const accounts = await db
-          .selectDistinct({ connectorType: connectedAccounts.connectorType })
-          .from(connectedAccounts)
-          .where(eq(connectedAccounts.userId, userId));
-
-        // SCRUM-136: "connected" alone can be a lie — the consent screen lets
-        // a user untick scopes, and tool calls run as the DEFAULT account, so
-        // that account's grant is the one this answer reports on. The agent
-        // gets the finished delta in display words, never scope URLs.
-        const defaultGrants = await db
-          .select({
-            connectorType: connectedAccounts.connectorType,
-            scopes: serviceConnections.scopes,
-          })
-          .from(connectedAccounts)
-          .innerJoin(
-            serviceConnections,
-            eq(connectedAccounts.serviceConnectionId, serviceConnections.id)
-          )
-          .where(
-            and(
-              eq(connectedAccounts.userId, userId),
-              eq(connectedAccounts.isDefault, true)
-            )
-          );
-        const serviceScopeStatus = defaultGrants.map((row) => {
-          const delta = scopeDelta(row.connectorType, row.scopes);
-          return {
-            service: row.connectorType,
-            grantComplete: delta.complete,
-            missingServices: delta.missing.map((m) => m.displayName),
-            reconnectUrl: delta.complete
-              ? null
-              : (getConnectableService(row.connectorType)?.connectUrl ?? null),
-          };
-        });
-
-        const status = await periodStatus(db, userId);
-        // The one shared cap decider (SCRUM-84/94): the enforcing claim, this
-        // answer, and the chat panel's meter all resolve the cap through the
-        // same function, so what the agent says, what the meter shows, and
-        // what the claim refuses at cannot drift apart.
-        const cap = await agentRunCap(db, userId);
-        const used = status?.agentRuns ?? 0;
-
-        return {
-          plan: row?.plan ?? "free",
-          connectedServices: accounts.map((a) => a.connectorType),
-          // Per-service grant honesty (SCRUM-136). A service listed above with
-          // grantComplete false here is connected-but-short: name what is
-          // missing and point at reconnectUrl rather than promising tools
-          // that will 403.
-          serviceScopeStatus,
-          // Reported as remaining rather than used, because that is the
-          // question people actually ask, and because a limit you can see
-          // coming is a meter rather than a wall.
-          runsRemaining: cap === null ? null : Math.max(0, cap - used),
-          runsCap: cap,
-          toolCallsThisPeriod: status?.calls ?? 0,
-          // Tolerate a string here: some driver paths hand timestamps back
-          // unparsed, and a crashed status tool derails the whole turn.
-          periodStartedAt: status?.periodStart
-            ? new Date(status.periodStart).toISOString()
-            : null,
-          links: DASHBOARD_LINKS,
-        };
-      },
-    },
-
     show_mcp_config: {
       requireApproval: false,
       description:
@@ -397,7 +316,6 @@ export function buildIntrospectionTools({ db, userId }: IntrospectionDeps) {
 /** The tool names this module owns. Exported so the agent wiring and the tests
  * agree on the list without either restating it. */
 export const INTROSPECTION_TOOL_NAMES = [
-  "account_status",
   "show_mcp_config",
   "request_connection",
   "disconnect_service",

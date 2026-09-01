@@ -6,11 +6,7 @@ import { withRoute } from "@/lib/with-route";
 import { getEnv } from "@datatorag-mcp/config";
 import { getMastra, DATATORAG_AGENT_ID } from "@/mastra";
 import { RUN_ID_CONTEXT_KEY } from "@/mastra/llm-usage";
-import {
-  buildPluginRequestContext,
-  listPluginServers,
-  loadUserPluginCredentials,
-} from "@/mastra/mcp/client";
+import { buildPluginRequestContext } from "@/mastra/mcp/client";
 import {
   deriveThreadId, findApprovalTargets, mintRunId, ownsRunId,
 } from "@/gateway/playground/run-ownership";
@@ -379,26 +375,11 @@ export const POST = withRoute(async (userId, request) => {
    * block returns. */
   let usageRunId: string | undefined;
   try {
-    // Per-request identity for the plugin connections. Built per plugin, not
-    // once for the request: a plugin's token is a credential for THAT
-    // plugin's upstream, and one shared key would post every plugin every
-    // other plugin's token.
-    const servers = await listPluginServers(db);
-    const credentials = await loadUserPluginCredentials(
-      db,
-      userId,
-      servers.map((s) => s.slug)
-    );
-    const requestContext = buildPluginRequestContext({
-      userId,
-      tokensByServer: credentials.tokensByServer,
-      // The account each token was resolved for rides beside it, so tool
-      // metering can stamp the identity the call actually runs as.
-      accountsByServer: credentials.accountsByServer,
-      // And that account's granted scopes (SCRUM-136), so the scope gate can
-      // refuse a call whose permission was never granted before it 403s.
-      scopesByServer: credentials.scopesByServer,
-    });
+    // Per-request identity, and identity only (SCRUM-188): the agent is an
+    // in-process client of our own MCP, which resolves tokens, accounts and
+    // scope gates per call itself. The agent layer no longer loads or
+    // threads any credential.
+    const requestContext = buildPluginRequestContext({ userId });
 
     // The run this turn belongs to, so each model call can report its tokens
     // against it. On an approval leg the runtime resumes the ORIGINAL run, so

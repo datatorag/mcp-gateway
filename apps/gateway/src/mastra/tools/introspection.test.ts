@@ -128,58 +128,10 @@ describe("account introspection", () => {
     expect((await tools.show_mcp_config.execute()).mayOfferProactively).toBe(true);
   });
 
-  it("scopes every query to the session user", async () => {
-    const { db, scopedTo } = stubDb();
-    const tools = buildIntrospectionTools({ db, userId: "user-1" });
-
-    await tools.account_status.execute();
-
-    // Two queries (plan, connected accounts) plus the two period reads, and
-    // every one was handed the id the tool was built with.
-    expect(scopedTo.length).toBeGreaterThanOrEqual(2);
-    expect(periodStatus).toHaveBeenCalledWith(db, "user-1");
-    expect(agentRunCap).toHaveBeenCalledWith(db, "user-1");
-  });
-
-  it("reports runs as remaining, so the limit is a meter and not a wall", async () => {
-    const { db } = stubDb();
-    const out = await buildIntrospectionTools({ db, userId: "user-1" }).account_status.execute();
-
-    // 7 used against the free allowance.
-    expect(out.runsCap).toBeGreaterThan(0);
-    expect(out.runsRemaining).toBe(out.runsCap! - 7);
-    expect(out.toolCallsThisPeriod).toBe(40);
-  });
-
-  it("reports no cap for an exempt account rather than a fake one", async () => {
-    agentRunCap.mockResolvedValue(null);
-    const { db } = stubDb();
-    const out = await buildIntrospectionTools({ db, userId: "user-1" }).account_status.execute();
-
-    // Showing a limit that does not apply would have the agent tell an exempt
-    // user they are running out of something they cannot run out of.
-    expect(out.runsCap).toBeNull();
-    expect(out.runsRemaining).toBeNull();
-  });
-
-  it("does not spend a run to answer how many runs are left", async () => {
-    // The read must not go through the claim. Answering the question by
-    // consuming the thing being asked about is the obvious wrong way to build
-    // this, and it would be invisible: the number returned would simply be one
-    // lower than the truth, every time.
-    const { db } = stubDb();
-    await buildIntrospectionTools({ db, userId: "user-1" }).account_status.execute();
-
-    expect(periodStatus).toHaveBeenCalledTimes(1);
-  });
-
-  it("hands back specific views, not 'the dashboard'", async () => {
-    const { db } = stubDb();
-    const out = await buildIntrospectionTools({ db, userId: "user-1" }).account_status.execute();
-
-    expect(out.links.usage).toBe("/dashboard/usage");
-    expect(out.links.mcpConfig).toBe("/dashboard/mcp-config");
-  });
+  // account_status's suite is deleted with the tool (SCRUM-188): the agent
+  // now reaches list_connected_accounts through the gateway's own MCP, so
+  // the account question has one answer path and one set of tests, over
+  // there. What remains here are the UI-action tools.
 
   it("declares reads as not needing approval", async () => {
     const { db } = stubDb();
@@ -187,7 +139,7 @@ describe("account introspection", () => {
     // Declared rather than classified: these bypass the name-based gate, so a
     // read has to say so explicitly. A tool that CHANGES account state must
     // declare true and go through the same gate a sheet edit does.
-    expect(tools.account_status.requireApproval).toBe(false);
+    expect(tools.show_mcp_config.requireApproval).toBe(false);
   });
 
   it("makes EVERY tool state its approval requirement explicitly", async () => {

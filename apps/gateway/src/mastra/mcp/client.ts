@@ -1,666 +1,140 @@
-import { createHash } from "node:crypto";
-import { MCPClient } from "@mastra/mcp";
 import { RequestContext } from "@mastra/core/request-context";
 import type { ToolsInput } from "@mastra/core/agent";
-import type { Tool } from "@mastra/core/tools";
-import { eq } from "drizzle-orm";
-import type { Database } from "@datatorag-mcp/db";
-import { mcpServers } from "@datatorag-mcp/db";
-import { NAMESPACE_SEPARATOR } from "@/gateway/plugin-manager";
-import {
-  buildPluginServerUrl,
-  listUserToolRows,
-  type PluginServerRow,
-} from "@/gateway/user-tools";
-import { PLUGIN_SERVICE_MAP, resolveServiceToken } from "@/gateway/service-token";
-import {
-  checkScopeForTool,
-  missingScopeMessage,
-  rewriteScopeError,
-  MISSING_SCOPE_ERROR_MARKER,
-} from "@/gateway/scope-grant";
-import { accountsGrantingScope } from "@/gateway/connected-accounts";
-import { classifyWrite, flattenToolResult, stripAccountArg } from "@/gateway/playground/tools";
+import { jsonSchema, type JSONSchema7 } from "ai";
+import { Client } from "@modelcontextprotocol/sdk/client/index.js";
+import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
+import { createMcpServer, BUILT_IN_TOOLS } from "@/gateway/mcp-server";
+import { ConnectionPool } from "@/gateway/pool";
+import { classifyWrite } from "@/gateway/playground/tools";
 import { capToolOutput } from "@/gateway/playground/cap";
-import { trackToolCall } from "@/gateway/track";
-import { RUN_ID_CONTEXT_KEY } from "@/mastra/llm-usage";
 import { EPHEMERAL_CACHE_OPTIONS } from "@/mastra/agents/datatorag";
 import { getDb } from "@/lib/db";
 import { buildIntrospectionTools } from "@/mastra/tools/introspection";
 
 /**
- * The playground agent's connection to our plugin MCP servers.
+ * The dashboard agent's connection to the gateway's own MCP (SCRUM-188).
  *
- * This module owns the CLIENT half of plugin connectivity for the agent only:
- * which servers exist, how a request is authenticated as a particular user, and
- * which tools that user may see. Everything else about plugins — cloning,
- * building, port allocation, process supervision, token vaulting, metering —
- * is unchanged and lives where it always did.
+ * The agent is an ORDINARY CLIENT of the same MCP server every external
+ * client talks to, constructed in-process with the authenticated session's
+ * userId. Ruled by Manuel: the agent should just be another client
+ * connecting to our MCP; the only difference is that the user is already
+ * authenticated because they already logged in.
  *
- * The shape here is deliberate, and it is NOT the obvious one: a client — and
- * therefore an MCP session — PER USER, memoised, rather than one shared client
- * with the caller's identity travelling per request.
+ * What that dissolves, deliberately, relative to the previous design where
+ * the agent wired straight to the plugin processes:
  *
- * One shared client is what a reading of the framework suggests, and it is
- * wrong against the servers we actually run. Our plugin servers keep a map of
- * session id → transport. The first request of a session builds the upstream
- * API client from the `X-User-Token` on THAT request; every later request is
- * routed by its `mcp-session-id` alone and the token header is never read
- * again. So a shared client establishes one session, and that session's
- * identity is whatever was present at initialize — which, since the handshake
- * happens outside any request, is nothing at all. Every call then runs
- * unauthenticated, and would run as user A if A had happened to open it.
+ *  - No token loading, scope threading, or per-server credential context:
+ *    the MCP server resolves the per-call token, account, and scope gate
+ *    itself, exactly as it does for every client.
+ *  - No per-user client cache, sweep, or token fingerprint: the pair is
+ *    constructed per request and garbage-collected with it. The registry
+ *    read it costs per turn is the read the old path also made per turn.
+ *  - NO METERING HERE. One tool call is one event, emitted at the MCP
+ *    layer. The agent layer emits nothing and meters nothing — not a
+ *    reduced count, no count at all (per SCRUM-188). Client identity on
+ *    the event (SCRUM-189) is how agent traffic stays attributable.
  *
- * Hence: one session per user, opened with that user's token already on the
- * initialize request (see `tokensByServer` below — the token is bound into the
- * client's own `fetch`, not fished out of a request context that does not
- * reach the handshake). Two users can never share a session, because a session
- * is never reachable from more than one user's cache key.
+ * What stays agent-side: the write-approval WIRING (the policy is
+ * gateway-side; see requireApprovalFor), the prompt-cache breakpoint, the
+ * output cap, and the UI-action introspection tools.
  */
-
-/** Header our plugin servers read to decide whose credentials to act with.
- * Same header the non-agent call path sends — the plugins have exactly one
- * notion of "who is this", and this must not become a second one. */
-export const USER_TOKEN_HEADER = "X-User-Token";
 
 /** Request-context key holding the id of the user the request is running as. */
 export const USER_ID_CONTEXT_KEY = "userId";
 
-/** Request-context key holding the access token for one plugin.
- *
- * Keyed PER SERVER, not one token for the whole request: a plugin's token is a
- * credential for that plugin's upstream (Google, Atlassian, …), and they are
- * not interchangeable. One shared key would hand every plugin every other
- * plugin's token — at best a failed call, at worst a credential leak across
- * providers. */
-export function userTokenContextKey(serverSlug: string): string {
-  return `userToken:${serverSlug}`;
-}
+/** How the in-process client introduces itself at the MCP initialize
+ * handshake. Lands as client_name on every tool_call event (SCRUM-189), so
+ * agent traffic stays separable from external clients without a second
+ * event or a special-cased surface. */
+export const AGENT_CLIENT_NAME = "datatorag-agent";
 
-/** Request-context key holding the ACCOUNT a plugin's token was resolved for.
- *
- * Travels beside the token because they are two halves of one resolution:
- * the playground always acts as the default account (the token is bound at
- * session open, and `stripAccountArg` removes any account argument before the
- * call), so the only truthful `account_email` a usage row can carry is the
- * one the resolution chose — not whatever the model happened to type. Before
- * this, the field echoed the caller's argument, so every agent-surface row
- * carried null on exactly the field metered billing would bill on. */
-export function userAccountContextKey(serverSlug: string): string {
-  return `userAccount:${serverSlug}`;
-}
+/** The OAuth client id dashboard sessions authenticate under (the same
+ * literal auth.ts stamps on web session tokens). The agent acts inside that
+ * session, so its calls carry the session's own client id — nothing is
+ * minted for the agent, per the ruling that it needs no second identity. */
+export const WEB_OAUTH_CLIENT_ID = "web";
 
-/** Request-context key holding the granted-scopes string of the account a
- * plugin's token was resolved for (SCRUM-136). The third half of the same
- * resolution as the token and account above: the scope gate must judge the
- * account the call actually runs as. Absent entries make no claim — the
- * gate fails open to the call. */
-export function userScopesContextKey(serverSlug: string): string {
-  return `userScopes:${serverSlug}`;
-}
-
-/** Builds the per-request identity the plugin connections read from.
+/** Builds the per-request identity the tool resolver reads from.
  *
  * Must be a real RequestContext, not a plain object that looks like one: the
- * value is consumed via `.get()` deep inside the client, so an object literal
- * type-errors here and would fail at call time rather than at construction. */
-export function buildPluginRequestContext(opts: {
-  userId: string;
-  /** Plugin slug → that plugin's access token for this user. Slugs with no
-   * connected account are simply absent. */
-  tokensByServer: Record<string, string>;
-  /** Plugin slug → the account email the token above was resolved for. Only
-   * feeds usage attribution; absent entries stamp null, never a guess. */
-  accountsByServer?: Record<string, string>;
-  /** Plugin slug → the granted-scopes string of that account (SCRUM-136).
-   * Feeds the pre-call scope gate; absent entries make no claim. */
-  scopesByServer?: Record<string, string>;
-}): RequestContext {
+ * value is consumed via `.get()` inside the resolver and the model factory,
+ * so an object literal type-errors here and would fail at call time rather
+ * than at construction. Token/account/scope threading is gone (SCRUM-188):
+ * identity is the only thing the agent layer still carries. */
+export function buildPluginRequestContext(opts: { userId: string }): RequestContext {
   const requestContext = new RequestContext();
   requestContext.set(USER_ID_CONTEXT_KEY, opts.userId);
-  for (const [slug, token] of Object.entries(opts.tokensByServer)) {
-    requestContext.set(userTokenContextKey(slug), token);
-  }
-  for (const [slug, account] of Object.entries(opts.accountsByServer ?? {})) {
-    requestContext.set(userAccountContextKey(slug), account);
-  }
-  for (const [slug, scopes] of Object.entries(opts.scopesByServer ?? {})) {
-    requestContext.set(userScopesContextKey(slug), scopes);
-  }
   return requestContext;
 }
 
-/** Current access token per plugin slug for one user, refreshing where
- * needed, each with the account it was resolved for. Plugins the user has not
- * connected are omitted rather than mapped to an empty string, so a missing
- * token is never mistaken for a valid one. */
-export async function loadUserPluginCredentials(
-  db: Database,
-  userId: string,
-  serverSlugs: string[]
-): Promise<{
-  tokensByServer: Record<string, string>;
-  accountsByServer: Record<string, string>;
-  scopesByServer: Record<string, string>;
-}> {
-  const entries = await Promise.all(
-    serverSlugs.map(async (slug) => {
-      const service = PLUGIN_SERVICE_MAP[slug];
-      if (!service) return null;
-      const resolved = await resolveServiceToken(db, userId, service);
-      return resolved ? ([slug, resolved] as const) : null;
-    })
-  );
-  const tokensByServer: Record<string, string> = {};
-  const accountsByServer: Record<string, string> = {};
-  const scopesByServer: Record<string, string> = {};
-  for (const entry of entries) {
-    if (!entry) continue;
-    const [slug, resolved] = entry;
-    tokensByServer[slug] = resolved.token;
-    if (resolved.accountEmail) accountsByServer[slug] = resolved.accountEmail;
-    if (resolved.scopes) scopesByServer[slug] = resolved.scopes;
-  }
-  return { tokensByServer, accountsByServer, scopesByServer };
-}
+/** Shared across requests because a ConnectionPool is per-plugin-server and
+ * credential-free by invariant (per-user tokens always take the one-shot
+ * path inside the MCP server). Only legacy non-service plugins ever touch
+ * it, but the server constructor requires one. */
+const agentPool = new ConnectionPool();
 
-/* -------------------------------------------------------------------------- */
-/* Tool naming                                                                 */
-/* -------------------------------------------------------------------------- */
-
-/** Our namespaced tool name: `<slug>__<tool>`.
- *
- * The framework's own convention is `<server>_<tool>` — a SINGLE underscore —
- * and we cannot use it. Every tool we serve has underscores inside its own
- * name (`gmail_send`, `slides_batch_update`), so a single-underscore join is
- * ambiguous: `gws-mcp_docs_create` could split at three different places and
- * nothing in the string says which is right. The double underscore is what
- * makes the split unique, it is the name the registry stores, the name the MCP
- * front door serves, and the name the UI trims for display — so the mapping
- * happens here, at the one boundary where the server is still known
- * separately from the tool. */
-export function toNamespacedName(serverSlug: string, toolName: string): string {
-  return `${serverSlug}${NAMESPACE_SEPARATOR}${toolName}`;
-}
-
-/* -------------------------------------------------------------------------- */
-/* The per-user client                                                         */
-/* -------------------------------------------------------------------------- */
-
-/** Active plugin servers, with whatever address each is currently reachable at.
- * Ports are assigned by the plugin supervisor and recorded on the row; we read
- * them, we never pick them. */
-export async function listPluginServers(db: Database): Promise<PluginServerRow[]> {
-  return db
-    .select({
-      slug: mcpServers.slug,
-      containerPort: mcpServers.containerPort,
-      githubRepoUrl: mcpServers.githubRepoUrl,
-    })
-    .from(mcpServers)
-    .where(eq(mcpServers.status, "active"));
-}
-
-/** Plugin slug → this user's token for that plugin. Absent means not connected;
- * never an empty string, so "missing" is never mistaken for "valid". */
-export type PluginTokens = Record<string, string>;
-
-/** The tokens for one request, read back out of its context.
- *
- * The slugs have to be supplied because a `RequestContext` is a bag with no
- * listable keys — the caller already knows which plugins exist, so it says so
- * rather than the context guessing. */
-export function readPluginTokens(
-  requestContext: RequestContext | undefined | null,
-  serverSlugs: string[]
-): PluginTokens {
-  const tokens: PluginTokens = {};
-  for (const slug of serverSlugs) {
-    const token = requestContext?.get(userTokenContextKey(slug));
-    if (typeof token === "string" && token.length > 0) tokens[slug] = token;
-  }
-  return tokens;
-}
-
-/** One client for ONE user, holding one session per plugin, opened as them.
- *
- * `tokensByServer` is the load-bearing argument. Bound into the per-server
- * `fetch` closure, it puts the token on EVERY outgoing request including the
- * initialize handshake — and initialize is the only one our plugin servers read
- * it on. A token supplied any other way arrives too late to decide who the
- * session is.
- *
- * The request-context lookup is kept as a fallback rather than removed. It is
- * correct and harmless for a plugin that does read the header per call, and it
- * is what a client built without bound tokens (a test, a tokenless probe) still
- * has. The bound token WINS where both exist, so the header can never disagree
- * with the identity the session was actually opened as. */
-export function createPluginMCPClient(
-  servers: PluginServerRow[],
-  opts?: { id?: string; timeout?: number; tokensByServer?: PluginTokens }
-): MCPClient {
-  const boundTokens = opts?.tokensByServer ?? {};
-  return new MCPClient({
-    id: opts?.id ?? "datatorag-playground-plugins",
-    ...(opts?.timeout ? { timeout: opts.timeout } : {}),
-    servers: Object.fromEntries(
-      servers.map((server) => [
-        server.slug,
-        {
-          url: new URL(buildPluginServerUrl(server)),
-          fetch: (
-            url: string | URL,
-            init?: RequestInit,
-            requestContext?: RequestContext | null
-          ) => {
-            const contextToken = requestContext?.get(userTokenContextKey(server.slug));
-            const token =
-              boundTokens[server.slug] ??
-              (typeof contextToken === "string" ? contextToken : undefined);
-            const headers = new Headers(init?.headers);
-            if (typeof token === "string" && token.length > 0) {
-              headers.set(USER_TOKEN_HEADER, token);
-            }
-            return fetch(url, { ...init, headers });
-          },
-        },
-      ])
-    ),
-  });
-}
-
-/* -------------------------------------------------------------------------- */
-/* The per-user client cache                                                   */
-/* -------------------------------------------------------------------------- */
+/** Declared approvals for the gateway built-ins, read from the same registry
+ * object a new built-in is added to. Everything else classifies by name. */
+const BUILTIN_APPROVAL: ReadonlyMap<string, "read" | "write"> = new Map(
+  BUILT_IN_TOOLS.map((t) => [t.definition.name, t.approval])
+);
 
 /**
- * How long a user's plugin sessions are kept alive after their last use, and
- * how many users' worth we keep at once.
+ * Whether a tool named `name` needs user approval before running (SCRUM-188).
  *
- * A client per user is a client per user, so this cache grows with traffic and
- * has to be bounded. The policy is idle-TTL plus an LRU cap, both enforced by a
- * sweep on every lookup — no timers, because a timer in a serverless-shaped
- * process either keeps it alive or never fires. Eviction always `disconnect()`s,
- * which is what actually terminates the MCP sessions on the plugin servers;
- * dropping the reference alone would leak a session per user, on every plugin,
- * for the lifetime of the process.
- *
- * The TTL is generous relative to a chat turn and short relative to an access
- * token's life, so the common case is a warm session for the length of a
- * conversation and a cold one the next day. Nothing depends on the exact
- * numbers: a swept-out client costs one handshake to rebuild.
+ * Built-ins use their DECLARED approval (they live outside the plugin
+ * registry, so the name classifier's snapshot never covers them); every
+ * other name goes through classifyWrite, whose default is fail-closed: a
+ * name it does not recognise requires approval. There is no third source.
  */
-const CLIENT_IDLE_TTL_MS = 10 * 60_000;
-const MAX_CACHED_CLIENTS = 200;
-
-type CachedClient = { key: string; client: MCPClient; lastUsedAt: number };
-
-/** Insertion-ordered, and re-inserted on every hit, so iteration order IS
- * least-recently-used order. */
-const clientCache = new Map<string, CachedClient>();
-
-function disposeCachedClient(entry: CachedClient): void {
-  clientCache.delete(entry.key);
-  void entry.client.disconnect().catch(() => {});
+export function requireApprovalFor(name: string): boolean {
+  const declared = BUILTIN_APPROVAL.get(name);
+  if (declared !== undefined) return declared === "write";
+  return classifyWrite(name);
 }
 
-function sweepClientCache(now: number): void {
-  for (const entry of Array.from(clientCache.values())) {
-    if (now - entry.lastUsedAt > CLIENT_IDLE_TTL_MS) disposeCachedClient(entry);
-  }
-  while (clientCache.size > MAX_CACHED_CLIENTS) {
-    const oldest = clientCache.values().next().value;
-    if (!oldest) break;
-    disposeCachedClient(oldest);
-  }
-}
-
-/**
- * An opaque digest of the tokens a client was built with.
- *
- * It exists so that a REFRESHED TOKEN GETS A NEW SESSION. A session pins the
- * credential it was opened with; keep the session and the user keeps acting
- * with a token that expired hours ago. Changing the fingerprint changes the
- * cache key, so the old client is left to age out and a new session opens with
- * the current token — the one correct behaviour that a user-id-only key cannot
- * produce.
- *
- * The digest is one-way and is only ever compared to another digest. It must
- * never be logged, returned in an error, or surfaced anywhere a token's
- * presence could be confirmed by guessing at its input.
- */
-function tokenFingerprint(tokensByServer: PluginTokens): string {
-  const material = Object.keys(tokensByServer)
-    .sort()
-    .map((slug) => `${slug}\u0000${tokensByServer[slug]}`)
-    .join("\u0001");
-  return createHash("sha256").update(material).digest("hex");
-}
-
-/**
- * This user's plugin client, memoised.
- *
- * The key is (server set, user, token fingerprint) and every part of it earns
- * its place:
- * - the SERVER SET, so installing, removing or restarting a plugin invalidates
- *   the client rather than leaving it pointed at a port nobody is listening on;
- * - the USER, so no two people can ever be handed the same session — the
- *   property that makes cross-tenant leakage structurally impossible here
- *   rather than merely unobserved;
- * - the TOKEN FINGERPRINT, so a refresh opens a new session instead of pinning
- *   a stale credential for as long as the process lives.
- */
-export function getPluginMCPClient(
-  servers: PluginServerRow[],
-  opts: { userId: string; tokensByServer: PluginTokens }
-): MCPClient {
-  const signature = servers
-    .map((s) => `${s.slug}@${buildPluginServerUrl(s)}`)
-    .sort()
-    .join("|");
-  const key = [signature, opts.userId, tokenFingerprint(opts.tokensByServer)].join("\u0002");
-
-  const now = Date.now();
-  sweepClientCache(now);
-
-  const hit = clientCache.get(key);
-  if (hit) {
-    hit.lastUsedAt = now;
-    // Re-insert to move it to the young end of the LRU order.
-    clientCache.delete(key);
-    clientCache.set(key, hit);
-    return hit.client;
-  }
-
-  const client = createPluginMCPClient(servers, {
-    // Distinct per cache entry: the framework keeps its own registry of clients
-    // by id and hands back the existing one for a repeat id, which for a
-    // per-user client would be the shared-client bug wearing a different hat.
-    id: `datatorag-playground-plugins-${createHash("sha256").update(key).digest("hex").slice(0, 32)}`,
-    tokensByServer: opts.tokensByServer,
-  });
-  clientCache.set(key, { key, client, lastUsedAt: now });
-  sweepClientCache(now);
-  return client;
-}
-
-/** Disconnects and forgets every cached client. For tests and shutdown; nothing
- * in a request path should need it. */
-export async function resetPluginClientCache(): Promise<void> {
-  const entries = Array.from(clientCache.values());
-  clientCache.clear();
-  await Promise.allSettled(entries.map((entry) => entry.client.disconnect()));
-}
-
-/* -------------------------------------------------------------------------- */
-/* The write gate                                                              */
-/* -------------------------------------------------------------------------- */
-
-/**
- * Applies our policy to one tool the MCP client just handed us, in place.
- *
- * Two things happen here, and both are the kind of thing that is invisible
- * when it is missing:
- *
- * 1. THE WRITE GATE. `requireApproval` is set from the same classifier the
- *    previous agent loop used, so a tool that can change the user's data
- *    cannot reach the plugin server until the user has said yes. This is set
- *    as a plain property on the tool rather than by wrapping it: the runtime
- *    reads it off the tool itself, and it defaults to `false`, which is
- *    exactly why every tool has to be visited — a tool we forget to classify
- *    is a tool that runs unprompted, not a tool that errors.
- *
- * 2. THE ACCOUNT STRIP. See `stripAccountArg` — the playground has always
- *    acted as the user's default account, and it still does.
- *
- * 3. THE OUTPUT CAP. See `capToolOutput` — a tool result is re-sent on every
- *    later step of the turn, so an unbounded one is paid for repeatedly.
- *
- * All three wrap the tool the client handed us rather than the transport, so
- * they hold for every call the model can make, including one made on the
- * resume leg after an approval.
- *
- * Mutating rather than copying is safe and deliberate: the client builds these
- * tool objects fresh on every listing, so the object we are handed belongs to
- * this request. Copying a class instance would risk dropping whatever the
- * framework keeps off the own-property surface.
- *
- * NOT TAKEN UP YET, and worth knowing before anyone redesigns the classifier:
- * `requireApproval` also accepts `(input, ctx) => boolean | Promise<boolean>`,
- * so the decision may read the tool's ARGUMENTS and not just its name. That
- * makes rules like "sending mail outside the company needs approval, internal
- * does not" expressible, which a name-based classifier cannot say at all — it
- * sees `gws-mcp__gmail_send` and nothing about the recipient. Deliberately not
- * built here: an input-aware rule is a product policy decision, and this change
- * was scoped to keeping the existing gate's behaviour identical. The current
- * boolean form is the floor either way — an input-aware rule may raise a read
- * to needing approval, never lower a write.
- */
-/**
- * What the agent path needs to report a tool call the way the gateway does.
- *
- * METERING BELONGS HERE, NOT AT THE STREAM. The first version of agent
- * metering watched `tool-output-available` chunks go past on the UI message
- * stream and called `trackToolCall` from there. That vantage point cannot see
- * a connector, a latency or an account, so it reported `connectorType: null`
- * and `latencyMs: 0` into `usage_events` — a table with no surface column that
- * feeds the customer-facing by-connector and latency views. Agent rows landed
- * there indistinguishable from gateway traffic and permanently wrong.
- *
- * This wrapper has all three: the slug is in the name, the connector follows
- * from it, the account arrives as an argument, and the clock brackets the real
- * call. Undefined `meter` means do not meter, which keeps the injectable tests
- * that build tools without a database working unchanged.
- */
-export type ToolMeter = {
-  db: Database;
-  userId: string;
-  /** Ties this call to the run that made it, so a turn's calls and its token
-   * cost can be summed into one billable unit. */
-  runId: string | null;
-  /** The connector this tool's plugin maps to, or null for an unmapped one. */
-  connectorType: string | null;
-  /** The account the plugin session was opened as — the identity the call
-   * actually runs with, since `stripAccountArg` removes any account argument
-   * before dispatch. This, not the argument, is what usage rows stamp. Null
-   * when resolution reported no account (legacy connections, tests). */
-  resolvedAccountEmail: string | null;
+/** The MCP tool-definition fields the wrapper consumes. */
+type McpToolDef = {
+  name: string;
+  description?: string;
+  inputSchema: Record<string, unknown>;
 };
 
-export function applyToolPolicy(
-  namespacedName: string,
-  tool: Tool<unknown, unknown, unknown, unknown>,
-  meter?: ToolMeter,
-  /** SCRUM-136: the connector and granted-scopes string of the account this
-   * session's calls run as, so the gate can refuse a call whose scope was
-   * never granted BEFORE it burns a round trip on a guaranteed 403. Absent
-   * (tests, legacy paths) means no static claim — fail-open to the call. */
-  scopeInfo?: { service: string | null; granted: string | null }
-): Tool<unknown, unknown, unknown, unknown> {
-  tool.requireApproval = classifyWrite(namespacedName);
-
-  const execute = tool.execute;
-  if (execute) {
-    tool.execute = async (input, context) => {
-      const startTime = Date.now();
-      // The account STAMPED on the usage row is the one the session actually
-      // runs as (resolved at token time), because `stripAccountArg` below
-      // removes any account argument before the call — an argument-derived
-      // stamp recorded a mailbox the call never touched, or (the common
-      // case) nothing at all. The argument is kept only as a fallback for
-      // meters built without resolution, i.e. injected test doubles.
-      const accountEmail = meter?.resolvedAccountEmail ?? accountArgOf(input);
-
-      // SCRUM-136/107: refuse before dispatch when the needed scope is
-      // known-missing. The message instructs the model to say so in words
-      // and offer the reconnect card via request_connection — the user never
-      // reads a raw Google error. Metered with the distinct marker so a
-      // refusal is never invisible to instrumentation.
-      const scopeCheck = checkScopeForTool({
-        toolName: namespacedName,
-        service: scopeInfo?.service,
-        granted: scopeInfo?.granted,
-        surface: "agent",
-      });
-      if (!scopeCheck.ok) {
-        // SCRUM-145: with a database on hand, the refusal names the account
-        // this session runs as and any other connected account that DOES
-        // hold the scope, so the model can tell the user the truth instead
-        // of a sentence that survives them fixing their grant. Enrichment
-        // only — a failed lookup leaves the plain refusal standing.
-        let refusalText = scopeCheck.message;
-        if (meter && scopeInfo?.service) {
-          try {
-            const alternates = await accountsGrantingScope(
-              meter.db,
-              meter.userId,
-              scopeInfo.service,
-              scopeCheck.missing.scope,
-              meter.resolvedAccountEmail
-            );
-            refusalText = missingScopeMessage({
-              displayName: scopeCheck.missing.displayName,
-              surface: "agent",
-              accountEmail: meter.resolvedAccountEmail,
-              alternates,
-            });
-          } catch {
-            // scopeCheck.message stands.
-          }
-        }
-        const marker = `${MISSING_SCOPE_ERROR_MARKER} ${scopeCheck.missing.displayName} not granted`;
-        if (meter) {
-          report(meter, namespacedName, accountEmail, startTime, {
-            responseSizeBytes: null,
-            errorMessage: marker,
-            outcome: {
-              thrown: false,
-              isError: true,
-              errorMessage: marker,
-              source: "agent",
-              toolName: namespacedName,
-            },
-          });
-        }
-        return {
-          content: [{ type: "text", text: refusalText }],
-          isError: true,
-        };
-      }
-
-      try {
-        const result = await execute(stripAccountArg(input), context);
-        // Serialized ONCE and reused. Sizing and capping both need the
-        // serialized form, and this runs on every tool call on a pre-cap
-        // result, so a second traversal of a large mailbox or Drive listing is
-        // real synchronous work on the event loop for nothing.
-        const serialized = serialize(result);
-        const { text: flatText, isError: flatIsError } = flattenToolResult(
-          result as { content?: Array<{ type: string; text?: string }>; isError?: boolean }
-        );
-        if (meter) {
-          report(meter, namespacedName, accountEmail, startTime, {
-            responseSizeBytes: serialized?.length ?? null,
-            errorMessage: flatIsError ? flatText : null,
-            outcome: {
-              thrown: false,
-              isError: flatIsError,
-              errorMessage: flatIsError ? flatText : null,
-              source: "agent",
-              toolName: namespacedName,
-            },
-          });
-        }
-
-        // SCRUM-136: the at-failure net behind the pre-call check above. A
-        // Google insufficient-scope 403 that slipped through (unmapped tool,
-        // stale row) reaches the model as instructions to explain and offer
-        // reconnect; the RAW error was metered above — truth in the usage
-        // row, words in the conversation.
-        if (flatIsError) {
-          const rewritten = rewriteScopeError({
-            toolName: namespacedName,
-            service: scopeInfo?.service,
-            errorText: flatText,
-            surface: "agent",
-          });
-          if (rewritten) {
-            console.warn(`[scope-error] ${namespacedName}: ${flatText}`);
-            return {
-              ...(result as Record<string, unknown>),
-              content: [{ type: "text", text: rewritten }],
-            };
-          }
-        }
-        return capToolOutput(result, serialized);
-      } catch (error) {
-        if (meter) {
-          const message = error instanceof Error ? error.message : "Unknown error";
-          report(meter, namespacedName, accountEmail, startTime, {
-            responseSizeBytes: null,
-            errorMessage: message,
-            outcome: {
-              thrown: true,
-              errorMessage: message,
-              source: "agent",
-              toolName: namespacedName,
-            },
-          });
-        }
-        throw error;
-      }
-    };
-  }
-
-  return tool;
-}
-
-/** The account the caller addressed, when they named one. */
-function accountArgOf(input: unknown): string | undefined {
-  if (input === null || typeof input !== "object" || Array.isArray(input)) return undefined;
-  const account = (input as Record<string, unknown>).account;
-  return typeof account === "string" && account.length > 0 ? account : undefined;
-}
-
-/** Serialize once, for both sizing and capping. Never throws: a result that
- * will not serialize (circular) must not turn a successful tool call into a
- * failed one just because we tried to measure it. */
-function serialize(result: unknown): string | undefined {
-  try {
-    return JSON.stringify(result);
-  } catch {
-    return undefined;
-  }
-}
-
-/** One usage row, from either outcome.
+/**
+ * Wraps the MCP server's tool list into the agent runtime's tool shape.
  *
- * Shared rather than written twice because the two branches differ in three
- * fields and agree in five, and a field added to one and missed on the other
- * produces an inconsistent row silently — which is the class of defect the
- * metering tests exist to catch, so reproducing it inside the fix would be a
- * poor joke. Fire-and-forget, as the gateway path does it: metering must never
- * slow a tool response, and trackToolCall never throws. */
-function report(
-  meter: ToolMeter,
-  toolName: string,
-  accountEmail: string | undefined,
-  startTime: number,
-  outcome: {
-    responseSizeBytes: number | null;
-    errorMessage: string | null;
-    outcome: Parameters<typeof trackToolCall>[1]["outcome"];
+ * EVERY tool the model can see passes through here — there is no path that
+ * puts a tool in front of the model without the approval requirement being
+ * set, which is the property that makes the gate a gate rather than a
+ * habit. (The three UI-action introspection tools are merged after this set
+ * and DECLARE their own approvals; the boundary suite asserts both groups.)
+ *
+ * Injectable for tests: callers pass the connected client's methods.
+ */
+export function wrapMcpTools(
+  defs: McpToolDef[],
+  callTool: (name: string, args: Record<string, unknown>) => Promise<unknown>
+): ToolsInput {
+  const resolved: ToolsInput = {};
+  for (const def of defs) {
+    resolved[def.name] = {
+      description: def.description ?? "",
+      inputSchema: jsonSchema(def.inputSchema as JSONSchema7),
+      requireApproval: requireApprovalFor(def.name),
+      // The result is returned as the MCP server shaped it — including its
+      // worded scope refusals and error rewrites — capped for context size.
+      // No metering, no rewriting, no account handling here: the server did
+      // all of that, for this client like any other.
+      execute: async (input: unknown) => {
+        const result = await callTool(
+          def.name,
+          (input ?? {}) as Record<string, unknown>
+        );
+        return capToolOutput(result);
+      },
+    } as ToolsInput[string];
   }
-): void {
-  void trackToolCall(meter.db, {
-    userId: meter.userId,
-    toolName,
-    connectorType: meter.connectorType,
-    accountEmail,
-    latencyMs: Date.now() - startTime,
-    runId: meter.runId,
-    ...outcome,
-  });
+  return applyPromptCacheBreakpoint(resolved);
 }
 
 /** Attaches the tool-schema half of the prompt-cache pair to a resolved set.
@@ -673,7 +147,7 @@ function report(
  * turn, which is the normal shape of a playground turn.
  *
  * "Last" is well defined: the set is a plain object built in a single pass
- * below, so its key order is its insertion order, and that is the order the
+ * above, so its key order is its insertion order, and that is the order the
  * provider serializes. The order has to be STABLE across the steps of a turn
  * for the cache to hit at all — it is, because the set is resolved once per
  * request and reused for every step of that request.
@@ -687,109 +161,15 @@ export function applyPromptCacheBreakpoint(tools: ToolsInput): ToolsInput {
   return tools;
 }
 
-/* -------------------------------------------------------------------------- */
-/* Per-request tool resolution                                                 */
-/* -------------------------------------------------------------------------- */
-
-export type PluginToolDeps = {
-  client: MCPClient;
-  /** The namespaced tools this user is allowed to see. Shared policy — a user
-   * only gets tools from plugins whose service they have actually connected. */
-  listAllowedToolNames: (userId: string) => Promise<Set<string>>;
-  /** Where usage rows go. Omitted by the injectable tests, which build tool
-   * sets with no database; omitting it turns metering off rather than
-   * requiring every caller to supply a stub. */
-  meterDb?: Database;
-};
-
 /**
- * The tool set for one request, named our way and filtered to this user.
+ * The tool set for one request: the gateway's own MCP, consumed in-process.
  *
- * Grouped-by-server listing is used rather than the flat namespaced one for a
- * concrete reason: the flat list has already applied the framework's
- * single-underscore join, which is lossy for our names. Grouped, the server is
- * still a separate key, so we can join it ourselves and keep a name that can be
- * taken apart again.
- *
- * No user id in the context means no tools — a request that cannot say who it
- * is gets nothing, rather than everything.
+ * No user id in the context means no tools — a request that cannot say who
+ * it is gets nothing, rather than everything. The `surface: "agent"` hint
+ * changes only the WORDING of scope refusals (the model gets steered to the
+ * inline reconnect control it can render); the gate policy is the server's
+ * own, identical for every client.
  */
-export async function resolvePluginTools(
-  requestContext: RequestContext | undefined | null,
-  deps: PluginToolDeps
-): Promise<ToolsInput> {
-  const userId = requestContext?.get(USER_ID_CONTEXT_KEY);
-  if (typeof userId !== "string" || userId.length === 0) return {};
-
-  const [allowed, toolsets] = await Promise.all([
-    deps.listAllowedToolNames(userId),
-    deps.client.listToolsets(),
-  ]);
-
-  // The run id rides the same context the model factory reads it from, so a
-  // tool call and the model calls of the same turn carry one id. Absent on the
-  // paths that do not mint one, and null is a fine value for it.
-  const runId = requestContext?.get(RUN_ID_CONTEXT_KEY);
-  const meterBase = deps.meterDb
-    ? {
-        db: deps.meterDb,
-        userId,
-        runId: typeof runId === "string" && runId.length > 0 ? runId : null,
-      }
-    : null;
-
-  const resolved: ToolsInput = {};
-  for (const [serverSlug, serverTools] of Object.entries(toolsets)) {
-    // Derived once per server rather than per tool: every tool from one plugin
-    // shares its connector — and its account, which was resolved alongside the
-    // token this server's session was opened with.
-    const connectorType = PLUGIN_SERVICE_MAP[serverSlug] ?? null;
-    const contextAccount = requestContext?.get(userAccountContextKey(serverSlug));
-    const resolvedAccountEmail =
-      typeof contextAccount === "string" && contextAccount.length > 0
-        ? contextAccount
-        : null;
-    const meter = meterBase
-      ? { ...meterBase, connectorType, resolvedAccountEmail }
-      : undefined;
-    // SCRUM-136: the granted scopes of the account this server's session was
-    // opened with, resolved alongside the token. Absent means no claim; the
-    // scope gate inside applyToolPolicy fails open to the call.
-    const contextScopes = requestContext?.get(userScopesContextKey(serverSlug));
-    const scopeInfo = {
-      service: connectorType,
-      granted:
-        typeof contextScopes === "string" && contextScopes.length > 0
-          ? contextScopes
-          : null,
-    };
-    for (const [toolName, tool] of Object.entries(serverTools)) {
-      const namespacedName = toNamespacedName(serverSlug, toolName);
-      if (!allowed.has(namespacedName)) continue;
-      // The KEY is what the model sees and what comes back on a tool call, so
-      // this is where our naming convention is actually enforced.
-      //
-      // Every tool goes through applyToolPolicy — there is no path that puts a
-      // tool in front of the model without one, which is the property that
-      // makes the gate a gate rather than a habit.
-      resolved[namespacedName] = applyToolPolicy(
-        namespacedName,
-        tool,
-        meter,
-        scopeInfo
-      );
-    }
-  }
-  return applyPromptCacheBreakpoint(resolved);
-}
-
-/** The resolver the agent is built with: same as {@link resolvePluginTools},
- * wired to the real database and to THIS CALLER'S client. Kept separate so the
- * resolution logic above stays injectable and testable without either.
- *
- * The identity check is repeated here rather than left to `resolvePluginTools`
- * because the client is chosen by user: an anonymous request must not open a
- * session at all, not merely be handed no tools from one. */
 export async function resolveUserPluginTools({
   requestContext,
 }: {
@@ -799,27 +179,28 @@ export async function resolveUserPluginTools({
   if (typeof userId !== "string" || userId.length === 0) return {};
 
   const db = getDb();
-  const servers = await listPluginServers(db);
-  // The tokens are already on the request context — the route loaded them when
-  // it built it — so this costs no extra database work.
-  const client = getPluginMCPClient(servers, {
-    userId,
-    tokensByServer: readPluginTokens(requestContext, servers.map((s) => s.slug)),
+  const server = createMcpServer(userId, db, agentPool, {
+    surface: "agent",
+    clientId: WEB_OAUTH_CLIENT_ID,
   });
+  const client = new Client(
+    { name: AGENT_CLIENT_NAME, version: "1.0.0" },
+    { capabilities: {} }
+  );
+  const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
+  await Promise.all([
+    server.connect(serverTransport),
+    client.connect(clientTransport),
+  ]);
 
-  const pluginTools = await resolvePluginTools(requestContext, {
-    client,
-    meterDb: db,
-    listAllowedToolNames: async (id) => {
-      const rows = await listUserToolRows(db, id);
-      return new Set(rows.map((row) => row.namespacedName));
-    },
-  });
+  const { tools } = await client.listTools();
+  const wrapped = wrapMcpTools(tools as McpToolDef[], (name, args) =>
+    client.callTool({ name, arguments: args })
+  );
 
-  // Introspection tools are OURS, not a plugin's: they read this user's own
-  // account state, they take no identity argument, and their approval
-  // requirement is declared rather than classified from a name. They are added
-  // after the plugin set so the prompt-cache breakpoint stays on a plugin tool
-  // schema, which is the large invariant block worth caching.
-  return { ...pluginTools, ...buildIntrospectionTools({ db, userId }) };
+  // Introspection tools are OURS, not a plugin's: UI actions on this user's
+  // own account, no identity argument, approval DECLARED rather than
+  // classified. Added after the MCP set so the prompt-cache breakpoint stays
+  // on an MCP tool schema, which is the large invariant block worth caching.
+  return { ...wrapped, ...buildIntrospectionTools({ db, userId }) };
 }

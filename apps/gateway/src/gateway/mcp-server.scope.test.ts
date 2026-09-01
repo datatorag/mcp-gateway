@@ -53,8 +53,8 @@ const poolMock = {
   release: vi.fn(),
 } as unknown as ConnectionPool;
 
-async function connectedClient(baseUrl?: string) {
-  const server = createMcpServer("user-1", dbMock, poolMock, { baseUrl });
+async function connectedClient(baseUrl?: string, surface?: "mcp" | "agent") {
+  const server = createMcpServer("user-1", dbMock, poolMock, { baseUrl, surface });
   const client = new Client({ name: "test-client", version: "0.0.0" });
   const [clientTransport, serverTransport] =
     InMemoryTransport.createLinkedPair();
@@ -216,6 +216,33 @@ describe("pre-call scope gate (SCRUM-107)", () => {
 
     expect(result.isError ?? false).toBe(false);
     expect(callPluginToolOnce).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("the agent surface hint (SCRUM-188)", () => {
+  it("steers the agent client's scope refusal to request_connection, not a URL", async () => {
+    // Same gate, same policy, different audience: the in-process agent
+    // client CAN render the inline reconnect card, so its refusal wording
+    // instructs the model to offer it rather than pointing at a dashboard
+    // URL the model would merely recite.
+    resolveServiceToken.mockResolvedValue({
+      token: "tok",
+      accountEmail: "a@example.com",
+      scopes: IDENTITY_ONLY,
+    });
+    const client = await connectedClient("https://gw.example.test", "agent");
+
+    const result = await client.callTool({
+      name: "gws-mcp__drive_search",
+      arguments: { query: "q" },
+    });
+
+    expect(result.isError).toBe(true);
+    const text = textOf(result);
+    expect(text).toContain("request_connection");
+    expect(text).not.toContain("https://gw.example.test/dashboard");
+    // And still no scope URLs in front of anyone.
+    expect(text).not.toContain("googleapis.com");
   });
 });
 

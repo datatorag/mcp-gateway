@@ -70,26 +70,13 @@ vi.mock("@/gateway/track", () => ({
   trackPlaygroundConfirm: async () => {},
 }));
 
-// The plugin inventory and the token vault are database-backed and are not what
-// this file is about. `buildPluginRequestContext` stays REAL — it is what makes
-// the per-user identity the resumed write travels with.
-vi.mock("@/mastra/mcp/client", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("@/mastra/mcp/client")>()),
-  listPluginServers: async () => [{ slug: "gws-mcp", containerPort: 1, githubRepoUrl: null }],
-  loadUserPluginCredentials: async () => ({
-    tokensByServer: { "gws-mcp": "test-token" },
-    accountsByServer: {},
-  }),
-}));
-
 const getMastra = vi.fn();
 vi.mock("@/mastra", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/mastra")>()),
   getMastra: () => getMastra(),
 }));
 
-import { startFakePlugin } from "@/mastra/test-support/fake-plugin";
-import { buildPluginRequestContext, createPluginMCPClient, resolvePluginTools } from "@/mastra/mcp/client";
+import { buildPluginRequestContext, wrapMcpTools } from "@/mastra/mcp/client";
 import { POST } from "./route";
 
 /* -------------------------------------------------------------------------- */
@@ -152,32 +139,25 @@ const WRITE_TOOL = "gws-mcp__docs_create";
 const TOOL_CALL_ID = "call-victim";
 
 async function setup() {
-  const plugin = await startFakePlugin(["docs_create"]);
-  cleanups.push(plugin.close);
-
-  const client = createPluginMCPClient(
+  // The tool set as SCRUM-188 builds it: the wrapped MCP boundary, with a
+  // recorder standing in for the in-process client. What matters to this
+  // file is only that the tool is write-gated and that execution is
+  // observable — the ownership gate under test is entirely route-side.
+  const executed: Array<{ tool: string; args: Record<string, unknown> }> = [];
+  const tools = wrapMcpTools(
     [
       {
-        slug: "gws-mcp",
-        containerPort: plugin.port,
-        // Present so the URL resolves to the local test server rather than the
-        // in-cluster hostname the production shape uses.
-        githubRepoUrl: "https://github.com/datatorag/gws-mcp",
+        name: WRITE_TOOL,
+        description: "write",
+        inputSchema: { type: "object", properties: {} },
       },
     ],
-    {
-      id: `own-${Date.now()}-${Math.random()}`,
-      // The session is opened as USER_A, which is what makes the resumed write
-      // in these tests genuinely A's rather than nobody's.
-      tokensByServer: { "gws-mcp": "t" },
+    async (name, args) => {
+      executed.push({ tool: name, args });
+      return { content: [{ type: "text", text: "ok" }] };
     }
   );
-  cleanups.push(() => client.disconnect());
-
-  const tools = await resolvePluginTools(
-    buildPluginRequestContext({ userId: USER_A, tokensByServer: { "gws-mcp": "t" } }),
-    { client, listAllowedToolNames: async () => new Set([WRITE_TOOL]) }
-  );
+  const plugin = { executed };
 
   const storage = new InMemoryStore();
   const agent = new Agent({
@@ -278,7 +258,7 @@ describe("approval ownership", () => {
     getSessionUserId.mockResolvedValue(USER_A);
     await drain(await POST(post({ messages: approvalMessages(approvalId), id: "chat-1" })));
 
-    expect(plugin.executed).toEqual([{ tool: "docs_create", args: { title: "victim-doc" } }]);
+    expect(plugin.executed).toEqual([{ tool: WRITE_TOOL, args: { title: "victim-doc" } }]);
   });
 
   it("rejects an approval whose run id was never minted here", async () => {
@@ -347,6 +327,6 @@ describe("why the gate exists — the framework's own behaviour", () => {
     // If this ever goes green as an empty array, the framework has grown its
     // own ownership check and the route gate has a second opinion backing it
     // up. Until then the gate is the only thing standing here.
-    expect(plugin.executed).toEqual([{ tool: "docs_create", args: { title: "victim-doc" } }]);
+    expect(plugin.executed).toEqual([{ tool: WRITE_TOOL, args: { title: "victim-doc" } }]);
   });
 });

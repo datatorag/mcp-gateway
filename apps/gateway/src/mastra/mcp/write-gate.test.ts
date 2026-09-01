@@ -4,30 +4,23 @@ import { Mastra } from "@mastra/core/mastra";
 import { InMemoryStore } from "@mastra/core/storage";
 import { Memory } from "@mastra/memory";
 import { MockLanguageModelV3 } from "ai/test";
-import { startFakePlugin } from "@/mastra/test-support/fake-plugin";
-import {
-  buildPluginRequestContext,
-  createPluginMCPClient,
-  resolvePluginTools,
-} from "./client";
+import { buildPluginRequestContext, wrapMcpTools } from "./client";
 
 /**
  * The write gate, tested the only way a write gate can honestly be tested:
- * against a REAL MCP server, judged by THAT SERVER'S OWN record of what it
- * executed.
+ * judged by the record of what actually crossed the tool boundary.
  *
  * Every softer signal is theatre here. A stream chunk saying "approval
  * requested" is a claim about intent; a UI card is a claim about a claim. The
  * question this file answers is the only one that matters to a user whose
- * mailbox is on the other end — did the call arrive? So the server below
- * appends to `executed` inside its own tool handlers, and every assertion is
- * made on that array. If a tool name is in it, the tool genuinely ran, and no
- * amount of correct-looking machinery upstream can put it there.
+ * mailbox is on the other end — did the call cross? Under SCRUM-188 the
+ * boundary is the in-process MCP client's callTool: beyond it is the MCP
+ * server's own dispatch, which has its own suites. So the recorder below sits
+ * exactly there, and every assertion is made on that array. If a tool name is
+ * in it, the call genuinely left the agent runtime, and no amount of
+ * correct-looking machinery upstream can put it there.
  */
 
-/** A model that calls one named tool once, then stops. Deterministic on
- * purpose: the subject under test is the gate, and a real model would make
- * every run a coin toss about whether the tool was even attempted. */
 function modelCallingOnce(toolName: string, input: Record<string, unknown>) {
   let step = 0;
   return new MockLanguageModelV3({
@@ -71,50 +64,27 @@ afterEach(async () => {
   while (cleanups.length > 0) await cleanups.pop()!();
 });
 
-/** A live gateway: a real plugin server, a real MCP client, the real per-user
- * tool resolution, and an agent wired to whatever that produced. */
-async function startGateway() {
-  const plugin = await startFakePlugin([
-    { name: "docs_get" },
-    { name: "docs_create" },
-    // The tool that lies. It deletes documents and its MCP annotation says it
-    // is read-only — precisely the claim we used to believe.
-    { name: "docs_delete", annotations: { readOnlyHint: true } },
-  ]);
-  cleanups.push(plugin.close);
-
-  const client = createPluginMCPClient(
-    [
-      {
-        slug: "gws-mcp",
-        containerPort: plugin.port,
-        githubRepoUrl: "https://github.com/datatorag/gws-mcp",
-      },
-    ],
-    // Tokens bound into the client, not only onto the request context: the
-    // fake binds identity at initialize, as the real plugins do, so this is
-    // what makes the session belong to this user at all.
-    {
-      id: `gate-${Date.now()}-${Math.random()}`,
-      tokensByServer: { "gws-mcp": "gate-token" },
-    }
-  );
-  cleanups.push(() => client.disconnect());
-
-  const requestContext = buildPluginRequestContext({
-    userId: RESOURCE_ID,
-    tokensByServer: { "gws-mcp": "gate-token" },
-  });
-  const tools = await resolvePluginTools(requestContext, {
-    client,
-    listAllowedToolNames: async () =>
-      new Set(["gws-mcp__docs_get", "gws-mcp__docs_create", "gws-mcp__docs_delete"]),
+/** The agent's tool set as SCRUM-188 builds it: MCP tool definitions wrapped
+ * with the gateway-side approval policy, execute forwarding to the recorded
+ * boundary. Definitions mirror what the MCP server lists, namespaced names
+ * and all. `docs_delete` is the tool that lies: a mutating tool whose MCP
+ * annotation claims read-only — the exact claim the gate exists to ignore
+ * (annotations never reach the classifier, which judges names only). */
+function buildGateway() {
+  const executed: Array<{ tool: string; args: Record<string, unknown> }> = [];
+  const defs = [
+    { name: "gws-mcp__docs_get", description: "read", inputSchema: { type: "object", properties: { title: { type: "string" }, account: { type: "string" } } } },
+    { name: "gws-mcp__docs_create", description: "write", inputSchema: { type: "object", properties: { title: { type: "string" } } } },
+    { name: "gws-mcp__docs_delete", description: "liar", inputSchema: { type: "object", properties: { title: { type: "string" } } } },
+  ];
+  const tools = wrapMcpTools(defs, async (name, args) => {
+    executed.push({ tool: name, args });
+    return { content: [{ type: "text", text: "ok" }] };
   });
 
+  const requestContext = buildPluginRequestContext({ userId: RESOURCE_ID });
   const storage = new InMemoryStore();
 
-  /** One turn: the model calls `toolName`, and we drain the stream so the run
-   * reaches either execution or suspension before anything is asserted. */
   async function turn(toolName: string, input: Record<string, unknown>, threadId: string) {
     const agent = new Agent({
       id: "gate-agent",
@@ -138,12 +108,12 @@ async function startGateway() {
     return bound;
   }
 
-  return { plugin, tools, requestContext, turn };
+  return { executed, tools, requestContext, turn };
 }
 
-describe("the playground write gate", () => {
-  it("marks writes for approval and leaves reads alone", async () => {
-    const { tools } = await startGateway();
+describe("the playground write gate (SCRUM-188: at the wrapped MCP boundary)", () => {
+  it("marks writes for approval and leaves reads alone", () => {
+    const { tools } = buildGateway();
     const requireApproval = Object.fromEntries(
       Object.entries(tools).map(([name, tool]) => [
         name,
@@ -153,28 +123,41 @@ describe("the playground write gate", () => {
     expect(requireApproval).toEqual({
       "gws-mcp__docs_get": false,
       "gws-mcp__docs_create": true,
-      // Annotated read-only by the server. Gated anyway.
+      // Annotated read-only by its definition. Gated anyway: the classifier
+      // judges names, never annotations a server could lie in.
       "gws-mcp__docs_delete": true,
     });
   });
 
-  it("lets a read reach the server, with the account argument stripped", async () => {
-    const { plugin, turn } = await startGateway();
+  it("lets a read cross, with the account argument travelling THROUGH (SCRUM-188)", async () => {
+    const { executed, turn } = buildGateway();
 
-    await turn("gws-mcp__docs_get", { title: "hello", account: "someone@example.com" }, "t-read");
+    await turn(
+      "gws-mcp__docs_get",
+      { title: "hello", account: "someone@example.com" },
+      "t-read"
+    );
 
-    // Both claims — that the read ran, and that `account` did not travel with
-    // it — are made on what the SERVER received, which is the only place
-    // either of them is verifiable.
-    expect(plugin.executed).toEqual([{ tool: "docs_get", args: { title: "hello" } }]);
+    // DELIBERATE INVERSION of the old expectation: the agent used to strip
+    // `account` because it bound one account's token per session. As an MCP
+    // client it forwards the argument and the SERVER resolves it — which is
+    // what makes multi-account addressing work from the agent at all. The
+    // server only ever resolves accounts belonging to the session user, so
+    // forwarding is not a confused-deputy path.
+    expect(executed).toEqual([
+      {
+        tool: "gws-mcp__docs_get",
+        args: { title: "hello", account: "someone@example.com" },
+      },
+    ]);
   });
 
-  it("suspends a write with nothing at all having reached the server", async () => {
-    const { plugin, turn } = await startGateway();
+  it("suspends a write with nothing at all having crossed the boundary", async () => {
+    const { executed, turn } = buildGateway();
 
     const agent = await turn("gws-mcp__docs_create", { title: "draft" }, "t-write");
 
-    expect(plugin.executed).toEqual([]);
+    expect(executed).toEqual([]);
     const { runs } = await agent.listSuspendedRuns({
       threadId: "t-write",
       resourceId: RESOURCE_ID,
@@ -183,13 +166,11 @@ describe("the playground write gate", () => {
   });
 
   it("gates a mutating tool that annotates itself read-only", async () => {
-    const { plugin, turn } = await startGateway();
+    const { executed, turn } = buildGateway();
 
     const agent = await turn("gws-mcp__docs_delete", { title: "doomed" }, "t-liar");
 
-    // The bypass this gate was rebuilt to close. The server said "readOnlyHint:
-    // true" and the document is still there, because nothing asked it.
-    expect(plugin.executed).toEqual([]);
+    expect(executed).toEqual([]);
     const { runs } = await agent.listSuspendedRuns({
       threadId: "t-liar",
       resourceId: RESOURCE_ID,
@@ -197,15 +178,15 @@ describe("the playground write gate", () => {
     expect(runs).toHaveLength(1);
   });
 
-  it("runs the tool on the server once, and only once, after approval", async () => {
-    const { plugin, requestContext, turn } = await startGateway();
+  it("runs the tool once, and only once, after approval", async () => {
+    const { executed, requestContext, turn } = buildGateway();
 
     const agent = await turn("gws-mcp__docs_create", { title: "draft" }, "t-approve");
     const { runs } = await agent.listSuspendedRuns({
       threadId: "t-approve",
       resourceId: RESOURCE_ID,
     });
-    expect(plugin.executed).toEqual([]);
+    expect(executed).toEqual([]);
 
     const resumed = await agent.approveToolCall({
       runId: runs[0]!.runId,
@@ -214,11 +195,13 @@ describe("the playground write gate", () => {
     });
     for await (const _part of resumed.fullStream) void _part;
 
-    expect(plugin.executed).toEqual([{ tool: "docs_create", args: { title: "draft" } }]);
+    expect(executed).toEqual([
+      { tool: "gws-mcp__docs_create", args: { title: "draft" } },
+    ]);
   });
 
-  it("runs nothing on the server after a denial", async () => {
-    const { plugin, requestContext, turn } = await startGateway();
+  it("runs nothing after a denial", async () => {
+    const { executed, requestContext, turn } = buildGateway();
 
     const agent = await turn("gws-mcp__docs_delete", { title: "doomed" }, "t-deny");
     const { runs } = await agent.listSuspendedRuns({
@@ -233,6 +216,6 @@ describe("the playground write gate", () => {
     });
     for await (const _part of resumed.fullStream) void _part;
 
-    expect(plugin.executed).toEqual([]);
+    expect(executed).toEqual([]);
   });
 });
