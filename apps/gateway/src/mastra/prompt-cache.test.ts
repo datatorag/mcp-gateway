@@ -7,8 +7,7 @@ vi.mock("@datatorag-mcp/config", () => ({
   getEnv: () => ({ ANTHROPIC_API_KEY: "test-key", PLAYGROUND_MODEL: "claude-haiku-4-5" }),
 }));
 
-import { startFakePlugin } from "./test-support/fake-plugin";
-import { buildPluginRequestContext, createPluginMCPClient, resolvePluginTools } from "./mcp/client";
+import { buildPluginRequestContext, wrapMcpTools } from "./mcp/client";
 import { createDatatoragAgent, DATATORAG_AGENT_ID, SYSTEM_PROMPT } from "./agents/datatorag";
 
 /**
@@ -92,34 +91,20 @@ afterEach(async () => {
   while (cleanups.length > 0) await cleanups.pop()!();
 });
 
-/** One real turn through the real agent, returning the body it sent. */
+/** One real turn through the real agent, returning the body it sent.
+ * Tools come through wrapMcpTools, the SCRUM-188 path: the definitions are
+ * what the in-process MCP server would list, and the breakpoint treatment
+ * under test is applied by that wrapper. */
 async function captureTurn(toolNames: string[]): Promise<CapturedBody> {
-  const plugin = await startFakePlugin(toolNames);
-  cleanups.push(plugin.close);
-
-  const client = createPluginMCPClient(
-    [
-      {
-        slug: "gws-mcp",
-        containerPort: plugin.port,
-        githubRepoUrl: "https://github.com/datatorag/gws-mcp",
-      },
-    ],
-    {
-      id: `cache-${Date.now()}-${Math.random()}`,
-      tokensByServer: { "gws-mcp": "cache-token" },
-    }
+  const requestContext = buildPluginRequestContext({ userId: "cache-user" });
+  const tools = wrapMcpTools(
+    toolNames.map((n) => ({
+      name: `gws-mcp__${n}`,
+      description: n,
+      inputSchema: { type: "object", properties: {} },
+    })),
+    async () => ({ content: [{ type: "text", text: "ok" }] })
   );
-  cleanups.push(() => client.disconnect());
-
-  const requestContext = buildPluginRequestContext({
-    userId: "cache-user",
-    tokensByServer: { "gws-mcp": "cache-token" },
-  });
-  const tools = await resolvePluginTools(requestContext, {
-    client,
-    listAllowedToolNames: async () => new Set(toolNames.map((n) => `gws-mcp__${n}`)),
-  });
 
   const storage = new InMemoryStore();
   const mastra = new Mastra({

@@ -39,6 +39,16 @@ export async function trackToolCall(
      * answer both how many tools a run used and what that run cost, which are
      * otherwise in two event streams with nothing in common. */
     runId?: string | null;
+    /** Client identity (SCRUM-189): provenance as PROPERTIES of the one
+     * event, never a second event or a second count. clientId is the OAuth
+     * client id the session authenticated with — ours and stable, but it
+     * identifies a REGISTRATION (dynamic registration mints a fresh id per
+     * register call). clientName is self-reported at the MCP initialize
+     * handshake and drifts across versions. Both, because each answers a
+     * question the other cannot. Rows from before these existed have neither;
+     * that cliff is a missing join key, not a drop in usage. */
+    clientId?: string | null;
+    clientName?: string | null;
   }
 ): Promise<void> {
   // Metering + analytics run fire-and-forget off the tool-response path (see the
@@ -70,6 +80,8 @@ export async function trackToolCall(
           metered: meter,
           surface: props.outcome.source,
           run_id: props.runId ?? null,
+          client_id: props.clientId ?? null,
+          client_name: props.clientName ?? null,
           ...identityProps(userEmail),
         },
       });

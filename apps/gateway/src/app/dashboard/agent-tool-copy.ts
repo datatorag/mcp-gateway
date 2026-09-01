@@ -39,9 +39,17 @@ export const INTERNAL_TOOL_DISPLAY: Record<
   string,
   { label: string; icon: LucideIcon }
 > = {
-  account_status: {
+  // account_status was deleted (SCRUM-188); the built-ins below are the
+  // gateway's own tools the agent now reaches as an MCP client, and the
+  // same reasoning applies: they are plumbing the user never asked for by
+  // name, so the card says what happened.
+  list_connected_accounts: {
     label: "Checking your connected accounts",
     icon: Link2Icon,
+  },
+  echo: {
+    label: "Testing the connection",
+    icon: PlugIcon,
   },
   show_mcp_config: {
     label: "Getting your MCP config",

@@ -59,12 +59,21 @@ export const BUILT_IN_TOOLS: {
     description: string;
     inputSchema: Record<string, unknown>;
   };
+  /** DECLARED approval requirement (SCRUM-188), read by the agent's tool
+   * wrapper. Built-ins live outside the plugin registry, so the name-based
+   * classifier's snapshot suites must never carry them — the declaration
+   * lives here, in the same object a new built-in is added to, so
+   * classification cannot be forgotten separately from creation. A parity
+   * test asserts every entry declares one. "read" runs unprompted; anything
+   * that changes state declares "write" and gets the confirm card. */
+  approval: "read" | "write";
   handler: (
     args: Record<string, unknown> | undefined,
     ctx: { db: Database; userId: string }
   ) => Promise<BuiltinResult>;
 }[] = [
   {
+    approval: "read",
     definition: {
       name: "list_connected_accounts",
       description:
@@ -109,6 +118,7 @@ export const BUILT_IN_TOOLS: {
     },
   },
   {
+    approval: "read",
     definition: {
       name: "echo",
       description:
@@ -148,13 +158,32 @@ export function createMcpServer(
     /** Absolute origin for links in user-facing tool errors (SCRUM-136).
      * Optional so tests and legacy call sites fall back to a relative path. */
     baseUrl?: string;
+    /** Which audience reads this server's refusal wording (SCRUM-188). The
+     * scope-gate POLICY is identical either way; only the message differs:
+     * "mcp" (default) points at the dashboard URL because an external client
+     * can render nothing else, "agent" instructs the model to offer the
+     * inline reconnect control it can actually show. Set to "agent" only by
+     * the in-process construction. */
+    surface?: "mcp" | "agent";
+    /** The OAuth client id of the credential this session authenticated
+     * with (SCRUM-189). Stamped as client_id on every tool_call event; the
+     * self-reported clientInfo.name from the initialize handshake rides
+     * beside it as client_name. Note client_id identifies a REGISTRATION
+     * (dynamic registration mints a fresh id per register call), so
+     * client_name is the product-ish axis and client_id the stable one. */
+    clientId?: string;
   }
 ): Server {
   const connectionsUrl = `${opts?.baseUrl ?? ""}/dashboard/connections`;
+  const surface = opts?.surface ?? "mcp";
+  const clientId = opts?.clientId ?? null;
   const server = new Server(
     { name: "datatorag-mcp", version: "0.1.0" },
     { capabilities: { tools: {} } }
   );
+  /** Self-reported by the client at initialize; undefined until the
+   * handshake completes, which is before any tool call can arrive. */
+  const clientName = () => server.getClientVersion()?.name ?? null;
 
   server.setRequestHandler(ListToolsRequestSchema, async () => {
     // Shared connected-service policy — see user-tools.ts. This handler only
@@ -217,6 +246,8 @@ export function createMcpServer(
         // event is emitted and the billing sinks never run.
         void trackToolCall(db, {
           userId,
+          clientId,
+          clientName: clientName(),
           toolName: name,
           connectorType: null,
           accountEmail: undefined,
@@ -232,6 +263,8 @@ export function createMcpServer(
         console.error(`[route-error] builtin ${name}:`, message);
         void trackToolCall(db, {
           userId,
+          clientId,
+          clientName: clientName(),
           toolName: name,
           connectorType: null,
           accountEmail: undefined,
@@ -356,7 +389,7 @@ export function createMcpServer(
         toolName,
         service: requiredService,
         granted: resolved?.scopes ?? null,
-        surface: "mcp",
+        surface,
         connectionsUrl: grantFixUrl,
       });
       if (!scopeCheck.ok) {
@@ -376,7 +409,7 @@ export function createMcpServer(
           );
           refusalText = missingScopeMessage({
             displayName: scopeCheck.missing.displayName,
-            surface: "mcp",
+            surface,
             connectionsUrl: grantFixUrl,
             accountEmail,
             alternates,
@@ -389,6 +422,8 @@ export function createMcpServer(
         // this exists to fix.
         void trackToolCall(db, {
           userId,
+          clientId,
+          clientName: clientName(),
           toolName: name,
           connectorType: requiredService,
           accountEmail,
@@ -472,7 +507,7 @@ export function createMcpServer(
         toolName,
         service: requiredService ?? null,
         errorText: errorMessage,
-        surface: "mcp",
+        surface,
         connectionsUrl: grantFixUrl,
       });
       if (scopeRewrite) {
@@ -487,6 +522,8 @@ export function createMcpServer(
       // self-contained (never throws) so the floating promise is safe.
       void trackToolCall(db, {
         userId,
+        clientId,
+        clientName: clientName(),
         toolName: name,
         connectorType: requiredService ?? null,
         accountEmail,
@@ -509,6 +546,8 @@ export function createMcpServer(
       // path, self-contained and never throwing.
       void trackToolCall(db, {
         userId,
+        clientId,
+        clientName: clientName(),
         toolName: name,
         connectorType: requiredService ?? null,
         accountEmail,

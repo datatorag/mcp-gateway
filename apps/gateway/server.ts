@@ -183,12 +183,13 @@ async function main() {
    * rule liveTokenConditions expresses in SQL.
    */
   async function validateBearer(rawToken: string): Promise<
-    | { ok: true; userId: string }
+    | { ok: true; userId: string; clientId: string }
     | { ok: false; reason: AuthFailureReason; userId: string | null }
   > {
     const [token] = await db
       .select({
         userId: oauthAccessTokens.userId,
+        clientId: oauthAccessTokens.clientId,
         revokedAt: oauthAccessTokens.revokedAt,
         expiresAt: oauthAccessTokens.expiresAt,
       })
@@ -196,7 +197,8 @@ async function main() {
       .where(eq(oauthAccessTokens.token, rawToken))
       .limit(1);
 
-    if (token && isTokenLive(token)) return { ok: true, userId: token.userId };
+    if (token && isTokenLive(token))
+      return { ok: true, userId: token.userId, clientId: token.clientId };
 
     return {
       ok: false,
@@ -322,7 +324,10 @@ async function main() {
         }
       };
 
-      const server = createMcpServer(auth.userId, db, pool, { baseUrl });
+      const server = createMcpServer(auth.userId, db, pool, {
+        baseUrl,
+        clientId: auth.clientId,
+      });
       await server.connect(transport);
 
       await transport.handleRequest(req, res, req.body);
