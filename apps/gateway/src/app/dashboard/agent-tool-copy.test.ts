@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { INTROSPECTION_TOOL_NAMES } from "../../mastra/tools/introspection";
+import { BUILT_IN_TOOLS } from "../../gateway/mcp-server";
 import {
   INTERNAL_TOOL_DISPLAY,
   internalToolIcon,
@@ -18,9 +19,14 @@ describe("agent tool display names", () => {
     // auditing what the agent touched needs the precise name, and that
     // auditability is a public product claim. Adding a connector entry here
     // is therefore a decision to overturn, not a mapping to extend.
-    expect(Object.keys(INTERNAL_TOOL_DISPLAY).sort()).toEqual(
-      [...INTROSPECTION_TOOL_NAMES].sort()
-    );
+    // Since SCRUM-188 the agent also sees the gateway BUILT-INS through the
+    // shared MCP listing, and they are internal tools by the same reasoning,
+    // so the map covers both lists — still ground truth, still both ways.
+    const internal = [
+      ...INTROSPECTION_TOOL_NAMES,
+      ...BUILT_IN_TOOLS.map((t) => t.definition.name),
+    ];
+    expect(Object.keys(INTERNAL_TOOL_DISPLAY).sort()).toEqual(internal.sort());
   });
 
   it("labels are human sentences, not identifiers", () => {
@@ -50,7 +56,10 @@ describe("agent tool display names", () => {
     // The observed defect, pinned: these two raw ids were the first things a
     // new user saw after their first message. If either lookup starts
     // returning the id again, the regression is exactly the filed bug.
-    expect(toolDisplayName("account_status")).not.toBe("account_status");
+    // account_status was deleted with SCRUM-188; its successor on the agent
+    // surface is the built-in, which must stay mapped for the same reason.
+    expect(toolDisplayName("list_connected_accounts")).not.toBe(
+      "list_connected_accounts");
     expect(toolDisplayName("request_connection")).not.toBe(
       "request_connection"
     );
