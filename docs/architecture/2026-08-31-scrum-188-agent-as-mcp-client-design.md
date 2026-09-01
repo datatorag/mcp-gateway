@@ -161,10 +161,49 @@ suite (retargeted at the wrapper).
 
 ## Deliberately not done here
 
-- SCRUM-189 (client identity on the event): dependency named, not built.
 - SCRUM-190 (revoked grants indistinguishable from live): shares a surface,
   explicitly out of scope.
-- The two account_status data defects: ship first, independently, per the
-  ruling; this spec assumes they land before or with the deletion.
 - The Connections page: untouched; it is the correct implementation.
-- No code in this change: spec only, implementation awaits the go.
+
+## Amendment, 2026-09-01: what moved when the code was written
+
+Implemented at the go, with SCRUM-189 BUNDLED (ruled: shipping it
+separately would buy a second metric-era discontinuity in the same
+charts — one break, not two). Two spec lines were overtaken, and where the
+code disagreed with the spec, the code won:
+
+- **"The two account_status data defects ship first, independently" is
+  WITHDRAWN.** That sequencing predated the settled design; both defects
+  lived only in account_status, and the deletion IS the fix. Nothing was
+  patched on the way to being deleted.
+- **The `account` argument now travels THROUGH the agent.** The spec noted
+  the old path stripped it; implementation makes the inversion explicit: an
+  MCP client forwards the argument and the server resolves it — which is
+  what makes multi-account addressing work from the agent at all. The
+  server only resolves accounts belonging to the session user, so
+  forwarding is not a confused-deputy path. Pinned by the write-gate suite.
+- **SCRUM-189 needed no invention:** client_name is `datatorag-agent` (the
+  in-process client's own clientInfo, read server-side from the initialize
+  handshake); client_id is `web`, the OAuth client id the dashboard
+  session's tokens already carry. Confirmed while wiring it: the dynamic
+  registration endpoint mints a fresh id per registration with no dedupe,
+  so **client_id identifies a REGISTRATION, not a product** — client_name
+  is the product-ish axis (self-reported, drifts), client_id the stable
+  one. Breakdowns should anchor on name. Rows from before these fields
+  existed have neither; that cliff is a missing join key, not a usage drop.
+- **run_id on tool events is not preserved**, per the implementation-go
+  ruling: agent traffic is a small fraction of all tool calls and no
+  machinery is built to carry a run through the MCP layer. If SCRUM-189's
+  fields later offer a cheap per-run attribution path, that is a separate
+  change.
+- **The runtime accepts the wrapped shape directly:** MCP JSON schemas pass
+  through the `ai` package's `jsonSchema()` wrapper on plain tool objects,
+  and the approval flag on those objects is honoured by the real confirm
+  flow — proven end-to-end by the retargeted write-gate suite, including a
+  deliberate-sabotage run showing five tests go red when the gate is
+  removed. A security pin nobody has seen fail is decoration; this one has
+  been seen failing.
+- **Built-ins declare `approval: "read" | "write"`** on their registry
+  entries as designed; the parity pin and the boundary suite (wrapped
+  tools, both built-ins, the fail-closed stranger, and the three
+  wrapper-bypassing UI tools) live in `mastra/mcp/client.test.ts`.
