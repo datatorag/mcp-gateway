@@ -304,11 +304,11 @@ describe("internal tool cards wear human labels (SCRUM-100)", () => {
   const INTERNAL_TURN: UIMessageChunk[] = [
     { type: "start", messageId: "assistant-3" },
     { type: "start-step" },
-    { type: "tool-input-start", toolCallId: "call-a", toolName: "account_status" },
+    { type: "tool-input-start", toolCallId: "call-a", toolName: "list_connected_accounts" },
     {
       type: "tool-input-available",
       toolCallId: "call-a",
-      toolName: "account_status",
+      toolName: "list_connected_accounts",
       input: {},
     },
     { type: "tool-output-available", toolCallId: "call-a", output: { plan: "free" } },
@@ -332,7 +332,7 @@ describe("internal tool cards wear human labels (SCRUM-100)", () => {
     // beside a raw id and this would still look fixed at a glance.
     expect(text).toContain("Checking your connected accounts");
     expect(text).toContain("Asking for a connection");
-    expect(text).not.toContain("account_status");
+    expect(text).not.toContain("list_connected_accounts");
     expect(text).not.toContain("request_connection");
   });
 
@@ -354,11 +354,13 @@ describe("internal tool cards wear human labels (SCRUM-100)", () => {
     const UNKNOWN_TOOL_TURN: UIMessageChunk[] = [
       { type: "start", messageId: "assistant-4" },
       { type: "start-step" },
-      { type: "tool-input-start", toolCallId: "call-c", toolName: "echo" },
+      // A name NOTHING maps: echo gained a real entry with SCRUM-188, which
+      // broke this control silently — the wrench specimen must stay unmapped.
+      { type: "tool-input-start", toolCallId: "call-c", toolName: "mystery_tool" },
       {
         type: "tool-input-available",
         toolCallId: "call-c",
-        toolName: "echo",
+        toolName: "mystery_tool",
         input: { text: "hi" },
       },
       { type: "tool-output-available", toolCallId: "call-c", output: "hi" },
