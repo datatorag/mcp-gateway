@@ -83,17 +83,8 @@ vi.mock("@/mastra", () => ({
   DATATORAG_AGENT_ID: "datatorag-playground",
 }));
 
-vi.mock("@/mastra/mcp/client", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("@/mastra/mcp/client")>()),
-  listPluginServers: async () => [
-    { slug: "gws-mcp", containerPort: 1, githubRepoUrl: null },
-    { slug: "atlassian-mcp", containerPort: 2, githubRepoUrl: null },
-  ],
-  loadUserPluginCredentials: async (_db: unknown, userId: string) => ({
-    tokensByServer: { "gws-mcp": `gws-token-for-${userId}` },
-    accountsByServer: { "gws-mcp": `${userId}@example.com` },
-  }),
-}));
+// The route only needs the context builder from the client module (SCRUM-188
+// removed credential loading); the real builder is cheap and side-effect-free.
 
 const handleChatStream = vi.fn();
 vi.mock("@mastra/ai-sdk", () => ({
@@ -101,11 +92,7 @@ vi.mock("@mastra/ai-sdk", () => ({
 }));
 
 import { mintRunId } from "@/gateway/playground/run-ownership";
-import {
-  USER_ID_CONTEXT_KEY,
-  userAccountContextKey,
-  userTokenContextKey,
-} from "@/mastra/mcp/client";
+import { USER_ID_CONTEXT_KEY } from "@/mastra/mcp/client";
 import { POST } from "./route";
 
 const USER = "user-1";
@@ -552,18 +539,17 @@ describe("POST /api/playground/chat — what reaches the runtime", () => {
     expect(call.version).toBe("v6");
   });
 
-  it("carries the caller's identity and per-plugin tokens in params", async () => {
+  it("carries the caller's identity, and ONLY identity, in params (SCRUM-188)", async () => {
     await drain(await POST(post({ messages: USER_TURN })));
     const context = lastParams().requestContext as { get: (k: string) => unknown };
 
     expect(context.get(USER_ID_CONTEXT_KEY)).toBe(USER);
-    // Keyed PER PLUGIN. One shared key would hand the Atlassian plugin the
-    // user's Google token.
-    expect(context.get(userTokenContextKey("gws-mcp"))).toBe(`gws-token-for-${USER}`);
-    expect(context.get(userTokenContextKey("atlassian-mcp"))).toBeUndefined();
-    // The account each token was resolved for rides beside it, so metering
-    // stamps the identity the call actually runs as.
-    expect(context.get(userAccountContextKey("gws-mcp"))).toBe(`${USER}@example.com`);
+    // No per-plugin tokens, accounts, or scopes on the context any more: the
+    // agent is an in-process client of our own MCP, which resolves all of
+    // that per call. A credential on this context would be a second path.
+    expect(context.get("userToken:gws-mcp")).toBeUndefined();
+    expect(context.get("userAccount:gws-mcp")).toBeUndefined();
+    expect(context.get("userScopes:gws-mcp")).toBeUndefined();
   });
 
   it("names the thread on every turn's response, so the client can route a connect back into it", async () => {
