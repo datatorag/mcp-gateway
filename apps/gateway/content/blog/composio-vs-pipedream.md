@@ -2,11 +2,62 @@
 title: "Composio vs Pipedream Connect: Same Pitch, Different Plumbing"
 excerpt: "Both sell developers a way to wire their users' apps into an agent product. Composio leans on per-user MCP URLs, Pipedream on external user IDs and Connect Links. Here's how they differ, and the question to ask before you pick either."
 date: "2026-07-23"
-updated: "2026-08-14"
+updated: "2026-08-26"
 updatedNote: "August 26, 2026: narrowed an overbroad privacy claim. The pass-through statement implied nothing is stored anywhere; the gateway keeps nothing, but the hosted agent on our own site stores its conversation threads. The privacy policy is now linked from the paragraph. EARLIER: Corrected as pricing firmed up. The tool count is gone rather than restated, since every figure we publish eventually rots. The claim that there is no per-call meter no longer holds: tiers carry a monthly allowance of tool calls, so the honest contrast with prepaid credits is that there is nothing to buy up front, not that nothing is counted. And the pricing page now carries published numbers, so this post points there instead of describing tiers that have since been renamed."
 author: "Manuel Yang"
 category: "Comparison"
 tags: ["composio", "pipedream", "mcp", "comparison", "ai-agents"]
+faqs:
+  - q: How do Composio and Pipedream Connect differ technically?
+    a: >-
+      In how a request is routed to the right end user. With Composio, your
+      application code calls `composio.mcp.generate(user_id, mcp_config_id)` to
+      mint a per-user MCP URL. With Pipedream Connect, every request carries an
+      `x-pd-external-user-id` header naming one of your users, and you onboard
+      them through a Connect Link. Same job, two idioms: Composio mints URLs,
+      Pipedream routes headers. Both reflect the July 2026 comparison behind
+      this post.
+  - q: Which has better Google Workspace coverage, Composio or Pipedream?
+    a: >-
+      Composio, if your product's core loop lives in Google. Its Gmail coverage
+      is dozens of actions and genuinely deep. Pipedream's Google coverage is
+      wide and thin: a small set of pre-built actions per app plus a generic
+      make-an-API-request fallback that pushes the work of shaping the Google
+      API onto your agent. Both share a gap as of the July 2026 comparison
+      behind this post: neither ships standalone Slides or Contacts coverage
+      worth the name.
+  - q: How are Composio and Pipedream Connect priced?
+    a: >-
+      On different axes, as of the July 2026 comparison behind this post.
+      Pipedream Connect meters compute credits, and agents are chatty, with
+      polls, retries and chained calls, so a conversational agent leans hard on
+      exactly the thing Pipedream meters. Composio charges platform pricing plus
+      the engineering time to build and maintain the integration layer. Neither
+      is wrong, and you should model your real usage before committing to
+      either.
+  - q: Does Composio or Pipedream Connect offer a HIPAA BAA?
+    a: >-
+      Pipedream Connect does, which matters if you are touching regulated health
+      data. Both hold SOC 2 Type II, and Composio additionally holds ISO 27001,
+      which tends to matter for international procurement. That reflects the
+      July 2026 comparison behind this post. On general-purpose attestations
+      both are ahead of DataToRAG, and we would rather say so plainly.
+  - q: Do I need Composio or Pipedream to use Claude with my own Google account?
+    a: >-
+      No. Both platforms assume you are the developer, building for users who
+      are not you. If what actually brought you here is wanting Claude working
+      in your own Gmail, Docs, Sheets and Jira, then using either means standing
+      up a multi-tenant product with exactly one tenant: registering
+      credentials, minting a per-user URL or an external user ID for an audience
+      of one, and maintaining that scaffolding forever. It works, and it is a
+      development project standing between you and your own inbox.
+  - q: Can I self-host Composio or Pipedream Connect?
+    a: >-
+      Not on a standard plan, as of the July 2026 comparison behind this post.
+      Composio's runtime is closed and self-hosting is an enterprise-plan
+      conversation; Pipedream Connect is cloud only. DataToRAG's core is
+      MIT-licensed and runs on Docker Compose with your own Postgres, so
+      self-hosting is a clone rather than a contract.
 ---
 
 Composio and Pipedream Connect are the two platforms you'll shortlist if you're building an agent product and don't want to write OAuth for forty apps. They're similar enough that the comparison pages blur together: both hold your users' tokens, both run the handshakes, both hand your agent an MCP endpoint per user.

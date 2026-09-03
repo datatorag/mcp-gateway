@@ -2,7 +2,7 @@
 title: "You Can Self-Host a Google Workspace MCP for Free. The OAuth Verification Is the Catch."
 excerpt: "The open-source Google Workspace MCP servers are genuinely good. The cost isn't the code. It's the Google Cloud project, the consent screen, and the verification that comes after."
 date: "2026-06-29"
-updated: "2026-07-30"
+updated: "2026-08-26"
 updatedNote: "August 26, 2026: narrowed an overbroad privacy claim. The pass-through statement implied nothing is stored anywhere; the gateway keeps nothing, but the hosted agent on our own site stores its conversation threads. The privacy policy is now linked from the paragraph."
 author: "Manuel Yang"
 category: "Comparison"

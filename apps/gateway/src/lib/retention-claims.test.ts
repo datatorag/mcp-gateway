@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { readFileSync, readdirSync } from "node:fs";
 import path from "node:path";
+import matter from "gray-matter";
 
 /**
  * A retention claim ("we don't store your data") is the line that decides the
@@ -58,6 +59,34 @@ function filesToScan(): string[] {
   return out;
 }
 
+/** Per-post FAQ answers live in frontmatter as YAML folded block scalars, which
+ * wrap one sentence across several physical lines. A per-line regex cannot see a
+ * claim that straddles a line break, so "we do not / store your data" split over
+ * two lines was invisible to this sweep: measured, not assumed, before this was
+ * added. gray-matter has already folded each answer back into one string, so
+ * scan that. Same failure the file header describes, arriving through a new
+ * authoring shape rather than through new wording. */
+function faqAnswerLines(text: string): string[] {
+  let data: Record<string, unknown>;
+  try {
+    ({ data } = matter(text));
+  } catch {
+    return []; // malformed frontmatter is content-frontmatter.test.ts's job
+  }
+  if (!Array.isArray(data.faqs)) return [];
+  return data.faqs.flatMap((entry) => {
+    if (typeof entry !== "object" || entry === null) return [];
+    const { a } = entry as { a?: unknown };
+    return typeof a === "string" ? [a] : [];
+  });
+}
+
+/** Every line this sweep judges: the file's own lines, plus each FAQ answer
+ * folded back to one. */
+function linesToScan(text: string): string[] {
+  return [...text.split("\n"), ...faqAnswerLines(text)];
+}
+
 describe("retention claims are qualified", () => {
   it("scans a non-empty set of files", () => {
     // Guards the guard: an empty glob would make every assertion below pass.
@@ -75,7 +104,7 @@ describe("retention claims are qualified", () => {
         continue;
       }
       const fileQualified = QUALIFIED.test(text);
-      text.split("\n").forEach((line, i) => {
+      linesToScan(text).forEach((line, i) => {
         // Frontmatter notes describe a PAST correction, so they legitimately
         // restate the old claim while explaining it.
         if (line.startsWith("updatedNote:")) return;
@@ -87,5 +116,43 @@ describe("retention claims are qualified", () => {
     }
 
     expect(offenders, `Unqualified retention claims with no /privacy link:\n${offenders.join("\n")}`).toEqual([]);
+  });
+
+  it("sees a retention claim that a folded FAQ answer wraps across lines", () => {
+    // The reason faqAnswerLines exists, pinned so nobody deletes it as noise.
+    // The claim below is split mid-sentence exactly as YAML wrapping produces.
+    const wrapped = [
+      "---",
+      'title: "x"',
+      "faqs:",
+      "  - q: Where does my data go?",
+      "    a: >-",
+      "      Requests go straight to Google and back. We do not",
+      "      store your data anywhere in the gateway.",
+      "---",
+      "body",
+    ].join("\n");
+
+    const hits = (lines: string[]) =>
+      lines.filter((l) => RETENTION_CLAIM.test(l) && ABOUT_USER_DATA.test(l));
+
+    // The gap: scanning the raw lines finds nothing, which is byte-identical to
+    // a clean file. This assertion is the record of why the fold is needed.
+    expect(hits(wrapped.split("\n"))).toEqual([]);
+    // The fix: folded, the same claim is caught.
+    expect(hits(linesToScan(wrapped))).toHaveLength(1);
+  });
+
+  it("still reads FAQ answers that are already clean", () => {
+    // Positive control. Without it, faqAnswerLines returning [] for every file
+    // would make the case above pass by looking at nothing, and the sweep would
+    // report clean because it had gone blind rather than because content is ok.
+    const real = readFileSync(
+      path.join(ROOT, "content/blog/composio-vs-zapier-mcp.md"),
+      "utf8"
+    );
+    const answers = faqAnswerLines(real);
+    expect(answers.length).toBeGreaterThan(0);
+    expect(answers.every((a) => !a.includes("\n"))).toBe(true);
   });
 });

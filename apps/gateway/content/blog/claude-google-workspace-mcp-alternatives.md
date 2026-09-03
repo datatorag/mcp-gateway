@@ -7,6 +7,63 @@ updatedNote: "August 24: a bigger correction than the last one. Anthropic's Gmai
 author: "Manuel Yang"
 category: "Comparison"
 tags: ["google-workspace", "claude", "mcp", "comparison", "alternatives"]
+faqs:
+  - q: Can Claude's native Gmail connector send email?
+    a: >-
+      Yes. As of our August 24, 2026 check of the native connectors' tool lists,
+      Claude's Gmail connector sends a new message, sends an existing draft,
+      replies with reply-all, and forwards, alongside labelling, starring,
+      marking read, archiving and trashing. The one Gmail verb still missing is
+      deleting a draft it created. That surface moves, so the date is part of
+      the answer.
+  - q: What can Claude's native Google connectors not do?
+    a: >-
+      As of our August 24, 2026 check, Claude's native Gmail, Calendar and Drive
+      connectors cover mail, calendar and files, and stop there. There is no
+      cell-level Sheets editing, and nothing that writes content onto a Slides
+      deck: Drive will create a real presentation at a real URL, but it arrives
+      with one slide, a blank title and a blank subtitle. Contacts and Tasks are
+      not in the native surface at all. You also connect one Google account at a
+      time.
+  - q: Can I use more than one Google account with Claude at the same time?
+    a: >-
+      Not through Claude's native connectors, which hold one Google account at a
+      time as of our August 24, 2026 check, so switching between a work and a
+      personal inbox means disconnecting and reconnecting. DataToRAG connects
+      work, personal and shared accounts under one endpoint, and Claude can
+      target a specific account or search across all of them in a single prompt.
+  - q: Do Composio and Pipedream work without writing code?
+    a: >-
+      No. Both are developer platforms rather than products you sign into. With
+      Composio you generate a per-user MCP URL inside your own application code;
+      with Pipedream Connect you pass an external user ID for each of your users
+      and route requests with headers. That is the right shape if you are
+      shipping a product that connects your customers' accounts, and the wrong
+      shape if you want your own Google account wired into Claude this
+      afternoon. Both statements reflect the mid-2026 survey behind this post.
+  - q: What does self-hosting an open-source Google Workspace MCP server involve?
+    a: >-
+      The tools are not the hard part. You create your own Google Cloud project,
+      enable each API, and build an OAuth consent screen. Your app sits in
+      testing, showing an unverified app warning, until you submit it for
+      Google's review, and the restricted Gmail and Drive scopes pull you into a
+      CASA security assessment. After that you own token storage and refresh,
+      hosting, uptime and every update, and you get no Atlassian, because these
+      servers are Google only. It is a legitimate choice if you want total
+      control and have the ops time. See [the self-hosting write-up](/blog/open-source-google-workspace-mcp-alternative).
+  - q: Which option should I use to connect Claude to Google Workspace?
+    a: >-
+      If you mostly read email, glance at your calendar and occasionally pull a
+      file into Claude, all on one account, use Claude's native connectors: they
+      are free and anything else is overkill. If you need Claude to poke at a
+      long tail of different apps with simple actions, Zapier MCP's breadth is
+      the move. If you are a developer building a product that connects your
+      customers' accounts, look at Composio and Pipedream. If you want every
+      byte to stay on infrastructure you control and have the ops hours, self-host an open-source server. If you want Claude to send the email, edit the
+      doc, update the sheet, and manage tasks, contacts, Jira and Confluence
+      across more than one account without standing up a Google Cloud project,
+      that is the gap DataToRAG was built to fill. That mapping reflects
+      where each option stood as of August 2026.
 ---
 
 Someone asked me last week which connector they should use to get Claude working inside their Google Workspace. I started to answer, then stopped, because the honest version takes a minute. There are at least five real options and they're built for completely different people. One is free and lives inside Claude. One reaches nine thousand apps. Two are developer platforms you'd wire into your own product. One is an open-source server you run yourself. Then there's the thing we make.
