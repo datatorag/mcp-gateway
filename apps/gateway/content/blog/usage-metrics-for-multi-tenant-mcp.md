@@ -25,11 +25,11 @@ For every tool call we record six things:
 - Outcome label (`success`, `user_error`, or `server_error`)
 - Latency in milliseconds
 - Response size in bytes
-- The error message when something failed, stored unchanged
+- The error message when something failed, stored as received and capped in length
 
 That's the whole row. No arguments. No response body. No `q=` search query, no message ID, no ticket title, no document contents.
 
-If a call errored with something like `"Message 18f3a2c1b not found for user alice@company.com"`, we store that string unchanged, in a row only that user can see. It quotes their own data, and they already received the same error in full when the call failed, so censoring the stored copy only made failures harder to diagnose. The redaction happens on the way out instead: before that message is sent to our analytics provider it runs through a regex redactor that replaces emails, Google Drive IDs, and long quoted strings with a `[redacted]` marker. The error message is useful because it tells users why something failed. It's not worth sending PII to a third party to get there.
+If a call errored with something like `"Message 18f3a2c1b not found for user alice@company.com"`, we store that string as received and capped in length, in a row only that user can see. It quotes their own data, and they already received the same error in full when the call failed, so censoring the stored copy only made failures harder to diagnose. The redaction happens on the way out instead: before that message is sent to our analytics provider it runs through a regex redactor that replaces emails, Google Drive IDs, and long quoted strings with a `[redacted]` marker. The error message is useful because it tells users why something failed. It's not worth sending PII to a third party to get there.
 
 The schema lives in a single `usage_events` table in the same Postgres instance as the rest of the app. No separate analytics warehouse, no third-party event pipeline, no cross-region replication. It's just a table.
 

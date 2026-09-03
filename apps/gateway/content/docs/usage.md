@@ -24,7 +24,7 @@ The drill-down page shows the last 50 calls for a single tool — when it ran, t
 
 For every tool call we record the tool name, connector, outcome (success / user error / server error), latency, and response size. We log when a call happened but not what it did — arguments and responses are never stored.
 
-If a call fails, we store the error message the upstream service returned, unchanged, so the reason a call failed is actually readable. That row is visible only to you, and it can quote your own data. Separately, before any error message is sent to our analytics provider it runs through a redactor that strips emails, Google Drive IDs, and long quoted strings.
+If a call fails, we store the error message the upstream service returned, as received and capped at 4,000 characters, so the reason a call failed is actually readable. That row is visible only to you, and it can quote your own data. Separately, before any error message is sent to our analytics provider it runs through a redactor that strips emails, Google Drive IDs, and long quoted strings.
 
 ## What counts
 
@@ -49,7 +49,7 @@ Dashboard API requests are limited to 120 per minute per user. If you hit that, 
 ## Privacy
 
 - Usage records store the tool name, connected account, outcome, timing and request/response sizes. They do not store request arguments or response bodies.
-- Error messages are stored unchanged so you can debug them, in a row only you can see, and are redacted before they reach our analytics provider
+- Error messages are stored as received, capped at 4,000 characters, so you can debug them, in a row only you can see, and are redacted before they reach our analytics provider
 - Every row is scoped to your user ID, other users cannot see your data
 - Conversations in the in-product agent are stored separately and DO include your messages and tool results. Delete a thread to remove it.
 - To delete your account and everything with it, email support@datatorag.com
