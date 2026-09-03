@@ -20,10 +20,17 @@ run of your document text quoted inside a diagnostic still gets redacted. Fields
 recognise are dropped rather than passed through, and anything that does not parse takes the old
 blanket path unchanged. Ambiguity still resolves to "this is content".
 
-**The honest limit: only Google's envelope shape is recognised so far.** Jira and Confluence
-return errors in a different shape, and some of our own messages are plain prose rather than an
-envelope at all. Both still take the blanket path, so a failed Atlassian call can still read
-`[redacted-content]` in your usage log. Teaching the parser those shapes is next.
+**The honest limit: only Google's envelope shape is recognised.** Jira and Confluence return
+errors in a different shape, and some of our own messages are plain prose rather than an envelope
+at all. Both still take the blanket path, so a failed Atlassian call can still read
+`[redacted-content]` in your usage log.
+
+We are not going to fix that by teaching the parser one more shape, and then the next one. The
+redaction rule exists to keep your content out of a third-party analytics tool, which is a real
+constraint that is not going anywhere. It was never a reason to censor the copy we store for you
+and show back to you, in a table only you can see, quoting an error you already received in full
+at the time of the call. So the stored copy is going to stop being redacted at all. That fixes
+Atlassian, our own messages, and every connector we add later, in one change.
 
 **`sheets_find_rows` no longer asks for approval in the agent.** It searches a range and returns
 matching row numbers, and it changes nothing, so the prompt was never a judgement anyone made:
