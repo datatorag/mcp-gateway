@@ -1,7 +1,14 @@
 /**
- * Error-message redaction for every stored/exported sink (SCRUM-176).
+ * Error-message redaction for the PostHog path, and only that path.
  *
- * The constraint that does not move: user content must never enter our logs.
+ * This used to feed every sink (SCRUM-176). Since SCRUM-200 our own
+ * usage_events row stores the message raw, because it is the user's own data
+ * shown back only to them and they already received the whole error live.
+ * The one consumer left is the tool_call capture in track.ts, where the rule
+ * is real: PostHog is a third-party processor, and an error can quote the
+ * text a tool choked on. Nothing here relaxes for that path.
+ *
+ * The constraint that does not move: user content must never leave our systems.
  * The old implementation enforced it with a blanket rule, "any quoted string
  * over 40 characters is content", which cannot tell an API's own diagnostic
  * from a user's data: a JSON error envelope quotes everything, so every

@@ -58,10 +58,16 @@ export async function trackToolCall(
   // best-effort: on any failure we log and move on.
   try {
     const { status, meter } = classifyOutcome(props.outcome);
-    // Redact once, up front, so the SAME scrubbed value reaches every sink —
-    // PostHog (a third-party US vendor) and our own Postgres alike. The redactor
-    // is idempotent, so writeUsageEvent re-scrubbing below is a harmless no-op.
-    const errorMessage = redactErrorMessage(props.errorMessage);
+    // One message, two sinks, opposite rules (SCRUM-200). PostHog is a
+    // third-party processor: an error can quote the text a tool choked on, and
+    // that must not leave our systems, so the capture below gets the scrubbed
+    // value. Our own usage_events row is user-scoped and shown back only to
+    // the person whose call it was, who already received the whole error live
+    // from the tool response (nothing on that path redacts). Censoring their
+    // own copy made failed calls undiagnosable, so writeUsageEvent gets the
+    // raw message, capped for size there. Never route props.errorMessage to
+    // capture(); the redacted value is the only one that may leave.
+    const redactedErrorMessage = redactErrorMessage(props.errorMessage);
     const c = getPosthog();
     const identity = await resolveUserIdentity(db, props.userId);
     const userEmail = identity?.email ?? null;
@@ -76,7 +82,7 @@ export async function trackToolCall(
           status,
           latency_ms: props.latencyMs,
           response_size_bytes: props.responseSizeBytes,
-          error_message: errorMessage,
+          error_message: redactedErrorMessage,
           metered: meter,
           surface: props.outcome.source,
           run_id: props.runId ?? null,
@@ -148,7 +154,7 @@ export async function trackToolCall(
         status,
         latencyMs: props.latencyMs,
         responseSizeBytes: props.responseSizeBytes,
-        errorMessage,
+        errorMessage: props.errorMessage,
       }).then((result) => {
         if (!result.ok) {
           console.warn(

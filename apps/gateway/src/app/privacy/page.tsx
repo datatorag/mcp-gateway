@@ -43,8 +43,11 @@ export default function PrivacyPage() {
             <strong>Usage records.</strong> For each tool call we record the tool name, the
             connected account it ran against, whether it succeeded, how long it took, and the size
             of the request and response. We do not store the arguments or the response body in
-            these records. Error messages are redacted for emails, identifiers and quoted content
-            before they are stored.
+            these records. When a call fails we store the error message the upstream service
+            returned, as received and capped in length, so you can diagnose it. That message can
+            quote your own data, and the record is visible only to you. Before any error message
+            reaches our analytics provider it is redacted for emails, identifiers and quoted
+            content.
           </p>
           <p>
             <strong>How you found us.</strong> We record the marketing channel, campaign
