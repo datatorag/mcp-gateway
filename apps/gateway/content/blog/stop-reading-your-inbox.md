@@ -2,6 +2,8 @@
 title: "How to Stop Reading Your Inbox"
 excerpt: "Our inbox-triage skill sorts unread mail across every account you connect, labels and clears the noise, and mails you one digest. The four decisions that make it work, and the prompt-injection hole we caught before shipping the page."
 date: "2026-08-26"
+updated: "2026-09-03"
+updatedNote: "Corrected the claim that this runs every morning. It did not: the scheduled job missed three of the ten days after this published, and every check we had passed while it happened. The routine and the four decisions below are unchanged and still what we run. The scheduling was the broken part, and it now has its own post."
 author: "Manuel Yang"
 category: "Product"
 tags: ["gmail", "claude", "skills", "productivity", "email"]
@@ -12,7 +14,8 @@ the rest. That ratio is why inbox triage is the first thing we turned into a
 [published skill](/skills/inbox-triage): a routine you paste into Claude that reads a day of
 unread mail, clears what doesn't need a human, and mails you a short digest of what does.
 
-I run it every morning across several mailboxes. The steps are on the skill page. What I want
+I run it every morning across several mailboxes. (Or I thought I did. The routine held up; the
+schedule under it did not, and [that turned out to be its own post](/blog/the-job-that-was-armed-and-inert).) The steps are on the skill page. What I want
 to write about is the four decisions behind the steps, because we got each one wrong first,
 and the reasons are what make the pattern work rather than merely run.
 
