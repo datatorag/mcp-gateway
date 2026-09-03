@@ -172,7 +172,15 @@ export default async function BlogArticlePage({ params }: Props) {
         <article className="mx-auto max-w-2xl px-6 pb-12 pt-28 sm:pb-16 sm:pt-32">
           <script
             type="application/ld+json"
-            dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+            // JSON.stringify does not escape "<", so a literal </script> in any
+            // serialized field would close this element early. The site FAQ page
+            // has always escaped here and this one never did: two copies of one
+            // pattern that drifted. Adding FAQ answers widens what flows through
+            // it, so the copies are brought back together rather than left one
+            // field wider apart.
+            dangerouslySetInnerHTML={{
+              __html: JSON.stringify(jsonLd).replace(/</g, "\\u003c"),
+            }}
           />
 
           <Link

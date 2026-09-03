@@ -147,10 +147,23 @@ describe("FAQ projections", () => {
   });
 
   it("keeps JSON-LD answers free of markup", () => {
+    // `<[a-z]` alone requires a letter straight after the angle bracket, so it
+    // does NOT see a closing tag. Read on its own it would look like coverage
+    // of the script-termination hazard and is not, so the closer is matched
+    // explicitly. The page escapes "<" when serializing regardless; this keeps
+    // authored answers clean rather than relying on that single defence.
     for (const { file, q, a } of authoredFaqs()) {
       const text = faqAnswerText(a);
-      expect(text, `${file}: ${q}`).not.toMatch(/\]\(|<[a-z]/);
+      expect(text, `${file}: ${q}`).not.toMatch(/\]\(|<\/?[a-z]/i);
     }
+  });
+
+  it("the markup rule sees a closing tag, not just an opening one", () => {
+    const rule = /\]\(|<\/?[a-z]/i;
+    expect(rule.test("ends the block early </script>")).toBe(true);
+    expect(rule.test("an opening <a href")).toBe(true);
+    expect(rule.test("a markdown [link](/blog/x)")).toBe(true);
+    expect(rule.test("plain prose with a < b arithmetic")).toBe(false);
   });
 
   it("gives every question a unique, stable anchor", () => {
