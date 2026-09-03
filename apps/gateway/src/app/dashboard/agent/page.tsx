@@ -1,5 +1,7 @@
 import { redirect } from "next/navigation";
 import { getSessionUserId } from "@/lib/session";
+import { db } from "@/lib/db";
+import { loadConnectionsView } from "@/gateway/connections-view";
 import { AGENT_PROMPTS } from "../agent-prompts";
 import { AgentClient } from "./agent-client";
 
@@ -44,8 +46,16 @@ export default async function AgentPage({
 }) {
   const userId = await getSessionUserId();
   if (!userId) redirect("/auth/login");
-  const { welcome, signup, thread, connected, connect_error, prompt } =
-    await searchParams;
+  // The connection state, loaded HERE (SCRUM-206). This is a server
+  // component that already holds the user's id, so the answer the empty
+  // state branches on is known before first paint; asking the browser to go
+  // and find it again after mount is what put a wrong-biased "unknown" state
+  // in front of every new user. Same loader as /api/connections, so the
+  // shape cannot drift from what a later refetch returns. The two lookups
+  // (session, then connections) are sequential by nature: the second needs
+  // the first's answer.
+  const [{ welcome, signup, thread, connected, connect_error, prompt }, initialConnections] =
+    await Promise.all([searchParams, loadConnectionsView(db, userId)]);
 
   // SEED BY IDENTIFIER, NEVER BY CONTENT (SCRUM-118). The Connections page's
   // prompt cards link here with an INDEX into the shared AGENT_PROMPTS list,
@@ -76,6 +86,7 @@ export default async function AgentPage({
           : null
       }
       seedPrompt={seedPrompt}
+      initialConnections={initialConnections}
     />
   );
 }

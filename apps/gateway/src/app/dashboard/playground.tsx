@@ -31,6 +31,7 @@ import {
 } from "@/components/ai-elements/prompt-input";
 import { Suggestion, Suggestions } from "@/components/ai-elements/suggestion";
 import { Lock } from "lucide-react";
+import { Spinner } from "@/components/ui/spinner";
 import Link from "next/link";
 import {
   ConnectGrantContext,
@@ -174,9 +175,19 @@ const PAGE_GREETING =
  * purpose, so this surface and the dashboard cards cannot drift; the lock is
  * state, not a second list. */
 const UNCONNECTED_LEAD = "Connect an account to get started.";
+/** The signup landing's lead, in Manuel's words: a user who signed up
+ * seconds ago cannot hold a connection, so this state is assumed rather than
+ * looked up, and there is no claim to get wrong. */
+const WELCOME_LEAD = "Welcome to DataToRAG. Connect your accounts to get started.";
 const UNCONNECTED_PROMPTS_CAPTION = "Once you connect, you can ask things like:";
 /** Matches the dashboard prompt cards' disabled tooltip, word for word. */
 const LOCKED_PROMPT_TITLE = "Connect an account to run this";
+/** The genuinely-unknown state, which after SCRUM-206 is only ever a
+ * client-side refetch: the control is shown by default, under an indicator
+ * that reads as a CHECK in progress, not as a claim. "Connect an account to
+ * get started" would be false to someone holding nine; "checking" is true to
+ * everyone for the moment they see it. */
+const CHECKING_ACCOUNTS = "Checking your accounts";
 
 export interface PlaygroundHandle {
   /** Seed the input with `prompt` and submit it immediately. Used by the
@@ -225,6 +236,12 @@ interface PlaygroundProps {
   /** Fired once a turn has gone out, so a thread list can pick up a new
    * conversation and its freshly written title. */
   onConversationChanged?: () => void;
+  /** The signup landing (SCRUM-206). The empty state assumes nothing is
+   * connected without waiting for a lookup, because a user who signed up
+   * seconds ago cannot hold a connection, and greets them as new. A
+   * connected user on this landing (a returning account re-signing up) still
+   * gets the connected shape: the assumption yields to a known answer. */
+  welcome?: boolean;
 }
 
 /** Feedback is reported against the prompt that produced the answer, which is
@@ -257,6 +274,7 @@ export const Playground = forwardRef<PlaygroundHandle, PlaygroundProps>(
       threadId = null,
       initialMessages,
       onConversationChanged,
+      welcome = false,
     },
     ref
   ) {
@@ -301,10 +319,16 @@ export const Playground = forwardRef<PlaygroundHandle, PlaygroundProps>(
      * generic list fills the remainder, so the promised three is enforced
      * here rather than asserted in a comment. */
     const personalised = ownFilePrompts.length > 0;
-    /** KNOWN unconnected (SCRUM-206). Both halves matter: before the lookup
-     * resolves the state is unknown and the prompts stay live, so a
-     * returning user never sees the locked screen for a frame. */
-    const locked = connectionsLoaded && !hasConnectedAccount;
+    /** The empty state's three answers to "is anything connected" (SCRUM-206).
+     *
+     * `locked`: known unconnected, OR a signup landing with no answer yet,
+     * which is assumed unconnected because it cannot be otherwise. A known
+     * connected answer wins over the assumption either way.
+     * `checking`: genuinely unknown. After SCRUM-206 the page supplies the
+     * answer from the server, so this is only ever a client-side refetch;
+     * it shows the control under a checking indicator and claims nothing. */
+    const locked = !hasConnectedAccount && (connectionsLoaded || welcome);
+    const checking = !connectionsLoaded && !welcome;
     const suggestions = personalised
       ? [
           ...ownFilePrompts,
@@ -748,24 +772,25 @@ export const Playground = forwardRef<PlaygroundHandle, PlaygroundProps>(
                       {PAGE_GREETING}
                     </h1>
                   )}
-                  {/* CLAIMS are gated on the lookup (SCRUM-114). Until it
-                      resolves, connection state is unknown and unknown makes
-                      no claim: neither the connection-state copy nor the
-                      connect card renders, because the card is
-                      click-instrumented and a flash would log connect intent
-                      from an already-connected user. The prompts render
-                      before that, live (SCRUM-117), so a returning user's
-                      first paint looks like nothing in particular; a
-                      lookup that fails resolves to "none connected" and the
-                      unconnected shape below, which is the honest state.
+                  {/* THREE STATES (SCRUM-206).
 
-                      THREE STATES, NOT TWO (SCRUM-206). Once KNOWN
-                      unconnected, the screen's job is one connection: the
-                      lead line and the connect control come first, and the
-                      prompts stay but LOCKED, because every one of them
-                      needs a connection this user does not have and six
-                      live suggestions that all fail read as a product that
-                      does not do what it says. Connected keeps its shape. */}
+                      Connected: the claim and live prompts. Known
+                      unconnected, or a signup landing: the screen's job is
+                      one connection, so the lead line and the connect
+                      control come first and the prompts stay but LOCKED,
+                      because every one of them needs a connection this user
+                      does not have, and six live suggestions that all fail
+                      read as a product that does not do what it says.
+
+                      Unknown: since the page loads the answer server-side
+                      this is only ever a client-side refetch, and Manuel's
+                      ruling for it is the control by default under a
+                      CHECKING indicator, not a blank and not a claim. The
+                      card is click-instrumented; showing it while checking
+                      can only log intent from someone who actually clicks
+                      it, which is the intent the event is for. The prompts
+                      stay live while checking (SCRUM-117): a lock would be
+                      a claim, and unknown makes none. */}
                   {connectionsLoaded && hasConnectedAccount && (
                     <p
                       className={cn(
@@ -785,28 +810,42 @@ export const Playground = forwardRef<PlaygroundHandle, PlaygroundProps>(
                       byte-identical to what SCRUM-112 instrumented; this
                       moves WHERE it sits, never what it is, so the telemetry
                       series stays comparable across the deploy boundary. */}
-                  {locked && (
+                  {(locked || checking) && (
                     <div className={isPage ? "space-y-3" : "space-y-2"}>
-                      <p
-                        className={cn(
-                          "font-medium text-foreground",
-                          isPage ? "text-sm" : "text-xs"
-                        )}
-                      >
-                        {UNCONNECTED_LEAD}
-                      </p>
+                      {locked ? (
+                        <p
+                          className={cn(
+                            "font-medium text-foreground",
+                            isPage ? "text-sm" : "text-xs"
+                          )}
+                        >
+                          {welcome ? WELCOME_LEAD : UNCONNECTED_LEAD}
+                        </p>
+                      ) : (
+                        <p
+                          className={cn(
+                            "flex items-center gap-2 text-muted-foreground",
+                            isPage ? "text-sm" : "text-xs"
+                          )}
+                        >
+                          <Spinner aria-label={CHECKING_ACCOUNTS} className="size-3.5" />
+                          {CHECKING_ACCOUNTS}
+                        </p>
+                      )}
                       <ConnectPart
                         services={CONNECTABLE_SERVICES}
                         source="empty_state"
                       />
-                      <p
-                        className={cn(
-                          "text-muted-foreground",
-                          isPage ? "text-sm" : "text-xs"
-                        )}
-                      >
-                        {UNCONNECTED_PROMPTS_CAPTION}
-                      </p>
+                      {locked && (
+                        <p
+                          className={cn(
+                            "text-muted-foreground",
+                            isPage ? "text-sm" : "text-xs"
+                          )}
+                        >
+                          {UNCONNECTED_PROMPTS_CAPTION}
+                        </p>
+                      )}
                     </div>
                   )}
                   {/* Three suggestions, enforced by the top-up above, two

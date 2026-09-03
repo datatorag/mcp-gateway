@@ -55,10 +55,13 @@ function deferred<T>() {
   return { promise, resolve };
 }
 
+type Initial = { accounts: Array<Record<string, unknown>>; connections: unknown[] };
+
 function mountWith(
   connections: () => Promise<Response>,
   suggestions: string[] = [],
-  seedPrompt: string | null = null
+  seedPrompt: string | null = null,
+  opts: { initialConnections?: Initial | null; landedFrom?: "signup" | "login" } = {}
 ) {
   vi.stubGlobal(
     "fetch",
@@ -75,13 +78,26 @@ function mountWith(
   act(() => {
     root.render(
       <AgentClient
+        initialConnections={
+          (opts.initialConnections ?? null) as Parameters<typeof AgentClient>[0]["initialConnections"]
+        }
         isDefaultView={false}
-        landedFrom="login"
+        landedFrom={opts.landedFrom ?? "login"}
         seedPrompt={seedPrompt}
       />
     );
   });
 }
+
+const CONNECTED: Initial = {
+  accounts: [{ id: "a1", connectorType: "google-workspace" }],
+  connections: [],
+};
+const UNCONNECTED: Initial = { accounts: [], connections: [] };
+const connectionsFetches = () =>
+  (globalThis.fetch as unknown as { mock: { calls: unknown[][] } }).mock.calls.filter(
+    (c) => String(c[0]).includes("/api/connections")
+  ).length;
 
 const flush = () =>
   act(async () => {
@@ -106,11 +122,16 @@ describe("the empty state and the unknown connection state (SCRUM-114)", () => {
     );
     await flush();
 
-    // The state under test: the fetch is still in flight. This is every
-    // user's first paint on every load. Neither branch may render - the
-    // connect pitch would be wrong for a connected user, the connected
-    // greeting wrong for a new one.
-    expect(text()).not.toContain("Connect Google Workspace");
+    // The state under test: the fetch is still in flight. Since the SCRUM-206
+    // amendment this is no longer any user's first paint (the page supplies
+    // the answer from the server), only a client-side refetch. It renders the
+    // connect control under a CHECKING indicator, which is honest to a
+    // connected user for the moment they see it, and no claim either way:
+    // no lock copy, no connected greeting.
+    expect(text()).toContain("Checking your accounts");
+    expect(text()).toContain("Connect Google Workspace");
+    expect(text()).not.toContain("Once you connect");
+    expect(text()).not.toContain("Connect an account to get started");
     expect(text()).not.toContain("anything in the meantime");
     // Branch-specific strings only: the page GREETING legitimately says
     // "connected accounts" and stays through every state - it makes no claim
@@ -143,9 +164,10 @@ describe("the empty state and the unknown connection state (SCRUM-114)", () => {
     await flush();
     expect(text()).toContain("Ask something about your connected accounts");
     expect(text()).not.toContain("Connect Google Workspace");
+    expect(text()).not.toContain("Checking your accounts");
   });
 
-  it("shows the connect pitch only AFTER an unconnected resolution", async () => {
+  it("makes the unconnected CLAIM only AFTER an unconnected resolution", async () => {
     const gate = deferred<unknown>();
     mountWith(() =>
       gate.promise.then(
@@ -153,7 +175,10 @@ describe("the empty state and the unknown connection state (SCRUM-114)", () => {
       )
     );
     await flush();
-    expect(text()).not.toContain("Connect Google Workspace");
+    // In flight: the control is there under the checking indicator, but the
+    // claim ("get started", the lock) waits for the answer.
+    expect(text()).toContain("Checking your accounts");
+    expect(text()).not.toContain("Connect an account to get started");
 
     await act(async () => {
       gate.resolve({ accounts: [], connections: [] });
@@ -161,6 +186,8 @@ describe("the empty state and the unknown connection state (SCRUM-114)", () => {
     });
     await flush();
     expect(text()).toContain("Connect Google Workspace");
+    expect(text()).toContain("Connect an account to get started");
+    expect(text()).not.toContain("Checking your accounts");
     // SCRUM-117 put the prompts and the card together in this state. SCRUM-206
     // keeps both but reverses the order and locks the prompts: see the
     // describe below for the pins on that shape. Here, only the fact that the
@@ -374,11 +401,12 @@ describe("the empty state for a user with no connection (SCRUM-206)", () => {
       )
     );
     await flush();
-    // In flight: prompts live, no lock copy, no card. This is every returning
-    // user's first paint, and it must look like nothing in particular.
+    // In flight: prompts live, no lock copy, the control under a checking
+    // indicator. A returning user who ever sees this (only on a client-side
+    // refetch now) sees a check in progress, not a claim about them.
     expect(promptButtons().every((b) => !b.disabled)).toBe(true);
     expect(text()).not.toContain("Once you connect");
-    expect(connectCard()).toBeUndefined();
+    expect(text()).toContain("Checking your accounts");
     await act(async () => {
       gate.resolve({
         accounts: [{ id: "a1", connectorType: "google-workspace" }],
@@ -389,5 +417,75 @@ describe("the empty state for a user with no connection (SCRUM-206)", () => {
     await flush();
     expect(promptButtons().every((b) => !b.disabled)).toBe(true);
     expect(text()).not.toContain("Once you connect");
+  });
+});
+
+/* SCRUM-206 AMENDMENT: the page is a server component that already holds the
+ * user's id, so it fetches the connection state itself and hands it down.
+ * The client hook starts from truth instead of from empty, and the unknown
+ * state is gone from first paint: there is nothing to time and nothing to
+ * flash. A signup landing additionally assumes nothing is connected, because
+ * a user who signed up seconds ago cannot hold a connection, and greets them
+ * in those words. */
+describe("server-supplied connection state and the signup landing (SCRUM-206)", () => {
+  const promptButtons = () =>
+    Array.from(container.querySelectorAll("button")).filter(
+      (b) => (b.textContent ?? "").length > 30
+    );
+  const neverResolves = () => new Promise<Response>(() => {});
+  const WELCOME = "Welcome to DataToRAG. Connect your accounts to get started.";
+
+  it("renders the unconnected shape on the FIRST paint, and never asks the browser again", async () => {
+    mountWith(neverResolves, [], null, { initialConnections: UNCONNECTED });
+    // No flush: this is the synchronous first render.
+    expect(text()).toContain("Connect an account to get started");
+    expect(text()).toContain("Once you connect");
+    expect(promptButtons().every((b) => b.disabled)).toBe(true);
+    expect(text()).not.toContain("Checking your accounts");
+    await flush();
+    await flush();
+    expect(connectionsFetches()).toBe(0);
+  });
+
+  it("renders the connected shape on the FIRST paint, with no card and no check", async () => {
+    mountWith(neverResolves, [], null, { initialConnections: CONNECTED });
+    expect(text()).toContain("Ask something about your connected accounts");
+    expect(text()).not.toContain("Connect Google Workspace");
+    expect(text()).not.toContain("Checking your accounts");
+    expect(promptButtons().every((b) => !b.disabled)).toBe(true);
+    await flush();
+    await flush();
+    expect(connectionsFetches()).toBe(0);
+  });
+
+  it("greets a signup landing with the welcome line instead of the generic ask", async () => {
+    mountWith(neverResolves, [], null, {
+      initialConnections: UNCONNECTED,
+      landedFrom: "signup",
+    });
+    expect(text()).toContain(WELCOME);
+    expect(text()).not.toContain("Connect an account to get started");
+    expect(text()).toContain("Connect Google Workspace");
+    expect(promptButtons().every((b) => b.disabled)).toBe(true);
+  });
+
+  it("a signup landing with NO server answer assumes nothing is connected, immediately", async () => {
+    mountWith(neverResolves, [], null, { landedFrom: "signup" });
+    expect(text()).toContain(WELCOME);
+    expect(promptButtons().every((b) => b.disabled)).toBe(true);
+    expect(text()).not.toContain("Checking your accounts");
+  });
+
+  it("never shows the welcome line to a connected user, even on a signup landing", async () => {
+    mountWith(neverResolves, [], null, {
+      initialConnections: CONNECTED,
+      landedFrom: "signup",
+    });
+    expect(text()).not.toContain(WELCOME);
+    expect(text()).not.toContain("Connect Google Workspace");
+    expect(text()).toContain("Ask something about your connected accounts");
+    await flush();
+    await flush();
+    expect(text()).not.toContain(WELCOME);
   });
 });
