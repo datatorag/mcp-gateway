@@ -65,8 +65,11 @@ Two things the diff does not make obvious, done deliberately:
 
 An earlier decision record on the OAuth security model says error text is
 redacted before any egress, client responses included. The client-response
-half of that sentence was never true; the tool result has always carried the
-full error. This record supersedes that sentence.
+half of that sentence was never true at any point: `mcp-server.ts` has no
+redact call and never had one, so from the day it was written that sentence
+described a guarantee we did not have. The tool result has always carried the
+full error. This record supersedes that sentence; the old record stays as
+written, because decision records are append-only.
 
 ## Consequences
 

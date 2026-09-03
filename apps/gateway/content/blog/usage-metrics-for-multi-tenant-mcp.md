@@ -2,6 +2,8 @@
 title: "Building a Usage Dashboard Without Logging User Data"
 excerpt: "How we show users exactly what their AI assistant is doing (calls, latency, errors) without storing a single argument or response body."
 date: "2026-04-20"
+updated: "2026-09-03"
+updatedNote: "Corrected the error-message claim. The post said stored error messages are redacted, which was true when it was written and is no longer. The redaction protected against sending user content to a third-party analytics provider, and that still happens; it was never a reason to censor the copy stored for the user in a row only they can see, quoting an error they had already received in full. The stored copy is now raw."
 author: "Manuel Yang"
 category: "Engineering"
 coverImage: "/blog/usage-dashboard.png"
@@ -23,11 +25,11 @@ For every tool call we record six things:
 - Outcome label (`success`, `user_error`, or `server_error`)
 - Latency in milliseconds
 - Response size in bytes
-- A redacted error message when something failed
+- The error message when something failed, stored unchanged
 
 That's the whole row. No arguments. No response body. No `q=` search query, no message ID, no ticket title, no document contents.
 
-If a call errored with something like `"Message 18f3a2c1b not found for user alice@company.com"`, we run that string through a regex redactor before it hits the database. Emails, Google Drive IDs, and long quoted strings all get replaced with `[redacted]`. The error message is useful because it tells users why something failed. It's not worth storing PII to get there.
+If a call errored with something like `"Message 18f3a2c1b not found for user alice@company.com"`, we store that string unchanged, in a row only that user can see. It quotes their own data, and they already received the same error in full when the call failed, so censoring the stored copy only made failures harder to diagnose. The redaction happens on the way out instead: before that message is sent to our analytics provider it runs through a regex redactor that replaces emails, Google Drive IDs, and long quoted strings with a `[redacted]` marker. The error message is useful because it tells users why something failed. It's not worth sending PII to a third party to get there.
 
 The schema lives in a single `usage_events` table in the same Postgres instance as the rest of the app. No separate analytics warehouse, no third-party event pipeline, no cross-region replication. It's just a table.
 
@@ -101,7 +103,7 @@ Two choices worth naming.
 
 **"Median" and "slow-end" instead of "P50" and "P95."** Users aren't SREs. "Slow-end latency" tells them "this is the speed you get on a bad day" without requiring them to know what a percentile is. I went back and forth on this one. The instinct when you work on infrastructure is to use the precise term. The instinct is wrong when you're writing UI for people who have better things to do than learn percentiles.
 
-**Click a tool row to drill down.** The table lists every tool the user has called. Clicking one navigates to `/dashboard/usage/[tool]` with the last 50 calls and per-tool aggregates. The drill-down is the answer to "what actually broke?" It's where the redacted error messages live.
+**Click a tool row to drill down.** The table lists every tool the user has called. Clicking one navigates to `/dashboard/usage/[tool]` with the last 50 calls and per-tool aggregates. The drill-down is the answer to "what actually broke?" It's where the error messages live.
 
 ![Per-tool drill-down: aggregates plus the last 50 calls with status and latency](/blog/usage-drilldown.png)
 
@@ -109,7 +111,7 @@ Two choices worth naming.
 
 A usage dashboard in a multi-tenant service isn't a feature. It's a trust signal. The promise is that you can see what your AI assistant is doing without us seeing what you're doing.
 
-We got there by being disciplined about the row schema: tool name, outcome, latency, size, redacted error. Nothing else.
+We got there by being disciplined about the row schema: tool name, outcome, latency, size, the error message. Nothing else.
 
 If we ever need to add billing on top of this (metered pricing based on call counts), the meter semantics are already correct. Success and user errors count. Server errors don't. Playground calls don't. The plumbing is the same.
 
