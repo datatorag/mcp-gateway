@@ -20,6 +20,11 @@ vi.mock("next/navigation", () => ({
 }));
 // The real client pulls in the whole chat surface; only the props matter here.
 vi.mock("./agent-client", () => ({ AgentClient: () => null }));
+// The server-side connection fetch (SCRUM-206) is not what this file pins.
+vi.mock("@/gateway/connections-view", () => ({
+  loadConnectionsView: async () => ({ accounts: [], connections: [] }),
+}));
+vi.mock("@/lib/db", () => ({ db: {} }));
 
 import AgentPage from "./page";
 import { AGENT_PROMPTS } from "../agent-prompts";

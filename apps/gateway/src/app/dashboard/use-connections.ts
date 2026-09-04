@@ -13,10 +13,27 @@ import type { ConnectedAccount, LegacyConnection } from "./connections/types";
  * and it is the same reason the prompts list and the signup conversion were
  * pulled out next door.
  */
-export function useConnections() {
-  const [accounts, setAccounts] = useState<ConnectedAccount[]>([]);
-  const [legacyConnections, setLegacyConnections] = useState<LegacyConnection[]>([]);
-  const [loaded, setLoaded] = useState(false);
+export function useConnections(
+  /** The answer already known at render time, when the caller has it
+   * (SCRUM-206). The Agent page is a server component holding the user's id,
+   * so it loads the connection state itself and passes it here; the hook then
+   * starts from truth instead of from "nothing connected, go and ask", and
+   * the browser never repeats a lookup the server just did. `refetch` stays
+   * for changes made after mount. Callers without a server answer pass
+   * nothing and get the fetch-on-mount behaviour unchanged. */
+  initial?: {
+    accounts: ConnectedAccount[];
+    connections: LegacyConnection[];
+  } | null
+) {
+  const [accounts, setAccounts] = useState<ConnectedAccount[]>(
+    initial?.accounts ?? []
+  );
+  const [legacyConnections, setLegacyConnections] = useState<LegacyConnection[]>(
+    initial?.connections ?? []
+  );
+  const [loaded, setLoaded] = useState(initial != null);
+  const seeded = initial != null;
 
   const refetch = useCallback(async () => {
     // `loaded` must be set on EVERY path, including a rejected fetch. It was
@@ -52,8 +69,9 @@ export function useConnections() {
   }, []);
 
   useEffect(() => {
+    if (seeded) return;
     void refetch();
-  }, [refetch]);
+  }, [refetch, seeded]);
 
   return {
     accounts,

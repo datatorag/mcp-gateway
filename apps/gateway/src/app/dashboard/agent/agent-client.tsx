@@ -7,6 +7,7 @@ import { Playground, type PlaygroundHandle } from "../playground";
 import { AGENT_PROMPTS } from "../agent-prompts";
 import { useSignupConversion } from "../use-signup-conversion";
 import { useConnections } from "../use-connections";
+import type { ConnectionsView } from "@/gateway/connections-view";
 import { ThreadList } from "./thread-list";
 import type { PlaygroundMessage } from "../playground-presentation";
 import { getConnectableService } from "../connections/service-registry";
@@ -40,9 +41,15 @@ export function AgentClient({
   connectedService = null,
   connectError = null,
   seedPrompt = null,
+  initialConnections = null,
 }: {
   isDefaultView: boolean;
   landedFrom: AgentLandedFrom;
+  /** The connection state as the server loaded it at render time
+   * (SCRUM-206), so the empty state's first paint is the right one and
+   * nothing is fetched to find out. Null only when a caller has no server
+   * answer, in which case the hook fetches as before. */
+  initialConnections?: ConnectionsView | null;
   /** Thread to reopen on mount — the connect round trip's return leg. */
   resumeThreadId?: string | null;
   /** Registry id of the service the user just connected, when they did. */
@@ -57,7 +64,7 @@ export function AgentClient({
   seedPrompt?: string | null;
 }) {
   const { accounts, hasConnectedAccount, loaded: connectionsLoaded } =
-    useConnections();
+    useConnections(initialConnections);
   const ref = useRef<PlaygroundHandle>(null);
 
   /** Run the seeded prompt exactly once, stripping the param first so a
@@ -267,6 +274,11 @@ export function AgentClient({
             prompts={AGENT_PROMPTS}
             ref={ref}
             threadId={thread.id}
+            // The signup landing (SCRUM-206): a user who signed up seconds ago
+            // cannot hold a connection, so the empty state assumes none
+            // without waiting for the lookup. State only; the copy for an
+            // unconnected user is the same however they arrived.
+            welcome={landedFrom === "signup"}
           />
         </div>
       </div>

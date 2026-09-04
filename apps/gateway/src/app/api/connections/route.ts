@@ -1,73 +1,22 @@
 import { NextResponse } from "next/server";
-import { eq, and, notInArray } from "drizzle-orm";
+import { eq, and } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { withRoute } from "@/lib/with-route";
-import { serviceConnections, connectedAccounts } from "@datatorag-mcp/db";
+import { connectedAccounts } from "@datatorag-mcp/db";
 import {
-  listConnectedAccounts,
   disconnectAccount,
   disconnectService,
   setDefaultAccount,
 } from "@/gateway/connected-accounts";
 import { revokeUpstream } from "@/gateway/service-token";
-import { scopeDelta, serviceGrantStates } from "@/gateway/scope-grant";
+import { loadConnectionsView } from "@/gateway/connections-view";
 
-/** The finished grant answer for one row, in the shape consumers render
- * (SCRUM-136 + SCRUM-106). Both halves come out of scope-grant.ts, so the
- * account rows and the legacy rows cannot describe the same grant two
- * different ways — they used to run the same inline projection twice. */
-function scopeStatusFor(service: string, scopes: string | null) {
-  const { missing, complete } = scopeDelta(service, scopes);
-  return { missing, complete, services: serviceGrantStates(service, scopes) };
-}
-
-// GET /api/connections — list connected accounts for the logged-in user
+// GET /api/connections: list connected accounts for the logged-in user.
+// The body is the SAME loader the Agent page runs server-side (SCRUM-206),
+// so what the page hands down on first paint and what the browser refetches
+// later are one shape from one place.
 export const GET = withRoute(async (userId) => {
-  const rawAccounts = await listConnectedAccounts(db, userId);
-
-  // SCRUM-136 (the SCRUM-105 shape): callers get the finished DELTA, not a
-  // scope array to re-derive "is this enough" from — the comparison lives in
-  // scope-grant.ts and nowhere else.
-  const accounts = rawAccounts.map((a) => ({
-    ...a,
-    scopeStatus: scopeStatusFor(a.connectorType, a.scopes),
-  }));
-
-  // Legacy: un-migrated service_connections (no connected_accounts row yet)
-  const migratedSet = accounts.map((a) => a.serviceConnectionId);
-
-  const legacyConnections =
-    migratedSet.length > 0
-      ? await db
-          .select({
-            id: serviceConnections.id,
-            service: serviceConnections.service,
-            scopes: serviceConnections.scopes,
-            connectedAt: serviceConnections.connectedAt,
-          })
-          .from(serviceConnections)
-          .where(
-            and(
-              eq(serviceConnections.userId, userId),
-              notInArray(serviceConnections.id, migratedSet)
-            )
-          )
-      : await db
-          .select({
-            id: serviceConnections.id,
-            service: serviceConnections.service,
-            scopes: serviceConnections.scopes,
-            connectedAt: serviceConnections.connectedAt,
-          })
-          .from(serviceConnections)
-          .where(eq(serviceConnections.userId, userId));
-
-  const connections = legacyConnections.map((c) => ({
-    ...c,
-    scopeStatus: scopeStatusFor(c.service, c.scopes),
-  }));
-
-  return NextResponse.json({ accounts, connections });
+  return NextResponse.json(await loadConnectionsView(db, userId));
 });
 
 // DELETE /api/connections?accountId=xxx or ?service=xxx (legacy)

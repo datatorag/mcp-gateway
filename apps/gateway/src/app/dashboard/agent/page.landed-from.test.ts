@@ -19,6 +19,18 @@ vi.mock("next/navigation", () => ({
 }));
 // The real client pulls in the whole chat surface; only the props matter here.
 vi.mock("./agent-client", () => ({ AgentClient: () => null }));
+// SCRUM-206: the page fetches the connection state server-side and hands it
+// down, so the client never starts from "unknown". The loader is the same
+// one /api/connections serves, mocked here; this file pins only that the
+// page calls it for the session's user and passes the result through.
+const loadConnectionsView = vi.fn(async (..._args: unknown[]) => ({
+  accounts: [],
+  connections: [],
+}));
+vi.mock("@/gateway/connections-view", () => ({
+  loadConnectionsView: (...args: unknown[]) => loadConnectionsView(...args),
+}));
+vi.mock("@/lib/db", () => ({ db: { tag: "db" } }));
 
 import AgentPage from "./page";
 
@@ -52,9 +64,22 @@ const NO_CONNECT_RETURN = {
   // A plain landing seeds nothing (SCRUM-118); the seeding contract itself
   // is pinned in page.seed-prompt.test.ts.
   seedPrompt: null,
+  // The server-fetched connection state (SCRUM-206), as the mocked loader
+  // returns it.
+  initialConnections: { accounts: [], connections: [] },
 };
 
 describe("agent page landing props", () => {
+  it("fetches the connection state server-side, for the session's user (SCRUM-206)", async () => {
+    loadConnectionsView.mockClear();
+    const props = await render({});
+    expect(loadConnectionsView).toHaveBeenCalledTimes(1);
+    expect(loadConnectionsView.mock.calls[0]?.[1]).toBe("user-1");
+    expect(
+      (props as unknown as { initialConnections: unknown }).initialConnections
+    ).toEqual({ accounts: [], connections: [] });
+  });
+
   it("marks the signup landing as landed_from=signup", async () => {
     expect(await render({ welcome: "1", signup: "1" })).toEqual({
       isDefaultView: true,

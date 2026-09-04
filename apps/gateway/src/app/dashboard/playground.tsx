@@ -30,6 +30,8 @@ import {
   PromptInputTools,
 } from "@/components/ai-elements/prompt-input";
 import { Suggestion, Suggestions } from "@/components/ai-elements/suggestion";
+import { Lock } from "lucide-react";
+import { Spinner } from "@/components/ui/spinner";
 import Link from "next/link";
 import {
   ConnectGrantContext,
@@ -163,6 +165,41 @@ const LAYOUT: Record<
 const PAGE_GREETING =
   "Ask for something and it works across your connected accounts.";
 
+/** The empty state for a user with NO connection (SCRUM-206).
+ *
+ * Every prompt in the shared list needs a connection, and a new account has
+ * none, so offering them live greeted a new user with six invitations that
+ * would all fail. The screen's one job for this user is a connection: the
+ * connect control leads, and the prompts stay visible but LOCKED under a
+ * line that says connecting is what unlocks them. Same shared list, on
+ * purpose, so this surface and the dashboard cards cannot drift; the lock is
+ * state, not a second list. */
+/** The unconnected lead: a greeting and an onboarding instruction, for EVERY
+ * user with zero connections, however they arrived.
+ *
+ * Zero connections is what makes a user new here, not the arrival path. The
+ * product does nothing without a connection, so this screen's one job for
+ * such a user is to make connecting the obvious next step, and a returning
+ * account that never connected is exactly as new as one that signed up a
+ * minute ago. The sentence was briefly gated on the signup param, which
+ * keyed the message on HOW someone arrived rather than WHAT state they are
+ * in, and left the returning never-connected user with a terse line. Ruled
+ * the other way: the greeting goes to everyone unconnected. The signup param
+ * still matters, but only as the zero-lookup assumption of unconnectedness
+ * (see `welcome` below), never as a copy switch. */
+const UNCONNECTED_GREETING = "Welcome to DataToRAG.";
+const UNCONNECTED_INSTRUCTION = "Connect your accounts to get started.";
+const UNCONNECTED_LEAD = `${UNCONNECTED_GREETING} ${UNCONNECTED_INSTRUCTION}`;
+const UNCONNECTED_PROMPTS_CAPTION = "Once you connect, you can ask things like:";
+/** Matches the dashboard prompt cards' disabled tooltip, word for word. */
+const LOCKED_PROMPT_TITLE = "Connect an account to run this";
+/** The genuinely-unknown state, which after SCRUM-206 is only ever a
+ * client-side refetch: the control is shown by default, under an indicator
+ * that reads as a CHECK in progress, not as a claim. "Connect an account to
+ * get started" would be false to someone holding nine; "checking" is true to
+ * everyone for the moment they see it. */
+const CHECKING_ACCOUNTS = "Checking your accounts";
+
 export interface PlaygroundHandle {
   /** Seed the input with `prompt` and submit it immediately. Used by the
    * "What can I do?" prompt cards' Run action in dashboard-client.tsx. */
@@ -210,6 +247,13 @@ interface PlaygroundProps {
   /** Fired once a turn has gone out, so a thread list can pick up a new
    * conversation and its freshly written title. */
   onConversationChanged?: () => void;
+  /** The signup landing (SCRUM-206). The empty state assumes nothing is
+   * connected without waiting for a lookup, because a user who signed up
+   * seconds ago cannot hold a connection. This is an ASSUMPTION about state,
+   * not a copy switch: the unconnected copy is the same for everyone. A
+   * connected user on this landing (a returning account re-signing up) still
+   * gets the connected shape: the assumption yields to a known answer. */
+  welcome?: boolean;
 }
 
 /** Feedback is reported against the prompt that produced the answer, which is
@@ -242,6 +286,7 @@ export const Playground = forwardRef<PlaygroundHandle, PlaygroundProps>(
       threadId = null,
       initialMessages,
       onConversationChanged,
+      welcome = false,
     },
     ref
   ) {
@@ -286,6 +331,16 @@ export const Playground = forwardRef<PlaygroundHandle, PlaygroundProps>(
      * generic list fills the remainder, so the promised three is enforced
      * here rather than asserted in a comment. */
     const personalised = ownFilePrompts.length > 0;
+    /** The empty state's three answers to "is anything connected" (SCRUM-206).
+     *
+     * `locked`: known unconnected, OR a signup landing with no answer yet,
+     * which is assumed unconnected because it cannot be otherwise. A known
+     * connected answer wins over the assumption either way.
+     * `checking`: genuinely unknown. After SCRUM-206 the page supplies the
+     * answer from the server, so this is only ever a client-side refetch;
+     * it shows the control under a checking indicator and claims nothing. */
+    const locked = !hasConnectedAccount && (connectionsLoaded || welcome);
+    const checking = !connectionsLoaded && !welcome;
     const suggestions = personalised
       ? [
           ...ownFilePrompts,
@@ -729,76 +784,134 @@ export const Playground = forwardRef<PlaygroundHandle, PlaygroundProps>(
                       {PAGE_GREETING}
                     </h1>
                   )}
-                  {/* CLAIMS are gated, PROMPTS are not (SCRUM-114, SCRUM-117).
-                      Until the connection lookup resolves, connection state
-                      is unknown and unknown makes no claim: neither the
-                      connection-state copy nor the connect card renders,
-                      because the card is click-instrumented and a flash
-                      would log connect intent from an already-connected
-                      user. The PROMPTS below are outside that gate on
-                      purpose - they depend on nothing about the user's
-                      connections, and what is possible should be visible
-                      before anything resolves. An unconnected user who runs
-                      one lands exactly in the in-thread connect flow, which
-                      is the flow the product wants them in. */}
-                  {connectionsLoaded && (
+                  {/* THREE STATES (SCRUM-206).
+
+                      Connected: the claim and live prompts. Known
+                      unconnected, or a signup landing: the screen's job is
+                      one connection, so the lead line and the connect
+                      control come first and the prompts stay but LOCKED,
+                      because every one of them needs a connection this user
+                      does not have, and six live suggestions that all fail
+                      read as a product that does not do what it says.
+
+                      Unknown: since the page loads the answer server-side
+                      this is only ever a client-side refetch, and Manuel's
+                      ruling for it is the control by default under a
+                      CHECKING indicator, not a blank and not a claim. The
+                      card is click-instrumented; showing it while checking
+                      can only log intent from someone who actually clicks
+                      it, which is the intent the event is for. The prompts
+                      stay live while checking (SCRUM-117): a lock would be
+                      a claim, and unknown makes none. */}
+                  {connectionsLoaded && hasConnectedAccount && (
                     <p
                       className={cn(
                         "text-muted-foreground",
                         isPage ? "text-sm" : "text-xs"
                       )}
                     >
-                      {hasConnectedAccount
-                        ? personalised
-                          ? suggestions.slice(0, 3).length === 1
-                            ? "Here is something I can do with what you have connected."
-                            : "Here are a few things I can do with what you have connected."
-                          : "Ask something about your connected accounts."
-                        : "I can work with your email, files, calendar and issues, once you connect an account. You can ask me anything in the meantime."}
+                      {personalised
+                        ? suggestions.slice(0, 3).length === 1
+                          ? "Here is something I can do with what you have connected."
+                          : "Here are a few things I can do with what you have connected."
+                        : "Ask something about your connected accounts."}
                     </p>
+                  )}
+                  {/* The connect control LEADS in the unconnected state. The
+                      card itself - copy, hrefs, source property - is
+                      byte-identical to what SCRUM-112 instrumented; this
+                      moves WHERE it sits, never what it is, so the telemetry
+                      series stays comparable across the deploy boundary. */}
+                  {(locked || checking) && (
+                    <div className={isPage ? "space-y-3" : "space-y-2"}>
+                      {locked ? (
+                        <p
+                          className={cn(
+                            "font-medium text-foreground",
+                            isPage ? "text-sm" : "text-xs"
+                          )}
+                        >
+                          {UNCONNECTED_LEAD}
+                        </p>
+                      ) : (
+                        <p
+                          className={cn(
+                            "flex items-center gap-2 text-muted-foreground",
+                            isPage ? "text-sm" : "text-xs"
+                          )}
+                        >
+                          <Spinner aria-label={CHECKING_ACCOUNTS} className="size-3.5" />
+                          {CHECKING_ACCOUNTS}
+                        </p>
+                      )}
+                      <ConnectPart
+                        services={CONNECTABLE_SERVICES}
+                        source="empty_state"
+                      />
+                      {locked && (
+                        <p
+                          className={cn(
+                            "text-muted-foreground",
+                            isPage ? "text-sm" : "text-xs"
+                          )}
+                        >
+                          {UNCONNECTED_PROMPTS_CAPTION}
+                        </p>
+                      )}
+                    </div>
                   )}
                   {/* Three suggestions, enforced by the top-up above, two
                       arrangements. The panel keeps its pill row. The page
                       stacks them full-width, because these are whole
                       sentences and a nowrap pill scroller hides most of
                       every one of them on the surface where they are the
-                      main thing to read. */}
+                      main thing to read. Locked: a real `disabled`, not a
+                      styled look-alike, so a click cannot submit, plus the
+                      mark and the tooltip so the lock is visible without
+                      hovering. */}
                   {isPage ? (
                         <div className="space-y-2">
                           {suggestions.slice(0, 3).map((prompt, i) => (
                             <Suggestion
-                              className="h-auto w-full justify-start whitespace-normal rounded-xl px-4 py-3 text-left text-sm font-normal"
+                              className="h-auto w-full justify-start whitespace-normal rounded-xl px-4 py-3 text-left text-sm font-normal disabled:cursor-not-allowed disabled:opacity-60"
+                              disabled={locked}
                               key={i}
                               onClick={send}
                               suggestion={prompt}
-                            />
+                              title={locked ? LOCKED_PROMPT_TITLE : undefined}
+                            >
+                              {locked && (
+                                <Lock
+                                  aria-hidden
+                                  className="mr-2 size-3.5 shrink-0 text-muted-foreground"
+                                />
+                              )}
+                              {prompt}
+                            </Suggestion>
                           ))}
                         </div>
                       ) : (
                         <Suggestions>
                           {suggestions.slice(0, 3).map((prompt, i) => (
                             <Suggestion
-                              className="h-auto py-1 text-[11px]"
+                              className="h-auto py-1 text-[11px] disabled:cursor-not-allowed disabled:opacity-60"
+                              disabled={locked}
                               key={i}
                               onClick={send}
                               suggestion={prompt}
-                            />
+                              title={locked ? LOCKED_PROMPT_TITLE : undefined}
+                            >
+                              {locked && (
+                                <Lock
+                                  aria-hidden
+                                  className="mr-1 size-3 shrink-0 text-muted-foreground"
+                                />
+                              )}
+                              {prompt}
+                            </Suggestion>
                           ))}
                         </Suggestions>
                       )}
-                  {/* The connect card: only once the state is KNOWN to be
-                      unconnected, below the prompts so what is possible
-                      reads before what is asked for. The card itself - copy,
-                      hrefs, source property - is byte-identical to what
-                      SCRUM-112 instrumented; this change moves WHERE it
-                      sits, never what it is, so the telemetry series stays
-                      comparable across the deploy boundary. */}
-                  {connectionsLoaded && !hasConnectedAccount && (
-                    <ConnectPart
-                      services={CONNECTABLE_SERVICES}
-                      source="empty_state"
-                    />
-                  )}
                 </div>
               )}
 
