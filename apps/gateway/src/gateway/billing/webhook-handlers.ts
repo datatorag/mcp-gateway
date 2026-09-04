@@ -3,6 +3,7 @@ import { and, eq, isNull } from "drizzle-orm";
 import type { Database } from "@datatorag-mcp/db";
 import { stripeEvents, subscriptions, users, type Plan } from "@datatorag-mcp/db";
 import type { SubscriptionStatus } from "@datatorag-mcp/db";
+import { newCustomerFromEvent, notifyNewCustomer } from "./customer-alert";
 
 /**
  * Stripe webhook lifecycle, in one place, IDEMPOTENT BY CONSTRUCTION.
@@ -204,7 +205,7 @@ export async function handleStripeEvent(
   db: Database,
   event: Stripe.Event
 ): Promise<WebhookOutcome> {
-  return db.transaction(async (tx) => {
+  const outcome = await db.transaction(async (tx) => {
     const claimed = await tx
       .insert(stripeEvents)
       .values({ id: event.id, type: event.type })
@@ -216,4 +217,16 @@ export async function handleStripeEvent(
     const action = await applyEvent(tx, event);
     return { duplicate: false as const, action };
   });
+  // The #leads alert for a REAL new customer (SCRUM-212), after the
+  // transaction has committed so a rolled-back apply never announces
+  // anything, and only on a first delivery: the event claim above is what
+  // makes a Stripe redelivery a no-op for the database, and the alert rides
+  // on that same claim rather than keeping a second record of its own.
+  // Awaited, not fire-and-forget: it never throws, Stripe's delivery timeout
+  // is generous, and a deterministic post is what the handler test counts.
+  if (!outcome.duplicate) {
+    const newCustomer = newCustomerFromEvent(event);
+    if (newCustomer) await notifyNewCustomer(db, newCustomer);
+  }
+  return outcome;
 }

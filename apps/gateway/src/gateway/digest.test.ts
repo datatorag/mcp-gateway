@@ -17,8 +17,14 @@ import {
   collectStripe,
   collectPosthog,
   posthogInternalFilterSql,
+  stripeLines,
+  posthogLines,
+  neonLines,
+  reconcile,
+  type NeonData,
 } from "./digest";
 import { sendSlack } from "../lib/slack";
+import { getStripe } from "../lib/stripe";
 
 const fakeDb = {} as never; // collectors are injected in these tests; db is never touched
 
@@ -83,6 +89,222 @@ describe("runDailyDigest", () => {
   });
 });
 
+/* SCRUM-211: the digest labelled a started checkout as a new customer.
+ * `customer.created` is emitted by our own checkout route when checkout
+ * BEGINS, so that label reported intent as revenue. The lines now say what
+ * each event is, in a fixed order, and a started checkout that no
+ * subscription followed says so on its own line. */
+describe("stripeLines (SCRUM-211): each Stripe event labelled as what it is", () => {
+  it("labels customer.created as a started checkout, never as a customer", () => {
+    const lines = stripeLines({ "customer.created": 1 });
+    expect(lines).toEqual(["Checkouts started: 1 (0 became customers)"]);
+    expect(lines.join("\n")).not.toMatch(/New customers: 1/);
+  });
+
+  it("counts a new customer only from a created subscription", () => {
+    const lines = stripeLines({
+      "customer.created": 1,
+      "customer.subscription.created": 1,
+      "payment_intent.succeeded": 1,
+    });
+    expect(lines).toEqual([
+      "Checkouts started: 1 (1 became a customer)",
+      "New customers (subscription created): 1",
+      "Payments succeeded: 1",
+    ]);
+  });
+
+  it("keeps a fixed order and drops zero lines, but never drops a failed payment", () => {
+    const lines = stripeLines({
+      "payment_intent.payment_failed": 2,
+      "payment_intent.succeeded": 3,
+    });
+    expect(lines).toEqual(["Payments succeeded: 3", "Payments FAILED: 2"]);
+    expect(stripeLines({})).toEqual([]);
+  });
+});
+
+describe("collectStripe (SCRUM-211): the event list flows through the labels", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    envState.STRIPE_API_KEY = "sk_test_x";
+  });
+  afterEach(() => {
+    envState.STRIPE_API_KEY = "";
+  });
+
+  it("renders a started checkout that no subscription followed, from the raw event list", async () => {
+    vi.mocked(getStripe).mockReturnValue({
+      events: {
+        list: async () => ({
+          data: [
+            { type: "customer.created" },
+            { type: "customer.updated" },
+            { type: "checkout.session.expired" },
+          ],
+        }),
+      },
+    } as never);
+    const lines = await collectStripe(new Date());
+    expect(lines).toEqual(["Checkouts started: 1 (0 became customers)"]);
+  });
+});
+
+/* SCRUM-211: a PostHog click count printed beside a DB connection count that
+ * contradicted it, under a label that made the click sound like the
+ * connection. `connector_added` is a CLICK on the dashboard's connect button, captured
+ * client-side before OAuth starts; `account_connected` is the server-side
+ * event that fires when a connection is actually written. The labels now say
+ * so, and the real one becomes a fact the digest can reconcile with the DB. */
+describe("posthogLines (SCRUM-211): clicks are clicks, connections are connections", () => {
+  it("labels connector_added as a connect click and account_connected as a connection", () => {
+    const { lines, facts } = posthogLines([
+      ["account_connected", "", 1],
+      ["connector_added", "", 2],
+      ["user_signed_up", "", 3],
+    ]);
+    expect(lines).toContain("Connect clicks (dashboard): 2");
+    expect(lines).toContain("Accounts connected: 1");
+    expect(lines).toContain("Signups: 3");
+    expect(lines.join("\n")).not.toContain("Connectors added");
+    expect(facts).toEqual({ connections: 1, signups: 3 });
+  });
+
+  it("reports absent events as zero facts: no rows is a claim of zero, not silence", () => {
+    const { facts } = posthogLines([["$pageview", "", 10]]);
+    expect(facts).toEqual({ connections: 0, signups: 0 });
+  });
+
+  it("still splits tool_call by surface after the other lines", () => {
+    const { lines } = posthogLines([
+      ["$pageview", "", 120],
+      ["tool_call", "agent", 3],
+      ["tool_call", "mcp", 11],
+    ]);
+    expect(lines[lines.length - 1]).toBe("Tool calls: 14 (3 agent / 11 mcp)");
+  });
+});
+
+/* SCRUM-212: THE RULE ABOVE ANY FIELD. When two sources describe the same
+ * fact and disagree, the digest says so. Two contradictory numbers printed
+ * side by side in silence look reconciled, which is worse than either alone. */
+describe("reconcile (SCRUM-212): two sources, one fact, a visible marker when they differ", () => {
+  it("names the fact and both numbers when the DB and PostHog disagree", () => {
+    const lines = reconcile({
+      neon: { connections: 0, signups: 2 },
+      posthog: { connections: 2, signups: 2 },
+    });
+    expect(lines).toEqual(["New service connections: DB says 0, PostHog says 2"]);
+  });
+
+  it("is silent when they agree, and when a source is missing", () => {
+    expect(reconcile({ neon: { connections: 1, signups: 2 }, posthog: { connections: 1, signups: 2 } })).toEqual([]);
+    expect(reconcile({ neon: { connections: 1, signups: 2 }, posthog: null })).toEqual([]);
+    expect(reconcile({ neon: null, posthog: { connections: 1, signups: 2 } })).toEqual([]);
+  });
+
+  it("checks every shared fact, not just the first", () => {
+    const lines = reconcile({
+      neon: { connections: 0, signups: 1 },
+      posthog: { connections: 2, signups: 3 },
+    });
+    expect(lines).toHaveLength(2);
+    expect(lines[1]).toBe("Signups: DB says 1, PostHog says 3");
+  });
+});
+
+describe("formatDigest (SCRUM-212): the disagreement block", () => {
+  it("renders a conspicuous block when sources disagree, and none when they do not", () => {
+    const withMarker = formatDigest(
+      "Mon Jan 1",
+      { neon: ["New service connections: 0"], stripe: [], posthog: ["Accounts connected: 2"] },
+      ["New service connections: DB says 0, PostHog says 2"]
+    );
+    const flat = JSON.stringify(withMarker.blocks);
+    expect(flat).toContain("Sources disagree");
+    expect(flat).toContain("DB says 0, PostHog says 2");
+    const without = formatDigest("Mon Jan 1", { neon: [], stripe: [], posthog: [] }, []);
+    expect(JSON.stringify(without.blocks)).not.toContain("Sources disagree");
+  });
+});
+
+/* SCRUM-212: detail that makes a number actionable, without becoming a
+ * dashboard. Signups are named with their source; the paying customers are a
+ * named line that is conspicuous at zero; the connection count carries its
+ * denominator. */
+describe("neonLines (SCRUM-212): the DB section names what it counts", () => {
+  const base: NeonData = {
+    leads: [],
+    signups: [],
+    usage: { calls: 0, activeUsers: 0 },
+    payingCustomers: [],
+    newConnections: 0,
+    funnel: { connected: 1, signups: 6, days: 14 },
+  };
+
+  it("names each signup with where they came from, paid and organic apart", () => {
+    const { lines, facts } = neonLines({
+      ...base,
+      signups: [
+        {
+          name: "Paid Person",
+          email: "paid@example.com",
+          acquisitionChannel: "paid_search",
+          acquisitionUtmSource: "google",
+          acquisitionUtmMedium: "cpc",
+          acquisitionUtmCampaign: null,
+          acquisitionGclid: "x",
+          acquisitionReferringDomain: null,
+        },
+        {
+          name: null,
+          email: "organic@example.com",
+          acquisitionChannel: "organic",
+          acquisitionUtmSource: null,
+          acquisitionUtmMedium: null,
+          acquisitionUtmCampaign: null,
+          acquisitionGclid: null,
+          acquisitionReferringDomain: "news.example.com",
+        },
+      ],
+    });
+    expect(lines).toContain("Signups: 2");
+    expect(lines).toContain("• Paid Person <paid@example.com>: paid_search - google / cpc (gclid ✓)");
+    expect(lines).toContain("• (no name) <organic@example.com>: organic - news.example.com");
+    expect(facts.signups).toBe(2);
+  });
+
+  it("makes the paying customers a named line, conspicuous at zero calls", () => {
+    const quiet = neonLines({
+      ...base,
+      usage: { calls: 25, activeUsers: 1 },
+      payingCustomers: [{ email: "pro@example.com", calls: 0 }],
+    });
+    expect(quiet.lines).toContain("Tool calls: 25 (1 active user)");
+    expect(quiet.lines).toContain("⚠️ Paying customers active: 0 of 1");
+    expect(quiet.lines).toContain("• pro@example.com: 0 calls");
+
+    const active = neonLines({
+      ...base,
+      payingCustomers: [{ email: "pro@example.com", calls: 17 }],
+    });
+    expect(active.lines).toContain("Paying customers active: 1 of 1");
+    expect(active.lines).toContain("• pro@example.com: 17 calls");
+    expect(active.lines.join("\n")).not.toContain("⚠️");
+  });
+
+  it("says when there are no paying customers at all", () => {
+    expect(neonLines(base).lines).toContain("Paying customers: none");
+  });
+
+  it("carries the funnel denominator beside the connection count", () => {
+    const { lines, facts } = neonLines({ ...base, newConnections: 0 });
+    expect(lines).toContain("New service connections: 0");
+    expect(lines).toContain("Connected: 1 of 6 signups in the last 14 days");
+    expect(facts.connections).toBe(0);
+  });
+});
+
 describe("collectStripe / collectPosthog — not configured", () => {
   const fetchMock = vi.fn();
 
@@ -136,7 +358,10 @@ describe("collectPosthog — line formatting", () => {
         ],
       }),
     });
-    const lines = await collectPosthog(new Date());
+    const result = await collectPosthog(new Date());
+    // SCRUM-212: the collector now returns lines plus the facts it can vouch
+    // for, so the digest can reconcile them against the DB.
+    const lines = Array.isArray(result) ? result : result.lines;
     expect(lines).toContain("Pageviews: 120");
     expect(lines).toContain("Agent runs: 3");
     // Total first, then per-surface counts in the query's ORDER BY surface order.

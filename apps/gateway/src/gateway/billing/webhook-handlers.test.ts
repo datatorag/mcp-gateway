@@ -1,10 +1,18 @@
 import { randomUUID } from "node:crypto";
-import { describe, it, expect, beforeAll, afterAll } from "vitest";
+import { describe, it, expect, beforeAll, afterAll, vi } from "vitest";
 import { eq } from "drizzle-orm";
 import type Stripe from "stripe";
 import type { Database } from "@datatorag-mcp/db";
 import { stripeEvents, subscriptions, users } from "@datatorag-mcp/db";
 import { getTestDb, stopTestDb, insertTestUser, isDockerAvailable } from "@/test-utils/db";
+
+// SCRUM-212: the #leads alert rides on the handler. Mocked so the suite can
+// count posts without a Slack token; the post's contents are pinned in
+// customer-alert.test.ts.
+vi.mock("../../lib/slack", () => ({
+  sendSlack: vi.fn().mockResolvedValue(undefined),
+}));
+import { sendSlack } from "../../lib/slack";
 import { handleStripeEvent } from "./webhook-handlers";
 
 // REAL POSTGRES ON PURPOSE. The idempotency guard IS an ON CONFLICT insert
@@ -112,6 +120,46 @@ describe.skipIf(!dockerAvailable)("stripe webhook handlers (real db)", () => {
     const second = await handleStripeEvent(db, event);
     expect(second).toEqual({ duplicate: true });
     expect(await planOf(userId)).toBe("free");
+  });
+
+  it("SCRUM-212: a created, active subscription posts ONE #leads alert; the replay posts none", async () => {
+    vi.mocked(sendSlack).mockClear();
+    const userId = await insertTestUser(db);
+    const cus = `cus_${randomUUID().slice(0, 8)}`;
+    await linkCustomer(userId, cus);
+    const event = subscriptionEvent({
+      eventId: `evt_${randomUUID()}`,
+      type: "customer.subscription.created",
+      subscriptionId: `sub_${randomUUID().slice(0, 8)}`,
+      customerId: cus,
+      status: "active",
+    });
+
+    await handleStripeEvent(db, event);
+    const leadsPosts = () =>
+      vi.mocked(sendSlack).mock.calls.filter(([channel]) => channel === "leads");
+    expect(leadsPosts()).toHaveLength(1);
+    expect(leadsPosts()[0][1].text).toContain("New customer");
+
+    // Stripe redelivers. The event claim already makes the replay a no-op for
+    // the database; the alert rides on the same claim, so it is a no-op for
+    // Slack too. No second scheme.
+    await handleStripeEvent(db, event);
+    expect(leadsPosts()).toHaveLength(1);
+
+    // And a subscription UPDATE (a renewal, a cancellation flag) never posts:
+    // that would page on every billing cycle of an existing customer.
+    await handleStripeEvent(
+      db,
+      subscriptionEvent({
+        eventId: `evt_${randomUUID()}`,
+        type: "customer.subscription.updated",
+        subscriptionId: `sub_${randomUUID().slice(0, 8)}`,
+        customerId: cus,
+        status: "active",
+      })
+    );
+    expect(leadsPosts()).toHaveLength(1);
   });
 
   it("cancel_at_period_end keeps Pro until the period ends; deletion ends it", async () => {

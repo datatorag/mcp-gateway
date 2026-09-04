@@ -1,10 +1,11 @@
-import { and, gte, inArray, notInArray, sql, type SQL } from "drizzle-orm";
+import { and, eq, gte, inArray, notInArray, sql, type SQL } from "drizzle-orm";
 import type { Database } from "@datatorag-mcp/db";
 import { leads, users, usageEvents, serviceConnections } from "@datatorag-mcp/db";
 import type { PgColumn } from "drizzle-orm/pg-core";
 import { getEnv } from "@datatorag-mcp/config";
 import { getStripe } from "../lib/stripe";
 import { sendSlack, type SlackMessage } from "../lib/slack";
+import { acquisitionSummary, type AcquisitionRow } from "./signup-alert";
 
 export type DigestSections = {
   neon: string[] | null;
@@ -12,14 +13,33 @@ export type DigestSections = {
   posthog: string[] | null;
 };
 
+/**
+ * A fact two sources can both report, so the digest can check them against
+ * each other (SCRUM-212). THE RULE: when two sources disagree, the digest
+ * says so. Two contradictory numbers printed side by side in silence look
+ * reconciled, which is worse than printing neither. Only facts the sources
+ * are meant to agree on belong here; a counter that undercounts by design
+ * (usage_events, with its best-effort insert) would mark every day and
+ * teach readers to ignore the marker.
+ */
+export type FactKey = "connections" | "signups";
+export type Facts = Partial<Record<FactKey, number>>;
+
+/** A collector may return bare lines, or lines plus the facts it can vouch
+ * for. Bare lines keep the injected collectors in tests and any caller that
+ * has nothing to reconcile working unchanged. */
+export type CollectorResult = string[] | { lines: string[]; facts?: Facts };
+
 export type Collectors = {
-  neon: (db: Database, since: Date) => Promise<string[]>;
-  stripe: (since: Date) => Promise<string[]>;
-  posthog: (since: Date) => Promise<string[]>;
+  neon: (db: Database, since: Date) => Promise<CollectorResult>;
+  stripe: (since: Date) => Promise<CollectorResult>;
+  posthog: (since: Date) => Promise<CollectorResult>;
 };
 
 const MAX_LEAD_LINES = 10; // Slack caps messages at 50 blocks; keep lists bounded
+const MAX_SIGNUP_LINES = 10;
 const NOT_CONFIGURED = ["_not configured — skipped_"]; // rendered for credential-less sources; asserted verbatim in tests
+const FUNNEL_WINDOW_DAYS = 14;
 
 // ── Internal-traffic exclusion ────────────────────────────────────────
 // Raw HogQL/API queries do NOT inherit PostHog's insight-level test-account
@@ -97,28 +117,93 @@ function notInternalUserId(db: Database, userIdCol: PgColumn): SQL[] {
   return conds;
 }
 
-export async function collectNeon(db: Database, since: Date): Promise<string[]> {
+// ── Product (DB) ──────────────────────────────────────────────────────
+
+/** What the DB section renders from, gathered by collectNeon and formatted
+ * by neonLines so the wording is testable without a database. */
+export type NeonData = {
+  leads: Array<{ name: string; email: string; company: string }>;
+  signups: Array<{ name: string | null; email: string } & NonNullable<AcquisitionRow>>;
+  usage: { calls: number; activeUsers: number };
+  /** Every paying (pro) customer, with their calls in the window. The most
+   * informative number the digest has (SCRUM-212): whether a paying customer
+   * used the product today, named, and conspicuous at zero. */
+  payingCustomers: Array<{ email: string; calls: number }>;
+  newConnections: number;
+  /** The running funnel: of the signups in the last `days`, how many have
+   * ever connected a service. A zero with no denominator reads as quiet
+   * when it may be the normal state of the funnel. */
+  funnel: { connected: number; signups: number; days: number };
+};
+
+export function neonLines(d: NeonData): { lines: string[]; facts: Facts } {
   const lines: string[] = [];
 
+  if (d.leads.length > 0) {
+    lines.push(`*${d.leads.length} new lead${d.leads.length === 1 ? "" : "s"}:*`);
+    for (const l of d.leads.slice(0, MAX_LEAD_LINES)) {
+      lines.push(`• ${l.name} <${l.email}> — ${l.company}`);
+    }
+    if (d.leads.length > MAX_LEAD_LINES) {
+      lines.push(`…and ${d.leads.length - MAX_LEAD_LINES} more`);
+    }
+  }
+
+  // Named, with provenance: paid and organic are different news, and the
+  // count alone flattened them.
+  lines.push(`Signups: ${d.signups.length}`);
+  for (const s of d.signups.slice(0, MAX_SIGNUP_LINES)) {
+    lines.push(`• ${s.name ?? "(no name)"} <${s.email}>: ${acquisitionSummary(s)}`);
+  }
+  if (d.signups.length > MAX_SIGNUP_LINES) {
+    lines.push(`…and ${d.signups.length - MAX_SIGNUP_LINES} more`);
+  }
+
+  lines.push(
+    `Tool calls: ${d.usage.calls} (${d.usage.activeUsers} active user${d.usage.activeUsers === 1 ? "" : "s"})`
+  );
+  if (d.payingCustomers.length === 0) {
+    lines.push("Paying customers: none");
+  } else {
+    const active = d.payingCustomers.filter((c) => c.calls > 0).length;
+    const marker = active === 0 ? "⚠️ " : "";
+    lines.push(`${marker}Paying customers active: ${active} of ${d.payingCustomers.length}`);
+    for (const c of d.payingCustomers) {
+      lines.push(`• ${c.email}: ${c.calls} call${c.calls === 1 ? "" : "s"}`);
+    }
+  }
+
+  lines.push(`New service connections: ${d.newConnections}`);
+  lines.push(
+    `Connected: ${d.funnel.connected} of ${d.funnel.signups} signups in the last ${d.funnel.days} days`
+  );
+
+  return {
+    lines,
+    facts: { signups: d.signups.length, connections: d.newConnections },
+  };
+}
+
+export async function collectNeon(db: Database, since: Date): Promise<CollectorResult> {
   const newLeads = await db
     .select({ name: leads.name, email: leads.email, company: leads.company })
     .from(leads)
     .where(and(gte(leads.createdAt, since), sql`NOT ${isInternalEmail(leads.email)}`));
-  if (newLeads.length > 0) {
-    lines.push(`*${newLeads.length} new lead${newLeads.length === 1 ? "" : "s"}:*`);
-    for (const l of newLeads.slice(0, MAX_LEAD_LINES)) {
-      lines.push(`• ${l.name} <${l.email}> — ${l.company}`);
-    }
-    if (newLeads.length > MAX_LEAD_LINES) {
-      lines.push(`…and ${newLeads.length - MAX_LEAD_LINES} more`);
-    }
-  }
 
-  const [signups] = await db
-    .select({ n: sql<number>`count(*)::int` })
+  const signups = await db
+    .select({
+      name: users.name,
+      email: users.email,
+      acquisitionChannel: users.acquisitionChannel,
+      acquisitionUtmSource: users.acquisitionUtmSource,
+      acquisitionUtmMedium: users.acquisitionUtmMedium,
+      acquisitionUtmCampaign: users.acquisitionUtmCampaign,
+      acquisitionGclid: users.acquisitionGclid,
+      acquisitionReferringDomain: users.acquisitionReferringDomain,
+    })
     .from(users)
-    .where(and(gte(users.createdAt, since), sql`NOT ${isInternalEmail(users.email)}`));
-  lines.push(`Signups: ${signups.n}`);
+    .where(and(gte(users.createdAt, since), sql`NOT ${isInternalEmail(users.email)}`))
+    .orderBy(users.createdAt);
 
   const [usage] = await db
     .select({
@@ -129,7 +214,23 @@ export async function collectNeon(db: Database, since: Date): Promise<string[]> 
     .where(
       and(gte(usageEvents.createdAt, since), ...notInternalUserId(db, usageEvents.userId))
     );
-  lines.push(`Tool calls: ${usage.calls} (${usage.activeUsers} active user${usage.activeUsers === 1 ? "" : "s"})`);
+
+  // Every paying customer, joined to their calls in the window. A LEFT join
+  // on purpose: the customer who called nothing is the row this line exists
+  // to show.
+  const payingCustomers = await db
+    .select({
+      email: users.email,
+      calls: sql<number>`count(${usageEvents.id})::int`,
+    })
+    .from(users)
+    .leftJoin(
+      usageEvents,
+      and(eq(usageEvents.userId, users.id), gte(usageEvents.createdAt, since))
+    )
+    .where(and(eq(users.plan, "pro"), sql`NOT ${isInternalEmail(users.email)}`))
+    .groupBy(users.id, users.email)
+    .orderBy(users.email);
 
   const [conns] = await db
     .select({ n: sql<number>`count(*)::int` })
@@ -140,33 +241,142 @@ export async function collectNeon(db: Database, since: Date): Promise<string[]> 
         ...notInternalUserId(db, serviceConnections.userId)
       )
     );
-  lines.push(`New service connections: ${conns.n}`);
 
+  const windowStart = new Date(since.getTime() - (FUNNEL_WINDOW_DAYS - 1) * 24 * 60 * 60 * 1000);
+  const [funnel] = await db
+    .select({
+      signups: sql<number>`count(*)::int`,
+      connected: sql<number>`count(*) filter (where exists (select 1 from ${serviceConnections} where ${serviceConnections.userId} = ${users.id}))::int`,
+    })
+    .from(users)
+    .where(and(gte(users.createdAt, windowStart), sql`NOT ${isInternalEmail(users.email)}`));
+
+  return neonLines({
+    leads: newLeads,
+    signups,
+    usage,
+    payingCustomers,
+    newConnections: conns.n,
+    funnel: { connected: funnel.connected, signups: funnel.signups, days: FUNNEL_WINDOW_DAYS },
+  });
+}
+
+// ── Revenue (Stripe) ──────────────────────────────────────────────────
+
+/**
+ * Each Stripe event labelled as what it IS, in a fixed order (SCRUM-211).
+ *
+ * `customer.created` is emitted by our own checkout route the moment
+ * checkout BEGINS, before anyone has paid. Labelling it "New customers"
+ * reported intent as revenue, and the digest announced a customer where
+ * there was only a started checkout, while the same map held the two events
+ * that would have contradicted it. A customer exists when a
+ * subscription is created; a payment is a payment. A started checkout that
+ * no subscription followed now says so on its own line, because that gap is
+ * the signal, not the count.
+ */
+const STRIPE_LINES: Array<{ type: string; label: string }> = [
+  { type: "customer.created", label: "Checkouts started" },
+  { type: "customer.subscription.created", label: "New customers (subscription created)" },
+  { type: "payment_intent.succeeded", label: "Payments succeeded" },
+  { type: "payment_intent.payment_failed", label: "Payments FAILED" },
+];
+
+export function stripeLines(counts: Record<string, number>): string[] {
+  const lines: string[] = [];
+  const started = counts["customer.created"] ?? 0;
+  const customers = counts["customer.subscription.created"] ?? 0;
+  for (const { type, label } of STRIPE_LINES) {
+    const n = counts[type] ?? 0;
+    if (n === 0) continue;
+    if (type === "customer.created") {
+      const became =
+        customers === 1 ? "1 became a customer" : `${customers} became customers`;
+      lines.push(`${label}: ${started} (${became})`);
+    } else {
+      lines.push(`${label}: ${n}`);
+    }
+  }
   return lines;
 }
 
-export async function collectStripe(since: Date): Promise<string[]> {
+export async function collectStripe(since: Date): Promise<CollectorResult> {
   if (!getEnv().STRIPE_API_KEY) return NOT_CONFIGURED;
   const stripe = getStripe();
   const events = await stripe.events.list({
     created: { gte: Math.floor(since.getTime() / 1000) },
     limit: 100,
   });
-  const counts = new Map<string, number>();
-  const INTERESTING: Record<string, string> = {
-    "customer.created": "New customers",
-    "customer.subscription.created": "New subscriptions",
-    "payment_intent.succeeded": "Payments succeeded",
-    "payment_intent.payment_failed": "Payments FAILED",
-  };
-  for (const e of events.data) {
-    if (INTERESTING[e.type]) counts.set(e.type, (counts.get(e.type) ?? 0) + 1);
-  }
-  if (counts.size === 0) return [];
-  return [...counts.entries()].map(([type, n]) => `${INTERESTING[type]}: ${n}`);
+  const counts: Record<string, number> = {};
+  for (const e of events.data) counts[e.type] = (counts[e.type] ?? 0) + 1;
+  return stripeLines(counts);
 }
 
-export async function collectPosthog(since: Date): Promise<string[]> {
+// ── Web + funnel (PostHog) ────────────────────────────────────────────
+
+const POSTHOG_EVENTS = [
+  "$pageview",
+  "lead_submitted",
+  "user_signed_up",
+  "copy_mcp_config",
+  "connector_added",
+  "account_connected",
+  "agent_run",
+  "tool_call",
+  "playground_tool_call",
+];
+
+/**
+ * Labels that say what the event IS (SCRUM-211). `connector_added` is a
+ * CLICK on the dashboard's connect button, captured client-side before OAuth
+ * starts; it fires without a connection behind it and carries no user
+ * email. `account_connected` is the server-side event emitted when a
+ * connection is actually written, and it is the one the DB count can be
+ * checked against. "Connectors added" was the click wearing the connection's
+ * name, printed beside a DB count that contradicted it.
+ */
+const POSTHOG_LABELS: Record<string, string> = {
+  $pageview: "Pageviews",
+  lead_submitted: "Lead form submits",
+  user_signed_up: "Signups",
+  copy_mcp_config: "MCP config copies",
+  connector_added: "Connect clicks (dashboard)",
+  account_connected: "Accounts connected",
+  agent_run: "Agent runs",
+  tool_call: "Tool calls",
+  // Kept only so history spanning the rename stays visible. Nothing emits
+  // this any more; when it stops appearing it has aged out, not broken.
+  playground_tool_call: "Tool calls (before the rename)",
+};
+
+export function posthogLines(rows: Array<[string, string, number]>): {
+  lines: string[];
+  facts: Facts;
+} {
+  const lines: string[] = [];
+  for (const [event, , n] of rows) {
+    if (event === "tool_call") continue; // aggregated below
+    lines.push(`${POSTHOG_LABELS[event] ?? event}: ${n}`);
+  }
+  // ORDER BY event puts tool_call rows last, so appending the aggregate here
+  // keeps the line order identical to the unsplit version of this digest.
+  const toolCalls = rows.filter(([event]) => event === "tool_call");
+  if (toolCalls.length > 0) {
+    const total = toolCalls.reduce((sum, [, , n]) => sum + n, 0);
+    const split = toolCalls.map(([, surface, n]) => `${n} ${surface}`).join(" / ");
+    lines.push(`${POSTHOG_LABELS.tool_call}: ${total} (${split})`);
+  }
+  // Absent rows are a claim of zero, not silence: the query asked for these
+  // events and none came back.
+  const count = (event: string) =>
+    rows.filter(([e]) => e === event).reduce((sum, [, , n]) => sum + n, 0);
+  return {
+    lines,
+    facts: { connections: count("account_connected"), signups: count("user_signed_up") },
+  };
+}
+
+export async function collectPosthog(since: Date): Promise<CollectorResult> {
   const { POSTHOG_PERSONAL_API_KEY, POSTHOG_PROJECT_ID } = getEnv();
   if (!POSTHOG_PERSONAL_API_KEY || !POSTHOG_PROJECT_ID) return NOT_CONFIGURED;
   // THE CUTOVER RULE, stated here once and referenced from elsewhere rather
@@ -190,8 +400,7 @@ export async function collectPosthog(since: Date): Promise<string[]> {
     "if(event = 'tool_call', coalesce(nullif(JSONExtractString(properties, 'surface'), ''), 'mcp'), '') AS surface, " +
     "count() AS n FROM events " +
     `WHERE timestamp >= toDateTime('${since.toISOString().slice(0, 19).replace("T", " ")}') ` +
-    "AND event IN ('$pageview', 'lead_submitted', 'copy_mcp_config', " +
-    "'connector_added', 'agent_run', 'tool_call', 'playground_tool_call') " +
+    `AND event IN (${POSTHOG_EVENTS.map(hogqlStr).join(", ")}) ` +
     `${posthogInternalFilterSql()} ` +
     "GROUP BY event, surface ORDER BY event, surface";
   const res = await fetch(
@@ -208,33 +417,33 @@ export async function collectPosthog(since: Date): Promise<string[]> {
   );
   if (!res.ok) throw new Error(`PostHog query failed: ${res.status}`);
   const data = (await res.json()) as { results: [string, string, number][] };
-  const LABELS: Record<string, string> = {
-    $pageview: "Pageviews",
-    lead_submitted: "Lead form submits",
-    copy_mcp_config: "MCP config copies",
-    connector_added: "Connectors added",
-    agent_run: "Agent runs",
-    tool_call: "Tool calls",
-    // Kept only so history spanning the rename stays visible. Nothing emits
-    // this any more; when it stops appearing it has aged out, not broken.
-    playground_tool_call: "Tool calls (before the rename)",
-  };
-  if (!data.results || data.results.length === 0) return [];
+  return posthogLines(data.results ?? []);
+}
+
+// ── Reconciliation ────────────────────────────────────────────────────
+
+const FACT_LABELS: Record<FactKey, string> = {
+  connections: "New service connections",
+  signups: "Signups",
+};
+
+/** One line per shared fact the sources disagree on. Silent when they agree
+ * and when either side has no facts to offer (a failed source is already
+ * marked unavailable in its own section). */
+export function reconcile(sources: { neon: Facts | null; posthog: Facts | null }): string[] {
+  const { neon, posthog } = sources;
+  if (!neon || !posthog) return [];
   const lines: string[] = [];
-  for (const [event, , n] of data.results) {
-    if (event === "tool_call") continue; // aggregated below
-    lines.push(`${LABELS[event] ?? event}: ${n}`);
-  }
-  // ORDER BY event puts tool_call rows last, so appending the aggregate here
-  // keeps the line order identical to the unsplit version of this digest.
-  const toolCalls = data.results.filter(([event]) => event === "tool_call");
-  if (toolCalls.length > 0) {
-    const total = toolCalls.reduce((sum, [, , n]) => sum + n, 0);
-    const split = toolCalls.map(([, surface, n]) => `${n} ${surface}`).join(" / ");
-    lines.push(`${LABELS.tool_call}: ${total} (${split})`);
+  for (const key of Object.keys(FACT_LABELS) as FactKey[]) {
+    const a = neon[key];
+    const b = posthog[key];
+    if (a === undefined || b === undefined) continue;
+    if (a !== b) lines.push(`${FACT_LABELS[key]}: DB says ${a}, PostHog says ${b}`);
   }
   return lines;
 }
+
+// ── Rendering ─────────────────────────────────────────────────────────
 
 function sectionBlock(title: string, lines: string[] | null): unknown {
   const body =
@@ -249,18 +458,34 @@ function sectionBlock(title: string, lines: string[] | null): unknown {
   };
 }
 
-export function formatDigest(dateLabel: string, sections: DigestSections): SlackMessage {
-  return {
-    text: `Daily digest — ${dateLabel}`,
-    blocks: [
-      {
-        type: "header",
-        text: { type: "plain_text", text: `📊 Daily digest — ${dateLabel}`, emoji: true },
+export function formatDigest(
+  dateLabel: string,
+  sections: DigestSections,
+  disagreements: string[] = []
+): SlackMessage {
+  const blocks: unknown[] = [
+    {
+      type: "header",
+      text: { type: "plain_text", text: `📊 Daily digest: ${dateLabel}`, emoji: true },
+    },
+    sectionBlock("Product (DB)", sections.neon),
+    sectionBlock("Revenue (Stripe)", sections.stripe),
+    sectionBlock("Web + funnel (PostHog)", sections.posthog),
+  ];
+  if (disagreements.length > 0) {
+    // Conspicuous by design. Two numbers that disagree in silence look
+    // reconciled; this block is what stops that.
+    blocks.push({
+      type: "section",
+      text: {
+        type: "mrkdwn",
+        text: `*⚠️ Sources disagree*\n${disagreements.join("\n")}\n_One of these is wrong. Neither is confirmed until you know which._`,
       },
-      sectionBlock("Product (DB)", sections.neon),
-      sectionBlock("Revenue (Stripe)", sections.stripe),
-      sectionBlock("Web + funnel (PostHog)", sections.posthog),
-    ],
+    });
+  }
+  return {
+    text: `Daily digest: ${dateLabel}${disagreements.length > 0 ? " (sources disagree)" : ""}`,
+    blocks,
   };
 }
 
@@ -270,12 +495,20 @@ const defaultCollectors: Collectors = {
   posthog: collectPosthog,
 };
 
+type SourceOutcome = { lines: string[]; facts: Facts | null } | null;
+
+function normalise(result: CollectorResult): { lines: string[]; facts: Facts | null } {
+  return Array.isArray(result)
+    ? { lines: result, facts: null }
+    : { lines: result.lines, facts: result.facts ?? null };
+}
+
 async function runSource(
   name: string,
-  fn: () => Promise<string[]>
-): Promise<string[] | null> {
+  fn: () => Promise<CollectorResult>
+): Promise<SourceOutcome> {
   try {
-    return await fn();
+    return normalise(await fn());
   } catch (err) {
     console.error(`[digest] ${name} collector failed`, err);
     await sendSlack("alerts", {
@@ -305,7 +538,19 @@ export async function runDailyDigest(
     runSource("posthog", () => c.posthog(since)),
   ]);
 
-  const message = formatDigest(dateLabel, { neon, stripe, posthog });
+  const disagreements = reconcile({
+    neon: neon?.facts ?? null,
+    posthog: posthog?.facts ?? null,
+  });
+  const message = formatDigest(
+    dateLabel,
+    {
+      neon: neon?.lines ?? null,
+      stripe: stripe?.lines ?? null,
+      posthog: posthog?.lines ?? null,
+    },
+    disagreements
+  );
   if (opts?.dryRun) {
     console.log(JSON.stringify(message, null, 2));
     return message;

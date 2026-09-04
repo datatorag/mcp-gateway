@@ -61,7 +61,7 @@ export async function notifySignup(
     await sendSlack("leads", {
       text:
         `🟣 New signup: ${user.name ?? "(no name)"} <${user.email}>` +
-        `\n${sourceLine(acquisition)}` +
+        `\n${acquisitionSourceLine(acquisition)}` +
         (entryPath ? `\nLanded: ${entryPath}` : "") +
         `\n${leadMatchLine(lead)}` +
         `\nSigned up: ${signedUpAt}`,
@@ -71,7 +71,7 @@ export async function notifySignup(
   }
 }
 
-type AcquisitionRow =
+export type AcquisitionRow =
   | {
       acquisitionChannel: string | null;
       acquisitionUtmSource: string | null;
@@ -87,11 +87,13 @@ type AcquisitionRow =
  * as "nothing to report", the explicit string reads as "capture did not work",
  * and the latter is the signal that lets us notice attribution regressions
  * from the channel itself.
+ *
+ * Shared with the new-customer alert and the daily digest (SCRUM-212), so
+ * "where did this person come from" reads the same on every Slack surface.
+ * The words below are the acquisition summary without the "Source: " prefix.
  */
-function sourceLine(a: AcquisitionRow): string {
-  if (!a?.acquisitionChannel) {
-    return "Source: unknown (no acquisition data captured)";
-  }
+export function acquisitionSummary(a: AcquisitionRow): string {
+  if (!a?.acquisitionChannel) return "unknown (no acquisition data captured)";
   const detail = [
     a.acquisitionUtmSource,
     a.acquisitionUtmMedium,
@@ -104,7 +106,11 @@ function sourceLine(a: AcquisitionRow): string {
   // Presence only — the raw gclid is long, unreadable, and nothing a human
   // acts on in Slack.
   const gclid = a.acquisitionGclid ? " (gclid ✓)" : "";
-  return `Source: ${a.acquisitionChannel}${shown ? ` - ${shown}` : ""}${gclid}`;
+  return `${a.acquisitionChannel}${shown ? ` - ${shown}` : ""}${gclid}`;
+}
+
+export function acquisitionSourceLine(a: AcquisitionRow): string {
+  return `Source: ${acquisitionSummary(a)}`;
 }
 
 /** Entry PATH only: the query string is where all the length is and none of
