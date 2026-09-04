@@ -174,11 +174,19 @@ const PAGE_GREETING =
  * line that says connecting is what unlocks them. Same shared list, on
  * purpose, so this surface and the dashboard cards cannot drift; the lock is
  * state, not a second list. */
-const UNCONNECTED_LEAD = "Connect an account to get started.";
-/** The signup landing's lead, in Manuel's words: a user who signed up
- * seconds ago cannot hold a connection, so this state is assumed rather than
- * looked up, and there is no claim to get wrong. */
-const WELCOME_LEAD = "Welcome to DataToRAG. Connect your accounts to get started.";
+/** The unconnected lead is ONE sentence composed from two halves.
+ *
+ * The INSTRUCTION belongs to the state: every unconnected user gets it,
+ * however they arrived. The GREETING belongs to a first visit, so only the
+ * signup landing prefixes it. They were one string gated on the signup
+ * param, which keyed the message on HOW someone arrived rather than WHAT
+ * state they are in, and the person that failed was a returning user with
+ * zero connections, who most needs telling what to do. Composed rather than
+ * kept as two strings, for the reason AGENT_PROMPTS lives in one file: an
+ * edit to the instruction changes both states or neither. */
+const UNCONNECTED_LEAD = "Connect your accounts to get started.";
+const WELCOME_GREETING = "Welcome to DataToRAG.";
+const WELCOME_LEAD = `${WELCOME_GREETING} ${UNCONNECTED_LEAD}`;
 const UNCONNECTED_PROMPTS_CAPTION = "Once you connect, you can ask things like:";
 /** Matches the dashboard prompt cards' disabled tooltip, word for word. */
 const LOCKED_PROMPT_TITLE = "Connect an account to run this";

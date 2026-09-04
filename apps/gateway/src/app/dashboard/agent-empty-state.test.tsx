@@ -89,6 +89,15 @@ function mountWith(
   });
 }
 
+/** The two halves of the unconnected lead (SCRUM-206, second amendment).
+ * The INSTRUCTION belongs to the STATE, so every unconnected user gets it
+ * however they arrived; the GREETING belongs to a first visit, so only the
+ * signup landing prefixes it. Split on purpose: "Welcome" was gating the
+ * whole sentence, and a returning user with zero connections, the person
+ * who most needs telling what to do, was getting four words. */
+const INSTRUCTION = "Connect your accounts to get started.";
+const GREETING = "Welcome to DataToRAG.";
+
 const CONNECTED: Initial = {
   accounts: [{ id: "a1", connectorType: "google-workspace" }],
   connections: [],
@@ -131,7 +140,7 @@ describe("the empty state and the unknown connection state (SCRUM-114)", () => {
     expect(text()).toContain("Checking your accounts");
     expect(text()).toContain("Connect Google Workspace");
     expect(text()).not.toContain("Once you connect");
-    expect(text()).not.toContain("Connect an account to get started");
+    expect(text()).not.toContain(INSTRUCTION);
     expect(text()).not.toContain("anything in the meantime");
     // Branch-specific strings only: the page GREETING legitimately says
     // "connected accounts" and stays through every state - it makes no claim
@@ -178,7 +187,7 @@ describe("the empty state and the unknown connection state (SCRUM-114)", () => {
     // In flight: the control is there under the checking indicator, but the
     // claim ("get started", the lock) waits for the answer.
     expect(text()).toContain("Checking your accounts");
-    expect(text()).not.toContain("Connect an account to get started");
+    expect(text()).not.toContain(INSTRUCTION);
 
     await act(async () => {
       gate.resolve({ accounts: [], connections: [] });
@@ -186,7 +195,7 @@ describe("the empty state and the unknown connection state (SCRUM-114)", () => {
     });
     await flush();
     expect(text()).toContain("Connect Google Workspace");
-    expect(text()).toContain("Connect an account to get started");
+    expect(text()).toContain(INSTRUCTION);
     expect(text()).not.toContain("Checking your accounts");
     // SCRUM-117 put the prompts and the card together in this state. SCRUM-206
     // keeps both but reverses the order and locks the prompts: see the
@@ -433,12 +442,12 @@ describe("server-supplied connection state and the signup landing (SCRUM-206)", 
       (b) => (b.textContent ?? "").length > 30
     );
   const neverResolves = () => new Promise<Response>(() => {});
-  const WELCOME = "Welcome to DataToRAG. Connect your accounts to get started.";
+  const WELCOME = `${GREETING} ${INSTRUCTION}`;
 
   it("renders the unconnected shape on the FIRST paint, and never asks the browser again", async () => {
     mountWith(neverResolves, [], null, { initialConnections: UNCONNECTED });
     // No flush: this is the synchronous first render.
-    expect(text()).toContain("Connect an account to get started");
+    expect(text()).toContain(INSTRUCTION);
     expect(text()).toContain("Once you connect");
     expect(promptButtons().every((b) => b.disabled)).toBe(true);
     expect(text()).not.toContain("Checking your accounts");
@@ -463,8 +472,24 @@ describe("server-supplied connection state and the signup landing (SCRUM-206)", 
       initialConnections: UNCONNECTED,
       landedFrom: "signup",
     });
+    // One sentence composed from two: the greeting prefixes the SAME
+    // instruction every unconnected user gets, so the two states cannot
+    // drift apart.
     expect(text()).toContain(WELCOME);
-    expect(text()).not.toContain("Connect an account to get started");
+    expect(text()).toContain("Connect Google Workspace");
+    expect(promptButtons().every((b) => b.disabled)).toBe(true);
+  });
+
+  it("a returning, never-connected user gets the instruction and not the greeting", async () => {
+    // The case this split exists for. A login landing (no signup param) for
+    // an account with zero connections: they are told what to do, in the
+    // same words as the signup landing, without being welcomed as new.
+    mountWith(neverResolves, [], null, {
+      initialConnections: UNCONNECTED,
+      landedFrom: "login",
+    });
+    expect(text()).toContain(INSTRUCTION);
+    expect(text()).not.toContain(GREETING);
     expect(text()).toContain("Connect Google Workspace");
     expect(promptButtons().every((b) => b.disabled)).toBe(true);
   });
@@ -476,16 +501,18 @@ describe("server-supplied connection state and the signup landing (SCRUM-206)", 
     expect(text()).not.toContain("Checking your accounts");
   });
 
-  it("never shows the welcome line to a connected user, even on a signup landing", async () => {
+  it("never shows the greeting OR the instruction to a connected user, even on a signup landing", async () => {
     mountWith(neverResolves, [], null, {
       initialConnections: CONNECTED,
       landedFrom: "signup",
     });
-    expect(text()).not.toContain(WELCOME);
+    expect(text()).not.toContain(GREETING);
+    expect(text()).not.toContain(INSTRUCTION);
     expect(text()).not.toContain("Connect Google Workspace");
     expect(text()).toContain("Ask something about your connected accounts");
     await flush();
     await flush();
-    expect(text()).not.toContain(WELCOME);
+    expect(text()).not.toContain(GREETING);
+    expect(text()).not.toContain(INSTRUCTION);
   });
 });
