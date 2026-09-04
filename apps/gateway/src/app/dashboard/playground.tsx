@@ -174,19 +174,22 @@ const PAGE_GREETING =
  * line that says connecting is what unlocks them. Same shared list, on
  * purpose, so this surface and the dashboard cards cannot drift; the lock is
  * state, not a second list. */
-/** The unconnected lead is ONE sentence composed from two halves.
+/** The unconnected lead: a greeting and an onboarding instruction, for EVERY
+ * user with zero connections, however they arrived.
  *
- * The INSTRUCTION belongs to the state: every unconnected user gets it,
- * however they arrived. The GREETING belongs to a first visit, so only the
- * signup landing prefixes it. They were one string gated on the signup
- * param, which keyed the message on HOW someone arrived rather than WHAT
- * state they are in, and the person that failed was a returning user with
- * zero connections, who most needs telling what to do. Composed rather than
- * kept as two strings, for the reason AGENT_PROMPTS lives in one file: an
- * edit to the instruction changes both states or neither. */
-const UNCONNECTED_LEAD = "Connect your accounts to get started.";
-const WELCOME_GREETING = "Welcome to DataToRAG.";
-const WELCOME_LEAD = `${WELCOME_GREETING} ${UNCONNECTED_LEAD}`;
+ * Zero connections is what makes a user new here, not the arrival path. The
+ * product does nothing without a connection, so this screen's one job for
+ * such a user is to make connecting the obvious next step, and a returning
+ * account that never connected is exactly as new as one that signed up a
+ * minute ago. The sentence was briefly gated on the signup param, which
+ * keyed the message on HOW someone arrived rather than WHAT state they are
+ * in, and left the returning never-connected user with a terse line. Ruled
+ * the other way: the greeting goes to everyone unconnected. The signup param
+ * still matters, but only as the zero-lookup assumption of unconnectedness
+ * (see `welcome` below), never as a copy switch. */
+const UNCONNECTED_GREETING = "Welcome to DataToRAG.";
+const UNCONNECTED_INSTRUCTION = "Connect your accounts to get started.";
+const UNCONNECTED_LEAD = `${UNCONNECTED_GREETING} ${UNCONNECTED_INSTRUCTION}`;
 const UNCONNECTED_PROMPTS_CAPTION = "Once you connect, you can ask things like:";
 /** Matches the dashboard prompt cards' disabled tooltip, word for word. */
 const LOCKED_PROMPT_TITLE = "Connect an account to run this";
@@ -246,7 +249,8 @@ interface PlaygroundProps {
   onConversationChanged?: () => void;
   /** The signup landing (SCRUM-206). The empty state assumes nothing is
    * connected without waiting for a lookup, because a user who signed up
-   * seconds ago cannot hold a connection, and greets them as new. A
+   * seconds ago cannot hold a connection. This is an ASSUMPTION about state,
+   * not a copy switch: the unconnected copy is the same for everyone. A
    * connected user on this landing (a returning account re-signing up) still
    * gets the connected shape: the assumption yields to a known answer. */
   welcome?: boolean;
@@ -827,7 +831,7 @@ export const Playground = forwardRef<PlaygroundHandle, PlaygroundProps>(
                             isPage ? "text-sm" : "text-xs"
                           )}
                         >
-                          {welcome ? WELCOME_LEAD : UNCONNECTED_LEAD}
+                          {UNCONNECTED_LEAD}
                         </p>
                       ) : (
                         <p

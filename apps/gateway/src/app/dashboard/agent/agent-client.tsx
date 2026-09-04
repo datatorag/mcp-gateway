@@ -275,8 +275,9 @@ export function AgentClient({
             ref={ref}
             threadId={thread.id}
             // The signup landing (SCRUM-206): a user who signed up seconds ago
-            // cannot hold a connection, so the empty state assumes none and
-            // greets them in those words.
+            // cannot hold a connection, so the empty state assumes none
+            // without waiting for the lookup. State only; the copy for an
+            // unconnected user is the same however they arrived.
             welcome={landedFrom === "signup"}
           />
         </div>
