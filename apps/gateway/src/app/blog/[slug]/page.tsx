@@ -2,7 +2,14 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import Image from "next/image";
-import { getAllPosts, getPostBySlug, getRelatedPosts } from "@/lib/blog";
+import {
+  faqAnchor,
+  faqAnswerHtml,
+  faqAnswerText,
+  getAllPosts,
+  getPostBySlug,
+  getRelatedPosts,
+} from "@/lib/blog";
 import { Navbar } from "@/components/navbar";
 import { ZoomableImage } from "@/components/zoomable-image";
 import { formatContentDate } from "@/lib/utils";
@@ -115,6 +122,29 @@ export default async function BlogArticlePage({ params }: Props) {
       },
       mainEntityOfPage: { "@type": "WebPage", "@id": postUrl },
     },
+    // FAQPage, when the post authored questions. Google RETIRED the FAQ rich
+    // result for every site on 2026-05-07 and deleted the documentation on
+    // 2026-06-15, so this earns no Google search appearance and nothing should
+    // ever claim it does. It ships because it is ten lines and makes content we
+    // already publish unambiguous to anything that reads structured data. That
+    // is a bet on a mechanism with NO VERIFIED CONSUMER: the on-page block below
+    // is what actually pays, and it is the half to protect in any future edit.
+    ...(post.faqs.length > 0
+      ? [
+          {
+            "@context": "https://schema.org",
+            "@type": "FAQPage",
+            mainEntity: post.faqs.map((f) => ({
+              "@type": "Question",
+              name: f.q,
+              acceptedAnswer: {
+                "@type": "Answer",
+                text: faqAnswerText(f.a),
+              },
+            })),
+          },
+        ]
+      : []),
     {
       "@context": "https://schema.org",
       "@type": "BreadcrumbList",
@@ -142,7 +172,15 @@ export default async function BlogArticlePage({ params }: Props) {
         <article className="mx-auto max-w-2xl px-6 pb-12 pt-28 sm:pb-16 sm:pt-32">
           <script
             type="application/ld+json"
-            dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+            // JSON.stringify does not escape "<", so a literal </script> in any
+            // serialized field would close this element early. The site FAQ page
+            // has always escaped here and this one never did: two copies of one
+            // pattern that drifted. Adding FAQ answers widens what flows through
+            // it, so the copies are brought back together rather than left one
+            // field wider apart.
+            dangerouslySetInnerHTML={{
+              __html: JSON.stringify(jsonLd).replace(/</g, "\\u003c"),
+            }}
           />
 
           <Link
@@ -240,6 +278,44 @@ export default async function BlogArticlePage({ params }: Props) {
                 </span>
               ))}
             </div>
+          )}
+
+          {/* Per-post FAQ. Deliberately NOT an accordion: collapsed text is
+              worse to extract from and the block is short. Questions are real
+              headings so a reader parsing document structure finds them as
+              questions, and each carries an id plus scroll-mt-28 so a deep link
+              is not hidden under the fixed navbar. */}
+          {post.faqs.length > 0 && (
+            <section className="mt-12 border-t border-border pt-10">
+              <h2 className="font-display text-lg font-bold text-foreground">
+                Frequently asked questions
+              </h2>
+              <div className="mt-6 space-y-7">
+                {post.faqs.map((faq) => {
+                  const anchor = faqAnchor(faq.q);
+                  return (
+                    <div key={anchor} id={anchor} className="scroll-mt-28">
+                      <h3 className="group text-sm font-semibold text-foreground">
+                        {faq.q}{" "}
+                        <a
+                          href={`#${anchor}`}
+                          className="text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100"
+                          aria-label={`Link to: ${faq.q}`}
+                        >
+                          #
+                        </a>
+                      </h3>
+                      <div
+                        className="mt-2 text-sm leading-relaxed text-muted-foreground [&_a]:underline [&_a]:underline-offset-2 [&_a:hover]:text-foreground [&_code]:rounded [&_code]:bg-secondary [&_code]:px-1 [&_code]:py-0.5 [&_code]:text-xs"
+                        dangerouslySetInnerHTML={{
+                          __html: faqAnswerHtml(faq.a),
+                        }}
+                      />
+                    </div>
+                  );
+                })}
+              </div>
+            </section>
           )}
 
           {/* CTA — appears on every post */}

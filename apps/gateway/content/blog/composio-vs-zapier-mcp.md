@@ -2,10 +2,58 @@
 title: "Composio vs Zapier MCP: Two Different Bets (and the Question Neither Answers)"
 excerpt: "Composio is integration infrastructure for developers shipping agents. Zapier MCP is automation breadth for people who already live in Zaps. If the actual question is 'how do I get Claude working deep in my Google Workspace', both answers come up short."
 date: "2026-07-23"
+updated: "2026-08-26"
 updatedNote: "August 26, 2026: narrowed an overbroad privacy claim. The pass-through statement implied nothing is stored anywhere; the gateway keeps nothing, but the hosted agent on our own site stores its conversation threads. The privacy policy is now linked from the paragraph."
 author: "Manuel Yang"
 category: "Comparison"
 tags: ["composio", "zapier", "mcp", "comparison", "ai-agents"]
+faqs:
+  - q: What is the difference between Composio and Zapier MCP?
+    a: >-
+      They are bets on different users rather than competing products. Composio
+      is a builder's platform: your application code mints a per-user MCP URL,
+      so the input is a development project and the output is a hosted endpoint
+      your product hands to an agent. Zapier MCP is the opposite shape, with no
+      code at all: you point Claude at one server URL, setup takes about five
+      minutes, and auth is zero-config because Zapier already holds your app
+      connections. One is an SDK you build on, the other is a switchboard you
+      plug into. Both shapes reflect the mid-2026 check behind this
+      comparison.
+  - q: Does Zapier MCP support Google Slides, Contacts or Tasks?
+    a: >-
+      No. Slides, Contacts and Tasks are not on Zapier's MCP surface as of the
+      mid-2026 check behind this comparison. Its Google coverage there is Gmail,
+      Docs, Sheets, Drive and Calendar, exposed as Zap-shaped actions, which are
+      coarser than the underlying API.
+  - q: Can Zapier MCP restructure a Google Doc?
+    a: >-
+      Not structurally. Zapier exposes append, insert and find-and-replace for
+      Google Docs, but not Google's `batchUpdate` call, which is the one that
+      lets an agent restructure a whole document in a single pass. As of the
+      mid-2026 check behind this comparison, that call is not on Zapier's MCP
+      surface.
+  - q: How is Zapier MCP billed when an AI agent uses it?
+    a: >-
+      Every successful tool call spends tasks from your Zapier plan's shared
+      budget, the same budget your Zaps draw on. An agent that fires a dozen
+      calls to finish one request draws that budget down faster than a person
+      clicking ever would, so model your real usage before committing. That
+      reflects the mid-2026 check behind this comparison.
+  - q: Can I self-host Composio or Zapier MCP?
+    a: >-
+      Not on a standard plan. Composio's runtime is closed and self-hosting is
+      an enterprise-plan conversation. Zapier MCP is cloud only. Both statements
+      reflect the mid-2026 check behind this comparison. DataToRAG's core is
+      MIT-licensed and runs on Docker Compose with your own Postgres, so self-hosting there is a clone rather than a contract.
+  - q: Which is more secure, Composio or Zapier MCP?
+    a: >-
+      Both hold general-purpose security attestations, and both are ahead of
+      DataToRAG on that axis, which we would rather say plainly than skip. As of
+      the mid-2026 check behind this comparison, Composio has SOC 2 Type II and
+      ISO 27001, and Zapier has SOC 2 Type II and years of trust-program work.
+      DataToRAG's credential is Google-specific: we passed CASA Tier 2, the
+      review Google requires for restricted Gmail and Drive scopes, with zero
+      findings, and Google verified the app in June 2026.
 ---
 
 People keep framing this as a head-to-head, and I get why. Composio and Zapier MCP are the two names that come up first when you search for a way to hand an AI agent real tools. Both speak MCP. Both list an intimidating number of integrations. Both have good docs.

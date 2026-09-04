@@ -46,7 +46,7 @@ const groups: FaqGroup[] = [
       {
         id: "which-clients",
         q: "Which AI clients work with it?",
-        a: `Any client that supports remote MCP servers. Claude on web, desktop and the phone app all do. Because the server is hosted, your setup follows you: the same connection works from your laptop and your phone. There is a <a href="/blog/connect-google-workspace-to-claude">walkthrough for Claude</a> if you want screenshots.`,
+        a: `Any client that supports remote MCP servers. Claude on web, desktop and the phone app all do. Because the server is hosted, your setup follows you: the same connection works from your laptop and your phone. There is a <a href="/docs/getting-started">walkthrough for Claude</a> if you want screenshots.`,
       },
       {
         id: "run-a-server",

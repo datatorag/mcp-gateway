@@ -19,6 +19,20 @@ export interface Collection<T extends { slug: string }> {
   getBySlug: (slug: string) => T | null;
 }
 
+/** One authored question and its answer.
+ *
+ * `a` is markdown. It is the ONE definition: the page renders it to HTML and the
+ * JSON-LD carries it flattened to plain text, both derived by pure functions, so
+ * there is no second copy to drift. Answers live in frontmatter rather than in a
+ * sibling file deliberately: the frontmatter-parse guard and the retention-claim
+ * sweep both scan `content/**\/*.md` by extension, and an FAQ answer is exactly
+ * the kind of prose that makes a retention or capability claim. A new directory
+ * would escape both guards with no failing test to say so. */
+export interface ContentFaq {
+  q: string;
+  a: string;
+}
+
 export interface ParsedFile {
   slug: string;
   /** Frontmatter, as gray-matter returned it. */
@@ -81,4 +95,17 @@ export const field = {
     typeof v === "number" ? v : fallback,
   stringArray: (v: unknown): string[] =>
     Array.isArray(v) ? v.map(String) : [],
+  /** Discards a malformed entry rather than coercing it, matching
+   * `stringArray`. A half-written FAQ renders nothing, which is visible; a
+   * coerced one would render `[object Object]` into a page AND into JSON-LD. */
+  faqList: (v: unknown): ContentFaq[] =>
+    Array.isArray(v)
+      ? v.flatMap((entry) => {
+          if (typeof entry !== "object" || entry === null) return [];
+          const { q, a } = entry as { q?: unknown; a?: unknown };
+          if (typeof q !== "string" || q.trim() === "") return [];
+          if (typeof a !== "string" || a.trim() === "") return [];
+          return [{ q: q.trim(), a: a.trim() }];
+        })
+      : [],
 };
