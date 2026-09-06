@@ -104,14 +104,13 @@ function collectionSource(
  * what turns "somebody deleted the FAQ block" into a red test instead of a
  * quieter page.
  *
- * `docs` sits at 0 deliberately: the pipeline ships in this commit and the
- * content lands in the next one, which raises it. Until then the `scanned` half
- * of the control still separates "the docs collection stopped resolving" from
- * "docs have no FAQs yet", two states the entry count alone cannot tell apart,
- * and the reason `scanned` is tracked separately at all. */
+ * `scanned` is tracked separately from the entry count because they answer
+ * different questions: a source can legitimately hold no FAQs yet, but a source
+ * that scans nothing has stopped resolving and every rule below has gone vacuous
+ * for it. The entry count alone cannot tell those apart. */
 const SOURCES: FaqSource[] = [
   { name: "blog", minimum: 18, load: collectionSource("blog", getAllPosts) },
-  { name: "docs", minimum: 0, load: collectionSource("docs", getAllDocs) },
+  { name: "docs", minimum: 6, load: collectionSource("docs", getAllDocs) },
 ];
 
 const loaded = SOURCES.map((s) => ({ source: s, result: s.load() }));
