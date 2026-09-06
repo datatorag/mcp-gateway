@@ -52,6 +52,7 @@ Slug = filename without `.md`. Frontmatter fields, with fallback if omitted:
 | `ogImage` | string, optional | `undefined` |
 | `coverImage` | string, optional | `undefined` |
 | `tags` | string array | `[]` (any non-array value is discarded, not coerced) |
+| `faqs` | list of `{q, a}` | `[]` (see **Per-page FAQs** below) |
 
 `readTime` is **not** frontmatter — it's computed: word count from `content.split(/\s+/)`,
 then `` `${Math.max(1, Math.ceil(words / 230))} min read` ``. There's also a `postsBySlug`
@@ -84,6 +85,7 @@ Slug = filename.
 | `order` | number | `99` (no explicit order sorts last, both top-level and per-connector) |
 | `section` | string | `"general"` (captured, sent in a PostHog `DOCS_VIEWED` event, but **not** used for sidebar grouping) |
 | `connector` | string \| null | `null` |
+| `faqs` | list of `{q, a}` | `[]` (see **Per-page FAQs** below) |
 
 `connector` is what actually drives sidebar grouping, via the static `CONNECTORS` registry
 in `docs-connectors.ts` (`{id, title, slug}`, currently `google-workspace` and `atlassian`).
@@ -187,6 +189,71 @@ connectors actually ship. A skill naming a tool we do not ship is worse than no 
 a reader pastes it in and it fails on them. Extend that list only after confirming the
 tool exists on the live wire, never to make a test pass. Note `tools` is the surface the
 skill operates over, not a strict call list.
+
+## Per-page FAQs
+
+Blog and docs pages can carry a `faqs:` list in frontmatter. Read through
+`field.faqList` like every other field; a malformed entry is dropped, never coerced.
+
+```yaml
+faqs:
+  - q: Does Zapier MCP support Google Slides?
+    a: >-
+      Zapier MCP does not expose Google Slides on its MCP surface as of the
+      mid-2026 check behind this comparison. See
+      [the roundup](/blog/claude-google-workspace-mcp-alternatives).
+```
+
+**Answers use `>-` folded block scalars, and that is load-bearing rather than
+cosmetic.** Inside a block scalar, inner double quotes, apostrophes, a `colon: space`
+sequence, backticks and markdown links all survive with zero escaping, which
+neutralises the defect class that once made `main` unbuildable. A double-quoted `q:`
+can still break the build.
+
+**One authored string, two derived projections, no second copy.** `a` is markdown and
+is the only definition. `faqAnswerHtml` renders it for the page via
+`marked.parseInline`, so links and inline code work and block-level markdown does not,
+keeping an answer to one paragraph by construction. `faqAnswerText` flattens the same
+string for `acceptedAnswer.text`. Both live in `src/lib/faq.ts` (NOT `blog.ts`, they
+moved when docs gained the block) and neither is hand-maintained, so the page and the
+JSON-LD cannot drift.
+
+Render with `<FaqSection faqs={...}/>` (`src/components/faq-section.tsx`) and emit the
+node with `faqPageNode` from `src/lib/site-schema.ts`, serialized through
+`<JsonLd nodes={...}/>`. Do not hand-roll the `<` escaping again; that component exists
+because two copies of it had already drifted.
+
+**The guard is a registry, not a directory walk.** `src/lib/faq.test.ts` holds one
+`SOURCES` list and applies every rule to the union. Adding a surface that publishes
+FAQs means appending a source with its current `minimum`, in the same commit as the
+content. Two sweeps drift and the one nobody extended fails by looking at nothing.
+Sources load through the real collections (`getAllPosts`, `getAllDocs`), not a private
+re-parse, so the guard sees exactly the strings the page renders.
+
+Rules it enforces, each with a mutation control beside it:
+
+- **Every answer naming a competitor carries a literal year.** An FAQ answer is built
+  to be quoted away from its page, so "at the time of writing" evaporates on the way
+  out and leaves an undated permanent claim about somebody else's moving product. The
+  rule is per ANSWER, not per sentence: an answer that already carries a date satisfies
+  it throughout.
+- **No hyphenated word split by folding.** A folded scalar joins lines with spaces, so
+  a hyphen broken across two lines becomes "self- hosting". Invisible in the source.
+- **Every answer names its own subject**, because an extracted answer arrives without
+  its question.
+- **Anchors unique within a page**, derived from `q` by `faqAnchor`, never authored.
+- **No markup surviving into the JSON-LD projection.**
+
+Note what these do NOT do: they cannot tell whether a date is the right date or whether
+a claim was ever true. Claims are a person's job. And the retention-claim sweep already
+folds each answer back to one line before scanning, because a per-line regex cannot see
+a claim that straddles a block-scalar line break.
+
+**Do not describe any of this as earning a Google rich result.** Google retired the FAQ
+rich result for every site on 2026-05-07 and removed the documentation on 2026-06-15.
+The justification is answer-engine extraction; the on-page block is what pays and the
+schema is packaging. There is no verified consumer of the markup, and this work cannot
+be measured.
 
 ## Page conventions
 

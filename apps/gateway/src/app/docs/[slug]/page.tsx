@@ -2,7 +2,10 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import { getAllDocs, getDocBySlug } from "@/lib/docs";
+import { faqPageNode } from "@/lib/site-schema";
 import { SetupInstructions } from "@/components/setup-instructions";
+import { FaqSection } from "@/components/faq-section";
+import { JsonLd } from "@/components/json-ld";
 import { ServiceIcon, serviceFromSlug } from "@/components/service-icon";
 import { DocViewTracker } from "./view-tracker";
 import { DocsCta } from "../cta";
@@ -51,6 +54,10 @@ export default async function DocPage({ params }: Props) {
   return (
     <div>
       <DocViewTracker slug={doc.slug} section={doc.section} />
+      {/* Only FAQPage for now. Organization, WebSite and BreadcrumbList belong
+          to SCRUM-205 and append to this same array rather than starting a
+          third convention. */}
+      <JsonLd nodes={doc.faqs.length > 0 ? [faqPageNode(doc.faqs)] : []} />
       <h1 className="flex items-center gap-3 font-display text-2xl font-bold text-foreground">
         {serviceFromSlug(doc.slug) && (
           <ServiceIcon service={doc.slug} size={28} />
@@ -78,6 +85,10 @@ export default async function DocPage({ params }: Props) {
           />
         </>
       )}
+
+      {/* After the body and before the CTA, so it reads as part of the page
+          rather than as part of the pitch. Same component the blog renders. */}
+      <FaqSection faqs={doc.faqs} />
 
       {/* The conversion moment: the reader has just finished the page. The
           sidebar CTA is always on screen and therefore easy to stop seeing;

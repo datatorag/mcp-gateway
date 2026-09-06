@@ -1,6 +1,11 @@
 import { marked } from "marked";
 import { CONNECTORS, type Connector } from "./docs-connectors";
-import { defineCollection, field, type ParsedFile } from "./content-collection";
+import {
+  defineCollection,
+  field,
+  type ContentFaq,
+  type ParsedFile,
+} from "./content-collection";
 
 export interface DocPage {
   slug: string;
@@ -9,6 +14,12 @@ export interface DocPage {
   order: number;
   section: string;
   connector: string | null;
+  /** Per-page questions and answers, rendered on the page and emitted as
+   * FAQPage JSON-LD from the same strings. Same field, same shape and same
+   * reader as the blog's, deliberately: docs pages are already question-shaped
+   * and a second mechanism for them is how the two drift. Empty for most
+   * pages. */
+  faqs: ContentFaq[];
   content: string;
   html: string;
 }
@@ -61,6 +72,7 @@ function parsePage({ slug, data, content }: ParsedFile): DocPage {
     order: field.number(data.order, 99),
     section: field.string(data.section, "general"),
     connector: field.string(data.connector) || null,
+    faqs: field.faqList(data.faqs),
     content,
     html,
   };
