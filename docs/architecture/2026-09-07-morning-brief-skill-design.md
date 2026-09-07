@@ -31,13 +31,14 @@ a private denylist outside the repo.
 Listed as classes rather than values, on purpose. The values are the thing that must
 not ship, and this file ships.
 
-- **Account addresses.** The source names each mailbox by address, including personal
-  and family ones and an employer's. The public skill says "the accounts you connect"
-  and pins the recipient as "the first address in the account list". No address of any
-  kind appears; the boundary test allows only documentation placeholders.
-- **The employer.** The source has a whole section about a day-job mailbox with its own
-  surfacing policy and a rule that employer identifiers never enter our artefacts. None
-  of that policy, and no name, survives. The public skill has no concept of a day job.
+- **Account addresses.** The source names each mailbox by address, work and personal
+  alike. The public skill says "the accounts you connect" and pins the recipient as
+  "the first address in the account list". No address of any kind appears; the boundary
+  test allows only documentation placeholders.
+- **Per-account handling rules.** The source carries handling rules written for one
+  specific work mailbox. None of them survive, and no organisation is named. The public
+  skill treats every account the same, work or personal; multi-account handling serves
+  that reader without naming a category for them.
 - **The person.** The source is written to and about one named person and quotes him.
   The public skill addresses "you". The test refuses the first name in any skill file.
 - **Internal identifiers.** Ticket numbers, finding ids, lesson ids, thread ids, the
