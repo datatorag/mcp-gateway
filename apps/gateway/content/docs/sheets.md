@@ -4,6 +4,43 @@ description: "Read, create, update, append and delete Google Sheets, find rows b
 order: 5
 section: "connectors"
 connector: "google-workspace"
+faqs:
+  - q: If I write a value starting with an equals sign, does it become a formula?
+    a: >-
+      No. Values written through the DataToRAG Sheets connector that begin with
+      an equals sign are stored as text and never run as formulas.
+  - q: Why does my spreadsheet look unreadable even though the values are right?
+    a: >-
+      Column width. The Google Sheets API defaults to 100px columns, so anything
+      longer than a few words is clipped and the reader never learns there was
+      more text. The Sheets format-table tool applies the whole readable pass in
+      one atomic call: header styling, a frozen header row, column widths,
+      wrapping, optional banding, and an optional trim of the empty grid outside
+      the range.
+  - q: Does a successful formatting call mean the sheet looks the way I wanted?
+    a: >-
+      No. Formatting calls report what was sent, not what the sheet now looks
+      like, and empty reply objects only tell you the batch was accepted. Opening
+      the Google sheet is the only thing that tells you the result is what you
+      meant.
+  - q: What is the difference between clearing a tab and deleting one?
+    a: >-
+      Clearing keeps the tab. The DataToRAG clear tool empties values in a range
+      while leaving the tab and its formatting in place, and a bare tab name
+      clears the whole tab. Deleting a tab removes it and every row in it, and
+      that cannot be undone through the Google Sheets API, so clear a tab when
+      you only want to empty it.
+  - q: Can it find rows by value and then update them?
+    a: >-
+      Yes. The Sheets find-rows tool returns the matching row numbers plus a
+      ready-made A1 range for each, so a lookup can be followed straight by an
+      update, and it searches many values in one call.
+  - q: What if I need a spreadsheet operation the tools do not cover?
+    a: >-
+      There is a pass-through. Beneath the job-shaped Sheets tools sits the full
+      Google Sheets batchUpdate pass-through, for what they do not cover: borders,
+      merges, inserting or deleting columns, duplicating tabs and protected
+      ranges.
 ---
 
 The Sheets connector lets your AI assistant read data from spreadsheets, write to cells, append rows, create new sheets, and manage the tabs inside them. Values written through the connector that begin with `=` are stored as text, never run as formulas.

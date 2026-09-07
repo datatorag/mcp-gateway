@@ -3,6 +3,44 @@ title: "Usage & Metrics"
 description: "See how your AI assistant is using DataToRAG — calls, latency, errors, and per-tool breakdowns."
 order: 5
 section: "general"
+faqs:
+  - q: Do failed tool calls count against my usage?
+    a: >-
+      Some do. Successful calls and user errors are both counted, because a
+      request that reached the API and came back with a legitimate no still ran.
+      Server errors are not counted: if the DataToRAG gateway is down, a plugin
+      crashes, or an upstream API has a 5xx outage, that is not metered.
+  - q: What does DataToRAG record about each tool call?
+    a: >-
+      The tool name, connector, outcome, latency and response size, plus the
+      connected account. Arguments and response bodies are not recorded.
+      Conversations in the in-product agent are the exception and do include your
+      messages and tool results, and deleting a thread removes it.
+  - q: How long is my usage data kept?
+    a: >-
+      Raw events for 90 days. After that they are replaced by daily rollups, one
+      row per day per tool with call count, error count and latency percentiles,
+      and the rollup job runs every night at 02:00 UTC. The shape of your usage
+      stays visible going back, without per-call detail being held forever.
+  - q: Is there a rate limit?
+    a: >-
+      On the dashboard, yes. Dashboard API requests are limited to 120 per minute
+      per user, and going over returns a 429 with a Retry-After header saying how
+      long to wait. Tool calls through the DataToRAG MCP endpoint are not limited
+      by that; it applies only to the dashboard's own read APIs.
+  - q: Can other people see my usage data?
+    a: >-
+      No. Every usage row is scoped to your own user ID and other users cannot
+      see it. Stored error messages can quote your own material and are visible
+      only to you, and they are redacted before they reach our analytics
+      provider.
+  - q: What does the usage dashboard show?
+    a: >-
+      Four things. Summary cards for total calls this month, success rate, median
+      latency and slow-end latency; call volume over time; a by-connector
+      breakdown across Google Workspace, Atlassian and anything else connected;
+      and a per-tool table you can click into for the last 50 calls of a single
+      tool.
 ---
 
 Every tool call your AI assistant makes through DataToRAG is logged to your personal usage dashboard at [datatorag.com/dashboard/usage](https://datatorag.com/dashboard/usage). You can see what ran, how fast it was, and where errors are happening.

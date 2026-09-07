@@ -3,6 +3,46 @@ title: "Getting Started"
 description: "Connect your tools to AI assistants through a single MCP endpoint."
 order: 0
 section: "general"
+faqs:
+  - q: I connected my Google account but none of the tools work. What went wrong?
+    a: >-
+      Almost always the consent screen. Google presents it with every permission
+      box unchecked and the Continue button works anyway, so clicking straight
+      through completes the connection, shows DataToRAG as connected, and grants
+      permission to nothing. There is no error at any point. Open the DataToRAG
+      dashboard, look at what the account actually granted, and reconnect,
+      ticking "Select all" or the services you want.
+  - q: Is connecting my Google account in the dashboard enough to set up DataToRAG?
+    a: >-
+      No. Setup is two separate connections and both are required: connect your
+      accounts in the DataToRAG dashboard, then point your AI client at the
+      DataToRAG MCP endpoint. Connecting an account in the dashboard does not
+      connect your assistant, and this is the step most people miss.
+  - q: What URL do I point my AI client at?
+    a: >-
+      The DataToRAG MCP endpoint is https://datatorag.com/mcp. Add it in your
+      client as a custom connector, leaving the advanced OAuth fields empty, and
+      the client then redirects you to sign in with the same Google account you
+      used on the DataToRAG dashboard.
+  - q: Can I grant only some Google services and add the rest later?
+    a: >-
+      Yes. You can grant a subset on Google's consent screen and come back later,
+      and connecting more services afterwards re-runs the same screen. If tools
+      are missing in your client, check what your account granted on the
+      DataToRAG dashboard and reconnect if it is short.
+  - q: Can I try DataToRAG without connecting an AI client?
+    a: >-
+      Yes. The dashboard playground is a built-in chat that runs the same tools
+      against your connected accounts in the browser, with no client setup.
+      Anything that would change your data, such as sending an email or updating
+      an issue, pauses for your explicit approval before it runs. The playground
+      is for trying things out; connect your own client for day to day use.
+  - q: Where can I see what my assistant actually did?
+    a: >-
+      Every tool call appears in your personal usage dashboard, with call volume,
+      latency, error rates and a per-tool breakdown, and the first successful
+      call shows up within seconds. The [Usage docs](/docs/usage) cover what gets
+      tracked and how retention works.
 ---
 
 DataToRAG gives your AI assistant access to Google Workspace (Gmail, Drive, Calendar, Docs, Sheets, Slides, Contacts, Tasks) and Atlassian (Jira, Confluence) through a single MCP server. Want to see it in action first? Try the [playground](https://datatorag.com/dashboard), a built-in chat in your dashboard that runs real tools against your connected accounts, no client setup needed.

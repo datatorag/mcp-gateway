@@ -110,7 +110,7 @@ function collectionSource(
  * for it. The entry count alone cannot tell those apart. */
 const SOURCES: FaqSource[] = [
   { name: "blog", minimum: 18, load: collectionSource("blog", getAllPosts) },
-  { name: "docs", minimum: 6, load: collectionSource("docs", getAllDocs) },
+  { name: "docs", minimum: 69, load: collectionSource("docs", getAllDocs) },
 ];
 
 const loaded = SOURCES.map((s) => ({ source: s, result: s.load() }));

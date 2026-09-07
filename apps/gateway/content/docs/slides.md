@@ -4,6 +4,28 @@ description: "Read, create, and update Google Slides presentations."
 order: 6
 section: "connectors"
 connector: "google-workspace"
+faqs:
+  - q: Can DataToRAG add text to a slide that already exists?
+    a: >-
+      Yes. The Slides batch update tool inserts or replaces text, adds slides and
+      deletes objects, in the Google Slides batchUpdate format, applied in order
+      in one call. Reading the deck first returns the slide object IDs to target.
+  - q: How does it know where to put text on a deck it just created?
+    a: >-
+      From the placeholder map. Creating a presentation returns its ID plus a
+      placeholder map per slide, pairing TITLE, BODY and SUBTITLE with their
+      object IDs, so the first text insertion needs no lookup.
+  - q: Will reading a large presentation use up my context window?
+    a: >-
+      Less than you would expect. The Slides read tool returns slide object IDs,
+      placeholder types and their text, stripped of layout and styling data, so a
+      large deck still fits in context.
+  - q: Can Slides tools target a specific Google account?
+    a: >-
+      Yes. Every tool on this page takes an optional account argument naming the
+      connected Google account to act on, and omitting it uses the default
+      account. With a personal and a work account connected, your assistant can
+      read from one and write to the other in the same turn.
 ---
 
 The Slides connector lets your AI assistant read presentation content, create new decks, and apply batch updates to slides.

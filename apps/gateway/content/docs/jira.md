@@ -4,6 +4,40 @@ description: "Search issues with JQL, create, update, transition, and comment on
 order: 21
 section: "connectors"
 connector: "atlassian"
+faqs:
+  - q: Can I undo deleting a Jira issue?
+    a: >-
+      No. Deleting an issue cannot be undone through the Jira API. Deleted issues
+      do not go to a trash or an archive, and Jira does not reuse the key, so
+      every link, branch name and comment pointing at it breaks permanently.
+      Transitioning the issue to Done or Won't Do instead keeps its history and
+      leaves the key resolvable.
+  - q: What happens to subtasks when a Jira issue is deleted?
+    a: >-
+      An issue with subtasks is rejected outright unless the delete call passes
+      delete_subtasks, and passing it destroys the subtasks along with the
+      parent. Linked issues are not deleted, only subtasks.
+  - q: Can DataToRAG move a Jira issue through its workflow?
+    a: >-
+      Yes. One tool lists the transitions available on an issue and returns their
+      IDs, and a second moves the issue to a new workflow status using one of
+      those IDs. Comments can be added, edited and deleted in the same session.
+  - q: How do I find the ID of a Jira custom field?
+    a: >-
+      There is a tool for it. The Jira fields tool lists every available field,
+      system and custom, so you can discover the field IDs that creates and
+      updates take.
+  - q: Can I use more than one Atlassian site?
+    a: >-
+      Yes. Every Jira tool takes an optional account argument naming the
+      connected Atlassian account to act on, and omitting it uses the default
+      account. Connect more than one site and a single request can reach
+      whichever one the work belongs to.
+  - q: What Jira permissions does DataToRAG ask for?
+    a: >-
+      Three classic Atlassian scopes, covering reading and writing Jira work and
+      reading Jira users. Confluence is separate on the same connection and uses
+      granular scopes instead.
 ---
 
 The Jira tools let your AI assistant search, create, update, and move issues through their workflow, plus manage comments and attachments.

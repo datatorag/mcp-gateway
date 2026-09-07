@@ -4,6 +4,38 @@ description: "Search, read, send, reply, forward, and draft emails, and manage l
 order: 1
 section: "connectors"
 connector: "google-workspace"
+faqs:
+  - q: Can DataToRAG send and reply to email, or only read it?
+    a: >-
+      It sends. The Gmail tools cover sending a new message, replying to an
+      existing thread and forwarding a message, alongside creating, updating,
+      sending and deleting drafts. Searching and reading use Gmail's own query
+      syntax.
+  - q: How does DataToRAG archive an email?
+    a: >-
+      By removing the INBOX label. The Gmail label tool adds or removes labels on
+      one message or several, and removing INBOX archives a message while
+      removing UNREAD marks it read.
+  - q: Can it mark a lot of messages read at once?
+    a: >-
+      Yes. The Gmail mark-read tool takes a single message or a batch of up to
+      1,000 message IDs. For label changes beyond read state, DataToRAG uses the
+      label tool instead.
+  - q: If I delete a Gmail label, do the messages go too?
+    a: >-
+      No. Deleting a label removes it from every message carrying it, and the
+      messages themselves are not deleted. Gmail's system labels, including
+      INBOX, UNREAD and SENT, cannot be deleted at all.
+  - q: Can it save an email attachment to Drive?
+    a: >-
+      Yes. One Gmail tool saves an email attachment straight to Google Drive, and
+      DataToRAG's search tool can find the messages carrying attachments first
+      using Gmail's own query syntax.
+  - q: What Gmail permission does DataToRAG ask for?
+    a: >-
+      One scope, gmail.modify. That single Google scope covers everything the
+      Gmail connector does: searching, reading, sending, replying, forwarding,
+      drafting, saving attachments to Drive and managing labels.
 ---
 
 The Gmail connector gives your AI assistant full access to your inbox: searching, reading, composing, labeling, and organizing messages.
