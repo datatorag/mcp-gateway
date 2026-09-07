@@ -68,7 +68,7 @@ Two rules that keep this honest:
 - **Search by header name, not column letter.** If you must use a letter, the range has
   to start at column A: a narrow range plus a letter (like range `D1:D60` with column
   `D`) returns zero matches for every value, silently, and an all-`notFound` answer reads
-  as "the directory is empty" and re-appends every row (SCRUM-163).
+  as "the directory is empty" and re-appends every row.
 - **When the answer is an absence, suspect the query first.** Before trusting a big
   `notFound` list, confirm the call can find anything at all by including one name you
   know is already in the sheet.

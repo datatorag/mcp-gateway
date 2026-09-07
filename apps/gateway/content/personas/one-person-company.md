@@ -6,6 +6,7 @@ order: 1
 skills:
   - inbox-triage
   - week-ahead
+  - morning-brief
   - weekly-capture
   - gmail-attachments-to-drive
   - edit-a-doc-in-place

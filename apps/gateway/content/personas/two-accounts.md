@@ -7,6 +7,7 @@ skills:
   - work-and-personal-gmail
   - inbox-triage
   - week-ahead
+  - morning-brief
 ---
 
 Employed somewhere and building something else. Freelancing across a couple of
