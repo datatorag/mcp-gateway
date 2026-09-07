@@ -20,6 +20,13 @@ import { describe, expect, it } from "vitest";
  *   when that file is present. Listing them in this file would publish the
  *   very things the test exists to keep out, so without the file that layer
  *   is skipped visibly rather than silently passed.
+ *
+ * READ A GREEN RUN ACCORDINGLY. "The boundary test passed" is an incomplete
+ * sentence: passed WITH the denylist and passed WITHOUT it are different
+ * claims. A name is a value, not a shape, so the highest-consequence items
+ * (a person, an employer) can only ever be caught by the private layer. A
+ * run with 11 skips held the shapes and nothing else; a person with the
+ * denylist is the boundary, and any automated run is a subset of it.
  */
 const SKILLS_DIR = join(process.cwd(), "content", "skills");
 const files = readdirSync(SKILLS_DIR).filter((f) => f.endsWith(".md"));
