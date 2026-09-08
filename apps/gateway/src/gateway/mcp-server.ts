@@ -49,6 +49,28 @@ const ACCOUNT_PARAM_SCHEMA = {
     "Optional email address of the connected account to use (e.g. 'user@gmail.com'). If omitted, the default account is used.",
 } as const;
 
+/**
+ * SCRUM-225: which service a tool answer says is not usable, or null.
+ *
+ * The scheduler reads a run's tool results through this so it can pause a
+ * schedule with "reconnect needed" naming the service. It lives beside the
+ * three sentences it recognises (the not-connected answer, the unknown-account
+ * answer and the scope refusal, all below) so the wording and the recogniser
+ * change in one file. Every one of them carries the connect URL with the
+ * service as its last segment, and that is what is read.
+ */
+export function connectionFailureService(text: string): string | null {
+  if (
+    !/ is not connected\. Please connect it/.test(text) &&
+    !text.startsWith("No connected account found for ") &&
+    !text.includes(MISSING_SCOPE_ERROR_MARKER)
+  ) {
+    return null;
+  }
+  const m = /\/dashboard\/connections\/([a-z0-9-]+)/.exec(text);
+  return m?.[1] ?? "unknown";
+}
+
 type BuiltinResult = {
   content: { type: "text"; text: string }[];
   isError?: boolean;

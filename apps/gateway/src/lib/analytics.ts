@@ -40,6 +40,12 @@ export const EVENTS = {
    * client session by prompt or by tool. */
   SKILL_SEARCHED: "skill_searched",
   SKILL_APPLIED: "skill_applied",
+  /** Scheduled skill runs (SCRUM-225). */
+  SKILL_SCHEDULED: "skill_scheduled",
+  SKILL_SCHEDULE_PAUSED: "skill_schedule_paused",
+  SKILL_SCHEDULE_RESUMED: "skill_schedule_resumed",
+  SKILL_SCHEDULE_DELETED: "skill_schedule_deleted",
+  SKILL_RUN_FINISHED: "skill_run_finished",
   MCP_REQUEST_RECEIVED: "mcp_request_received",
   MCP_SESSION_INITIALIZED: "mcp_session_initialized",
   MCP_AUTH_FAILED: "mcp_auth_failed",

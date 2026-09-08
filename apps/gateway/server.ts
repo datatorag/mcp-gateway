@@ -37,6 +37,7 @@ import {
 import cron from "node-cron";
 import { runDailyRollup } from "./src/gateway/usage/rollup";
 import { runDailyDigest } from "./src/gateway/digest";
+import { runDueSchedules } from "./src/gateway/skills/scheduler";
 import { runNoActivationFollowup } from "./src/gateway/lifecycle";
 import { securityHeaders } from "./src/gateway/security-headers";
 
@@ -89,11 +90,25 @@ async function main() {
     { timezone: "America/Los_Angeles" }
   );
 
+  // Scheduled skill runs (SCRUM-225): a tick every minute, in UTC because
+  // each schedule carries its own zone. Safe to run twice: the claim in the
+  // store gives every due row to exactly one tick.
+  const skillsJob = cron.schedule(
+    "* * * * *",
+    () => {
+      runDueSchedules(db).catch((err) =>
+        console.error("[skills] scheduler tick failed", err)
+      );
+    },
+    { timezone: "UTC" }
+  );
+
   const shutdown = async () => {
     console.log("Shutting down...");
     rollupJob.stop();
     digestJob.stop();
     followupJob.stop();
+    skillsJob.stop();
     await pluginManager.stopAll();
     await pool.drain();
     await shutdownPosthog();

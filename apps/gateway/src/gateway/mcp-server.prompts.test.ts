@@ -42,7 +42,7 @@ vi.mock("./billing/enforce", () => ({
   checkCallAllowance: vi.fn().mockResolvedValue({ allowed: true }),
 }));
 
-import { createMcpServer, BUILT_IN_TOOLS } from "./mcp-server";
+import { createMcpServer, BUILT_IN_TOOLS, connectionFailureService } from "./mcp-server";
 import type { ConnectionPool } from "./pool";
 
 const dbMock = {} as unknown as Database;
@@ -264,5 +264,25 @@ describe("tools: the same catalogue for clients that render tools only", () => {
     expect(text).not.toContain("b".repeat(100));
     expect(text).not.toMatch(/[\u0000-\u001f\u007f]/);
     expect(text).toContain("morning-brief");
+  });
+});
+
+describe("connectionFailureService: the scheduler reads the server's own sentences (SCRUM-225)", () => {
+  it("names the service from the not-connected and unknown-account answers", () => {
+    expect(
+      connectionFailureService(
+        "google-workspace is not connected. Please connect it from the dashboard at https://example.com/dashboard/connections/google-workspace before using gws-mcp tools."
+      )
+    ).toBe("google-workspace");
+    expect(
+      connectionFailureService(
+        'No connected account found for "x@example.com". Please connect it from the dashboard at https://example.com/dashboard/connections/atlassian.'
+      )
+    ).toBe("atlassian");
+  });
+
+  it("is null for ordinary tool output, even output that mentions connections", () => {
+    expect(connectionFailureService("Found 3 messages about connections.")).toBeNull();
+    expect(connectionFailureService("")).toBeNull();
   });
 });

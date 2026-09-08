@@ -599,3 +599,16 @@ export async function trackOAuthCompleted(
     },
   });
 }
+
+/** SCRUM-225: the scheduler's events (`skill_run_started`, `skill_run_finished`,
+ * `skill_schedule_*`), captured the same way every playground lifecycle event
+ * is. The event name is one of `EVENTS`; the runner passes it through so its
+ * outcome table stays free of analytics wiring. Never throws. */
+export async function trackSkillEvent(
+  db: Database,
+  userId: string,
+  event: string,
+  props: Record<string, unknown>
+): Promise<void> {
+  return capturePlaygroundEvent(db, userId, event, props);
+}

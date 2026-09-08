@@ -3,6 +3,7 @@ import { db } from "@/lib/db";
 import { getSessionUserId } from "@/lib/session";
 import { getAllSkills, servicesFor } from "@/lib/skills";
 import { loadConnectionsView } from "@/gateway/connections-view";
+import { listSchedulesForUser } from "@/gateway/skills/schedules";
 import { SkillsClient } from "./skills-client";
 
 export const dynamic = "force-dynamic";
@@ -37,5 +38,9 @@ export default async function DashboardSkillsPage() {
     services: servicesFor(skill),
   }));
 
-  return <SkillsClient connected={[...connected]} skills={skills} />;
+  // The user's schedules and their history (SCRUM-225), loaded server-side
+  // so the Schedules section is honest on first paint too.
+  const schedules = await listSchedulesForUser(db, userId);
+
+  return <SkillsClient connected={[...connected]} skills={skills} schedules={schedules} />;
 }
