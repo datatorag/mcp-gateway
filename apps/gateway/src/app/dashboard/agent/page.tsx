@@ -56,7 +56,7 @@ export default async function AgentPage({
   // is carried; anything else bounces plain, through the same literal every
   // dashboard route uses (the route-session-checks guard reads it).
   const lapsedSkill =
-    !userId && typeof params.skill === "string" && getSkillBySlug(params.skill)
+    !userId && typeof params.skill === "string" && (await getSkillBySlug(params.skill))
       ? params.skill
       : null;
   if (lapsedSkill) redirect(`/auth/login?next=${encodeURIComponent(skillDeepLink(lapsedSkill))}`);
@@ -90,12 +90,13 @@ export default async function AgentPage({
   // agent holding write scopes on the user's accounts.
   const seedSkillSource =
     typeof skill === "string" && /^[a-z0-9-]{1,80}$/.test(skill)
-      ? getSkillBySlug(skill)
+      ? await getSkillBySlug(skill, userId)
       : null;
   const seedSkill = seedSkillSource
     ? {
         slug: seedSkillSource.slug,
         title: seedSkillSource.title,
+        layer: seedSkillSource.layer,
         services: servicesFor(seedSkillSource),
         message: skillRunMessage(seedSkillSource),
       }

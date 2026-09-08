@@ -30,8 +30,10 @@ export default async function DashboardSkillsPage() {
   for (const a of connections.accounts) connected.add(a.connectorType);
   for (const c of connections.connections) connected.add(c.service);
 
-  const skills = getAllSkills().map((skill) => ({
+  const skills = (await getAllSkills(userId)).map((skill) => ({
     slug: skill.slug,
+    layer: skill.layer,
+    forkedFrom: skill.forkedFrom,
     title: skill.title,
     situation: skill.situation,
     produces: skill.produces,

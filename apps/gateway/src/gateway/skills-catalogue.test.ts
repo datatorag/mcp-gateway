@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { getAllSkills, getSkillBySlug, skillRunMessage } from "@/lib/skills";
+import { readSkillFiles, skillRunMessage } from "@/lib/skills";
 import {
   echoName,
   searchSkills,
@@ -10,21 +10,21 @@ import {
 
 /* SCRUM-224: the catalogue as the MCP surface answers it. Pure, so the prompt
  * path and the tool path cannot disagree, and testable without a database. */
-const brief = getSkillBySlug("morning-brief")!;
+const brief = readSkillFiles().find((s) => s.slug === "morning-brief")!;
 const NONE = new Set<string>();
 const GOOGLE = new Set(["google-workspace"]);
 const URL = "https://example.com/dashboard/connections";
 
 describe("searchSkills", () => {
-  it("returns the whole catalogue in authored order for an empty query", () => {
-    expect(searchSkills("").map((s) => s.slug)).toEqual(getAllSkills().map((s) => s.slug));
-    expect(searchSkills(undefined).length).toBe(getAllSkills().length);
+  it("returns the whole catalogue in authored order for an empty query", async () => {
+    expect((await searchSkills(null, "")).map((s) => s.slug)).toEqual(readSkillFiles().map((s) => s.slug));
+    expect((await searchSkills(null, undefined)).length).toBe(readSkillFiles().length);
   });
 
-  it("matches title, situation, produces, slug and tool names, case-insensitively", () => {
-    expect(searchSkills("MORNING").map((s) => s.slug)).toContain("morning-brief");
-    expect(searchSkills("tasks_create").map((s) => s.slug)).toContain("morning-brief");
-    expect(searchSkills("zz-no-such-thing-zz")).toEqual([]);
+  it("matches title, situation, produces, slug and tool names, case-insensitively", async () => {
+    expect((await searchSkills(null, "MORNING")).map((s) => s.slug)).toContain("morning-brief");
+    expect((await searchSkills(null, "tasks_create")).map((s) => s.slug)).toContain("morning-brief");
+    expect(await searchSkills(null, "zz-no-such-thing-zz")).toEqual([]);
   });
 });
 

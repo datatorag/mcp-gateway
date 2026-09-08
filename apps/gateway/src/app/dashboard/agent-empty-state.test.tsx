@@ -57,7 +57,13 @@ function deferred<T>() {
 
 type Initial = { accounts: Array<Record<string, unknown>>; connections: unknown[] };
 
-type SeedSkill = { slug: string; title: string; services: string[]; message: string };
+type SeedSkill = {
+  slug: string;
+  title: string;
+  layer: "published" | "yours";
+  services: string[];
+  message: string;
+};
 
 function mountWith(
   connections: () => Promise<Response>,
@@ -101,6 +107,7 @@ function mountWith(
  * either submits the message once, or, when a service is missing, routes to
  * connect with the deep link as the return path so the run happens after. */
 const SEED_SKILL: SeedSkill = {
+  layer: "published",
   slug: "morning-brief",
   title: "Get a morning brief across your mail, calendar and tasks with Claude",
   services: ["google-workspace"],

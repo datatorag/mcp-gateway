@@ -38,6 +38,8 @@ import cron from "node-cron";
 import { runDailyRollup } from "./src/gateway/usage/rollup";
 import { runDailyDigest } from "./src/gateway/digest";
 import { runDueSchedules } from "./src/gateway/skills/scheduler";
+import { seedPublishedSkills, skillReader } from "./src/gateway/skills/catalogue-store";
+import { setSkillReader } from "./src/lib/skills";
 import { runNoActivationFollowup } from "./src/gateway/lifecycle";
 import { securityHeaders } from "./src/gateway/security-headers";
 
@@ -52,6 +54,20 @@ async function main() {
   const db = createDb(env.DATABASE_URL);
   const pool = new ConnectionPool();
   const baseUrl = env.GATEWAY_BASE_URL;
+
+  // The skill catalogue (SCRUM-226): seed the published files into the table
+  // and point every read at it. A failure here is logged and the process
+  // serves the parsed files, which ship in the image, so the public skill
+  // pages never depend on this succeeding.
+  try {
+    const seeded = await seedPublishedSkills(db);
+    setSkillReader(skillReader(db));
+    console.log(
+      `[skills] seeded published skills: ${seeded.inserted} new, ${seeded.unchanged} unchanged, ${seeded.retired} retired`
+    );
+  } catch (err) {
+    console.error("[skills] seeding failed; serving the published files", err);
+  }
 
   // Initialize plugin manager and start all active plugins
   const pluginManager = getPluginManager(db, pool);

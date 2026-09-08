@@ -14,14 +14,14 @@ import {
 
 type Props = { params: Promise<{ slug: string }> };
 
-export function generateStaticParams() {
-  return getAllSkills().map((skill) => ({ slug: skill.slug }));
+export async function generateStaticParams() {
+  return (await getAllSkills()).map((skill) => ({ slug: skill.slug }));
 }
 
 /** Own metadata per page, query-shaped — never the root default. */
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { slug } = await params;
-  const skill = getSkillBySlug(slug);
+  const skill = await getSkillBySlug(slug);
   if (!skill) return {};
 
   const title = `${skill.title} | DataToRAG`;
@@ -39,10 +39,10 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 
 export default async function SkillPage({ params }: Props) {
   const { slug } = await params;
-  const skill = getSkillBySlug(slug);
+  const skill = await getSkillBySlug(slug);
   if (!skill) notFound();
 
-  const related = getRelatedSkills(slug);
+  const related = await getRelatedSkills(slug);
   const connectors = connectorsFor(skill.tools);
 
   return (

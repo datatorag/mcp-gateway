@@ -52,10 +52,9 @@ export function getPersonaBySlug(slug: string): Persona | null {
 /** The persona's skills, resolved and in authored order. Silently drops a
  * slug that does not resolve so a typo degrades to a shorter list rather
  * than a crash; the test is what stops the typo shipping. */
-export function skillsForPersona(persona: Persona): Skill[] {
-  return persona.skillSlugs
-    .map((slug) => getSkillBySlug(slug))
-    .filter((skill): skill is Skill => skill !== null);
+export async function skillsForPersona(persona: Persona): Promise<Skill[]> {
+  const resolved = await Promise.all(persona.skillSlugs.map((slug) => getSkillBySlug(slug)));
+  return resolved.filter((skill): skill is Skill => skill !== null);
 }
 
 function parsePersona({ slug, data, content }: ParsedFile): Persona | null {

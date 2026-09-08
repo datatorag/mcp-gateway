@@ -1,9 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
   connectorsFor,
-  getAllSkills,
+  readSkillFiles,
   getRelatedSkills,
-  getSkillBySlug,
   servicesFor,
   skillDeepLink,
   signInAndRunHref,
@@ -15,7 +14,7 @@ import { REGISTRY_TOOL_NAMES } from "@/gateway/playground/registry-snapshot";
 /* SCRUM-223: the catalogue is the one source every surface reads, so the
  * pieces the deep link and the run depend on live here and are pinned here. */
 describe("the catalogue's run and deep-link helpers (SCRUM-223)", () => {
-  const skill = getSkillBySlug("morning-brief")!;
+  const skill = readSkillFiles().find((s) => s.slug === "morning-brief")!;
 
   it("maps a skill's connectors to the service ids the connect flow uses", () => {
     expect(servicesFor(skill)).toEqual(["google-workspace"]);
@@ -70,7 +69,7 @@ describe("the catalogue's run and deep-link helpers (SCRUM-223)", () => {
  * fails on them, not on us. */
 const SHIPPED_TOOLS = REGISTRY_TOOL_NAMES;
 
-const skills = getAllSkills();
+const skills = readSkillFiles();
 
 describe("the skills collection", () => {
   it("parses every file in content/skills", () => {
@@ -128,9 +127,9 @@ describe("the skills collection", () => {
     }
   });
 
-  it("relates skills without reaching for the blog's tag model", () => {
+  it("relates skills without reaching for the blog's tag model", async () => {
     for (const skill of skills) {
-      const related = getRelatedSkills(skill.slug);
+      const related = await getRelatedSkills(skill.slug);
       expect(related.length).toBeGreaterThan(0);
       expect(related.map((r) => r.slug)).not.toContain(skill.slug);
     }

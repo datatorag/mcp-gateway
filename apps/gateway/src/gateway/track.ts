@@ -600,10 +600,11 @@ export async function trackOAuthCompleted(
   });
 }
 
-/** SCRUM-225: the scheduler's events (`skill_run_started`, `skill_run_finished`,
- * `skill_schedule_*`), captured the same way every playground lifecycle event
- * is. The event name is one of `EVENTS`; the runner passes it through so its
- * outcome table stays free of analytics wiring. Never throws. */
+/** SCRUM-226 (and the scheduler's events on its own branch): a skill
+ * lifecycle event (`skill_created`, `skill_updated`, `skill_forked`,
+ * `skill_deleted`, `skill_run_*`, `skill_schedule_*`), captured the same way
+ * every playground lifecycle event is. The event name is one of `EVENTS`;
+ * the caller passes it through. Never throws. */
 export async function trackSkillEvent(
   db: Database,
   userId: string,

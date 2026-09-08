@@ -32,6 +32,12 @@ vi.mock("./connected-accounts", () => ({
 }));
 // The skills built-ins (SCRUM-224) read the shared connected-services set;
 // not the subject here, so it answers "nothing connected".
+vi.mock("./skills/catalogue-store", () => ({
+  createUserSkill: vi.fn().mockResolvedValue({ ok: false, reason: "invalid", field: "title", error: "title is required" }),
+  updateUserSkill: vi.fn().mockResolvedValue({ ok: false, reason: "not_found" }),
+  forkSkill: vi.fn().mockResolvedValue({ ok: false, reason: "not_found" }),
+  deleteUserSkill: vi.fn().mockResolvedValue(null),
+}));
 vi.mock("./connected-services", () => ({
   listConnectedServiceIds: vi.fn().mockResolvedValue(new Set<string>()),
 }));

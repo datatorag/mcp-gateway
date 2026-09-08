@@ -120,6 +120,14 @@ before commit (public repo). Pending-capture spots use HTML-comment placeholders
 
 ### Skills — `apps/gateway/src/lib/skills.ts`
 
+**Since SCRUM-226 the files are the authored source, not the served store.** The
+parser below still runs, but its output (`readSkillFiles()`) is seeded into the
+`skills` table at boot and every page reads the table through async `getAllSkills(viewer)`
+/ `getSkillBySlug(slug, viewer)` (public pages pass `null`). A markdown edit therefore
+reaches the site on the next deploy, as before, through the seeder rather than the cache.
+The accuracy and boundary tests still run over the files, so a published skill still
+changes only through a reviewed commit. Details in `codebase-map`.
+
 Slug = filename. Its OWN collection, deliberately not blog posts: a skill page is a
 reference artifact people return to and copy from, a blog post is a one-time read, so
 skills get no reverse-chronological feed and do not use `getRelatedPosts`. Sorted by

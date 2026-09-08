@@ -67,6 +67,22 @@ export const INTERNAL_TOOL_DISPLAY: Record<
     label: "Loading a skill",
     icon: BookOpenIcon,
   },
+  skills_create: {
+    label: "Saving a new skill of yours",
+    icon: BookOpenIcon,
+  },
+  skills_update: {
+    label: "Saving a new version of your skill",
+    icon: BookOpenIcon,
+  },
+  skills_fork: {
+    label: "Forking a published skill into your own",
+    icon: BookOpenIcon,
+  },
+  skills_delete: {
+    label: "Deleting your skill",
+    icon: BookOpenIcon,
+  },
   show_mcp_config: {
     label: "Getting your MCP config",
     icon: CodeIcon,

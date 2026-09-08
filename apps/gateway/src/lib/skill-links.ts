@@ -20,3 +20,33 @@ export function skillDeepLink(slug: string): string {
 export function signInAndRunHref(slug: string): string {
   return `/auth/login?next=${encodeURIComponent(skillDeepLink(slug))}`;
 }
+
+/** Connector display name to the service id the connect flow and the
+ * connections table use. One mapping, next to `connectorsFor`, so the three
+ * surfaces that ask "does this user have what this skill needs" agree. */
+const SERVICE_ID_BY_CONNECTOR: Record<string, string> = {
+  "Google Workspace": "google-workspace",
+  Atlassian: "atlassian",
+};
+
+/** The service ids a skill needs connected, in `connectorsFor` order. */
+export function servicesFor(skill: { tools: string[] }): string[] {
+  return connectorsFor(skill.tools)
+    .map((name) => SERVICE_ID_BY_CONNECTOR[name])
+    .filter((id): id is string => typeof id === "string");
+}
+
+
+/** Which connectors a tool set touches, from the tool-name prefix the
+ * plugins already namespace by. */
+export function connectorsFor(tools: string[]): string[] {
+  const out = new Set<string>();
+  for (const tool of tools) {
+    if (/^(gmail|calendar|drive|sheets|docs|slides|contacts|tasks|gws)_/.test(tool)) {
+      out.add("Google Workspace");
+    } else if (/^(jira|confluence)_/.test(tool)) {
+      out.add("Atlassian");
+    }
+  }
+  return [...out];
+}

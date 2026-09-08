@@ -44,7 +44,7 @@ export default async function PersonaPage({ params }: Props) {
   const persona = getPersonaBySlug(slug);
   if (!persona) notFound();
 
-  const skills = skillsForPersona(persona);
+  const skills = await skillsForPersona(persona);
 
   return (
     <>

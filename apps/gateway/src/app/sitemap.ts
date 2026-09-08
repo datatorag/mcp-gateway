@@ -48,7 +48,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     priority: 0.6,
   }));
 
-  const skills: MetadataRoute.Sitemap = getAllSkills().map((s) => ({
+  const skills: MetadataRoute.Sitemap = (await getAllSkills()).map((s) => ({
     url: `${BASE}/skills/${s.slug}`,
     changeFrequency: "monthly",
     priority: 0.7,

@@ -6,29 +6,85 @@ import {
   CalendarClockIcon,
   CheckCircle2Icon,
   CircleDashedIcon,
+  GitForkIcon,
   PauseIcon,
+  PencilIcon,
   PlayIcon,
+  PlusIcon,
   Trash2Icon,
 } from "lucide-react";
 import { EVENTS } from "@/lib/analytics";
-import { skillDeepLink } from "@/lib/skill-links";
+import { servicesFor, skillDeepLink } from "@/lib/skill-links";
 import type { ScheduleView } from "@/gateway/skills/schedules";
 import { SERVICES } from "../connections/services";
 
 /** The catalogue as the page passes it down: display fields plus the service
- * ids each skill needs. No skill text travels to the client; the run message
- * is composed server-side on the agent page from the slug. */
+ * ids each skill needs, and which layer it is (SCRUM-226). No skill text
+ * travels with the list; the editor loads a skill's file on demand and the
+ * run message is composed server-side on the agent page from the slug. */
 export type SkillListItem = {
   slug: string;
   title: string;
   situation: string;
   produces: string;
   services: string[];
+  /** "published" (ours, seeded from the repo) or "yours" (the user's row). */
+  layer: "published" | "yours";
+  forkedFrom?: { slug: string; version: string } | null;
+};
+
+/** What the editor reads and writes: the user's skill with its file. */
+type OwnSkill = {
+  slug: string;
+  title: string;
+  situation: string;
+  produces: string;
+  tools: string[];
+  accounts: "single" | "multiple";
+  source: string;
 };
 
 function serviceName(id: string): string {
   return SERVICES.find((s) => s.id === id)?.name ?? id;
 }
+
+function toItem(skill: {
+  slug: string;
+  title: string;
+  situation: string;
+  produces: string;
+  tools?: string[];
+  services?: string[];
+  layer: "published" | "yours";
+  forkedFrom?: { slug: string; version: string } | null;
+}): SkillListItem {
+  return {
+    slug: skill.slug,
+    title: skill.title,
+    situation: skill.situation,
+    produces: skill.produces,
+    services: skill.services ?? servicesFor({ tools: skill.tools ?? [] }),
+    layer: skill.layer,
+    forkedFrom: skill.forkedFrom ?? null,
+  };
+}
+
+type ApiError = { error?: string; field?: string; message?: string; cap?: number; missing?: string[] };
+
+function refusalText(status: number, body: ApiError): string {
+  if (body.error === "invalid") return `${body.field ?? "input"}: ${body.message ?? "not valid"}`;
+  if (body.error === "cap") return `You already have ${body.cap ?? 50} skills of your own, which is the limit. Delete one first.`;
+  if (body.error === "not_connected") {
+    return `Connect ${(body.missing ?? []).map(serviceName).join(" and ")} first.`;
+  }
+  if (body.error === "exists") return "You already have this.";
+  if (status === 429) return "Too many requests. Try again in a moment.";
+  return "That did not save. Try again.";
+}
+
+/* ---------------------------------------------------------------------- */
+/* Schedules (SCRUM-225)                                                   */
+/* ---------------------------------------------------------------------- */
 
 const WEEKDAY_NAMES = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 
@@ -73,32 +129,24 @@ function browserTimezone(): string {
   }
 }
 
-type ApiError = { error?: string; missing?: string[] };
-
-function refusalText(status: number, body: ApiError): string {
-  if (body.error === "not_connected") {
-    return `Connect ${(body.missing ?? []).map(serviceName).join(" and ")} first.`;
-  }
-  if (body.error === "exists") return "This skill already has a schedule.";
-  if (status === 429) return "Too many requests. Try again in a moment.";
-  return "That did not save. Try again.";
-}
-
 /**
- * One card per skill, each with a Run link to the deep link (SCRUM-223), a
- * Schedule control on the runnable ones (SCRUM-225), and a Schedules section
- * above the catalogue listing each schedule with its state and history.
+ * One card per skill, each with a Run link to the deep link (SCRUM-223); a
+ * Schedules section and a Schedule control on runnable cards (SCRUM-225);
+ * and the user's own skills beside the published ones (SCRUM-226): every
+ * card says which layer it is, a published card offers Fork, the user's
+ * cards offer Edit and Delete behind a confirmation, and New skill opens the
+ * same editor empty. Every change goes through the API and the page
+ * re-renders from the API's answer, never from an optimistic guess.
  *
  * A skill whose service is missing runs through the SAME link: the agent
  * page routes to connect and continues, so the intent is never dead-ended.
  * The button says "Connect and run" in that case rather than claiming one
  * click, which is the same action-plus-precondition rule the public CTA
- * follows. Every schedule change goes through the API and the section
- * re-renders from the API's answer, never from an optimistic guess.
+ * follows.
  */
 export function SkillsClient({
   connected,
-  skills,
+  skills: initialSkills,
   schedules: initialSchedules = [],
 }: {
   connected: string[];
@@ -106,19 +154,51 @@ export function SkillsClient({
   schedules?: ScheduleView[];
 }) {
   const have = new Set(connected);
+  const [skills, setSkills] = useState<SkillListItem[]>(initialSkills);
   const [schedules, setSchedules] = useState<ScheduleView[]>(initialSchedules);
+  const [creating, setCreating] = useState(false);
   const scheduled = new Set(schedules.map((s) => s.skillSlug));
 
-  const replace = (next: ScheduleView) =>
+  const replaceSkill = (item: SkillListItem) =>
+    setSkills((list) => list.map((s) => (s.slug === item.slug ? item : s)));
+  const replaceSchedule = (next: ScheduleView) =>
     setSchedules((list) => list.map((s) => (s.id === next.id ? next : s)));
 
   return (
     <div className="mx-auto max-w-4xl">
-      <h1 className="font-display text-2xl font-bold text-foreground">Skills</h1>
-      <p className="mt-1 text-sm text-muted-foreground">
-        Routines the agent runs for you on the accounts you connect. Run one now, schedule it,
-        or read it first on the public page.
-      </p>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h1 className="font-display text-2xl font-bold text-foreground">Skills</h1>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Routines the agent runs for you on the accounts you connect. Run one now, schedule it,
+            fork a published one to make it yours, or write your own.
+          </p>
+        </div>
+        {!creating && (
+          <button
+            type="button"
+            className="inline-flex items-center gap-1.5 rounded-full border border-border px-4 py-2 text-sm font-medium text-foreground transition-colors hover:bg-muted"
+            onClick={() => setCreating(true)}
+          >
+            <PlusIcon aria-hidden="true" className="size-3.5" />
+            New skill
+          </button>
+        )}
+      </div>
+
+      {creating && (
+        <div className="mt-6">
+          <SkillEditor
+            initial={null}
+            onCancel={() => setCreating(false)}
+            onSaved={(saved) => {
+              setSkills((list) => [...list.filter((s) => s.slug !== saved.slug), toItem(saved)]);
+              posthog.capture(EVENTS.SKILL_CREATED, { skill: saved.slug, source: "dashboard" });
+              setCreating(false);
+            }}
+          />
+        </div>
+      )}
 
       {schedules.length > 0 && (
         <section className="mt-6" aria-labelledby="schedules-heading">
@@ -130,7 +210,7 @@ export function SkillsClient({
               <ScheduleRow
                 key={s.id}
                 schedule={s}
-                onChange={replace}
+                onChange={replaceSchedule}
                 onDeleted={(id) => setSchedules((list) => list.filter((x) => x.id !== id))}
               />
             ))}
@@ -139,81 +219,249 @@ export function SkillsClient({
       )}
 
       <ul className="mt-6 grid gap-4 sm:grid-cols-2">
-        {skills.map((skill) => {
-          const missing = skill.services.filter((id) => !have.has(id));
-          const ready = missing.length === 0;
-          return (
-            <li
-              className="flex flex-col rounded-2xl border border-border bg-background p-5"
-              key={skill.slug}
-            >
-              <h2 className="font-display text-base font-semibold leading-snug text-foreground">
-                {skill.title}
-              </h2>
-              <p className="mt-2 text-sm italic leading-relaxed text-muted-foreground">
-                &ldquo;{skill.situation}&rdquo;
-              </p>
-              <p className="mt-2 text-sm leading-relaxed text-foreground/90">{skill.produces}</p>
-
-              <ul className="mt-4 space-y-1 text-xs text-muted-foreground">
-                {skill.services.map((id) => (
-                  <li className="flex items-center gap-1.5" key={id}>
-                    {have.has(id) ? (
-                      <CheckCircle2Icon
-                        aria-hidden="true"
-                        className="size-3.5 text-emerald-600"
-                      />
-                    ) : (
-                      <CircleDashedIcon aria-hidden="true" className="size-3.5" />
-                    )}
-                    {serviceName(id)} {have.has(id) ? "connected" : "not connected"}
-                  </li>
-                ))}
-              </ul>
-
-              <div className="mt-4 flex items-center justify-between gap-3">
-                <a
-                  className="text-xs text-muted-foreground underline-offset-4 hover:underline"
-                  href={`/skills/${skill.slug}`}
-                >
-                  Read the skill
-                </a>
-                <div className="flex items-center gap-2">
-                  {ready && !scheduled.has(skill.slug) && (
-                    <ScheduleControl
-                      slug={skill.slug}
-                      onCreated={(s) => setSchedules((list) => [...list, s])}
-                    />
-                  )}
-                  {/* A plain anchor: the destination is a full page load of the
-                      agent with the skill loaded, and the click event must fire
-                      before navigation rather than be lost to a client route. */}
-                  <a
-                    className="inline-flex items-center gap-1.5 rounded-full bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
-                    href={skillDeepLink(skill.slug)}
-                    onClick={() =>
-                      posthog.capture(EVENTS.SKILL_RUN_CLICKED, {
-                        skill: skill.slug,
-                        source: "dashboard",
-                        trigger: "manual",
-                      })
-                    }
-                  >
-                    <PlayIcon aria-hidden="true" className="size-3.5 fill-current" />
-                    {ready ? "Run" : "Connect and run"}
-                  </a>
-                </div>
-              </div>
-            </li>
-          );
-        })}
+        {skills.map((skill) => (
+          <SkillCardRow
+            key={skill.slug}
+            skill={skill}
+            have={have}
+            scheduled={scheduled.has(skill.slug)}
+            onScheduled={(s) => setSchedules((list) => [...list, s])}
+            onChange={replaceSkill}
+            onRemoved={(slug, published) =>
+              setSkills((list) =>
+                published
+                  ? list.map((s) => (s.slug === slug ? published : s))
+                  : list.filter((s) => s.slug !== slug)
+              )
+            }
+          />
+        ))}
       </ul>
     </div>
   );
 }
 
+function SkillCardRow({
+  skill,
+  have,
+  scheduled,
+  onScheduled,
+  onChange,
+  onRemoved,
+}: {
+  skill: SkillListItem;
+  have: Set<string>;
+  scheduled: boolean;
+  onScheduled: (s: ScheduleView) => void;
+  onChange: (item: SkillListItem) => void;
+  onRemoved: (slug: string, published: SkillListItem | null) => void;
+}) {
+  const [editing, setEditing] = useState<OwnSkill | null>(null);
+  const [confirming, setConfirming] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const missing = skill.services.filter((id) => !have.has(id));
+  const ready = missing.length === 0;
+  const mine = skill.layer === "yours";
+
+  const fork = async () => {
+    setBusy(true);
+    setError(null);
+    try {
+      const res = await fetch("/api/skills/fork", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ slug: skill.slug }),
+      });
+      const body = (await res.json().catch(() => ({}))) as ApiError & { skill?: Parameters<typeof toItem>[0] };
+      if (!res.ok || !body.skill) {
+        setError(refusalText(res.status, body));
+        return;
+      }
+      posthog.capture(EVENTS.SKILL_FORKED, { skill: skill.slug, source: "dashboard" });
+      onChange(toItem(body.skill));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const startEdit = async () => {
+    setBusy(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/skills/own/${encodeURIComponent(skill.slug)}`);
+      const body = (await res.json().catch(() => ({}))) as { skill?: OwnSkill };
+      if (!res.ok || !body.skill) {
+        setError("Could not load the skill for editing. Try again.");
+        return;
+      }
+      setEditing(body.skill);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const remove = async () => {
+    setBusy(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/skills/own/${encodeURIComponent(skill.slug)}`, { method: "DELETE" });
+      const body = (await res.json().catch(() => ({}))) as { published?: SkillListItem | null };
+      if (!res.ok) {
+        setError("That did not delete. Try again.");
+        return;
+      }
+      onRemoved(skill.slug, body.published ?? null);
+    } finally {
+      setBusy(false);
+      setConfirming(false);
+    }
+  };
+
+  if (editing) {
+    return (
+      <li className="rounded-2xl border border-border bg-background p-5 sm:col-span-2">
+        <SkillEditor
+          initial={editing}
+          onCancel={() => setEditing(null)}
+          onSaved={(saved) => {
+            onChange(toItem(saved));
+            posthog.capture(EVENTS.SKILL_UPDATED, { skill: saved.slug, source: "dashboard" });
+            setEditing(null);
+          }}
+        />
+      </li>
+    );
+  }
+
+  return (
+    <li className="flex flex-col rounded-2xl border border-border bg-background p-5">
+      <div className="flex items-start justify-between gap-2">
+        <h2 className="font-display text-base font-semibold leading-snug text-foreground">
+          {skill.title}
+        </h2>
+        <span
+          className={
+            mine
+              ? "shrink-0 rounded-full bg-primary/10 px-2 py-0.5 text-[11px] font-medium text-primary"
+              : "shrink-0 rounded-full bg-muted px-2 py-0.5 text-[11px] font-medium text-muted-foreground"
+          }
+        >
+          {mine ? "Your version" : "Published"}
+        </span>
+      </div>
+      <p className="mt-2 text-sm italic leading-relaxed text-muted-foreground">
+        &ldquo;{skill.situation}&rdquo;
+      </p>
+      <p className="mt-2 text-sm leading-relaxed text-foreground/90">{skill.produces}</p>
+
+      <ul className="mt-4 space-y-1 text-xs text-muted-foreground">
+        {skill.services.map((id) => (
+          <li className="flex items-center gap-1.5" key={id}>
+            {have.has(id) ? (
+              <CheckCircle2Icon aria-hidden="true" className="size-3.5 text-emerald-600" />
+            ) : (
+              <CircleDashedIcon aria-hidden="true" className="size-3.5" />
+            )}
+            {serviceName(id)} {have.has(id) ? "connected" : "not connected"}
+          </li>
+        ))}
+      </ul>
+
+      {error && <p className="mt-3 text-xs text-destructive">{error}</p>}
+
+      <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
+        <div className="flex flex-wrap items-center gap-3">
+          {!mine && (
+            <a
+              className="text-xs text-muted-foreground underline-offset-4 hover:underline"
+              href={`/skills/${skill.slug}`}
+            >
+              Read the skill
+            </a>
+          )}
+          {mine ? (
+            <>
+              <button
+                type="button"
+                className="inline-flex items-center gap-1 text-xs text-muted-foreground underline-offset-4 hover:underline"
+                disabled={busy}
+                onClick={() => void startEdit()}
+              >
+                <PencilIcon aria-hidden="true" className="size-3" />
+                Edit
+              </button>
+              {confirming ? (
+                <span className="inline-flex flex-wrap items-center gap-2 text-xs">
+                  <span className="text-muted-foreground">
+                    {skill.forkedFrom
+                      ? "Delete your version? Nothing else changes and the published skill comes back."
+                      : "Delete this skill? Its versions are kept but it will not show or run."}
+                  </span>
+                  <button
+                    type="button"
+                    className="rounded-full bg-destructive px-3 py-1 font-medium text-destructive-foreground"
+                    disabled={busy}
+                    onClick={() => void remove()}
+                  >
+                    Yes, delete
+                  </button>
+                  <button type="button" className="underline-offset-4 hover:underline" onClick={() => setConfirming(false)}>
+                    Keep it
+                  </button>
+                </span>
+              ) : (
+                <button
+                  type="button"
+                  className="inline-flex items-center gap-1 text-xs text-muted-foreground underline-offset-4 hover:underline"
+                  disabled={busy}
+                  onClick={() => setConfirming(true)}
+                >
+                  <Trash2Icon aria-hidden="true" className="size-3" />
+                  Delete
+                </button>
+              )}
+            </>
+          ) : (
+            <button
+              type="button"
+              className="inline-flex items-center gap-1 text-xs text-muted-foreground underline-offset-4 hover:underline"
+              disabled={busy}
+              onClick={() => void fork()}
+            >
+              <GitForkIcon aria-hidden="true" className="size-3" />
+              Fork
+            </button>
+          )}
+        </div>
+        <div className="flex items-center gap-2">
+          {ready && !scheduled && <ScheduleControl slug={skill.slug} onCreated={onScheduled} />}
+          {/* A plain anchor: the destination is a full page load of the
+              agent with the skill loaded, and the click event must fire
+              before navigation rather than be lost to a client route. */}
+          <a
+            className="inline-flex items-center gap-1.5 rounded-full bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
+            href={skillDeepLink(skill.slug)}
+            onClick={() =>
+              posthog.capture(EVENTS.SKILL_RUN_CLICKED, {
+                skill: skill.slug,
+                source: "dashboard",
+                trigger: "manual",
+                layer: skill.layer,
+              })
+            }
+          >
+            <PlayIcon aria-hidden="true" className="size-3.5 fill-current" />
+            {ready ? "Run" : "Connect and run"}
+          </a>
+        </div>
+      </div>
+    </li>
+  );
+}
+
 /** Cadence, hour and the browser's zone; the API answers with the schedule
- * or the true reason it refused. */
+ * or the true reason it refused (SCRUM-225). */
 function ScheduleControl({
   slug,
   onCreated,
@@ -468,5 +716,142 @@ function ScheduleRow({
         </ul>
       )}
     </li>
+  );
+}
+
+/* ---------------------------------------------------------------------- */
+/* A user's own skill: the editor (SCRUM-226)                              */
+/* ---------------------------------------------------------------------- */
+
+const EMPTY: OwnSkill = {
+  slug: "",
+  title: "",
+  situation: "",
+  produces: "",
+  tools: [],
+  accounts: "single",
+  source: "---\nname: my-skill\ndescription: What this skill does, in one line.\n---\n\n# My skill\n\n1. ...\n",
+};
+
+/** The editor for a user's skill: the fields and a plain textarea for the
+ * file. Saves through POST (new) or PATCH (a new version of an existing
+ * one); the API's refusal is shown as it came, naming the field. */
+function SkillEditor({
+  initial,
+  onCancel,
+  onSaved,
+}: {
+  initial: OwnSkill | null;
+  onCancel: () => void;
+  onSaved: (skill: Parameters<typeof toItem>[0] & OwnSkill) => void;
+}) {
+  const [draft, setDraft] = useState<OwnSkill>(initial ?? EMPTY);
+  const [toolsText, setToolsText] = useState((initial?.tools ?? []).join(", "));
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const isNew = initial === null;
+
+  const save = async () => {
+    setBusy(true);
+    setError(null);
+    const tools = toolsText
+      .split(/[\s,]+/)
+      .map((t) => t.trim())
+      .filter(Boolean);
+    const payload = {
+      title: draft.title,
+      situation: draft.situation,
+      produces: draft.produces,
+      tools,
+      accounts: draft.accounts,
+      source: draft.source,
+    };
+    try {
+      const res = await fetch(isNew ? "/api/skills/own" : `/api/skills/own/${encodeURIComponent(draft.slug)}`, {
+        method: isNew ? "POST" : "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      const body = (await res.json().catch(() => ({}))) as ApiError & { skill?: Parameters<typeof toItem>[0] & OwnSkill };
+      if (!res.ok || !body.skill) {
+        setError(refusalText(res.status, body));
+        return;
+      }
+      onSaved(body.skill);
+    } catch {
+      setError("That did not save. Try again.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const field = (label: string, name: keyof OwnSkill, multiline = false) => (
+    <label className="block text-xs text-muted-foreground">
+      {label}
+      {multiline ? (
+        <textarea
+          name={name}
+          className="mt-1 block w-full rounded-md border border-border bg-background px-2 py-1 text-sm text-foreground"
+          rows={name === "source" ? 14 : 2}
+          value={draft[name] as string}
+          onChange={(e) => setDraft({ ...draft, [name]: e.target.value })}
+        />
+      ) : (
+        <input
+          name={name}
+          className="mt-1 block w-full rounded-md border border-border bg-background px-2 py-1 text-sm text-foreground"
+          value={draft[name] as string}
+          onChange={(e) => setDraft({ ...draft, [name]: e.target.value })}
+        />
+      )}
+    </label>
+  );
+
+  return (
+    <div className="space-y-3 rounded-2xl border border-border bg-background p-5">
+      <h2 className="font-display text-base font-semibold text-foreground">
+        {isNew ? "New skill" : `Edit your version: ${draft.title}`}
+      </h2>
+      {field("Title", "title")}
+      {field("The situation it is for", "situation")}
+      {field("What it produces", "produces", true)}
+      <label className="block text-xs text-muted-foreground">
+        Tools it uses, by name, comma separated
+        <input
+          name="tools"
+          className="mt-1 block w-full rounded-md border border-border bg-background px-2 py-1 text-sm text-foreground"
+          value={toolsText}
+          onChange={(e) => setToolsText(e.target.value)}
+        />
+      </label>
+      <label className="block text-xs text-muted-foreground">
+        Accounts
+        <select
+          name="accounts"
+          className="mt-1 block rounded-md border border-border bg-background px-2 py-1 text-sm text-foreground"
+          value={draft.accounts}
+          onChange={(e) => setDraft({ ...draft, accounts: e.target.value as OwnSkill["accounts"] })}
+        >
+          <option value="single">One account</option>
+          <option value="multiple">Several accounts</option>
+        </select>
+      </label>
+      {field("The skill file", "source", true)}
+      {error && <p className="text-xs text-destructive">{error}</p>}
+      <div className="flex items-center gap-3">
+        <button
+          type="button"
+          className="rounded-full bg-primary px-4 py-2 text-sm font-medium text-primary-foreground disabled:opacity-60"
+          disabled={busy}
+          onClick={() => void save()}
+        >
+          Save
+        </button>
+        <button type="button" className="text-xs text-muted-foreground underline-offset-4 hover:underline" onClick={onCancel}>
+          Cancel
+        </button>
+        <span className="text-xs text-muted-foreground">Every save is a new version; the previous one is kept.</span>
+      </div>
+    </div>
   );
 }

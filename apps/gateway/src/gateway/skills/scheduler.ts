@@ -90,7 +90,9 @@ export async function runDueSchedules(
     const due = await deps.store.claimDue(now);
     let ran = 0;
     for (const schedule of due) {
-      const skill = getSkillBySlug(schedule.skillSlug);
+      // The owner's own version wins the slug (SCRUM-226): a scheduled run of a
+      // forked skill runs the fork, the same as a manual run would.
+      const skill = await getSkillBySlug(schedule.skillSlug, schedule.userId);
       if (!skill) {
         // A schedule for a skill that left the catalogue: pause it with the
         // failure reason rather than run nothing forever in silence.

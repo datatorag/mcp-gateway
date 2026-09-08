@@ -92,9 +92,9 @@ describe("published skills stay on the public side of the boundary", () => {
    * beyond fixed sentences, service names and the addresses it was GIVEN, so
    * the file-level checks above cover what the wire carries. */
   it("the MCP apply text for every skill is the preface plus the verbatim run message", async () => {
-    const { getAllSkills, skillRunMessage } = await import("./skills");
+    const { readSkillFiles, skillRunMessage } = await import("./skills");
     const { skillApplyText } = await import("@/gateway/skills-catalogue");
-    for (const skill of getAllSkills()) {
+    for (const skill of readSkillFiles()) {
       const text = skillApplyText(skill, {
         connected: new Set(["google-workspace", "atlassian"]),
         accounts: [

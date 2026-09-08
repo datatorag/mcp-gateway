@@ -93,7 +93,7 @@ export default async function HomePage() {
   const playgroundHref = signedIn ? "/dashboard" : "/auth/login";
   // Authored order, first three. Adding a skill file does not silently change
   // the home page beyond that, and /skills stays the complete list.
-  const featuredSkills = getAllSkills().slice(0, 3);
+  const featuredSkills = (await getAllSkills()).slice(0, 3);
   // Same set as /skills/for/*, three of them for the grid. A subset, never
   // a card that exists only here.
   const homePersonas = getAllPersonas().slice(0, 3);

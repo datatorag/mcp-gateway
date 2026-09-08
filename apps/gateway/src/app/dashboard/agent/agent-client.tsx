@@ -48,7 +48,7 @@ export function AgentClient({
    * from the one catalogue: the services it needs and the run message the
    * catalogue composed. Runs once when every service is connected; otherwise
    * the empty state asks for the connect and returns here afterwards. */
-  seedSkill?: { slug: string; title: string; services: string[]; message: string } | null;
+  seedSkill?: { slug: string; title: string; layer: "published" | "yours"; services: string[]; message: string } | null;
   isDefaultView: boolean;
   landedFrom: AgentLandedFrom;
   /** The connection state as the server loaded it at render time

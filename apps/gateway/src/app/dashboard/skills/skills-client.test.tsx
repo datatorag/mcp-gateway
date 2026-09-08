@@ -36,6 +36,7 @@ const SKILLS = [
     situation: "Every morning I open three inboxes.",
     produces: "One brief.",
     services: ["google-workspace"],
+    layer: "published" as const,
   },
   {
     slug: "retro-page-to-jira-tickets",
@@ -43,8 +44,16 @@ const SKILLS = [
     situation: "The retro is in Confluence.",
     produces: "Tickets.",
     services: ["atlassian"],
+    layer: "published" as const,
   },
 ];
+
+function jsonResponse(body: unknown, status = 200) {
+  return { ok: status < 400, status, json: async () => body } as Response;
+}
+const fetchMock = vi.fn();
+const buttonNamed = (name: string) =>
+  Array.from(container.querySelectorAll("button")).find((b) => (b.textContent ?? "").trim() === name);
 
 describe("the dashboard skills list (SCRUM-223)", () => {
   it("renders every skill with a Run link to its deep link", () => {
@@ -95,6 +104,7 @@ describe("the dashboard skills list (SCRUM-223)", () => {
       skill: "morning-brief",
       source: "dashboard",
       trigger: "manual",
+      layer: "published",
     });
   });
 });
@@ -131,14 +141,6 @@ const SCHEDULE = {
     },
   ],
 };
-
-function jsonResponse(body: unknown, status = 200) {
-  return { ok: status < 400, status, json: async () => body } as Response;
-}
-
-const fetchMock = vi.fn();
-const buttonNamed = (name: string) =>
-  Array.from(container.querySelectorAll("button")).find((b) => (b.textContent ?? "").trim() === name);
 
 describe("schedules on the skills page (SCRUM-225)", () => {
   beforeEach(() => {
@@ -197,6 +199,8 @@ describe("schedules on the skills page (SCRUM-225)", () => {
     act(() => {
       root.render(<SkillsClient connected={["google-workspace"]} skills={SKILLS} schedules={[SCHEDULE]} />);
     });
+    // The first Delete on the page is the schedule's; the cards are published
+    // and offer Fork, not Delete.
     await act(async () => {
       buttonNamed("Delete")!.click();
     });
@@ -246,5 +250,131 @@ describe("schedules on the skills page (SCRUM-225)", () => {
       buttonNamed("Save schedule")!.click();
     });
     expect(container.textContent).toContain("Connect Google Workspace first");
+  });
+});
+
+/* SCRUM-226: a user's own skills on the same page. Every card says which
+ * layer it is; a published card offers Fork; the user's own cards offer Edit
+ * and Delete behind a confirmation that says, for a shadow, that the
+ * published one comes back. Every change goes through the API and the page
+ * re-renders from its answer. */
+const PUBLISHED = { ...SKILLS[0]!, layer: "published" as const };
+const MINE = {
+  slug: "morning-brief",
+  title: "Get a morning brief",
+  situation: "Every morning I open three inboxes.",
+  produces: "One brief, my way.",
+  services: ["google-workspace"],
+  layer: "yours" as const,
+  forkedFrom: { slug: "morning-brief", version: "0123456789abcdef" },
+};
+
+describe("user-owned skills on the skills page (SCRUM-226)", () => {
+  beforeEach(() => {
+    fetchMock.mockReset();
+    vi.stubGlobal("fetch", fetchMock);
+  });
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("says which layer each card is", () => {
+    act(() => {
+      root.render(
+        <SkillsClient connected={["google-workspace"]} skills={[PUBLISHED, { ...SKILLS[1]!, layer: "published" }]} />
+      );
+    });
+    expect(container.textContent).toContain("Published");
+    expect(container.textContent).not.toContain("Your version");
+    act(() => {
+      root.unmount();
+      root = createRoot(container);
+      root.render(<SkillsClient connected={["google-workspace"]} skills={[PUBLISHED, { ...MINE, slug: "draft-sweep" }]} />);
+    });
+    expect(container.textContent).toContain("Your version");
+  });
+
+  it("forks a published skill through the API and the card becomes yours", async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse({ skill: MINE }, 201));
+    act(() => {
+      root.render(<SkillsClient connected={["google-workspace"]} skills={[PUBLISHED]} />);
+    });
+    await act(async () => {
+      buttonNamed("Fork")!.click();
+    });
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/skills/fork",
+      expect.objectContaining({ method: "POST", body: JSON.stringify({ slug: "morning-brief" }) })
+    );
+    expect(container.textContent).toContain("Your version");
+    expect(buttonNamed("Fork")).toBeUndefined();
+    expect(capture).toHaveBeenCalledWith("skill_forked", expect.objectContaining({ skill: "morning-brief", source: "dashboard" }));
+  });
+
+  it("deletes a shadow only after a confirmation that says the published skill comes back", async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse({ slug: "morning-brief", shadowed: true }));
+    act(() => {
+      root.render(<SkillsClient connected={["google-workspace"]} skills={[MINE]} />);
+    });
+    await act(async () => {
+      buttonNamed("Delete")!.click();
+    });
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(container.textContent).toContain("the published skill comes back");
+    await act(async () => {
+      buttonNamed("Yes, delete")!.click();
+    });
+    expect(fetchMock).toHaveBeenCalledWith("/api/skills/own/morning-brief", expect.objectContaining({ method: "DELETE" }));
+    expect(container.textContent).not.toContain("Your version");
+  });
+
+  it("edits through the API and shows the saved version", async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse({ skill: { ...MINE, produces: "One brief, updated." } }));
+    fetchMock.mockResolvedValueOnce(jsonResponse({ skill: { ...MINE, produces: "One brief, updated.", source: "---\nname: morning-brief\n---\n", tools: ["gmail_list"] } }));
+    act(() => {
+      root.render(<SkillsClient connected={["google-workspace"]} skills={[MINE]} />);
+    });
+    await act(async () => {
+      buttonNamed("Edit")!.click();
+    });
+    const produces = container.querySelector('textarea[name="produces"], input[name="produces"]') as HTMLInputElement;
+    expect(produces).toBeTruthy();
+    await act(async () => {
+      buttonNamed("Save")!.click();
+    });
+    const call = fetchMock.mock.calls.find(
+      ([url, init]) => url === "/api/skills/own/morning-brief" && (init as RequestInit | undefined)?.method === "PATCH"
+    );
+    expect(call).toBeTruthy();
+    expect(container.textContent).toContain("One brief, updated.");
+  });
+
+  it("shows the API's refusal on a save, naming the field", async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse({ skill: { ...MINE, source: "---\n", tools: ["gmail_list"] } }));
+    fetchMock.mockResolvedValueOnce(jsonResponse({ error: "invalid", field: "tools", message: "unknown tool: gmail_teleport" }, 400));
+    act(() => {
+      root.render(<SkillsClient connected={["google-workspace"]} skills={[MINE]} />);
+    });
+    await act(async () => {
+      buttonNamed("Edit")!.click();
+    });
+    await act(async () => {
+      buttonNamed("Save")!.click();
+    });
+    expect(container.textContent).toContain("unknown tool: gmail_teleport");
+  });
+
+  it("creates a new skill from the New skill form", async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse({ skill: { ...MINE, slug: "draft-sweep", title: "Sweep my drafts" } }, 201));
+    act(() => {
+      root.render(<SkillsClient connected={["google-workspace"]} skills={[PUBLISHED]} />);
+    });
+    await act(async () => {
+      buttonNamed("New skill")!.click();
+    });
+    await act(async () => {
+      buttonNamed("Save")!.click();
+    });
+    expect(fetchMock).toHaveBeenCalledWith("/api/skills/own", expect.objectContaining({ method: "POST" }));
+    expect(container.textContent).toContain("Sweep my drafts");
+    expect(capture).toHaveBeenCalledWith("skill_created", expect.objectContaining({ skill: "draft-sweep", source: "dashboard" }));
   });
 });

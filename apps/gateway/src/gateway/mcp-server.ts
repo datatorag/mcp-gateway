@@ -17,7 +17,9 @@ import {
   topResultKind,
 } from "./skills-catalogue";
 import { listConnectedServiceIds } from "./connected-services";
-import { trackSkillApplied, trackSkillSearched } from "./track";
+import { trackSkillApplied, trackSkillEvent, trackSkillSearched } from "./track";
+import { EVENTS } from "../lib/analytics";
+import { createUserSkill, deleteUserSkill, forkSkill, updateUserSkill, type WriteResult } from "./skills/catalogue-store";
 import { eq, and } from "drizzle-orm";
 import type { Database } from "@datatorag-mcp/db";
 import { mcpServers, pluginConnections } from "@datatorag-mcp/db";
@@ -69,6 +71,47 @@ export function connectionFailureService(text: string): string | null {
   }
   const m = /\/dashboard\/connections\/([a-z0-9-]+)/.exec(text);
   return m?.[1] ?? "unknown";
+}
+
+/** The fields a user's skill is saved from (SCRUM-226); one definition for
+ * skills_create and skills_update. */
+const SKILL_FIELDS = {
+  title: { type: "string", description: "Query-shaped, like a published skill's title." },
+  situation: { type: "string", description: "The problem, in your words. Optional." },
+  produces: { type: "string", description: "What the run produces. Optional." },
+  source: { type: "string", description: "The skill file itself, markdown with frontmatter." },
+  tools: { type: "array", items: { type: "string" }, description: "The tools it uses, by name." },
+  accounts: { type: "string", enum: ["single", "multiple"], description: "Optional; single by default." },
+} as const;
+
+/** The answer to a write: the saved skill's identity, or the reason it was
+ * refused in plain words, never an error. */
+function writeAnswer(result: WriteResult, verb: string): string {
+  if (result.ok) {
+    return JSON.stringify({
+      [verb]: true,
+      slug: result.skill.slug,
+      version: result.skill.version,
+      layer: result.skill.layer,
+      title: result.skill.title,
+      forkedFrom: result.skill.forkedFrom,
+      note:
+        result.skill.layer === "yours"
+          ? "This is your version. It runs in place of any published skill with the same slug, for you only."
+          : undefined,
+    });
+  }
+  switch (result.reason) {
+    case "invalid":
+      return `Not ${verb}: ${result.field}: ${result.error}.`;
+    case "cap":
+      return `Not ${verb}: you already have ${result.cap} skills of your own, which is the limit. Delete one first.`;
+    case "exists":
+      return `Not ${verb}: you already have your version of that skill. Update it with skills_update, or delete it to start again.`;
+    case "not_found":
+    default:
+      return `No skill of yours by that slug${verb === "forked" ? ", and no published skill either" : ""}. Call skills_search to see what you have.`;
+  }
 }
 
 type BuiltinResult = {
@@ -135,7 +178,7 @@ export const BUILT_IN_TOOLS: {
     handler: async (args, { db, userId }) => {
       const query = typeof args?.query === "string" ? args.query : null;
       const [matches, connected] = await Promise.all([
-        Promise.resolve(searchSkills(query)),
+        searchSkills(userId, query),
         listConnectedServiceIds(db, userId),
       ]);
       // Search text is user content: the event carries its length, the
@@ -177,7 +220,7 @@ export const BUILT_IN_TOOLS: {
       },
     },
     handler: async (args, { db, userId, connectionsUrl }) => {
-      const skill = findSkill(args?.slug);
+      const skill = await findSkill(userId, args?.slug);
       if (!skill) {
         // Not an error: a model that guessed a slug gets the real list, the
         // same way an empty search would, and nothing is applied or counted.
@@ -186,8 +229,8 @@ export const BUILT_IN_TOOLS: {
             {
               type: "text" as const,
               text:
-                `No published skill named ${JSON.stringify(echoName(args?.slug))}. Available slugs: ` +
-                getAllSkills()
+                `No skill named ${JSON.stringify(echoName(args?.slug))}, published or yours. Available slugs: ` +
+                (await getAllSkills(userId))
                   .map((s) => s.slug)
                   .join(", ") +
                 ". Call skills_search to see what each one does.",
@@ -203,6 +246,106 @@ export const BUILT_IN_TOOLS: {
         runnable: applied.runnable,
       });
       return { content: [{ type: "text" as const, text: applied.text }] };
+    },
+  },
+  /* A USER'S OWN SKILLS (SCRUM-226). Four write built-ins, declared write so
+   * the agent prompts before them, sharing the store's functions with the
+   * dashboard routes. A refusal is a plain answer the model can act on (the
+   * field, the cap, the missing skill), never an error: the same shape
+   * skills_get uses for an unknown slug. Every change reports its event. */
+  {
+    approval: "write",
+    definition: {
+      name: "skills_create",
+      description:
+        "Save a new skill of your own: a routine the agent can run for you on your connected accounts. Private to you. Takes the title, the situation it is for, what it produces, the skill file (markdown, the same shape as a published skill), the tools it uses, and whether it runs on a single account or multiple. Answers with the slug and version.",
+      inputSchema: {
+        type: "object" as const,
+        properties: SKILL_FIELDS,
+        required: ["title", "source", "tools"],
+      },
+    },
+    handler: async (args, { db, userId }) => {
+      const result = await createUserSkill(db, userId, args ?? {});
+      if (result.ok) {
+        void trackSkillEvent(db, userId, EVENTS.SKILL_CREATED, { skill: result.skill.slug, via: "tool" });
+      }
+      return { content: [{ type: "text" as const, text: writeAnswer(result, "created") }] };
+    },
+  },
+  {
+    approval: "write",
+    definition: {
+      name: "skills_update",
+      description:
+        "Save a new version of one of your own skills. Every save is a new immutable version; the previous one is kept. Takes the slug and the same fields as skills_create. A published skill cannot be edited: fork it first with skills_fork.",
+      inputSchema: {
+        type: "object" as const,
+        properties: { slug: { type: "string", description: "The slug of your skill." }, ...SKILL_FIELDS },
+        required: ["slug", "title", "source", "tools"],
+      },
+    },
+    handler: async (args, { db, userId }) => {
+      const slug = typeof args?.slug === "string" ? args.slug : "";
+      const result = await updateUserSkill(db, userId, slug, args ?? {});
+      if (result.ok) {
+        void trackSkillEvent(db, userId, EVENTS.SKILL_UPDATED, { skill: result.skill.slug, via: "tool" });
+      }
+      return { content: [{ type: "text" as const, text: writeAnswer(result, "updated") }] };
+    },
+  },
+  {
+    approval: "write",
+    definition: {
+      name: "skills_fork",
+      description:
+        "Copy a published skill into your own skills, keeping its slug, so your version runs in its place for you. Records which published version it came from. Edit the copy with skills_update; delete it with skills_delete to get the published one back.",
+      inputSchema: {
+        type: "object" as const,
+        properties: { slug: { type: "string", description: "The published skill's slug, from skills_search." } },
+        required: ["slug"],
+      },
+    },
+    handler: async (args, { db, userId }) => {
+      const slug = typeof args?.slug === "string" ? args.slug : "";
+      const result = await forkSkill(db, userId, slug);
+      if (result.ok) {
+        void trackSkillEvent(db, userId, EVENTS.SKILL_FORKED, { skill: result.skill.slug, via: "tool" });
+      }
+      return { content: [{ type: "text" as const, text: writeAnswer(result, "forked") }] };
+    },
+  },
+  {
+    approval: "write",
+    definition: {
+      name: "skills_delete",
+      description:
+        "Delete one of your own skills. If it was your version of a published skill, the published one is available to you again.",
+      inputSchema: {
+        type: "object" as const,
+        properties: { slug: { type: "string", description: "The slug of your skill." } },
+        required: ["slug"],
+      },
+    },
+    handler: async (args, { db, userId }) => {
+      const slug = typeof args?.slug === "string" ? args.slug : "";
+      const deleted = await deleteUserSkill(db, userId, slug);
+      if (!deleted) {
+        return {
+          content: [{ type: "text" as const, text: `No skill of yours named ${JSON.stringify(echoName(slug))}. Call skills_search to see your skills.` }],
+        };
+      }
+      void trackSkillEvent(db, userId, EVENTS.SKILL_DELETED, { skill: deleted.slug, via: "tool", shadowed: deleted.shadowed });
+      return {
+        content: [
+          {
+            type: "text" as const,
+            text: deleted.shadowed
+              ? `Deleted your version of ${deleted.slug}. The published skill is available to you again.`
+              : `Deleted your skill ${deleted.slug}.`,
+          },
+        ],
+      };
     },
   },
   {
@@ -293,7 +436,7 @@ async function applySkillFor(
   account: unknown,
   connectionsUrl: string
 ): Promise<{ text: string; runnable: boolean }> {
-  const skill = findSkill(slug)!;
+  const skill = (await findSkill(userId, slug))!;
   const [connected, accounts] = await Promise.all([
     listConnectedServiceIds(db, userId),
     listConnectedAccounts(db, userId),
@@ -357,7 +500,7 @@ export function createMcpServer(
   const clientName = () => server.getClientVersion()?.name ?? null;
 
   server.setRequestHandler(ListPromptsRequestSchema, async () => ({
-    prompts: getAllSkills().map((skill) => ({
+    prompts: (await getAllSkills(userId)).map((skill) => ({
       name: skill.slug,
       title: skill.title,
       description: `${skill.situation} ${skill.produces}`,
@@ -374,7 +517,7 @@ export function createMcpServer(
 
   server.setRequestHandler(GetPromptRequestSchema, async (request) => {
     const { name, arguments: args } = request.params;
-    const skill = findSkill(name);
+    const skill = await findSkill(userId, name);
     if (!skill) {
       // A prompt name is an identifier into the one catalogue; an unknown one
       // is a client error, never a guess.

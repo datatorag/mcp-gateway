@@ -9,7 +9,7 @@ import {
   type RunStatus,
   type ScheduleCadence,
 } from "@datatorag-mcp/db";
-import { getSkillBySlug, servicesFor } from "@/lib/skills";
+import { getAllSkills, getSkillBySlug, servicesFor } from "@/lib/skills";
 import { listConnectedServiceIds } from "../connected-services";
 import { isValidTimezone, nextRunAt } from "./schedule-time";
 
@@ -97,11 +97,17 @@ export function validateScheduleInput(
 
 type ScheduleRecord = typeof skillSchedules.$inferSelect;
 
-function toView(row: ScheduleRecord, runs: RunView[]): ScheduleView {
+/** Titles as the viewer sees them: their own version's title wins the slug
+ * (SCRUM-226), the same rule every other surface applies. */
+async function titlesFor(userId: string): Promise<Map<string, string>> {
+  return new Map((await getAllSkills(userId)).map((s) => [s.slug, s.title]));
+}
+
+function toView(row: ScheduleRecord, runs: RunView[], titles: ReadonlyMap<string, string>): ScheduleView {
   return {
     id: row.id,
     skillSlug: row.skillSlug,
-    title: getSkillBySlug(row.skillSlug)?.title ?? row.skillSlug,
+    title: titles.get(row.skillSlug) ?? row.skillSlug,
     cadence: row.cadence,
     hour: row.hour,
     minute: row.minute,
@@ -148,11 +154,8 @@ export async function listSchedulesForUser(db: Database, userId: string): Promis
     .from(skillSchedules)
     .where(eq(skillSchedules.userId, userId))
     .orderBy(skillSchedules.createdAt);
-  const history = await historyFor(
-    db,
-    rows.map((r) => r.id)
-  );
-  return rows.map((r) => toView(r, history.get(r.id) ?? []));
+  const [history, titles] = await Promise.all([historyFor(db, rows.map((r) => r.id)), titlesFor(userId)]);
+  return rows.map((r) => toView(r, history.get(r.id) ?? [], titles));
 }
 
 export type CreateResult =
@@ -170,7 +173,7 @@ export async function createSchedule(
   input: ScheduleInput,
   now: Date = new Date()
 ): Promise<CreateResult> {
-  const skill = getSkillBySlug(input.slug);
+  const skill = await getSkillBySlug(input.slug, userId);
   if (!skill) return { ok: false, reason: "unknown_skill" };
   const connected = await listConnectedServiceIds(db, userId);
   const missing = servicesFor(skill).filter((s) => !connected.has(s));
@@ -199,7 +202,7 @@ export async function createSchedule(
         updatedAt: now,
       })
       .returning();
-    return { ok: true, schedule: toView(row!, []) };
+    return { ok: true, schedule: toView(row!, [], new Map([[skill.slug, skill.title]])) };
   } catch (err) {
     // The unique key caught a race the pre-check did not; same answer.
     if ((err as { code?: string })?.code === "23505") return { ok: false, reason: "exists" };
@@ -238,8 +241,8 @@ export async function setSchedulePaused(
     .where(and(eq(skillSchedules.id, id), eq(skillSchedules.userId, userId)))
     .returning();
   if (!updated) return null;
-  const history = await historyFor(db, [id]);
-  return toView(updated, history.get(id) ?? []);
+  const [history, titles] = await Promise.all([historyFor(db, [id]), titlesFor(userId)]);
+  return toView(updated, history.get(id) ?? [], titles);
 }
 
 export async function deleteSchedule(

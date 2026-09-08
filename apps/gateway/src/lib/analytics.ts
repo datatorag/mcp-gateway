@@ -46,6 +46,11 @@ export const EVENTS = {
   SKILL_SCHEDULE_RESUMED: "skill_schedule_resumed",
   SKILL_SCHEDULE_DELETED: "skill_schedule_deleted",
   SKILL_RUN_FINISHED: "skill_run_finished",
+  /** User-owned skills (SCRUM-226). */
+  SKILL_CREATED: "skill_created",
+  SKILL_UPDATED: "skill_updated",
+  SKILL_FORKED: "skill_forked",
+  SKILL_DELETED: "skill_deleted",
   MCP_REQUEST_RECEIVED: "mcp_request_received",
   MCP_SESSION_INITIALIZED: "mcp_session_initialized",
   MCP_AUTH_FAILED: "mcp_auth_failed",

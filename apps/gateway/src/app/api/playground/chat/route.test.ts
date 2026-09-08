@@ -93,7 +93,7 @@ vi.mock("@mastra/ai-sdk", () => ({
 
 import { mintRunId } from "@/gateway/playground/run-ownership";
 import { USER_ID_CONTEXT_KEY } from "@/mastra/mcp/client";
-import { getSkillBySlug, skillRunMessage } from "@/lib/skills";
+import { readSkillFiles, skillRunMessage } from "@/lib/skills";
 import { POST } from "./route";
 
 const USER = "user-1";
@@ -306,7 +306,7 @@ describe("POST /api/playground/chat — the turn cap", () => {
    * catalogue does not know is dropped, never echoed: the event must not be
    * able to claim a skill that does not exist. */
   it("stamps a valid skill slug and its trigger on the run event when the turn IS the skill's run message", async () => {
-    const skill = getSkillBySlug("morning-brief")!;
+    const skill = readSkillFiles().find((s) => s.slug === "morning-brief")!;
     const turn = [{ id: "u1", role: "user", parts: [{ type: "text", text: skillRunMessage(skill) }] }];
     await drain(
       await POST(post({ messages: turn, skill: "morning-brief", skillTrigger: "manual" }))
@@ -319,7 +319,7 @@ describe("POST /api/playground/chat — the turn cap", () => {
   });
 
   it("the exact text beside a NON-TEXT part is an ordinary turn too", async () => {
-    const skill = getSkillBySlug("morning-brief")!;
+    const skill = readSkillFiles().find((s) => s.slug === "morning-brief")!;
     const turn = [
       {
         id: "u1",

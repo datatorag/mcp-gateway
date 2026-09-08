@@ -21,8 +21,8 @@ export const metadata: Metadata = {
   },
 };
 
-export default function SkillsIndexPage() {
-  const skills = getAllSkills();
+export default async function SkillsIndexPage() {
+  const skills = await getAllSkills();
   const personas = getAllPersonas();
 
   return (

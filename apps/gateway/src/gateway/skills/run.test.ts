@@ -1,5 +1,5 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
-import { getSkillBySlug } from "@/lib/skills";
+import { readSkillFiles } from "@/lib/skills";
 import { classifyRun, runSchedule, MAX_CONSECUTIVE_FAILURES, type RunDeps } from "./run";
 import { memoryScheduleStore, type ScheduleRow } from "./store";
 
@@ -8,7 +8,7 @@ import { memoryScheduleStore, type ScheduleRow } from "./store";
  * the in-memory one, so every branch of the outcome table is pinned here
  * without a model or a database. */
 
-const skill = getSkillBySlug("morning-brief")!;
+const skill = readSkillFiles().find((s) => s.slug === "morning-brief")!;
 const NOW = new Date("2026-09-09T14:00:00Z");
 
 function schedule(over: Partial<ScheduleRow> = {}): ScheduleRow {

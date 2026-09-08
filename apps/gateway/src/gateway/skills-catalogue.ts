@@ -40,6 +40,8 @@ export type SkillNeed = { service: string; name: string; connected: boolean };
 export type SkillSummary = {
   slug: string;
   title: string;
+  /** "published" or "yours" (SCRUM-226). */
+  layer: Skill["layer"];
   situation: string;
   produces: string;
   tools: string[];
@@ -61,6 +63,7 @@ export function skillSummary(skill: Skill, connected: ReadonlySet<string>): Skil
   return {
     slug: skill.slug,
     title: skill.title,
+    layer: skill.layer,
     situation: skill.situation,
     produces: skill.produces,
     tools: skill.tools,
@@ -71,8 +74,8 @@ export function skillSummary(skill: Skill, connected: ReadonlySet<string>): Skil
 
 /** Case-insensitive substring search over title, situation, produces, slug
  * and tool names. An empty query is the whole catalogue, in authored order. */
-export function searchSkills(query: string | undefined | null): Skill[] {
-  const all = getAllSkills();
+export async function searchSkills(viewer: string | null, query: string | undefined | null): Promise<Skill[]> {
+  const all = await getAllSkills(viewer);
   const q = (query ?? "").trim().toLowerCase();
   if (!q) return all;
   return all.filter((skill) =>
@@ -103,7 +106,13 @@ export function skillApplyText(
     connectionsUrl: string;
   }
 ): string {
-  const lines: string[] = [];
+  // Which layer is running, said first (per HQ decision): a fork shadows
+  // the published skill for its owner, and every surface names which one.
+  const lines: string[] = [
+    skill.layer === "yours"
+      ? `This is your version of the skill${skill.forkedFrom ? ", forked from the published one" : ""}.`
+      : "This is the published skill.",
+  ];
   for (const need of skillNeeds(skill, opts.connected)) {
     if (!need.connected) {
       lines.push(
@@ -153,6 +162,6 @@ export function topResultKind(matches: readonly Skill[]): "published" | null {
   return matches.length > 0 ? "published" : null;
 }
 
-export function findSkill(slug: unknown): Skill | null {
-  return typeof slug === "string" ? getSkillBySlug(slug) : null;
+export async function findSkill(viewer: string | null, slug: unknown): Promise<Skill | null> {
+  return typeof slug === "string" ? getSkillBySlug(slug, viewer) : null;
 }

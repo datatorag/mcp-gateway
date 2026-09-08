@@ -219,9 +219,11 @@ function firstUserMessageText(messages: unknown[]): string | null {
  * background run. Attribution follows the same rule, so a skill event can
  * only ever describe a real skill run.
  */
-function isSkillRunTurn(messages: unknown[], slug: unknown): boolean {
+async function isSkillRunTurn(messages: unknown[], slug: unknown, viewer: string): Promise<boolean> {
   if (typeof slug !== "string") return false;
-  const skill = getSkillBySlug(slug);
+  // The viewer's own version wins the slug (SCRUM-226), so a user who forked
+  // a skill runs their fork, and the exact-message check is against it.
+  const skill = await getSkillBySlug(slug, viewer);
   if (!skill) return false;
   const last = messages[messages.length - 1] as
     | { role?: unknown; parts?: unknown }
@@ -269,7 +271,7 @@ export const POST = withRoute(async (userId, request) => {
    * sees is in `messages` like any other turn. The client sends the trigger
    * under `skillTrigger` because `trigger` already means something else on
    * this body (the AI SDK's submit/regenerate). */
-  const skillSlug = isSkillRunTurn(messages, body?.skill) ? (body!.skill as string) : null;
+  const skillSlug = (await isSkillRunTurn(messages, body?.skill, userId)) ? (body!.skill as string) : null;
   const skillTrigger =
     skillSlug && (body?.skillTrigger === "manual" || body?.skillTrigger === "scheduled")
       ? body.skillTrigger

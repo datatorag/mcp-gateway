@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { getAllPersonas, skillsForPersona } from "./personas";
-import { getAllSkills } from "./skills";
+import { readSkillFiles } from "./skills";
 
 /** A persona is a claim about who something is for. The invariants here are
  * the ones that keep it from becoming a claim with nothing behind it. */
@@ -17,7 +17,7 @@ describe("personas", () => {
       // The failure this catches is a page rendering with a hole in it: a
       // typo'd slug drops silently at render time, so the test is the only
       // place it is visible.
-      const shipped = new Set(getAllSkills().map((s) => s.slug));
+      const shipped = new Set(readSkillFiles().map((s) => s.slug));
       const dangling = persona.skillSlugs.filter((s) => !shipped.has(s));
       expect(dangling, `${persona.slug} references unshipped skills`).toEqual([]);
     }
@@ -25,8 +25,8 @@ describe("personas", () => {
 
   it.each(personas.map((p) => [p.slug, p] as const))(
     "%s resolves to a non-empty skill list",
-    (_slug, persona) => {
-      expect(skillsForPersona(persona).length).toBeGreaterThan(0);
+    async (_slug, persona) => {
+      expect((await skillsForPersona(persona)).length).toBeGreaterThan(0);
     }
   );
 
@@ -52,7 +52,7 @@ describe("personas", () => {
    * different taxonomies, which is the problem the layer was built to fix. */
   it("covers every skill at least once", () => {
     const referenced = new Set(personas.flatMap((p) => p.skillSlugs));
-    const orphans = getAllSkills()
+    const orphans = readSkillFiles()
       .map((s) => s.slug)
       .filter((slug) => !referenced.has(slug));
     expect(orphans, "skills no persona routes anyone to").toEqual([]);
