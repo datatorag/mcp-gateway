@@ -26,6 +26,15 @@ import { drizzleScheduleStore } from "./store";
 
 let inFlight = false;
 
+/**
+ * The runner's real dependencies. `over` exists for tests and for nothing
+ * else: it can replace `baseUrl`, which is the allowlist the run email
+ * anchors, so it must never be reachable from a request. It is not: this
+ * module is imported by `server.ts` (the cron entrypoint, which passes only
+ * the database) and by its own tests, and `scheduler.test.ts` asserts both
+ * facts against the source tree so a future importer under `src/app` fails
+ * the suite.
+ */
 export function buildRunDeps(db: Database, over: Partial<RunDeps> = {}): RunDeps {
   const env = getEnv();
   return {
