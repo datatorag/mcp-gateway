@@ -13,6 +13,8 @@ import {
   searchSkills,
   skillApplyText,
   skillSummary,
+  echoName,
+  topResultKind,
 } from "./skills-catalogue";
 import { listConnectedServiceIds } from "./connected-services";
 import { trackSkillApplied, trackSkillSearched } from "./track";
@@ -114,7 +116,14 @@ export const BUILT_IN_TOOLS: {
         Promise.resolve(searchSkills(query)),
         listConnectedServiceIds(db, userId),
       ]);
-      void trackSkillSearched(db, userId, { query, results: matches.length, surface: "mcp" });
+      // Search text is user content: the event carries its length, the
+      // result count and the top result's kind, never the string.
+      void trackSkillSearched(db, userId, {
+        queryLength: (query ?? "").length,
+        results: matches.length,
+        topResult: topResultKind(matches),
+        surface: "mcp",
+      });
       return {
         content: [
           {
@@ -155,7 +164,7 @@ export const BUILT_IN_TOOLS: {
             {
               type: "text" as const,
               text:
-                `No published skill named ${JSON.stringify(args?.slug ?? null)}. Available slugs: ` +
+                `No published skill named ${JSON.stringify(echoName(args?.slug))}. Available slugs: ` +
                 getAllSkills()
                   .map((s) => s.slug)
                   .join(", ") +
@@ -347,7 +356,7 @@ export function createMcpServer(
     if (!skill) {
       // A prompt name is an identifier into the one catalogue; an unknown one
       // is a client error, never a guess.
-      throw new McpError(ErrorCode.InvalidParams, `Unknown prompt: ${name}`);
+      throw new McpError(ErrorCode.InvalidParams, `Unknown prompt: ${JSON.stringify(echoName(name))}`);
     }
     const applied = await applySkillFor(db, userId, skill.slug, args?.account, connectionsUrl);
     void trackSkillApplied(db, userId, {
@@ -481,7 +490,7 @@ export function createMcpServer(
     if (separatorIndex === -1) {
       return {
         content: [
-          { type: "text" as const, text: `Unknown tool: ${name}` },
+          { type: "text" as const, text: `Unknown tool: ${JSON.stringify(echoName(name))}` },
         ],
         isError: true,
       };
@@ -506,7 +515,7 @@ export function createMcpServer(
         content: [
           {
             type: "text" as const,
-            text: `Unknown server: ${serverSlug}`,
+            text: `Unknown server: ${JSON.stringify(echoName(serverSlug))}`,
           },
         ],
         isError: true,
@@ -549,7 +558,7 @@ export function createMcpServer(
       accountEmail = resolved?.accountEmail ?? requestedAccount;
       if (!userToken) {
         const msg = requestedAccount
-          ? `No connected account found for ${requestedAccount}. Please connect it from the dashboard at ${grantFixUrl}.`
+          ? `No connected account found for ${echoName(requestedAccount)}. Please connect it from the dashboard at ${grantFixUrl}.`
           : `${requiredService} is not connected. Please connect it from the dashboard at ${grantFixUrl} before using ${serverSlug} tools.`;
         return {
           content: [{ type: "text" as const, text: msg }],
@@ -738,7 +747,7 @@ export function createMcpServer(
         content: [
           {
             type: "text" as const,
-            text: `Error calling ${serverSlug}/${toolName}: ${message}`,
+            text: `Error calling ${echoName(serverSlug)}/${echoName(toolName)}: ${message}`,
           },
         ],
         isError: true,

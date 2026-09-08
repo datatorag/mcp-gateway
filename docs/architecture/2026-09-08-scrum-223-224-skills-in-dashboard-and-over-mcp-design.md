@@ -109,7 +109,7 @@ neither holds any content of its own.
 
 ### Instrumented like the dashboard
 
-`skill_searched` (`query`, result count) and `skill_applied` (`skill`, `surface:
+`skill_searched` (query length, result count and the top result's kind; never the query text, which is user content) and `skill_applied` (`skill`, `surface:
 mcp`, `via: prompt | tool`), server-side with the session's user, so an MCP-surface
 run can be attributed to a skill the same way a dashboard run can. The tool calls
 that follow are already `tool_call` events on the same user and client.

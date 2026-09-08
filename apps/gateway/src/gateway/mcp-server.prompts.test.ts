@@ -134,6 +134,19 @@ describe("prompts: the catalogue for clients that render prompts", () => {
     await expect(client.getPrompt({ name: "no-such-skill", arguments: {} })).rejects.toThrow();
   });
 
+  it("never reflects an arbitrary-length prompt name back: capped and stripped of control characters", async () => {
+    const client = await connectedClient();
+    const name = "x".repeat(40) + String.fromCharCode(27) + "[31m" + "y".repeat(400);
+    const err = await client.getPrompt({ name, arguments: {} }).catch((e: unknown) => e);
+    const message = String((err as Error).message);
+    expect(message).toContain("Unknown prompt");
+    expect(message).not.toContain(name);
+    expect(message).not.toMatch(/[\u0000-\u001f\u007f]/);
+    // Exactly the first 64 printable characters, then the cut marker.
+    expect(message).toContain(`"${"x".repeat(40)}[31m${"y".repeat(20)}..."`);
+    expect(message.length).toBeLessThan(200);
+  });
+
   it("emits skill_applied via prompt, with the slug", async () => {
     const client = await connectedClient();
     await client.getPrompt({ name: "morning-brief", arguments: {} });
@@ -162,10 +175,36 @@ describe("tools: the same catalogue for clients that render tools only", () => {
     expect(brief.needs).toEqual([
       { service: "google-workspace", name: "Google Workspace", connected: true },
     ]);
+    // Search text is user content and never reaches analytics: the event
+    // carries the query's length, the result count and the top result's kind.
     expect(trackSkillSearched).toHaveBeenCalledWith(
       dbMock,
       "user-1",
-      expect.objectContaining({ query: "morning", results: parsed.skills.length, surface: "mcp" })
+      expect.objectContaining({
+        queryLength: 7,
+        results: parsed.skills.length,
+        topResult: "published",
+        surface: "mcp",
+      })
+    );
+    const props = trackSkillSearched.mock.calls[0]![2] as Record<string, unknown>;
+    expect(props).not.toHaveProperty("query");
+    expect(JSON.stringify(props)).not.toContain("morning");
+  });
+
+  it("skill_searched with no query and no match reports zero length and a null top result", async () => {
+    const client = await connectedClient();
+    await client.callTool({ name: "skills_search", arguments: {} });
+    expect(trackSkillSearched).toHaveBeenLastCalledWith(
+      dbMock,
+      "user-1",
+      expect.objectContaining({ queryLength: 0, topResult: "published" })
+    );
+    await client.callTool({ name: "skills_search", arguments: { query: "zz-no-such-thing-zz" } });
+    expect(trackSkillSearched).toHaveBeenLastCalledWith(
+      dbMock,
+      "user-1",
+      expect.objectContaining({ queryLength: 19, results: 0, topResult: null })
     );
   });
 
@@ -190,5 +229,40 @@ describe("tools: the same catalogue for clients that render tools only", () => {
     const text = (res.content as Array<{ type: string; text: string }>)[0]!.text;
     expect(text).toContain("morning-brief");
     expect(trackSkillApplied).not.toHaveBeenCalled();
+  });
+
+  it("an unknown tool name and an unknown server slug reflect through the same cap", async () => {
+    const client = await connectedClient();
+    const long = "t".repeat(300);
+    const noSep = await client.callTool({ name: long, arguments: {} });
+    const noSepText = (noSep.content as Array<{ type: string; text: string }>)[0]!.text;
+    expect(noSep.isError).toBe(true);
+    expect(noSepText).toContain("Unknown tool");
+    expect(noSepText).not.toContain(long);
+    expect(noSepText).toContain("t".repeat(64) + "...");
+    // The server lookup runs before the unknown-server answer, so this leg
+    // needs a database that finds nothing.
+    const emptySelect = { from: () => ({ where: () => ({ limit: async () => [] }) }) };
+    const dbEmpty = { select: () => emptySelect } as unknown as Database;
+    const server = createMcpServer("user-1", dbEmpty, poolMock, { baseUrl: BASE });
+    const lookup = new Client({ name: "test-client", version: "0.0.0" });
+    const [ct, st] = InMemoryTransport.createLinkedPair();
+    await server.connect(st);
+    await lookup.connect(ct);
+    const badServer = await lookup.callTool({ name: `${long}__read`, arguments: {} });
+    const badServerText = (badServer.content as Array<{ type: string; text: string }>)[0]!.text;
+    expect(badServerText).toContain("Unknown server");
+    expect(badServerText).not.toContain(long);
+  });
+
+  it("skills_get never reflects an arbitrary-length slug back: capped and stripped of control characters", async () => {
+    const client = await connectedClient();
+    const slug = "a".repeat(40) + String.fromCharCode(7) + "b".repeat(400);
+    const res = await client.callTool({ name: "skills_get", arguments: { slug } });
+    const text = (res.content as Array<{ type: string; text: string }>)[0]!.text;
+    expect(text).not.toContain(slug);
+    expect(text).not.toContain("b".repeat(100));
+    expect(text).not.toMatch(/[\u0000-\u001f\u007f]/);
+    expect(text).toContain("morning-brief");
   });
 });

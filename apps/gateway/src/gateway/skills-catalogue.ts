@@ -131,6 +131,28 @@ export function skillApplyText(
   return `${lines.join("\n")}\n\n${skillRunMessage(skill)}`;
 }
 
+/** The one place a request value is ever reflected back to the requester
+ * (an unknown prompt name, tool name, server slug or skill slug). A caller must never get an
+ * arbitrary-length string of their own choosing echoed, and never a control
+ * character, so: strings only, control characters removed, capped at 64
+ * with the cut marked. Anything else reflects as nothing. */
+export const ECHO_MAX = 64;
+export function echoName(value: unknown): string {
+  if (typeof value !== "string") return "";
+  // eslint-disable-next-line no-control-regex
+  // Control (Cc) and format (Cf) characters: ASCII and C1 controls, and the
+  // bidi overrides that can make a reflected string read backwards.
+  const printable = value.replace(/[\p{Cc}\p{Cf}]/gu, "");
+  return printable.length > ECHO_MAX ? printable.slice(0, ECHO_MAX) + "..." : printable;
+}
+
+/** What kind of skill led the results. Every skill is a published one today;
+ * the value exists so the event keeps its shape when user-owned skills join
+ * the catalogue. */
+export function topResultKind(matches: readonly Skill[]): "published" | null {
+  return matches.length > 0 ? "published" : null;
+}
+
 export function findSkill(slug: unknown): Skill | null {
   return typeof slug === "string" ? getSkillBySlug(slug) : null;
 }

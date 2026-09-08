@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { getAllSkills, getSkillBySlug, skillRunMessage } from "@/lib/skills";
 import {
+  echoName,
   searchSkills,
   skillApplyText,
   skillNeeds,
@@ -24,6 +25,33 @@ describe("searchSkills", () => {
     expect(searchSkills("MORNING").map((s) => s.slug)).toContain("morning-brief");
     expect(searchSkills("tasks_create").map((s) => s.slug)).toContain("morning-brief");
     expect(searchSkills("zz-no-such-thing-zz")).toEqual([]);
+  });
+});
+
+describe("echoName: the only request value ever reflected, capped and printable", () => {
+  it("passes a short printable identifier through unchanged", () => {
+    expect(echoName("morning-brief")).toBe("morning-brief");
+  });
+
+  it("caps at 64 characters and marks the cut", () => {
+    const long = "a".repeat(200);
+    const out = echoName(long);
+    expect(out.length).toBeLessThanOrEqual(64 + 3);
+    expect(out.endsWith("...")).toBe(true);
+    expect(out.startsWith("a".repeat(64))).toBe(true);
+  });
+
+  it("strips control characters, including terminal escapes", () => {
+    expect(echoName("a" + String.fromCharCode(27) + "[31mb" + String.fromCharCode(0) + "c\n")).toBe("a[31mbc");
+    // C1 controls and bidi overrides too, not only ASCII.
+    expect(echoName("a\u0085b\u202ec\u200bd")).toBe("abcd");
+  });
+
+  it("describes a non-string without reflecting it", () => {
+    expect(echoName(undefined)).toBe("");
+    expect(echoName(null)).toBe("");
+    expect(echoName({ slug: "x" })).toBe("");
+    expect(echoName(42)).toBe("");
   });
 });
 

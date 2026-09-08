@@ -315,11 +315,19 @@ async function capturePlaygroundEvent(
 export async function trackSkillSearched(
   db: Database,
   userId: string,
-  props: { query: string | null; results: number; surface: "mcp" | "agent" }
+  props: {
+    /** Search text is user content and never reaches analytics (the same
+     * rule that keeps tool arguments off `tool_call`): its length only. */
+    queryLength: number;
+    results: number;
+    topResult: "published" | "user" | null;
+    surface: "mcp" | "agent";
+  }
 ): Promise<void> {
   return capturePlaygroundEvent(db, userId, EVENTS.SKILL_SEARCHED, {
-    query: props.query,
+    query_length: props.queryLength,
     results: props.results,
+    top_result: props.topResult,
     surface: props.surface,
   });
 }
