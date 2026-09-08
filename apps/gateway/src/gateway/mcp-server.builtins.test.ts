@@ -20,6 +20,8 @@ import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 const trackToolCall = vi.fn().mockResolvedValue(undefined);
 vi.mock("./track", () => ({
   trackToolCall: (...args: unknown[]) => trackToolCall(...args),
+  trackSkillSearched: vi.fn().mockResolvedValue(undefined),
+  trackSkillApplied: vi.fn().mockResolvedValue(undefined),
 }));
 vi.mock("./mcp-analytics", () => ({
   trackMcpToolsListed: vi.fn().mockResolvedValue(undefined),
@@ -27,6 +29,11 @@ vi.mock("./mcp-analytics", () => ({
 const listConnectedAccounts = vi.fn();
 vi.mock("./connected-accounts", () => ({
   listConnectedAccounts: (...args: unknown[]) => listConnectedAccounts(...args),
+}));
+// The skills built-ins (SCRUM-224) read the shared connected-services set;
+// not the subject here, so it answers "nothing connected".
+vi.mock("./connected-services", () => ({
+  listConnectedServiceIds: vi.fn().mockResolvedValue(new Set<string>()),
 }));
 const listUserToolRows = vi.fn();
 vi.mock("./user-tools", () => ({

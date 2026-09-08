@@ -227,12 +227,19 @@ function isSkillRunTurn(messages: unknown[], slug: unknown): boolean {
     | { role?: unknown; parts?: unknown }
     | undefined;
   if (!last || last.role !== "user" || !Array.isArray(last.parts)) return false;
-  const text = last.parts
-    .filter((p): p is { type: string; text: string } =>
-      typeof p === "object" && p !== null && (p as { type?: unknown }).type === "text"
-    )
-    .map((p) => p.text)
-    .join("");
+  // Byte for byte means the WHOLE turn: every part is a text part with a
+  // string body. A file part or a typeless part beside the exact text is
+  // not the catalogue's message and gets the ordinary gated turn.
+  const parts = last.parts as unknown[];
+  const allText = parts.every(
+    (p) =>
+      typeof p === "object" &&
+      p !== null &&
+      (p as { type?: unknown }).type === "text" &&
+      typeof (p as { text?: unknown }).text === "string"
+  );
+  if (!allText || parts.length === 0) return false;
+  const text = (parts as Array<{ text: string }>).map((p) => p.text).join("");
   return text === skillRunMessage(skill);
 }
 

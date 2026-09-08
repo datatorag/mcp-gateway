@@ -309,6 +309,35 @@ async function capturePlaygroundEvent(
   }
 }
 
+/** SCRUM-224: the catalogue over MCP. A search, and a skill handed to a
+ * client session by prompt or by tool, attributed by slug the same way a
+ * dashboard run is. Intent events; activation is unchanged. */
+export async function trackSkillSearched(
+  db: Database,
+  userId: string,
+  props: { query: string | null; results: number; surface: "mcp" | "agent" }
+): Promise<void> {
+  return capturePlaygroundEvent(db, userId, EVENTS.SKILL_SEARCHED, {
+    query: props.query,
+    results: props.results,
+    surface: props.surface,
+  });
+}
+
+export async function trackSkillApplied(
+  db: Database,
+  userId: string,
+  props: { skill: string; via: "prompt" | "tool"; surface: "mcp" | "agent"; runnable: boolean }
+): Promise<void> {
+  return capturePlaygroundEvent(db, userId, EVENTS.SKILL_APPLIED, {
+    skill: props.skill,
+    via: props.via,
+    surface: props.surface,
+    runnable: props.runnable,
+    trigger: "manual",
+  });
+}
+
 export async function trackPlaygroundMessage(
   db: Database,
   userId: string

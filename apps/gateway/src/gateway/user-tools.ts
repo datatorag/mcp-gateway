@@ -1,14 +1,10 @@
 import { eq, and } from "drizzle-orm";
 import type { Database } from "@datatorag-mcp/db";
-import {
-  tools,
-  mcpServers,
-  connectedAccounts,
-  serviceConnections,
-} from "@datatorag-mcp/db";
+import { tools, mcpServers, connectedAccounts } from "@datatorag-mcp/db";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 import { PLUGIN_SERVICE_MAP } from "./service-token";
+import { listConnectedServiceIds } from "./connected-services";
 
 /**
  * The single definition of "which registry tools can this user see" plus the
@@ -51,12 +47,12 @@ export async function listUserToolRows(
   db: Database,
   userId: string
 ): Promise<UserToolRow[]> {
-  // Run user-specific and global queries in parallel
-  const [accountRows, registeredTools] = await Promise.all([
-    db
-      .selectDistinct({ connectorType: connectedAccounts.connectorType })
-      .from(connectedAccounts)
-      .where(eq(connectedAccounts.userId, userId)),
+  // Run user-specific and global queries in parallel. The connected set is
+  // the shared definition in connected-services.ts (SCRUM-224), so the tool
+  // list and the skills catalogue answer "what does this user have" the
+  // same way.
+  const [connectedServices, registeredTools] = await Promise.all([
+    listConnectedServiceIds(db, userId),
     db
       .select({
         namespacedName: tools.namespacedName,
@@ -69,19 +65,6 @@ export async function listUserToolRows(
       .innerJoin(mcpServers, eq(tools.mcpServerId, mcpServers.id))
       .where(and(eq(mcpServers.status, "active"), eq(tools.enabled, true))),
   ]);
-
-  const connectedServices = new Set<string>();
-  for (const row of accountRows) connectedServices.add(row.connectorType);
-
-  // Fallback: check un-migrated service_connections, only when the user has
-  // no rows in connected_accounts at all.
-  if (connectedServices.size === 0) {
-    const legacyRows = await db
-      .selectDistinct({ service: serviceConnections.service })
-      .from(serviceConnections)
-      .where(eq(serviceConnections.userId, userId));
-    for (const row of legacyRows) connectedServices.add(row.service);
-  }
 
   const result: UserToolRow[] = [];
   for (const t of registeredTools) {

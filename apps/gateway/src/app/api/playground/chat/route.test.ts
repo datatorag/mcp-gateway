@@ -318,6 +318,26 @@ describe("POST /api/playground/chat — the turn cap", () => {
     );
   });
 
+  it("the exact text beside a NON-TEXT part is an ordinary turn too", async () => {
+    const skill = getSkillBySlug("morning-brief")!;
+    const turn = [
+      {
+        id: "u1",
+        role: "user",
+        parts: [
+          { type: "text", text: skillRunMessage(skill) },
+          { type: "file", mediaType: "text/plain", url: "data:text/plain;base64,aGk=" },
+        ],
+      },
+    ];
+    await drain(await POST(post({ messages: turn, skill: "morning-brief", skillTrigger: "manual" })));
+    expect(trackAgentRun).toHaveBeenCalledWith(
+      expect.anything(),
+      USER,
+      expect.objectContaining({ skill: null })
+    );
+  });
+
   it("a valid slug beside ARBITRARY text is an ordinary turn: no skill, no trigger", async () => {
     // The no-gates policy is scoped to the catalogue's own run message. A
     // caller naming a real skill next to text of their own gets the gated

@@ -29,7 +29,14 @@
  * remembered.
  */
 import type { LucideIcon } from "lucide-react";
-import { CodeIcon, Link2Icon, PlugIcon, UnplugIcon } from "lucide-react";
+import {
+  BookOpenIcon,
+  CodeIcon,
+  Link2Icon,
+  PlugIcon,
+  SearchIcon,
+  UnplugIcon,
+} from "lucide-react";
 
 /** One entry per internal tool: what the card says, and the mark it wears.
  * Connector cards carry their service's brand mark; these carry a neutral
@@ -50,6 +57,15 @@ export const INTERNAL_TOOL_DISPLAY: Record<
   echo: {
     label: "Testing the connection",
     icon: PlugIcon,
+  },
+  // The skill catalogue over MCP (SCRUM-224), reachable from the agent too.
+  skills_search: {
+    label: "Searching the skill catalogue",
+    icon: SearchIcon,
+  },
+  skills_get: {
+    label: "Loading a skill",
+    icon: BookOpenIcon,
   },
   show_mcp_config: {
     label: "Getting your MCP config",

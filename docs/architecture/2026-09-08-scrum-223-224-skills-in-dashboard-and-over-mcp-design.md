@@ -81,7 +81,7 @@ changes its destination and its wording. Scheduling is not built.
 
 ## SCRUM-224: the catalogue over MCP
 
-### Recommendation: both prompts and tools, one catalogue
+### Recommendation: both prompts and tools, one catalogue (built as recommended)
 
 The gateway declares only the `tools` capability today; nothing about prompts is
 wired. The SDK in use ships `ListPromptsRequestSchema` and `GetPromptRequestSchema`,
@@ -289,6 +289,13 @@ owner actually has); the boundary test is about what WE publish.
    the two built-ins through a real client, prompts through a real client, the
    boundary extension. Watched red first.
 8. A browser walk of the funnel as an unauthenticated, unconnected user.
+
+Testing note for whoever walks it next: the browser harness stubs the chat endpoint
+at the request stage so no model turn is meant to run, yet the throwaway user's
+server-side counter showed two agent runs claimed and zero tool calls after the
+walk. Two turns reached the server past the stub and the cause was not established.
+Treat the stub as best effort, use a throwaway user with a placeholder connection,
+and read the run counter before deleting the user.
 
 ## Other live branches
 

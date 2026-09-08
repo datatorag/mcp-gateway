@@ -1,8 +1,21 @@
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import {
   CallToolRequestSchema,
+  ErrorCode,
+  GetPromptRequestSchema,
+  ListPromptsRequestSchema,
   ListToolsRequestSchema,
+  McpError,
 } from "@modelcontextprotocol/sdk/types.js";
+import { getAllSkills } from "@/lib/skills";
+import {
+  findSkill,
+  searchSkills,
+  skillApplyText,
+  skillSummary,
+} from "./skills-catalogue";
+import { listConnectedServiceIds } from "./connected-services";
+import { trackSkillApplied, trackSkillSearched } from "./track";
 import { eq, and } from "drizzle-orm";
 import type { Database } from "@datatorag-mcp/db";
 import { mcpServers, pluginConnections } from "@datatorag-mcp/db";
@@ -69,9 +82,98 @@ export const BUILT_IN_TOOLS: {
   approval: "read" | "write";
   handler: (
     args: Record<string, unknown> | undefined,
-    ctx: { db: Database; userId: string }
+    ctx: { db: Database; userId: string; connectionsUrl: string }
   ) => Promise<BuiltinResult>;
 }[] = [
+  /* THE SKILL CATALOGUE AS TOOLS (SCRUM-224), for clients that render tools
+   * only. Both read the one catalogue the public pages, the dashboard and
+   * the prompts read; `skills_get` hands over EXACTLY the text the prompt
+   * hands over, so a model gets the same bytes whichever door it came
+   * through. Noun-first names, per HQ decision, so they read like every
+   * other registry tool. Read-only: they change nothing anywhere. */
+  {
+    approval: "read",
+    definition: {
+      name: "skills_search",
+      description:
+        "Search the published skill catalogue: routines that tell an assistant what to do with the user's connected accounts and in what order. Returns each matching skill's slug, title, the situation it is for, what it produces, the tools it uses, the services it needs, and whether this user has them connected. Call skills_get with a slug to load one into this session.",
+      inputSchema: {
+        type: "object" as const,
+        properties: {
+          query: {
+            type: "string",
+            description:
+              "Free text matched against titles, situations, outcomes and tool names. Omit to list every skill.",
+          },
+        },
+      },
+    },
+    handler: async (args, { db, userId }) => {
+      const query = typeof args?.query === "string" ? args.query : null;
+      const [matches, connected] = await Promise.all([
+        Promise.resolve(searchSkills(query)),
+        listConnectedServiceIds(db, userId),
+      ]);
+      void trackSkillSearched(db, userId, { query, results: matches.length, surface: "mcp" });
+      return {
+        content: [
+          {
+            type: "text" as const,
+            text: JSON.stringify({
+              skills: matches.map((skill) => skillSummary(skill, connected)),
+              how_to_apply: "Call skills_get with a slug; follow the returned skill exactly as written.",
+            }),
+          },
+        ],
+      };
+    },
+  },
+  {
+    approval: "read",
+    definition: {
+      name: "skills_get",
+      description:
+        "Load one published skill into this session. Returns the skill file to follow, prefaced by which of its services this user has connected and which account the run will use. Pass account (one of the user's connected addresses) to choose; otherwise the default account is used.",
+      inputSchema: {
+        type: "object" as const,
+        properties: {
+          slug: { type: "string", description: "The skill's slug, from skills_search." },
+          account: {
+            type: "string",
+            description: "Optional. The connected account the skill should run against.",
+          },
+        },
+      },
+    },
+    handler: async (args, { db, userId, connectionsUrl }) => {
+      const skill = findSkill(args?.slug);
+      if (!skill) {
+        // Not an error: a model that guessed a slug gets the real list, the
+        // same way an empty search would, and nothing is applied or counted.
+        return {
+          content: [
+            {
+              type: "text" as const,
+              text:
+                `No published skill named ${JSON.stringify(args?.slug ?? null)}. Available slugs: ` +
+                getAllSkills()
+                  .map((s) => s.slug)
+                  .join(", ") +
+                ". Call skills_search to see what each one does.",
+            },
+          ],
+        };
+      }
+      const applied = await applySkillFor(db, userId, skill.slug, args?.account, connectionsUrl);
+      void trackSkillApplied(db, userId, {
+        skill: skill.slug,
+        via: "tool",
+        surface: "mcp",
+        runnable: applied.runnable,
+      });
+      return { content: [{ type: "text" as const, text: applied.text }] };
+    },
+  },
   {
     approval: "read",
     definition: {
@@ -146,6 +248,40 @@ export const BUILT_IN_TOOLS: {
 ];
 
 /**
+ * A skill, applied to this user's session (SCRUM-224): the connection
+ * preface (what the skill needs, what is connected, which account the run
+ * will use) and the verbatim run message. One function, called by the
+ * prompt handler and the tool handler, which is what makes their answers
+ * byte-identical. The connected set is the shared definition the tool list
+ * uses, so "does this user have what this needs" is answered one way.
+ */
+async function applySkillFor(
+  db: Database,
+  userId: string,
+  slug: string,
+  account: unknown,
+  connectionsUrl: string
+): Promise<{ text: string; runnable: boolean }> {
+  const skill = findSkill(slug)!;
+  const [connected, accounts] = await Promise.all([
+    listConnectedServiceIds(db, userId),
+    listConnectedAccounts(db, userId),
+  ]);
+  const summary = skillSummary(skill, connected);
+  const text = skillApplyText(skill, {
+    connected,
+    accounts: accounts.map((a) => ({
+      connectorType: a.connectorType,
+      accountEmail: a.accountEmail,
+      isDefault: a.isDefault,
+    })),
+    account: typeof account === "string" ? account : null,
+    connectionsUrl,
+  });
+  return { text, runnable: summary.runnable };
+}
+
+/**
  * Creates a new MCP Server instance for a client session.
  * Dynamically serves tools from the registry and routes calls to backend
  * processes (local plugins) or Docker containers.
@@ -179,11 +315,52 @@ export function createMcpServer(
   const clientId = opts?.clientId ?? null;
   const server = new Server(
     { name: "datatorag-mcp", version: "0.1.0" },
-    { capabilities: { tools: {} } }
+    // Prompts (SCRUM-224): the skill catalogue as the native "apply a
+    // reusable instruction to this session" primitive, for clients that
+    // render it. The same catalogue is served as tools for clients that do
+    // not; see BUILT_IN_TOOLS.
+    { capabilities: { tools: {}, prompts: {} } }
   );
   /** Self-reported by the client at initialize; undefined until the
    * handshake completes, which is before any tool call can arrive. */
   const clientName = () => server.getClientVersion()?.name ?? null;
+
+  server.setRequestHandler(ListPromptsRequestSchema, async () => ({
+    prompts: getAllSkills().map((skill) => ({
+      name: skill.slug,
+      title: skill.title,
+      description: `${skill.situation} ${skill.produces}`,
+      arguments: [
+        {
+          name: "account",
+          description:
+            "Optional. The connected account to run against; the default account is used otherwise, and the prompt names the one it chose.",
+          required: false,
+        },
+      ],
+    })),
+  }));
+
+  server.setRequestHandler(GetPromptRequestSchema, async (request) => {
+    const { name, arguments: args } = request.params;
+    const skill = findSkill(name);
+    if (!skill) {
+      // A prompt name is an identifier into the one catalogue; an unknown one
+      // is a client error, never a guess.
+      throw new McpError(ErrorCode.InvalidParams, `Unknown prompt: ${name}`);
+    }
+    const applied = await applySkillFor(db, userId, skill.slug, args?.account, connectionsUrl);
+    void trackSkillApplied(db, userId, {
+      skill: skill.slug,
+      via: "prompt",
+      surface,
+      runnable: applied.runnable,
+    });
+    return {
+      description: skill.title,
+      messages: [{ role: "user" as const, content: { type: "text" as const, text: applied.text } }],
+    };
+  });
 
   server.setRequestHandler(ListToolsRequestSchema, async () => {
     // Shared connected-service policy — see user-tools.ts. This handler only
@@ -236,7 +413,7 @@ export function createMcpServer(
       try {
         const result = await builtin.handler(
           rawArgs as Record<string, unknown> | undefined,
-          { db, userId }
+          { db, userId, connectionsUrl }
         );
         // Same fire-and-forget shape as the plugin path below. This call
         // going missing is a real regression we have shipped before: built-ins

@@ -87,6 +87,37 @@ describe("published skills stay on the public side of the boundary", () => {
     }
   });
 
+  /* SCRUM-224: what the MCP surface hands a client is the catalogue's run
+   * message plus a connection preface. Pin that the preface adds nothing
+   * beyond fixed sentences, service names and the addresses it was GIVEN, so
+   * the file-level checks above cover what the wire carries. */
+  it("the MCP apply text for every skill is the preface plus the verbatim run message", async () => {
+    const { getAllSkills, skillRunMessage } = await import("./skills");
+    const { skillApplyText } = await import("@/gateway/skills-catalogue");
+    for (const skill of getAllSkills()) {
+      const text = skillApplyText(skill, {
+        connected: new Set(["google-workspace", "atlassian"]),
+        accounts: [
+          { connectorType: "google-workspace", accountEmail: "me@example.com", isDefault: true },
+          { connectorType: "atlassian", accountEmail: "me@example.org", isDefault: true },
+        ],
+        connectionsUrl: "https://example.com/dashboard/connections",
+      });
+      const run = skillRunMessage(skill);
+      expect(text.endsWith(run), skill.slug).toBe(true);
+      const preface = text.slice(0, text.length - run.length);
+      // The address regex is greedy on dots; a sentence-ending period after
+      // an address is punctuation, not part of the host.
+      const addresses = (preface.match(EMAIL_RE) ?? [])
+        .map((a) => a.replace(/\.$/, ""))
+        .filter((a) => !ALLOWED_EMAIL.test(a));
+      expect(addresses, `preface addresses for ${skill.slug}`).toEqual([]);
+      for (const { name, re } of SHAPE_PATTERNS) {
+        expect(re.test(preface), `${name} in the preface for ${skill.slug}`).toBe(false);
+      }
+    }
+  });
+
   const denylist = loadDenylist();
   const withValues = denylist ? it : it.skip;
   withValues.each(files)(
