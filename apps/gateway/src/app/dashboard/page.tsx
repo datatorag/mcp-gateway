@@ -12,9 +12,10 @@ export const dynamic = "force-dynamic";
  * signed-in furniture to a stranger is not a property this route should have.
  *
  * THE ENUMERATED STATE, because a count from memory got this wrong twice.
- * There are seven routes under `/dashboard`: this one, `agent`, `mcp-config`,
- * `usage`, `usage/[tool]`, `connections/[service]` and `connections`. The
- * first six resolve the session before rendering anything. The seventh,
+ * There are eight routes under `/dashboard`: this one, `agent`, `skills`,
+ * `mcp-config`, `usage`, `usage/[tool]`, `connections/[service]` and
+ * `connections`. The first seven resolve the session before rendering
+ * anything. The eighth,
  * `connections/page.tsx`, deliberately does not, and says so in its own file:
  * it renders nothing and immediately redirects here, which does check.
  *

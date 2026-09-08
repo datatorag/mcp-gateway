@@ -1,6 +1,63 @@
 import { describe, expect, it } from "vitest";
-import { connectorsFor, getAllSkills, getRelatedSkills } from "./skills";
+import {
+  connectorsFor,
+  getAllSkills,
+  getRelatedSkills,
+  getSkillBySlug,
+  servicesFor,
+  skillDeepLink,
+  signInAndRunHref,
+  skillRunMessage,
+  skillSlugFromPath,
+} from "./skills";
 import { REGISTRY_TOOL_NAMES } from "@/gateway/playground/registry-snapshot";
+
+/* SCRUM-223: the catalogue is the one source every surface reads, so the
+ * pieces the deep link and the run depend on live here and are pinned here. */
+describe("the catalogue's run and deep-link helpers (SCRUM-223)", () => {
+  const skill = getSkillBySlug("morning-brief")!;
+
+  it("maps a skill's connectors to the service ids the connect flow uses", () => {
+    expect(servicesFor(skill)).toEqual(["google-workspace"]);
+    // In the order the tools name them, one entry per service.
+    expect(servicesFor({ ...skill, tools: ["jira_search", "gmail_read", "gmail_send"] })).toEqual([
+      "atlassian",
+      "google-workspace",
+    ]);
+  });
+
+  it("builds the deep link and the sign-in link from the slug alone", () => {
+    expect(skillDeepLink("morning-brief")).toBe("/dashboard/agent?skill=morning-brief");
+    expect(signInAndRunHref("morning-brief")).toBe(
+      "/auth/login?next=%2Fdashboard%2Fagent%3Fskill%3Dmorning-brief"
+    );
+  });
+
+  it("reads the slug back out of a validated next path, and only a real one", () => {
+    expect(skillSlugFromPath("/dashboard/agent?skill=morning-brief")).toBe("morning-brief");
+    expect(skillSlugFromPath("/dashboard/agent?skill=morning-brief&welcome=1")).toBe(
+      "morning-brief"
+    );
+    // An unknown slug is not a skill, and the events must never claim one.
+    expect(skillSlugFromPath("/dashboard/agent?skill=no-such-skill")).toBeNull();
+    expect(skillSlugFromPath("/dashboard/agent")).toBeNull();
+    expect(skillSlugFromPath(null)).toBeNull();
+    expect(skillSlugFromPath(undefined)).toBeNull();
+    expect(skillSlugFromPath(42)).toBeNull();
+  });
+
+  it("puts the VERBATIM skill file inside the run message, in the user's voice", () => {
+    const text = skillRunMessage(skill);
+    expect(text).toContain(skill.skillSource);
+    expect(text).toContain(skill.title);
+    // The skill's own rails are the limits, stated in the message rather
+    // than delegated to a gate: per HQ decision a skill run prompts for
+    // nothing mid-run.
+    expect(text).toContain("exactly as written");
+    expect(text).toContain("its own rails");
+    expect(text).not.toContain("\u2014");
+  });
+});
 
 /** A published skill may only name tools we actually ship.
  *

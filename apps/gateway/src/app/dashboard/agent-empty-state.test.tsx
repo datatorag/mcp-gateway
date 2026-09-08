@@ -57,11 +57,17 @@ function deferred<T>() {
 
 type Initial = { accounts: Array<Record<string, unknown>>; connections: unknown[] };
 
+type SeedSkill = { slug: string; title: string; services: string[]; message: string };
+
 function mountWith(
   connections: () => Promise<Response>,
   suggestions: string[] = [],
   seedPrompt: string | null = null,
-  opts: { initialConnections?: Initial | null; landedFrom?: "signup" | "login" } = {}
+  opts: {
+    initialConnections?: Initial | null;
+    landedFrom?: "signup" | "login";
+    seedSkill?: SeedSkill | null;
+  } = {}
 ) {
   vi.stubGlobal(
     "fetch",
@@ -84,10 +90,104 @@ function mountWith(
         isDefaultView={false}
         landedFrom={opts.landedFrom ?? "login"}
         seedPrompt={seedPrompt}
+        seedSkill={opts.seedSkill ?? null}
       />
     );
   });
 }
+
+/* SCRUM-223: the deep link's last hop. The page resolved the slug and handed
+ * this component the skill's services and its run message; this component
+ * either submits the message once, or, when a service is missing, routes to
+ * connect with the deep link as the return path so the run happens after. */
+const SEED_SKILL: SeedSkill = {
+  slug: "morning-brief",
+  title: "Get a morning brief across your mail, calendar and tasks with Claude",
+  services: ["google-workspace"],
+  message: "Run the morning brief skill now.\n\n---\nname: morning-brief\n---",
+};
+
+describe("the skill deep link's last hop (SCRUM-223)", () => {
+  const neverResolves = () => new Promise<Response>(() => {});
+  const chatCalls = () =>
+    (globalThis.fetch as unknown as { mock: { calls: unknown[][] } }).mock.calls.filter(
+      (c) => String(c[0]).includes("/api/playground/chat")
+    );
+
+  it("submits the skill's run message exactly once when its service is connected", async () => {
+    window.history.replaceState(null, "", "/dashboard/agent?skill=morning-brief&welcome=1");
+    mountWith(neverResolves, [], null, {
+      initialConnections: CONNECTED,
+      seedSkill: SEED_SKILL,
+    });
+    await flush();
+    await flush();
+    expect(chatCalls(), "skill did not submit").toHaveLength(1);
+    const body = JSON.parse(String((chatCalls()[0]![1] as { body?: unknown })?.body ?? "{}"));
+    expect(JSON.stringify(body)).toContain("name: morning-brief");
+    // The slug and the trigger ride in the request body so the server can
+    // stamp the run event; the message text is not where attribution lives.
+    expect(body.skill).toBe("morning-brief");
+    expect(body.skillTrigger).toBe("manual");
+    // The parameter is stripped so a reload or a shared link cannot re-run it,
+    // and only its own param goes.
+    expect(window.location.search).not.toContain("skill=");
+    expect(window.location.search).toContain("welcome=1");
+  });
+
+  it("does NOT submit when the skill's service is missing; it asks to connect and keeps the intent", async () => {
+    window.history.replaceState(null, "", "/dashboard/agent?skill=morning-brief");
+    mountWith(neverResolves, [], null, {
+      initialConnections: UNCONNECTED,
+      seedSkill: SEED_SKILL,
+    });
+    await flush();
+    await flush();
+    expect(chatCalls()).toHaveLength(0);
+    // The ask names the skill and the service, and the connect control's
+    // return path IS the deep link, so the connect callback lands back here
+    // with the skill still named.
+    expect(text()).toContain("To run this skill, connect Google Workspace");
+    const card = Array.from(container.querySelectorAll("a")).find((a) =>
+      (a.textContent ?? "").includes("Connect Google Workspace")
+    );
+    expect(card).toBeTruthy();
+    expect(decodeURIComponent(card!.getAttribute("href") ?? "")).toContain(
+      "next=/dashboard/agent?skill=morning-brief"
+    );
+    // The parameter stays in the URL while the intent is pending: stripping
+    // it here is what would drop the campaign click on the floor.
+    expect(window.location.search).toContain("skill=morning-brief");
+  });
+
+  it("a returning connect (connected=<service> on the deep link) runs the skill", async () => {
+    window.history.replaceState(
+      null,
+      "",
+      "/dashboard/agent?skill=morning-brief&connected=google-workspace"
+    );
+    act(() => {
+      root.render(
+        <AgentClient
+          connectedService="google-workspace"
+          initialConnections={
+            CONNECTED as unknown as Parameters<typeof AgentClient>[0]["initialConnections"]
+          }
+          isDefaultView={false}
+          landedFrom="login"
+          seedSkill={SEED_SKILL}
+        />
+      );
+    });
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => new Response("{}", { status: 200 }))
+    );
+    await flush();
+    await flush();
+    expect(chatCalls()).toHaveLength(1);
+  });
+});
 
 /** The unconnected lead (SCRUM-206, as finally ruled): a user with zero
  * connections IS a new user, however they arrived, and always gets the

@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 import { ArrowLeftIcon, CircleCheckIcon } from "lucide-react";
 import { Navbar } from "@/components/navbar";
 import { CopySkill } from "@/components/copy-skill";
+import { RunSkillCta } from "@/components/run-skill-cta";
 import {
   connectorsFor,
   getAllSkills,
@@ -125,23 +126,10 @@ export default async function SkillPage({ params }: Props) {
             dangerouslySetInnerHTML={{ __html: skill.notesHtml }}
           />
 
-          {/* Signup is the CTA, never a wall — everything above reads
-              signed-out. */}
-          <div className="mt-12 rounded-2xl border border-border bg-secondary/40 p-6 text-center">
-            <h2 className="font-display text-lg font-semibold text-foreground">
-              Run it against your own data
-            </h2>
-            <p className="mx-auto mt-2 max-w-md text-sm leading-relaxed text-muted-foreground">
-              Connect Google Workspace, paste the gateway URL into Claude, and
-              this skill works on your accounts.
-            </p>
-            <Link
-              className="mt-5 inline-flex items-center justify-center rounded-full bg-primary px-5 py-2.5 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
-              href="/auth/login"
-            >
-              Get the gateway
-            </Link>
-          </div>
+          {/* The CTA, never a wall: everything above reads signed-out. It is
+              the deep link into the agent with this skill loaded (SCRUM-223),
+              and the campaign's landing click. */}
+          <RunSkillCta services={connectors} slug={skill.slug} />
 
           {related.length > 0 && (
             <div className="mt-14 border-t border-border pt-8">

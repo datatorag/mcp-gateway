@@ -3,6 +3,7 @@ import { getSessionUserId } from "@/lib/session";
 import { db } from "@/lib/db";
 import { loadConnectionsView } from "@/gateway/connections-view";
 import { AGENT_PROMPTS } from "../agent-prompts";
+import { getSkillBySlug, servicesFor, skillDeepLink, skillRunMessage } from "@/lib/skills";
 import { AgentClient } from "./agent-client";
 
 export const dynamic = "force-dynamic";
@@ -42,20 +43,32 @@ export default async function AgentPage({
     connected?: string;
     connect_error?: string;
     prompt?: string;
+    skill?: string;
   }>;
 }) {
+  const params = await searchParams;
   const userId = await getSessionUserId();
+  // A PRESENT BUT INVALID session (expired, revoked) reaches this check
+  // rather than the middleware, which gates on presence alone. On the skill
+  // deep link (SCRUM-223) the bounce must carry the slug exactly as the
+  // middleware's does, or a campaign click from a user whose old session has
+  // lapsed lands on a generic agent page after login. Only a published slug
+  // is carried; anything else bounces plain, through the same literal every
+  // dashboard route uses (the route-session-checks guard reads it).
+  const lapsedSkill =
+    !userId && typeof params.skill === "string" && getSkillBySlug(params.skill)
+      ? params.skill
+      : null;
+  if (lapsedSkill) redirect(`/auth/login?next=${encodeURIComponent(skillDeepLink(lapsedSkill))}`);
   if (!userId) redirect("/auth/login");
   // The connection state, loaded HERE (SCRUM-206). This is a server
   // component that already holds the user's id, so the answer the empty
   // state branches on is known before first paint; asking the browser to go
   // and find it again after mount is what put a wrong-biased "unknown" state
   // in front of every new user. Same loader as /api/connections, so the
-  // shape cannot drift from what a later refetch returns. The two lookups
-  // (session, then connections) are sequential by nature: the second needs
-  // the first's answer.
-  const [{ welcome, signup, thread, connected, connect_error, prompt }, initialConnections] =
-    await Promise.all([searchParams, loadConnectionsView(db, userId)]);
+  // shape cannot drift from what a later refetch returns.
+  const { welcome, signup, thread, connected, connect_error, prompt, skill } = params;
+  const initialConnections = await loadConnectionsView(db, userId);
 
   // SEED BY IDENTIFIER, NEVER BY CONTENT (SCRUM-118). The Connections page's
   // prompt cards link here with an INDEX into the shared AGENT_PROMPTS list,
@@ -68,6 +81,25 @@ export default async function AgentPage({
     typeof prompt === "string" && /^\d{1,2}$/.test(prompt)
       ? AGENT_PROMPTS[Number(prompt)] ?? null
       : null;
+
+  // THE SKILL DEEP LINK (SCRUM-223), under the same rule: the slug names a
+  // published skill in the one catalogue or it names nothing. The client
+  // receives the skill's services (so it can route to connect first) and the
+  // run message the catalogue composes; free text in the parameter is
+  // ignored, not sanitised, because the message is auto-submitted to an
+  // agent holding write scopes on the user's accounts.
+  const seedSkillSource =
+    typeof skill === "string" && /^[a-z0-9-]{1,80}$/.test(skill)
+      ? getSkillBySlug(skill)
+      : null;
+  const seedSkill = seedSkillSource
+    ? {
+        slug: seedSkillSource.slug,
+        title: seedSkillSource.title,
+        services: servicesFor(seedSkillSource),
+        message: skillRunMessage(seedSkillSource),
+      }
+    : null;
   return (
     <AgentClient
       isDefaultView={welcome === "1"}
@@ -86,6 +118,7 @@ export default async function AgentPage({
           : null
       }
       seedPrompt={seedPrompt}
+      seedSkill={seedSkill}
       initialConnections={initialConnections}
     />
   );

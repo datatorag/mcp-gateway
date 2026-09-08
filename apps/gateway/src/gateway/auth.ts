@@ -19,6 +19,7 @@ import {
 } from "./track";
 import { sendWelcomeEmail } from "./lifecycle";
 import { notifySignup } from "./signup-alert";
+import { skillSlugFromPath } from "../lib/skills";
 import {
   postLoginDestination,
   resolveNextPath,
@@ -241,7 +242,11 @@ export function createAuthRouter(
       // session row survives its retention window, a column on the user does
       // not expire.
       await persistAcquisition(db, user.id, attribution);
-      trackSignup(user.id, user.email, user.name, attribution);
+      // SCRUM-223: the campaign funnel's slug rides on the login event,
+      // parsed from the same parked `next` the redirect below redeems.
+      trackSignup(user.id, user.email, user.name, attribution, {
+        skill: skillSlugFromPath(requestedPath),
+      });
       void sendWelcomeEmail({
         email: user.email,
         name: user.name,
@@ -255,7 +260,9 @@ export function createAuthRouter(
         createdAt: user.createdAt,
       });
     } else {
-      trackLogin(user.id, user.email, attribution);
+      trackLogin(user.id, user.email, attribution, {
+        skill: skillSlugFromPath(requestedPath),
+      });
     }
 
     const token = randomBytes(32).toString("base64url");
@@ -575,7 +582,10 @@ export function createAuthRouter(
       PROVIDERS.GOOGLE_WORKSPACE,
       accountEmail,
       attribution,
-      grantDelta
+      grantDelta,
+      // SCRUM-223: a connect made on a skill's behalf carries its slug, from
+      // the same parked `next` the return redirect redeems.
+      { skill: skillSlugFromPath(requestedPath) }
     );
 
     res.redirect(
@@ -779,7 +789,9 @@ export function createAuthRouter(
       session.userId,
       PROVIDERS.ATLASSIAN,
       accountEmail,
-      attribution
+      attribution,
+      undefined,
+      { skill: skillSlugFromPath(requestedPath) }
     );
 
     res.redirect(

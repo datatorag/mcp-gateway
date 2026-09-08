@@ -76,6 +76,61 @@ export function getRelatedSkills(slug: string, limit = 2): Skill[] {
     .slice(0, limit);
 }
 
+/* ---------------------------------------------------------------------- */
+/* Running a skill (SCRUM-223)                                             */
+/* ---------------------------------------------------------------------- */
+
+/** Connector display name to the service id the connect flow and the
+ * connections table use. One mapping, next to `connectorsFor`, so the three
+ * surfaces that ask "does this user have what this skill needs" agree. */
+const SERVICE_ID_BY_CONNECTOR: Record<string, string> = {
+  "Google Workspace": "google-workspace",
+  Atlassian: "atlassian",
+};
+
+/** The service ids a skill needs connected, in `connectorsFor` order. */
+export function servicesFor(skill: Pick<Skill, "tools">): string[] {
+  return connectorsFor(skill.tools)
+    .map((name) => SERVICE_ID_BY_CONNECTOR[name])
+    .filter((id): id is string => typeof id === "string");
+}
+
+/** The link builders live in `skill-links.ts`, which has no server-only
+ * imports, so client components can use them; re-exported here so server
+ * callers have one import for everything about skills. */
+export { skillDeepLink, signInAndRunHref } from "./skill-links";
+
+/** The slug a validated `next` path names, or null. Only a PUBLISHED slug
+ * counts: an event must never claim a skill the catalogue does not have. */
+export function skillSlugFromPath(path: unknown): string | null {
+  if (typeof path !== "string") return null;
+  let url: URL;
+  try {
+    url = new URL(path, "http://placeholder.invalid");
+  } catch {
+    return null;
+  }
+  if (url.pathname !== "/dashboard/agent") return null;
+  const slug = url.searchParams.get("skill");
+  if (!slug) return null;
+  return getSkillBySlug(slug) ? slug : null;
+}
+
+/** What a model is handed to run a skill, in the user's voice, with the
+ * VERBATIM skill file inside. One string for every surface (the dashboard
+ * agent, the MCP prompt, the MCP tool), so what a model receives is
+ * byte-identical whichever door it came through. The skill's own rails are
+ * the limits: nothing gains write behaviour by moving surfaces, and per HQ
+ * decision a skill run prompts for nothing mid-run. */
+export function skillRunMessage(skill: Pick<Skill, "title" | "skillSource">): string {
+  return (
+    `Run the following skill for me now: ${skill.title}. ` +
+    "Follow it exactly as written, using my connected accounts, and stay within " +
+    "its own rails. Report what you did at the end.\n\n" +
+    skill.skillSource
+  );
+}
+
 /** Which connectors a tool set touches, from the tool-name prefix the
  * plugins already namespace by. */
 export function connectorsFor(tools: string[]): string[] {

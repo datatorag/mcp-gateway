@@ -6,7 +6,8 @@ import { withRoute } from "@/lib/with-route";
 import { getEnv } from "@datatorag-mcp/config";
 import { getMastra, DATATORAG_AGENT_ID } from "@/mastra";
 import { RUN_ID_CONTEXT_KEY } from "@/mastra/llm-usage";
-import { buildPluginRequestContext } from "@/mastra/mcp/client";
+import { buildPluginRequestContext, SKILL_RUN_CONTEXT_KEY } from "@/mastra/mcp/client";
+import { getSkillBySlug } from "@/lib/skills";
 import {
   deriveThreadId, findApprovalTargets, mintRunId, ownsRunId,
 } from "@/gateway/playground/run-ownership";
@@ -219,11 +220,28 @@ export const POST = withRoute(async (userId, request) => {
 
   const body = (await request.json().catch(() => null)) as {
     messages?: unknown; id?: unknown; trigger?: unknown; threadId?: unknown;
+    skill?: unknown; skillTrigger?: unknown;
   } | null;
   const messages = body?.messages;
   if (!Array.isArray(messages) || messages.length === 0) {
     return NextResponse.json({ error: "Bad request" }, { status: 400 });
   }
+
+  /* A SKILL RUN (SCRUM-223). The client names the published skill this turn
+   * executes; the slug is validated against the one catalogue here, and a
+   * slug the catalogue does not know is dropped rather than echoed, so the
+   * run event can never claim a skill that does not exist. `trigger` is who
+   * started it (SCRUM-225): only the two known values are accepted. Both are
+   * attribution and a policy switch, never content: the message the model
+   * sees is in `messages` like any other turn. The client sends the trigger
+   * under `skillTrigger` because `trigger` already means something else on
+   * this body (the AI SDK's submit/regenerate). */
+  const skillSlug =
+    typeof body?.skill === "string" && getSkillBySlug(body.skill) ? body.skill : null;
+  const skillTrigger =
+    skillSlug && (body?.skillTrigger === "manual" || body?.skillTrigger === "scheduled")
+      ? body.skillTrigger
+      : undefined;
 
   /* WHICH CONVERSATION THIS TURN BELONGS TO.
    *
@@ -388,13 +406,22 @@ export const POST = withRoute(async (userId, request) => {
     // two runs and halve its own token total.
     usageRunId = isApprovalLeg ? approvals[0]?.runId : mintRunId(userId);
     if (usageRunId) requestContext.set(RUN_ID_CONTEXT_KEY, usageRunId);
+    // A skill run prompts for nothing mid-run (per HQ decision, see
+    // skill-run-gate.ts); the tool resolver reads this key and swaps the
+    // approval policy for this one request.
+    if (skillSlug) requestContext.set(SKILL_RUN_CONTEXT_KEY, skillSlug);
 
     // One event per RUN, not per leg. An approval leg resumes a run that was
     // already counted and already claimed, so emitting here would report two
     // runs for one turn and overstate exactly the number the allowance is
     // measured in.
     if (!isApprovalLeg && usageRunId) {
-      void trackAgentRun(db, userId, { runId: usageRunId, runsUsed });
+      void trackAgentRun(db, userId, {
+        runId: usageRunId,
+        runsUsed,
+        skill: skillSlug,
+        ...(skillTrigger ? { trigger: skillTrigger } : {}),
+      });
     }
 
     // NAME THE CONVERSATION, ONCE, FROM WHAT THE USER ALREADY TYPED.

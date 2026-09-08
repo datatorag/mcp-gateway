@@ -300,6 +300,34 @@ describe("POST /api/playground/chat — the turn cap", () => {
     expect(trackPlaygroundMessage).toHaveBeenCalledWith(expect.anything(), USER);
   });
 
+  /* SCRUM-223: a skill run names its skill in the body, validated against the
+   * catalogue, so the run event carries the slug and the trigger. A slug the
+   * catalogue does not know is dropped, never echoed: the event must not be
+   * able to claim a skill that does not exist. */
+  it("stamps a valid skill slug and its trigger on the run event", async () => {
+    await drain(
+      await POST(post({ messages: USER_TURN, skill: "morning-brief", skillTrigger: "manual" }))
+    );
+    expect(trackAgentRun).toHaveBeenCalledWith(
+      expect.anything(),
+      USER,
+      expect.objectContaining({ skill: "morning-brief", trigger: "manual" })
+    );
+  });
+
+  it("drops an unknown skill slug and a foreign trigger value", async () => {
+    await drain(
+      await POST(post({ messages: USER_TURN, skill: "no-such-skill", skillTrigger: "cron" }))
+    );
+    expect(trackAgentRun).toHaveBeenCalledWith(
+      expect.anything(),
+      USER,
+      expect.objectContaining({ skill: null })
+    );
+    const props = trackAgentRun.mock.calls[0]![2] as Record<string, unknown>;
+    expect(props.trigger).toBeUndefined();
+  });
+
   it("the run allowance is PLAN-AWARE — Pro claims against the allowance Pro paid for", async () => {
     // This REVERSES the earlier plan-independent pin, on the terms that pin
     // itself set: it existed to make a per-plan allowance "a decision, not a

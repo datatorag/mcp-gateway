@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import posthog from "posthog-js";
 import { EVENTS } from "@/lib/analytics";
 import { Playground, type PlaygroundHandle } from "../playground";
@@ -41,8 +41,14 @@ export function AgentClient({
   connectedService = null,
   connectError = null,
   seedPrompt = null,
+  seedSkill = null,
   initialConnections = null,
 }: {
+  /** The skill deep link's payload (SCRUM-223), RESOLVED SERVER-SIDE by slug
+   * from the one catalogue: the services it needs and the run message the
+   * catalogue composed. Runs once when every service is connected; otherwise
+   * the empty state asks for the connect and returns here afterwards. */
+  seedSkill?: { slug: string; title: string; services: string[]; message: string } | null;
   isDefaultView: boolean;
   landedFrom: AgentLandedFrom;
   /** The connection state as the server loaded it at render time
@@ -63,9 +69,64 @@ export function AgentClient({
    * into an auto-submitted turn. */
   seedPrompt?: string | null;
 }) {
-  const { accounts, hasConnectedAccount, loaded: connectionsLoaded } =
-    useConnections(initialConnections);
+  const {
+    accounts,
+    legacyConnections,
+    hasConnectedAccount,
+    loaded: connectionsLoaded,
+  } = useConnections(initialConnections);
   const ref = useRef<PlaygroundHandle>(null);
+
+  /* THE SKILL DEEP LINK'S LAST HOP (SCRUM-223).
+   *
+   * The page resolved the slug and the connections. If every service the
+   * skill needs is connected, the run message is submitted ONCE and the
+   * parameter is stripped, exactly as the prompt seed below does. If one is
+   * missing, nothing is submitted and the parameter STAYS in the URL: the
+   * empty state asks for the connect with this deep link as the return path,
+   * and the connect callback lands back here with the skill still named.
+   * Stripping the parameter in that branch is what would drop the campaign
+   * click on the floor. */
+  const connectedServiceIds = useMemo(() => {
+    const ids = new Set<string>();
+    for (const a of accounts) ids.add(a.connectorType);
+    for (const c of legacyConnections) ids.add(c.service);
+    return ids;
+  }, [accounts, legacyConnections]);
+  const missingServices = useMemo(
+    () => (seedSkill ? seedSkill.services.filter((id) => !connectedServiceIds.has(id)) : []),
+    [seedSkill, connectedServiceIds]
+  );
+  const pendingSkill =
+    seedSkill && connectionsLoaded && missingServices.length > 0
+      ? { slug: seedSkill.slug, title: seedSkill.title, missingServices }
+      : null;
+  const skillRunRef = useRef(false);
+  useEffect(() => {
+    if (!seedSkill || skillRunRef.current) return;
+    if (!connectionsLoaded || missingServices.length > 0) return;
+    skillRunRef.current = true;
+    const params = new URLSearchParams(window.location.search);
+    params.delete("skill");
+    params.delete("connected");
+    const rest = params.toString();
+    window.history.replaceState(
+      null,
+      "",
+      rest ? `${window.location.pathname}?${rest}` : window.location.pathname
+    );
+    // Intent, not activation: the run starting is tracked by slug and
+    // trigger, and activation stays the first tool call per person.
+    posthog.capture(EVENTS.SKILL_RUN_STARTED, {
+      skill: seedSkill.slug,
+      surface: "agent",
+      trigger: "manual",
+    });
+    ref.current?.runPrompt(seedSkill.message, {
+      skill: seedSkill.slug,
+      skillTrigger: "manual",
+    });
+  }, [seedSkill, connectionsLoaded, missingServices]);
 
   /** Run the seeded prompt exactly once, stripping the param first so a
    * reload or a shared URL cannot re-submit it (same pattern as the connect
@@ -279,6 +340,7 @@ export function AgentClient({
             // without waiting for the lookup. State only; the copy for an
             // unconnected user is the same however they arrived.
             welcome={landedFrom === "signup"}
+            pendingSkill={pendingSkill}
           />
         </div>
       </div>

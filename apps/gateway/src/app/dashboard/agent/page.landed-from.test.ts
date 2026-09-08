@@ -67,6 +67,9 @@ const NO_CONNECT_RETURN = {
   // The server-fetched connection state (SCRUM-206), as the mocked loader
   // returns it.
   initialConnections: { accounts: [], connections: [] },
+  // A plain landing seeds no skill either (SCRUM-223); the skill seeding
+  // contract is pinned in page.seed-prompt.test.ts.
+  seedSkill: null,
 };
 
 describe("agent page landing props", () => {

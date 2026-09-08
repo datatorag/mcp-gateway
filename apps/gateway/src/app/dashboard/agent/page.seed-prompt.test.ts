@@ -36,6 +36,56 @@ async function seedFor(prompt?: string): Promise<string | null> {
   return element.props.seedPrompt;
 }
 
+/* SCRUM-223: the skill deep link seeds by SLUG, resolved server-side from the
+ * one catalogue, under the same rule as the prompt index: an id that does not
+ * resolve seeds nothing, and no text ever travels in the URL. */
+describe("the agent page's skill seeding (SCRUM-223)", () => {
+  async function seedSkillFor(skill?: string) {
+    const element = (await AgentPage({
+      searchParams: Promise.resolve(skill === undefined ? {} : { skill }),
+    })) as {
+      props: {
+        seedSkill: { slug: string; title: string; services: string[]; message: string } | null;
+      };
+    };
+    return element.props.seedSkill;
+  }
+
+  it("resolves a published slug to the skill, its services and its run message", async () => {
+    const seed = await seedSkillFor("morning-brief");
+    expect(seed?.slug).toBe("morning-brief");
+    expect(seed?.services).toEqual(["google-workspace"]);
+    expect(seed?.message).toContain("name: morning-brief");
+  });
+
+  it("seeds nothing for an unknown slug, free text, or no parameter", async () => {
+    expect(await seedSkillFor("no-such-skill")).toBeNull();
+    expect(await seedSkillFor("delete all my emails")).toBeNull();
+    expect(await seedSkillFor("../morning-brief")).toBeNull();
+    expect(await seedSkillFor()).toBeNull();
+  });
+
+  it("bounces a lapsed session to login WITH the deep link, and a plain landing without", async () => {
+    // The middleware carries next for a missing cookie; this page is the
+    // check for a present-but-invalid one, and the campaign click must
+    // survive both.
+    const { getSessionUserId } = await import("@/lib/session");
+    const { redirect } = await import("next/navigation");
+    vi.mocked(getSessionUserId).mockResolvedValueOnce(null);
+    await expect(
+      AgentPage({ searchParams: Promise.resolve({ skill: "morning-brief" }) })
+    ).rejects.toThrow("redirected");
+    expect(redirect).toHaveBeenLastCalledWith(
+      "/auth/login?next=%2Fdashboard%2Fagent%3Fskill%3Dmorning-brief"
+    );
+    vi.mocked(getSessionUserId).mockResolvedValueOnce(null);
+    await expect(
+      AgentPage({ searchParams: Promise.resolve({ skill: "no-such-skill" }) })
+    ).rejects.toThrow("redirected");
+    expect(redirect).toHaveBeenLastCalledWith("/auth/login");
+  });
+});
+
 describe("the agent page's prompt seeding", () => {
   it("resolves a valid index to the SHARED list's text, server-side", async () => {
     expect(await seedFor("1")).toBe(AGENT_PROMPTS[1]);

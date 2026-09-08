@@ -17,6 +17,33 @@ import {
 } from "./post-login-destination";
 
 describe("postLoginDestination", () => {
+  /* SCRUM-223: the campaign's deep link is /dashboard/agent?skill=<slug>
+   * behind a login. The skill parameter must ride through the login redirect
+   * for both a new and a returning user, with our own params added rather
+   * than replacing it. If this ever drops the query, the campaign click lands
+   * on a generic dashboard and the ad promised something the page did not do. */
+  describe("the skill deep link survives login (SCRUM-223)", () => {
+    it("keeps the skill parameter for a new user and adds signup and welcome", () => {
+      expect(
+        postLoginDestination({
+          agentDefaultView: true,
+          isNewUser: true,
+          requestedPath: "/dashboard/agent?skill=morning-brief",
+        })
+      ).toBe("/dashboard/agent?skill=morning-brief&signup=1&welcome=1");
+    });
+
+    it("keeps the skill parameter for a returning user and adds welcome", () => {
+      expect(
+        postLoginDestination({
+          agentDefaultView: false,
+          isNewUser: false,
+          requestedPath: "/dashboard/agent?skill=morning-brief",
+        })
+      ).toBe("/dashboard/agent?skill=morning-brief&welcome=1");
+    });
+  });
+
   describe("AGENT_DEFAULT_VIEW=on", () => {
     it("sends a new user to the agent with both params", () => {
       expect(

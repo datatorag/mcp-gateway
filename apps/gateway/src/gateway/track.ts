@@ -226,11 +226,19 @@ async function trackFirstToolCall(
  * session id of its own, so without it the signup cannot be joined to the
  * browsing session — and therefore to the channel — that produced it.
  */
+/** SCRUM-223: the campaign funnel's slug, as an added property on the login
+ * and connect events. The value is parsed from the SAME validated `next`
+ * path the redirect redeems, so an event can never claim a skill the
+ * redirect did not carry. Null when the login or connect was not on a skill's
+ * behalf. */
+export type SkillContext = { skill?: string | null };
+
 export function trackSignup(
   userId: string,
   email: string,
   name: string | null,
-  attribution?: Attribution | null
+  attribution?: Attribution | null,
+  context?: SkillContext
 ): void {
   const c = getPosthog();
   if (!c) return;
@@ -247,6 +255,7 @@ export function trackSignup(
       ...sessionProps(attribution),
       ...acquisitionProps(attribution),
       ...acquisitionSetOnce(attribution),
+      skill: context?.skill ?? null,
     },
   });
 }
@@ -254,14 +263,19 @@ export function trackSignup(
 export function trackLogin(
   userId: string,
   email: string,
-  attribution?: Attribution | null
+  attribution?: Attribution | null,
+  context?: SkillContext
 ): void {
   const c = getPosthog();
   if (!c) return;
   c.capture({
     distinctId: userId,
     event: EVENTS.USER_LOGGED_IN,
-    properties: { ...identityProps(email), ...sessionProps(attribution) },
+    properties: {
+      ...identityProps(email),
+      ...sessionProps(attribution),
+      skill: context?.skill ?? null,
+    },
   });
 }
 
@@ -312,7 +326,16 @@ export async function trackPlaygroundMessage(
 export async function trackAgentRun(
   db: Database,
   userId: string,
-  props: { runId: string; runsUsed: number }
+  props: {
+    runId: string;
+    runsUsed: number;
+    /** SCRUM-223: the published skill this run executes, when it is a skill
+     * run, validated against the catalogue by the caller. Null for an
+     * ordinary turn, so a skill run and a plain turn split in every insight
+     * without a second event. `trigger` says who started it (SCRUM-225). */
+    skill?: string | null;
+    trigger?: "manual" | "scheduled";
+  }
 ): Promise<void> {
   // Activation for the agent surface, claimed the same idempotent way as the
   // gateway's: UPDATE ... WHERE the column IS NULL, so exactly one concurrent
@@ -326,6 +349,8 @@ export async function trackAgentRun(
   return capturePlaygroundEvent(db, userId, EVENTS.AGENT_RUN, {
     run_id: props.runId,
     runs_used: props.runsUsed,
+    skill: props.skill ?? null,
+    ...(props.trigger ? { trigger: props.trigger } : {}),
   });
 }
 
@@ -517,7 +542,8 @@ export async function trackOAuthCompleted(
    * on an era event — the event still fires on a partial grant so the funnel
    * count keeps its meaning; `grant_complete` carries the split. Optional so
    * providers without per-scope consent (Atlassian) stamp complete. */
-  grant?: { complete: boolean; missing: Array<{ displayName: string }> }
+  grant?: { complete: boolean; missing: Array<{ displayName: string }> },
+  context?: SkillContext
 ): Promise<void> {
   const c = getPosthog();
   if (!c) return;
@@ -532,6 +558,7 @@ export async function trackOAuthCompleted(
       missing_scopes: grant?.missing.map((m) => m.displayName) ?? [],
       ...identityProps(email),
       ...sessionProps(attribution),
+      skill: context?.skill ?? null,
     },
   });
 }

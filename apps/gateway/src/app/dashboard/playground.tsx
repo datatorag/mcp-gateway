@@ -200,11 +200,22 @@ const LOCKED_PROMPT_TITLE = "Connect an account to run this";
  * everyone for the moment they see it. */
 const CHECKING_ACCOUNTS = "Checking your accounts";
 
+/** Extra request-body fields a submitted turn carries (SCRUM-223): the
+ * published skill it runs and who started it. Attribution and a policy
+ * switch on the server, never content; the message is the text. */
+export type RunOptions = { skill?: string; skillTrigger?: "manual" | "scheduled" };
+
 export interface PlaygroundHandle {
   /** Seed the input with `prompt` and submit it immediately. Used by the
-   * "What can I do?" prompt cards' Run action in dashboard-client.tsx. */
-  runPrompt: (prompt: string) => void;
+   * "What can I do?" prompt cards' Run action in dashboard-client.tsx and by
+   * the skill deep link's last hop in agent-client.tsx. */
+  runPrompt: (prompt: string, options?: RunOptions) => void;
 }
+
+/** A skill the page was asked to run that cannot run yet (SCRUM-223): a
+ * service it needs is not connected. The empty state leads with that ask and
+ * the connect control returns to the deep link, so the run happens after. */
+export type PendingSkill = { slug: string; title: string; missingServices: string[] };
 
 interface PlaygroundProps {
   /** Example prompts, offered as quick-start chips in the empty state. */
@@ -254,6 +265,8 @@ interface PlaygroundProps {
    * connected user on this landing (a returning account re-signing up) still
    * gets the connected shape: the assumption yields to a known answer. */
   welcome?: boolean;
+  /** SCRUM-223: a skill waiting on a connect. Null when there is none. */
+  pendingSkill?: PendingSkill | null;
 }
 
 /** Feedback is reported against the prompt that produced the answer, which is
@@ -287,6 +300,7 @@ export const Playground = forwardRef<PlaygroundHandle, PlaygroundProps>(
       initialMessages,
       onConversationChanged,
       welcome = false,
+      pendingSkill = null,
     },
     ref
   ) {
@@ -576,7 +590,7 @@ export const Playground = forwardRef<PlaygroundHandle, PlaygroundProps>(
     const awaitingConfirm = useMemo(() => hasPendingApproval(messages), [messages]);
 
     const send = useCallback(
-      (raw: string) => {
+      (raw: string, options?: RunOptions) => {
         const text = raw.trim();
         if (
           !text ||
@@ -597,7 +611,15 @@ export const Playground = forwardRef<PlaygroundHandle, PlaygroundProps>(
         // drops a re-entrant call, and clearing first would eat the text.
         void runExclusive(async () => {
           setInput("");
-          await sendMessage({ text });
+          // A skill run names its skill and trigger in the request body
+          // (SCRUM-223); the server validates the slug against the catalogue
+          // and stamps the run event. An ordinary turn sends no extra body.
+          await sendMessage(
+            { text },
+            options?.skill
+              ? { body: { skill: options.skill, skillTrigger: options.skillTrigger ?? "manual" } }
+              : undefined
+          );
           // A turn has gone out, so a thread list is now stale: a brand new
           // conversation did not exist before this and a resumed one just
           // moved to the top. Fired after the send rather than before, so a
@@ -708,11 +730,16 @@ export const Playground = forwardRef<PlaygroundHandle, PlaygroundProps>(
      * does not re-render every message row per streamed token. */
     const connectReturn = useMemo(
       () => ({
-        nextPath: serverThreadId
-          ? `/dashboard/agent?thread=${encodeURIComponent(serverThreadId)}`
-          : "/dashboard/agent",
+        // A skill waiting on a connect returns to ITS deep link (SCRUM-223),
+        // so the connect callback lands with the skill still named and the
+        // run happens then. That is the hop the campaign funnel cannot lose.
+        nextPath: pendingSkill
+          ? `/dashboard/agent?skill=${encodeURIComponent(pendingSkill.slug)}`
+          : serverThreadId
+            ? `/dashboard/agent?thread=${encodeURIComponent(serverThreadId)}`
+            : "/dashboard/agent",
       }),
-      [serverThreadId]
+      [serverThreadId, pendingSkill]
     );
 
     /** What each service's DEFAULT account actually granted (SCRUM-106).
@@ -824,7 +851,22 @@ export const Playground = forwardRef<PlaygroundHandle, PlaygroundProps>(
                       series stays comparable across the deploy boundary. */}
                   {(locked || checking) && (
                     <div className={isPage ? "space-y-3" : "space-y-2"}>
-                      {locked ? (
+                      {pendingSkill ? (
+                        // The deep link's ask (SCRUM-223): the skill the
+                        // user came to run, and the one thing standing
+                        // between them and it. The control below returns to
+                        // the deep link, so nothing about the intent is lost.
+                        <p
+                          className={cn(
+                            "font-medium text-foreground",
+                            isPage ? "text-sm" : "text-xs"
+                          )}
+                        >
+                          {`To run this skill, connect ${pendingSkill.missingServices
+                            .map((id) => SERVICES.find((s) => s.id === id)?.name ?? id)
+                            .join(" and ")}: ${pendingSkill.title}`}
+                        </p>
+                      ) : locked ? (
                         <p
                           className={cn(
                             "font-medium text-foreground",

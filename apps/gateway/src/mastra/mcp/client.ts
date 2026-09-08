@@ -10,6 +10,7 @@ import { capToolOutput } from "@/gateway/playground/cap";
 import { EPHEMERAL_CACHE_OPTIONS } from "@/mastra/agents/datatorag";
 import { getDb } from "@/lib/db";
 import { buildIntrospectionTools } from "@/mastra/tools/introspection";
+import { skillRunApproval } from "./skill-run-gate";
 
 /**
  * The dashboard agent's connection to the gateway's own MCP (SCRUM-188).
@@ -41,6 +42,13 @@ import { buildIntrospectionTools } from "@/mastra/tools/introspection";
 
 /** Request-context key holding the id of the user the request is running as. */
 export const USER_ID_CONTEXT_KEY = "userId";
+
+/** Request-context key set to the skill slug when the turn is a SKILL RUN
+ * (SCRUM-223). A skill run is a background process and prompts for nothing
+ * mid-run (per HQ decision, see skill-run-gate.ts); the tool wrapper reads
+ * this key to swap the approval policy for that one request. Absent on every
+ * ordinary turn, where the write gate stays exactly as it was. */
+export const SKILL_RUN_CONTEXT_KEY = "skillRun";
 
 /** How the in-process client introduces itself at the MCP initialize
  * handshake. Lands as client_name on every tool_call event (SCRUM-189), so
@@ -113,14 +121,20 @@ type McpToolDef = {
  */
 export function wrapMcpTools(
   defs: McpToolDef[],
-  callTool: (name: string, args: Record<string, unknown>) => Promise<unknown>
+  callTool: (name: string, args: Record<string, unknown>) => Promise<unknown>,
+  opts?: {
+    /** SCRUM-223: this request is a skill run. The approval policy comes
+     * from skill-run-gate.ts (nothing prompts) instead of the write gate. */
+    skillRun?: boolean;
+  }
 ): ToolsInput {
+  const approvalFor = opts?.skillRun ? skillRunApproval : requireApprovalFor;
   const resolved: ToolsInput = {};
   for (const def of defs) {
     resolved[def.name] = {
       description: def.description ?? "",
       inputSchema: jsonSchema(def.inputSchema as JSONSchema7),
-      requireApproval: requireApprovalFor(def.name),
+      requireApproval: approvalFor(def.name),
       // The result is returned as the MCP server shaped it — including its
       // worded scope refusals and error rewrites — capped for context size.
       // No metering, no rewriting, no account handling here: the server did
@@ -194,8 +208,11 @@ export async function resolveUserPluginTools({
   ]);
 
   const { tools } = await client.listTools();
-  const wrapped = wrapMcpTools(tools as McpToolDef[], (name, args) =>
-    client.callTool({ name, arguments: args })
+  const skillRun = typeof requestContext.get(SKILL_RUN_CONTEXT_KEY) === "string";
+  const wrapped = wrapMcpTools(
+    tools as McpToolDef[],
+    (name, args) => client.callTool({ name, arguments: args }),
+    { skillRun }
   );
 
   // Introspection tools are OURS, not a plugin's: UI actions on this user's

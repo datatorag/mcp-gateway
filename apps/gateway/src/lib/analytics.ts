@@ -27,6 +27,19 @@ export const EVENTS = {
   DEFAULT_ACCOUNT_CHANGED: "default_account_changed",
   COPY_MCP_CONFIG: "copy_mcp_config",
   SKILL_COPIED: "skill_copied",
+  /** SCRUM-223: the campaign funnel, one event per hop, every one carrying
+   * `skill` (the slug). The public page's CTA, the dashboard list's Run, and
+   * the run starting in the agent. The login, connect and agent_run events
+   * carry the slug as an added property rather than as new events. These are
+   * INTENT events: activation stays "first tool_call per person" and a skill
+   * run is never substituted for it. */
+  SKILL_RUN_CTA_CLICKED: "skill_run_cta_clicked",
+  SKILL_RUN_CLICKED: "skill_run_clicked",
+  SKILL_RUN_STARTED: "skill_run_started",
+  /** SCRUM-224: the catalogue over MCP. A search, and a skill handed to a
+   * client session by prompt or by tool. */
+  SKILL_SEARCHED: "skill_searched",
+  SKILL_APPLIED: "skill_applied",
   MCP_REQUEST_RECEIVED: "mcp_request_received",
   MCP_SESSION_INITIALIZED: "mcp_session_initialized",
   MCP_AUTH_FAILED: "mcp_auth_failed",

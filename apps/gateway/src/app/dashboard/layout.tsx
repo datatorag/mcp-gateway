@@ -14,6 +14,7 @@ import {
   PanelLeftClose,
   PanelLeftOpen,
   Plug,
+  Sparkles,
   type LucideIcon,
 } from "lucide-react";
 import { useCurrentUser, type CurrentUser } from "@/lib/use-current-user";
@@ -30,6 +31,10 @@ const navItems: Array<{ href: string; label: string; icon: LucideIcon }> = [
   // glyph labelled Connections would say the old name to anyone hovering.
   { href: "/dashboard", label: "Connections", icon: Cable },
   { href: "/dashboard/agent", label: "Agent", icon: MessageSquare },
+  // Skills (SCRUM-223): the catalogue the public pages publish, with a Run
+  // that lands in the Agent with the skill loaded. Next to Agent because
+  // that is where a Run ends up.
+  { href: "/dashboard/skills", label: "Skills", icon: Sparkles },
   { href: "/dashboard/usage", label: "Usage", icon: BarChart3 },
   { href: "/dashboard/billing", label: "Billing", icon: CreditCard },
   { href: "/dashboard/mcp-config", label: "MCP config", icon: Plug },

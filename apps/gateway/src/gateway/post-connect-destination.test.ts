@@ -11,6 +11,18 @@ import {
  * red instead of quiet.
  */
 describe("postConnectDestination", () => {
+  it("keeps a skill deep link intact across the connect hop (SCRUM-223)", () => {
+    // The second OAuth redirect in the campaign funnel. The agent page sends
+    // an unconnected user to connect with the deep link as the return path;
+    // the callback must land back on it with the skill still named.
+    expect(
+      postConnectDestination({
+        requestedPath: "/dashboard/agent?skill=morning-brief",
+        provider: "google-workspace",
+      })
+    ).toBe("/dashboard/agent?skill=morning-brief&connected=google-workspace");
+  });
+
   it("returns to the requested path with connected=<provider>", () => {
     expect(
       postConnectDestination({
