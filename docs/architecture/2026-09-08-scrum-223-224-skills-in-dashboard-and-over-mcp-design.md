@@ -71,8 +71,11 @@ the button says so ("Connect and run"). "Skills" joins the dashboard nav after A
 
 ### What stays as it is
 
-Read-only skills stay read-only: the skill text says so, the agent's write gate asks
-before any write regardless, and nothing here changes either. The public page's
+Read-only skills stay read-only: the skill text is the limit, and nothing here changes
+what any skill says. (The write gate's role in a skill run was ruled on later; see
+"Rulings received" below.) A skill run is recognised only when the submitted turn is
+byte-identical to the catalogue's own run message beside a published slug, so the
+no-gates policy can never apply to text a caller wrote. The public page's
 existing copy button and prose are untouched; only the CTA box at the bottom
 changes its destination and its wording. Scheduling is not built.
 
@@ -93,9 +96,10 @@ so prompts are a capability declaration and two handlers, not a dependency.
 - **Tools** cover clients that render tools only. Two built-ins in the existing
   `BUILT_IN_TOOLS` registry, both `approval: "read"`, so they appear in `tools/list`,
   emit `tool_call` and go through the same dispatch as every other built-in:
-  `search_skills` (optional `query`, matched against title, situation, produces and
+  `skills_search` (optional `query`, matched against title, situation, produces and
   tool names; returns slug, title, situation, produces, and per-service connected
-  or not) and `get_skill` (`slug`; returns the same text the prompt returns). The
+  or not) and `skills_get` (`slug`; returns the same text the prompt returns).
+  Noun-first, per HQ decision, so they read like every other registry tool. The
   model adopts the returned text; there is nothing to install.
 
 Why both rather than one: a prompt is invisible to a tools-only client and a tool is
@@ -226,6 +230,28 @@ HQ's answers to the five points above before its shape is settled.
   is the Run click or the schedule save. `wrapMcpTools` swaps the approval policy for
   a skill run to `skill-run-gate.ts`, which clears it for every tool; an ordinary turn
   keeps the write gate exactly as it was. Safety is ordering and recovery.
+
+## The skills store (per HQ decision, see SCRUM-224 and SCRUM-226)
+
+The file-based catalogue SCRUM-223 ships against is a step, not the destination.
+Skills migrate to a database. In SCRUM-224 published skills and user-owned skills
+(SCRUM-226) live in ONE table with `owner` and `visibility` on every row (visibility
+fixed at `public` for ours and `private` for a user's, so sharing later is a policy
+change, not a migration), every save an immutable version, and `forked_from` pinning
+slug plus version. Every surface reads one query filtered by owner and visibility; the
+"union" of published plus mine is that filter.
+
+**Where the boundary control runs once published skills are rows: option (a).** The
+repo's `content/skills/*.md` files remain the AUTHORED SOURCE for our published skills
+and are seeded into the table on deploy, keyed by slug with the content hash as the
+version. The boundary test keeps running over the files in the suite, before any push,
+and a published skill can change only through a reviewed commit that passes it. Option
+(b), authoring in the table behind an admin flag with the test run against rows, was
+rejected because it moves the only gate on public text off the path a reviewer sees
+and onto a runtime that has no reviewer. A published skill with no boundary test is
+public text with no gate, which this design must not produce. User skills are private
+to their owner and are validated at save (size, no secrets, tools and accounts the
+owner actually has); the boundary test is about what WE publish.
 
 ## Scope questions for HQ, not decided here
 

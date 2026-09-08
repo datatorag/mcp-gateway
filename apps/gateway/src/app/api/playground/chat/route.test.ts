@@ -93,6 +93,7 @@ vi.mock("@mastra/ai-sdk", () => ({
 
 import { mintRunId } from "@/gateway/playground/run-ownership";
 import { USER_ID_CONTEXT_KEY } from "@/mastra/mcp/client";
+import { getSkillBySlug, skillRunMessage } from "@/lib/skills";
 import { POST } from "./route";
 
 const USER = "user-1";
@@ -304,14 +305,30 @@ describe("POST /api/playground/chat — the turn cap", () => {
    * catalogue, so the run event carries the slug and the trigger. A slug the
    * catalogue does not know is dropped, never echoed: the event must not be
    * able to claim a skill that does not exist. */
-  it("stamps a valid skill slug and its trigger on the run event", async () => {
+  it("stamps a valid skill slug and its trigger on the run event when the turn IS the skill's run message", async () => {
+    const skill = getSkillBySlug("morning-brief")!;
+    const turn = [{ id: "u1", role: "user", parts: [{ type: "text", text: skillRunMessage(skill) }] }];
+    await drain(
+      await POST(post({ messages: turn, skill: "morning-brief", skillTrigger: "manual" }))
+    );
+    expect(trackAgentRun).toHaveBeenCalledWith(
+      expect.anything(),
+      USER,
+      expect.objectContaining({ skill: "morning-brief", trigger: "manual" })
+    );
+  });
+
+  it("a valid slug beside ARBITRARY text is an ordinary turn: no skill, no trigger", async () => {
+    // The no-gates policy is scoped to the catalogue's own run message. A
+    // caller naming a real skill next to text of their own gets the gated
+    // turn everyone gets.
     await drain(
       await POST(post({ messages: USER_TURN, skill: "morning-brief", skillTrigger: "manual" }))
     );
     expect(trackAgentRun).toHaveBeenCalledWith(
       expect.anything(),
       USER,
-      expect.objectContaining({ skill: "morning-brief", trigger: "manual" })
+      expect.objectContaining({ skill: null })
     );
   });
 

@@ -7,7 +7,7 @@ import { getEnv } from "@datatorag-mcp/config";
 import { getMastra, DATATORAG_AGENT_ID } from "@/mastra";
 import { RUN_ID_CONTEXT_KEY } from "@/mastra/llm-usage";
 import { buildPluginRequestContext, SKILL_RUN_CONTEXT_KEY } from "@/mastra/mcp/client";
-import { getSkillBySlug } from "@/lib/skills";
+import { getSkillBySlug, skillRunMessage } from "@/lib/skills";
 import {
   deriveThreadId, findApprovalTargets, mintRunId, ownsRunId,
 } from "@/gateway/playground/run-ownership";
@@ -210,6 +210,32 @@ function firstUserMessageText(messages: unknown[]): string | null {
 /* The route                                                                   */
 /* -------------------------------------------------------------------------- */
 
+/**
+ * Is this turn a SKILL RUN (SCRUM-223)? Two things must both hold: the body
+ * names a published slug, AND the turn being submitted is that skill's own
+ * run message, byte for byte, as the catalogue composes it. The second half
+ * is what keeps the no-gates policy scoped to skills: a caller who sends a
+ * valid slug beside arbitrary text gets an ordinary gated turn, not a
+ * background run. Attribution follows the same rule, so a skill event can
+ * only ever describe a real skill run.
+ */
+function isSkillRunTurn(messages: unknown[], slug: unknown): boolean {
+  if (typeof slug !== "string") return false;
+  const skill = getSkillBySlug(slug);
+  if (!skill) return false;
+  const last = messages[messages.length - 1] as
+    | { role?: unknown; parts?: unknown }
+    | undefined;
+  if (!last || last.role !== "user" || !Array.isArray(last.parts)) return false;
+  const text = last.parts
+    .filter((p): p is { type: string; text: string } =>
+      typeof p === "object" && p !== null && (p as { type?: unknown }).type === "text"
+    )
+    .map((p) => p.text)
+    .join("");
+  return text === skillRunMessage(skill);
+}
+
 // POST /api/playground/chat — one capped, streaming playground turn. The same
 // endpoint answers a gated write: the decision rides in on the messages array.
 export const POST = withRoute(async (userId, request) => {
@@ -236,8 +262,7 @@ export const POST = withRoute(async (userId, request) => {
    * sees is in `messages` like any other turn. The client sends the trigger
    * under `skillTrigger` because `trigger` already means something else on
    * this body (the AI SDK's submit/regenerate). */
-  const skillSlug =
-    typeof body?.skill === "string" && getSkillBySlug(body.skill) ? body.skill : null;
+  const skillSlug = isSkillRunTurn(messages, body?.skill) ? (body!.skill as string) : null;
   const skillTrigger =
     skillSlug && (body?.skillTrigger === "manual" || body?.skillTrigger === "scheduled")
       ? body.skillTrigger
