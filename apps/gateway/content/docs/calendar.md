@@ -29,7 +29,7 @@ faqs:
       if you need it.
 ---
 
-The Calendar connector lets your AI assistant manage your Google Calendar — viewing your schedule, creating events, and checking availability.
+The Calendar connector lets your AI assistant manage your Google Calendar: viewing your schedule, creating events, and checking availability.
 
 ## Available operations
 

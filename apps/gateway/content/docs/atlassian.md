@@ -1,6 +1,6 @@
 ---
 title: "Atlassian"
-description: "Jira and Confluence — issues, pages, comments, and search."
+description: "Jira and Confluence: issues, pages, comments, and search."
 order: 20
 section: "general"
 faqs:
@@ -20,7 +20,7 @@ faqs:
       and edits pages, and manages comments and attachments.
 ---
 
-The Atlassian connector gives your AI assistant access to Jira and Confluence — searching issues with JQL, creating and updating tickets, reading and editing pages, and managing comments and attachments.
+The Atlassian connector gives your AI assistant access to Jira and Confluence: searching issues with JQL, creating and updating tickets, reading and editing pages, and managing comments and attachments.
 
 ## Services
 
