@@ -25,7 +25,7 @@ The Gmail connector gives your AI assistant full access to your inbox: searching
 | `gmail_send_draft` | Send an existing draft |
 | `gmail_delete_draft` | Delete a draft |
 | `gmail_mark_read` | Mark messages as read, for a single message or a batch of up to 1,000 IDs. For label changes beyond read state, use `gmail_label_message` |
-| `gmail_label_message` | Add or remove labels on one message or several. Removing INBOX archives a message; removing UNREAD marks it read |
+| `gmail_label_message` | Label many messages in one call: `message_ids` (up to 1,000) with `add_labels` and `remove_labels`, one `batchModify` request, a per-message outcome in the result; `message_id` for a single message. Removing INBOX archives a message; removing UNREAD marks it read |
 | `gmail_create_label` | Create a label. Nested labels use `/` in the name (e.g., `Alerts/Invoices`). Returns the created label, including its ID |
 | `gmail_list_labels` | List every label, system and user-created, with its ID, name, and type. Label IDs feed `gmail_label_message`, `gmail_update_label`, and `gmail_delete_label` |
 | `gmail_update_label` | Rename a label or change its visibility. Takes the label ID, not the name. Renaming keeps the label on already-labeled messages |

@@ -80,12 +80,13 @@ Decide three things before the first call, and write them at the top of the run:
 
 5. Label the NOISE and mark it read in ONE call. Once per run per account, create the
    dated label `Triaged/<YYYY-MM-DD>` with `gmail_create_label` if it does not already
-   exist, then call `gmail_mark_read` with the NOISE message ids, `add_labels` set to
-   that label's id and `remove_labels` set to `["UNREAD"]`. That single call is atomic:
-   both happen or neither does.
+   exist, then call `gmail_label_message` ONCE with `message_ids` set to every NOISE
+   message id, `add_labels` set to that label's id and `remove_labels` set to
+   `["UNREAD"]`. One call, one request, for the whole batch; never once per message.
+   The result lists every id with its outcome, so a partial batch is visible.
 
-   If you ever have to do it as two calls, label first with `gmail_label_message`, then
-   mark read. The order is deliberate. Marking read is the only irreversible act in this
+   If you ever have to do it as two calls, label first (`gmail_label_message` with
+   `add_labels` only), then mark read (`gmail_mark_read` with the same `message_ids`). The order is deliberate. Marking read is the only irreversible act in this
    routine, so the reversible step goes first: if the run dies between the two, a
    labelled unread message is recoverable, an unlabelled read one is not. The label is
    also your audit trail and your undo. Search `label:Triaged` to see everything this
