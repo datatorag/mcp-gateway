@@ -1,6 +1,6 @@
 ---
 name: ops-debugging
-description: Use when diagnosing or operating the datatorag-mcp production gateway — plugin update/re-discovery, OAuth token failures, container issues, health checks. Placeholder-form runbook; live values come from private memory (like db-query).
+description: Use when diagnosing or operating the datatorag-mcp production gateway — plugin update/registry change, OAuth token failures, container issues, health checks. Placeholder-form runbook; live values come from private memory (like db-query).
 ---
 
 # Ops Debugging — Production Gateway
@@ -24,83 +24,56 @@ Don't duplicate these — read them first, then come back here for the gap:
   `reference_plugin_registry` (installed plugins, reinstall notes),
   `reference_neon_database` (prod project id/region).
 
-This skill only adds what those don't cover: the full plugin re-discovery
-recipe (deploy skill stops at "see reference_plugin_registry for details"),
+This skill only adds what those don't cover: the plugin update + registry
+change recipe (and why it is never a re-discovery),
 a symptom-first failure-mode table, and verification patterns that combine
 health checks + DB state.
 
-## Plugin update + tool re-discovery
+## Plugin update + registry change
 
-When a plugin's tool set changes (new/renamed/removed tools) and a rebuild alone
-won't fix the `tools` table, run the full re-discovery recipe. Proven in prod
-2026-07-18.
+When a plugin ships a change to its tool set (a changed description or schema,
+a new tool, a removed tool), the container gets the new code and the `tools`
+table gets exactly the rows that changed. Not a re-discovery.
+
+**The registry rule (SCRUM-138, SCRUM-235).** The `tools` table does not
+resync itself on a plugin deploy: `startAll()` only respawns processes, and
+`discoverTools()` runs at install time only. It is also never regenerated
+wholesale by hand. A full re-discovery (delete every row, reinsert what the
+plugin reports) once left seven tools live in the plugin and invisible in the
+registry, and its unconditional DELETE is the wrong tool for every routine
+change. What to do instead depends on what changed:
+
+- **An existing tool changed** (description, input schema, annotations): one
+  surgical `UPDATE tools SET description = ..., input_schema_json = ...
+  WHERE namespaced_name = '<slug>__<tool>'`, guarded on the old description
+  text so it touches nothing if the row is not the one you expect, with
+  `RETURNING` read back. The served count stays flat; say so in the report.
+- **A new tool**: one `INSERT` for that row (columns as `discoverTools`
+  writes them: `mcp_server_id`, `name`, `namespaced_name`, `description`,
+  `input_schema_json`, `read_only_hint`, `credits_per_call`), landed in the
+  same change as the playground classification commit. The served count
+  moves by exactly one, and the smoke suite is told in advance so its count
+  assertion is updated, not surprised.
+- **A removed tool**: one `DELETE` of that row, same discipline.
+- **Never a full re-discovery.** If the registry and the plugin disagree by
+  more than the change you are shipping, stop and diff them; a wholesale
+  rewrite hides the discrepancy instead of explaining it.
+
+After the row change, verify against the served surface, not the plugin's
+source: `tools/list` through the gateway with a real bearer must show the
+new description or the new name.
 
 1. **Pull + build the plugin inside its running container** (see deploy skill
    step 5 for the `git pull && pnpm install && npx tsc` exec).
 2. **Restart the gateway** so the plugin child process picks up the new build.
-3. **Run a re-discovery script from inside the gateway container** — it must
-   execute from `/app/apps/gateway` (module resolution for `@modelcontextprotocol/sdk`
-   and the `postgres` driver fails from `/tmp` or other paths):
-
-   ```bash
-   docker exec -i <gateway-container> bash -c \
-     'cat > /app/apps/gateway/rediscover.mjs && cd /app/apps/gateway && node rediscover.mjs; rm -f /app/apps/gateway/rediscover.mjs' < rediscover.mjs
-   ```
-
-   The script file must live under `/app/apps/gateway` — Node ESM resolves imports from the script's own path, so `/tmp` fails even with `cwd` set. The script is piped in from your local copy and removed after.
-
-   Script skeleton (fill in `<placeholders>`):
-
-   ```js
-   import { Client } from "@modelcontextprotocol/sdk/client/index.js";
-   import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
-   import postgres from "postgres";
-
-   const PLUGIN_PORT = <plugin-port>;       // from mcp_servers.container_port
-   const MCP_SERVER_ID = "<mcp-server-uuid>";
-   const SLUG = "<plugin-slug>";
-   const sql = postgres(process.env.DATABASE_URL); // container's own env, no secrets here
-
-   const transport = new StreamableHTTPClientTransport(
-     new URL(`http://localhost:${PLUGIN_PORT}/mcp`)
-   );
-   const client = new Client({ name: "rediscover", version: "1.0.0" }, { capabilities: {} });
-   await client.connect(transport);
-   const { tools } = await client.listTools();
-
-   // REFUSE TO WRITE A SHORTER LIST THAN THE ONE ALREADY THERE. The DELETE
-   // below is unconditional, so a plugin that answered listTools while half
-   // started would silently strip the registry down to whatever it managed to
-   // report. Ground truth is only ground truth when the plugin is actually up.
-   const [{ count: existing }] = await sql`
-     SELECT count(*)::int FROM tools WHERE mcp_server_id = ${MCP_SERVER_ID}`;
-   if (tools.length < existing) {
-     throw new Error(`refusing: plugin reported ${tools.length}, registry has ${existing}`);
-   }
-
-   await sql.begin(async (tx) => {
-     await tx`DELETE FROM tools WHERE mcp_server_id = ${MCP_SERVER_ID}`;
-     for (const t of tools) {
-       await tx`INSERT INTO tools (mcp_server_id, name, namespaced_name, description, input_schema_json, read_only_hint, credits_per_call)
-         VALUES (${MCP_SERVER_ID}, ${t.name}, ${`${SLUG}__${t.name}`}, ${t.description}, ${JSON.stringify(t.inputSchema)}, ${t.annotations?.readOnlyHint ?? null}, 1)`;
-       // enabled column defaults to true; no need to set it explicitly
-     }
-   });
-   await sql.end();
-   ```
-
-   **`read_only_hint` is not optional, and omitting it fails silently.** An
-   earlier version of this skeleton left the column out, so every re-discovery
-   run through it reset the whole plugin's annotations to NULL. Nothing goes
-   red when that happens: the cross-check in `tool-classification.test.ts`
-   treats NULL as "the plugin said nothing", so wiping the annotations disables
-   the guard that would have caught the divergence rather than tripping it. The
-   canonical writer (`plugin-manager.ts`'s `discoverTools`) has always persisted
-   it; any hand-rolled script must match it column for column.
-
-   The DELETE-and-reinsert runs in one transaction so a mid-loop failure cannot
-   leave the registry emptied.
-
+3. **Apply the row change** from a session that can reach the production
+   database (the `db-query` skill), one statement, read back with
+   `RETURNING`. For an `INSERT`, `read_only_hint` is not optional: the
+   cross-check in `tool-classification.test.ts` treats NULL as "the plugin
+   said nothing", so a row written without it disables the guard rather than
+   tripping it. Match `discoverTools` in `plugin-manager.ts` column for
+   column. (The retired wholesale script lived here until SCRUM-235; it is
+   gone on purpose, and the unconditional DELETE it carried is the reason.)
 4. **No gateway restart is needed for the registry.** `listUserToolRows`
    (`user-tools.ts`) queries `tools` on every ListTools request and caches
    nothing, so new rows are live to the next request from any session, old or
@@ -148,7 +121,17 @@ are two events, and only one of them has a check.
 Ask the **plugin** what it has, and diff that against the registry:
 
 ```js
-// Same connect-and-listTools as the re-discovery script above.
+// Run from /app/apps/gateway inside the gateway container (module resolution
+// for the SDK and the postgres driver fails from /tmp). Read-only: it never
+// writes to `tools`.
+import { Client } from "@modelcontextprotocol/sdk/client/index.js";
+import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
+import postgres from "postgres";
+const PLUGIN_PORT = <plugin-port>;       // from mcp_servers.container_port
+const MCP_SERVER_ID = "<mcp-server-uuid>";
+const sql = postgres(process.env.DATABASE_URL); // container's own env
+const client = new Client({ name: "verify", version: "1.0.0" }, { capabilities: {} });
+await client.connect(new StreamableHTTPClientTransport(new URL(`http://localhost:${PLUGIN_PORT}/mcp`)));
 const { tools } = await client.listTools();
 const rows = await sql`
   SELECT name FROM tools WHERE mcp_server_id = ${MCP_SERVER_ID} AND enabled = true`;
@@ -206,7 +189,7 @@ use rather than by a row count.
   see deploy skill's `a4e56b3` note that prod `gateway` has no `depends_on`
   on postgres/db-init).
 - **Tool-count parity**: compare the plugin's live `tools/list` response
-  (same Streamable HTTP call used in the re-discovery script above) against
+  (the Streamable HTTP connect in the registration-verification leg above) against
   the `tools` table row count for that `mcp_server_id` — use the "Tool
   registry" recipe in the db-query skill.
 - **Plugin/server status**: the db-query skill's "Plugin / MCP server status"

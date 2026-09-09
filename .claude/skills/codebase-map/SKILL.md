@@ -95,7 +95,7 @@ the quick reference; the ADRs carry context + alternatives-considered.
 ## Invariants & gotchas
 
 - **Two same-named `plugin-manager.ts` files**: `apps/gateway/src/lib/plugin-manager.ts` is the 22-line `getPluginManager()` singleton accessor (globalThis-based for Next hot-reload); `apps/gateway/src/gateway/plugin-manager.ts` is the actual 500-line `PluginManager` class. Easy to open the wrong one.
-- **`startAll()` does not re-discover tools** — it only respawns processes for `status: "active"` servers. `discoverTools()` runs only during install/reinstall. A plugin whose tool set changed needs a reinstall, not a gateway restart.
+- **`startAll()` does not re-discover tools** — it only respawns processes for `status: "active"` servers. `discoverTools()` runs only during install/reinstall. A plugin whose tool set changed needs a surgical row change in `tools` (one UPDATE, INSERT or DELETE per changed tool, never a wholesale re-discovery; SCRUM-138, SCRUM-235), not a gateway restart.
 - **`discoverTools()` deletes all `tools` rows for a server, then reinserts** — and `tools.enabled` defaults `true` (`packages/db/src/schema/tools.ts`), so reinstalling a plugin resets any manually-disabled tool to enabled. Mid-reinstall, ListTools can briefly see an empty tool set for that server.
 - **`/api/servers` is session-auth-gated** (GET included); the public POST/DELETE install/uninstall endpoints no longer exist. Plugin reinstalls require SSH to the gateway host (see the `deploy` skill).
 - **Dev server port comes from the root `.env`** (`GATEWAY_PORT`) — `pnpm dev` runs `node --env-file=../../.env`. It is NOT Next's default 3000 (dev compose publishes 8285).

@@ -88,10 +88,17 @@ hands it to `GwsClient` per request, no per-user `gws auth login`).
 After the PR merges into `~/git/gws-mcp` main, this is separate from and
 in addition to landing the merge itself:
 
-1. **Prod plugin update + tool re-discovery** — pull/rebuild the plugin in
-   its running container and re-run tool discovery so the gateway's `tools`
-   table matches the new tool set. See the `ops-debugging` skill's "Plugin
-   update + tool re-discovery" recipe.
+1. **Prod plugin update + a surgical registry change**: pull/rebuild the
+   plugin in its running container and restart the gateway so the child
+   process picks up the code (the `ops-debugging` skill's "Plugin update +
+   registry change" recipe). Then change the `tools` table by exactly the
+   rows this PR changed: an existing tool that changed gets one `UPDATE` of
+   its row (served count flat), a new tool gets one `INSERT` alongside the
+   classification commit in step 3 (count moves by one, smoke suite told in
+   advance), a removed tool one `DELETE`. Never a full re-discovery; the
+   table does not resync itself (SCRUM-138) and a wholesale rewrite once
+   left seven tools live and invisible. Prove it from `tools/list` through
+   the gateway, not from the plugin's source.
 2. **Gateway docs + changelog + tool-count check** — if the change is
    user-visible (new tool, changed behavior), add a changelog entry and
    update the relevant `apps/gateway/content/docs/*.md` page, and recheck

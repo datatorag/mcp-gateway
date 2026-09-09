@@ -61,9 +61,16 @@ user_invocable: true
    # Restart gateway so plugin process picks up new code
    cd ~/datatorag-mcp/docker && docker compose -f docker-compose.prod.yml --env-file ../.env restart gateway
 
-   # If tools changed: re-discover tools by connecting to plugin MCP endpoint,
-   # then update the tools table. See reference_plugin_registry memory for details.
    ```
+
+   **Then change the `tools` table by exactly what the plugin change changed,
+   never by re-discovery.** The registry does not resync itself on a plugin
+   deploy (SCRUM-138) and is never regenerated wholesale: an existing tool
+   whose description or schema changed gets one surgical `UPDATE` of its row
+   (served count flat); a new tool gets one `INSERT` plus the playground
+   classification commit (count moves by one, smoke suite told in advance);
+   a removed tool one `DELETE`. Full recipe and the reason in the
+   `ops-debugging` skill's "Plugin update + registry change" section.
 
    **Verify the deploy** (as of 2026-07-13, `GET /api/servers` requires auth and returns
    `{"error":"Unauthorized"}` to anonymous requests — don't use it for status checks):
@@ -74,6 +81,8 @@ user_invocable: true
      `http://localhost:40000/mcp`, capture the `mcp-session-id` response header, then
      POST `tools/list` with that header and extract the tool names.
    - If the sets match and `mcp_servers.status` is `active`, no tools-table update is needed.
+     If they differ by more than the rows you just changed, stop and diff them; do not
+     re-discover to make them match.
 
 6. **Clean up**
    - Remove temp SSH key files after deploy
