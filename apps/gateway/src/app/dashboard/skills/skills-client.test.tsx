@@ -8,6 +8,7 @@ const capture = vi.fn();
 vi.mock("posthog-js", () => ({ default: { capture: (...a: unknown[]) => capture(...a) } }));
 
 const { SkillsClient } = await import("./skills-client");
+const { SCHEDULING_UI } = await import("./scheduling-flag");
 
 let container: HTMLDivElement;
 let root: Root;
@@ -151,7 +152,7 @@ describe("schedules on the skills page (SCRUM-225)", () => {
 
   it("lists each schedule with its cadence, next run, state and history, and links each run to its thread", () => {
     act(() => {
-      root.render(<SkillsClient connected={["google-workspace"]} skills={SKILLS} schedules={[SCHEDULE]} />);
+      root.render(<SkillsClient connected={["google-workspace"]} skills={SKILLS} schedules={[SCHEDULE]} schedulingUi />);
     });
     const text = container.textContent ?? "";
     expect(text).toContain("Schedules");
@@ -172,6 +173,7 @@ describe("schedules on the skills page (SCRUM-225)", () => {
           connected={["google-workspace"]}
           skills={SKILLS}
           schedules={[{ ...SCHEDULE, paused: true, pausedReason: "reconnect" }]}
+          schedulingUi
         />
       );
     });
@@ -181,7 +183,7 @@ describe("schedules on the skills page (SCRUM-225)", () => {
   it("pauses through the API and re-renders from its answer", async () => {
     fetchMock.mockResolvedValueOnce(jsonResponse({ schedule: { ...SCHEDULE, paused: true, pausedReason: "user" } }));
     act(() => {
-      root.render(<SkillsClient connected={["google-workspace"]} skills={SKILLS} schedules={[SCHEDULE]} />);
+      root.render(<SkillsClient connected={["google-workspace"]} skills={SKILLS} schedules={[SCHEDULE]} schedulingUi />);
     });
     await act(async () => {
       buttonNamed("Pause")!.click();
@@ -197,7 +199,7 @@ describe("schedules on the skills page (SCRUM-225)", () => {
   it("deletes only after a confirmation, then removes the row", async () => {
     fetchMock.mockResolvedValueOnce(jsonResponse({ ok: true }));
     act(() => {
-      root.render(<SkillsClient connected={["google-workspace"]} skills={SKILLS} schedules={[SCHEDULE]} />);
+      root.render(<SkillsClient connected={["google-workspace"]} skills={SKILLS} schedules={[SCHEDULE]} schedulingUi />);
     });
     // The first Delete on the page is the schedule's; the cards are published
     // and offer Fork, not Delete.
@@ -215,7 +217,7 @@ describe("schedules on the skills page (SCRUM-225)", () => {
   it("schedules a runnable skill from its card with the browser's zone, and the new schedule appears", async () => {
     fetchMock.mockResolvedValueOnce(jsonResponse({ schedule: SCHEDULE }, 201));
     act(() => {
-      root.render(<SkillsClient connected={["google-workspace"]} skills={SKILLS} schedules={[]} />);
+      root.render(<SkillsClient connected={["google-workspace"]} skills={SKILLS} schedules={[]} schedulingUi />);
     });
     // Only the runnable card offers a schedule; the Atlassian card does not.
     const openers = Array.from(container.querySelectorAll("button")).filter(
@@ -241,7 +243,7 @@ describe("schedules on the skills page (SCRUM-225)", () => {
   it("shows the API's refusal instead of pretending", async () => {
     fetchMock.mockResolvedValueOnce(jsonResponse({ error: "not_connected", missing: ["google-workspace"] }, 409));
     act(() => {
-      root.render(<SkillsClient connected={["google-workspace"]} skills={SKILLS} schedules={[]} />);
+      root.render(<SkillsClient connected={["google-workspace"]} skills={SKILLS} schedules={[]} schedulingUi />);
     });
     await act(async () => {
       buttonNamed("Schedule")!.click();
@@ -279,7 +281,7 @@ describe("user-owned skills on the skills page (SCRUM-226)", () => {
   it("says which layer each card is", () => {
     act(() => {
       root.render(
-        <SkillsClient connected={["google-workspace"]} skills={[PUBLISHED, { ...SKILLS[1]!, layer: "published" }]} />
+        <SkillsClient connected={["google-workspace"]} skills={[PUBLISHED, { ...SKILLS[1]!, layer: "published" }]} schedulingUi />
       );
     });
     expect(container.textContent).toContain("Published");
@@ -287,7 +289,7 @@ describe("user-owned skills on the skills page (SCRUM-226)", () => {
     act(() => {
       root.unmount();
       root = createRoot(container);
-      root.render(<SkillsClient connected={["google-workspace"]} skills={[PUBLISHED, { ...MINE, slug: "draft-sweep" }]} />);
+      root.render(<SkillsClient connected={["google-workspace"]} skills={[PUBLISHED, { ...MINE, slug: "draft-sweep" }]} schedulingUi />);
     });
     expect(container.textContent).toContain("Your version");
   });
@@ -295,7 +297,7 @@ describe("user-owned skills on the skills page (SCRUM-226)", () => {
   it("forks a published skill through the API and the card becomes yours", async () => {
     fetchMock.mockResolvedValueOnce(jsonResponse({ skill: MINE }, 201));
     act(() => {
-      root.render(<SkillsClient connected={["google-workspace"]} skills={[PUBLISHED]} />);
+      root.render(<SkillsClient connected={["google-workspace"]} skills={[PUBLISHED]} schedulingUi />);
     });
     await act(async () => {
       buttonNamed("Fork")!.click();
@@ -312,7 +314,7 @@ describe("user-owned skills on the skills page (SCRUM-226)", () => {
   it("deletes a shadow only after a confirmation that says the published skill comes back", async () => {
     fetchMock.mockResolvedValueOnce(jsonResponse({ slug: "morning-brief", shadowed: true }));
     act(() => {
-      root.render(<SkillsClient connected={["google-workspace"]} skills={[MINE]} />);
+      root.render(<SkillsClient connected={["google-workspace"]} skills={[MINE]} schedulingUi />);
     });
     await act(async () => {
       buttonNamed("Delete")!.click();
@@ -330,7 +332,7 @@ describe("user-owned skills on the skills page (SCRUM-226)", () => {
     fetchMock.mockResolvedValueOnce(jsonResponse({ skill: { ...MINE, produces: "One brief, updated." } }));
     fetchMock.mockResolvedValueOnce(jsonResponse({ skill: { ...MINE, produces: "One brief, updated.", source: "---\nname: morning-brief\n---\n", tools: ["gmail_list"] } }));
     act(() => {
-      root.render(<SkillsClient connected={["google-workspace"]} skills={[MINE]} />);
+      root.render(<SkillsClient connected={["google-workspace"]} skills={[MINE]} schedulingUi />);
     });
     await act(async () => {
       buttonNamed("Edit")!.click();
@@ -351,7 +353,7 @@ describe("user-owned skills on the skills page (SCRUM-226)", () => {
     fetchMock.mockResolvedValueOnce(jsonResponse({ skill: { ...MINE, source: "---\n", tools: ["gmail_list"] } }));
     fetchMock.mockResolvedValueOnce(jsonResponse({ error: "invalid", field: "tools", message: "unknown tool: gmail_teleport" }, 400));
     act(() => {
-      root.render(<SkillsClient connected={["google-workspace"]} skills={[MINE]} />);
+      root.render(<SkillsClient connected={["google-workspace"]} skills={[MINE]} schedulingUi />);
     });
     await act(async () => {
       buttonNamed("Edit")!.click();
@@ -365,7 +367,7 @@ describe("user-owned skills on the skills page (SCRUM-226)", () => {
   it("creates a new skill from the New skill form", async () => {
     fetchMock.mockResolvedValueOnce(jsonResponse({ skill: { ...MINE, slug: "draft-sweep", title: "Sweep my drafts" } }, 201));
     act(() => {
-      root.render(<SkillsClient connected={["google-workspace"]} skills={[PUBLISHED]} />);
+      root.render(<SkillsClient connected={["google-workspace"]} skills={[PUBLISHED]} schedulingUi />);
     });
     await act(async () => {
       buttonNamed("New skill")!.click();
@@ -376,5 +378,26 @@ describe("user-owned skills on the skills page (SCRUM-226)", () => {
     expect(fetchMock).toHaveBeenCalledWith("/api/skills/own", expect.objectContaining({ method: "POST" }));
     expect(container.textContent).toContain("Sweep my drafts");
     expect(capture).toHaveBeenCalledWith("skill_created", expect.objectContaining({ skill: "draft-sweep", source: "dashboard" }));
+  });
+});
+
+/* SCRUM-239: scheduling is hidden from the UI until it is designed. The
+ * default render shows none of it, even with schedules present, and the
+ * reveal is one constant. The backend, its routes and the 225 tests above
+ * (which render with the UI revealed) are untouched. */
+describe("scheduling hidden from the UI (SCRUM-239)", () => {
+  it("shows no Schedule control, no Schedules section and no schedule copy by default", () => {
+    act(() => {
+      root.render(<SkillsClient connected={["google-workspace"]} skills={SKILLS} schedules={[SCHEDULE]} />);
+    });
+    const text = container.textContent ?? "";
+    expect(SCHEDULING_UI).toBe(false);
+    expect(text).not.toContain("Schedules");
+    expect(text).not.toContain("schedule it");
+    expect(text).not.toContain("Every day");
+    expect(buttonNamed("Schedule")).toBeFalsy();
+    // The rest of the page is intact.
+    expect(text).toContain("Run one now");
+    expect(text).toContain("fork a published one");
   });
 });

@@ -16,6 +16,7 @@ import {
 import { EVENTS } from "@/lib/analytics";
 import { servicesFor, skillDeepLink } from "@/lib/skill-links";
 import type { ScheduleView } from "@/gateway/skills/schedules";
+import { SCHEDULING_UI } from "./scheduling-flag";
 import { SERVICES } from "../connections/services";
 
 /** The catalogue as the page passes it down: display fields plus the service
@@ -148,10 +149,15 @@ export function SkillsClient({
   connected,
   skills: initialSkills,
   schedules: initialSchedules = [],
+  schedulingUi = SCHEDULING_UI,
 }: {
   connected: string[];
   skills: SkillListItem[];
   schedules?: ScheduleView[];
+  /** SCRUM-239: scheduling affordances render only when this is true. The
+   * default is the one constant that reveals the feature; tests that cover
+   * the feature pass it explicitly. */
+  schedulingUi?: boolean;
 }) {
   const have = new Set(connected);
   const [skills, setSkills] = useState<SkillListItem[]>(initialSkills);
@@ -170,8 +176,9 @@ export function SkillsClient({
         <div>
           <h1 className="font-display text-2xl font-bold text-foreground">Skills</h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            Routines the agent runs for you on the accounts you connect. Run one now, schedule it,
-            fork a published one to make it yours, or write your own.
+            Routines the agent runs for you on the accounts you connect. Run one now,
+            {schedulingUi ? " schedule it," : ""} fork a published one to make it yours, or write
+            your own.
           </p>
         </div>
         {!creating && (
@@ -200,7 +207,7 @@ export function SkillsClient({
         </div>
       )}
 
-      {schedules.length > 0 && (
+      {schedulingUi && schedules.length > 0 && (
         <section className="mt-6" aria-labelledby="schedules-heading">
           <h2 id="schedules-heading" className="font-display text-lg font-semibold text-foreground">
             Schedules
@@ -225,6 +232,7 @@ export function SkillsClient({
             skill={skill}
             have={have}
             scheduled={scheduled.has(skill.slug)}
+            schedulingUi={schedulingUi}
             onScheduled={(s) => setSchedules((list) => [...list, s])}
             onChange={replaceSkill}
             onRemoved={(slug, published) =>
@@ -245,6 +253,7 @@ function SkillCardRow({
   skill,
   have,
   scheduled,
+  schedulingUi,
   onScheduled,
   onChange,
   onRemoved,
@@ -252,6 +261,7 @@ function SkillCardRow({
   skill: SkillListItem;
   have: Set<string>;
   scheduled: boolean;
+  schedulingUi: boolean;
   onScheduled: (s: ScheduleView) => void;
   onChange: (item: SkillListItem) => void;
   onRemoved: (slug: string, published: SkillListItem | null) => void;
@@ -435,7 +445,9 @@ function SkillCardRow({
           )}
         </div>
         <div className="flex items-center gap-2">
-          {ready && !scheduled && <ScheduleControl slug={skill.slug} onCreated={onScheduled} />}
+          {schedulingUi && ready && !scheduled && (
+            <ScheduleControl slug={skill.slug} onCreated={onScheduled} />
+          )}
           {/* A plain anchor: the destination is a full page load of the
               agent with the skill loaded, and the click event must fire
               before navigation rather than be lost to a client route. */}

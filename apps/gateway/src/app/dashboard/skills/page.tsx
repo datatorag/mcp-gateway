@@ -4,6 +4,7 @@ import { getSessionUserId } from "@/lib/session";
 import { getAllSkills, servicesFor } from "@/lib/skills";
 import { loadConnectionsView } from "@/gateway/connections-view";
 import { listSchedulesForUser } from "@/gateway/skills/schedules";
+import { SCHEDULING_UI } from "./scheduling-flag";
 import { SkillsClient } from "./skills-client";
 
 export const dynamic = "force-dynamic";
@@ -41,8 +42,9 @@ export default async function DashboardSkillsPage() {
   }));
 
   // The user's schedules and their history (SCRUM-225), loaded server-side
-  // so the Schedules section is honest on first paint too.
-  const schedules = await listSchedulesForUser(db, userId);
+  // so the Schedules section is honest on first paint too. Not read at all
+  // while the feature is hidden (SCRUM-239): nothing would render it.
+  const schedules = SCHEDULING_UI ? await listSchedulesForUser(db, userId) : [];
 
   return <SkillsClient connected={[...connected]} skills={skills} schedules={schedules} />;
 }
