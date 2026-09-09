@@ -25,6 +25,12 @@ vi.mock("@/gateway/connections-view", () => ({
   loadConnectionsView: async () => ({ accounts: [], connections: [] }),
 }));
 vi.mock("@/lib/db", () => ({ db: {} }));
+/** SCRUM-240: the seed hands the run its accounts, read from the same rows
+ * the chat route will read. Empty unless a test says otherwise. */
+const listConnectedAccounts = vi.fn(async (..._args: unknown[]): Promise<unknown[]> => []);
+vi.mock("@/gateway/connected-accounts", () => ({
+  listConnectedAccounts: (...args: unknown[]) => listConnectedAccounts(...args),
+}));
 
 import AgentPage from "./page";
 import { AGENT_PROMPTS } from "../agent-prompts";
@@ -56,6 +62,17 @@ describe("the agent page's skill seeding (SCRUM-223)", () => {
     expect(seed?.slug).toBe("morning-brief");
     expect(seed?.services).toEqual(["google-workspace"]);
     expect(seed?.message).toContain("name: morning-brief");
+    expect(seed?.message).toContain("No account is connected for this run");
+  });
+
+  it("hands the run the user's accounts with the default marked (SCRUM-240)", async () => {
+    listConnectedAccounts.mockResolvedValueOnce([
+      { connectorType: "google-workspace", accountEmail: "b@example.com", isDefault: false },
+      { connectorType: "google-workspace", accountEmail: "a@example.com", isDefault: true },
+    ]);
+    const seed = await seedSkillFor("morning-brief");
+    expect(seed?.message).toContain("- google-workspace: a@example.com (default), b@example.com");
+    expect(seed?.message).toContain("Do not ask which accounts to cover");
   });
 
   it("seeds nothing for an unknown slug, free text, or no parameter", async () => {

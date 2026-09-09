@@ -72,6 +72,14 @@ vi.mock("@/lib/db", () => {
   return { db: chain, getDb: () => chain };
 });
 
+/** SCRUM-240: the run message carries the user's accounts, and the route
+ * recomputes it from the same rows. Empty by default so the existing
+ * skill-run cases keep building the message with no accounts. */
+const listConnectedAccounts = vi.fn(async (..._args: unknown[]): Promise<unknown[]> => []);
+vi.mock("@/gateway/connected-accounts", () => ({
+  listConnectedAccounts: (...args: unknown[]) => listConnectedAccounts(...args),
+}));
+
 const userOwnsThread = vi.fn();
 vi.mock("@/gateway/playground/threads", () => ({
   userOwnsThread: (...args: unknown[]) => userOwnsThread(...args),
@@ -93,7 +101,7 @@ vi.mock("@mastra/ai-sdk", () => ({
 
 import { mintRunId } from "@/gateway/playground/run-ownership";
 import { USER_ID_CONTEXT_KEY } from "@/mastra/mcp/client";
-import { readSkillFiles, skillContinueMessage, skillRunMessage } from "@/lib/skills";
+import { readSkillFiles, runAccountsFrom, skillContinueMessage, skillRunMessage } from "@/lib/skills";
 import { CHAT_MAX_STEPS, SKILL_RUN_MAX_STEPS } from "@/mastra/run-steps";
 import { POST } from "./route";
 
@@ -317,6 +325,35 @@ describe("POST /api/playground/chat — the turn cap", () => {
       USER,
       expect.objectContaining({ skill: "morning-brief", trigger: "manual" })
     );
+  });
+
+  it("recognises the message built with the user's own accounts, and not one built with others (SCRUM-240)", async () => {
+    const skill = readSkillFiles().find((s) => s.slug === "morning-brief")!;
+    const rows = [
+      { connectorType: "google-workspace", accountEmail: "a@example.com", isDefault: true },
+      { connectorType: "google-workspace", accountEmail: "b@example.com", isDefault: false },
+    ];
+    listConnectedAccounts.mockResolvedValue(rows);
+    const mine = skillRunMessage(skill, runAccountsFrom(rows));
+    await drain(
+      await POST(post({ messages: [{ id: "u1", role: "user", parts: [{ type: "text", text: mine }] }], skill: "morning-brief", skillTrigger: "manual" }))
+    );
+    expect(trackAgentRun).toHaveBeenLastCalledWith(
+      expect.anything(),
+      USER,
+      expect.objectContaining({ skill: "morning-brief", trigger: "manual" })
+    );
+
+    const theirs = skillRunMessage(skill, runAccountsFrom([rows[0]!]));
+    await drain(
+      await POST(post({ messages: [{ id: "u2", role: "user", parts: [{ type: "text", text: theirs }] }], skill: "morning-brief", skillTrigger: "manual" }))
+    );
+    expect(trackAgentRun).toHaveBeenLastCalledWith(
+      expect.anything(),
+      USER,
+      expect.objectContaining({ skill: null })
+    );
+    listConnectedAccounts.mockResolvedValue([]);
   });
 
   it("the exact text beside a NON-TEXT part is an ordinary turn too", async () => {

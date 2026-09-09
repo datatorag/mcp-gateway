@@ -3,7 +3,8 @@ import { getSessionUserId } from "@/lib/session";
 import { db } from "@/lib/db";
 import { loadConnectionsView } from "@/gateway/connections-view";
 import { AGENT_PROMPTS } from "../agent-prompts";
-import { getSkillBySlug, servicesFor, skillDeepLink, skillRunMessage } from "@/lib/skills";
+import { getSkillBySlug, runAccountsFrom, servicesFor, skillDeepLink, skillRunMessage } from "@/lib/skills";
+import { listConnectedAccounts } from "@/gateway/connected-accounts";
 import { AgentClient } from "./agent-client";
 
 export const dynamic = "force-dynamic";
@@ -98,7 +99,9 @@ export default async function AgentPage({
         title: seedSkillSource.title,
         layer: seedSkillSource.layer,
         services: servicesFor(seedSkillSource),
-        message: skillRunMessage(seedSkillSource),
+        // The run is handed its accounts (SCRUM-240) so it never asks which
+        // to cover; the chat route recomputes this text from the same rows.
+        message: skillRunMessage(seedSkillSource, runAccountsFrom(await listConnectedAccounts(db, userId))),
       }
     : null;
   return (

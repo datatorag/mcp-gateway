@@ -92,7 +92,7 @@ describe("published skills stay on the public side of the boundary", () => {
    * beyond fixed sentences, service names and the addresses it was GIVEN, so
    * the file-level checks above cover what the wire carries. */
   it("the MCP apply text for every skill is the preface plus the verbatim run message", async () => {
-    const { readSkillFiles, skillRunMessage } = await import("./skills");
+    const { readSkillFiles, runAccountsFrom, skillRunMessage } = await import("./skills");
     const { skillApplyText } = await import("@/gateway/skills-catalogue");
     for (const skill of readSkillFiles()) {
       const text = skillApplyText(skill, {
@@ -103,7 +103,13 @@ describe("published skills stay on the public side of the boundary", () => {
         ],
         connectionsUrl: "https://example.com/dashboard/connections",
       });
-      const run = skillRunMessage(skill);
+      const run = skillRunMessage(
+        skill,
+        runAccountsFrom([
+          { connectorType: "google-workspace", accountEmail: "me@example.com", isDefault: true },
+          { connectorType: "atlassian", accountEmail: "me@example.org", isDefault: true },
+        ])
+      );
       expect(text.endsWith(run), skill.slug).toBe(true);
       const preface = text.slice(0, text.length - run.length);
       // The address regex is greedy on dots; a sentence-ending period after

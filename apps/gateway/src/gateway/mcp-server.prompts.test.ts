@@ -11,7 +11,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import type { Database } from "@datatorag-mcp/db";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
-import { readSkillFiles, skillRunMessage } from "@/lib/skills";
+import { readSkillFiles, runAccountsFrom, skillRunMessage } from "@/lib/skills";
 import { skillApplyText } from "./skills-catalogue";
 
 const trackToolCall = vi.fn().mockResolvedValue(undefined);
@@ -114,7 +114,21 @@ describe("prompts: the catalogue for clients that render prompts", () => {
     expect(m.content.type).toBe("text");
     const text = (m.content as { text: string }).text;
     const skill = readSkillFiles().find((s) => s.slug === "morning-brief")!;
-    expect(text.endsWith(skillRunMessage(skill))).toBe(true);
+    expect(
+      text.endsWith(
+        skillRunMessage(
+          skill,
+          runAccountsFrom(
+            ACCOUNTS.map((a) => ({
+              connectorType: a.connectorType,
+              accountEmail: a.accountEmail,
+              isDefault: a.isDefault,
+            }))
+          )
+        )
+      )
+    ).toBe(true);
+    expect(text).toContain("Do not ask which accounts to cover");
     expect(text).toContain("This run will use work@example.com");
     expect(text).toBe(
       skillApplyText(skill, {

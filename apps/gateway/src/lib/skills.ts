@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import { marked } from "marked";
 import { defineCollection, field, type ParsedFile } from "./content-collection";
-import { connectorsFor } from "./skill-links";
+import { connectorsFor, servicesFor } from "./skill-links";
 
 /**
  * The skill catalogue (SCRUM-226: rows, with the files as the authored
@@ -262,11 +262,75 @@ export function skillSlugFromPath(path: unknown): string | null {
  * byte-identical whichever door it came through. The skill's own rails are
  * the limits: nothing gains write behaviour by moving surfaces, and per HQ
  * decision a skill run prompts for nothing mid-run. */
-export function skillRunMessage(skill: Pick<Skill, "title" | "skillSource">): string {
+/** One connected account as a skill run sees it. `service` is the connector
+ * id the skill's tools map to (`servicesFor`), so the list can be scoped to
+ * what the skill needs. */
+export type RunAccount = { service: string; email: string; isDefault: boolean };
+
+/** The mail service sorts first: the recipient rule names "the default
+ * account of the first service listed", and what a skill sends to the user
+ * is mail, so the first service must be the one with a mailbox. Everything
+ * else follows alphabetically. */
+function serviceRank(service: string): number {
+  return service === "google-workspace" ? 0 : 1;
+}
+
+/** The user's connected-account rows, as the run message wants them:
+ * default first, then by address, so the same accounts always give the
+ * same text (the chat route recomputes it and compares byte for byte). */
+export function runAccountsFrom(
+  rows: ReadonlyArray<{ connectorType: string; accountEmail: string; isDefault: boolean | null }>
+): RunAccount[] {
+  return rows
+    .map((r) => ({ service: r.connectorType, email: r.accountEmail, isDefault: !!r.isDefault }))
+    .sort(
+      (a, b) =>
+        serviceRank(a.service) - serviceRank(b.service) ||
+        a.service.localeCompare(b.service) ||
+        Number(b.isDefault) - Number(a.isDefault) ||
+        a.email.localeCompare(b.email)
+    );
+}
+
+/** The accounts block of a run message (SCRUM-240). A run is HANDED its
+ * accounts so it never has to ask: which accounts a service has, which is
+ * the default, and the rule in one sentence. Scoped to the services the
+ * skill's tools need; a skill with no recognisable service gets them all. */
+function runAccountsBlock(skill: Pick<Skill, "tools">, accounts: readonly RunAccount[]): string {
+  const needed = new Set(servicesFor(skill));
+  const relevant = needed.size ? accounts.filter((a) => needed.has(a.service)) : [...accounts];
+  if (relevant.length === 0) {
+    return (
+      "No account is connected for this run. Stop and say that nothing is connected; " +
+      "do not ask which account to use."
+    );
+  }
+  const byService = new Map<string, RunAccount[]>();
+  for (const a of relevant) byService.set(a.service, [...(byService.get(a.service) ?? []), a]);
+  const lines = [...byService.entries()].map(
+    ([service, list]) =>
+      `- ${service}: ${list.map((a) => (a.isDefault ? `${a.email} (default)` : a.email)).join(", ")}`
+  );
+  return (
+    "Accounts for this run, by service:\n" +
+    lines.join("\n") +
+    "\n\nCover every account listed for a service this skill needs. The recipient of anything " +
+    "the skill sends to you is the default account of the first service listed. Use a subset " +
+    "only where this message names one. Do not ask which accounts to cover or in what order; " +
+    "this list is the answer."
+  );
+}
+
+export function skillRunMessage(
+  skill: Pick<Skill, "title" | "skillSource" | "tools">,
+  accounts: readonly RunAccount[] = []
+): string {
   return (
     `Run the following skill for me now: ${skill.title}. ` +
     "Follow it exactly as written, using my connected accounts, and stay within " +
     "its own rails. Report what you did at the end.\n\n" +
+    runAccountsBlock(skill, accounts) +
+    "\n\n" +
     skill.skillSource
   );
 }

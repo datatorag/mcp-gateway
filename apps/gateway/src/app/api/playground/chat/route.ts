@@ -7,7 +7,8 @@ import { getEnv } from "@datatorag-mcp/config";
 import { getMastra, DATATORAG_AGENT_ID } from "@/mastra";
 import { RUN_ID_CONTEXT_KEY } from "@/mastra/llm-usage";
 import { buildPluginRequestContext, SKILL_RUN_CONTEXT_KEY } from "@/mastra/mcp/client";
-import { getSkillBySlug, skillContinueMessage, skillRunMessage } from "@/lib/skills";
+import { getSkillBySlug, runAccountsFrom, skillContinueMessage, skillRunMessage } from "@/lib/skills";
+import { listConnectedAccounts } from "@/gateway/connected-accounts";
 import { CHAT_MAX_STEPS, SKILL_RUN_MAX_STEPS } from "@/mastra/run-steps";
 import {
   deriveThreadId, findApprovalTargets, mintRunId, ownsRunId,
@@ -287,10 +288,14 @@ async function isSkillRunTurn(messages: unknown[], slug: unknown, viewer: string
   );
   if (!allText || parts.length === 0) return false;
   const text = (parts as Array<{ text: string }>).map((p) => p.text).join("");
-  // The continuation Continue sends after a stop (SCRUM-234) is a skill run
-  // too: same slug, a fixed text, so the resumed run keeps the no-gates
-  // policy and gets a fresh budget under a fresh run id.
-  return text === skillRunMessage(skill) || text === skillContinueMessage(skill.slug);
+  // The message carries the user's accounts (SCRUM-240), recomputed here
+  // from the same rows the seed read. An account connected between the page
+  // load and the submit makes the texts differ, and the turn runs as an
+  // ordinary gated turn: the safe side. The continuation Continue sends
+  // after a stop (SCRUM-234) is a skill run too: same slug, a fixed text, so
+  // the resumed run keeps the no-gates policy under a fresh run id.
+  const accounts = runAccountsFrom(await listConnectedAccounts(db, viewer));
+  return text === skillRunMessage(skill, accounts) || text === skillContinueMessage(skill.slug);
 }
 
 // POST /api/playground/chat — one capped, streaming playground turn. The same

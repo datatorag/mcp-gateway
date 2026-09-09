@@ -6,6 +6,7 @@ import {
   servicesFor,
   skillDeepLink,
   signInAndRunHref,
+  runAccountsFrom,
   skillContinueMessage,
   skillRunMessage,
   skillSlugFromPath,
@@ -146,5 +147,67 @@ describe("skillContinueMessage (SCRUM-234)", () => {
     expect(text).toMatch(/do not restart/i);
     expect(text).toContain("its own rails");
     expect(text).not.toContain("\u2014");
+  });
+});
+
+/* SCRUM-240: a skill run is HANDED its accounts so it never asks which to
+ * cover. The first end-to-end morning brief stopped to ask exactly that. */
+describe("skill run accounts (SCRUM-240)", () => {
+  const brief = readSkillFiles().find((s) => s.slug === "morning-brief")!;
+  const GW = "google-workspace";
+
+  it("names every account of a needed service, marks the default, and says not to ask", () => {
+    const text = skillRunMessage(brief, [
+      { service: GW, email: "b@example.com", isDefault: false },
+      { service: GW, email: "a@example.com", isDefault: true },
+    ]);
+    expect(text).toContain("- google-workspace: b@example.com, a@example.com (default)");
+    expect(text).toContain("Do not ask which accounts to cover");
+    expect(text).toContain("recipient");
+    expect(text.indexOf("Accounts for this run")).toBeLessThan(text.indexOf(brief.skillSource));
+    expect(text).not.toContain("\u2014");
+  });
+
+  it("with nothing connected, tells the run to stop and say so rather than ask", () => {
+    const text = skillRunMessage(brief, []);
+    expect(text).toContain("No account is connected for this run");
+    expect(text).toContain("do not ask which account to use");
+  });
+
+  it("lists only the services the skill's tools need", () => {
+    const text = skillRunMessage(brief, [
+      { service: "atlassian", email: "j@example.com", isDefault: true },
+      { service: GW, email: "a@example.com", isDefault: true },
+    ]);
+    expect(text).toContain("a@example.com (default)");
+    expect(text).not.toContain("j@example.com");
+  });
+
+  it("runAccountsFrom puts the mail service first, then default first, then address, so the text is stable", () => {
+    const rows = [
+      { connectorType: GW, accountEmail: "z@example.com", isDefault: false },
+      { connectorType: "atlassian", accountEmail: "j@example.com", isDefault: null },
+      { connectorType: GW, accountEmail: "m@example.com", isDefault: true },
+      { connectorType: GW, accountEmail: "a@example.com", isDefault: false },
+    ];
+    // The mail service first, whatever the alphabet says: the recipient rule
+    // names the default of the FIRST service, and a brief is sent by mail.
+    expect(runAccountsFrom(rows).map((a) => `${a.service}:${a.email}:${a.isDefault}`)).toEqual([
+      `${GW}:m@example.com:true`,
+      `${GW}:a@example.com:false`,
+      `${GW}:z@example.com:false`,
+      "atlassian:j@example.com:false",
+    ]);
+    expect(runAccountsFrom([...rows].reverse())).toEqual(runAccountsFrom(rows));
+  });
+
+  it("every multi-account skill states the default and never asks which accounts to cover", () => {
+    const multi = readSkillFiles().filter((s) => s.accounts === "multiple");
+    expect(multi.length).toBeGreaterThan(0);
+    for (const s of multi) {
+      expect(s.skillSource, s.slug).toMatch(/(every|each) (connected |listed )?(account|mailbox)/i);
+      expect(s.skillSource, s.slug).not.toMatch(/list the (accounts|mailboxes) to (cover|triage)/i);
+      expect(s.skillSource, s.slug).not.toMatch(/they want included/i);
+    }
   });
 });

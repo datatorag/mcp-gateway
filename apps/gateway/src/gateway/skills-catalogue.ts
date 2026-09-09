@@ -2,6 +2,7 @@ import {
   getAllSkills,
   getSkillBySlug,
   servicesFor,
+  runAccountsFrom,
   skillRunMessage,
   type Skill,
 } from "@/lib/skills";
@@ -137,7 +138,14 @@ export function skillApplyText(
       lines.push(`${need.name} is connected.`);
     }
   }
-  return `${lines.join("\n")}\n\n${skillRunMessage(skill)}`;
+  const runAccounts = runAccountsFrom(
+    opts.accounts.map((a) => ({
+      connectorType: a.connectorType,
+      accountEmail: a.accountEmail,
+      isDefault: a.isDefault,
+    }))
+  );
+  return `${lines.join("\n")}\n\n${skillRunMessage(skill, runAccounts)}`;
 }
 
 /** The one place a request value is ever reflected back to the requester

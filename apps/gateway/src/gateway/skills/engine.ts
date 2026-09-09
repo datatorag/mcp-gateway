@@ -2,8 +2,9 @@ import type { Database } from "@datatorag-mcp/db";
 import { getMastra, DATATORAG_AGENT_ID } from "@/mastra";
 import { RUN_ID_CONTEXT_KEY } from "@/mastra/llm-usage";
 import { buildPluginRequestContext, SKILL_RUN_CONTEXT_KEY } from "@/mastra/mcp/client";
-import { skillRunMessage } from "@/lib/skills";
+import { runAccountsFrom, skillRunMessage } from "@/lib/skills";
 import { SKILL_RUN_MAX_STEPS } from "@/mastra/run-steps";
+import { listConnectedAccounts } from "../connected-accounts";
 import { setThreadTitleIfEmpty } from "../playground/threads";
 import { trackAgentRun } from "../track";
 import type { EngineToolCall, RunEngine } from "./run";
@@ -64,7 +65,8 @@ export function mastraEngine(db: Database): RunEngine {
     const agent = getMastra().getAgent(DATATORAG_AGENT_ID);
     const partial: EngineToolCall[] = [];
     try {
-      const result = await agent.generate(skillRunMessage(skill), {
+      const accounts = runAccountsFrom(await listConnectedAccounts(db, userId));
+      const result = await agent.generate(skillRunMessage(skill, accounts), {
         memory: { thread: threadId, resource: userId },
         requestContext,
         runId,
