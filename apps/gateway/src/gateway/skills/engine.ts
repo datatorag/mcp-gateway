@@ -3,6 +3,7 @@ import { getMastra, DATATORAG_AGENT_ID } from "@/mastra";
 import { RUN_ID_CONTEXT_KEY } from "@/mastra/llm-usage";
 import { buildPluginRequestContext, SKILL_RUN_CONTEXT_KEY } from "@/mastra/mcp/client";
 import { skillRunMessage } from "@/lib/skills";
+import { SKILL_RUN_MAX_STEPS } from "@/mastra/run-steps";
 import { setThreadTitleIfEmpty } from "../playground/threads";
 import { trackAgentRun } from "../track";
 import type { EngineToolCall, RunEngine } from "./run";
@@ -67,6 +68,7 @@ export function mastraEngine(db: Database): RunEngine {
         memory: { thread: threadId, resource: userId },
         requestContext,
         runId,
+        maxSteps: SKILL_RUN_MAX_STEPS,
         onStepFinish: (step: unknown) => {
           const s = step as { toolResults?: unknown[] };
           for (const raw of s.toolResults ?? []) {

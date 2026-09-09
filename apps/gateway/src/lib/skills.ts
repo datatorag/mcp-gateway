@@ -237,7 +237,7 @@ export async function getRelatedSkills(slug: string, limit = 2): Promise<Skill[]
  * `skill-links.ts`, which has no server-only imports, so client components
  * can use them; re-exported here so server callers have one import for
  * everything about skills. */
-export { skillDeepLink, signInAndRunHref, connectorsFor, servicesFor } from "./skill-links";
+export { skillDeepLink, signInAndRunHref, connectorsFor, servicesFor, skillContinueMessage } from "./skill-links";
 
 /** The slug a validated `next` path names, or null. Only a PUBLISHED slug
  * counts: an event must never claim a skill the catalogue does not have,

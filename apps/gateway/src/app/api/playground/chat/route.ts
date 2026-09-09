@@ -7,7 +7,8 @@ import { getEnv } from "@datatorag-mcp/config";
 import { getMastra, DATATORAG_AGENT_ID } from "@/mastra";
 import { RUN_ID_CONTEXT_KEY } from "@/mastra/llm-usage";
 import { buildPluginRequestContext, SKILL_RUN_CONTEXT_KEY } from "@/mastra/mcp/client";
-import { getSkillBySlug, skillRunMessage } from "@/lib/skills";
+import { getSkillBySlug, skillContinueMessage, skillRunMessage } from "@/lib/skills";
+import { CHAT_MAX_STEPS, SKILL_RUN_MAX_STEPS } from "@/mastra/run-steps";
 import {
   deriveThreadId, findApprovalTargets, mintRunId, ownsRunId,
 } from "@/gateway/playground/run-ownership";
@@ -120,6 +121,10 @@ const NON_CONTENT_CHUNK_TYPES: Record<UIMessageChunk["type"], boolean> = {
 /* Stream instrumentation                                                      */
 /* -------------------------------------------------------------------------- */
 
+/** What the route knows about the turn that the stream itself does not:
+ * whether it is a skill run and what its step budget is (SCRUM-234). */
+type RunShape = { skill: string | null; stepCap: number };
+
 type StreamTaps = {
   /** First chunk of real assistant output — the refund gate. */
   onDelivered: () => void;
@@ -142,10 +147,25 @@ type StreamTaps = {
  * the user declines never executes, so it is never counted. */
 function instrumentStream(
   source: ReadableStream<UIMessageChunk>,
-  taps: StreamTaps
+  taps: StreamTaps,
+  run: RunShape
 ): ReadableStream<UIMessageChunk> {
   const reader = source.getReader();
   let delivered = false;
+  // SCRUM-234: a stop is a notice, never silence. The stream is watched for
+  // the two shapes a cap leaves, and one data part goes into the thread
+  // before the stream closes so the client can say which limit, how many
+  // steps completed, and offer Continue. A step is one `start-step`.
+  let steps = 0;
+  let lastContent: "none" | "tool" | "text" = "none";
+  // A turn that stopped for an approval stopped for the user, not for a cap:
+  // the confirm card is its notice, and no stop card belongs beside it.
+  let approvalRequested = false;
+  const stoppedPart = (limit: "steps" | "size"): UIMessageChunk =>
+    ({
+      type: "data-run-stopped",
+      data: { limit, steps, cap: limit === "steps" ? run.stepCap : null, skill: run.skill },
+    }) as UIMessageChunk;
 
   return new ReadableStream<UIMessageChunk>({
     async pull(controller) {
@@ -153,6 +173,10 @@ function instrumentStream(
       try {
         result = await reader.read();
       } catch (err) {
+        // The size ceiling refuses the NEXT model call, so the run really did
+        // stop at a step boundary with everything before it delivered: the
+        // notice belongs in the thread beside the error text.
+        if (isRunTokenCeilingError(err)) controller.enqueue(stoppedPart("size"));
         controller.enqueue({ type: "error", errorText: taps.onFailure(err) });
         controller.close();
         taps.onClosed?.();
@@ -168,7 +192,28 @@ function instrumentStream(
         delivered = true;
         taps.onDelivered();
       }
-      if (chunk.type === "tool-approval-request") taps.onApprovalShown();
+      if (chunk.type === "tool-approval-request") {
+        taps.onApprovalShown();
+        approvalRequested = true;
+      }
+      if (chunk.type === "start-step") steps += 1;
+      if (chunk.type === "tool-output-available" || chunk.type === "tool-output-error") {
+        lastContent = "tool";
+      } else if (chunk.type === "text-start" || chunk.type === "text-delta") {
+        lastContent = "text";
+      }
+      if (chunk.type === "finish") {
+        // A turn that ends right after a tool result, with no assistant text
+        // after it, is the shape a step cap leaves (the runtime reports the
+        // finish as tool calls). A finished turn ends in prose.
+        const reason = (chunk as { finishReason?: string }).finishReason;
+        if (
+          !approvalRequested &&
+          (reason === "tool-calls" || (lastContent === "tool" && reason !== "error"))
+        ) {
+          controller.enqueue(stoppedPart("steps"));
+        }
+      }
       controller.enqueue(chunk);
     },
     cancel(reason) {
@@ -242,7 +287,10 @@ async function isSkillRunTurn(messages: unknown[], slug: unknown, viewer: string
   );
   if (!allText || parts.length === 0) return false;
   const text = (parts as Array<{ text: string }>).map((p) => p.text).join("");
-  return text === skillRunMessage(skill);
+  // The continuation Continue sends after a stop (SCRUM-234) is a skill run
+  // too: same slug, a fixed text, so the resumed run keeps the no-gates
+  // policy and gets a fresh budget under a fresh run id.
+  return text === skillRunMessage(skill) || text === skillContinueMessage(skill.slug);
 }
 
 // POST /api/playground/chat — one capped, streaming playground turn. The same
@@ -499,6 +547,9 @@ export const POST = withRoute(async (userId, request) => {
         // gate above verifies. On an approval leg the runtime takes the run id
         // from the approval itself, so supplying one here would be ignored.
         ...(isApprovalLeg ? {} : { runId: usageRunId as string }),
+        // The step budget is ours (SCRUM-234): the runtime's default of five
+        // ended a real skill run silently after its fifth model call.
+        maxSteps: skillSlug ? SKILL_RUN_MAX_STEPS : CHAT_MAX_STEPS,
       },
       onError: (err) => {
         // The token ceiling is a PRODUCT STATE, not a failure: say what
@@ -522,7 +573,9 @@ export const POST = withRoute(async (userId, request) => {
 
   return createUIMessageStreamResponse({
     headers: quotaHeaders,
-    stream: instrumentStream(stream, {
+    stream: instrumentStream(
+      stream,
+      {
       onDelivered: () => { delivered = true; },
       // NO TOOL METERING HERE, DELIBERATELY. It used to live on this tap, and
       // the vantage point was the problem: a stream chunk knows a tool's name
@@ -553,6 +606,8 @@ export const POST = withRoute(async (userId, request) => {
           }
         );
       },
-    }),
+      },
+      { skill: skillSlug, stepCap: skillSlug ? SKILL_RUN_MAX_STEPS : CHAT_MAX_STEPS }
+    ),
   });
 });

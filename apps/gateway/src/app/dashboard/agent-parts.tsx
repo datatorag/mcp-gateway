@@ -40,6 +40,15 @@ export const ConnectGrantContext = createContext<{
   scopeStatusByService: Record<string, ScopeStatus | undefined>;
 }>({ scopeStatusByService: {} });
 
+/** What the stop card can do (SCRUM-234). `continueRun` sends the fixed
+ * continuation for the skill in the same thread; absent (the default, and
+ * the docs/landing renderings) the card shows the notice with no button,
+ * because a button that cannot act is worse than none. */
+export const RunControlContext = createContext<{
+  continueRun: ((skill: string) => void) | null;
+  busy: boolean;
+}>({ continueRun: null, busy: false });
+
 /**
  * Things the agent can put in the thread that are not text and not a tool call.
  *
@@ -72,6 +81,15 @@ export type AgentDataParts = {
     runsRemaining: number | null;
     runsCap: number | null;
     connectedAccounts: string[];
+  };
+  /** A cap stopped the run (SCRUM-234): which one, how far it got, and the
+   * skill to continue, if it was a skill run. Put in the thread by the chat
+   * route before the stream closes, so it survives a reload. */
+  "run-stopped": {
+    limit: "steps" | "size";
+    steps: number;
+    cap: number | null;
+    skill: string | null;
   };
   /** A write that stopped for approval in a conversation the user has come
    * back to. The decision cannot be given any more, so this replaces the
@@ -293,6 +311,37 @@ function ApprovalExpiredPart({ toolName }: AgentDataParts["approval-expired"]) {
   );
 }
 
+function RunStoppedPart({ limit, steps, cap, skill }: AgentDataParts["run-stopped"]) {
+  const { continueRun, busy } = useContext(RunControlContext);
+  const reached = limit === "size" || (cap !== null && steps >= cap);
+  const what =
+    limit === "size"
+      ? `This run reached its size limit after ${steps} ${steps === 1 ? "step" : "steps"}.`
+      : reached
+        ? `This run reached its step limit (${cap} steps).`
+        : `This run stopped after ${steps} ${steps === 1 ? "step" : "steps"}, before it finished.`;
+  return (
+    <div
+      className="rounded-xl border border-border bg-muted/40 p-3 text-xs text-foreground"
+      data-testid="run-stopped"
+    >
+      <p>{what} Everything it already finished is saved.</p>
+      {skill && continueRun ? (
+        <button
+          type="button"
+          className="mt-2 inline-flex items-center rounded-full border border-border px-3 py-1.5 text-xs font-medium transition-colors hover:bg-muted disabled:opacity-50"
+          disabled={busy}
+          onClick={() => continueRun(skill)}
+        >
+          Continue from where it stopped
+        </button>
+      ) : (
+        <p className="mt-1 text-muted-foreground">Send a new message to continue.</p>
+      )}
+    </div>
+  );
+}
+
 /** Every declared kind, rendered. Total by type: adding a key above without a
  * renderer here is a compile error. */
 const AGENT_PART_RENDERERS: {
@@ -302,6 +351,7 @@ const AGENT_PART_RENDERERS: {
   "mcp-config": () => <McpConfigPart />,
   "account-state": (data) => <AccountStatePart {...data} />,
   "approval-expired": (data) => <ApprovalExpiredPart {...data} />,
+  "run-stopped": (data) => <RunStoppedPart {...data} />,
 };
 
 /**

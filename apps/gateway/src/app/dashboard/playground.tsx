@@ -1,5 +1,6 @@
 "use client";
 
+import { skillContinueMessage } from "@/lib/skill-links";
 import {
   forwardRef,
   useCallback,
@@ -33,11 +34,7 @@ import { Suggestion, Suggestions } from "@/components/ai-elements/suggestion";
 import { Lock } from "lucide-react";
 import { Spinner } from "@/components/ui/spinner";
 import Link from "next/link";
-import {
-  ConnectGrantContext,
-  ConnectPart,
-  ConnectReturnContext,
-} from "./agent-parts";
+import { ConnectGrantContext, ConnectPart, ConnectReturnContext, RunControlContext } from "./agent-parts";
 import { SERVICES } from "./connections/services";
 import { buttonVariants } from "@/components/ui/button";
 import {
@@ -781,9 +778,22 @@ export const Playground = forwardRef<PlaygroundHandle, PlaygroundProps>(
       ? COMPOSER_PLACEHOLDER_AWAITING_CONFIRM
       : COMPOSER_PLACEHOLDER_READY;
 
+    // The stop card's Continue (SCRUM-234): the fixed continuation for the
+    // skill, in this thread, as a skill run. Same send path as everything
+    // else, so the guards (streaming, cap, hidden) apply unchanged.
+    const runControl = useMemo(
+      () => ({
+        continueRun: (slug: string) =>
+          send(skillContinueMessage(slug), { skill: slug, skillTrigger: "manual" }),
+        busy: streaming,
+      }),
+      [send, streaming]
+    );
+
     const chat = (
       <ConnectReturnContext.Provider value={connectReturn}>
       <ConnectGrantContext.Provider value={connectGrant}>
+      <RunControlContext.Provider value={runControl}>
       <div className={style.root}>
           <Conversation className="min-h-0">
             {/* gap-0: the message rows carry their own vertical rhythm now
@@ -1067,6 +1077,7 @@ export const Playground = forwardRef<PlaygroundHandle, PlaygroundProps>(
             />
           </div>
       </div>
+      </RunControlContext.Provider>
       </ConnectGrantContext.Provider>
       </ConnectReturnContext.Provider>
     );

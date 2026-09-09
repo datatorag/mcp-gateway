@@ -70,10 +70,13 @@ const statusIcons: Record<ToolPart["state"], ReactNode> = {
   "output-error": <XCircleIcon className="size-4 text-red-600" />,
 };
 
-export const getStatusBadge = (status: ToolPart["state"]) => (
+/** `label` overrides the state's own word without changing the state: a
+ * settled message shows "Interrupted" for a call whose result never came
+ * (SCRUM-234), and the part keeps its true state. */
+export const getStatusBadge = (status: ToolPart["state"], label?: string) => (
   <Badge className="gap-1.5 rounded-full text-xs" variant="secondary">
-    {statusIcons[status]}
-    {statusLabels[status]}
+    {label ? <XCircleIcon className="size-4 text-orange-600" /> : statusIcons[status]}
+    {label ?? statusLabels[status]}
   </Badge>
 );
 
@@ -84,8 +87,9 @@ export const ToolHeader = ({
   type,
   state,
   toolName,
+  badgeLabel,
   ...props
-}: ToolHeaderProps) => {
+}: ToolHeaderProps & { badgeLabel?: string }) => {
   const derivedName =
     type === "dynamic-tool" ? toolName : type.split("-").slice(1).join("-");
   const service = serviceFromToolName(derivedName);
@@ -113,7 +117,7 @@ export const ToolHeader = ({
             <WrenchIcon className="size-4 text-muted-foreground" />
           ))}
         <span className="font-medium text-sm">{title ?? derivedName}</span>
-        {getStatusBadge(state)}
+        {getStatusBadge(state, badgeLabel)}
       </span>
       {/* Base UI's Collapsible.Root emits `data-open`/`data-closed` — there is
           no `data-state` attribute anywhere in @base-ui/react, so the upstream

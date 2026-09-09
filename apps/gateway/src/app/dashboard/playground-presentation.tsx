@@ -227,11 +227,19 @@ export function shouldExpandTool(
   return expand.includes(shortToolName(toolPartName(part)));
 }
 
+const IN_FLIGHT_STATES = new Set(["input-streaming", "input-available"]);
+
 export function ToolCard({
   part,
   defaultOpen = false,
+  settled = false,
 }: {
   part: AnyToolPart;
+  /** The stream that produced this message has closed (SCRUM-234). A tool
+   * part still in flight then is a call whose result never came, and the
+   * card says Interrupted rather than Running. The part's own state is not
+   * touched. */
+  settled?: boolean;
   /** Render the card already expanded. Defaults to false, which is the
    * playground's and the landing demo's behaviour and is unchanged. Exists
    * for docs/marketing captures, where the arguments and result ARE the
@@ -250,6 +258,7 @@ export function ToolCard({
   const icon = InternalIcon ? (
     <InternalIcon className="size-4 text-muted-foreground" />
   ) : undefined;
+  const badgeLabel = settled && IN_FLIGHT_STATES.has(part.state) ? "Interrupted" : undefined;
   return (
     <Tool className="mb-0 text-xs" defaultOpen={defaultOpen}>
       {/* `title` overrides the header's own name derivation, which would
@@ -257,6 +266,7 @@ export function ToolCard({
           because the header's props are a discriminated union on `type`. */}
       {part.type === "dynamic-tool" ? (
         <ToolHeader
+          badgeLabel={badgeLabel}
           icon={icon}
           state={part.state}
           title={display}
@@ -264,7 +274,13 @@ export function ToolCard({
           type="dynamic-tool"
         />
       ) : (
-        <ToolHeader icon={icon} state={part.state} title={display} type={part.type} />
+        <ToolHeader
+          badgeLabel={badgeLabel}
+          icon={icon}
+          state={part.state}
+          title={display}
+          type={part.type}
+        />
       )}
       <ToolContent>
         <ToolInput input={part.input ?? {}} />
@@ -391,6 +407,9 @@ function FeedbackControls({
 }
 
 interface MessageRowProps {
+  /** The stream that produced this message has closed. Optional so the
+   * scripted demo, whose rows are complete by construction, need not say so. */
+  settled?: boolean;
   message: PlaygroundMessage;
   /** Whether this is the last message in the list — gates the Regenerate
    * action, which only ever applies to the most recent turn. */
@@ -431,6 +450,7 @@ export const MessageRow = memo(function MessageRow({
   message,
   isLast,
   showActions,
+  settled = false,
   busy,
   awaitingConfirm,
   textSize = "xs",
@@ -486,6 +506,7 @@ export const MessageRow = memo(function MessageRow({
                 <ToolCard
                   defaultOpen={shouldExpandTool(expandTools, part)}
                   part={part}
+                  settled={settled}
                 />
                 {/* The confirm card is bound to the SAME part: an approval
                     request is a state of the tool call, not a message of its
@@ -668,6 +689,7 @@ export function MessageList({
             busy={busy}
             comments={comments}
             expandTools={expandTools}
+            settled={complete}
             feedback={feedback}
             isLast={isLast}
             key={message.id}

@@ -6,6 +6,7 @@ import {
   servicesFor,
   skillDeepLink,
   signInAndRunHref,
+  skillContinueMessage,
   skillRunMessage,
   skillSlugFromPath,
 } from "./skills";
@@ -133,5 +134,17 @@ describe("the skills collection", () => {
       expect(related.length).toBeGreaterThan(0);
       expect(related.map((r) => r.slug)).not.toContain(skill.slug);
     }
+  });
+});
+
+describe("skillContinueMessage (SCRUM-234)", () => {
+  it("is a fixed text per slug that resumes rather than restarts, with no em-dash", () => {
+    const text = skillContinueMessage("morning-brief");
+    expect(text).toBe(skillContinueMessage("morning-brief"));
+    expect(text).toContain("morning-brief");
+    expect(text).toMatch(/last completed step/);
+    expect(text).toMatch(/do not restart/i);
+    expect(text).toContain("its own rails");
+    expect(text).not.toContain("\u2014");
   });
 });

@@ -8,7 +8,7 @@
  * cannot be asserted here by accident.
  */
 
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { readUIMessageStream, type UIMessageChunk } from "ai";
@@ -18,6 +18,7 @@ import {
   progressFor,
   type PlaygroundMessage,
 } from "./playground-presentation";
+import { RunControlContext } from "./agent-parts";
 
 const START: UIMessageChunk[] = [{ type: "start", messageId: "assistant-1" }, { type: "start-step" }];
 
@@ -146,5 +147,107 @@ describe("the progress row in the list", () => {
 
     render([USER_TURN, message], false);
     expect(container.querySelector('[data-testid="run-progress"]')).toBeNull();
+  });
+});
+
+/* SCRUM-234: a stop is a notice with a way on, and a settled message never
+ * says Running about a tool call whose result never came. */
+describe("the stop notice and the interrupted card (SCRUM-234)", () => {
+  let container: HTMLDivElement;
+  let root: Root;
+
+  const STOPPED: PlaygroundMessage = {
+    id: "assistant-2",
+    role: "assistant",
+    parts: [
+      { type: "step-start" },
+      {
+        type: "tool-gws-mcp__gmail_search",
+        toolCallId: "call-9",
+        state: "output-available",
+        input: {},
+        output: { messages: [] },
+      },
+      { type: "data-run-stopped", data: { limit: "steps", steps: 60, cap: 60, skill: "morning-brief" } },
+    ] as PlaygroundMessage["parts"],
+  };
+
+  function render(messages: PlaygroundMessage[], continueRun?: (slug: string) => void) {
+    const list = (
+      <MessageList
+        awaitingConfirm={false}
+        busy={false}
+        comments={{}}
+        erroredIds={new Set()}
+        feedback={{}}
+        lastMessageComplete
+        messages={messages}
+        onCommentChange={() => {}}
+        onDecide={() => {}}
+        onRate={() => {}}
+        onRegenerate={() => {}}
+        onSendComment={() => {}}
+      />
+    );
+    act(() => {
+      root.render(
+        continueRun ? (
+          <RunControlContext.Provider value={{ continueRun, busy: false }}>{list}</RunControlContext.Provider>
+        ) : (
+          list
+        )
+      );
+    });
+  }
+
+  beforeEach(() => {
+    (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    container = document.createElement("div");
+    document.body.appendChild(container);
+    root = createRoot(container);
+  });
+
+  afterEach(() => {
+    act(() => root.unmount());
+    container.remove();
+  });
+
+  it("names the limit and the steps completed, and Continue hands the slug to the container", () => {
+    const continueRun = vi.fn();
+    render([USER_TURN, STOPPED], continueRun);
+    const text = (container.textContent ?? "").replace(/\s+/g, " ");
+    expect(text).toContain("step limit");
+    expect(text).toContain("60 steps");
+    expect(text).toContain("saved");
+    const button = Array.from(container.querySelectorAll("button")).find((b) =>
+      (b.textContent ?? "").includes("Continue")
+    );
+    expect(button).toBeTruthy();
+    act(() => button!.click());
+    expect(continueRun).toHaveBeenCalledWith("morning-brief");
+  });
+
+  it("says size limit for the token ceiling, and offers no Continue where no container can act", () => {
+    const sized: PlaygroundMessage = {
+      ...STOPPED,
+      parts: [
+        STOPPED.parts[0]!,
+        STOPPED.parts[1]!,
+        { type: "data-run-stopped", data: { limit: "size", steps: 3, cap: null, skill: null } },
+      ] as PlaygroundMessage["parts"],
+    };
+    render([USER_TURN, sized]);
+    const text = (container.textContent ?? "").replace(/\s+/g, " ");
+    expect(text).toContain("size limit");
+    expect(text).toContain("3 steps");
+    expect(Array.from(container.querySelectorAll("button")).some((b) => (b.textContent ?? "").includes("Continue"))).toBe(false);
+  });
+
+  it("a settled message shows Interrupted, not Running, for a tool call whose result never came", async () => {
+    const message = await assemble(TOOL_RUNNING);
+    render([USER_TURN, message]);
+    const text = container.textContent ?? "";
+    expect(text).toContain("Interrupted");
+    expect(text).not.toContain("Running");
   });
 });

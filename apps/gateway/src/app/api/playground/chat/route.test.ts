@@ -93,7 +93,8 @@ vi.mock("@mastra/ai-sdk", () => ({
 
 import { mintRunId } from "@/gateway/playground/run-ownership";
 import { USER_ID_CONTEXT_KEY } from "@/mastra/mcp/client";
-import { readSkillFiles, skillRunMessage } from "@/lib/skills";
+import { readSkillFiles, skillContinueMessage, skillRunMessage } from "@/lib/skills";
+import { CHAT_MAX_STEPS, SKILL_RUN_MAX_STEPS } from "@/mastra/run-steps";
 import { POST } from "./route";
 
 const USER = "user-1";
@@ -670,5 +671,128 @@ describe("POST /api/playground/chat — what reaches the runtime", () => {
     // The runtime is never handed the request at all — the refusal lands
     // before anything that could resume.
     expect(handleChatStream).not.toHaveBeenCalled();
+  });
+});
+
+/* SCRUM-234: the step budget is ours, and no cap ends a turn silently. The
+ * runtime's default was five model calls per turn, which ended a real
+ * morning brief after eight tool calls with no notice at all. */
+describe("step budget and the stop notice (SCRUM-234)", () => {
+  const TOOL_STEP = (id: string): UIMessageChunk[] => [
+    { type: "start-step" },
+    { type: "tool-input-start", toolCallId: id, toolName: "gws-mcp__gmail_search" },
+    { type: "tool-input-available", toolCallId: id, toolName: "gws-mcp__gmail_search", input: {} },
+    { type: "tool-output-available", toolCallId: id, output: { messages: [] } },
+    { type: "finish-step" },
+  ];
+
+  function skillTurn() {
+    const skill = readSkillFiles().find((s) => s.slug === "morning-brief")!;
+    return [{ id: "u1", role: "user", parts: [{ type: "text", text: skillRunMessage(skill) }] }];
+  }
+
+  /** Emits what it is given, then fails with the given error. */
+  function failingWith(before: UIMessageChunk[], err: Error): ReadableStream<UIMessageChunk> {
+    let index = 0;
+    return new ReadableStream({
+      pull(controller) {
+        if (index < before.length) {
+          controller.enqueue(before[index++]!);
+          return;
+        }
+        controller.error(err);
+      },
+    });
+  }
+
+  it("passes the skill step budget for a skill turn and the chat budget otherwise", async () => {
+    await drain(await POST(post({ messages: skillTurn(), skill: "morning-brief", skillTrigger: "manual" })));
+    expect(lastParams().maxSteps).toBe(SKILL_RUN_MAX_STEPS);
+    await drain(await POST(post({ messages: USER_TURN })));
+    expect(lastParams().maxSteps).toBe(CHAT_MAX_STEPS);
+    expect(SKILL_RUN_MAX_STEPS).toBeGreaterThan(CHAT_MAX_STEPS);
+  });
+
+  it("a turn that ends right after a tool result carries a run-stopped part before the finish", async () => {
+    handleChatStream.mockResolvedValue(
+      chunkStream([
+        { type: "start" },
+        ...TOOL_STEP("call-1"),
+        ...TOOL_STEP("call-2"),
+        { type: "finish", finishReason: "tool-calls" } as UIMessageChunk,
+      ])
+    );
+    const chunks = await drain(
+      await POST(post({ messages: skillTurn(), skill: "morning-brief", skillTrigger: "manual" }))
+    );
+    const stopped = chunks.findIndex((c) => c.type === "data-run-stopped");
+    const finish = chunks.findIndex((c) => c.type === "finish");
+    expect(stopped).toBeGreaterThan(-1);
+    expect(stopped).toBeLessThan(finish);
+    expect(chunks[stopped]!.data).toEqual({
+      limit: "steps",
+      steps: 2,
+      cap: SKILL_RUN_MAX_STEPS,
+      skill: "morning-brief",
+    });
+  });
+
+  it("a turn that ends with prose carries no run-stopped part", async () => {
+    handleChatStream.mockResolvedValue(
+      chunkStream([
+        { type: "start" },
+        ...TOOL_STEP("call-1"),
+        { type: "start-step" },
+        { type: "text-start", id: "t1" },
+        { type: "text-delta", id: "t1", delta: "Done. Here is the brief." },
+        { type: "text-end", id: "t1" },
+        { type: "finish-step" },
+        { type: "finish", finishReason: "stop" } as UIMessageChunk,
+      ])
+    );
+    const chunks = await drain(await POST(post({ messages: USER_TURN })));
+    expect(chunks.some((c) => c.type === "data-run-stopped")).toBe(false);
+  });
+
+  it("a turn that stops for an approval carries no run-stopped part: the confirm card is its notice", async () => {
+    handleChatStream.mockResolvedValue(
+      chunkStream([
+        { type: "start" },
+        ...TOOL_STEP("call-1"),
+        { type: "start-step" },
+        { type: "tool-input-start", toolCallId: "call-2", toolName: "gws-mcp__docs_create" },
+        { type: "tool-input-available", toolCallId: "call-2", toolName: "gws-mcp__docs_create", input: {} },
+        { type: "tool-approval-request", toolCallId: "call-2", approvalId: "approval-1" },
+        { type: "finish", finishReason: "tool-calls" } as UIMessageChunk,
+      ])
+    );
+    const chunks = await drain(await POST(post({ messages: USER_TURN })));
+    expect(chunks.some((c) => c.type === "data-run-stopped")).toBe(false);
+  });
+
+  it("the size ceiling refusal carries a run-stopped part of the size kind before the error", async () => {
+    handleChatStream.mockResolvedValue(
+      failingWith([{ type: "start" }, ...TOOL_STEP("call-1")], new RunTokenCeilingError(150_000))
+    );
+    const chunks = await drain(
+      await POST(post({ messages: skillTurn(), skill: "morning-brief", skillTrigger: "manual" }))
+    );
+    const stopped = chunks.findIndex((c) => c.type === "data-run-stopped");
+    const error = chunks.findIndex((c) => c.type === "error");
+    expect(stopped).toBeGreaterThan(-1);
+    expect(stopped).toBeLessThan(error);
+    expect(chunks[stopped]!.data).toEqual({ limit: "size", steps: 1, cap: null, skill: "morning-brief" });
+    expect(chunks[error]!.errorText).toBe(RUN_CEILING_MESSAGE);
+  });
+
+  it("the continuation message beside a valid slug is a skill run, so Continue keeps the no-gates policy", async () => {
+    const turn = [{ id: "u1", role: "user", parts: [{ type: "text", text: skillContinueMessage("morning-brief") }] }];
+    await drain(await POST(post({ messages: turn, skill: "morning-brief", skillTrigger: "manual" })));
+    expect(trackAgentRun).toHaveBeenLastCalledWith(
+      expect.anything(),
+      USER,
+      expect.objectContaining({ skill: "morning-brief", trigger: "manual" })
+    );
+    expect(lastParams().maxSteps).toBe(SKILL_RUN_MAX_STEPS);
   });
 });

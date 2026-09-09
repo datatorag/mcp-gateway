@@ -30,6 +30,17 @@ const SERVICE_ID_BY_CONNECTOR: Record<string, string> = {
 };
 
 /** The service ids a skill needs connected, in `connectorsFor` order. */
+/** What Continue sends after a stop (SCRUM-234): a fixed text per slug, so
+ * the chat route can recognise it beside the slug as a skill run and keep the
+ * no-gates policy. It resumes; it never restarts from the seed. */
+export function skillContinueMessage(slug: string): string {
+  return (
+    `Continue the skill run for ${slug}. Pick up from your last completed step, ` +
+    "do not restart from the beginning, stay within its own rails, and report " +
+    "what you did at the end."
+  );
+}
+
 export function servicesFor(skill: { tools: string[] }): string[] {
   return connectorsFor(skill.tools)
     .map((name) => SERVICE_ID_BY_CONNECTOR[name])
