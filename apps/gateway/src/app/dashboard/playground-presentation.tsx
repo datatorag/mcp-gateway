@@ -21,7 +21,7 @@ import { memo } from "react";
 import type { DynamicToolUIPart, ToolUIPart, UIMessage } from "ai";
 import { renderAgentPart, type AgentDataParts } from "./agent-parts";
 import { internalToolIcon, toolDisplayName } from "./agent-tool-copy";
-import { RefreshCcwIcon, ThumbsDownIcon, ThumbsUpIcon } from "lucide-react";
+import { ClockIcon, RefreshCcwIcon, ThumbsDownIcon, ThumbsUpIcon } from "lucide-react";
 
 import {
   Message,
@@ -543,6 +543,65 @@ export const MessageRow = memo(function MessageRow({
   );
 });
 
+/* -------------------------------------------------------------------------- */
+/* Run progress (SCRUM-237)                                                    */
+/* -------------------------------------------------------------------------- */
+
+export interface RunProgress {
+  /** "Thinking", "Writing", or "Running <tool>". */
+  label: string;
+  /** Model calls started so far in this message, from its `step-start`
+   * parts; 0 before the first assistant part exists. */
+  step: number;
+}
+
+const TOOL_IN_FLIGHT = new Set(["input-streaming", "input-available"]);
+
+/** What the agent is doing right now, derived from the stream and nothing
+ * else: `busy` is the chat runtime's own "a request is in flight", and the
+ * last message's parts are what it has assembled so far. HONEST STATE ONLY
+ * (SCRUM-237): there is no timer, no guess, and the answer is null
+ * the moment the stream is closed, so a tool part stranded in
+ * `input-available` after close (SCRUM-234's defect) is never narrated as
+ * Running by this row. An approval request is its own state with its own
+ * card, so it is not narrated either. */
+export function progressFor(
+  busy: boolean,
+  last: PlaygroundMessage | undefined
+): RunProgress | null {
+  if (!busy) return null;
+  if (!last || last.role !== "assistant") return { label: "Thinking", step: 0 };
+  const step = last.parts.filter((part) => part.type === "step-start").length;
+  const part = last.parts[last.parts.length - 1];
+  if (!part) return { label: "Thinking", step };
+  if (isToolPart(part)) {
+    if (part.state === "approval-requested") return null;
+    if (TOOL_IN_FLIGHT.has(part.state)) {
+      return { label: `Running ${shortToolName(toolPartName(part))}`, step };
+    }
+    return { label: "Thinking", step };
+  }
+  if (part.type === "text") return { label: "Writing", step };
+  return { label: "Thinking", step };
+}
+
+/** The one line under the last message while a turn runs. Same pulsing clock
+ * as the tool card's Running badge, so the two read as one vocabulary. */
+export function ProgressRow({ progress }: { progress: RunProgress }) {
+  return (
+    <div
+      aria-live="polite"
+      className="mt-3 flex items-center gap-2 text-xs text-muted-foreground"
+      data-testid="run-progress"
+    >
+      <ClockIcon className="size-3.5 animate-pulse" />
+      {progress.step > 1 && <span>Step {progress.step}</span>}
+      {progress.step > 1 && <span aria-hidden>&middot;</span>}
+      <span>{progress.label}</span>
+    </div>
+  );
+}
+
 export interface MessageListProps {
   messages: PlaygroundMessage[];
   /** A request is in flight — confirm buttons and regenerate are locked. */
@@ -623,6 +682,10 @@ export function MessageList({
           />
         );
       })}
+      {(() => {
+        const progress = progressFor(busy, messages[messages.length - 1]);
+        return progress ? <ProgressRow progress={progress} /> : null;
+      })()}
     </>
   );
 }
