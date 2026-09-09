@@ -10,6 +10,7 @@ import {
   skillContinueMessage,
   skillRunMessage,
   skillSlugFromPath,
+  runClockLine,
 } from "./skills";
 import { REGISTRY_TOOL_NAMES } from "@/gateway/playground/registry-snapshot";
 
@@ -209,5 +210,44 @@ describe("skill run accounts (SCRUM-240)", () => {
       expect(s.skillSource, s.slug).not.toMatch(/list the (accounts|mailboxes) to (cover|triage)/i);
       expect(s.skillSource, s.slug).not.toMatch(/they want included/i);
     }
+  });
+});
+
+/* SCRUM-242: the run message carries the clock. A run had no way to learn
+ * the date, guessed it from mail, and re-read every calendar for the wrong
+ * day. The system prompt stays clock-free (it is the cached prefix); the
+ * run message is per run and uncached, so the line lives there. */
+describe("the run clock (SCRUM-242)", () => {
+  const brief = readSkillFiles().find((s) => s.slug === "morning-brief")!;
+  const NOW = new Date("2026-09-09T23:04:12Z");
+
+  it("states the start, the zone and the local date that today means", () => {
+    const line = runClockLine({ now: NOW, zone: "America/Los_Angeles" });
+    expect(line).toContain("Run started 2026-09-09T23:04:12Z.");
+    expect(line).toContain("America/Los_Angeles");
+    expect(line).toContain("Wednesday 2026-09-09 16:04");
+    expect(line).toContain("that is today");
+    expect(line).toMatch(/never from a mail or event timestamp/);
+    expect(line).not.toContain("\u2014");
+  });
+
+  it("crosses the date line honestly: late UTC is the next day east of it", () => {
+    expect(runClockLine({ now: NOW, zone: "Asia/Tokyo" })).toContain("Thursday 2026-09-10 08:04");
+  });
+
+  it("says when the zone is not known and falls back to the UTC date", () => {
+    const line = runClockLine({ now: NOW, zone: null });
+    expect(line).toContain("Run started 2026-09-09T23:04:12Z.");
+    expect(line).toContain("time zone is not known");
+    expect(line).toContain("2026-09-09 (UTC)");
+    expect(line).not.toContain("null");
+  });
+
+  it("ends the run message with the line when a clock is given, and is unchanged without one", () => {
+    const clock = { now: NOW, zone: "Europe/Berlin" };
+    const withClock = skillRunMessage(brief, [], clock);
+    expect(withClock.startsWith(skillRunMessage(brief, []))).toBe(true);
+    expect(withClock.endsWith("\n\n" + runClockLine(clock))).toBe(true);
+    expect(skillRunMessage(brief, [])).not.toContain("Run started");
   });
 });

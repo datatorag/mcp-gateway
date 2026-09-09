@@ -5,6 +5,7 @@ import {
   runAccountsFrom,
   skillRunMessage,
   type Skill,
+  type RunClock,
 } from "@/lib/skills";
 
 /**
@@ -105,6 +106,10 @@ export function skillApplyText(
      * one of the user's connected accounts. */
     account?: string | null;
     connectionsUrl: string;
+    /** When the client asked (SCRUM-242). An MCP client offers no zone, so
+     * the line says the zone is not known. Omitted by tests that pin the
+     * text byte for byte. */
+    clock?: RunClock;
   }
 ): string {
   // Which layer is running, said first (per HQ decision): a fork shadows
@@ -145,7 +150,7 @@ export function skillApplyText(
       isDefault: a.isDefault,
     }))
   );
-  return `${lines.join("\n")}\n\n${skillRunMessage(skill, runAccounts)}`;
+  return `${lines.join("\n")}\n\n${skillRunMessage(skill, runAccounts, opts.clock)}`;
 }
 
 /** The one place a request value is ever reflected back to the requester

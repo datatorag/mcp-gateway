@@ -56,7 +56,7 @@ function isErrorResult(result: unknown): boolean {
 }
 
 export function mastraEngine(db: Database): RunEngine {
-  return async ({ userId, skill, threadId, runId }) => {
+  return async ({ userId, skill, threadId, runId, timezone }) => {
     const requestContext = buildPluginRequestContext({ userId });
     requestContext.set(RUN_ID_CONTEXT_KEY, runId);
     requestContext.set(SKILL_RUN_CONTEXT_KEY, skill.slug);
@@ -66,7 +66,10 @@ export function mastraEngine(db: Database): RunEngine {
     const partial: EngineToolCall[] = [];
     try {
       const accounts = runAccountsFrom(await listConnectedAccounts(db, userId));
-      const result = await agent.generate(skillRunMessage(skill, accounts), {
+      // The clock ends the message (SCRUM-242): the runner's time, the
+      // schedule's zone, so "today" is the user's today and never a guess.
+      const clock = { now: new Date(), zone: timezone ?? null };
+      const result = await agent.generate(skillRunMessage(skill, accounts, clock), {
         memory: { thread: threadId, resource: userId },
         requestContext,
         runId,

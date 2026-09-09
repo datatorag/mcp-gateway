@@ -88,7 +88,7 @@ describe("runSchedule: the outcome table", () => {
     expect(report.status).toBe("succeeded");
     expect(d.claim).toHaveBeenCalledWith("user-1");
     expect(d.engine).toHaveBeenCalledWith(
-      expect.objectContaining({ userId: "user-1", skill, threadId: expect.any(String), runId: expect.any(String) })
+      expect.objectContaining({ userId: "user-1", skill, threadId: expect.any(String), runId: expect.any(String), timezone: "America/Los_Angeles" })
     );
     const run = store.runs[0]!;
     expect(run).toMatchObject({ status: "succeeded", delivered: "notification_email", threadId: report.threadId });

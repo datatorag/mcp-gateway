@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import { marked } from "marked";
 import { defineCollection, field, type ParsedFile } from "./content-collection";
-import { connectorsFor, servicesFor } from "./skill-links";
+import { connectorsFor, runClockLine, servicesFor, type RunClock } from "./skill-links";
 
 /**
  * The skill catalogue (SCRUM-226: rows, with the files as the authored
@@ -237,7 +237,8 @@ export async function getRelatedSkills(slug: string, limit = 2): Promise<Skill[]
  * `skill-links.ts`, which has no server-only imports, so client components
  * can use them; re-exported here so server callers have one import for
  * everything about skills. */
-export { skillDeepLink, signInAndRunHref, connectorsFor, servicesFor, skillContinueMessage } from "./skill-links";
+export { skillDeepLink, signInAndRunHref, connectorsFor, servicesFor, skillContinueMessage, runClockLine } from "./skill-links";
+export type { RunClock } from "./skill-links";
 
 /** The slug a validated `next` path names, or null. Only a PUBLISHED slug
  * counts: an event must never claim a skill the catalogue does not have,
@@ -323,7 +324,8 @@ function runAccountsBlock(skill: Pick<Skill, "tools">, accounts: readonly RunAcc
 
 export function skillRunMessage(
   skill: Pick<Skill, "title" | "skillSource" | "tools">,
-  accounts: readonly RunAccount[] = []
+  accounts: readonly RunAccount[] = [],
+  clock?: RunClock
 ): string {
   return (
     `Run the following skill for me now: ${skill.title}. ` +
@@ -331,7 +333,11 @@ export function skillRunMessage(
     "its own rails. Report what you did at the end.\n\n" +
     runAccountsBlock(skill, accounts) +
     "\n\n" +
-    skill.skillSource
+    skill.skillSource +
+    // SCRUM-242: the clock ends the message. It is not part of the byte-for-byte
+    // match the chat route makes (the client sends the message without it, and
+    // the route appends it), so a clock never turns a run into a gated turn.
+    (clock ? "\n\n" + runClockLine(clock) : "")
   );
 }
 

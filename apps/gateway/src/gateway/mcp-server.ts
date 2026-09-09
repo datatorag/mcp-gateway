@@ -451,6 +451,8 @@ async function applySkillFor(
     })),
     account: typeof account === "string" ? account : null,
     connectionsUrl,
+    // SCRUM-242: the server's time; an MCP client offers no zone.
+    clock: { now: new Date(), zone: null },
   });
   return { text, runnable: summary.runnable };
 }

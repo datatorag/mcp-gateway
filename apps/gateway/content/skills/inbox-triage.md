@@ -74,8 +74,8 @@ triages the wrong inbox.
 5. Build one digest covering every account, formatted to be read in a mail client,
    not skimmed as raw text:
 
-   - **Lead with a real timestamp** so a stale run is obvious at a glance. Run
-     `date`, do not guess it. If a run was partial or an account failed, say so in
+   - **Lead with a real timestamp** so a stale run is obvious at a glance. The run
+     message carries the date and time; use it, do not guess. If a run was partial or an account failed, say so in
      that same header.
    - **A dated-items box at the top**, before anything else: every item that
      carries a date or deadline, so the first thing the digest answers is "is

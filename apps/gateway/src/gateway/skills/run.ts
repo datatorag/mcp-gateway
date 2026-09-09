@@ -42,6 +42,9 @@ export type RunEngine = (args: {
   skill: Skill;
   threadId: string;
   runId: string;
+  /** The schedule's zone, so the run message can say what day it is
+   * where the user lives (SCRUM-242). */
+  timezone?: string;
 }) => Promise<EngineResult>;
 
 export type RunDeps = {
@@ -151,7 +154,7 @@ export async function runSchedule(schedule: ScheduleRow, skill: Skill, deps: Run
       schedule_id: schedule.id,
     });
     try {
-      const result = await deps.engine({ userId, skill, threadId, runId });
+      const result = await deps.engine({ userId, skill, threadId, runId, timezone: schedule.timezone });
       const classified = classifyRun(result, deps.connectionFailure);
       status = classified.status;
       service = classified.service;

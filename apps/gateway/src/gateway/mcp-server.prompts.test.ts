@@ -114,9 +114,9 @@ describe("prompts: the catalogue for clients that render prompts", () => {
     expect(m.content.type).toBe("text");
     const text = (m.content as { text: string }).text;
     const skill = readSkillFiles().find((s) => s.slug === "morning-brief")!;
-    expect(
-      text.endsWith(
-        skillRunMessage(
+    // SCRUM-242: the verbatim run message, then the clock line. An MCP client
+    // has no zone to offer, so the line says the zone is not known.
+    const run = skillRunMessage(
           skill,
           runAccountsFrom(
             ACCOUNTS.map((a) => ({
@@ -125,12 +125,13 @@ describe("prompts: the catalogue for clients that render prompts", () => {
               isDefault: a.isDefault,
             }))
           )
-        )
-      )
-    ).toBe(true);
+        );
+    expect(text).toContain(run);
+    expect(text.slice(text.indexOf(run) + run.length)).toMatch(/^\n\nRun started \d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z\. The user's time zone is not known/);
     expect(text).toContain("Do not ask which accounts to cover");
     expect(text).toContain("This run will use work@example.com");
-    expect(text).toBe(
+    // Everything before the clock is the catalogue's apply text, byte for byte.
+    expect(text.slice(0, text.indexOf(run) + run.length)).toBe(
       skillApplyText(skill, {
         connected: new Set(["google-workspace"]),
         accounts: ACCOUNTS.map((a) => ({

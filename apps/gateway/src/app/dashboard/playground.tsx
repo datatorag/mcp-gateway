@@ -1,6 +1,17 @@
 "use client";
 
 import { skillContinueMessage } from "@/lib/skill-links";
+
+/** The browser's IANA zone for a skill run (SCRUM-242), so the run message
+ * can say what day it is where the user is. The server validates it and
+ * stamps its own time; a browser that cannot say sends nothing. */
+function browserZone(): string | undefined {
+  try {
+    return Intl.DateTimeFormat().resolvedOptions().timeZone || undefined;
+  } catch {
+    return undefined;
+  }
+}
 import {
   forwardRef,
   useCallback,
@@ -614,7 +625,7 @@ export const Playground = forwardRef<PlaygroundHandle, PlaygroundProps>(
           await sendMessage(
             { text },
             options?.skill
-              ? { body: { skill: options.skill, skillTrigger: options.skillTrigger ?? "manual" } }
+              ? { body: { skill: options.skill, skillTrigger: options.skillTrigger ?? "manual", zone: browserZone() } }
               : undefined
           );
           // A turn has gone out, so a thread list is now stale: a brand new

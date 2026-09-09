@@ -135,8 +135,8 @@ Decide three things before the first call, and write them at the top of the run:
 9. Build one brief covering every account, formatted to be read in a mail client, not
    skimmed as raw text:
 
-   - **Lead with a real timestamp** so a stale run is obvious at a glance. Run `date`,
-     do not guess it. If a run was partial, a search truncated, or an account failed,
+   - **Lead with a real timestamp** so a stale run is obvious at a glance. The run
+     message carries the date and time; use it, do not guess. If a run was partial, a search truncated, or an account failed,
      say so in that same header.
    - **Counts in the header**: found, cleared, left unread for you, and the tasks line:
      how many tasks this run created and how many in the list are still open. **Print

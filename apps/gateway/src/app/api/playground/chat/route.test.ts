@@ -833,3 +833,52 @@ describe("step budget and the stop notice (SCRUM-234)", () => {
     expect(lastParams().maxSteps).toBe(SKILL_RUN_MAX_STEPS);
   });
 });
+
+/* SCRUM-242: the route appends the clock to a recognised skill run with the
+ * browser's zone and the server's time. The match stays byte for byte on the
+ * text the client sent; the clock is added after it, never part of it. */
+describe("the run clock (SCRUM-242)", () => {
+  function skillTurn() {
+    const skill = readSkillFiles().find((s) => s.slug === "morning-brief")!;
+    return [{ id: "u1", role: "user", parts: [{ type: "text", text: skillRunMessage(skill) }] }];
+  }
+  const lastText = () => {
+    const messages = lastParams().messages as Array<{ parts: Array<{ text: string }> }>;
+    return messages[messages.length - 1]!.parts.map((p) => p.text).join("");
+  };
+
+  it("hands the runtime the run message ending with the clock line in the browser's zone", async () => {
+    const before = Date.now();
+    await drain(
+      await POST(post({ messages: skillTurn(), skill: "morning-brief", skillTrigger: "manual", zone: "America/Los_Angeles" }))
+    );
+    const text = lastText();
+    const skill = readSkillFiles().find((s) => s.slug === "morning-brief")!;
+    expect(text.startsWith(skillRunMessage(skill))).toBe(true);
+    const m = text.match(/\n\nRun started (\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z)\. The user's time zone is America\/Los_Angeles, where it is /);
+    expect(m).not.toBeNull();
+    const started = Date.parse(m![1]!);
+    expect(started).toBeGreaterThanOrEqual(Math.floor(before / 1000) * 1000);
+    expect(started).toBeLessThanOrEqual(Date.now());
+    // Still a skill run: the step budget and the attribution are the skill's.
+    expect(lastParams().maxSteps).toBe(SKILL_RUN_MAX_STEPS);
+  });
+
+  it("falls back to the unknown-zone line when the zone is not an IANA name", async () => {
+    await drain(
+      await POST(post({ messages: skillTurn(), skill: "morning-brief", skillTrigger: "manual", zone: "Mars/Olympus" }))
+    );
+    expect(lastText()).toMatch(/Run started .* time zone is not known/);
+    expect(lastText()).not.toContain("Mars/Olympus");
+  });
+
+  it("appends the clock when no zone is sent at all", async () => {
+    await drain(await POST(post({ messages: skillTurn(), skill: "morning-brief", skillTrigger: "manual" })));
+    expect(lastText()).toMatch(/Run started .* time zone is not known/);
+  });
+
+  it("leaves an ordinary turn untouched even when a zone is sent", async () => {
+    await drain(await POST(post({ messages: USER_TURN, zone: "America/Los_Angeles" })));
+    expect(lastText()).toBe("hi");
+  });
+});

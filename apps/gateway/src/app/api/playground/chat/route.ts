@@ -7,7 +7,8 @@ import { getEnv } from "@datatorag-mcp/config";
 import { getMastra, DATATORAG_AGENT_ID } from "@/mastra";
 import { RUN_ID_CONTEXT_KEY } from "@/mastra/llm-usage";
 import { buildPluginRequestContext, SKILL_RUN_CONTEXT_KEY } from "@/mastra/mcp/client";
-import { getSkillBySlug, runAccountsFrom, skillContinueMessage, skillRunMessage } from "@/lib/skills";
+import { getSkillBySlug, runAccountsFrom, runClockLine, skillContinueMessage, skillRunMessage, type RunClock } from "@/lib/skills";
+import { isValidTimezone } from "@/gateway/skills/schedule-time";
 import { listConnectedAccounts } from "@/gateway/connected-accounts";
 import { CHAT_MAX_STEPS, SKILL_RUN_MAX_STEPS } from "@/mastra/run-steps";
 import {
@@ -298,6 +299,17 @@ async function isSkillRunTurn(messages: unknown[], slug: unknown, viewer: string
   return text === skillRunMessage(skill, accounts) || text === skillContinueMessage(skill.slug);
 }
 
+/** The messages with the clock line appended to the last user text part
+ * (SCRUM-242). The turn was recognised as a skill run before this, so the
+ * last message is known to be all text parts. Nothing is mutated. */
+function withRunClock(messages: unknown[], clock: RunClock): unknown[] {
+  const last = messages[messages.length - 1] as { parts: Array<{ type: string; text: string }> };
+  const parts = last.parts.map((p) => ({ ...p }));
+  const tail = parts[parts.length - 1]!;
+  tail.text = `${tail.text}\n\n${runClockLine(clock)}`;
+  return [...messages.slice(0, -1), { ...last, parts }];
+}
+
 // POST /api/playground/chat — one capped, streaming playground turn. The same
 // endpoint answers a gated write: the decision rides in on the messages array.
 export const POST = withRoute(async (userId, request) => {
@@ -308,7 +320,7 @@ export const POST = withRoute(async (userId, request) => {
 
   const body = (await request.json().catch(() => null)) as {
     messages?: unknown; id?: unknown; trigger?: unknown; threadId?: unknown;
-    skill?: unknown; skillTrigger?: unknown;
+    skill?: unknown; skillTrigger?: unknown; zone?: unknown;
   } | null;
   const messages = body?.messages;
   if (!Array.isArray(messages) || messages.length === 0) {
@@ -329,6 +341,16 @@ export const POST = withRoute(async (userId, request) => {
     skillSlug && (body?.skillTrigger === "manual" || body?.skillTrigger === "scheduled")
       ? body.skillTrigger
       : undefined;
+
+  /* THE CLOCK (SCRUM-242). A skill run is handed the time it started and the
+   * user's zone, because nothing else tells it the date: no tool returns the
+   * time and the system prompt carries none (it is the cached prefix). The
+   * match above is on the text the client sent; the line goes on AFTER it,
+   * with this server's time, so a browser's clock decides nothing and the
+   * zone is only ever an IANA name this process can format in. */
+  const zone =
+    skillSlug && typeof body?.zone === "string" && isValidTimezone(body.zone) ? body.zone : null;
+  const runMessages = skillSlug ? withRunClock(messages, { now: new Date(), zone }) : messages;
 
   /* WHICH CONVERSATION THIS TURN BELONGS TO.
    *
@@ -530,7 +552,7 @@ export const POST = withRoute(async (userId, request) => {
       agentId: DATATORAG_AGENT_ID,
       version: MASTRA_STREAM_VERSION,
       params: {
-        messages: messages as never,
+        messages: runMessages as never,
         trigger,
         // `requestContext` belongs in `params`, not in `defaultOptions`. The
         // handler spreads these options into the resume leg it starts when it

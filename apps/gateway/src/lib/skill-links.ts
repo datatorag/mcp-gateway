@@ -41,6 +41,53 @@ export function skillContinueMessage(slug: string): string {
   );
 }
 
+/** When a run started and where the user is (SCRUM-242). `zone` is an IANA
+ * name the caller has already validated, or null when nobody knows it. */
+export type RunClock = { now: Date; zone: string | null };
+
+/** The local wall clock of `now` in `zone` as `{ weekday, date, time }`. */
+function localParts(now: Date, zone: string): { weekday: string; date: string; time: string } {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: zone,
+    hourCycle: "h23",
+    year: "numeric", month: "2-digit", day: "2-digit",
+    hour: "2-digit", minute: "2-digit",
+    weekday: "long",
+  }).formatToParts(now);
+  const get = (type: string) => parts.find((p) => p.type === type)?.value ?? "";
+  return {
+    weekday: get("weekday"),
+    date: `${get("year")}-${get("month")}-${get("day")}`,
+    time: `${get("hour")}:${get("minute")}`,
+  };
+}
+
+/** The one line that tells a run what day it is (SCRUM-242).
+ *
+ * A skill run has no clock: no tool returns the time, and the system prompt
+ * carries no date on purpose, because it is the cached prefix of every call
+ * and a timestamp there would break the cache on every turn. The run message
+ * is per run and uncached already, so the clock ends it. The first live run
+ * without this line inferred the date from mail timestamps, got tomorrow,
+ * and re-read every calendar for the wrong day. */
+export function runClockLine(clock: RunClock): string {
+  const iso = clock.now.toISOString().replace(/\.\d{3}Z$/, "Z");
+  if (clock.zone) {
+    const local = localParts(clock.now, clock.zone);
+    return (
+      `Run started ${iso}. The user's time zone is ${clock.zone}, where it is ` +
+      `${local.weekday} ${local.date} ${local.time}; that is today. Take every "today" and ` +
+      `"tomorrow" in the skill from this line, never from a mail or event timestamp.`
+    );
+  }
+  const utcDate = iso.slice(0, 10);
+  return (
+    `Run started ${iso}. The user's time zone is not known: take today as ${utcDate} (UTC) ` +
+    "unless a calendar you read shows a different local date, and never take the date from " +
+    "a mail timestamp."
+  );
+}
+
 export function servicesFor(skill: { tools: string[] }): string[] {
   return connectorsFor(skill.tools)
     .map((name) => SERVICE_ID_BY_CONNECTOR[name])
