@@ -34,13 +34,32 @@ user_invocable: true
    - The server runs AWS CLI v2 (installed via the official installer — the apt `awscli` package no longer exists on Ubuntu 24.04).
    - Safe to skip only when no secrets changed since the last render.
 
-3. **Rebuild and restart the gateway**
+3. **Tag the rollback image, then rebuild and restart the gateway**
+
+   The rollback tag names the sha that is RUNNING, which is the one recorded
+   in `~/datatorag-mcp/.deployed-sha` on the host. It is never `git rev-parse
+   HEAD` on the host: by this step the checkout has already been pulled (and a
+   migration step may have pulled it earlier still), so HEAD is the incoming
+   sha and a tag taken from it names the rollback after the thing you are
+   about to replace it with (SCRUM-230; it happened twice in one night). The
+   file is the only fallback-free source; if it does not exist yet, this is
+   the first deploy under the rule, so read HEAD once, say so in the report,
+   and let this deploy create the file.
    ```bash
+   # rollback tag from the RUNNING sha, before anything is rebuilt
+   ssh -i <key> ubuntu@<ip> 'cd ~/datatorag-mcp && OLD=$(cut -c1-7 .deployed-sha) && IMG=$(docker ps --filter name=gateway --format "{{.Image}}" | head -1) && docker tag "$IMG" "docker-gateway:rollback-$OLD" && echo "rollback-$OLD"'
    ssh -i <key> ubuntu@<ip> "cd ~/datatorag-mcp/docker && docker compose --env-file ../.env -f docker-compose.prod.yml up -d --build gateway"
    ```
    - The `.env` file lives at `~/datatorag-mcp/.env` on the server (NOT in `docker/`)
    - Must pass `--env-file ../.env` to docker compose
    - This rebuilds only the gateway container; postgres data is preserved in a volume
+   - After the health check in step 4 passes, record the new sha:
+     `ssh -i <key> ubuntu@<ip> "cd ~/datatorag-mcp && git rev-parse HEAD > .deployed-sha"`.
+     Record it only on a passing health check; a deploy that never came up must
+     not become the next deploy's rollback target.
+   - Rolling back is `docker tag docker-gateway:rollback-<sha> docker-gateway:latest`
+     followed by the same `compose up -d gateway` without `--build`, then the
+     health check, then `.deployed-sha` set back to that sha.
 
 4. **Health check**
    ```bash
