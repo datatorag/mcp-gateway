@@ -71,6 +71,8 @@ services:
       STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET:-}
       STRIPE_PRO_MONTHLY_PRICE_ID: ${STRIPE_PRO_MONTHLY_PRICE_ID:-}
       STRIPE_PRO_YEARLY_PRICE_ID: ${STRIPE_PRO_YEARLY_PRICE_ID:-}
+      # SCRUM-231: the campaign's promotion code id, applied at checkout.
+      STRIPE_PROMOTION_CODE_ID: ${STRIPE_PROMOTION_CODE_ID:-}
       # This service enumerates the container's environment explicitly, so a
       # var present in .env but missing HERE never reaches the process. That is
       # how the agent default-view flag came to be unflippable in production:
