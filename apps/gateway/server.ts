@@ -40,6 +40,8 @@ import { runDailyDigest } from "./src/gateway/digest";
 import { runDueSchedules } from "./src/gateway/skills/scheduler";
 import { seedPublishedSkills, skillReader } from "./src/gateway/skills/catalogue-store";
 import { setSkillReader } from "./src/lib/skills";
+import { healthBody } from "./src/gateway/health";
+import { posthogState } from "./src/lib/posthog-server";
 import { runNoActivationFollowup } from "./src/gateway/lifecycle";
 import { securityHeaders } from "./src/gateway/security-headers";
 
@@ -51,6 +53,10 @@ async function main() {
   await nextApp.prepare();
 
   const env = getEnv();
+  // One boot line on the analytics state (SCRUM-228); /health carries the
+  // same answer for anything that reads state rather than logs.
+  const analytics = posthogState();
+  console.log(`[posthog] analytics ${analytics.analytics}: ${analytics.analytics_reason}`);
   const db = createDb(env.DATABASE_URL);
   const pool = new ConnectionPool();
   const baseUrl = env.GATEWAY_BASE_URL;
@@ -203,8 +209,10 @@ async function main() {
     })
   );
 
+  // SCRUM-228: carries the analytics state with its reason, so a box that
+  // went quiet is a readable "off", never an absence somebody has to notice.
   app.get("/health", (_req, res) => {
-    res.json({ status: "ok" });
+    res.json(healthBody());
   });
 
   /**

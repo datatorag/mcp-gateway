@@ -18,6 +18,8 @@ const envSchema = z.object({
   ATLASSIAN_CLIENT_SECRET: z.string().default(""),
   // PostHog
   POSTHOG_API_KEY: z.string().default(""),
+  /** SCRUM-228: analytics is off outside production unless this is "1". */
+  POSTHOG_ALLOW_NONPRODUCTION: z.string().default(""),
   // Stripe
   STRIPE_API_KEY: z.string().default(""),
   STRIPE_WEBHOOK_SECRET: z.string().default(""),

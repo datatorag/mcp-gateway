@@ -5,6 +5,7 @@ import posthog from "posthog-js";
 import { PostHogProvider as PHProvider } from "posthog-js/react";
 import { useCurrentUser } from "@/lib/use-current-user";
 import { AttributionLinks } from "@/components/attribution-links";
+import { posthogPolicy } from "@/lib/analytics-guard";
 
 // Init at module scope so posthog is ready before any component effect runs.
 // posthog.capture() and .identify() calls will no longer race with init.
@@ -31,9 +32,20 @@ import { AttributionLinks } from "@/components/attribution-links";
 // Removed as bundle/base-covered: capture_pageview:false (bundle sets
 // "history_change"), capture_pageleave:true (base default follows pageview
 // capture).
+//
+// SCRUM-228: analytics is OFF outside production unless the explicit flag is
+// set, by the same rule the server client uses. Next inlines both env values
+// at build or dev time, so the decision is made from the env file, and a
+// skipped init makes every posthog.capture in the tree a no-op, exactly as
+// a missing key already does.
 if (typeof window !== "undefined") {
   const key = process.env.NEXT_PUBLIC_POSTHOG_KEY;
-  if (key) {
+  const allowed = posthogPolicy({
+    nodeEnv: process.env.NODE_ENV,
+    allow: process.env.NEXT_PUBLIC_POSTHOG_ALLOW_NONPRODUCTION,
+    hasKey: Boolean(key),
+  }).on;
+  if (key && allowed) {
     posthog.init(key, {
       api_host: "https://f.datatorag.com",
       // Required with a proxy: the toolbar and view-in-PostHog links resolve
