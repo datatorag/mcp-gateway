@@ -807,9 +807,25 @@ describe("step budget and the stop notice (SCRUM-234)", () => {
     expect(chunks.some((c) => c.type === "data-run-stopped")).toBe(false);
   });
 
-  it("the size ceiling refusal carries a run-stopped part of the size kind before the error", async () => {
-    handleChatStream.mockResolvedValue(
-      failingWith([{ type: "start" }, ...TOOL_STEP("call-1")], new RunTokenCeilingError(150_000))
+  /** What the runtime really does with a thrown error (SCRUM-243): the AI SDK
+   * catches it inside the stream it builds, asks the route's `onError` for the
+   * text, and enqueues an ordinary `error` chunk. The stream never rejects, so
+   * a route that only watches for a rejection sees the ceiling as one more
+   * chunk on the pass-through path and injects nothing. */
+  function endingInBand(before: UIMessageChunk[], err: Error) {
+    return async (opts: { onError: (err: unknown) => string }) =>
+      new ReadableStream<UIMessageChunk>({
+        start(controller) {
+          for (const chunk of before) controller.enqueue(chunk);
+          controller.enqueue({ type: "error", errorText: opts.onError(err) });
+          controller.close();
+        },
+      });
+  }
+
+  it("the size ceiling arriving as an in-band error chunk carries a run-stopped part of the size kind before it", async () => {
+    handleChatStream.mockImplementation(
+      endingInBand([{ type: "start" }, ...TOOL_STEP("call-1")], new RunTokenCeilingError(150_000))
     );
     const chunks = await drain(
       await POST(post({ messages: skillTurn(), skill: "morning-brief", skillTrigger: "manual" }))
@@ -820,6 +836,33 @@ describe("step budget and the stop notice (SCRUM-234)", () => {
     expect(stopped).toBeLessThan(error);
     expect(chunks[stopped]!.data).toEqual({ limit: "size", steps: 1, cap: null, skill: "morning-brief" });
     expect(chunks[error]!.errorText).toBe(RUN_CEILING_MESSAGE);
+    // One notice, whichever path delivered the error.
+    expect(chunks.filter((c) => c.type === "data-run-stopped")).toHaveLength(1);
+  });
+
+  it("an in-band error that is not the ceiling carries no stop card", async () => {
+    handleChatStream.mockImplementation(
+      endingInBand([{ type: "start" }, ...TOOL_STEP("call-1")], new Error("upstream 502"))
+    );
+    const chunks = await drain(
+      await POST(post({ messages: skillTurn(), skill: "morning-brief", skillTrigger: "manual" }))
+    );
+    expect(chunks.some((c) => c.type === "data-run-stopped")).toBe(false);
+    expect(chunks.find((c) => c.type === "error")?.errorText).not.toBe(RUN_CEILING_MESSAGE);
+  });
+
+  it("a stream that rejects with the ceiling still carries the size-kind part exactly once", async () => {
+    handleChatStream.mockResolvedValue(
+      failingWith([{ type: "start" }, ...TOOL_STEP("call-1")], new RunTokenCeilingError(150_000))
+    );
+    const chunks = await drain(
+      await POST(post({ messages: skillTurn(), skill: "morning-brief", skillTrigger: "manual" }))
+    );
+    const stopped = chunks.findIndex((c) => c.type === "data-run-stopped");
+    const error = chunks.findIndex((c) => c.type === "error");
+    expect(stopped).toBeGreaterThan(-1);
+    expect(stopped).toBeLessThan(error);
+    expect(chunks.filter((c) => c.type === "data-run-stopped")).toHaveLength(1);
   });
 
   it("the continuation message beside a valid slug is a skill run, so Continue keeps the no-gates policy", async () => {

@@ -134,6 +134,10 @@ type StreamTaps = {
   onApprovalShown: () => void;
   /** The stream died. Receives the error; returns the text to send on. */
   onFailure: (err: unknown) => string;
+  /** Whether the run's token ceiling has refused a model call (SCRUM-243).
+   * The runtime reports that refusal as an ordinary `error` chunk, not as a
+   * rejection, so the stream wrapper has to ask rather than catch. */
+  ceilingStopped: () => boolean;
   /** The stream ended, cleanly or not. Fires once. */
   onClosed?: () => void;
 };
@@ -163,11 +167,18 @@ function instrumentStream(
   // A turn that stopped for an approval stopped for the user, not for a cap:
   // the confirm card is its notice, and no stop card belongs beside it.
   let approvalRequested = false;
+  // One notice per run, whichever path carried the ceiling.
+  let sizeNoticed = false;
   const stoppedPart = (limit: "steps" | "size"): UIMessageChunk =>
     ({
       type: "data-run-stopped",
       data: { limit, steps, cap: limit === "steps" ? run.stepCap : null, skill: run.skill },
     }) as UIMessageChunk;
+  const noticeSizeStop = (controller: ReadableStreamDefaultController<UIMessageChunk>) => {
+    if (sizeNoticed) return;
+    sizeNoticed = true;
+    controller.enqueue(stoppedPart("size"));
+  };
 
   return new ReadableStream<UIMessageChunk>({
     async pull(controller) {
@@ -178,7 +189,7 @@ function instrumentStream(
         // The size ceiling refuses the NEXT model call, so the run really did
         // stop at a step boundary with everything before it delivered: the
         // notice belongs in the thread beside the error text.
-        if (isRunTokenCeilingError(err)) controller.enqueue(stoppedPart("size"));
+        if (isRunTokenCeilingError(err)) noticeSizeStop(controller);
         controller.enqueue({ type: "error", errorText: taps.onFailure(err) });
         controller.close();
         taps.onClosed?.();
@@ -216,6 +227,12 @@ function instrumentStream(
           controller.enqueue(stoppedPart("steps"));
         }
       }
+      // SCRUM-243: this is the path the ceiling really takes. The runtime
+      // catches the refusal inside its own stream, asks `onError` for the
+      // text, and hands it on as an ordinary error chunk; the read above never
+      // throws. The route learns it was the ceiling from the hook that named
+      // it, not from the chunk, and puts the notice in front of the text.
+      if (chunk.type === "error" && taps.ceilingStopped()) noticeSizeStop(controller);
       controller.enqueue(chunk);
     },
     cancel(reason) {
@@ -497,6 +514,10 @@ export const POST = withRoute(async (userId, request) => {
   // Same lifetime as `stream`: computed inside the try, consumed by the tap on
   // the response below, which is outside it.
   let pendingTitle: string | null = null;
+  // SCRUM-243: set by the runtime's error hook when the token ceiling refused
+  // the next model call, read by the stream wrapper when the resulting error
+  // chunk goes past, so the size-kind stop notice precedes it.
+  let ceilingHit = false;
   /** Hoisted out of the try below because the stream taps close over it: the
    * tool-call events are emitted while the stream drains, long after this
    * block returns. */
@@ -582,6 +603,7 @@ export const POST = withRoute(async (userId, request) => {
         // The token ceiling is a PRODUCT STATE, not a failure: say what
         // happened in the user's terms instead of the generic error line.
         if (isRunTokenCeilingError(err)) {
+          ceilingHit = true;
           void trackPlaygroundRunCeilingHit(db, userId);
           return RUN_CEILING_MESSAGE;
         }
@@ -612,6 +634,7 @@ export const POST = withRoute(async (userId, request) => {
       // real duration are all in scope. Putting it back here would double-count
       // every call.
       onApprovalShown: () => { void trackPlaygroundConfirm(db, userId, "shown", 1); },
+      ceilingStopped: () => ceilingHit,
       onFailure: (err) => {
         // A ceiling stop is not a wasted turn: the run really consumed its
         // budget, so the claim stands and no refund applies. Everything the
