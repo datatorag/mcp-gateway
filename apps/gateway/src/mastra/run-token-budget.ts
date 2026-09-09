@@ -1,6 +1,6 @@
 import { wrapLanguageModel } from "ai";
 
-import { RUN_TOKEN_CEILING } from "@/gateway/billing/plans";
+import { RUN_CACHE_READ_WEIGHT, RUN_TOKEN_CEILING } from "@/gateway/billing/plans";
 
 /**
  * The per-run token ceiling (SCRUM-84), enforced at the step boundary.
@@ -34,10 +34,10 @@ import { RUN_TOKEN_CEILING } from "@/gateway/billing/plans";
  * ceiling per subscriber within any process lifetime, which is what the
  * ceiling exists to do.
  *
- * Tokens are counted the way the distribution that set the ceiling was
- * measured: input + cache-read + cache-write + output per model call, summed
- * over the run. The provider reports cache tokens EXCLUSIVELY of input
- * tokens, so adding all four buckets is not double counting.
+ * Tokens are charged per model call and summed over the run: uncached
+ * input, cache writes and output in full, cache reads at
+ * RUN_CACHE_READ_WEIGHT (SCRUM-236). See `usageTotal` for the shape this
+ * reads and the premise that rotted before it.
  */
 
 /** Bounded accumulator: run id -> tokens consumed so far. Insertion-order
@@ -48,21 +48,46 @@ const MAX_TRACKED_RUNS = 1024;
 const runTokens = new Map<string, number>();
 
 type UsageBuckets = {
-  inputTokens?: { total?: number; cacheRead?: number; cacheWrite?: number };
+  inputTokens?: { total?: number; noCache?: number; cacheRead?: number; cacheWrite?: number };
   outputTokens?: { total?: number };
 };
 
-/** Exported for its own unit test; production callers are the wrappers
- * below. The buckets arrive already normalised by `wrapLanguageModel`
- * (raw v2 `inputTokens`/`cachedInputTokens`/`outputTokens` numbers become
- * this nested shape inside middleware). */
+/** The buckets as the AI SDK v3 usage shape defines them (`@ai-sdk/provider`
+ * 3.x/4.x `LanguageModelV3Usage`, `ai` 7): `inputTokens.total` is EVERY
+ * input token, cached or not; `noCache`, `cacheRead` and `cacheWrite` are its
+ * parts. `@ai-sdk/anthropic` 4.0.21 fills `total` as input_tokens +
+ * cache_creation + cache_read, and the v2 shim in `ai` maps a v2 model's
+ * `inputTokens` to `total` and `cachedInputTokens` to `cacheRead` with
+ * `noCache` left undefined, so the uncached part is derived when absent.
+ *
+ * The sum before SCRUM-236 added the cache buckets to `total` on the premise
+ * that the provider reports them exclusively of input. That is true of the
+ * raw API and false of this shape, and it charged every cached token twice.
+ */
+function uncachedInput(input: UsageBuckets["inputTokens"]): number {
+  if (typeof input?.noCache === "number") return input.noCache;
+  return Math.max(
+    0,
+    (input?.total ?? 0) - (input?.cacheRead ?? 0) - (input?.cacheWrite ?? 0)
+  );
+}
+
+/** The SDK's own count of a call: total input (cache included) plus output.
+ * Unweighted; what a usage report means by "tokens". */
+export function usageTokens(usage: UsageBuckets | undefined): number {
+  return (usage?.inputTokens?.total ?? 0) + (usage?.outputTokens?.total ?? 0);
+}
+
+/** What the ceiling charges for a call. Exported for its own unit test;
+ * production callers are the wrappers below, which receive the buckets
+ * already normalised by `wrapLanguageModel`. */
 export function usageTotal(usage: UsageBuckets | undefined): number {
   const input = usage?.inputTokens;
   const output = usage?.outputTokens;
   return (
-    (input?.total ?? 0) +
-    (input?.cacheRead ?? 0) +
+    uncachedInput(input) +
     (input?.cacheWrite ?? 0) +
+    RUN_CACHE_READ_WEIGHT * (input?.cacheRead ?? 0) +
     (output?.total ?? 0)
   );
 }

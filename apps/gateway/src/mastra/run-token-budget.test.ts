@@ -1,10 +1,11 @@
 import { afterEach, describe, expect, it } from "vitest";
-import { RUN_TOKEN_CEILING } from "@/gateway/billing/plans";
+import { RUN_CACHE_READ_WEIGHT, RUN_TOKEN_CEILING } from "@/gateway/billing/plans";
 import {
   isRunTokenCeilingError,
   resetRunTokenBudgets,
   RunTokenCeilingError,
   runTokensUsed,
+  usageTokens,
   usageTotal,
   withRunTokenCeiling,
 } from "./run-token-budget";
@@ -51,17 +52,55 @@ function fakeModel(perCall: { input?: number; cachedInput?: number; output?: num
   return { model, callCount: () => calls };
 }
 
-describe("usageTotal", () => {
-  it("counts all four buckets the way the distribution was measured", () => {
-    // input + cache-read + cache-write + output; the provider reports cache
-    // tokens exclusively of input, so this sum is not double counting.
+/** SCRUM-236: the two model calls of a real production run (2026-09-09,
+ * a morning-brief skill run from the dashboard card), as the AI SDK v3
+ * usage shape delivered them. `inputTokens.total` ALREADY INCLUDES the
+ * cache buckets: call 1 wrote the 35,652-token prefix, call 2 read it. The
+ * old sum added the cache buckets to the total again and read these two
+ * calls as 152,510, over the 150,000 ceiling; the run was refused its third
+ * call after 81,206 real tokens. */
+const REAL_CALL_1 = {
+  inputTokens: { total: 39_087, noCache: 3_435, cacheRead: 0, cacheWrite: 35_652 },
+  outputTokens: { total: 61 },
+};
+const REAL_CALL_2 = {
+  inputTokens: { total: 39_691, noCache: 4_039, cacheRead: 35_652, cacheWrite: 0 },
+  outputTokens: { total: 2_367 },
+};
+
+describe("usageTokens (unweighted, the SDK's own total)", () => {
+  it("reads the v3 shape: total already includes cache, so total + output", () => {
+    expect(usageTokens(REAL_CALL_1)).toBe(39_148);
+    expect(usageTokens(REAL_CALL_2)).toBe(42_058);
+    expect(usageTokens(REAL_CALL_1) + usageTokens(REAL_CALL_2)).toBe(81_206);
+    expect(usageTokens(undefined)).toBe(0);
+  });
+});
+
+describe("usageTotal (what the ceiling charges)", () => {
+  it("charges uncached input and cache writes in full and a cache read at the weight", () => {
+    // Call 1: the prefix is WRITTEN, in full. 3,435 + 35,652 + 61.
+    expect(usageTotal(REAL_CALL_1)).toBe(39_148);
+    // Call 2: the prefix is READ at a tenth. 4,039 + 3,565.2 + 2,367.
+    expect(usageTotal(REAL_CALL_2)).toBeCloseTo(9_971.2, 1);
+    expect(usageTotal(REAL_CALL_1) + usageTotal(REAL_CALL_2)).toBeCloseTo(49_119.2, 1);
+    expect(usageTotal(REAL_CALL_1) + usageTotal(REAL_CALL_2)).toBeLessThan(RUN_TOKEN_CEILING);
+    expect(usageTotal(undefined)).toBe(0);
+  });
+
+  it("derives the uncached part when the provider leaves noCache undefined (the v2 shim)", () => {
+    // ai's v2 shim maps a v2 model's inputTokens to total and cachedInputTokens
+    // to cacheRead, and leaves noCache undefined.
     expect(
       usageTotal({
-        inputTokens: { total: 100, cacheRead: 50, cacheWrite: 25 },
+        inputTokens: { total: 100, cacheRead: 50 },
         outputTokens: { total: 10 },
       })
-    ).toBe(185);
-    expect(usageTotal(undefined)).toBe(0);
+    ).toBeCloseTo(50 + 50 * RUN_CACHE_READ_WEIGHT + 10, 6);
+  });
+
+  it("the weight is a tenth and lives beside the ceiling", () => {
+    expect(RUN_CACHE_READ_WEIGHT).toBe(0.1);
   });
 });
 
@@ -70,7 +109,8 @@ describe("withRunTokenCeiling", () => {
     const { model } = fakeModel({ input: 100, cachedInput: 50, output: 10 });
     const wrapped = withRunTokenCeiling(model, "run-buckets") as typeof model;
     await wrapped.doGenerate();
-    expect(runTokensUsed("run-buckets")).toBe(160);
+    // v2 shim: total 100 of which 50 cached. 50 uncached + 50 * 0.1 + 10 out.
+    expect(runTokensUsed("run-buckets")).toBeCloseTo(65, 6);
   });
 
   it("finishes the crossing call and refuses the NEXT one, never the one in flight", async () => {

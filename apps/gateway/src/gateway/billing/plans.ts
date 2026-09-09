@@ -28,12 +28,20 @@ export const FREE_MONTHLY_AGENT_RUNS = 25;
  *
  * Plan-independent on purpose: this is runaway protection, not a tier
  * feature, and a plan that bought more RUNS did not buy bigger ones.
- * Counted the same way the distribution was measured: input + cache-read +
- * cache-write + output tokens per model call, summed over the run (the
- * provider counts cache tokens exclusively of input, so this is not double
- * counting). Enforcement refuses the NEXT model call at a step boundary —
+ * Charged per model call and summed over the run as: uncached input +
+ * cache writes + output in full, plus cache reads at RUN_CACHE_READ_WEIGHT
+ * (SCRUM-236). Enforcement refuses the NEXT model call at a step boundary,
  * see `mastra/run-token-budget.ts`. */
 export const RUN_TOKEN_CEILING = 150_000;
+
+/** What a cached input token weighs against RUN_TOKEN_CEILING. The ceiling
+ * is a cost and abuse guard, and a cache read is priced at about a tenth of
+ * an input token, so it counts at a tenth. Before SCRUM-236 a cache read was
+ * charged in full and, because the SDK's input total already includes it,
+ * charged twice: a two-step skill run whose only weight was the 35k-token
+ * tool-schema prefix read 152k against this ceiling and was refused its
+ * third call after 81k real tokens. */
+export const RUN_CACHE_READ_WEIGHT = 0.1;
 
 export interface PlanLimits {
   monthlyIncluded: number;
