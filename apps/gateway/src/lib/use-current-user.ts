@@ -7,6 +7,8 @@ export interface CurrentUser {
   email: string;
   name: string | null;
   avatarUrl: string | null;
+  /** "free" | "pro" (SCRUM-231); absent from older cached responses. */
+  plan?: string;
 }
 
 let cached: CurrentUser | null | undefined;

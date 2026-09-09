@@ -26,6 +26,9 @@ const envSchema = z.object({
   STRIPE_PRO_MONTHLY_PRICE_ID: z.string().default(""),
   STRIPE_PRO_YEARLY_PRICE_ID: z.string().default(""),
   STRIPE_PAYG_PRICE_ID: z.string().default(""),
+  /** SCRUM-231: the Stripe promotion code id (promo_...) the campaign banner
+   * applies at checkout. Empty = the hosted page shows the code field instead. */
+  STRIPE_PROMOTION_CODE_ID: z.string().default(""),
   STRIPE_METER_ID: z.string().default(""),
   STRIPE_METER_EVENT_NAME: z.string().default("tool_calls"),
   // Cron auth — Bearer token required to hit /api/cron/* externally

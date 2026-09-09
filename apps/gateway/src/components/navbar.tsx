@@ -5,6 +5,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { useCurrentUser } from "@/lib/use-current-user";
 import { useDismissable } from "@/lib/use-dismissable";
+import { PromoBanner } from "@/components/promo-banner";
 
 interface NavLink {
   href: string;
@@ -50,6 +51,8 @@ export function Navbar() {
 
   return (
     <header className="fixed top-0 left-0 right-0 z-50 px-4 pt-4">
+      {/* SCRUM-231: every page with a navbar carries the promo banner. */}
+      <PromoBanner />
       <div className="mx-auto max-w-6xl rounded-2xl border border-white/10 bg-black/40 backdrop-blur-xl">
         <div className="flex h-14 items-center justify-between px-5">
           <Link href="/" className="flex items-center gap-3">

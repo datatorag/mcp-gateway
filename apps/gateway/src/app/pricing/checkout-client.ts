@@ -21,14 +21,17 @@ const TRY_AGAIN =
 
 export async function startProCheckout(
   interval: CheckoutInterval,
-  fetchFn: typeof fetch = fetch
+  fetchFn: typeof fetch = fetch,
+  /** SCRUM-231: the campaign code the banner carried here, applied by the
+   * server at checkout. Absent from the body when there is none. */
+  promo?: string
 ): Promise<CheckoutOutcome> {
   let res: Response;
   try {
     res = await fetchFn("/api/billing/checkout", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ interval }),
+      body: JSON.stringify(promo ? { interval, promo } : { interval }),
     });
   } catch {
     return { kind: "error", message: TRY_AGAIN };

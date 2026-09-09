@@ -19,6 +19,7 @@ import {
 } from "lucide-react";
 import { useCurrentUser, type CurrentUser } from "@/lib/use-current-user";
 import { useDismissable } from "@/lib/use-dismissable";
+import { PromoBanner } from "@/components/promo-banner";
 import { cn } from "@/lib/utils";
 
 const navItems: Array<{ href: string; label: string; icon: LucideIcon }> = [
@@ -193,6 +194,10 @@ export default function DashboardLayout({
   useFitBelowTopChrome(shell, true);
 
   return (
+    <>
+      {/* SCRUM-231: shown to a signed-in user without a subscription, hidden
+          from a paying customer; the shell below sizes itself under it. */}
+      <PromoBanner variant="dashboard" plan={user?.plan ?? null} />
     <div
       ref={shell}
       // ONE SHELL FOR EVERY DASHBOARD ROUTE. The shell is always exactly the
@@ -458,5 +463,6 @@ export default function DashboardLayout({
         )}
       </main>
     </div>
+    </>
   );
 }

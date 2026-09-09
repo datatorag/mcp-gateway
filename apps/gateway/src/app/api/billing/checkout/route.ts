@@ -6,10 +6,17 @@ import { users } from "@datatorag-mcp/db";
 import { db } from "@/lib/db";
 import { withRoute } from "@/lib/with-route";
 import { ensureStripeCustomer, getStripe } from "@/lib/stripe";
+import { isPromoCode, promoActive } from "@/lib/promo";
 
 export const dynamic = "force-dynamic";
 
-const bodySchema = z.object({ interval: z.enum(["monthly", "yearly"]) });
+const bodySchema = z.object({
+  interval: z.enum(["monthly", "yearly"]),
+  /** SCRUM-231: the campaign code as the banner carried it. Only the exact
+   * campaign code, while the campaign is active and the promotion code id
+   * is configured, changes anything; the id itself never comes from here. */
+  promo: z.string().max(32).optional(),
+});
 
 /**
  * Start a Stripe Checkout session for Pro. Returns the hosted checkout URL;
@@ -70,16 +77,25 @@ export const POST = withRoute(async (userId, req: NextRequest) => {
       .where(eq(users.id, userId));
   }
 
+  // SCRUM-231: the campaign code is APPLIED, not only shown. Stripe refuses
+  // `discounts` together with `allow_promotion_codes`, so exactly one of the
+  // two is sent: the discount when the body carries the campaign's code, the
+  // campaign is active by the clock and the promotion code id is configured;
+  // the open promo-code field otherwise, which is how a comped or
+  // coupon-holding customer has somewhere to type a code. The id is read
+  // from configuration only; nothing in the request can name one.
+  const applyPromo =
+    isPromoCode(parsed.data.promo) && promoActive(new Date()) && Boolean(env.STRIPE_PROMOTION_CODE_ID);
+  const promoParams = applyPromo
+    ? { discounts: [{ promotion_code: env.STRIPE_PROMOTION_CODE_ID }] }
+    : { allow_promotion_codes: true };
+
   const session = await getStripe().checkout.sessions.create({
     mode: "subscription",
     customer: customerId,
     client_reference_id: userId,
     line_items: [{ price: priceId, quantity: 1 }],
-    // The hosted page renders a promo-code field. The codes themselves live
-    // in Stripe — nothing here names one — and this is mutually exclusive
-    // with the `discounts` param, which we never pass. Without it a comped
-    // or coupon-holding customer has nowhere to type the code.
-    allow_promotion_codes: true,
+    ...promoParams,
     // Belt-and-braces user resolution for the webhook, should the customer-id
     // write above ever be lost to a partial failure.
     subscription_data: { metadata: { user_id: userId } },

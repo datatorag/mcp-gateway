@@ -3,6 +3,7 @@
 import { useState } from "react";
 import posthog from "posthog-js";
 import { EVENTS } from "@/lib/analytics";
+import { promoCopy } from "@/lib/promo";
 import { useSignupConversion } from "../dashboard/use-signup-conversion";
 import {
   startProCheckout,
@@ -45,7 +46,7 @@ const PRICE_LABEL: Record<CheckoutInterval, { amount: string; per: string }> = {
   yearly: { amount: "$200", per: "/ year" },
 };
 
-export function ProCheckout({ className }: { className: string }) {
+export function ProCheckout({ className, promo = null }: { className: string; promo?: string | null }) {
   const [interval, setInterval] = useState<CheckoutInterval>("monthly");
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -56,7 +57,7 @@ export function ProCheckout({ className }: { className: string }) {
     setPending(true);
     setError(null);
     posthog.capture(EVENTS.PRICING_CTA_CLICKED, { cta: "pro", interval });
-    const outcome = await startProCheckout(interval);
+    const outcome = await startProCheckout(interval, fetch, promo ?? undefined);
     if (outcome.kind === "redirect") {
       window.location.assign(outcome.url);
       return; // keep the button disabled while the browser navigates
@@ -78,6 +79,11 @@ export function ProCheckout({ className }: { className: string }) {
               ? "Two months free vs monthly"
               : "Or $200 a year, two months free"}
           </p>
+          {promo && (
+            <p className="mt-1 text-xs font-medium text-primary">
+              Code {promo} is applied at checkout: {promoCopy().discount}.
+            </p>
+          )}
         </div>
         <div
           role="group"

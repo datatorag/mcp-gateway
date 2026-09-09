@@ -63,6 +63,8 @@ export const EVENTS = {
    * "did they subscribe" signal is `users.plan`, written only by the Stripe
    * webhook. */
   PRICING_CTA_CLICKED: "pricing_cta_clicked",
+  /** SCRUM-231: one click on the promo banner, with the page; never a show. */
+  PROMO_BANNER_CLICKED: "promo_banner_clicked",
   /** The dashboard's "Manage billing" click. A click means intent to reach
    * the Stripe portal, nothing more; plan changes are reported by the
    * subscription webhooks, never inferred from this. */

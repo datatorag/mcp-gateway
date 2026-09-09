@@ -20,14 +20,14 @@ vi.mock("@/lib/db", () => ({
   },
 }));
 
-vi.mock("@datatorag-mcp/config", () => ({
-  getEnv: () => ({
-    STRIPE_API_KEY: "sk_test_x",
-    STRIPE_PRO_MONTHLY_PRICE_ID: "price_monthly",
-    STRIPE_PRO_YEARLY_PRICE_ID: "price_yearly",
-    GATEWAY_BASE_URL: "https://example.test",
-  }),
-}));
+const env: Record<string, string> = {
+  STRIPE_API_KEY: "sk_test_x",
+  STRIPE_PRO_MONTHLY_PRICE_ID: "price_monthly",
+  STRIPE_PRO_YEARLY_PRICE_ID: "price_yearly",
+  STRIPE_PROMOTION_CODE_ID: "",
+  GATEWAY_BASE_URL: "https://example.test",
+};
+vi.mock("@datatorag-mcp/config", () => ({ getEnv: () => env }));
 
 import { POST } from "./route";
 
@@ -42,6 +42,8 @@ function checkoutRequest(body: unknown): NextRequest {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  env.STRIPE_PROMOTION_CODE_ID = "";
+  vi.useRealTimers();
   sessionUserId.mockResolvedValue(USER);
   selectWhere.mockResolvedValue([
     { email: "u@example.com", stripeCustomerId: null, plan: "free" },
@@ -118,5 +120,49 @@ describe("POST /api/billing/checkout", () => {
     expect(sessionsCreate).toHaveBeenCalledWith(
       expect.objectContaining({ customer: "cus_new" })
     );
+  });
+});
+
+/* SCRUM-231: the campaign code is APPLIED at checkout, not only shown. Stripe
+ * refuses `discounts` together with `allow_promotion_codes`, so the two are
+ * mutually exclusive here by construction. */
+describe("POST /api/billing/checkout with the campaign promo", () => {
+  function createArgs(): Record<string, unknown> {
+    return sessionsCreate.mock.calls[0]![0] as Record<string, unknown>;
+  }
+
+  it("applies the promotion code through discounts when the code is the campaign's, the campaign is active and the id is configured", async () => {
+    env.STRIPE_PROMOTION_CODE_ID = "promo_test_id";
+    vi.useFakeTimers({ now: new Date("2026-10-01T12:00:00Z"), toFake: ["Date"] });
+    const res = await POST(checkoutRequest({ interval: "monthly", promo: "DTR50" }));
+    expect(res.status).toBe(200);
+    const args = createArgs();
+    expect(args.discounts).toEqual([{ promotion_code: "promo_test_id" }]);
+    expect(args).not.toHaveProperty("allow_promotion_codes");
+  });
+
+  it("falls back to the open promo-code field when the id is not configured", async () => {
+    vi.useFakeTimers({ now: new Date("2026-10-01T12:00:00Z"), toFake: ["Date"] });
+    await POST(checkoutRequest({ interval: "monthly", promo: "DTR50" }));
+    const args = createArgs();
+    expect(args).not.toHaveProperty("discounts");
+    expect(args.allow_promotion_codes).toBe(true);
+  });
+
+  it("ignores a wrong code and an expired campaign, and never trusts the body for the id", async () => {
+    env.STRIPE_PROMOTION_CODE_ID = "promo_test_id";
+    vi.useFakeTimers({ now: new Date("2026-10-01T12:00:00Z"), toFake: ["Date"] });
+    await POST(checkoutRequest({ interval: "monthly", promo: "OTHER" }));
+    expect(createArgs()).not.toHaveProperty("discounts");
+    sessionsCreate.mockClear();
+    vi.useFakeTimers({ now: new Date("2026-12-07T00:00:01Z"), toFake: ["Date"] });
+    await POST(checkoutRequest({ interval: "monthly", promo: "DTR50" }));
+    expect(createArgs()).not.toHaveProperty("discounts");
+    expect(createArgs().allow_promotion_codes).toBe(true);
+    sessionsCreate.mockClear();
+    // A non-string promo never reaches Stripe: the body schema refuses it.
+    const bad = await POST(checkoutRequest({ interval: "monthly", promo: { promotion_code: "promo_evil" } }));
+    expect(bad.status).toBe(400);
+    expect(sessionsCreate).not.toHaveBeenCalled();
   });
 });

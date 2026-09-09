@@ -81,3 +81,20 @@ describe("startProCheckout", () => {
     expect(outcome.kind).toBe("error");
   });
 });
+
+describe("startProCheckout with a promo code (SCRUM-231)", () => {
+  it("sends the promo in the body beside the interval, and nothing extra without one", async () => {
+    const fetchFn = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ url: "https://checkout.stripe.com/c/pay/x" }), { status: 200 })
+    ) as unknown as typeof fetch;
+    await startProCheckout("monthly", fetchFn, "DTR50");
+    expect(JSON.parse((fetchFn as unknown as { mock: { calls: unknown[][] } }).mock.calls[0]![1]!["body" as never] as string)).toEqual({
+      interval: "monthly",
+      promo: "DTR50",
+    });
+    await startProCheckout("monthly", fetchFn);
+    expect(JSON.parse((fetchFn as unknown as { mock: { calls: unknown[][] } }).mock.calls[1]![1]!["body" as never] as string)).toEqual({
+      interval: "monthly",
+    });
+  });
+});

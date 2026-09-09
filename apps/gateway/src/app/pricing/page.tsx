@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { eq, sql } from "drizzle-orm";
+import { PROMO, isPromoCode } from "@/lib/promo";
 import { db } from "@/lib/db";
 import { mcpServers, tools } from "@datatorag-mcp/db";
 import { Navbar } from "@/components/navbar";
@@ -103,8 +104,16 @@ const tiers: Tier[] = [
   },
 ];
 
-export default async function PricingPage() {
+export default async function PricingPage({
+  searchParams,
+}: {
+  searchParams?: Promise<Record<string, string | string[] | undefined>>;
+}) {
   const totalTools = await getToolCount();
+  // SCRUM-231: the banner carries the campaign code here; only the exact
+  // code is passed on, and the checkout route decides whether it applies.
+  const params = (await searchParams) ?? {};
+  const promo = isPromoCode(params.promo) ? PROMO.code : null;
 
   return (
     <>
@@ -162,7 +171,7 @@ export default async function PricingPage() {
                   </div>
                 )}
                 {tier.cta === "checkout" ? (
-                  <ProCheckout className={ctaPrimary} />
+                  <ProCheckout className={ctaPrimary} promo={promo} />
                 ) : tier.cta === "free" ? (
                   <FreeCta className={ctaSecondary} />
                 ) : (
