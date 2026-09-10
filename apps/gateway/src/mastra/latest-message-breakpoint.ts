@@ -50,11 +50,15 @@ const FIELD = (part: Part): "providerMetadata" | "callProviderMetadata" =>
     ? "callProviderMetadata"
     : "providerMetadata";
 
-/** Parts that become a block on the wire; anything else (step markers,
- * sources) cannot carry a breakpoint, and marking it would mark nothing. */
+/** Parts that become a block on the wire AND may carry a breakpoint. Step
+ * markers and sources produce no block, so marking them marks nothing. A
+ * reasoning part does produce a block, a thinking block, and the provider
+ * refuses cache control on one: choosing it would turn the step into a
+ * request error. In practice a step ends on its text or its tool call, with
+ * the thinking before them, so the reasoning part is never the tail; this
+ * keeps it that way when a step ends on thinking alone. */
 const MARKABLE = (part: Part): boolean =>
   part.type === "text" ||
-  part.type === "reasoning" ||
   part.type === "file" ||
   part.type === "tool-invocation" ||
   part.type === "dynamic-tool" ||
