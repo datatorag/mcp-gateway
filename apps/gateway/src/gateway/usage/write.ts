@@ -38,6 +38,9 @@ export interface UsageEventInput {
   latencyMs: number;
   responseSizeBytes: number | null;
   errorMessage: string | null;
+  /** gws_run only (SCRUM-227): the raw call's service and method; null otherwise. */
+  service?: string | null;
+  method?: string | null;
 }
 
 export type WriteResult =
@@ -82,6 +85,8 @@ export async function writeUsageEvent(
       latencyMs: input.latencyMs,
       responseSizeBytes: input.responseSizeBytes,
       errorMessage: capStoredErrorMessage(input.errorMessage),
+      service: input.service ?? null,
+      method: input.method ?? null,
     });
   }, timeoutMs);
 }

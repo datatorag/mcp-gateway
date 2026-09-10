@@ -31,6 +31,11 @@ export const usageEvents = pgTable(
     costUnits: integer("cost_units"),
     argumentsSizeBytes: integer("arguments_size_bytes"),
     client: text("client"),
+    /** For gws_run only (SCRUM-227): which raw API call it was, as the
+     * service and the method names. Never the arguments or a body. Null for
+     * every other tool, so a filter on either field is exact. */
+    service: text("service"),
+    method: text("method"),
   },
   (table) => [
     index("idx_usage_events_user_created").on(

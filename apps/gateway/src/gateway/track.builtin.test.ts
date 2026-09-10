@@ -143,3 +143,42 @@ describe("built-in tool_call tracking", () => {
     expect(execute).toHaveBeenCalled();
   });
 });
+
+/* SCRUM-227: gws_run is one tool name over every raw API call, so its event
+ * says WHICH call: the service and the method, never the arguments or a body.
+ * Every other tool carries null in both, so a filter on the fields is exact. */
+describe("gws_run tool_call carries service and method (SCRUM-227)", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    clearUserIdentityCache();
+    insertValues.mockResolvedValue(undefined);
+    execute.mockResolvedValue([]);
+    returning.mockResolvedValue([{ id: "user-1" }]);
+    selectLimit.mockResolvedValue([{ email: "user-1@example.com", firstToolCallAt: new Date() }]);
+  });
+
+  it("puts service and method on the event and on the usage row for a gws_run call", async () => {
+    await trackToolCall(dbMock, {
+      ...pluginProps(),
+      toolName: "gws-mcp__gws_run",
+      service: "calendar",
+      method: "list",
+      outcome: { ...pluginProps().outcome, toolName: "gws-mcp__gws_run" },
+    });
+    const [event] = toolCallCaptures();
+    expect(event.properties.service).toBe("calendar");
+    expect(event.properties.method).toBe("list");
+    expect(insertValues).toHaveBeenCalledTimes(1);
+    expect(insertValues.mock.calls[0][0]).toMatchObject({ service: "calendar", method: "list" });
+    // Never an argument or a body: the property set is exactly the two names.
+    expect(Object.keys(event.properties)).not.toEqual(expect.arrayContaining(["arguments", "body", "params"]));
+  });
+
+  it("carries null in both for every other tool", async () => {
+    await trackToolCall(dbMock, pluginProps());
+    const [event] = toolCallCaptures();
+    expect(event.properties.service).toBeNull();
+    expect(event.properties.method).toBeNull();
+    expect(insertValues.mock.calls[0][0]).toMatchObject({ service: null, method: null });
+  });
+});

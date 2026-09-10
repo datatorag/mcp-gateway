@@ -83,3 +83,16 @@ describe("writeUsageEventWithTimeout", () => {
     }
   });
 });
+
+describe("writeUsageEvent carries service and method (SCRUM-227)", () => {
+  const values = vi.fn().mockResolvedValue(undefined);
+  const db = { insert: () => ({ values }) } as unknown as Database;
+
+  it("writes the two fields when given and null when not", async () => {
+    values.mockClear();
+    await writeUsageEvent(db, { ...baseInput(null), toolName: "gws-mcp__gws_run", service: "drive", method: "files.list" });
+    expect(values.mock.calls[0][0]).toMatchObject({ service: "drive", method: "files.list" });
+    await writeUsageEvent(db, baseInput(null));
+    expect(values.mock.calls[1][0]).toMatchObject({ service: null, method: null });
+  });
+});

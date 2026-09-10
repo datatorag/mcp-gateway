@@ -49,6 +49,10 @@ export async function trackToolCall(
      * that cliff is a missing join key, not a drop in usage. */
     clientId?: string | null;
     clientName?: string | null;
+    /** gws_run only (SCRUM-227): which raw API call it was, as the service
+     * and method names, never the arguments. Null for every other tool. */
+    service?: string | null;
+    method?: string | null;
   }
 ): Promise<void> {
   // Metering + analytics run fire-and-forget off the tool-response path (see the
@@ -88,6 +92,8 @@ export async function trackToolCall(
           run_id: props.runId ?? null,
           client_id: props.clientId ?? null,
           client_name: props.clientName ?? null,
+          service: props.service ?? null,
+          method: props.method ?? null,
           ...identityProps(userEmail),
         },
       });
@@ -155,6 +161,8 @@ export async function trackToolCall(
         latencyMs: props.latencyMs,
         responseSizeBytes: props.responseSizeBytes,
         errorMessage: props.errorMessage,
+        service: props.service ?? null,
+        method: props.method ?? null,
       }).then((result) => {
         if (!result.ok) {
           console.warn(

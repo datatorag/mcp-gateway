@@ -18,6 +18,7 @@ import {
 } from "./skills-catalogue";
 import { listConnectedServiceIds } from "./connected-services";
 import { trackSkillApplied, trackSkillEvent, trackSkillSearched } from "./track";
+import { gwsRunFields } from "./usage/gws-run-fields";
 import { EVENTS } from "../lib/analytics";
 import { createUserSkill, deleteUserSkill, forkSkill, updateUserSkill, type WriteResult } from "./skills/catalogue-store";
 import { eq, and } from "drizzle-orm";
@@ -652,6 +653,9 @@ export function createMcpServer(
     }
 
     const args = rawArgs as Record<string, unknown>;
+    // SCRUM-227: a gws_run call is named by its service and method on the
+    // event and the row; the arguments themselves never leave this handler.
+    const runFields = gwsRunFields(name, args);
 
     const separatorIndex = name.indexOf(NAMESPACE_SEPARATOR);
     if (separatorIndex === -1) {
@@ -780,6 +784,7 @@ export function createMcpServer(
           toolName: name,
           connectorType: requiredService,
           accountEmail,
+          ...runFields,
           latencyMs: 0,
           responseSizeBytes: null,
           errorMessage: `${MISSING_SCOPE_ERROR_MARKER} ${scopeCheck.missing.displayName} not granted`,
@@ -880,6 +885,7 @@ export function createMcpServer(
         toolName: name,
         connectorType: requiredService ?? null,
         accountEmail,
+        ...runFields,
         latencyMs: Date.now() - startTime,
         responseSizeBytes: responseText.length,
         errorMessage,
@@ -904,6 +910,7 @@ export function createMcpServer(
         toolName: name,
         connectorType: requiredService ?? null,
         accountEmail,
+        ...runFields,
         latencyMs: Date.now() - startTime,
         responseSizeBytes: null,
         errorMessage: message,

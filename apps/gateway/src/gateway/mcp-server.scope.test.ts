@@ -302,3 +302,32 @@ describe("the 403 rewrite (the net behind the gate)", () => {
     expect(textOf(result)).toBe("rate limit exceeded");
   });
 });
+
+/* SCRUM-227: through the real CallTool path, a gws_run call reaches the
+ * tracker with its service and method and nothing of its arguments; any
+ * other tool reaches it with null in both. */
+describe("gws_run service and method reach the tracker (SCRUM-227)", () => {
+  it("hands service and method for gws_run, and only those", async () => {
+    resolveServiceToken.mockResolvedValue({ token: "tok", accountEmail: "a@example.com", scopes: FULL_GRANT });
+    callPluginToolOnce.mockResolvedValue({ isError: false, content: [{ type: "text", text: "{}" }] });
+    const client = await connectedClient();
+    await client.callTool({
+      name: "gws-mcp__gws_run",
+      arguments: { service: "calendar", resource: "events", method: "list", params: { calendarId: "primary" } },
+    });
+    const [, props] = trackToolCall.mock.calls.at(-1)!;
+    expect(props.service).toBe("calendar");
+    expect(props.method).toBe("list");
+    expect(JSON.stringify(props)).not.toContain("calendarId");
+  });
+
+  it("hands null in both for a dedicated tool", async () => {
+    resolveServiceToken.mockResolvedValue({ token: "tok", accountEmail: "a@example.com", scopes: FULL_GRANT });
+    callPluginToolOnce.mockResolvedValue({ isError: false, content: [{ type: "text", text: "{}" }] });
+    const client = await connectedClient();
+    await client.callTool({ name: "gws-mcp__gmail_search", arguments: { query: "is:unread" } });
+    const [, props] = trackToolCall.mock.calls.at(-1)!;
+    expect(props.service).toBeNull();
+    expect(props.method).toBeNull();
+  });
+});
