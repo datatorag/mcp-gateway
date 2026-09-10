@@ -28,9 +28,11 @@ import { createDatatoragAgent, DATATORAG_AGENT_ID, SYSTEM_PROMPT } from "./agent
  * nothing anywhere reports that it happened.
  */
 
+type CapturedBlock = { type?: string; cache_control?: { type?: string } };
 type CapturedBody = {
   system?: Array<{ text?: string; cache_control?: { type?: string } }>;
   tools?: Array<{ name?: string; cache_control?: { type?: string } }>;
+  messages?: Array<{ role?: string; content?: string | CapturedBlock[] }>;
   cache_control?: unknown;
 };
 
@@ -60,6 +62,32 @@ function anthropicStreamResponse(): Response {
   return new Response(body, { status: 200, headers: { "content-type": "text/event-stream" } });
 }
 
+/** An Anthropic streaming response that calls one tool with empty input, so
+ * the agent loop runs a second step and sends a second request. */
+function anthropicToolUseResponse(toolName: string): Response {
+  const event = (obj: unknown) => `event: ${(obj as { type: string }).type}\ndata: ${JSON.stringify(obj)}\n\n`;
+  const body = [
+    event({
+      type: "message_start",
+      message: {
+        id: "m1", type: "message", role: "assistant", model: "test", content: [],
+        stop_reason: null, stop_sequence: null,
+        usage: { input_tokens: 1, output_tokens: 1 },
+      },
+    }),
+    event({ type: "content_block_start", index: 0, content_block: { type: "tool_use", id: "toolu_1", name: toolName, input: {} } }),
+    event({ type: "content_block_delta", index: 0, delta: { type: "input_json_delta", partial_json: "{}" } }),
+    event({ type: "content_block_stop", index: 0 }),
+    event({
+      type: "message_delta",
+      delta: { stop_reason: "tool_use", stop_sequence: null },
+      usage: { output_tokens: 1 },
+    }),
+    event({ type: "message_stop" }),
+  ].join("");
+  return new Response(body, { status: 200, headers: { "content-type": "text/event-stream" } });
+}
+
 /** Reads a stream to completion. Via a reader rather than `for await`, because
  * the stream type is only async-iterable at runtime, not in its declaration. */
 async function drainStream(stream: unknown): Promise<void> {
@@ -72,9 +100,13 @@ async function drainStream(stream: unknown): Promise<void> {
 
 const cleanups: Array<() => Promise<void>> = [];
 const captured: CapturedBody[] = [];
+/** When set, the first provider call answers with this tool call and every
+ * later one with plain text: a two-step turn. */
+let firstCallUsesTool: string | null = null;
 
 beforeEach(() => {
   captured.length = 0;
+  firstCallUsesTool = null;
   const realFetch = globalThis.fetch;
   // Only the provider call is intercepted. The MCP traffic below runs over the
   // same global `fetch` and has to keep working, so anything that is not
@@ -82,6 +114,7 @@ beforeEach(() => {
   vi.stubGlobal("fetch", async (url: RequestInfo | URL, init?: RequestInit) => {
     if (!String(url).includes("api.anthropic.com")) return realFetch(url, init);
     captured.push(JSON.parse(String(init?.body ?? "{}")) as CapturedBody);
+    if (captured.length === 1 && firstCallUsesTool) return anthropicToolUseResponse(firstCallUsesTool);
     return anthropicStreamResponse();
   });
 });
@@ -125,7 +158,7 @@ async function captureTurn(toolNames: string[]): Promise<CapturedBody> {
   });
   await drainStream(stream);
 
-  expect(captured).toHaveLength(1);
+  expect(captured).toHaveLength(firstCallUsesTool ? 2 : 1);
   if (process.env.SHOW_BODY) {
     console.log(
       JSON.stringify(
@@ -175,5 +208,60 @@ describe("playground prompt caching, on the wire", () => {
     // serializes to a top-level `cache_control`, which Anthropic does not read
     // as a breakpoint. It looks configured and caches nothing.
     expect(body.cache_control).toBeUndefined();
+  });
+});
+
+/* SCRUM-241: a third breakpoint, on the latest message, moved every step.
+ * With only the system prompt and the tool schemas cached, every tool result
+ * of a run was uncached input again on each later step; a seven-mailbox pass
+ * was paid in full on every step after the one that read it. */
+describe("the moving breakpoint on the latest message (SCRUM-241)", () => {
+  /** The message blocks that carry a cache mark, as [messageIndex, blockIndex]. */
+  function marked(body: CapturedBody): Array<[number, number]> {
+    const out: Array<[number, number]> = [];
+    (body.messages ?? []).forEach((m, mi) => {
+      if (!Array.isArray(m.content)) return;
+      m.content.forEach((b, bi) => {
+        if (b.cache_control) out.push([mi, bi]);
+      });
+    });
+    return out;
+  }
+  function lastBlock(body: CapturedBody): [number, number] {
+    const messages = body.messages ?? [];
+    const last = messages[messages.length - 1]!;
+    const blocks = Array.isArray(last.content) ? last.content : [];
+    return [messages.length - 1, blocks.length - 1];
+  }
+
+  it("marks the last block of the last message, and only that, on a one-step turn", async () => {
+    const body = await captureTurn(["gmail_search"]);
+    expect(marked(body)).toEqual([lastBlock(body)]);
+    // The two existing breakpoints are untouched, and nothing leaks to the top level.
+    expect(body.system?.[0]?.cache_control).toEqual({ type: "ephemeral" });
+    expect(body.tools?.[body.tools.length - 1]?.cache_control).toEqual({ type: "ephemeral" });
+    expect(body.cache_control).toBeUndefined();
+  });
+
+  it("moves the mark to the tool result on the second step, leaving exactly one mark", async () => {
+    firstCallUsesTool = "gws-mcp__gmail_search";
+    await captureTurn(["gmail_search"]);
+    const [first, second] = captured as [CapturedBody, CapturedBody];
+    expect(marked(first)).toEqual([lastBlock(first)]);
+    // Step two carries the assistant tool call and its result after the user
+    // message. The mark sits on the newest block, the tool result; the runtime
+    // hands a tool part's metadata to its call block as well, so that adjacent
+    // block may carry it too, and nothing earlier does: the user message's
+    // mark from step one is gone.
+    const messages = second.messages ?? [];
+    expect(messages.length).toBeGreaterThan((first.messages ?? []).length);
+    const marks = marked(second);
+    expect(marks[marks.length - 1]).toEqual(lastBlock(second));
+    expect(marks.length).toBeLessThanOrEqual(2);
+    for (const [mi] of marks) expect(mi).toBeGreaterThanOrEqual(messages.length - 2);
+    expect(marks.some(([mi]) => mi === 0)).toBe(false);
+    expect(second.system?.[0]?.cache_control).toEqual({ type: "ephemeral" });
+    expect(second.tools?.[second.tools.length - 1]?.cache_control).toEqual({ type: "ephemeral" });
+    expect(second.cache_control).toBeUndefined();
   });
 });

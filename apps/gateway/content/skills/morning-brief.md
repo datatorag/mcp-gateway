@@ -55,7 +55,7 @@ Decide three things before the first call, and write them at the top of the run:
 ## Calendar, per account
 
 1. `calendar_list_events` for today and tomorrow (local time: `time_min` today 00:00,
-   `time_max` the day after tomorrow 00:00), `max_results` 50. Capture per event: date,
+   `time_max` the day after tomorrow 00:00), `max_results` 25. Capture per event: date,
    start and end, title, organiser, your own response status, all-day or timed, the join
    link, and which account it lives on.
 
@@ -67,7 +67,7 @@ Decide three things before the first call, and write them at the top of the run:
 3. Search unread inbox mail inside the window: `gmail_search` with query
    `is:unread in:inbox after:<window start as a Unix timestamp>` when you know your
    previous run's time, otherwise `is:unread in:inbox newer_than:2d`; `max_results`
-   50. A result count at or near
+   25. A result count at or near
    `max_results` means the search truncated. Treat that result as a sample, not a
    sweep: say so in the brief header, and narrow the query (by sender, by label, by
    older-than) rather than raising the ceiling on a mailbox that will always exceed it.

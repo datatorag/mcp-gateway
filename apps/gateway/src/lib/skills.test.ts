@@ -251,3 +251,16 @@ describe("the run clock (SCRUM-242)", () => {
     expect(skillRunMessage(brief, [])).not.toContain("Run started");
   });
 });
+
+/* SCRUM-241: a pass over every account is paid for on every later step of a
+ * run, so the size of one read is the size of the whole run. Fifty results
+ * per mailbox across seven mailboxes tripped the ceiling; twenty-five is the
+ * agreed number for the multi-account skills. */
+describe("read sizes in the published skills (SCRUM-241)", () => {
+  it("asks for at most 25 results per search or listing", () => {
+    for (const skill of readSkillFiles()) {
+      const asks = [...skill.skillSource.matchAll(/max_results`?\s*[:=]?\s*`?(\d+)/g)].map((m) => Number(m[1]));
+      for (const n of asks) expect(n, `${skill.slug} asks for ${n}`).toBeLessThanOrEqual(25);
+    }
+  });
+});
