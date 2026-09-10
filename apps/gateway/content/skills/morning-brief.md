@@ -83,9 +83,10 @@ Decide three things before the first call, and write them at the top of the run:
    - **NOISE:** newsletters, promotions, product announcements, social notifications,
      CI and bot output, vendor event invites.
 
-5. Label the NOISE and mark it read in ONE call. Once per run per account, create the
-   dated label `Triaged/<YYYY-MM-DD>` with `gmail_create_label` if it does not already
-   exist, then call `gmail_label_message` ONCE with `message_ids` set to every NOISE
+5. Label the NOISE and mark it read in ONE call. Once per run per account, call
+   `gmail_create_label` with the dated name `Triaged/<YYYY-MM-DD>`: it returns the
+   label's id whether it created the label or found it already there, so never list
+   labels first and never check before creating. Then call `gmail_label_message` ONCE with `message_ids` set to every NOISE
    message id, `add_labels` set to that label's id and `remove_labels` set to
    `["UNREAD"]`. One call, one request, for the whole batch; never once per message.
    The result lists every id with its outcome, so a partial batch is visible.

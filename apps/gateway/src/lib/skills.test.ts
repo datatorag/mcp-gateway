@@ -264,3 +264,20 @@ describe("read sizes in the published skills (SCRUM-241)", () => {
     }
   });
 });
+
+/* SCRUM-247: the label is created once per account per run and the tool answers
+ * with the id whether it created or found it, so a run never lists every
+ * mailbox's labels to learn one bit. Seven label lists cost a real brief 11k
+ * tokens of prefix on every later step. */
+describe("the dated label is created once, never looked up first (SCRUM-247)", () => {
+  it("no published skill lists labels or checks for the label before creating it", () => {
+    for (const skill of readSkillFiles()) {
+      expect(skill.tools, skill.slug).not.toContain("gmail_list_labels");
+      expect(skill.skillSource, skill.slug).not.toMatch(/gmail_list_labels/);
+      expect(skill.skillSource, skill.slug).not.toMatch(/if it does not already\s+exist/);
+      if (skill.tools.includes("gmail_create_label")) {
+        expect(skill.skillSource, skill.slug).toMatch(/never list\s+labels first/);
+      }
+    }
+  });
+});
