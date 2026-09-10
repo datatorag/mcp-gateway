@@ -11,6 +11,31 @@ user_invocable: true
 - AWS CLI configured with a profile that has Lightsail access
 - The production instance runs Docker Compose on AWS Lightsail
 
+## Scripted path (preferred)
+
+`scripts/deploy-gateway.sh <full-sha>` runs steps 2 to 4 below in one go, with
+the host and key taken from the environment so no live value lives in the
+repo:
+
+```bash
+DEPLOY_HOST=ubuntu@<ip> DEPLOY_KEY=<pem> scripts/deploy-gateway.sh <full-sha>
+```
+
+What it guarantees, and the manual path must match:
+
+- The rollback image is tagged `docker-gateway:rollback-<sha>` from the sha
+  that is RUNNING (the host's `.deployed-sha`), before anything builds. The
+  checkout is verified to be the requested sha before the build.
+- Only the newest five rollback tags are kept (`DEPLOY_KEEP_ROLLBACKS`); each
+  is a full image and the host disk filled once with dozens of them.
+- A failed build, or a container that was not recreated, stops before the
+  deployed sha is recorded. The old container keeps serving and `/health`
+  stays ok, so health alone never proves the new sha is live: check the
+  container's created time and the served build.
+- `.deployed-sha` is written only after `/health` answers ok.
+
+It does not render `.env` (step 2b) and does not touch plugins (step 5).
+
 ## Steps
 
 1. **Resolve SSH access**
