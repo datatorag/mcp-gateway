@@ -61,6 +61,7 @@ vi.mock("@/lib/db", () => ({ getDb: () => dbMock }));
 
 const {
   resolveUserPluginTools,
+  SKILL_RUN_CONTEXT_KEY,
   buildPluginRequestContext,
   requireApprovalFor,
   AGENT_CLIENT_NAME,
@@ -213,5 +214,38 @@ describe("identity and shape", () => {
       .filter(([, t]) => t.providerOptions !== undefined)
       .map(([name]) => name);
     expect(marked).toEqual(["echo"]);
+  });
+});
+
+/* SCRUM-238: a skill run sees the tools its skill names plus the gateway's
+ * built-ins, nothing else. A chat turn sees everything the user's services
+ * provide, as before. The published morning-brief names gmail_search and
+ * gmail_send and not the stranger in the fixture registry. */
+describe("a skill run sees its own tools (SCRUM-238)", () => {
+  it("keeps only the skill's named tools and the built-ins on a skill run", async () => {
+    const requestContext = buildPluginRequestContext({ userId: "user-1" });
+    requestContext.set(SKILL_RUN_CONTEXT_KEY, "morning-brief");
+    const tools = (await resolveUserPluginTools({ requestContext })) as Record<string, ResolvedTool>;
+    const names = Object.keys(tools);
+    expect(names).toContain("gws-mcp__gmail_search");
+    expect(names).toContain("gws-mcp__gmail_send");
+    expect(names).not.toContain("gws-mcp__totally_new_tool");
+    for (const b of BUILT_IN_TOOLS) expect(names).toContain(b.definition.name);
+  });
+
+  it("offers every tool on an ordinary turn", async () => {
+    const tools = await resolve();
+    expect(Object.keys(tools)).toEqual(
+      expect.arrayContaining(["gws-mcp__gmail_search", "gws-mcp__gmail_send", "gws-mcp__totally_new_tool"])
+    );
+  });
+
+  it("offers only the built-ins when the slug names no skill", async () => {
+    const requestContext = buildPluginRequestContext({ userId: "user-1" });
+    requestContext.set(SKILL_RUN_CONTEXT_KEY, "no-such-skill");
+    const tools = (await resolveUserPluginTools({ requestContext })) as Record<string, ResolvedTool>;
+    const names = Object.keys(tools);
+    expect(names.filter((n) => n.includes("__"))).toEqual([]);
+    for (const b of BUILT_IN_TOOLS) expect(names).toContain(b.definition.name);
   });
 });

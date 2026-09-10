@@ -346,3 +346,19 @@ export function skillRunMessage(
 export function layerLabel(skill: Pick<Skill, "layer">): "your version" | "published" {
   return skill.layer === "yours" ? "your version" : "published";
 }
+
+/** What the accuracy check says about a skill's tool list (SCRUM-238): the
+ * names we do not ship at all (a failure, the skill would fail on a reader),
+ * and the fallback gws_run named explicitly (a warning: a skill that needs
+ * the escape hatch is a missing dedicated tool, to be filed, not blocked). */
+export function skillToolFindings(
+  skill: Pick<Skill, "slug" | "tools">,
+  shipped: ReadonlySet<string>
+): { unknown: string[]; fallback: string[] } {
+  const unknown = skill.tools.filter((t) => !shipped.has(t));
+  const fallback = skill.tools.filter((t) => t === "gws_run");
+  if (fallback.length) {
+    console.warn(`[skills] ${skill.slug} names gws_run: a missing dedicated tool, file it`);
+  }
+  return { unknown, fallback };
+}

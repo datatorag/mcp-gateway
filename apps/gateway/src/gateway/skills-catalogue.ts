@@ -118,6 +118,9 @@ export function skillApplyText(
     skill.layer === "yours"
       ? `This is your version of the skill${skill.forkedFrom ? ", forked from the published one" : ""}.`
       : "This is the published skill.",
+    // SCRUM-238: a client running this with its own model cannot have its
+    // tool set scoped by us, so the text says which tools the skill uses.
+    `Tools this skill uses: ${skill.tools.join(", ")}.`,
   ];
   for (const need of skillNeeds(skill, opts.connected)) {
     if (!need.connected) {

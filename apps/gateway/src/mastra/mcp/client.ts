@@ -4,6 +4,8 @@ import { jsonSchema, type JSONSchema7 } from "ai";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import { createMcpServer, BUILT_IN_TOOLS } from "@/gateway/mcp-server";
+import { NAMESPACE_SEPARATOR } from "@/gateway/plugin-manager";
+import { getSkillBySlug } from "@/lib/skills";
 import { ConnectionPool } from "@/gateway/pool";
 import { classifyWrite } from "@/gateway/playground/tools";
 import { capToolOutput } from "@/gateway/playground/cap";
@@ -184,6 +186,24 @@ export function applyPromptCacheBreakpoint(tools: ToolsInput): ToolsInput {
  * inline reconnect control it can render); the gate policy is the server's
  * own, identical for every client.
  */
+/** The tools a skill run may see: the skill's own `tools` list (bare names
+ * matched against the namespaced tools the user's services provide) plus the
+ * MCP server's built-ins. A slug that names no skill the viewer can see
+ * offers the built-ins alone; the run message already says what happened. */
+async function skillScopedTools(
+  tools: McpToolDef[],
+  slug: string,
+  userId: string
+): Promise<McpToolDef[]> {
+  const skill = await getSkillBySlug(slug, userId);
+  const named = new Set(skill?.tools ?? []);
+  return tools.filter((t) => {
+    const sep = t.name.indexOf(NAMESPACE_SEPARATOR);
+    if (sep === -1) return true; // a gateway built-in
+    return named.has(t.name.slice(sep + NAMESPACE_SEPARATOR.length));
+  });
+}
+
 export async function resolveUserPluginTools({
   requestContext,
 }: {
@@ -208,9 +228,17 @@ export async function resolveUserPluginTools({
   ]);
 
   const { tools } = await client.listTools();
-  const skillRun = typeof requestContext.get(SKILL_RUN_CONTEXT_KEY) === "string";
+  const skillSlug = requestContext.get(SKILL_RUN_CONTEXT_KEY);
+  const skillRun = typeof skillSlug === "string";
+  // SCRUM-238: a skill run sees the tools its skill names plus the gateway's
+  // built-ins, nothing else. The built-ins are the fixed set the MCP server
+  // registers (no namespace in the name), never something a skill can widen:
+  // a skill that needs a tool names it, and gws_run only when named.
+  const offered = skillRun
+    ? await skillScopedTools(tools as McpToolDef[], skillSlug, userId)
+    : (tools as McpToolDef[]);
   const wrapped = wrapMcpTools(
-    tools as McpToolDef[],
+    offered,
     (name, args) => client.callTool({ name, arguments: args }),
     { skillRun }
   );

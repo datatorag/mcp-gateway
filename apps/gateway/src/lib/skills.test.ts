@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
   connectorsFor,
   readSkillFiles,
@@ -279,5 +279,29 @@ describe("the dated label is created once, never looked up first (SCRUM-247)", (
         expect(skill.skillSource, skill.slug).toMatch(/never list\s+labels first/);
       }
     }
+  });
+});
+
+/* SCRUM-238 (ruling Q3): gws_run is the escape hatch to any API. A skill may
+ * name it, and then it is offered to the run, but naming it is a finding: a
+ * skill that needs the fallback is a missing dedicated tool. The accuracy
+ * check warns rather than fails, so the finding is seen without blocking. */
+describe("a skill naming gws_run is a warning, not a failure (SCRUM-238)", () => {
+  it("warns for a skill that names gws_run and stays green", async () => {
+    const { skillToolFindings } = await import("./skills");
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const findings = skillToolFindings({ slug: "x", tools: ["gmail_search", "gws_run"] }, new Set(["gmail_search", "gws_run"]));
+    expect(findings.unknown).toEqual([]);
+    expect(findings.fallback).toEqual(["gws_run"]);
+    warn.mockRestore();
+  });
+
+  it("no published skill names gws_run today; if one does, the suite says so on stderr", () => {
+    for (const skill of readSkillFiles()) {
+      if (skill.tools.includes("gws_run")) {
+        console.warn(`[skills] ${skill.slug} names gws_run: a missing dedicated tool, file it`);
+      }
+    }
+    expect(true).toBe(true);
   });
 });

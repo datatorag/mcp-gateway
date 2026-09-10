@@ -129,6 +129,9 @@ describe("prompts: the catalogue for clients that render prompts", () => {
     expect(text).toContain(run);
     expect(text.slice(text.indexOf(run) + run.length)).toMatch(/^\n\nRun started \d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z\. The user's time zone is not known/);
     expect(text).toContain("Do not ask which accounts to cover");
+    // SCRUM-238: a client running the skill with its own model cannot have
+    // its tool set scoped, so the text says which tools the skill uses.
+    expect(text).toMatch(/Tools this skill uses: gmail_search, gmail_read, /);
     expect(text).toContain("This run will use work@example.com");
     // Everything before the clock is the catalogue's apply text, byte for byte.
     expect(text.slice(0, text.indexOf(run) + run.length)).toBe(
