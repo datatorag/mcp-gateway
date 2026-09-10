@@ -14,7 +14,7 @@ The Sheets connector lets your AI assistant read data from spreadsheets, write t
 
 | Tool | Description |
 |------|-------------|
-| `sheets_read` | Read data from a range of cells (e.g., `Sheet1!A1:D10`) |
+| `sheets_read` | Read one range, or several ranges in one call (`ranges: [...]`), one block per range in order (e.g., `Sheet1!A1:D10`) |
 | `sheets_create` | Create a new spreadsheet |
 | `sheets_update` | Update specific cells in a sheet |
 | `sheets_append` | Append rows to the end of a sheet |
