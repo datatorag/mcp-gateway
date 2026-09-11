@@ -54,6 +54,8 @@ It never asked me a question. That's deliberate. The run message hands the model
 connected accounts and says which one is the recipient, so "which accounts should I cover?" is
 answered before the first call. A routine that stops to ask is not a routine.
 
+![The run message: the skill, then the seven accounts it covers, with the recipient marked](/blog/skills-morning-brief-accounts.png)
+
 ## The rails
 
 Every published skill writes in exactly the places it says it writes and nowhere else. The
