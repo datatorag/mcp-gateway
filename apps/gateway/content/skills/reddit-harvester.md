@@ -1,6 +1,6 @@
 ---
 title: "Harvest a Reddit thread into a Google Sheets directory"
-order: 10
+order: 11
 situation: "A 'share what you're building' thread has a hundred products buried in comments, and I want them as a directory I can sort, share, and keep current."
 produces: "A formatted, deduplicated Google Sheet directory built from a thread, safe to share publicly, with every entry summarized in your words rather than pasted from the pitch."
 tools: [sheets_create, sheets_read, sheets_find_rows, sheets_append, sheets_update, sheets_format_table, sheets_format_range]

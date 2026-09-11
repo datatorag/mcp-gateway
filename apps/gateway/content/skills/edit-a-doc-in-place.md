@@ -1,6 +1,6 @@
 ---
 title: "Edit a Google Doc in place with Claude"
-order: 5
+order: 6
 situation: "The assistant reads my doc, tells me what to change, and then makes me go and change it myself."
 produces: "The edit applied in the document, in the right place, without a rewrite of everything around it."
 tools: [docs_get, docs_batch_update]

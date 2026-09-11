@@ -1,6 +1,6 @@
 ---
 title: "Get a morning brief across your mail, calendar and tasks with Claude"
-order: 11
+order: 1
 situation: "Every morning I open three inboxes and two calendars to find out what today actually needs from me, and I still miss the clash between them."
 produces: "One self-addressed brief: today's events across every calendar with the conflicts called out, the mail that needs a human grouped by account, and a task created for each thing you owe someone, with the noise labelled and marked read so it can be audited or undone."
 tools: [gmail_search, gmail_read, gmail_create_label, gmail_mark_read, gmail_label_message, gmail_send, calendar_list_events, tasks_list, tasks_list_tasks, tasks_create]

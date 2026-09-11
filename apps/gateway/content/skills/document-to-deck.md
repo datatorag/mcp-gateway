@@ -1,6 +1,6 @@
 ---
 title: "Build a Google Slides deck from a document with Claude"
-order: 8
+order: 9
 situation: "The summary already exists. Turning it into slides is an hour of work nobody wants to do."
 produces: "A structured deck built from the document you already wrote, ready to edit rather than ready to present."
 tools: [docs_get, slides_create, slides_batch_update, slides_get]

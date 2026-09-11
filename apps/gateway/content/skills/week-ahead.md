@@ -1,6 +1,6 @@
 ---
 title: "See your week across every calendar with Claude"
-order: 2
+order: 3
 situation: "I have meetings across three calendars and I find out about conflicts the morning of."
 produces: "A week-ahead agenda across every account, with conflicts and unanswered invites called out."
 tools: [calendar_list_events, calendar_get_event, calendar_freebusy]

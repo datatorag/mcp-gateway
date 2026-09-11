@@ -1,6 +1,6 @@
 ---
 title: "Save recurring email attachments to Drive with Claude"
-order: 4
+order: 5
 situation: "The same report lands in my inbox every week and I file it by hand, or I forget to."
 produces: "Attachments filed into the right Drive folder, without the files ever passing through the conversation."
 tools: [gmail_search, gmail_read, gmail_save_attachment_to_drive, drive_create_folder]

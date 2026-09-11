@@ -1,6 +1,6 @@
 ---
 title: "Keep a knowledge base in Google Sheets your agent can read"
-order: 3
+order: 4
 situation: "Our notes are scattered and half of them are stale. I want one place my agent can read and update."
 produces: "A Google Sheet your agent reads and writes reliably, without the traps that make spreadsheets bad interfaces."
 tools: [sheets_create, sheets_add_tab, sheets_read, sheets_update, sheets_append]

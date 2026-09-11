@@ -1,6 +1,6 @@
 ---
 title: "Turn a Confluence retro page into Jira tickets with Claude"
-order: 6
+order: 7
 situation: "We agreed the action items in the retro. They are on the page. Nobody filed them, and by Thursday nobody remembers them."
 produces: "One Jira issue per agreed action, filed with enough context to still make sense in six weeks."
 tools: [confluence_search, confluence_get_page, jira_create_issue, jira_get_issue]

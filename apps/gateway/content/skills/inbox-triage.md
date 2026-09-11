@@ -1,6 +1,6 @@
 ---
 title: "Triage your Gmail inbox with Claude"
-order: 1
+order: 2
 situation: "My inbox is full of things I don't need to read, and the two that matter are buried."
 produces: "A clean inbox and one self-addressed digest of what actually needs you, labelled so every action can be audited or undone."
 tools: [gmail_search, gmail_read, gmail_create_label, gmail_label_message, gmail_mark_read, gmail_send]

@@ -1,6 +1,6 @@
 ---
 title: "Search work and personal Gmail in one prompt with Claude"
-order: 7
+order: 8
 situation: "The receipt is in my personal inbox and the thread about it is in my work one, and I am the one switching between them."
 produces: "One answer assembled from every account you connected, or from exactly the one you name."
 tools: [gmail_search, gmail_read]
