@@ -67,6 +67,8 @@ The audience is technical decision-makers at mid-size companies — VPs of Engin
 
 ## Diagrams and Images
 
+Every post carries at least one image: a capture of the feature running or a product screenshot, never stock (ruled 2026-09-11). The rules below decide what else earns a place.
+
 A diagram earns its place when prose can't carry the idea efficiently. Skip it when prose already works.
 
 **Include a visual when you have:**
