@@ -106,6 +106,12 @@ export const EVENTS = {
    * its next step was told to close, `hard` when the ceiling refused the
    * next call; plus the weighted totals before and after the crossing step. */
   PLAYGROUND_RUN_CEILING_HIT: "playground_run_ceiling_hit",
+  /** One run ended (SCRUM-255): `reason` is completed, soft_ceiling,
+   * hard_ceiling, step_budget, stopped_by_user or failed; `viewer_left`
+   * says whether the browser had gone before the end (a disconnect does not
+   * end a run); plus steps, the weighted totals before and after the last
+   * step, and the thinking total. Emitted once per run, from the chat route. */
+  PLAYGROUND_RUN_ENDED: "playground_run_ended",
   PLAYGROUND_CONFIRM: "playground_confirm",
   PLAYGROUND_FEEDBACK: "playground_feedback",
   /** The agent's in-thread connect ask reached a decision point (SCRUM-112).

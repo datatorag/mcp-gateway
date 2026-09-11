@@ -608,7 +608,7 @@ export function createMcpServer(
           latencyMs: Date.now() - startTime,
           responseSizeBytes: JSON.stringify(result).length,
           errorMessage: null,
-          outcome: { thrown: false, isError: false, source: "mcp", toolName: name, builtin: true },
+          outcome: { thrown: false, isError: false, source: surface, toolName: name, builtin: true },
         });
         return result;
       } catch (error) {
@@ -625,7 +625,7 @@ export function createMcpServer(
           latencyMs: Date.now() - startTime,
           responseSizeBytes: null,
           errorMessage: message,
-          outcome: { thrown: true, errorMessage: message, source: "mcp", toolName: name, builtin: true },
+          outcome: { thrown: true, errorMessage: message, source: surface, toolName: name, builtin: true },
         });
         return {
           content: [
@@ -792,7 +792,7 @@ export function createMcpServer(
             thrown: false,
             isError: true,
             errorMessage: `${MISSING_SCOPE_ERROR_MARKER} ${scopeCheck.missing.displayName} not granted`,
-            source: "mcp",
+            source: surface,
             toolName: name,
           },
         });
@@ -889,7 +889,7 @@ export function createMcpServer(
         latencyMs: Date.now() - startTime,
         responseSizeBytes: responseText.length,
         errorMessage,
-        outcome: { thrown: false, isError, errorMessage, source: "mcp", toolName: name },
+        outcome: { thrown: false, isError, errorMessage, source: surface, toolName: name },
       });
 
       return result;
@@ -914,7 +914,7 @@ export function createMcpServer(
         latencyMs: Date.now() - startTime,
         responseSizeBytes: null,
         errorMessage: message,
-        outcome: { thrown: true, errorMessage: message, source: "mcp", toolName: name },
+        outcome: { thrown: true, errorMessage: message, source: surface, toolName: name },
       });
 
       return {

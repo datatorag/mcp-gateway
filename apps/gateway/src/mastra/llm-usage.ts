@@ -88,6 +88,10 @@ function capture(opts: {
   streamed: boolean;
   timeToFirstTokenSeconds?: number;
   error?: string;
+  /** SCRUM-255: on a skill run, which skill and how many tools the model saw. */
+  skill?: string;
+  toolsCount?: number;
+  builtinTools?: number;
 }): void {
   const posthog = getPosthog();
   if (!posthog) return;
@@ -111,6 +115,11 @@ function capture(opts: {
         $ai_cache_read_input_tokens: input?.cacheRead ?? 0,
         $ai_cache_creation_input_tokens: input?.cacheWrite ?? 0,
         $ai_reasoning_tokens: output?.reasoning ?? 0,
+        // The number the skill filter exists to reduce, said where the list
+        // is in force (SCRUM-255). Only on a skill run; absent otherwise.
+        ...(opts.skill ? { skill: opts.skill } : {}),
+        ...(typeof opts.toolsCount === "number" ? { tools_count: opts.toolsCount } : {}),
+        ...(typeof opts.builtinTools === "number" ? { builtin_tools: opts.builtinTools } : {}),
         $ai_latency: opts.latencySeconds,
         $ai_stream: opts.streamed,
         ...(opts.timeToFirstTokenSeconds === undefined
@@ -138,7 +147,13 @@ const seconds = (startMs: number) => (Date.now() - startMs) / 1000;
  */
 export function withLlmUsageTracking<TModel>(
   model: TModel,
-  ctx: { runId: string | undefined; userId: string | undefined }
+  ctx: {
+    runId: string | undefined;
+    userId: string | undefined;
+    skill?: string;
+    toolsCount?: number;
+    builtinTools?: number;
+  }
 ): TModel {
   const { runId, userId } = ctx;
   if (!runId || !userId) return model;
@@ -160,6 +175,9 @@ export function withLlmUsageTracking<TModel>(
           capture({
             distinctId: userId,
             runId,
+            skill: ctx.skill,
+            toolsCount: ctx.toolsCount,
+            builtinTools: ctx.builtinTools,
             modelId: inner.modelId,
             usage: result.usage as UsageBuckets | undefined,
             latencySeconds: seconds(startedAt),
@@ -170,6 +188,9 @@ export function withLlmUsageTracking<TModel>(
           capture({
             distinctId: userId,
             runId,
+            skill: ctx.skill,
+            toolsCount: ctx.toolsCount,
+            builtinTools: ctx.builtinTools,
             modelId: inner.modelId,
             usage: undefined,
             latencySeconds: seconds(startedAt),

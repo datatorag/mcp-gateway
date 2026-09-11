@@ -142,3 +142,25 @@ describe("llm usage instrumentation", () => {
     expect(capture.mock.calls[0][0].properties.$ai_is_error).toBe(true);
   });
 });
+
+/* SCRUM-255: the generation event says which skill ran and how many tools
+ * the model saw, off the same context the run id comes from. */
+describe("skill and tool count on the generation event (SCRUM-255)", () => {
+  beforeEach(() => capture.mockClear());
+
+  it("carries skill, tools_count and builtin_tools when the run is a skill run", async () => {
+    const model = withLlmUsageTracking(stubModel(USAGE), { ...CTX, skill: "morning-brief", toolsCount: 10, builtinTools: 8 });
+    await model.doGenerate({ prompt: [] } as never);
+    expect(capture).toHaveBeenCalledTimes(1);
+    expect(capture.mock.calls[0]![0].properties).toMatchObject({ skill: "morning-brief", tools_count: 10, builtin_tools: 8 });
+  });
+
+  it("carries none of them on an ordinary turn", async () => {
+    const model = withLlmUsageTracking(stubModel(USAGE), CTX);
+    await model.doGenerate({ prompt: [] } as never);
+    const props = capture.mock.calls[0]![0].properties as Record<string, unknown>;
+    expect("skill" in props).toBe(false);
+    expect("tools_count" in props).toBe(false);
+    expect("builtin_tools" in props).toBe(false);
+  });
+});

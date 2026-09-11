@@ -503,6 +503,29 @@ export async function trackPlaygroundRunCeilingHit(
   return capturePlaygroundEvent(db, userId, EVENTS.PLAYGROUND_RUN_CEILING_HIT, { ...hit });
 }
 
+/** How a run ended (SCRUM-255), once per run. `reason` names the ending;
+ * `viewer_left` is a separate fact, since a dropped connection no longer
+ * ends a run. The two totals are the weighted count before and after the
+ * last step; `thinking_tokens` is the run's reasoning total. */
+export interface RunEnded {
+  reason: "completed" | "soft_ceiling" | "hard_ceiling" | "step_budget" | "stopped_by_user" | "failed";
+  run_id: string;
+  skill: string | null;
+  viewer_left: boolean;
+  steps: number;
+  pre_step_weighted: number;
+  post_step_weighted: number;
+  thinking_tokens: number;
+}
+
+export async function trackPlaygroundRunEnded(
+  db: Database,
+  userId: string,
+  ended: RunEnded
+): Promise<void> {
+  return capturePlaygroundEvent(db, userId, EVENTS.PLAYGROUND_RUN_ENDED, { ...ended });
+}
+
 /** Write-confirmation gate: "shown" when a turn pauses for approval,
  * "approved"/"denied" on the user's decision. `writeCount` = pending writes. */
 export async function trackPlaygroundConfirm(

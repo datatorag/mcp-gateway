@@ -68,6 +68,7 @@ vi.mock("@/gateway/track", () => ({
   trackAgentRun: vi.fn(),
   trackToolCall: vi.fn(),
   trackPlaygroundConfirm: async () => {},
+  trackPlaygroundRunEnded: async () => {},
 }));
 
 const getMastra = vi.fn();

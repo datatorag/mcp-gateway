@@ -28,6 +28,7 @@ import {
   trackAgentRun,
   trackPlaygroundMessage, trackPlaygroundCapHit, trackPlaygroundConfirm,
   trackPlaygroundRunCeilingHit,
+  trackPlaygroundRunEnded,
 } from "@/gateway/track";
 import { planLimits, RUN_SOFT_CEILING } from "@/gateway/billing/plans";
 import {
@@ -40,7 +41,7 @@ import { eq } from "drizzle-orm";
 import { users } from "@datatorag-mcp/db";
 import { logAndGenericError } from "@/lib/errors";
 import { withKeepalive } from "./keepalive";
-import { runUsage } from "@/mastra/run-token-budget";
+import { runReasoningTokensUsed, runUsage } from "@/mastra/run-token-budget";
 import { recordRunUsage } from "@/gateway/usage/run-usage";
 import { costUsd } from "@/gateway/usage/model-prices";
 import { runEnded, runStarted, runStep, type RunLimit } from "@/gateway/playground/run-registry";
@@ -151,8 +152,9 @@ type StreamTaps = {
   onClosed?: () => void;
   /** One model call started (SCRUM-254): the run's record counts it. */
   onStep: () => void;
-  /** How the run ended, for the record. Fires once, viewer or no viewer. */
-  onEnd: (end: RunEnd) => void;
+  /** How the run ended, for the record. Fires once, viewer or no viewer,
+   * with the step count and whether the viewer had left (SCRUM-255). */
+  onEnd: (end: RunEnd, at: { steps: number; viewerLeft: boolean }) => void;
   /** The run's summary line for the thread (SCRUM-257), or null when the
    * run produced no usage to summarise. Asked once, at the finish. */
   summary: () => RunSummaryData | null;
@@ -191,10 +193,11 @@ function instrumentStream(
   let sizeNoticed = false;
   // One end per run, whichever path carried it (SCRUM-254).
   let ended = false;
+  let viewerLeft = false;
   const end = (how: RunEnd) => {
     if (ended) return;
     ended = true;
-    taps.onEnd(how);
+    taps.onEnd(how, { steps, viewerLeft });
   };
   // SCRUM-258: the runtime reports the user's stop as a tripwire data part
   // carrying the stop reason; the finish that follows is theirs, not a cap's.
@@ -331,6 +334,7 @@ function instrumentStream(
       for (const chunk of observe(result.value)) controller.enqueue(chunk);
     },
     cancel() {
+      viewerLeft = true;
       void drain();
     },
   });
@@ -824,9 +828,34 @@ export const POST = withRoute(async (userId, request) => {
         onStepStart();
         writeUsage(null);
       },
-      onEnd: (how) => {
+      onEnd: (how, at) => {
         runEnded(threadForTurn, how);
         writeUsage(new Date());
+        // SCRUM-255: one event says how the run ended. The reason names the
+        // ending; the viewer leaving is a separate fact, since a dropped
+        // connection does not end a run.
+        const reason =
+          how.state === "stopped"
+            ? how.limit === "user"
+              ? "stopped_by_user"
+              : how.limit === "size"
+                ? "hard_ceiling"
+                : "step_budget"
+            : how.state === "failed"
+              ? "failed"
+              : softNoticed
+                ? "soft_ceiling"
+                : "completed";
+        void trackPlaygroundRunEnded(db, userId, {
+          reason,
+          run_id: usageRunId ?? "",
+          skill: skillSlug,
+          viewer_left: at.viewerLeft,
+          steps: at.steps,
+          pre_step_weighted: lastStepTotal,
+          post_step_weighted: weightedNow(),
+          thinking_tokens: usageRunId ? runReasoningTokensUsed(usageRunId) : 0,
+        });
       },
       summary,
       // The thread row exists by now, which is the whole reason this waits.

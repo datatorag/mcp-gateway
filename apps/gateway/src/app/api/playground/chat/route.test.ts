@@ -47,10 +47,12 @@ vi.mock("@/gateway/usage/period", async (importOriginal) => ({
 const runTokensUsed = vi.fn((_runId: string): number => 0);
 const EMPTY_USAGE = { steps: 0, input: 0, cacheRead: 0, cacheWrite: 0, output: 0, reasoning: 0, weighted: 0 };
 const runUsage = vi.fn((_runId: string) => EMPTY_USAGE);
+const runReasoningTokensUsed = vi.fn((_runId: string): number => 0);
 vi.mock("@/mastra/run-token-budget", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/mastra/run-token-budget")>()),
   runTokensUsed: (runId: string) => runTokensUsed(runId),
   runUsage: (runId: string) => runUsage(runId),
+  runReasoningTokensUsed: (runId: string) => runReasoningTokensUsed(runId),
 }));
 
 /** SCRUM-257: the accounting writer, called from the route and mocked here. */
@@ -63,6 +65,7 @@ const trackPlaygroundMessage = vi.fn();
 const trackPlaygroundCapHit = vi.fn();
 const trackPlaygroundConfirm = vi.fn();
 const trackPlaygroundRunCeilingHit = vi.fn();
+const trackPlaygroundRunEnded = vi.fn();
 const trackAgentRun = vi.fn();
 const trackToolCall = vi.fn();
 vi.mock("@/gateway/track", () => ({
@@ -72,6 +75,7 @@ vi.mock("@/gateway/track", () => ({
   trackPlaygroundRunCeilingHit: (...a: unknown[]) =>
     trackPlaygroundRunCeilingHit(...a),
   trackAgentRun: (...a: unknown[]) => trackAgentRun(...a),
+  trackPlaygroundRunEnded: (...a: unknown[]) => trackPlaygroundRunEnded(...a),
   trackToolCall: (...a: unknown[]) => trackToolCall(...a),
 }));
 
@@ -210,6 +214,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   runTokensUsed.mockReturnValue(0);
   runUsage.mockReturnValue(EMPTY_USAGE);
+  runReasoningTokensUsed.mockReturnValue(0);
   getSessionUserId.mockResolvedValue(USER);
   getEnv.mockReturnValue({
     ANTHROPIC_API_KEY: "test-key",
@@ -1367,5 +1372,117 @@ describe("the user's stop (SCRUM-258)", () => {
     await reader.cancel("connection dropped");
     release();
     await vi.waitFor(() => expect(runStatus(threadId)).toMatchObject({ state: "stopped", limit: "user", steps: 2 }));
+  });
+});
+
+/* SCRUM-255: one event says how a run ended, with the weighted totals either
+ * side of its last step and the thinking total. Six shapes, one each. */
+describe("the run-ended event (SCRUM-255)", () => {
+  const TOOL_STEP = (id: string): UIMessageChunk[] => [
+    { type: "start-step" },
+    { type: "tool-input-start", toolCallId: id, toolName: "gws-mcp__gmail_search" },
+    { type: "tool-input-available", toolCallId: id, toolName: "gws-mcp__gmail_search", input: {} },
+    { type: "tool-output-available", toolCallId: id, output: { messages: [] } },
+    { type: "finish-step" },
+  ];
+  const PROSE_END: UIMessageChunk[] = [
+    { type: "start-step" },
+    { type: "text-start", id: "t1" },
+    { type: "text-delta", id: "t1", delta: "Sent." },
+    { type: "text-end", id: "t1" },
+    { type: "finish-step" },
+    { type: "finish", finishReason: "stop" } as UIMessageChunk,
+  ];
+  function skillTurn() {
+    const skill = readSkillFiles().find((s) => s.slug === "morning-brief")!;
+    return [{ id: "u1", role: "user", parts: [{ type: "text", text: skillRunMessage(skill) }] }];
+  }
+  function totalsByStep(values: number[]) {
+    let call = 0;
+    runTokensUsed.mockImplementation(() => values[Math.min(call++, values.length - 1)] ?? 0);
+  }
+  const ended = () => {
+    expect(trackPlaygroundRunEnded).toHaveBeenCalledTimes(1);
+    return trackPlaygroundRunEnded.mock.calls[0]![2] as Record<string, unknown>;
+  };
+
+  it("completed: a skill run that ends in prose, with steps, the totals and the thinking total", async () => {
+    totalsByStep([0, 30_000, 45_000, 45_000]);
+    runReasoningTokensUsed.mockReturnValue(12_345);
+    handleChatStream.mockResolvedValue(chunkStream([{ type: "start" }, ...TOOL_STEP("c1"), ...PROSE_END]));
+    await drain(await POST(post({ messages: skillTurn(), skill: "morning-brief", skillTrigger: "manual" })));
+    const e = ended();
+    expect(e).toMatchObject({ reason: "completed", skill: "morning-brief", steps: 2, viewer_left: false, thinking_tokens: 12_345 });
+    expect(e.pre_step_weighted).toBe(30_000);
+    expect(e.post_step_weighted).toBe(45_000);
+    expect(typeof e.run_id).toBe("string");
+  });
+
+  it("soft_ceiling: a run that crossed the closing line and then finished", async () => {
+    totalsByStep([0, 100_000, 130_000, 140_000]);
+    handleChatStream.mockResolvedValue(chunkStream([{ type: "start" }, ...TOOL_STEP("c1"), ...TOOL_STEP("c2"), ...PROSE_END]));
+    await drain(await POST(post({ messages: skillTurn(), skill: "morning-brief", skillTrigger: "manual" })));
+    expect(ended()).toMatchObject({ reason: "soft_ceiling", steps: 3 });
+  });
+
+  it("hard_ceiling: the ceiling refused the next call", async () => {
+    totalsByStep([0, 100_000, 160_000, 160_000]);
+    handleChatStream.mockImplementation(async (opts: { onError: (e: unknown) => string }) => {
+      const before: UIMessageChunk[] = [{ type: "start" }, ...TOOL_STEP("c1"), ...TOOL_STEP("c2")];
+      let index = 0;
+      return new ReadableStream<UIMessageChunk>({
+        pull(controller) {
+          if (index < before.length) { controller.enqueue(before[index++]!); return; }
+          if (index === before.length) { index++; controller.enqueue({ type: "error", errorText: opts.onError(new RunTokenCeilingError(160_000)) } as UIMessageChunk); return; }
+          controller.close();
+        },
+      });
+    });
+    await drain(await POST(post({ messages: skillTurn(), skill: "morning-brief", skillTrigger: "manual" })));
+    expect(ended()).toMatchObject({ reason: "hard_ceiling", steps: 2, post_step_weighted: 160_000 });
+  });
+
+  it("step_budget: a turn that ends right after a tool result", async () => {
+    handleChatStream.mockResolvedValue(chunkStream([{ type: "start" }, ...TOOL_STEP("c1"), { type: "finish", finishReason: "tool-calls" } as UIMessageChunk]));
+    await drain(await POST(post({ messages: skillTurn(), skill: "morning-brief", skillTrigger: "manual" })));
+    expect(ended()).toMatchObject({ reason: "step_budget", steps: 1 });
+  });
+
+  it("stopped_by_user: the processor's tripwire", async () => {
+    handleChatStream.mockResolvedValue(chunkStream([
+      { type: "start" }, ...TOOL_STEP("c1"),
+      { type: "data-tripwire", data: { reason: STOP_REASON, retry: false, processorId: "user-stop" } } as UIMessageChunk,
+      { type: "finish", finishReason: "other" } as UIMessageChunk,
+    ]));
+    await drain(await POST(post({ messages: skillTurn(), skill: "morning-brief", skillTrigger: "manual" })));
+    expect(ended()).toMatchObject({ reason: "stopped_by_user", steps: 1 });
+  });
+
+  it("failed: the runtime died, and a chat turn carries a null skill", async () => {
+    handleChatStream.mockResolvedValue(failingStream([{ type: "start" }, ...TOOL_STEP("c1")]));
+    await drain(await POST(post({ messages: USER_TURN })));
+    expect(ended()).toMatchObject({ reason: "failed", skill: null, steps: 1 });
+  });
+
+  it("viewer_left: a run that finished after the viewer disconnected says so, once", async () => {
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => { release = resolve; });
+    const before: UIMessageChunk[] = [{ type: "start" }, ...TOOL_STEP("c1")];
+    const all = [...before, ...PROSE_END];
+    let index = 0;
+    handleChatStream.mockResolvedValue(new ReadableStream<UIMessageChunk>({
+      async pull(controller) {
+        if (index === before.length) await gate;
+        if (index < all.length) { controller.enqueue(all[index++]!); return; }
+        controller.close();
+      },
+    }));
+    const res = await POST(post({ messages: skillTurn(), skill: "morning-brief", skillTrigger: "manual" }));
+    const reader = res.body!.getReader();
+    await reader.read();
+    await reader.cancel("connection dropped");
+    release();
+    await vi.waitFor(() => expect(trackPlaygroundRunEnded).toHaveBeenCalledTimes(1));
+    expect(trackPlaygroundRunEnded.mock.calls[0]![2]).toMatchObject({ reason: "completed", viewer_left: true, steps: 2 });
   });
 });

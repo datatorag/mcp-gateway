@@ -62,6 +62,8 @@ vi.mock("@/lib/db", () => ({ getDb: () => dbMock }));
 const {
   resolveUserPluginTools,
   SKILL_RUN_CONTEXT_KEY,
+  SKILL_TOOL_COUNT_KEY,
+  SKILL_BUILTIN_COUNT_KEY,
   buildPluginRequestContext,
   requireApprovalFor,
   AGENT_CLIENT_NAME,
@@ -178,7 +180,8 @@ describe("one call, one event, at the MCP layer (SCRUM-188/189)", () => {
     const [, props] = trackToolCall.mock.calls[0] as [unknown, Record<string, unknown>];
     expect(props.clientName).toBe(AGENT_CLIENT_NAME);
     expect(props.clientId).toBe(WEB_OAUTH_CLIENT_ID);
-    expect((props.outcome as { source: string }).source).toBe("mcp");
+    // SCRUM-255: the server stamps the surface it was built with.
+    expect((props.outcome as { source: string }).source).toBe("agent");
     expect(JSON.stringify(result)).toContain("hi");
   });
 
@@ -247,5 +250,31 @@ describe("a skill run sees its own tools (SCRUM-238)", () => {
     const names = Object.keys(tools);
     expect(names.filter((n) => n.includes("__"))).toEqual([]);
     for (const b of BUILT_IN_TOOLS) expect(names).toContain(b.definition.name);
+  });
+});
+
+/* SCRUM-255: the number SCRUM-238 exists to reduce is written down where it
+ * is decided, so the generation telemetry can carry it. */
+describe("the model-facing tool count (SCRUM-255)", () => {
+  it("a skill run records how many tools the model was handed, and how many were built-ins", async () => {
+    const requestContext = buildPluginRequestContext({ userId: "user-1" });
+    requestContext.set(SKILL_RUN_CONTEXT_KEY, "morning-brief");
+    const tools = (await resolveUserPluginTools({ requestContext })) as Record<string, ResolvedTool>;
+    const names = Object.keys(tools);
+    const connectorTools = names.filter((n) => n.includes("__"));
+    // The count is the set the model is handed: the skill's two connector
+    // tools plus every gateway tool (the MCP built-ins and the introspection
+    // tools), and the built-in count is everything without a namespace.
+    expect(connectorTools).toHaveLength(2);
+    expect(names.length).toBeGreaterThan(BUILT_IN_TOOLS.length + 2);
+    expect(requestContext.get(SKILL_TOOL_COUNT_KEY)).toBe(names.length);
+    expect(requestContext.get(SKILL_BUILTIN_COUNT_KEY)).toBe(names.length - 2);
+  });
+
+  it("an ordinary turn records nothing", async () => {
+    const requestContext = buildPluginRequestContext({ userId: "user-1" });
+    await resolveUserPluginTools({ requestContext });
+    expect(requestContext.get(SKILL_TOOL_COUNT_KEY)).toBeUndefined();
+    expect(requestContext.get(SKILL_BUILTIN_COUNT_KEY)).toBeUndefined();
   });
 });

@@ -52,6 +52,13 @@ export const USER_ID_CONTEXT_KEY = "userId";
  * ordinary turn, where the write gate stays exactly as it was. */
 export const SKILL_RUN_CONTEXT_KEY = "skillRun";
 
+/** What the skill filter left for the model (SCRUM-255): the count of tools
+ * handed to it and how many of those are gateway built-ins. Written by the
+ * resolver on a skill run, read by the generation telemetry. Absent on an
+ * ordinary turn. */
+export const SKILL_TOOL_COUNT_KEY = "skillToolCount";
+export const SKILL_BUILTIN_COUNT_KEY = "skillBuiltinCount";
+
 /** How the in-process client introduces itself at the MCP initialize
  * handshake. Lands as client_name on every tool_call event (SCRUM-189), so
  * agent traffic stays separable from external clients without a second
@@ -247,5 +254,18 @@ export async function resolveUserPluginTools({
   // own account, no identity argument, approval DECLARED rather than
   // classified. Added after the MCP set so the prompt-cache breakpoint stays
   // on an MCP tool schema, which is the large invariant block worth caching.
-  return { ...wrapped, ...buildIntrospectionTools({ db, userId }) };
+  const handed = { ...wrapped, ...buildIntrospectionTools({ db, userId }) };
+  if (skillRun) {
+    // SCRUM-255: the number the skill filter exists to reduce, written where
+    // it is decided so the generation telemetry can carry it. Counted on the
+    // set the model is actually handed, introspection tools included; the
+    // built-in count is every name without a connector namespace.
+    const names = Object.keys(handed);
+    requestContext.set(SKILL_TOOL_COUNT_KEY, names.length);
+    requestContext.set(
+      SKILL_BUILTIN_COUNT_KEY,
+      names.filter((n) => n.indexOf(NAMESPACE_SEPARATOR) === -1).length
+    );
+  }
+  return handed;
 }
