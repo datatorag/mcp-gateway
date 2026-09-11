@@ -16,10 +16,12 @@ import {
   deriveThreadId, findApprovalTargets, mintRunId, ownsRunId,
 } from "@/gateway/playground/run-ownership";
 import {
+  RUN_ID_HEADER,
   RUNS_CAP_HEADER,
   RUNS_REMAINING_HEADER,
   THREAD_ID_HEADER,
 } from "@/gateway/playground/quota-headers";
+import { STOP_REASON } from "@/mastra/user-stop";
 import { setThreadTitleIfEmpty, userOwnsThread } from "@/gateway/playground/threads";
 import { threadTitle } from "@/gateway/playground/thread-title";
 import {
@@ -194,7 +196,10 @@ function instrumentStream(
     ended = true;
     taps.onEnd(how);
   };
-  const stoppedPart = (limit: "steps" | "size"): UIMessageChunk =>
+  // SCRUM-258: the runtime reports the user's stop as a tripwire data part
+  // carrying the stop reason; the finish that follows is theirs, not a cap's.
+  let userStopped = false;
+  const stoppedPart = (limit: "steps" | "size" | "user"): UIMessageChunk =>
     ({
       type: "data-run-stopped",
       data: { limit, steps, cap: limit === "steps" ? run.stepCap : null, skill: run.skill },
@@ -229,12 +234,21 @@ function instrumentStream(
       const summary = taps.summary();
       if (summary) out.push({ type: "data-run-summary", data: summary } as UIMessageChunk);
     }
+    if (chunk.type === "data-tripwire") {
+      const data = (chunk as { data?: { reason?: unknown } }).data;
+      if (data?.reason === STOP_REASON) userStopped = true;
+    }
     if (chunk.type === "finish") {
       // A turn that ends right after a tool result, with no assistant text
       // after it, is the shape a step cap leaves (the runtime reports the
-      // finish as tool calls). A finished turn ends in prose.
+      // finish as tool calls). A finished turn ends in prose. A turn the
+      // user stopped ends at the boundary the processor aborted at, which
+      // looks like the cap shape, so it is named first (SCRUM-258).
       const reason = (chunk as { finishReason?: string }).finishReason;
-      if (
+      if (userStopped) {
+        out.push(stoppedPart("user"));
+        end({ state: "stopped", limit: "user" });
+      } else if (
         !approvalRequested &&
         (reason === "tool-calls" || (lastContent === "tool" && reason !== "error"))
       ) {
@@ -680,6 +694,8 @@ export const POST = withRoute(async (userId, request) => {
     // two runs and halve its own token total.
     usageRunId = isApprovalLeg ? approvals[0]?.runId : mintRunId(userId);
     if (usageRunId) requestContext.set(RUN_ID_CONTEXT_KEY, usageRunId);
+    // Told to the client so its Stop can name this run (SCRUM-258).
+    if (usageRunId) quotaHeaders[RUN_ID_HEADER] = usageRunId;
     // A skill run prompts for nothing mid-run (per HQ decision, see
     // skill-run-gate.ts); the tool resolver reads this key and swaps the
     // approval policy for this one request.

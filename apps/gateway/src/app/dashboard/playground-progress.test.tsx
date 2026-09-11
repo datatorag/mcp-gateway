@@ -317,6 +317,23 @@ describe("the stop notice and the interrupted card (SCRUM-234)", () => {
     expect(text).not.toMatch(/\$/);
   });
 
+  it("says the user stopped the run, and offers no Continue (SCRUM-258)", () => {
+    const stopped: PlaygroundMessage = {
+      id: "run-status-r3",
+      role: "assistant",
+      parts: [
+        { type: "data-run-stopped", data: { limit: "user", steps: 3, cap: null, skill: "morning-brief" } },
+      ] as PlaygroundMessage["parts"],
+    };
+    render([USER_TURN, stopped], vi.fn());
+    const text = (container.textContent ?? "").replace(/\s+/g, " ");
+    expect(text).toMatch(/you stopped/i);
+    expect(text).toContain("3 steps");
+    expect(text).toContain("saved");
+    expect(text).not.toContain("\u2014");
+    expect(Array.from(container.querySelectorAll("button")).some((b) => (b.textContent ?? "").includes("Continue"))).toBe(false);
+  });
+
   it("a settled message shows Interrupted, not Running, for a tool call whose result never came", async () => {
     const message = await assemble(TOOL_RUNNING);
     render([USER_TURN, message]);

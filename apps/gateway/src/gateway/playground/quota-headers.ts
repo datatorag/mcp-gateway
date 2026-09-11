@@ -24,3 +24,9 @@ export const RUNS_CAP_HEADER = "X-Playground-Runs-Cap";
  * thread-list API already hands them. Same header-not-stream-part reasoning
  * as the quota pair above. */
 export const THREAD_ID_HEADER = "X-Playground-Thread-Id";
+
+/** Which run this turn is (SCRUM-258), so the client's Stop can name it.
+ * The id carries its owner in an HMAC the stop endpoint verifies, so
+ * telling the user their own run id gives nobody a handle on anyone
+ * else's. Same header-not-stream-part reasoning as the thread id. */
+export const RUN_ID_HEADER = "X-Playground-Run-Id";

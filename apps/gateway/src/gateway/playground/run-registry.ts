@@ -23,8 +23,8 @@
 
 export type RunState = "running" | "completed" | "stopped" | "failed";
 
-/** Which limit ended a stopped run. */
-export type RunLimit = "steps" | "size";
+/** Which limit ended a stopped run: a cap, or the user's own Stop (SCRUM-258). */
+export type RunLimit = "steps" | "size" | "user";
 
 export interface RunRecord {
   runId: string;
@@ -103,8 +103,36 @@ export function runStatus(threadId: string): RunRecord | undefined {
   return record ? { ...record } : undefined;
 }
 
+/* -------------------------------------------------------------------------- */
+/* The user's Stop (SCRUM-258)                                                 */
+/* -------------------------------------------------------------------------- */
+
+/** Stop requests, keyed by run id: the stop endpoint writes one for the
+ * run's owner, and the agent's step processor reads it before each model
+ * call. Same bound and time to live as the run records. */
+const stops = new Map<string, number>();
+
+export function requestStop(runId: string): void {
+  if (!stops.has(runId) && stops.size >= MAX_TRACKED_THREADS) {
+    const oldest = stops.keys().next().value;
+    if (oldest !== undefined) stops.delete(oldest);
+  }
+  stops.set(runId, Date.now());
+}
+
+export function stopRequested(runId: string): boolean {
+  const at = stops.get(runId);
+  if (at === undefined) return false;
+  if (Date.now() - at > RUN_REGISTRY_TTL_MS) {
+    stops.delete(runId);
+    return false;
+  }
+  return true;
+}
+
 /** Test seam: the registry is process state, and tests must not leak runs
  * into each other. */
 export function resetRunRegistry(): void {
   records.clear();
+  stops.clear();
 }

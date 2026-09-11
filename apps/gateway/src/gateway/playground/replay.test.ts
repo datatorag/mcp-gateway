@@ -236,3 +236,16 @@ describe("the run summary line replays (SCRUM-257)", () => {
     expect(replayPart(part)).toEqual(part);
   });
 });
+
+/* SCRUM-258: a run the user stopped shows the stopped card on reload. */
+describe("the user's stop on reload (SCRUM-258)", () => {
+  it("appends the user card for a run stopped by the user after the viewer left", () => {
+    const stored = [
+      { id: "u1", role: "user", content: { parts: [{ type: "text", text: "run it" }] } },
+    ];
+    const out = withRunStatus(replayThread(stored), { runId: "r1", skill: "morning-brief", cap: 60, steps: 3, state: "stopped", limit: "user" });
+    expect(out[1]).toMatchObject({
+      parts: [{ type: "data-run-stopped", data: { limit: "user", steps: 3, cap: null, skill: "morning-brief" } }],
+    });
+  });
+});

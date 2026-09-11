@@ -226,7 +226,7 @@ export interface ReplayRunStatus {
   cap: number;
   steps: number;
   state: "running" | "completed" | "stopped" | "failed";
-  limit?: "steps" | "size";
+  limit?: "steps" | "size" | "user";
 }
 
 const STOP_CARD = "data-run-stopped";

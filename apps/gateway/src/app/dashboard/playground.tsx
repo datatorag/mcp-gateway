@@ -63,6 +63,7 @@ import {
   PANEL_STANDFIRST,
 } from "./agent-composer-copy";
 import {
+  RUN_ID_HEADER,
   RUNS_CAP_HEADER,
   RUNS_REMAINING_HEADER,
   THREAD_ID_HEADER,
@@ -341,6 +342,9 @@ export const Playground = forwardRef<PlaygroundHandle, PlaygroundProps>(
     const [serverThreadId, setServerThreadId] = useState<string | null>(
       threadId
     );
+    /** The run the current turn is (SCRUM-258), read off the response
+     * header, so Stop can name it. Null until a turn's response arrives. */
+    const [serverRunId, setServerRunId] = useState<string | null>(null);
 
     /** The user's own files when the read found any, the generic examples
      * otherwise. Derived once so the copy and the list cannot disagree about
@@ -450,6 +454,7 @@ export const Playground = forwardRef<PlaygroundHandle, PlaygroundProps>(
             // thread is known before the connect control could ever stream in.
             const turnThread = res.headers.get(THREAD_ID_HEADER);
             if (turnThread) setServerThreadId(turnThread);
+            setServerRunId(res.headers.get(RUN_ID_HEADER));
             return res;
           },
           // A resumed conversation names the thread it belongs to, so the
@@ -521,6 +526,31 @@ export const Playground = forwardRef<PlaygroundHandle, PlaygroundProps>(
     });
 
     const streaming = status === "submitted" || status === "streaming";
+
+    /** Stop means stop (SCRUM-258). The run's id is posted to the stop
+     * endpoint and the stream is left open: the server ends the run at the
+     * next step boundary and the thread receives the stopped card. Aborting
+     * the fetch instead would look like a dropped connection, which the
+     * server deliberately lets run to completion. With no run id in hand
+     * (a response that never arrived) the old abort is all there is. */
+    const requestStop = () => {
+      if (!serverRunId) {
+        void stop();
+        return;
+      }
+      // A refused request (a run id this process no longer recognises after
+      // a deploy, a rate limit) falls back to the local abort too, so Stop
+      // never silently does nothing.
+      void fetch("/api/playground/runs/stop", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ runId: serverRunId }),
+      })
+        .then((res) => {
+          if (!res.ok) void stop();
+        })
+        .catch(() => void stop());
+    };
 
     // Meter refresh, keyed on the stream settling: fires on mount (status
     // starts settled) and again after every turn, which is what keeps the
@@ -1072,7 +1102,7 @@ export const Playground = forwardRef<PlaygroundHandle, PlaygroundProps>(
                       !streaming &&
                       (awaitingConfirm || !input.trim())
                     }
-                    onStop={stop}
+                    onStop={requestStop}
                     status={status}
                   />
                 </PromptInputFooter>

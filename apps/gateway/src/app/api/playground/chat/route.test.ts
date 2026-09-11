@@ -120,8 +120,10 @@ import { mintRunId } from "@/gateway/playground/run-ownership";
 import { USER_ID_CONTEXT_KEY } from "@/mastra/mcp/client";
 import { readSkillFiles, runAccountsFrom, skillContinueMessage, skillRunMessage } from "@/lib/skills";
 import { CHAT_MAX_STEPS, SKILL_RUN_MAX_STEPS } from "@/mastra/run-steps";
-import { THREAD_ID_HEADER } from "@/gateway/playground/quota-headers";
+import { RUN_ID_HEADER, THREAD_ID_HEADER } from "@/gateway/playground/quota-headers";
 import { resetRunRegistry, runStatus } from "@/gateway/playground/run-registry";
+import { ownsRunId } from "@/gateway/playground/run-ownership";
+import { STOP_REASON } from "@/mastra/user-stop";
 import { KEEPALIVE_INTERVAL_MS } from "./keepalive";
 import { RUN_SOFT_CEILING, SKILL_RUN_EFFORT } from "@/gateway/billing/plans";
 import { POST } from "./route";
@@ -1295,5 +1297,75 @@ describe("run cost accounting (SCRUM-257)", () => {
     await vi.waitFor(() => expect(recordRunUsage).toHaveBeenCalled());
     const row = recordRunUsage.mock.calls.at(-1)![1] as { runId: string };
     expect(row.runId).toBe(resumedRunId);
+  });
+});
+
+/* SCRUM-258: the user's Stop ends the run at the next step boundary and the
+ * thread says the user stopped it; a dropped connection keeps SCRUM-254's
+ * behaviour, which the cases above already pin. */
+describe("the user's stop (SCRUM-258)", () => {
+  const TOOL_STEP = (id: string): UIMessageChunk[] => [
+    { type: "start-step" },
+    { type: "tool-input-start", toolCallId: id, toolName: "gws-mcp__gmail_search" },
+    { type: "tool-input-available", toolCallId: id, toolName: "gws-mcp__gmail_search", input: {} },
+    { type: "tool-output-available", toolCallId: id, output: { messages: [] } },
+    { type: "finish-step" },
+  ];
+  function skillTurn() {
+    const skill = readSkillFiles().find((s) => s.slug === "morning-brief")!;
+    return [{ id: "u1", role: "user", parts: [{ type: "text", text: skillRunMessage(skill) }] }];
+  }
+  /** What the runtime emits when the step processor aborts: the in-flight
+   * step's tool results, then a tripwire data part, then a finish. */
+  const STOPPED_BY_USER: UIMessageChunk[] = [
+    { type: "start" },
+    ...TOOL_STEP("c1"),
+    ...TOOL_STEP("c2"),
+    { type: "data-tripwire", data: { reason: STOP_REASON, retry: false, processorId: "user-stop" } } as UIMessageChunk,
+    { type: "finish", finishReason: "other" } as UIMessageChunk,
+  ];
+
+  it("tells the client its run id on every turn, so Stop can name it", async () => {
+    const res = await POST(post({ messages: skillTurn(), skill: "morning-brief", skillTrigger: "manual" }));
+    const runId = res.headers.get(RUN_ID_HEADER);
+    expect(runId).toBeTruthy();
+    expect(ownsRunId(USER, runId!)).toBe(true);
+    expect(lastParams().runId).toBe(runId);
+  });
+
+  it("a run the user stopped carries the user card before the finish, and never the step-cap card", async () => {
+    handleChatStream.mockResolvedValue(chunkStream(STOPPED_BY_USER));
+    const res = await POST(post({ messages: skillTurn(), skill: "morning-brief", skillTrigger: "manual" }));
+    const threadId = res.headers.get(THREAD_ID_HEADER)!;
+    const chunks = await drain(res);
+    const cards = chunks.filter((c) => c.type === "data-run-stopped");
+    expect(cards).toHaveLength(1);
+    expect(cards[0]!.data).toEqual({ limit: "user", steps: 2, cap: null, skill: "morning-brief" });
+    expect(chunks.findIndex((c) => c.type === "data-run-stopped")).toBeLessThan(chunks.findIndex((c) => c.type === "finish"));
+    expect(runStatus(threadId)).toMatchObject({ state: "stopped", limit: "user", steps: 2 });
+    expect(trackPlaygroundRunCeilingHit).not.toHaveBeenCalled();
+  });
+
+  it("a stop that lands after the viewer left is still recorded as the user's", async () => {
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => { release = resolve; });
+    const before: UIMessageChunk[] = [{ type: "start" }, ...TOOL_STEP("c1")];
+    const after = STOPPED_BY_USER.slice(before.length);
+    let index = 0;
+    const all = [...before, ...after];
+    handleChatStream.mockResolvedValue(new ReadableStream<UIMessageChunk>({
+      async pull(controller) {
+        if (index === before.length) await gate;
+        if (index < all.length) { controller.enqueue(all[index++]!); return; }
+        controller.close();
+      },
+    }));
+    const res = await POST(post({ messages: skillTurn(), skill: "morning-brief", skillTrigger: "manual" }));
+    const threadId = res.headers.get(THREAD_ID_HEADER)!;
+    const reader = res.body!.getReader();
+    await reader.read();
+    await reader.cancel("connection dropped");
+    release();
+    await vi.waitFor(() => expect(runStatus(threadId)).toMatchObject({ state: "stopped", limit: "user", steps: 2 }));
   });
 });

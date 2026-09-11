@@ -89,7 +89,7 @@ export type AgentDataParts = {
    * reader knows about a run whose viewer left (SCRUM-254): `running` while
    * it is still going, `error` when it failed after the viewer left. */
   "run-stopped": {
-    limit: "steps" | "size" | "running" | "error";
+    limit: "steps" | "size" | "running" | "error" | "user";
     steps: number;
     cap: number | null;
     skill: string | null;
@@ -348,16 +348,21 @@ function RunStoppedPart({ limit, steps, cap, skill }: AgentDataParts["run-stoppe
       ? `This run reached its size limit after ${stepsText}.`
       : limit === "error"
         ? `This run stopped with an error after ${stepsText}.`
-        : reached
-          ? `This run reached its step limit (${cap} steps).`
-          : `This run stopped after ${stepsText}, before it finished.`;
+        : limit === "user"
+          ? `You stopped this run after ${stepsText}.`
+          : reached
+            ? `This run reached its step limit (${cap} steps).`
+            : `This run stopped after ${stepsText}, before it finished.`;
+  // A run the user stopped is not offered a Continue: they said stop
+  // (SCRUM-258). A new message starts a fresh run as always.
+  const canContinue = limit !== "user";
   return (
     <div
       className="rounded-xl border border-border bg-muted/40 p-3 text-xs text-foreground"
       data-testid="run-stopped"
     >
       <p>{what} Everything it already finished is saved.</p>
-      {skill && continueRun ? (
+      {canContinue && skill && continueRun ? (
         <button
           type="button"
           className="mt-2 inline-flex items-center rounded-full border border-border px-3 py-1.5 text-xs font-medium transition-colors hover:bg-muted disabled:opacity-50"

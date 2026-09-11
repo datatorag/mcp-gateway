@@ -2,11 +2,13 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
   RUN_REGISTRY_TTL_MS,
+  requestStop,
   resetRunRegistry,
   runEnded,
   runStarted,
   runStatus,
   runStep,
+  stopRequested,
 } from "./run-registry";
 
 /**
@@ -79,5 +81,37 @@ describe("run registry (SCRUM-254)", () => {
     runStep("t6");
     vi.advanceTimersByTime(RUN_REGISTRY_TTL_MS - 1);
     expect(runStatus("t6")).toMatchObject({ steps: 1 });
+  });
+});
+
+/* SCRUM-258: the user's Stop is a request keyed by the run id the client
+ * was told, read by the step processor before the next model call. */
+describe("a stop request (SCRUM-258)", () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+    resetRunRegistry();
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("is false until asked, true after, and keyed by run id", () => {
+    expect(stopRequested("r-a")).toBe(false);
+    requestStop("r-a");
+    expect(stopRequested("r-a")).toBe(true);
+    expect(stopRequested("r-b")).toBe(false);
+  });
+
+  it("a run stopped by the user records the user limit", () => {
+    runStarted("t9", { runId: "r9", skill: "morning-brief", cap: 60 });
+    runStep("t9");
+    runEnded("t9", { state: "stopped", limit: "user" });
+    expect(runStatus("t9")).toMatchObject({ state: "stopped", limit: "user", steps: 1 });
+  });
+
+  it("forgets a stop request after the time to live", () => {
+    requestStop("r-old");
+    vi.advanceTimersByTime(RUN_REGISTRY_TTL_MS + 1);
+    expect(stopRequested("r-old")).toBe(false);
   });
 });

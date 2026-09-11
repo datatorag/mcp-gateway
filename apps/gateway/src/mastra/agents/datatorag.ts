@@ -1,5 +1,6 @@
 import { latestMessageBreakpoint } from "@/mastra/latest-message-breakpoint";
 import { softCeilingClosing } from "@/mastra/soft-ceiling";
+import { userStop } from "@/mastra/user-stop";
 import { createAnthropic } from "@ai-sdk/anthropic";
 import { Agent } from "@mastra/core/agent";
 import type { ToolsInput } from "@mastra/core/agent";
@@ -239,7 +240,9 @@ export function createDatatoragAgent(
     // marks that appended message as the newest block. Then the third
     // breakpoint, on the latest message, moved every step (SCRUM-241): what
     // a run produces is cached too, not only the prefix.
-    inputProcessors: [softCeilingClosing, latestMessageBreakpoint],
+    // The user's Stop first of all (SCRUM-258): a stopped run gets no
+    // closing instruction and no cache mark, it just ends.
+    inputProcessors: [userStop, softCeilingClosing, latestMessageBreakpoint],
     // Wrapped per request so each model call can report its token usage
     // against the run that made it. The ids come off the request context for
     // the same reason the tools do: they are per-caller, and a process-wide
