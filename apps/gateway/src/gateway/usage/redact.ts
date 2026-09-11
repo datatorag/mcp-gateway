@@ -27,6 +27,8 @@
 const EMAIL_RE = /[\w.+-]+@[\w-]+\.[\w.-]+/g;
 const GOOGLE_ID_RE = /\b[A-Za-z0-9_-]{20,}\b/g;
 const LONG_QUOTED_RE = /(["'])([^"'\n]{41,})\1/g;
+/** An API key (SCRUM-245): a credential, masked wherever it appears. */
+const API_KEY_RE = /sk-dtrmcp_[A-Za-z0-9_-]*/g;
 
 const MAX_LEN = 500;
 
@@ -36,6 +38,7 @@ const MAX_LEN = 500;
 function scrubText(text: string): string {
   let out = text;
   out = out.replace(EMAIL_RE, "[redacted-email]");
+  out = out.replace(API_KEY_RE, "[redacted-key]");
   out = out.replace(LONG_QUOTED_RE, (_m, q) => `${q}[redacted-content]${q}`);
   out = out.replace(GOOGLE_ID_RE, "[redacted-id]");
   return out;

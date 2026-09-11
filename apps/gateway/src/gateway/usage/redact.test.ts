@@ -145,3 +145,19 @@ describe("redactErrorMessage", () => {
     expect(out).toContain("was not found");
   });
 });
+
+/* SCRUM-245: an API key is a credential, and a credential quoted inside an
+ * error (a client that pasted it into the wrong header, a proxy echoing the
+ * request) must never reach the analytics vendor. */
+describe("redactErrorMessage masks API keys (SCRUM-245)", () => {
+  it("masks a key wherever it appears, keeping the rest of the diagnostic", () => {
+    const out = redactErrorMessage("401 from upstream for bearer sk-dtrmcp_AbCdEfGhIjKlMnOpQrStUvWxYz0123456789-_ab; retry");
+    expect(out).not.toContain("sk-dtrmcp_");
+    expect(out).toContain("401 from upstream for bearer ");
+    expect(out).toContain("; retry");
+  });
+
+  it("masks a short or truncated key too, since a prefix is enough to match on", () => {
+    expect(redactErrorMessage("saw sk-dtrmcp_abc here")).toBe("saw [redacted-key] here");
+  });
+});

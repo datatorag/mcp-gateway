@@ -217,3 +217,18 @@ describe("what a tools/list says about the client (SCRUM-256)", () => {
     });
   });
 });
+
+/* SCRUM-245: the handshake event says which kind of credential opened the
+ * session, so machine clients on keys separate from OAuth clients without a
+ * second event. */
+describe("auth kind on the session event (SCRUM-245)", () => {
+  it("records api_key when a key opened the session", async () => {
+    await trackMcpSessionInitialized(db, "user-123", { clientName: "harness", authKind: "api_key" });
+    expect(capture.mock.calls[0][0].properties).toMatchObject({ auth_kind: "api_key" });
+  });
+
+  it("records oauth otherwise, explicitly, so a filter on the property finds every session", async () => {
+    await trackMcpSessionInitialized(db, "user-123", { clientName: "Claude" });
+    expect(capture.mock.calls[0][0].properties).toMatchObject({ auth_kind: "oauth" });
+  });
+});

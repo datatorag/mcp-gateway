@@ -124,11 +124,19 @@ export async function trackMcpRequestReceived(
 export async function trackMcpSessionInitialized(
   db: Database,
   userId: string,
-  opts: { clientName?: string; clientVersion?: string }
+  opts: {
+    clientName?: string;
+    clientVersion?: string;
+    /** Which credential opened the session (SCRUM-245): an OAuth access
+     * token or an API key. Written explicitly either way so a filter on
+     * the property finds every session. */
+    authKind?: "oauth" | "api_key";
+  }
 ): Promise<void> {
   return captureMcpEvent(db, userId, EVENTS.MCP_SESSION_INITIALIZED, {
     client_name: opts.clientName ?? null,
     client_version: opts.clientVersion ?? null,
+    auth_kind: opts.authKind ?? "oauth",
     transport: "streamable_http",
   });
 }

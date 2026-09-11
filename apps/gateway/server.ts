@@ -2,11 +2,10 @@ import next from "next";
 import express from "express";
 import cookieParser from "cookie-parser";
 import { randomUUID } from "node:crypto";
-import { eq } from "drizzle-orm";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import { createMcpServer } from "./src/gateway/mcp-server";
 import { ConnectionPool } from "./src/gateway/pool";
-import { createDb, oauthAccessTokens } from "@datatorag-mcp/db";
+import { createDb } from "@datatorag-mcp/db";
 import { getEnv } from "@datatorag-mcp/config";
 import { createMetadataRouter } from "./src/gateway/oauth/metadata";
 import {
@@ -24,15 +23,13 @@ import { createRevokeRouter } from "./src/gateway/oauth/revoke";
 import { oauthRateLimit } from "./src/gateway/oauth/rate-limit";
 import { createAuthRouter } from "./src/gateway/auth";
 import { getPluginManager } from "./src/lib/plugin-manager";
-import { isTokenLive } from "./src/lib/token-liveness";
+import { resolveBearer, touchApiKey } from "./src/gateway/bearer-auth";
 import { shutdownPosthog } from "./src/gateway/track";
 import {
-  classifyAuthFailure,
   extractClientInfo,
   trackMcpRequestReceived,
   trackMcpSessionInitialized,
   trackMcpAuthFailed,
-  type AuthFailureReason,
 } from "./src/gateway/mcp-analytics";
 import cron from "node-cron";
 import { runDailyRollup } from "./src/gateway/usage/rollup";
@@ -216,35 +213,13 @@ async function main() {
   });
 
   /**
-   * Validate a Bearer token (OAuth access token). Fetches the row without
+   * Validate a Bearer: an OAuth access token, or an API key (SCRUM-245),
+   * decided by the key's fixed prefix. Both paths fetch the row without
    * liveness conditions so a reject can be classified (expired/revoked rows
-   * still name their owner); acceptance is exactly isTokenLive — the same
-   * rule liveTokenConditions expresses in SQL.
+   * still name their owner); acceptance is exactly isTokenLive for both.
+   * See bearer-auth.ts.
    */
-  async function validateBearer(rawToken: string): Promise<
-    | { ok: true; userId: string; clientId: string }
-    | { ok: false; reason: AuthFailureReason; userId: string | null }
-  > {
-    const [token] = await db
-      .select({
-        userId: oauthAccessTokens.userId,
-        clientId: oauthAccessTokens.clientId,
-        revokedAt: oauthAccessTokens.revokedAt,
-        expiresAt: oauthAccessTokens.expiresAt,
-      })
-      .from(oauthAccessTokens)
-      .where(eq(oauthAccessTokens.token, rawToken))
-      .limit(1);
-
-    if (token && isTokenLive(token))
-      return { ok: true, userId: token.userId, clientId: token.clientId };
-
-    return {
-      ok: false,
-      reason: classifyAuthFailure(token),
-      userId: token?.userId ?? null,
-    };
-  }
+  const validateBearer = (rawToken: string) => resolveBearer(db, rawToken);
 
   // MCP endpoint
   const resourceMetadataUrl = `${baseUrl}${PROTECTED_RESOURCE_PATH}`;
@@ -353,7 +328,12 @@ async function main() {
           void trackMcpSessionInitialized(db, auth.userId, {
             clientName: clientInfo.name,
             clientVersion: clientInfo.version,
+            authKind: auth.authKind,
           });
+          // A key's last use is its session opening, not every request:
+          // one write per handshake, and the dashboard's "last used" column
+          // is about whether the credential is alive, not how busy.
+          if (auth.authKind === "api_key") void touchApiKey(db, auth.keyId);
         },
       });
 
