@@ -145,18 +145,28 @@ const seconds = (startMs: number) => (Date.now() - startMs) / 1000;
  * would inflate the event count while leaving the distribution unchanged,
  * which is worse than not emitting it: it looks like coverage.
  */
+/** What a skill run adds to each generation event (SCRUM-255). */
+export type SkillRunDetail = {
+  skill?: string;
+  toolsCount?: number;
+  builtinTools?: number;
+};
+
 export function withLlmUsageTracking<TModel>(
   model: TModel,
   ctx: {
     runId: string | undefined;
     userId: string | undefined;
-    skill?: string;
-    toolsCount?: number;
-    builtinTools?: number;
+    /** Read when a call is REPORTED, not when the model is wrapped: the
+     * runtime resolves the model before the tools, and the tool resolver is
+     * what writes the counts, so a value read at wrap time is the value
+     * before it was known. */
+    atCapture?: () => SkillRunDetail;
   }
 ): TModel {
   const { runId, userId } = ctx;
   if (!runId || !userId) return model;
+  const detail = (): SkillRunDetail => ctx.atCapture?.() ?? {};
 
   // GENERIC, AND CAST BACK TO THE MODEL'S OWN TYPE, because two packages here
   // are pinned to different revisions of the provider spec: the agent runtime
@@ -175,9 +185,7 @@ export function withLlmUsageTracking<TModel>(
           capture({
             distinctId: userId,
             runId,
-            skill: ctx.skill,
-            toolsCount: ctx.toolsCount,
-            builtinTools: ctx.builtinTools,
+            ...detail(),
             modelId: inner.modelId,
             usage: result.usage as UsageBuckets | undefined,
             latencySeconds: seconds(startedAt),
@@ -188,9 +196,7 @@ export function withLlmUsageTracking<TModel>(
           capture({
             distinctId: userId,
             runId,
-            skill: ctx.skill,
-            toolsCount: ctx.toolsCount,
-            builtinTools: ctx.builtinTools,
+            ...detail(),
             modelId: inner.modelId,
             usage: undefined,
             latencySeconds: seconds(startedAt),
@@ -228,6 +234,11 @@ export function withLlmUsageTracking<TModel>(
             capture({
               distinctId: userId,
               runId,
+              // The streamed path is the one every real turn takes; the
+              // first production run after SCRUM-255 shipped had a
+              // generation event with none of these keys because only the
+              // non-streaming wrapper passed them.
+              ...detail(),
               modelId: inner.modelId,
               usage,
               latencySeconds: seconds(startedAt),

@@ -148,15 +148,53 @@ describe("llm usage instrumentation", () => {
 describe("skill and tool count on the generation event (SCRUM-255)", () => {
   beforeEach(() => capture.mockClear());
 
+  const SKILL_RUN = { skill: "morning-brief", toolsCount: 10, builtinTools: 8 };
+
   it("carries skill, tools_count and builtin_tools when the run is a skill run", async () => {
-    const model = withLlmUsageTracking(stubModel(USAGE), { ...CTX, skill: "morning-brief", toolsCount: 10, builtinTools: 8 });
+    const model = withLlmUsageTracking(stubModel(USAGE), { ...CTX, atCapture: () => SKILL_RUN });
     await model.doGenerate({ prompt: [] } as never);
     expect(capture).toHaveBeenCalledTimes(1);
     expect(capture.mock.calls[0]![0].properties).toMatchObject({ skill: "morning-brief", tools_count: 10, builtin_tools: 8 });
   });
 
+  it("carries them on the STREAMED path too, which is the path every real turn takes", async () => {
+    // The first production run after the change had a run-ended event naming
+    // the skill and a generation event with none of these keys: only the
+    // non-streaming wrapper passed them, and nothing streams through that.
+    const model = withLlmUsageTracking(stubModel(USAGE), { ...CTX, atCapture: () => SKILL_RUN }) as ReturnType<typeof stubModel>;
+    const { stream } = await model.doStream({} as never);
+    await drain(stream);
+    expect(capture).toHaveBeenCalledTimes(1);
+    expect(capture.mock.calls[0]![0].properties).toMatchObject({ $ai_stream: true, skill: "morning-brief", tools_count: 10, builtin_tools: 8 });
+  });
+
+  it("reads them when the call is reported, not when the model is wrapped", async () => {
+    // The model is resolved before the tools are, and the tool resolver is
+    // what writes the counts. Reading at capture time is what lets the event
+    // carry a number the wrapper could not have known.
+    let seen: { skill?: string; toolsCount?: number; builtinTools?: number } = {};
+    const model = withLlmUsageTracking(stubModel(USAGE), { ...CTX, atCapture: () => seen }) as ReturnType<typeof stubModel>;
+    const { stream } = await model.doStream({} as never);
+    seen = SKILL_RUN;
+    await drain(stream);
+    expect(capture.mock.calls[0]![0].properties).toMatchObject({ tools_count: 10, builtin_tools: 8 });
+  });
+
+  it("carries them on a failed call as well", async () => {
+    const failing = new MockLanguageModelV4({
+      provider: "anthropic",
+      modelId: "claude-test",
+      doGenerate: async () => {
+        throw new Error("upstream exploded");
+      },
+    });
+    const model = withLlmUsageTracking(failing, { ...CTX, atCapture: () => SKILL_RUN }) as typeof failing;
+    await expect(model.doGenerate({} as never)).rejects.toThrow("upstream exploded");
+    expect(capture.mock.calls[0]![0].properties).toMatchObject({ $ai_is_error: true, skill: "morning-brief" });
+  });
+
   it("carries none of them on an ordinary turn", async () => {
-    const model = withLlmUsageTracking(stubModel(USAGE), CTX);
+    const model = withLlmUsageTracking(stubModel(USAGE), { ...CTX, atCapture: () => ({}) });
     await model.doGenerate({ prompt: [] } as never);
     const props = capture.mock.calls[0]![0].properties as Record<string, unknown>;
     expect("skill" in props).toBe(false);

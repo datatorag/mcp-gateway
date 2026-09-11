@@ -259,15 +259,21 @@ export function createDatatoragAgent(
     // generation and must not be counted as one.
     model: ({ requestContext }) => {
       // The skill and the model-facing tool count ride beside the ids
-      // (SCRUM-255), read off the same context the resolver wrote them to.
-      const skill = requestContext.get(SKILL_RUN_CONTEXT_KEY);
-      const toolsCount = requestContext.get(SKILL_TOOL_COUNT_KEY);
-      const builtinTools = requestContext.get(SKILL_BUILTIN_COUNT_KEY);
+      // (SCRUM-255), read off the same context the resolver writes them to,
+      // and read when each call is REPORTED: the model resolves before the
+      // tools do, so a read here would run before the counts exist.
       const ctx = {
         ...usageContextFrom(requestContext, USER_ID_CONTEXT_KEY),
-        ...(typeof skill === "string" && skill ? { skill } : {}),
-        ...(typeof toolsCount === "number" ? { toolsCount } : {}),
-        ...(typeof builtinTools === "number" ? { builtinTools } : {}),
+        atCapture: () => {
+          const skill = requestContext.get(SKILL_RUN_CONTEXT_KEY);
+          const toolsCount = requestContext.get(SKILL_TOOL_COUNT_KEY);
+          const builtinTools = requestContext.get(SKILL_BUILTIN_COUNT_KEY);
+          return {
+            ...(typeof skill === "string" && skill ? { skill } : {}),
+            ...(typeof toolsCount === "number" ? { toolsCount } : {}),
+            ...(typeof builtinTools === "number" ? { builtinTools } : {}),
+          };
+        },
       };
       return withRunTokenCeiling(
         withLlmUsageTracking(resolveModel(), ctx),

@@ -49,3 +49,14 @@ the built-ins within it, and an ordinary turn records nothing; a
 generation event carries the count and the skill when the context holds
 them and omits them otherwise. Not proven here: the events as ingested by
 the analytics vendor on a real run.
+
+## Correction, same day
+
+The first production run after the deploy had a run-ended event naming the
+skill and a generation event with none of the three keys. Two causes, both
+fixed in the follow-up commit: only the non-streaming wrapper passed the
+fields, and every real turn streams; and the values were read when the
+model was wrapped, which can happen before the runtime resolves the tools,
+so the counts the resolver writes could not have been seen. The wrapper
+now takes a reader it calls when each generation is reported, on both
+paths, and the test suite drives the streamed path and the late read.
