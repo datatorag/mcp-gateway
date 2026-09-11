@@ -47,18 +47,27 @@ export function classifyAuthFailure(
 export function extractClientInfo(body: unknown): {
   name?: string;
   version?: string;
+  /** The protocol revision the client asked for (SCRUM-256). The SDK
+   * negotiates it at initialize and keeps no getter for it, so this is the
+   * one place it can be read. */
+  protocolVersion?: string;
 } {
   const messages = Array.isArray(body) ? body : [body];
   for (const m of messages) {
     if (!m || typeof m !== "object") continue;
-    const msg = m as { method?: unknown; params?: { clientInfo?: unknown } };
+    const msg = m as {
+      method?: unknown;
+      params?: { clientInfo?: unknown; protocolVersion?: unknown };
+    };
     if (msg.method !== "initialize") continue;
     const ci = msg.params?.clientInfo;
     if (!ci || typeof ci !== "object") return {};
     const { name, version } = ci as { name?: unknown; version?: unknown };
+    const pv = msg.params?.protocolVersion;
     return {
       name: typeof name === "string" ? name.slice(0, 200) : undefined,
       version: typeof version === "string" ? version.slice(0, 100) : undefined,
+      protocolVersion: typeof pv === "string" ? pv.slice(0, 50) : undefined,
     };
   }
   return {};
@@ -136,12 +145,29 @@ export async function trackMcpAuthFailed(
   });
 }
 
+/** What one tools/list says about the asker (SCRUM-256): the count split
+ * into the user's connector tools and the gateway's own built-ins, and the
+ * client name, version and protocol revision that listed. Counts and
+ * identity only; never a tool name. */
+export type ToolsListed = {
+  connectorTools: number;
+  builtinTools: number;
+  clientName?: string | null;
+  clientVersion?: string | null;
+  protocolVersion?: string | null;
+};
+
 export async function trackMcpToolsListed(
   db: Database,
   userId: string,
-  toolCount: number
+  listed: ToolsListed
 ): Promise<void> {
   return captureMcpEvent(db, userId, EVENTS.MCP_TOOLS_LISTED, {
-    tool_count: toolCount,
+    tool_count: listed.connectorTools + listed.builtinTools,
+    connector_tools: listed.connectorTools,
+    builtin_tools: listed.builtinTools,
+    client_name: listed.clientName ?? null,
+    client_version: listed.clientVersion ?? null,
+    protocol_version: listed.protocolVersion ?? null,
   });
 }

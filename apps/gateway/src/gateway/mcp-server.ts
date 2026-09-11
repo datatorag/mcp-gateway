@@ -485,11 +485,17 @@ export function createMcpServer(
      * (dynamic registration mints a fresh id per register call), so
      * client_name is the product-ish axis and client_id the stable one. */
     clientId?: string;
+    /** The protocol revision the client asked for at initialize (SCRUM-256),
+     * read off the request body by the HTTP layer because the SDK keeps no
+     * getter for it. Rides on the tools-listed event beside the client
+     * name and version the SDK does keep. */
+    protocolVersion?: string;
   }
 ): Server {
   const connectionsUrl = `${opts?.baseUrl ?? ""}/dashboard/connections`;
   const surface = opts?.surface ?? "mcp";
   const clientId = opts?.clientId ?? null;
+  const protocolVersion = opts?.protocolVersion;
   const server = new Server(
     { name: "datatorag-mcp", version: "0.1.0" },
     // Prompts (SCRUM-224): the skill catalogue as the native "apply a
@@ -574,9 +580,17 @@ export function createMcpServer(
     for (const t of BUILT_IN_TOOLS) toolList.push(t.definition);
 
     // A user who lists tools and then stops is a very different activation
-    // signal from one whose client never connected. Count only — never the
-    // tool list itself.
-    void trackMcpToolsListed(db, userId, toolList.length);
+    // signal from one whose client never connected. Counts and the asker's
+    // identity only (SCRUM-256), never the tool list itself: the split says
+    // whether "no tools" means nothing connected or a client that never
+    // asked, and the client fields say which client and protocol did.
+    void trackMcpToolsListed(db, userId, {
+      connectorTools: rows.length,
+      builtinTools: BUILT_IN_TOOLS.length,
+      clientName: clientName(),
+      clientVersion: server.getClientVersion()?.version ?? null,
+      protocolVersion,
+    });
 
     return { tools: toolList };
   });

@@ -366,6 +366,7 @@ async function main() {
       const server = createMcpServer(auth.userId, db, pool, {
         baseUrl,
         clientId: auth.clientId,
+        protocolVersion: clientInfo.protocolVersion,
       });
       await server.connect(transport);
 
