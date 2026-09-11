@@ -90,7 +90,11 @@ describe("a decision that can no longer be given", () => {
 describe("the parts that should vanish", () => {
   it("drops stream bookkeeping", () => {
     expect(replayPart({ type: "step-start" })).toBeNull();
-    expect(replayPart({ type: "reasoning", text: "thinking" })).toBeNull();
+    // SCRUM-262: reasoning replays as the row the live thread shows, so a
+    // reload mid-run renders the same rows; an empty one is nothing.
+    expect(replayPart({ type: "reasoning", text: "thinking" })).toEqual({ type: "reasoning", text: "thinking", state: "done" });
+    expect(replayPart({ type: "reasoning", text: "" })).toBeNull();
+    expect(replayPart({ type: "reasoning" })).toBeNull();
   });
 
   it("keeps text", () => {

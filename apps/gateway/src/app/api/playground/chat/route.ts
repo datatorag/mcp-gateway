@@ -106,14 +106,19 @@ const NON_CONTENT_CHUNK_TYPES: Record<UIMessageChunk["type"], boolean> = {
   abort: true,
   "message-metadata": true,
   error: true,
-  // Real content: text, reasoning, tool activity, sources, files.
+  // Real content: text, tool activity, sources, files.
   "text-start": false,
   "text-delta": false,
   "text-end": false,
-  "reasoning-start": false,
-  "reasoning-delta": false,
-  "reasoning-end": false,
-  "reasoning-file": false,
+  // Reasoning is forwarded to the client since SCRUM-262, but for the
+  // refund gate it is the model's working, not an answer: a turn that
+  // thinks and then fails before any text or tool output delivered nothing
+  // the user asked for, and is refunded exactly as it was before reasoning
+  // travelled. The gate's meaning does not change because more is shown.
+  "reasoning-start": true,
+  "reasoning-delta": true,
+  "reasoning-end": true,
+  "reasoning-file": true,
   custom: false,
   "tool-input-start": false,
   "tool-input-delta": false,
@@ -736,6 +741,12 @@ export const POST = withRoute(async (userId, request) => {
       mastra: getMastra(),
       agentId: DATATORAG_AGENT_ID,
       version: MASTRA_STREAM_VERSION,
+      // Reasoning parts reach the client (SCRUM-262): the thinking row opens
+      // them from a caret. The runtime drops them unless asked. What the
+      // route stores about a run stays behaviour only: nothing below reads a
+      // reasoning delta into the usage table or an analytics event. The
+      // keepalive still covers the gap before the first chunk.
+      sendReasoning: true,
       params: {
         messages: runMessages as never,
         trigger,

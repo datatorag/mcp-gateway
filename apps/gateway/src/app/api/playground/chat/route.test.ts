@@ -1486,3 +1486,52 @@ describe("the run-ended event (SCRUM-255)", () => {
     expect(trackPlaygroundRunEnded.mock.calls[0]![2]).toMatchObject({ reason: "completed", viewer_left: true, steps: 2 });
   });
 });
+
+/* SCRUM-262: reasoning reaches the client. The runtime drops reasoning
+ * chunks unless asked; the route asks, and forwards them as parts. What the
+ * route stores about a run is behaviour only, so nothing here reaches the
+ * usage table or an analytics event. */
+describe("reasoning parts reach the client (SCRUM-262)", () => {
+  it("asks the runtime for reasoning and forwards the deltas", async () => {
+    handleChatStream.mockResolvedValue(chunkStream([
+      { type: "start" },
+      { type: "start-step" },
+      { type: "reasoning-start", id: "r1" },
+      { type: "reasoning-delta", id: "r1", delta: "weighing the two threads" },
+      { type: "reasoning-end", id: "r1" },
+      { type: "text-start", id: "t1" },
+      { type: "text-delta", id: "t1", delta: "Two threads." },
+      { type: "text-end", id: "t1" },
+      { type: "finish-step" },
+      { type: "finish", finishReason: "stop" } as UIMessageChunk,
+    ]));
+    const res = await POST(post({ messages: [{ id: "u1", role: "user", parts: [{ type: "text", text: "hi" }] }] }));
+    expect(res.status).toBe(200);
+    const body = await new Response(res.body).text();
+    expect(body).toContain('"type":"reasoning-delta"');
+    expect(body).toContain("weighing the two threads");
+    const call = handleChatStream.mock.calls.at(-1)?.[0] as Record<string, unknown>;
+    expect(call.sendReasoning).toBe(true);
+  });
+});
+
+/* SCRUM-262: reasoning now travels to the client, and the refund gate must
+ * not start counting it as an answer. A turn that thinks and then fails
+ * before any text or tool output delivered nothing the user asked for. */
+describe("the refund gate and reasoning (SCRUM-262)", () => {
+  it("still refunds a turn that only reasoned before it died", async () => {
+    handleChatStream.mockResolvedValue(
+      failingStream([
+        { type: "start" },
+        { type: "start-step" },
+        { type: "reasoning-start", id: "r0" },
+        { type: "reasoning-delta", id: "r0", delta: "weighing the options" },
+        { type: "reasoning-end", id: "r0" },
+      ])
+    );
+    const chunks = await drain(await POST(post({ messages: USER_TURN })));
+    expect(chunks.some((c) => c.type === "reasoning-delta")).toBe(true);
+    expect(chunks.some((c) => c.type === "error")).toBe(true);
+    expect(refundAgentRun).toHaveBeenCalledWith(expect.anything(), USER);
+  });
+});

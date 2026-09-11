@@ -396,3 +396,23 @@ body > iframe {
     @apply font-sans;
   }
 }
+/* The agent thread clock (SCRUM-262): hands that turn while a step runs.
+   Two speeds, one keyframe. Motion is only ever applied under motion-safe:
+   (see animated-clock.tsx), so a reduced-motion reader gets a still clock. */
+@keyframes clock-turn {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@utility animate-clock-hands {
+  transform-box: fill-box;
+  transform-origin: 50% 50%;
+  animation: clock-turn 2s linear infinite;
+}
+
+@utility animate-clock-hands-slow {
+  transform-box: fill-box;
+  transform-origin: 0% 50%;
+  animation: clock-turn 24s linear infinite;
+}

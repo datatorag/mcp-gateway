@@ -379,3 +379,94 @@ describe("internal tool cards wear human labels (SCRUM-100)", () => {
     expect(container.querySelector('img[src*="/icons/services/"]')).toBeNull();
   });
 });
+
+/* SCRUM-262: the thinking row. Reasoning parts now reach the client, and
+ * each one renders as a collapsed row with a caret that opens the text for
+ * that step, remembered while the thread is open. The Running badge and the
+ * progress line carry a clock whose hands turn, CSS only, motion-safe. */
+const REASONED_TURN: UIMessageChunk[] = [
+  { type: "start", messageId: "assistant-2" },
+  { type: "start-step" },
+  { type: "reasoning-start", id: "r1" },
+  { type: "reasoning-delta", id: "r1", delta: "The inbox has two threads worth a reply; " },
+  { type: "reasoning-delta", id: "r1", delta: "the rest is newsletters." },
+  { type: "reasoning-end", id: "r1" },
+  { type: "text-start", id: "t2" },
+  { type: "text-delta", id: "t2", delta: "Two threads need you today." },
+  { type: "text-end", id: "t2" },
+  { type: "finish-step" },
+  { type: "finish", finishReason: "stop" } as UIMessageChunk,
+];
+
+describe("the thinking row (SCRUM-262)", () => {
+  it("collapses the reasoning by default and opens it from the caret, per step", async () => {
+    const message = await assemble(REASONED_TURN);
+    render([message], false);
+    expect(visibleText()).toContain("Two threads need you today.");
+    expect(visibleText()).not.toContain("newsletters");
+
+    const caret = container.querySelector<HTMLButtonElement>('[data-testid="thinking-caret"]');
+    expect(caret).not.toBeNull();
+    expect(caret!.getAttribute("aria-expanded")).toBe("false");
+    act(() => caret!.click());
+    expect(caret!.getAttribute("aria-expanded")).toBe("true");
+    expect(visibleText()).toContain("The inbox has two threads worth a reply; the rest is newsletters.");
+
+    // Re-rendering the same thread keeps the step open: the choice is
+    // remembered while the thread is on screen.
+    render([message], false);
+    expect(container.querySelector('[data-testid="thinking-caret"]')!.getAttribute("aria-expanded")).toBe("true");
+  });
+
+  it("renders no row at all for a step whose reasoning came back empty", async () => {
+    const message = await assemble([
+      { type: "start", messageId: "assistant-3" },
+      { type: "start-step" },
+      { type: "reasoning-start", id: "r2" },
+      { type: "reasoning-end", id: "r2" },
+      { type: "text-start", id: "t3" },
+      { type: "text-delta", id: "t3", delta: "Done." },
+      { type: "text-end", id: "t3" },
+      { type: "finish-step" },
+      { type: "finish", finishReason: "stop" } as UIMessageChunk,
+    ]);
+    render([message], false);
+    expect(container.querySelector('[data-testid="thinking-caret"]')).toBeNull();
+  });
+
+  it("gives a Running tool card a clock whose hands turn, and a finished one none", async () => {
+    const running = await assemble([
+      { type: "start", messageId: "assistant-4" },
+      { type: "start-step" },
+      { type: "tool-input-start", toolCallId: "call-9", toolName: "gws-mcp__gmail_search" },
+      { type: "tool-input-available", toolCallId: "call-9", toolName: "gws-mcp__gmail_search", input: {} },
+    ]);
+    // Live, not settled: with the stream closed an in-flight card says
+    // Interrupted (SCRUM-234) and wears no clock, which is right.
+    act(() => {
+      root.render(
+        <MessageList
+          awaitingConfirm={false}
+          busy
+          comments={{}}
+          erroredIds={new Set()}
+          feedback={{}}
+          lastMessageComplete={false}
+          messages={[running]}
+          onCommentChange={() => {}}
+          onDecide={onDecide}
+          onRate={() => {}}
+          onRegenerate={() => {}}
+          onSendComment={() => {}}
+        />
+      );
+    });
+    const hands = container.querySelector('[data-testid="clock-hands"]');
+    expect(hands).not.toBeNull();
+    expect(hands!.getAttribute("class") ?? "").toContain("motion-safe:");
+
+    const finished = await assemble(SUSPENDED_TURN.slice(0, 5));
+    render([finished], false);
+    expect(container.querySelector('[data-testid="clock-hands"]')).toBeNull();
+  });
+});

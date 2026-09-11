@@ -17,11 +17,12 @@
  * approval, the approved run's result and a denial are all states of one
  * `tool-<name>` part, which is what the agent runtime emits natively. */
 
-import { memo } from "react";
+import { memo, useState } from "react";
 import type { DynamicToolUIPart, ToolUIPart, UIMessage } from "ai";
 import { renderAgentPart, type AgentDataParts } from "./agent-parts";
 import { internalToolIcon, toolDisplayName } from "./agent-tool-copy";
-import { ClockIcon, RefreshCcwIcon, ThumbsDownIcon, ThumbsUpIcon } from "lucide-react";
+import { RefreshCcwIcon, ThumbsDownIcon, ThumbsUpIcon, ChevronRightIcon } from "lucide-react";
+import { AnimatedClock } from "@/components/animated-clock";
 
 import {
   Message,
@@ -480,6 +481,11 @@ export const MessageRow = memo(function MessageRow({
   onSendComment,
 }: MessageRowProps) {
   const bodyClass = MESSAGE_TEXT_CLASS[textSize];
+  // Which thinking rows are open, by part key (SCRUM-262). Row state, so it
+  // survives every re-render of the list while the thread is on screen and
+  // resets with the thread, which is the "remembered per step" the ask
+  // names: not persisted, not shared across threads.
+  const [openReasoning, setOpenReasoning] = useState<Record<string, boolean>>({});
   return (
     // The rows own the conversation's vertical rhythm (rather than the list
     // container), so every surface that renders them — dashboard playground,
@@ -488,6 +494,24 @@ export const MessageRow = memo(function MessageRow({
       <MessageContent className={`gap-3 ${bodyClass}`}>
         {message.parts.map((part, partIndex) => {
           const key = `${message.id}-${partIndex}`;
+          if (part.type === "reasoning") {
+            const text = typeof part.text === "string" ? part.text : "";
+            // A step whose reasoning came back empty (the provider returned
+            // no summary) gets no row: a caret that opens onto nothing reads
+            // as a bug, not as a step that thought silently.
+            if (text.trim() === "") return null;
+            return (
+              <ReasoningRow
+                key={key}
+                onToggle={() =>
+                  setOpenReasoning((prev) => ({ ...prev, [key]: !prev[key] }))
+                }
+                open={openReasoning[key] === true}
+                streaming={part.state === "streaming"}
+                text={text}
+              />
+            );
+          }
           if (part.type === "text") {
             return (
               // SECURITY: this playground deliberately feeds untrusted
@@ -622,8 +646,58 @@ export function progressFor(
   return { label: "Thinking", step };
 }
 
-/** The one line under the last message while a turn runs. Same pulsing clock
- * as the tool card's Running badge, so the two read as one vocabulary. */
+/**
+ * A step's reasoning, behind a caret (SCRUM-262).
+ *
+ * Collapsed by default: the reasoning is the model's working, and most of
+ * the time the answer is what the reader wants. The caret opens the text of
+ * THAT step; other steps keep their own state. While the step is still
+ * thinking the row wears the turning clock, so "Thinking" on the progress
+ * line and the row that will hold the thought read as one thing.
+ *
+ * The text is rendered as text, never as markdown: reasoning quotes what
+ * the model read, and what it read is untrusted third-party content. The
+ * markdown renderer's link and image allowlists exist for the answer; the
+ * working gets no renderer at all.
+ */
+export function ReasoningRow({
+  text,
+  open,
+  streaming,
+  onToggle,
+}: {
+  text: string;
+  open: boolean;
+  streaming: boolean;
+  onToggle: () => void;
+}) {
+  return (
+    <div className="text-xs text-muted-foreground" data-testid="thinking-row">
+      <button
+        aria-expanded={open}
+        className="flex items-center gap-1.5 rounded px-1 py-0.5 hover:text-foreground"
+        data-testid="thinking-caret"
+        onClick={onToggle}
+        type="button"
+      >
+        <ChevronRightIcon
+          className={`size-3.5 shrink-0 transition-transform ${open ? "rotate-90" : ""}`}
+        />
+        {streaming ? <AnimatedClock className="size-3.5" /> : null}
+        <span>{streaming ? "Thinking" : "Thought"}</span>
+      </button>
+      {open ? (
+        <div className="mt-1 ml-5 whitespace-pre-wrap border-l border-border pl-3 leading-relaxed">
+          {text}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+/** The one line under the last message while a turn runs. Same turning clock
+ * as the tool card's Running badge (SCRUM-262), so the two read as one
+ * vocabulary. */
 export function ProgressRow({ progress }: { progress: RunProgress }) {
   return (
     <div
@@ -631,7 +705,7 @@ export function ProgressRow({ progress }: { progress: RunProgress }) {
       className="mt-3 flex items-center gap-2 text-xs text-muted-foreground"
       data-testid="run-progress"
     >
-      <ClockIcon className="size-3.5 animate-pulse" />
+      <AnimatedClock className="size-3.5" />
       {progress.step > 1 && <span>Step {progress.step}</span>}
       {progress.step > 1 && <span aria-hidden>&middot;</span>}
       <span>{progress.label}</span>
