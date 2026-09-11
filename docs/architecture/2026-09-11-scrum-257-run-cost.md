@@ -41,7 +41,7 @@ One accumulator, one writer, one price table, two surfaces.
   tokens, cost) and a table of sessions, each with its runs, from two new
   session-gated routes, `/api/usage/runs` and `/api/usage/sessions`.
 
-For HQ's daily routine, the per-user per-day rollup is one query over the
+For the daily usage report, the per-user per-day rollup is one query over the
 table:
 
 ```sql
