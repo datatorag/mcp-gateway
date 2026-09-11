@@ -43,6 +43,23 @@ export const RUN_TOKEN_CEILING = 150_000;
  * third call after 81k real tokens. */
 export const RUN_CACHE_READ_WEIGHT = 0.1;
 
+/** How much a SKILL RUN asks the model to think per step (SCRUM-248).
+ *
+ * Thinking is the dominant cost of every step after the first on a
+ * multi-account run, and the direct cause of a run overshooting
+ * RUN_TOKEN_CEILING one step after the check. The model in use takes no
+ * token budget for thinking (the API rejects one); the control it takes is
+ * an effort level with adaptive thinking, where the API default is `high`.
+ * `medium` is the reversible first step down from that default, judged on
+ * the next real run against a five-thousand-token-per-step equivalent.
+ *
+ * Applied to skill-seeded turns only; ordinary chat keeps the default. A
+ * skill may override it in frontmatter (`effort: low|medium|high`), see
+ * `mastra/run-effort.ts`. */
+export const SKILL_RUN_EFFORT: SkillRunEffort = "medium";
+
+export type SkillRunEffort = "low" | "medium" | "high";
+
 export interface PlanLimits {
   monthlyIncluded: number;
   /** true → over-cap returns a hard-stop error; false → over-cap meters overage */

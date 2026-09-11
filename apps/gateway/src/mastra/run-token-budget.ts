@@ -46,10 +46,14 @@ import { RUN_CACHE_READ_WEIGHT, RUN_TOKEN_CEILING } from "@/gateway/billing/plan
  * newer runs, and the cost of forgetting it is one run's fresh budget. */
 const MAX_TRACKED_RUNS = 1024;
 const runTokens = new Map<string, number>();
+/** The thinking part of each call's output, summed per run (SCRUM-248), so
+ * the weighted total can be split into thinking and visible output from the
+ * same object the ceiling reads. Same bound and lifetime as `runTokens`. */
+const runReasoning = new Map<string, number>();
 
 type UsageBuckets = {
   inputTokens?: { total?: number; noCache?: number; cacheRead?: number; cacheWrite?: number };
-  outputTokens?: { total?: number };
+  outputTokens?: { total?: number; reasoning?: number };
 };
 
 /** The buckets as the AI SDK v3 usage shape defines them (`@ai-sdk/provider`
@@ -92,13 +96,19 @@ export function usageTotal(usage: UsageBuckets | undefined): number {
   );
 }
 
-function note(runId: string, tokens: number): void {
+function note(runId: string, usage: UsageBuckets | undefined): void {
+  const tokens = usageTotal(usage);
   if (tokens <= 0) return;
   if (!runTokens.has(runId) && runTokens.size >= MAX_TRACKED_RUNS) {
     const oldest = runTokens.keys().next().value;
-    if (oldest !== undefined) runTokens.delete(oldest);
+    if (oldest !== undefined) {
+      runTokens.delete(oldest);
+      runReasoning.delete(oldest);
+    }
   }
   runTokens.set(runId, (runTokens.get(runId) ?? 0) + tokens);
+  const reasoning = usage?.outputTokens?.reasoning ?? 0;
+  if (reasoning > 0) runReasoning.set(runId, (runReasoning.get(runId) ?? 0) + reasoning);
 }
 
 /** Tokens the run has consumed so far, as this process has seen them. */
@@ -106,11 +116,18 @@ export function runTokensUsed(runId: string): number {
   return runTokens.get(runId) ?? 0;
 }
 
+/** The thinking tokens inside that total (SCRUM-248). Zero when the
+ * provider reported none, or the run is unknown. */
+export function runReasoningTokensUsed(runId: string): number {
+  return runReasoning.get(runId) ?? 0;
+}
+
 /** Test seam: the accumulator is process state, and tests must not leak runs
  * into each other. Not for production use — production forgets via the
  * eviction bound and process restarts only. */
 export function resetRunTokenBudgets(): void {
   runTokens.clear();
+  runReasoning.clear();
 }
 
 /** The refusal, typed so the chat route can tell it from a provider failure.
@@ -163,7 +180,7 @@ export function withRunTokenCeiling<TModel>(
       wrapGenerate: async ({ doGenerate }) => {
         assertWithinCeiling();
         const result = await doGenerate();
-        note(runId, usageTotal(result.usage as UsageBuckets | undefined));
+        note(runId, result.usage as UsageBuckets | undefined);
         return result;
       },
       wrapStream: async ({ doStream }) => {
@@ -184,7 +201,7 @@ export function withRunTokenCeiling<TModel>(
           flush() {
             if (noted) return;
             noted = true;
-            note(runId, usageTotal(pending));
+            note(runId, pending);
           },
         });
         return { ...result, stream: result.stream.pipeThrough(tap) };

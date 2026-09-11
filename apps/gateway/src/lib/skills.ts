@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import { marked } from "marked";
 import { defineCollection, field, type ParsedFile } from "./content-collection";
 import { connectorsFor, runClockLine, servicesFor, type RunClock } from "./skill-links";
+import type { SkillRunEffort } from "@/gateway/billing/plans";
 
 /**
  * The skill catalogue (SCRUM-226: rows, with the files as the authored
@@ -57,6 +58,10 @@ export interface Skill extends SkillContent {
   version: string;
   /** For a fork: the published slug and version it was taken from. */
   forkedFrom: { slug: string; version: string } | null;
+  /** The thinking effort this skill's runs ask for (SCRUM-248), from the
+   * file's frontmatter. Absent means the constant beside the run ceiling.
+   * Not part of the content hash: it tunes the run, it is not the skill. */
+  effort?: SkillRunEffort;
   /** Rendered from `intro` at read; never stored. */
   introHtml: string;
   /** Rendered from `notes` at read; never stored. */
@@ -120,6 +125,7 @@ function parseSkill({ slug, data, content }: ParsedFile): Skill | null {
     skillSource,
     notes,
   };
+  const effort = parseSkillEffort(data.effort);
   return renderSkill({
     ...c,
     slug,
@@ -127,7 +133,14 @@ function parseSkill({ slug, data, content }: ParsedFile): Skill | null {
     layer: "published",
     version: skillVersion(c),
     forkedFrom: null,
+    ...(effort ? { effort } : {}),
   });
+}
+
+/** The frontmatter `effort` field, or nothing: a value outside the three
+ * levels is dropped rather than passed to the provider (SCRUM-248). */
+export function parseSkillEffort(value: unknown): SkillRunEffort | undefined {
+  return value === "low" || value === "medium" || value === "high" ? value : undefined;
 }
 
 const collection = defineCollection<Skill>({

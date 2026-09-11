@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import {
   connectorsFor,
+  parseSkillEffort,
   readSkillFiles,
   getRelatedSkills,
   servicesFor,
@@ -303,5 +304,24 @@ describe("a skill naming gws_run is a warning, not a failure (SCRUM-238)", () =>
       }
     }
     expect(true).toBe(true);
+  });
+});
+
+/* SCRUM-248: a skill may name its own thinking effort in frontmatter. None of
+ * the published skills does in this ticket; the constant applies to all. */
+describe("the effort override in frontmatter (SCRUM-248)", () => {
+  it("no published skill carries an override today", () => {
+    for (const skill of readSkillFiles()) {
+      expect(skill.effort, skill.slug).toBeUndefined();
+    }
+  });
+
+  it("parses a valid level and drops anything else", () => {
+    expect(parseSkillEffort("low")).toBe("low");
+    expect(parseSkillEffort("medium")).toBe("medium");
+    expect(parseSkillEffort("high")).toBe("high");
+    expect(parseSkillEffort("max")).toBeUndefined();
+    expect(parseSkillEffort(3)).toBeUndefined();
+    expect(parseSkillEffort(undefined)).toBeUndefined();
   });
 });

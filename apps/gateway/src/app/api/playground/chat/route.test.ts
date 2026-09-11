@@ -106,6 +106,7 @@ import { CHAT_MAX_STEPS, SKILL_RUN_MAX_STEPS } from "@/mastra/run-steps";
 import { THREAD_ID_HEADER } from "@/gateway/playground/quota-headers";
 import { resetRunRegistry, runStatus } from "@/gateway/playground/run-registry";
 import { KEEPALIVE_INTERVAL_MS } from "./keepalive";
+import { SKILL_RUN_EFFORT } from "@/gateway/billing/plans";
 import { POST } from "./route";
 
 const USER = "user-1";
@@ -1070,5 +1071,31 @@ describe("keepalive and the run after the viewer left (SCRUM-254)", () => {
     const res = await POST(post({ messages: USER_TURN }));
     await drain(res);
     expect(runStatus(res.headers.get(THREAD_ID_HEADER)!)).toMatchObject({ state: "failed", steps: 1 });
+  });
+});
+
+/* SCRUM-248: a skill-seeded turn bounds its thinking per step; ordinary chat
+ * keeps today's shape. */
+describe("the thinking effort on a skill run (SCRUM-248)", () => {
+  function skillTurn() {
+    const skill = readSkillFiles().find((s) => s.slug === "morning-brief")!;
+    return [{ id: "u1", role: "user", parts: [{ type: "text", text: skillRunMessage(skill) }] }];
+  }
+
+  it("a skill run's generation options carry adaptive thinking at the skill run effort", async () => {
+    await drain(await POST(post({ messages: skillTurn(), skill: "morning-brief", skillTrigger: "manual" })));
+    expect(lastParams().providerOptions).toEqual({
+      anthropic: { thinking: { type: "adaptive" }, effort: SKILL_RUN_EFFORT },
+    });
+  });
+
+  it("a chat turn's generation options carry no thinking setting at all", async () => {
+    await drain(await POST(post({ messages: USER_TURN })));
+    expect(lastParams().providerOptions).toBeUndefined();
+  });
+
+  it("a valid slug beside arbitrary text is a chat turn here too: no effort", async () => {
+    await drain(await POST(post({ messages: USER_TURN, skill: "morning-brief" })));
+    expect(lastParams().providerOptions).toBeUndefined();
   });
 });

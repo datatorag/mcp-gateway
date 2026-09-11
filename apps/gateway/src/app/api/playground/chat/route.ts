@@ -7,7 +7,8 @@ import { getEnv } from "@datatorag-mcp/config";
 import { getMastra, DATATORAG_AGENT_ID } from "@/mastra";
 import { RUN_ID_CONTEXT_KEY } from "@/mastra/llm-usage";
 import { buildPluginRequestContext, SKILL_RUN_CONTEXT_KEY } from "@/mastra/mcp/client";
-import { getSkillBySlug, runAccountsFrom, runClockLine, skillContinueMessage, skillRunMessage, type RunClock } from "@/lib/skills";
+import { getSkillBySlug, runAccountsFrom, runClockLine, skillContinueMessage, skillRunMessage, type RunClock, type Skill } from "@/lib/skills";
+import { skillRunProviderOptions } from "@/mastra/run-effort";
 import { isValidTimezone } from "@/gateway/skills/schedule-time";
 import { listConnectedAccounts } from "@/gateway/connected-accounts";
 import { CHAT_MAX_STEPS, SKILL_RUN_MAX_STEPS } from "@/mastra/run-steps";
@@ -348,16 +349,16 @@ function firstUserMessageText(messages: unknown[]): string | null {
  * background run. Attribution follows the same rule, so a skill event can
  * only ever describe a real skill run.
  */
-async function isSkillRunTurn(messages: unknown[], slug: unknown, viewer: string): Promise<boolean> {
-  if (typeof slug !== "string") return false;
+async function skillRunTurn(messages: unknown[], slug: unknown, viewer: string): Promise<Skill | null> {
+  if (typeof slug !== "string") return null;
   // The viewer's own version wins the slug (SCRUM-226), so a user who forked
   // a skill runs their fork, and the exact-message check is against it.
   const skill = await getSkillBySlug(slug, viewer);
-  if (!skill) return false;
+  if (!skill) return null;
   const last = messages[messages.length - 1] as
     | { role?: unknown; parts?: unknown }
     | undefined;
-  if (!last || last.role !== "user" || !Array.isArray(last.parts)) return false;
+  if (!last || last.role !== "user" || !Array.isArray(last.parts)) return null;
   // Byte for byte means the WHOLE turn: every part is a text part with a
   // string body. A file part or a typeless part beside the exact text is
   // not the catalogue's message and gets the ordinary gated turn.
@@ -369,7 +370,7 @@ async function isSkillRunTurn(messages: unknown[], slug: unknown, viewer: string
       (p as { type?: unknown }).type === "text" &&
       typeof (p as { text?: unknown }).text === "string"
   );
-  if (!allText || parts.length === 0) return false;
+  if (!allText || parts.length === 0) return null;
   const text = (parts as Array<{ text: string }>).map((p) => p.text).join("");
   // The message carries the user's accounts (SCRUM-240), recomputed here
   // from the same rows the seed read. An account connected between the page
@@ -378,7 +379,8 @@ async function isSkillRunTurn(messages: unknown[], slug: unknown, viewer: string
   // after a stop (SCRUM-234) is a skill run too: same slug, a fixed text, so
   // the resumed run keeps the no-gates policy under a fresh run id.
   const accounts = runAccountsFrom(await listConnectedAccounts(db, viewer));
-  return text === skillRunMessage(skill, accounts) || text === skillContinueMessage(skill.slug);
+  const isRun = text === skillRunMessage(skill, accounts) || text === skillContinueMessage(skill.slug);
+  return isRun ? skill : null;
 }
 
 /** The messages with the clock line appended to the last user text part
@@ -418,7 +420,8 @@ export const POST = withRoute(async (userId, request) => {
    * sees is in `messages` like any other turn. The client sends the trigger
    * under `skillTrigger` because `trigger` already means something else on
    * this body (the AI SDK's submit/regenerate). */
-  const skillSlug = (await isSkillRunTurn(messages, body?.skill, userId)) ? (body!.skill as string) : null;
+  const skillRun = await skillRunTurn(messages, body?.skill, userId);
+  const skillSlug = skillRun ? (body!.skill as string) : null;
   const skillTrigger =
     skillSlug && (body?.skillTrigger === "manual" || body?.skillTrigger === "scheduled")
       ? body.skillTrigger
@@ -663,6 +666,9 @@ export const POST = withRoute(async (userId, request) => {
         // The step budget is ours (SCRUM-234): the runtime's default of five
         // ended a real skill run silently after its fifth model call.
         maxSteps: skillSlug ? SKILL_RUN_MAX_STEPS : CHAT_MAX_STEPS,
+        // A skill run thinks at a bounded effort per step (SCRUM-248); an
+        // ordinary turn carries no thinking setting and keeps the default.
+        ...(skillRun ? { providerOptions: skillRunProviderOptions(skillRun) } : {}),
       },
       onError: (err) => {
         // The token ceiling is a PRODUCT STATE, not a failure: say what

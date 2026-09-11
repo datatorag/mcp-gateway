@@ -4,6 +4,7 @@ import {
   isRunTokenCeilingError,
   resetRunTokenBudgets,
   RunTokenCeilingError,
+  runReasoningTokensUsed,
   runTokensUsed,
   usageTokens,
   usageTotal,
@@ -24,7 +25,7 @@ afterEach(() => resetRunTokenBudgets());
  * middleware reads, which was verified by probe, not assumed: feeding nested
  * usage into the raw slot double-wraps it into `{total: {total: …}}` and the
  * sum silently becomes string concatenation. */
-function fakeModel(perCall: { input?: number; cachedInput?: number; output?: number }) {
+function fakeModel(perCall: { input?: number; cachedInput?: number; output?: number; reasoning?: number }) {
   let calls = 0;
   const model = {
     specificationVersion: "v2",
@@ -40,6 +41,7 @@ function fakeModel(perCall: { input?: number; cachedInput?: number; output?: num
           inputTokens: perCall.input ?? 0,
           cachedInputTokens: perCall.cachedInput ?? 0,
           outputTokens: perCall.output ?? 0,
+          reasoningTokens: perCall.reasoning ?? 0,
           totalTokens: (perCall.input ?? 0) + (perCall.output ?? 0),
         },
         warnings: [],
@@ -152,5 +154,27 @@ describe("withRunTokenCeiling", () => {
     foreign.name = "RunTokenCeilingError";
     expect(isRunTokenCeilingError(foreign)).toBe(true);
     expect(isRunTokenCeilingError(new Error("provider exploded"))).toBe(false);
+  });
+});
+
+/* SCRUM-248: the ceiling's own usage object records the thinking part of
+ * each step, so the weighted sum can be split into thinking and visible
+ * output without a second source. */
+describe("thinking tokens per run (SCRUM-248)", () => {
+  it("accumulates the reasoning part of each call's output against the run, beside the total", async () => {
+    const { model } = fakeModel({ input: 1_000, output: 700, reasoning: 500 });
+    const wrapped = withRunTokenCeiling(model, "run-r") as typeof model;
+    await wrapped.doGenerate();
+    await wrapped.doGenerate();
+    expect(runReasoningTokensUsed("run-r")).toBe(1_000);
+    expect(runTokensUsed("run-r")).toBe(3_400);
+  });
+
+  it("reads zero for a run with no reasoning reported, and for an unknown run", async () => {
+    const { model } = fakeModel({ input: 10, output: 5 });
+    const wrapped = withRunTokenCeiling(model, "run-s") as typeof model;
+    await wrapped.doGenerate();
+    expect(runReasoningTokensUsed("run-s")).toBe(0);
+    expect(runReasoningTokensUsed("run-none")).toBe(0);
   });
 });
