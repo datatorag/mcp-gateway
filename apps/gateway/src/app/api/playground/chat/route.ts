@@ -35,6 +35,8 @@ import { capExempt, claimAgentRun, refundAgentRun } from "@/gateway/usage/period
 import { eq } from "drizzle-orm";
 import { users } from "@datatorag-mcp/db";
 import { logAndGenericError } from "@/lib/errors";
+import { withKeepalive } from "./keepalive";
+import { runEnded, runStarted, runStep, type RunLimit } from "@/gateway/playground/run-registry";
 
 /**
  * The playground chat turn.
@@ -140,7 +142,13 @@ type StreamTaps = {
   ceilingStopped: () => boolean;
   /** The stream ended, cleanly or not. Fires once. */
   onClosed?: () => void;
+  /** One model call started (SCRUM-254): the run's record counts it. */
+  onStep: () => void;
+  /** How the run ended, for the record. Fires once, viewer or no viewer. */
+  onEnd: (end: RunEnd) => void;
 };
+
+type RunEnd = { state: "completed" | "failed" } | { state: "stopped"; limit: RunLimit };
 
 /** Wraps the runtime's stream so the route can count what went past and notice
  * a failure, without owning the loop that produced it.
@@ -169,15 +177,102 @@ function instrumentStream(
   let approvalRequested = false;
   // One notice per run, whichever path carried the ceiling.
   let sizeNoticed = false;
+  // One end per run, whichever path carried it (SCRUM-254).
+  let ended = false;
+  const end = (how: RunEnd) => {
+    if (ended) return;
+    ended = true;
+    taps.onEnd(how);
+  };
   const stoppedPart = (limit: "steps" | "size"): UIMessageChunk =>
     ({
       type: "data-run-stopped",
       data: { limit, steps, cap: limit === "steps" ? run.stepCap : null, skill: run.skill },
     }) as UIMessageChunk;
-  const noticeSizeStop = (controller: ReadableStreamDefaultController<UIMessageChunk>) => {
-    if (sizeNoticed) return;
-    sizeNoticed = true;
-    controller.enqueue(stoppedPart("size"));
+
+  /** Everything the route learns from one chunk, and what goes on to the
+   * client because of it: the chunk itself, preceded by a stop notice when
+   * the chunk is the shape a cap leaves. Shared by the live path and the
+   * drain after a disconnect, so the record is the same either way. */
+  const observe = (chunk: UIMessageChunk): UIMessageChunk[] => {
+    const out: UIMessageChunk[] = [];
+    if (!delivered && NON_CONTENT_CHUNK_TYPES[chunk.type] !== true) {
+      delivered = true;
+      taps.onDelivered();
+    }
+    if (chunk.type === "tool-approval-request") {
+      taps.onApprovalShown();
+      approvalRequested = true;
+    }
+    if (chunk.type === "start-step") {
+      steps += 1;
+      taps.onStep();
+    }
+    if (chunk.type === "tool-output-available" || chunk.type === "tool-output-error") {
+      lastContent = "tool";
+    } else if (chunk.type === "text-start" || chunk.type === "text-delta") {
+      lastContent = "text";
+    }
+    if (chunk.type === "finish") {
+      // A turn that ends right after a tool result, with no assistant text
+      // after it, is the shape a step cap leaves (the runtime reports the
+      // finish as tool calls). A finished turn ends in prose.
+      const reason = (chunk as { finishReason?: string }).finishReason;
+      if (
+        !approvalRequested &&
+        (reason === "tool-calls" || (lastContent === "tool" && reason !== "error"))
+      ) {
+        out.push(stoppedPart("steps"));
+        end({ state: "stopped", limit: "steps" });
+      } else {
+        end({ state: "completed" });
+      }
+    }
+    // SCRUM-243: this is the path the ceiling really takes. The runtime
+    // catches the refusal inside its own stream, asks `onError` for the
+    // text, and hands it on as an ordinary error chunk; the read never
+    // throws. The route learns it was the ceiling from the hook that named
+    // it, not from the chunk, and puts the notice in front of the text.
+    if (chunk.type === "error") {
+      if (taps.ceilingStopped()) {
+        if (!sizeNoticed) {
+          sizeNoticed = true;
+          out.push(stoppedPart("size"));
+        }
+        end({ state: "stopped", limit: "size" });
+      } else {
+        end({ state: "failed" });
+      }
+    }
+    out.push(chunk);
+    return out;
+  };
+
+  const endOnReadFailure = (err: unknown) => {
+    // The size ceiling refuses the NEXT model call, so the run really did
+    // stop at a step boundary with everything before it delivered.
+    if (isRunTokenCeilingError(err)) end({ state: "stopped", limit: "size" });
+    else end({ state: "failed" });
+  };
+
+  /** SCRUM-254: the viewer left. The run does not stop for that, and the
+   * runtime persists what it produces only if someone keeps reading, so the
+   * rest of the stream is read here to the end, observed for the record and
+   * sent nowhere. Cancelling the runtime's reader instead would make the
+   * answer to "did the run finish" depend on a browser tab. */
+  const drain = async () => {
+    try {
+      for (;;) {
+        const result = await reader.read();
+        if (result.done) break;
+        observe(result.value);
+      }
+      end({ state: "completed" });
+    } catch (err) {
+      endOnReadFailure(err);
+    } finally {
+      taps.onClosed?.();
+    }
   };
 
   return new ReadableStream<UIMessageChunk>({
@@ -186,57 +281,27 @@ function instrumentStream(
       try {
         result = await reader.read();
       } catch (err) {
-        // The size ceiling refuses the NEXT model call, so the run really did
-        // stop at a step boundary with everything before it delivered: the
-        // notice belongs in the thread beside the error text.
-        if (isRunTokenCeilingError(err)) noticeSizeStop(controller);
+        // The notice belongs in the thread beside the error text.
+        if (isRunTokenCeilingError(err) && !sizeNoticed) {
+          sizeNoticed = true;
+          controller.enqueue(stoppedPart("size"));
+        }
+        endOnReadFailure(err);
         controller.enqueue({ type: "error", errorText: taps.onFailure(err) });
         controller.close();
         taps.onClosed?.();
         return;
       }
       if (result.done) {
+        end({ state: "completed" });
         controller.close();
         taps.onClosed?.();
         return;
       }
-      const chunk = result.value;
-      if (!delivered && NON_CONTENT_CHUNK_TYPES[chunk.type] !== true) {
-        delivered = true;
-        taps.onDelivered();
-      }
-      if (chunk.type === "tool-approval-request") {
-        taps.onApprovalShown();
-        approvalRequested = true;
-      }
-      if (chunk.type === "start-step") steps += 1;
-      if (chunk.type === "tool-output-available" || chunk.type === "tool-output-error") {
-        lastContent = "tool";
-      } else if (chunk.type === "text-start" || chunk.type === "text-delta") {
-        lastContent = "text";
-      }
-      if (chunk.type === "finish") {
-        // A turn that ends right after a tool result, with no assistant text
-        // after it, is the shape a step cap leaves (the runtime reports the
-        // finish as tool calls). A finished turn ends in prose.
-        const reason = (chunk as { finishReason?: string }).finishReason;
-        if (
-          !approvalRequested &&
-          (reason === "tool-calls" || (lastContent === "tool" && reason !== "error"))
-        ) {
-          controller.enqueue(stoppedPart("steps"));
-        }
-      }
-      // SCRUM-243: this is the path the ceiling really takes. The runtime
-      // catches the refusal inside its own stream, asks `onError` for the
-      // text, and hands it on as an ordinary error chunk; the read above never
-      // throws. The route learns it was the ceiling from the hook that named
-      // it, not from the chunk, and puts the notice in front of the text.
-      if (chunk.type === "error" && taps.ceilingStopped()) noticeSizeStop(controller);
-      controller.enqueue(chunk);
+      for (const chunk of observe(result.value)) controller.enqueue(chunk);
     },
-    cancel(reason) {
-      return reader.cancel(reason);
+    cancel() {
+      void drain();
     },
   });
 }
@@ -620,9 +685,19 @@ export const POST = withRoute(async (userId, request) => {
     );
   }
 
+  // SCRUM-254: the run's record for this thread, written from the stream
+  // events below and read by the thread route when a viewer comes back. An
+  // approval leg resumes the run already on record.
+  const stepCap = skillSlug ? SKILL_RUN_MAX_STEPS : CHAT_MAX_STEPS;
+  if (!isApprovalLeg && usageRunId) {
+    runStarted(threadForTurn, { runId: usageRunId, skill: skillSlug, cap: stepCap });
+  }
+
+  // The keepalive wraps OUTSIDE the instrumented stream, so a keepalive never
+  // reaches the refund gate as delivered content (SCRUM-254).
   return createUIMessageStreamResponse({
     headers: quotaHeaders,
-    stream: instrumentStream(
+    stream: withKeepalive(instrumentStream(
       stream,
       {
       onDelivered: () => { delivered = true; },
@@ -646,6 +721,8 @@ export const POST = withRoute(async (userId, request) => {
         refundIfWasted();
         return logAndGenericError("[playground] turn failed", err);
       },
+      onStep: () => runStep(threadForTurn),
+      onEnd: (how) => runEnded(threadForTurn, how),
       // The thread row exists by now, which is the whole reason this waits.
       onClosed: () => {
         if (!pendingTitle) return;
@@ -657,7 +734,7 @@ export const POST = withRoute(async (userId, request) => {
         );
       },
       },
-      { skill: skillSlug, stepCap: skillSlug ? SKILL_RUN_MAX_STEPS : CHAT_MAX_STEPS }
-    ),
+      { skill: skillSlug, stepCap }
+    )),
   });
 });

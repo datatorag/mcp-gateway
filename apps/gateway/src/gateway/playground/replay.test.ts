@@ -16,7 +16,7 @@
  */
 
 import { describe, expect, it } from "vitest";
-import { replayMessage, replayPart, replayThread } from "./replay";
+import { replayMessage, replayPart, replayThread, withRunStatus } from "./replay";
 
 const toolPart = (over: Record<string, unknown> = {}) => ({
   type: "tool-invocation",
@@ -163,5 +163,67 @@ describe("whole messages", () => {
     ]);
     expect(out.map((m) => m.id)).toEqual(["1", "3"]);
     expect((out[1].parts[0] as { type: string }).type).toBe("tool-gws-mcp__drive_search");
+  });
+});
+
+/* SCRUM-254: a thread whose run outlived its viewer says so on reload. The
+ * registry is the route's record; this is the pure step that turns it into
+ * the card the user sees, reusing the SCRUM-234 stop card. */
+describe("the run's state after the viewer left (SCRUM-254)", () => {
+  const stored = [
+    { id: "u1", role: "user", content: { parts: [{ type: "text", text: "run it" }] } },
+    { id: "a1", role: "assistant", content: { parts: [{ type: "text", text: "Reading mail." }] } },
+  ];
+  const base = { runId: "r1", skill: "morning-brief", cap: 60, startedAt: 0, updatedAt: 0 };
+
+  it("says nothing when nothing is known, and nothing for a completed run", () => {
+    expect(withRunStatus(replayThread(stored), undefined)).toHaveLength(2);
+    expect(withRunStatus(replayThread(stored), { ...base, steps: 7, state: "completed" })).toHaveLength(2);
+  });
+
+  it("appends the running card, with no limit and the steps so far, for a run in flight", () => {
+    const out = withRunStatus(replayThread(stored), { ...base, steps: 4, state: "running" });
+    expect(out).toHaveLength(3);
+    expect(out[2]).toMatchObject({
+      role: "assistant",
+      parts: [{ type: "data-run-stopped", data: { limit: "running", steps: 4, cap: 60, skill: "morning-brief" } }],
+    });
+  });
+
+  it("appends the limit card for a run that stopped after the viewer left", () => {
+    const out = withRunStatus(replayThread(stored), { ...base, steps: 6, state: "stopped", limit: "size" });
+    expect(out[2]).toMatchObject({
+      parts: [{ type: "data-run-stopped", data: { limit: "size", steps: 6, cap: null, skill: "morning-brief" } }],
+    });
+    const steps = withRunStatus(replayThread(stored), { ...base, steps: 60, state: "stopped", limit: "steps" });
+    expect(steps[2]).toMatchObject({
+      parts: [{ type: "data-run-stopped", data: { limit: "steps", steps: 60, cap: 60 } }],
+    });
+  });
+
+  it("appends the error card for a run that failed after the viewer left", () => {
+    const out = withRunStatus(replayThread(stored), { ...base, steps: 2, state: "failed" });
+    expect(out[2]).toMatchObject({
+      parts: [{ type: "data-run-stopped", data: { limit: "error", steps: 2, cap: null, skill: "morning-brief" } }],
+    });
+  });
+
+  it("does not double a card the stored thread already carries", () => {
+    const withCard = [
+      ...stored,
+      {
+        id: "a2",
+        role: "assistant",
+        content: { parts: [{ type: "data-run-stopped", data: { limit: "size", steps: 6, cap: null, skill: null } }] },
+      },
+    ];
+    const out = withRunStatus(replayThread(withCard), { ...base, steps: 6, state: "stopped", limit: "size" });
+    const cards = out.flatMap((m) => m.parts).filter((p) => (p as { type?: string }).type === "data-run-stopped");
+    expect(cards).toHaveLength(1);
+  });
+
+  it("the stored stop card replays, so a card the runtime kept survives a reload", () => {
+    const part = { type: "data-run-stopped", data: { limit: "steps", steps: 60, cap: 60, skill: "morning-brief" } };
+    expect(replayPart(part)).toEqual(part);
   });
 });

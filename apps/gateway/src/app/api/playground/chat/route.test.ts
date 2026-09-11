@@ -103,6 +103,9 @@ import { mintRunId } from "@/gateway/playground/run-ownership";
 import { USER_ID_CONTEXT_KEY } from "@/mastra/mcp/client";
 import { readSkillFiles, runAccountsFrom, skillContinueMessage, skillRunMessage } from "@/lib/skills";
 import { CHAT_MAX_STEPS, SKILL_RUN_MAX_STEPS } from "@/mastra/run-steps";
+import { THREAD_ID_HEADER } from "@/gateway/playground/quota-headers";
+import { resetRunRegistry, runStatus } from "@/gateway/playground/run-registry";
+import { KEEPALIVE_INTERVAL_MS } from "./keepalive";
 import { POST } from "./route";
 
 const USER = "user-1";
@@ -923,5 +926,149 @@ describe("the run clock (SCRUM-242)", () => {
   it("leaves an ordinary turn untouched even when a zone is sent", async () => {
     await drain(await POST(post({ messages: USER_TURN, zone: "America/Los_Angeles" })));
     expect(lastText()).toBe("hi");
+  });
+});
+
+/* SCRUM-254: bytes keep flowing while a step thinks, and a viewer who leaves
+ * does not end the run or lose the record of how it ended. */
+describe("keepalive and the run after the viewer left (SCRUM-254)", () => {
+  const TOOL_STEP = (id: string): UIMessageChunk[] => [
+    { type: "start-step" },
+    { type: "tool-input-start", toolCallId: id, toolName: "gws-mcp__gmail_search" },
+    { type: "tool-input-available", toolCallId: id, toolName: "gws-mcp__gmail_search", input: {} },
+    { type: "tool-output-available", toolCallId: id, output: { messages: [] } },
+    { type: "finish-step" },
+  ];
+
+  function skillTurn() {
+    const skill = readSkillFiles().find((s) => s.slug === "morning-brief")!;
+    return [{ id: "u1", role: "user", parts: [{ type: "text", text: skillRunMessage(skill) }] }];
+  }
+
+  /** A runtime whose second half waits on the test, and which counts how far
+   * it was read: the drain after a disconnect is asserted on that count. */
+  function gatedSource(first: UIMessageChunk[], rest: UIMessageChunk[]) {
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => { release = resolve; });
+    const all = [...first, ...rest];
+    let index = 0;
+    const source = new ReadableStream<UIMessageChunk>({
+      async pull(controller) {
+        if (index === first.length) await gate;
+        if (index < all.length) {
+          controller.enqueue(all[index++]!);
+          return;
+        }
+        controller.close();
+      },
+    });
+    return { source, release, read: () => index, total: all.length };
+  }
+
+  const PROSE_END: UIMessageChunk[] = [
+    { type: "start-step" },
+    { type: "text-start", id: "t1" },
+    { type: "text-delta", id: "t1", delta: "Here is the brief." },
+    { type: "text-end", id: "t1" },
+    { type: "finish-step" },
+    { type: "finish", finishReason: "stop" } as UIMessageChunk,
+  ];
+
+  beforeEach(() => {
+    resetRunRegistry();
+  });
+
+  it("emits a transient keepalive while the runtime is silent, and none once it has spoken again", async () => {
+    vi.useFakeTimers();
+    try {
+      const { source, release } = gatedSource([{ type: "start" }, { type: "start-step" }], PROSE_END.slice(1));
+      handleChatStream.mockResolvedValue(source);
+      const res = await POST(post({ messages: USER_TURN }));
+      const reader = res.body!.getReader();
+      const decoder = new TextDecoder();
+      let text = "";
+      const pump = (async () => {
+        for (;;) {
+          const r = await reader.read();
+          if (r.done) return;
+          text += decoder.decode(r.value, { stream: true });
+        }
+      })();
+      await vi.advanceTimersByTimeAsync(KEEPALIVE_INTERVAL_MS * 2 + 10);
+      expect(text).toContain('"type":"data-keepalive"');
+      expect(text).toContain('"transient":true');
+      const before = (text.match(/data-keepalive/g) ?? []).length;
+      expect(before).toBeGreaterThanOrEqual(2);
+      release();
+      await vi.advanceTimersByTimeAsync(10);
+      await pump;
+      expect((text.match(/data-keepalive/g) ?? []).length).toBe(before);
+      expect(vi.getTimerCount()).toBe(0);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("a viewer who leaves mid-step does not stop the run: the runtime is read to the end and the record says completed", async () => {
+    const { source, release, read, total } = gatedSource(
+      [{ type: "start" }, ...TOOL_STEP("call-1")],
+      [...TOOL_STEP("call-2"), ...PROSE_END]
+    );
+    handleChatStream.mockResolvedValue(source);
+    const res = await POST(post({ messages: skillTurn(), skill: "morning-brief", skillTrigger: "manual" }));
+    const threadId = res.headers.get(THREAD_ID_HEADER)!;
+    expect(runStatus(threadId)).toMatchObject({ skill: "morning-brief", cap: SKILL_RUN_MAX_STEPS, state: "running" });
+
+    // Read one frame, then leave, the way a dropped connection cancels the body.
+    const reader = res.body!.getReader();
+    await reader.read();
+    await reader.cancel("connection dropped");
+    expect(runStatus(threadId)).toMatchObject({ state: "running" });
+
+    release();
+    await vi.waitFor(() => expect(read()).toBe(total));
+    await vi.waitFor(() => expect(runStatus(threadId)).toMatchObject({ state: "completed", steps: 3 }));
+  });
+
+  it("a run that stops at its size limit after the viewer left records the limit", async () => {
+    const { source, release, read, total } = gatedSource(
+      [{ type: "start" }, ...TOOL_STEP("call-1")],
+      [...TOOL_STEP("call-2"), { type: "error", errorText: RUN_CEILING_MESSAGE } as UIMessageChunk]
+    );
+    handleChatStream.mockImplementation(async (opts: { onError: (e: unknown) => string }) => {
+      // The runtime asks the route's hook for the text and hands on an error chunk.
+      opts.onError(new RunTokenCeilingError(150_000));
+      return source;
+    });
+    const res = await POST(post({ messages: skillTurn(), skill: "morning-brief", skillTrigger: "manual" }));
+    const threadId = res.headers.get(THREAD_ID_HEADER)!;
+    const reader = res.body!.getReader();
+    await reader.read();
+    await reader.cancel("connection dropped");
+    release();
+    await vi.waitFor(() => expect(read()).toBe(total));
+    await vi.waitFor(() => expect(runStatus(threadId)).toMatchObject({ state: "stopped", limit: "size", steps: 2 }));
+  });
+
+  it("with the viewer attached, the record follows the stream: stopped at the step cap, or completed", async () => {
+    handleChatStream.mockResolvedValue(
+      chunkStream([{ type: "start" }, ...TOOL_STEP("call-1"), ...TOOL_STEP("call-2"), { type: "finish", finishReason: "tool-calls" } as UIMessageChunk])
+    );
+    const res = await POST(post({ messages: skillTurn(), skill: "morning-brief", skillTrigger: "manual" }));
+    const threadId = res.headers.get(THREAD_ID_HEADER)!;
+    await drain(res);
+    expect(runStatus(threadId)).toMatchObject({ state: "stopped", limit: "steps", steps: 2 });
+
+    handleChatStream.mockResolvedValue(chunkStream([{ type: "start" }, ...PROSE_END]));
+    const res2 = await POST(post({ messages: USER_TURN }));
+    await drain(res2);
+    expect(runStatus(res2.headers.get(THREAD_ID_HEADER)!)).toMatchObject({ state: "completed", steps: 1, skill: null, cap: CHAT_MAX_STEPS });
+  });
+
+  it("a runtime that dies mid-run records failed", async () => {
+    handleChatStream.mockResolvedValue(failingStream([{ type: "start" }, ...TOOL_STEP("call-1")]));
+    const res = await POST(post({ messages: USER_TURN }));
+    await drain(res);
+    expect(runStatus(res.headers.get(THREAD_ID_HEADER)!)).toMatchObject({ state: "failed", steps: 1 });
   });
 });

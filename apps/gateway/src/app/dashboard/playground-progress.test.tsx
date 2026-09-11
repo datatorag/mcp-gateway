@@ -243,6 +243,49 @@ describe("the stop notice and the interrupted card (SCRUM-234)", () => {
     expect(Array.from(container.querySelectorAll("button")).some((b) => (b.textContent ?? "").includes("Continue"))).toBe(false);
   });
 
+  it("says the run is still going, with no Continue, when the viewer came back mid-run (SCRUM-254)", () => {
+    const running: PlaygroundMessage = {
+      id: "run-status-r1",
+      role: "assistant",
+      parts: [
+        { type: "data-run-stopped", data: { limit: "running", steps: 4, cap: 60, skill: "morning-brief" } },
+      ] as PlaygroundMessage["parts"],
+    };
+    render([USER_TURN, STOPPED, running], vi.fn());
+    const text = (container.textContent ?? "").replace(/\s+/g, " ");
+    expect(text).toMatch(/still (going|running)/i);
+    expect(text).toContain("4 steps");
+    expect(text).toMatch(/reload/i);
+    expect(text).not.toContain("\u2014");
+    // Two cards on the page; only the stopped one offers Continue.
+    const buttons = Array.from(container.querySelectorAll("button")).filter((b) =>
+      (b.textContent ?? "").includes("Continue")
+    );
+    expect(buttons).toHaveLength(1);
+  });
+
+  it("says the run stopped with an error, and offers Continue for a skill run (SCRUM-254)", () => {
+    const continueRun = vi.fn();
+    const failed: PlaygroundMessage = {
+      id: "run-status-r2",
+      role: "assistant",
+      parts: [
+        { type: "data-run-stopped", data: { limit: "error", steps: 2, cap: null, skill: "morning-brief" } },
+      ] as PlaygroundMessage["parts"],
+    };
+    render([USER_TURN, failed], continueRun);
+    const text = (container.textContent ?? "").replace(/\s+/g, " ");
+    expect(text).toMatch(/error/i);
+    expect(text).toContain("2 steps");
+    expect(text).toContain("saved");
+    const button = Array.from(container.querySelectorAll("button")).find((b) =>
+      (b.textContent ?? "").includes("Continue")
+    );
+    expect(button).toBeTruthy();
+    act(() => button!.click());
+    expect(continueRun).toHaveBeenCalledWith("morning-brief");
+  });
+
   it("a settled message shows Interrupted, not Running, for a tool call whose result never came", async () => {
     const message = await assemble(TOOL_RUNNING);
     render([USER_TURN, message]);

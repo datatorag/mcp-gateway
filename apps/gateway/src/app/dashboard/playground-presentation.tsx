@@ -114,11 +114,27 @@ export const GENERIC_ERROR = "Something went wrong. Please try again.";
  * this product's user-facing copy — it exists because this exact defect
  * (two "generic" strings silently diverging) shipped twice, invisible to
  * tsc/build/tests both times. */
+/** What the bubble says when the connection itself dropped (SCRUM-254).
+ *
+ * A run does not stop because the browser lost its stream: the server reads
+ * the runtime to the end and records how it went, and a reload shows that
+ * through the thread reader. The browser's own transport strings ("network
+ * error", "Failed to fetch") say none of this, and one of them was the whole
+ * of what a user saw after a long step. */
+export const CONNECTION_DROPPED =
+  "The connection dropped while the run was going. The run carries on server-side. " +
+  "Reload this conversation to see where it got to.";
+
+/** The strings the engines use for a failed or interrupted fetch. Matched on
+ * the message alone because the stream reader hands them on as a plain
+ * Error, with the TypeError already lost. */
+const TRANSPORT_FAILURE = /^(network ?error|failed to fetch|load failed)\b/i;
+
 export function errorBubbleText(error: Error | undefined): string {
   const serverMessage = error?.message?.trim();
-  return !serverMessage || serverMessage === SERVER_GENERIC_ERROR
-    ? GENERIC_ERROR
-    : serverMessage;
+  if (!serverMessage || serverMessage === SERVER_GENERIC_ERROR) return GENERIC_ERROR;
+  if (TRANSPORT_FAILURE.test(serverMessage)) return CONNECTION_DROPPED;
+  return serverMessage;
 }
 
 /* -------------------------------------------------------------------------- */

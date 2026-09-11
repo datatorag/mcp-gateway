@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { GENERIC_ERROR_MESSAGE } from "@/lib/errors";
-import { GENERIC_ERROR, errorBubbleText } from "./playground-presentation";
+import { CONNECTION_DROPPED, GENERIC_ERROR, errorBubbleText } from "./playground-presentation";
 
 /**
  * The playground error bubble has to do one subtle thing: pass a genuinely
@@ -49,6 +49,24 @@ describe("errorBubbleText", () => {
         expect(errorBubbleText(input)).toBe(GENERIC_ERROR);
       });
     }
+  });
+
+  describe("names a dropped connection (SCRUM-254)", () => {
+    // The browser's own transport failures, in the strings the engines use.
+    // A run carries on server-side after any of these, so the copy says so
+    // and points at the reload that shows where it got to.
+    const cases = ["network error", "Failed to fetch", "Load failed", "NetworkError when attempting to fetch resource."];
+    for (const message of cases) {
+      it(`"${message}" reads as a dropped connection, not a generic failure`, () => {
+        expect(errorBubbleText(new Error(message))).toBe(CONNECTION_DROPPED);
+      });
+    }
+    it("the copy says the run carries on and to reload, with no em-dash", () => {
+      expect(CONNECTION_DROPPED).toMatch(/reload/i);
+      expect(CONNECTION_DROPPED).toMatch(/carries on|keeps going|continues/i);
+      expect(CONNECTION_DROPPED).not.toContain("\u2014");
+      expect(CONNECTION_DROPPED).not.toContain("\u2013");
+    });
   });
 
   describe("passes actionable server copy through verbatim", () => {

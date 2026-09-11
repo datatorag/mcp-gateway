@@ -84,9 +84,11 @@ export type AgentDataParts = {
   };
   /** A cap stopped the run (SCRUM-234): which one, how far it got, and the
    * skill to continue, if it was a skill run. Put in the thread by the chat
-   * route before the stream closes, so it survives a reload. */
+   * route before the stream closes. The same card carries what the thread
+   * reader knows about a run whose viewer left (SCRUM-254): `running` while
+   * it is still going, `error` when it failed after the viewer left. */
   "run-stopped": {
-    limit: "steps" | "size";
+    limit: "steps" | "size" | "running" | "error";
     steps: number;
     cap: number | null;
     skill: string | null;
@@ -313,13 +315,32 @@ function ApprovalExpiredPart({ toolName }: AgentDataParts["approval-expired"]) {
 
 function RunStoppedPart({ limit, steps, cap, skill }: AgentDataParts["run-stopped"]) {
   const { continueRun, busy } = useContext(RunControlContext);
+  const stepsText = `${steps} ${steps === 1 ? "step" : "steps"}`;
+  // A run still going has nothing to continue from and nothing saved yet to
+  // point at: it says so and asks for a reload, which is when the thread
+  // reader can say more (SCRUM-254).
+  if (limit === "running") {
+    return (
+      <div
+        className="rounded-xl border border-border bg-muted/40 p-3 text-xs text-foreground"
+        data-testid="run-stopped"
+      >
+        <p>
+          This run is still going after {stepsText}. Reload this conversation in a minute to see
+          where it got to.
+        </p>
+      </div>
+    );
+  }
   const reached = limit === "size" || (cap !== null && steps >= cap);
   const what =
     limit === "size"
-      ? `This run reached its size limit after ${steps} ${steps === 1 ? "step" : "steps"}.`
-      : reached
-        ? `This run reached its step limit (${cap} steps).`
-        : `This run stopped after ${steps} ${steps === 1 ? "step" : "steps"}, before it finished.`;
+      ? `This run reached its size limit after ${stepsText}.`
+      : limit === "error"
+        ? `This run stopped with an error after ${stepsText}.`
+        : reached
+          ? `This run reached its step limit (${cap} steps).`
+          : `This run stopped after ${stepsText}, before it finished.`;
   return (
     <div
       className="rounded-xl border border-border bg-muted/40 p-3 text-xs text-foreground"

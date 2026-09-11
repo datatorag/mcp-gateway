@@ -33,6 +33,9 @@ const REPLAYABLE_DATA_PARTS = new Set([
   // a full-page OAuth round trip, so the one moment this part matters most is
   // when the thread is being rehydrated after the user comes back.
   "data-connect",
+  // The stop card (SCRUM-234). The route puts it in the stream; when the
+  // runtime keeps it, a reload shows the same notice the user saw.
+  "data-run-stopped",
 ]);
 
 /** The subset of a stored part this module understands. */
@@ -208,4 +211,66 @@ export function replayThread(
   return stored
     .map((m) => replayMessage(m))
     .filter((m): m is ReplayMessage => m !== null);
+}
+
+/* -------------------------------------------------------------------------- */
+/* The run's state after the viewer left (SCRUM-254)                          */
+/* -------------------------------------------------------------------------- */
+
+/** What the chat route recorded about a thread's run; see `run-registry.ts`. */
+export interface ReplayRunStatus {
+  runId: string;
+  skill: string | null;
+  cap: number;
+  steps: number;
+  state: "running" | "completed" | "stopped" | "failed";
+  limit?: "steps" | "size";
+}
+
+const STOP_CARD = "data-run-stopped";
+
+function carriesStopCard(messages: ReplayMessage[]): boolean {
+  return messages.some((m) =>
+    m.parts.some((p) => (p as { type?: unknown }).type === STOP_CARD)
+  );
+}
+
+/**
+ * Append the SCRUM-234 stop card for a run that outlived its viewer.
+ *
+ * A run still in flight gets the `running` state: no limit, the steps so
+ * far, no Continue. A run that ended at a limit after the viewer left gets
+ * the limit card, and a failed one the `error` card, unless the stored
+ * thread already carries a card (the runtime kept the one the route
+ * streamed). A completed run needs nothing: the finished message is its
+ * own evidence, and a card beside it would read as a stop that never
+ * happened.
+ */
+export function withRunStatus(
+  messages: ReplayMessage[],
+  status: ReplayRunStatus | undefined
+): ReplayMessage[] {
+  if (!status || status.state === "completed") return messages;
+  if (status.state !== "running" && carriesStopCard(messages)) return messages;
+  const limit =
+    status.state === "running" ? "running" : status.state === "failed" ? "error" : status.limit;
+  if (!limit) return messages;
+  return [
+    ...messages,
+    {
+      id: `run-status-${status.runId}`,
+      role: "assistant",
+      parts: [
+        {
+          type: STOP_CARD,
+          data: {
+            limit,
+            steps: status.steps,
+            cap: limit === "steps" || limit === "running" ? status.cap : null,
+            skill: status.skill,
+          },
+        },
+      ],
+    },
+  ];
 }

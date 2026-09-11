@@ -4,7 +4,8 @@ import {
   deleteThreadForUser,
   readThreadForUser,
 } from "@/gateway/playground/threads";
-import { replayThread } from "@/gateway/playground/replay";
+import { replayThread, withRunStatus } from "@/gateway/playground/replay";
+import { runStatus } from "@/gateway/playground/run-registry";
 
 export const dynamic = "force-dynamic";
 
@@ -34,12 +35,18 @@ type Ctx = { params: Promise<{ id: string }> };
 const notFound = () =>
   NextResponse.json({ error: "Not found" }, { status: 404 });
 
-/** One conversation's messages, converted into what the UI can render. */
+/** One conversation's messages, converted into what the UI can render.
+ *
+ * Plus the state of a run the viewer walked away from (SCRUM-254): the
+ * chat route records it per thread, and the reader appends the stop card
+ * for a run still going or one that ended at a limit after the viewer
+ * left. The ownership gate runs first, so the registry is consulted only
+ * for a thread that is the caller's. */
 const readHandler = withRoute<Ctx>(async (userId, _req, ctx) => {
   const { id } = await ctx.params;
   const stored = await readThreadForUser(userId, id);
   if (stored === null) return notFound();
-  return NextResponse.json({ messages: replayThread(stored) });
+  return NextResponse.json({ messages: withRunStatus(replayThread(stored), runStatus(id)) });
 }, { logContext: "[playground] read thread" });
 
 export async function GET(req: NextRequest, ctx: Ctx) {
