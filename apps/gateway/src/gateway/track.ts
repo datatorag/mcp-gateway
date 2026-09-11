@@ -482,11 +482,25 @@ export async function trackConnectCardShown(
  * `playground_cap_hit`, which is the RUN allowance refusing a new run; this
  * is one run's SIZE bound stopping its next step. Summing them as one series
  * would blur two different product walls. */
+/** The run's ceiling, soft or hard (SCRUM-251). `soft` means the run crossed
+ * the closing line between two steps and its next step carries the closing
+ * instruction; `hard` means the ceiling refused the next call. Both carry the
+ * weighted total before and after the step that crossed, so the event says
+ * how far past the line one step went. */
+export interface RunCeilingHit {
+  reason: "soft" | "hard";
+  run_id: string;
+  skill: string | null;
+  pre_step_weighted: number;
+  post_step_weighted: number;
+}
+
 export async function trackPlaygroundRunCeilingHit(
   db: Database,
-  userId: string
+  userId: string,
+  hit: RunCeilingHit
 ): Promise<void> {
-  return capturePlaygroundEvent(db, userId, EVENTS.PLAYGROUND_RUN_CEILING_HIT);
+  return capturePlaygroundEvent(db, userId, EVENTS.PLAYGROUND_RUN_CEILING_HIT, { ...hit });
 }
 
 /** Write-confirmation gate: "shown" when a turn pauses for approval,

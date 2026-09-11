@@ -27,10 +27,11 @@ import {
   trackPlaygroundMessage, trackPlaygroundCapHit, trackPlaygroundConfirm,
   trackPlaygroundRunCeilingHit,
 } from "@/gateway/track";
-import { planLimits } from "@/gateway/billing/plans";
+import { planLimits, RUN_SOFT_CEILING } from "@/gateway/billing/plans";
 import {
   isRunTokenCeilingError,
   RUN_CEILING_MESSAGE,
+  runTokensUsed,
 } from "@/mastra/run-token-budget";
 import { capExempt, claimAgentRun, refundAgentRun } from "@/gateway/usage/period";
 import { eq } from "drizzle-orm";
@@ -590,6 +591,31 @@ export const POST = withRoute(async (userId, request) => {
    * tool-call events are emitted while the stream drains, long after this
    * block returns. */
   let usageRunId: string | undefined;
+  /* THE SOFT CEILING (SCRUM-251). The run's weighted total is read at each
+   * step start, which is the total after the previous step. A skill run that
+   * crosses RUN_SOFT_CEILING between two readings is reported once as a
+   * `soft` ceiling hit with both readings; its next step carries the closing
+   * instruction, appended by the agent's input processor off the same
+   * accumulator. The hard stop reports the same two numbers: the total at
+   * the last step start and the total the ceiling refused at. */
+  let lastStepTotal = 0;
+  let softNoticed = false;
+  const weightedNow = () => (usageRunId ? runTokensUsed(usageRunId) : 0);
+  const ceilingHitProps = (reason: "soft" | "hard", post: number) => ({
+    reason,
+    run_id: usageRunId ?? "",
+    skill: skillSlug,
+    pre_step_weighted: lastStepTotal,
+    post_step_weighted: post,
+  });
+  const onStepStart = () => {
+    const total = weightedNow();
+    if (skillSlug && !softNoticed && lastStepTotal < RUN_SOFT_CEILING && total >= RUN_SOFT_CEILING) {
+      softNoticed = true;
+      void trackPlaygroundRunCeilingHit(db, userId, ceilingHitProps("soft", total));
+    }
+    lastStepTotal = total;
+  };
   try {
     // Per-request identity, and identity only (SCRUM-188): the agent is an
     // in-process client of our own MCP, which resolves tokens, accounts and
@@ -675,7 +701,7 @@ export const POST = withRoute(async (userId, request) => {
         // happened in the user's terms instead of the generic error line.
         if (isRunTokenCeilingError(err)) {
           ceilingHit = true;
-          void trackPlaygroundRunCeilingHit(db, userId);
+          void trackPlaygroundRunCeilingHit(db, userId, ceilingHitProps("hard", weightedNow()));
           return RUN_CEILING_MESSAGE;
         }
         return logAndGenericError("[playground] stream error", err);
@@ -721,13 +747,16 @@ export const POST = withRoute(async (userId, request) => {
         // budget, so the claim stands and no refund applies. Everything the
         // run finished before the stop was already streamed.
         if (isRunTokenCeilingError(err)) {
-          void trackPlaygroundRunCeilingHit(db, userId);
+          void trackPlaygroundRunCeilingHit(db, userId, ceilingHitProps("hard", weightedNow()));
           return RUN_CEILING_MESSAGE;
         }
         refundIfWasted();
         return logAndGenericError("[playground] turn failed", err);
       },
-      onStep: () => runStep(threadForTurn),
+      onStep: () => {
+        runStep(threadForTurn);
+        onStepStart();
+      },
       onEnd: (how) => runEnded(threadForTurn, how),
       // The thread row exists by now, which is the whole reason this waits.
       onClosed: () => {

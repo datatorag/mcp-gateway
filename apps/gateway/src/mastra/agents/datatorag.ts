@@ -1,4 +1,5 @@
 import { latestMessageBreakpoint } from "@/mastra/latest-message-breakpoint";
+import { softCeilingClosing } from "@/mastra/soft-ceiling";
 import { createAnthropic } from "@ai-sdk/anthropic";
 import { Agent } from "@mastra/core/agent";
 import type { ToolsInput } from "@mastra/core/agent";
@@ -233,9 +234,12 @@ export function createDatatoragAgent(
     // The MESSAGE, not the string — see SYSTEM_MESSAGE. This is what carries
     // the prompt-cache breakpoint.
     instructions: SYSTEM_MESSAGE,
-    // The third breakpoint, on the latest message, moved every step
-    // (SCRUM-241): what a run produces is cached too, not only the prefix.
-    inputProcessors: [latestMessageBreakpoint],
+    // The soft ceiling first (SCRUM-251): a skill run past its closing line
+    // gets the closing instruction appended, and the breakpoint below then
+    // marks that appended message as the newest block. Then the third
+    // breakpoint, on the latest message, moved every step (SCRUM-241): what
+    // a run produces is cached too, not only the prefix.
+    inputProcessors: [softCeilingClosing, latestMessageBreakpoint],
     // Wrapped per request so each model call can report its token usage
     // against the run that made it. The ids come off the request context for
     // the same reason the tools do: they are per-caller, and a process-wide

@@ -42,6 +42,14 @@ vi.mock("@/gateway/usage/period", async (importOriginal) => ({
   refundAgentRun: (...args: unknown[]) => refundAgentRun(...args),
 }));
 
+/** SCRUM-251: the route reads the run's weighted total between steps. The
+ * rest of the module (the ceiling error, its message) stays real. */
+const runTokensUsed = vi.fn((_runId: string): number => 0);
+vi.mock("@/mastra/run-token-budget", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/mastra/run-token-budget")>()),
+  runTokensUsed: (runId: string) => runTokensUsed(runId),
+}));
+
 const trackPlaygroundMessage = vi.fn();
 const trackPlaygroundCapHit = vi.fn();
 const trackPlaygroundConfirm = vi.fn();
@@ -106,7 +114,7 @@ import { CHAT_MAX_STEPS, SKILL_RUN_MAX_STEPS } from "@/mastra/run-steps";
 import { THREAD_ID_HEADER } from "@/gateway/playground/quota-headers";
 import { resetRunRegistry, runStatus } from "@/gateway/playground/run-registry";
 import { KEEPALIVE_INTERVAL_MS } from "./keepalive";
-import { SKILL_RUN_EFFORT } from "@/gateway/billing/plans";
+import { RUN_SOFT_CEILING, SKILL_RUN_EFFORT } from "@/gateway/billing/plans";
 import { POST } from "./route";
 
 const USER = "user-1";
@@ -189,6 +197,7 @@ function lastParams(): Record<string, unknown> {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  runTokensUsed.mockReturnValue(0);
   getSessionUserId.mockResolvedValue(USER);
   getEnv.mockReturnValue({
     ANTHROPIC_API_KEY: "test-key",
@@ -471,7 +480,8 @@ describe("POST /api/playground/chat — the turn cap", () => {
     expect(errorChunk?.errorText).toBe(RUN_CEILING_MESSAGE);
     expect(trackPlaygroundRunCeilingHit).toHaveBeenCalledWith(
       expect.anything(),
-      USER
+      USER,
+      expect.objectContaining({ reason: "hard" })
     );
     expect(refundAgentRun).not.toHaveBeenCalled();
   });
@@ -1097,5 +1107,106 @@ describe("the thinking effort on a skill run (SCRUM-248)", () => {
   it("a valid slug beside arbitrary text is a chat turn here too: no effort", async () => {
     await drain(await POST(post({ messages: USER_TURN, skill: "morning-brief" })));
     expect(lastParams().providerOptions).toBeUndefined();
+  });
+});
+
+/* SCRUM-251: the soft ceiling is reported with its reason and the weighted
+ * totals either side of the step that crossed it; the hard stop reports the
+ * same two numbers. */
+describe("the soft ceiling event (SCRUM-251)", () => {
+  const TOOL_STEP = (id: string): UIMessageChunk[] => [
+    { type: "start-step" },
+    { type: "tool-input-start", toolCallId: id, toolName: "gws-mcp__gmail_search" },
+    { type: "tool-input-available", toolCallId: id, toolName: "gws-mcp__gmail_search", input: {} },
+    { type: "tool-output-available", toolCallId: id, output: { messages: [] } },
+    { type: "finish-step" },
+  ];
+  const PROSE_END: UIMessageChunk[] = [
+    { type: "start-step" },
+    { type: "text-start", id: "t1" },
+    { type: "text-delta", id: "t1", delta: "Sent." },
+    { type: "text-end", id: "t1" },
+    { type: "finish-step" },
+    { type: "finish", finishReason: "stop" } as UIMessageChunk,
+  ];
+  function skillTurn() {
+    const skill = readSkillFiles().find((s) => s.slug === "morning-brief")!;
+    return [{ id: "u1", role: "user", parts: [{ type: "text", text: skillRunMessage(skill) }] }];
+  }
+  /** The accumulator as the route reads it at each step start: the value
+   * reported at step n is the total after step n-1. */
+  function totalsByStep(values: number[]) {
+    let call = 0;
+    runTokensUsed.mockImplementation(() => values[Math.min(call++, values.length - 1)] ?? 0);
+  }
+
+  it("a skill run crossing the line between two steps emits soft, once, with the totals either side", async () => {
+    // Step 1 starts at 0; step 2 starts with 100k on the clock; step 3 with 130k.
+    totalsByStep([0, 100_000, 130_000, 130_000]);
+    handleChatStream.mockResolvedValue(
+      chunkStream([{ type: "start" }, ...TOOL_STEP("c1"), ...TOOL_STEP("c2"), ...PROSE_END])
+    );
+    await drain(await POST(post({ messages: skillTurn(), skill: "morning-brief", skillTrigger: "manual" })));
+    const soft = trackPlaygroundRunCeilingHit.mock.calls.filter((c) => (c[2] as { reason?: string })?.reason === "soft");
+    expect(soft).toHaveLength(1);
+    expect(soft[0]![2]).toMatchObject({
+      reason: "soft",
+      pre_step_weighted: 100_000,
+      post_step_weighted: 130_000,
+      skill: "morning-brief",
+    });
+    expect(130_000).toBeGreaterThanOrEqual(RUN_SOFT_CEILING);
+    expect(100_000).toBeLessThan(RUN_SOFT_CEILING);
+  });
+
+  it("a skill run that stays under the line emits nothing", async () => {
+    totalsByStep([0, 50_000, 90_000, 120_000]);
+    handleChatStream.mockResolvedValue(
+      chunkStream([{ type: "start" }, ...TOOL_STEP("c1"), ...TOOL_STEP("c2"), ...PROSE_END])
+    );
+    await drain(await POST(post({ messages: skillTurn(), skill: "morning-brief", skillTrigger: "manual" })));
+    expect(trackPlaygroundRunCeilingHit).not.toHaveBeenCalled();
+  });
+
+  it("a chat turn crossing the line emits nothing: the closing instruction is a skill run's", async () => {
+    totalsByStep([0, 100_000, 130_000, 130_000]);
+    handleChatStream.mockResolvedValue(
+      chunkStream([{ type: "start" }, ...TOOL_STEP("c1"), ...TOOL_STEP("c2"), ...PROSE_END])
+    );
+    await drain(await POST(post({ messages: USER_TURN })));
+    expect(trackPlaygroundRunCeilingHit).not.toHaveBeenCalled();
+  });
+
+  it("the hard stop reports hard with the totals either side of the step that crossed", async () => {
+    totalsByStep([0, 100_000, 130_000, 160_000, 160_000]);
+    // The runtime asks the route's hook for the text when the ceiling
+    // refuses the NEXT call, i.e. after the steps have streamed: the hook is
+    // called as the error chunk is reached, not up front.
+    handleChatStream.mockImplementation(async (opts: { onError: (e: unknown) => string }) => {
+      const before: UIMessageChunk[] = [{ type: "start" }, ...TOOL_STEP("c1"), ...TOOL_STEP("c2"), ...TOOL_STEP("c3")];
+      let index = 0;
+      return new ReadableStream<UIMessageChunk>({
+        pull(controller) {
+          if (index < before.length) {
+            controller.enqueue(before[index++]!);
+            return;
+          }
+          if (index === before.length) {
+            index++;
+            const errorText = opts.onError(new RunTokenCeilingError(160_000));
+            controller.enqueue({ type: "error", errorText } as UIMessageChunk);
+            return;
+          }
+          controller.close();
+        },
+      });
+    });
+    await drain(await POST(post({ messages: skillTurn(), skill: "morning-brief", skillTrigger: "manual" })));
+    const hard = trackPlaygroundRunCeilingHit.mock.calls.filter((c) => (c[2] as { reason?: string })?.reason === "hard");
+    expect(hard).toHaveLength(1);
+    expect(hard[0]![2]).toMatchObject({ reason: "hard", pre_step_weighted: 130_000, post_step_weighted: 160_000 });
+    // The soft crossing on the way is reported too, once.
+    const soft = trackPlaygroundRunCeilingHit.mock.calls.filter((c) => (c[2] as { reason?: string })?.reason === "soft");
+    expect(soft).toHaveLength(1);
   });
 });

@@ -60,6 +60,16 @@ export const SKILL_RUN_EFFORT: SkillRunEffort = "medium";
 
 export type SkillRunEffort = "low" | "medium" | "high";
 
+/** Where a run is told to close (SCRUM-251): the share of RUN_TOKEN_CEILING
+ * after which the next step of a skill run carries a closing instruction,
+ * so the run ends with its report instead of one step past the ceiling.
+ * The hard ceiling is checked AFTER a step, and a closing step at today's
+ * thinking sizes weighs tens of thousands of tokens, so the line sits at
+ * 85 percent, not 95: the remaining 15 percent is the room the closing step
+ * runs in. See `mastra/soft-ceiling.ts`. */
+export const RUN_SOFT_CEILING_RATIO = 0.85;
+export const RUN_SOFT_CEILING = Math.round(RUN_TOKEN_CEILING * RUN_SOFT_CEILING_RATIO);
+
 export interface PlanLimits {
   monthlyIncluded: number;
   /** true → over-cap returns a hard-stop error; false → over-cap meters overage */
