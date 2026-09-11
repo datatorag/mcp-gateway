@@ -24,6 +24,7 @@ The Sheets connector lets your AI assistant read data from spreadsheets, write t
 | `sheets_clear` | Clear values in a range while keeping the tab and its formatting; a bare tab name clears the whole tab |
 | `sheets_delete_tab` | Delete a tab and every row in it; this cannot be undone via the API, so use `sheets_clear` when you only want to empty a tab |
 | `sheets_find_rows` | Find the rows whose value in one column matches, and get back their row numbers plus a ready-made A1 range for each, so a lookup can be followed straight by an update. Searches many values in one call |
+| `sheets_query` | Run a query in the QUERY() language over a range and get back only the matching rows: select, where, group by, order by, limit and the aggregates, in one call. Columns by sheet letter. Read-only |
 | `sheets_format_table` | Apply the whole readable-table pass to a range in one atomic call: header styling, frozen header row, column widths, wrapping, optional banding, and an optional trim of the empty grid outside the range |
 | `sheets_format_range` | Set fonts, colours, wrapping, alignment, padding, number formats and merges on named ranges. Takes a list of instructions and applies all of them in one atomic call |
 | `sheets_batch_update` | The full Sheets `batchUpdate` pass-through, beneath the job-shaped tools above. Use it for what they do not cover: borders, merges, inserting or deleting columns, duplicating tabs, protected ranges |

@@ -132,6 +132,7 @@ export const KNOWN_READ_TOOLS: ReadonlySet<string> = new Set<string>([
   "gws-mcp__gmail_read",
   "gws-mcp__gmail_search",
   "gws-mcp__sheets_find_rows",
+  "gws-mcp__sheets_query",
   "gws-mcp__sheets_read",
   "gws-mcp__slides_get",
   "gws-mcp__tasks_list",

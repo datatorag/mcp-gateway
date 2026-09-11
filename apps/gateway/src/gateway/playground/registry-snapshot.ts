@@ -115,6 +115,7 @@ export const REGISTRY_CLASSIFICATION: ReadonlyArray<readonly [string, "read" | "
   ["gws-mcp__sheets_find_rows", "read"],
   ["gws-mcp__sheets_format_range", "write"],
   ["gws-mcp__sheets_format_table", "write"],
+  ["gws-mcp__sheets_query", "read"],
   ["gws-mcp__sheets_read", "read"],
   ["gws-mcp__sheets_rename_tab", "write"],
   ["gws-mcp__sheets_update", "write"],
