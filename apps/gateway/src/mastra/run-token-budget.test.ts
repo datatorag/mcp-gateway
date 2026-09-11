@@ -6,6 +6,7 @@ import {
   RunTokenCeilingError,
   runReasoningTokensUsed,
   runTokensUsed,
+  runUsage,
   usageTokens,
   usageTotal,
   withRunTokenCeiling,
@@ -176,5 +177,30 @@ describe("thinking tokens per run (SCRUM-248)", () => {
     await wrapped.doGenerate();
     expect(runReasoningTokensUsed("run-s")).toBe(0);
     expect(runReasoningTokensUsed("run-none")).toBe(0);
+  });
+});
+
+/* SCRUM-257: the accumulator keeps the buckets the price table needs, and
+ * the step count, beside the weighted total the ceiling reads. */
+describe("runUsage: the buckets per run (SCRUM-257)", () => {
+  it("sums each bucket and counts the steps", async () => {
+    const { model } = fakeModel({ input: 1_000, cachedInput: 400, output: 700, reasoning: 500 });
+    const wrapped = withRunTokenCeiling(model, "run-u") as typeof model;
+    await wrapped.doGenerate();
+    await wrapped.doGenerate();
+    const usage = runUsage("run-u");
+    expect(usage.steps).toBe(2);
+    // The v2 shim reports 1,000 input of which 400 cached: 600 uncached per call.
+    expect(usage.input).toBe(1_200);
+    expect(usage.cacheRead).toBe(800);
+    expect(usage.cacheWrite).toBe(0);
+    expect(usage.output).toBe(1_400);
+    expect(usage.reasoning).toBe(1_000);
+    expect(usage.weighted).toBe(runTokensUsed("run-u"));
+    expect(usage.weighted).toBeCloseTo(2 * (600 + 0.1 * 400 + 700), 6);
+  });
+
+  it("reads all zeros for an unknown run", () => {
+    expect(runUsage("run-nobody")).toEqual({ steps: 0, input: 0, cacheRead: 0, cacheWrite: 0, output: 0, reasoning: 0, weighted: 0 });
   });
 });

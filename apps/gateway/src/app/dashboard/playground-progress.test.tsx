@@ -286,6 +286,37 @@ describe("the stop notice and the interrupted card (SCRUM-234)", () => {
     expect(continueRun).toHaveBeenCalledWith("morning-brief");
   });
 
+  it("the run summary line says the steps, the tokens and the cost (SCRUM-257)", () => {
+    const summarised: PlaygroundMessage = {
+      ...STOPPED,
+      parts: [
+        STOPPED.parts[0]!,
+        STOPPED.parts[1]!,
+        { type: "data-run-summary", data: { steps: 7, weightedTokens: 184_099, costUsd: 0.99, model: "claude-sonnet-5" } },
+      ] as PlaygroundMessage["parts"],
+    };
+    render([USER_TURN, summarised]);
+    const text = (container.textContent ?? "").replace(/\s+/g, " ");
+    expect(text).toContain("7 steps");
+    expect(text).toContain("184k tokens");
+    expect(text).toMatch(/about \$0\.99/);
+    expect(text).not.toContain("\u2014");
+  });
+
+  it("the run summary line says the cost is unknown when the model had no price (SCRUM-257)", () => {
+    const summarised: PlaygroundMessage = {
+      ...STOPPED,
+      parts: [
+        { type: "data-run-summary", data: { steps: 2, weightedTokens: 4_450, costUsd: null, model: "other" } },
+      ] as PlaygroundMessage["parts"],
+    };
+    render([USER_TURN, summarised]);
+    const text = (container.textContent ?? "").replace(/\s+/g, " ");
+    expect(text).toContain("2 steps");
+    expect(text).toContain("4.5k tokens");
+    expect(text).not.toMatch(/\$/);
+  });
+
   it("a settled message shows Interrupted, not Running, for a tool call whose result never came", async () => {
     const message = await assemble(TOOL_RUNNING);
     render([USER_TURN, message]);

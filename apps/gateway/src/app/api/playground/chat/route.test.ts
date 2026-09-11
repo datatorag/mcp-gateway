@@ -45,9 +45,18 @@ vi.mock("@/gateway/usage/period", async (importOriginal) => ({
 /** SCRUM-251: the route reads the run's weighted total between steps. The
  * rest of the module (the ceiling error, its message) stays real. */
 const runTokensUsed = vi.fn((_runId: string): number => 0);
+const EMPTY_USAGE = { steps: 0, input: 0, cacheRead: 0, cacheWrite: 0, output: 0, reasoning: 0, weighted: 0 };
+const runUsage = vi.fn((_runId: string) => EMPTY_USAGE);
 vi.mock("@/mastra/run-token-budget", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/mastra/run-token-budget")>()),
   runTokensUsed: (runId: string) => runTokensUsed(runId),
+  runUsage: (runId: string) => runUsage(runId),
+}));
+
+/** SCRUM-257: the accounting writer, called from the route and mocked here. */
+const recordRunUsage = vi.fn(async (..._args: unknown[]) => {});
+vi.mock("@/gateway/usage/run-usage", () => ({
+  recordRunUsage: (...args: unknown[]) => recordRunUsage(...args),
 }));
 
 const trackPlaygroundMessage = vi.fn();
@@ -198,6 +207,7 @@ function lastParams(): Record<string, unknown> {
 beforeEach(() => {
   vi.clearAllMocks();
   runTokensUsed.mockReturnValue(0);
+  runUsage.mockReturnValue(EMPTY_USAGE);
   getSessionUserId.mockResolvedValue(USER);
   getEnv.mockReturnValue({
     ANTHROPIC_API_KEY: "test-key",
@@ -1208,5 +1218,82 @@ describe("the soft ceiling event (SCRUM-251)", () => {
     // The soft crossing on the way is reported too, once.
     const soft = trackPlaygroundRunCeilingHit.mock.calls.filter((c) => (c[2] as { reason?: string })?.reason === "soft");
     expect(soft).toHaveLength(1);
+  });
+});
+
+/* SCRUM-257: the run's accounting row is written from the accumulator after
+ * every step and at the end, and the thread gets one summary line. */
+describe("run cost accounting (SCRUM-257)", () => {
+  const TOOL_STEP = (id: string): UIMessageChunk[] => [
+    { type: "start-step" },
+    { type: "tool-input-start", toolCallId: id, toolName: "gws-mcp__gmail_search" },
+    { type: "tool-input-available", toolCallId: id, toolName: "gws-mcp__gmail_search", input: {} },
+    { type: "tool-output-available", toolCallId: id, output: { messages: [] } },
+    { type: "finish-step" },
+  ];
+  const PROSE_END: UIMessageChunk[] = [
+    { type: "start-step" },
+    { type: "text-start", id: "t1" },
+    { type: "text-delta", id: "t1", delta: "Sent." },
+    { type: "text-end", id: "t1" },
+    { type: "finish-step" },
+    { type: "finish", finishReason: "stop" } as UIMessageChunk,
+  ];
+  function skillTurn() {
+    const skill = readSkillFiles().find((s) => s.slug === "morning-brief")!;
+    return [{ id: "u1", role: "user", parts: [{ type: "text", text: skillRunMessage(skill) }] }];
+  }
+  const USAGE = { steps: 3, input: 14, cacheRead: 100_000, cacheWrite: 50_000, output: 20_000, reasoning: 15_000, weighted: 80_000 };
+
+  it("writes the row after each step past the first and once more at the end, with the end time only on the last", async () => {
+    // At the first step's start nothing has been spent yet; from the second
+    // start on, the previous step's usage is in.
+    runUsage.mockReturnValueOnce(EMPTY_USAGE).mockReturnValue(USAGE);
+    handleChatStream.mockResolvedValue(chunkStream([{ type: "start" }, ...TOOL_STEP("c1"), ...TOOL_STEP("c2"), ...PROSE_END]));
+    const res = await POST(post({ messages: skillTurn(), skill: "morning-brief", skillTrigger: "manual" }));
+    const threadId = res.headers.get(THREAD_ID_HEADER)!;
+    await drain(res);
+    await vi.waitFor(() => expect(recordRunUsage).toHaveBeenCalledTimes(3));
+    const rows = recordRunUsage.mock.calls.map((c) => c[1] as { runId: string; threadId: string; skill: string | null; model: string; endedAt: Date | null });
+    for (const row of rows) {
+      expect(row).toMatchObject({ threadId, skill: "morning-brief", model: "claude-haiku-4-5" });
+      expect(row.runId).toBeTruthy();
+    }
+    expect(rows[0]!.endedAt).toBeNull();
+    expect(rows[1]!.endedAt).toBeNull();
+    expect(rows[2]!.endedAt).toBeInstanceOf(Date);
+    expect(recordRunUsage.mock.calls[2]![2]).toEqual(USAGE);
+  });
+
+  it("puts one summary line in the thread before the finish, with the steps, tokens and cost", async () => {
+    runUsage.mockReturnValue(USAGE);
+    handleChatStream.mockResolvedValue(chunkStream([{ type: "start" }, ...TOOL_STEP("c1"), ...PROSE_END]));
+    const chunks = await drain(await POST(post({ messages: USER_TURN })));
+    const summary = chunks.findIndex((c) => c.type === "data-run-summary");
+    const finish = chunks.findIndex((c) => c.type === "finish");
+    expect(summary).toBeGreaterThan(-1);
+    expect(summary).toBeLessThan(finish);
+    expect(chunks[summary]!.data).toMatchObject({ steps: 3, weightedTokens: 80_000, model: "claude-haiku-4-5" });
+    expect(typeof (chunks[summary]!.data as { costUsd: unknown }).costUsd).toBe("number");
+    expect(chunks.filter((c) => c.type === "data-run-summary")).toHaveLength(1);
+  });
+
+  it("a run that produced no usage gets no summary line and no row", async () => {
+    handleChatStream.mockResolvedValue(chunkStream([{ type: "start" }, { type: "finish", finishReason: "stop" } as UIMessageChunk]));
+    const chunks = await drain(await POST(post({ messages: USER_TURN })));
+    expect(chunks.some((c) => c.type === "data-run-summary")).toBe(false);
+    expect(recordRunUsage).not.toHaveBeenCalled();
+  });
+
+  it("an approval decision writes against the run it resumes, not a new one", async () => {
+    runUsage.mockReturnValue(USAGE);
+    handleChatStream.mockResolvedValue(chunkStream([{ type: "start" }, ...TOOL_STEP("c1"), ...PROSE_END]));
+    const turn = approvalTurn(USER);
+    const approvalId = (turn[1] as { parts: Array<{ approval: { id: string } }> }).parts[0]!.approval.id;
+    const resumedRunId = approvalId.split("::")[0]!;
+    await drain(await POST(post({ messages: turn })));
+    await vi.waitFor(() => expect(recordRunUsage).toHaveBeenCalled());
+    const row = recordRunUsage.mock.calls.at(-1)![1] as { runId: string };
+    expect(row.runId).toBe(resumedRunId);
   });
 });

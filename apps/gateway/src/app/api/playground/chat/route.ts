@@ -38,6 +38,9 @@ import { eq } from "drizzle-orm";
 import { users } from "@datatorag-mcp/db";
 import { logAndGenericError } from "@/lib/errors";
 import { withKeepalive } from "./keepalive";
+import { runUsage } from "@/mastra/run-token-budget";
+import { recordRunUsage } from "@/gateway/usage/run-usage";
+import { costUsd } from "@/gateway/usage/model-prices";
 import { runEnded, runStarted, runStep, type RunLimit } from "@/gateway/playground/run-registry";
 
 /**
@@ -148,7 +151,12 @@ type StreamTaps = {
   onStep: () => void;
   /** How the run ended, for the record. Fires once, viewer or no viewer. */
   onEnd: (end: RunEnd) => void;
+  /** The run's summary line for the thread (SCRUM-257), or null when the
+   * run produced no usage to summarise. Asked once, at the finish. */
+  summary: () => RunSummaryData | null;
 };
+
+type RunSummaryData = { steps: number; weightedTokens: number; costUsd: number | null; model: string };
 
 type RunEnd = { state: "completed" | "failed" } | { state: "stopped"; limit: RunLimit };
 
@@ -214,6 +222,12 @@ function instrumentStream(
       lastContent = "tool";
     } else if (chunk.type === "text-start" || chunk.type === "text-delta") {
       lastContent = "text";
+    }
+    if (chunk.type === "finish") {
+      // SCRUM-257: one line under the run saying what it cost, ahead of any
+      // stop notice and of the finish itself.
+      const summary = taps.summary();
+      if (summary) out.push({ type: "data-run-summary", data: summary } as UIMessageChunk);
     }
     if (chunk.type === "finish") {
       // A turn that ends right after a tool result, with no assistant text
@@ -616,6 +630,42 @@ export const POST = withRoute(async (userId, request) => {
     }
     lastStepTotal = total;
   };
+  /* THE ACCOUNTING ROW (SCRUM-257). Written from the same accumulator the
+   * ceiling reads, at each step start after the first (when the previous
+   * step's usage is in) and once more when the run ends, with the end time
+   * only on that last write. An approval leg resumes the original run, so
+   * its writes land on that run's row; the start time is kept as first
+   * written by the upsert. A run that produced no usage writes nothing. */
+  const runStartedAt = new Date();
+  const writeUsage = (endedAt: Date | null) => {
+    if (!usageRunId) return;
+    const usage = runUsage(usageRunId);
+    if (usage.steps === 0) return;
+    void recordRunUsage(
+      db,
+      {
+        runId: usageRunId,
+        userId,
+        threadId: threadForTurn,
+        skill: skillSlug,
+        model: env.PLAYGROUND_MODEL,
+        startedAt: runStartedAt,
+        endedAt,
+      },
+      usage
+    );
+  };
+  const summary = (): RunSummaryData | null => {
+    if (!usageRunId) return null;
+    const usage = runUsage(usageRunId);
+    if (usage.steps === 0) return null;
+    return {
+      steps: usage.steps,
+      weightedTokens: Math.round(usage.weighted),
+      costUsd: costUsd(env.PLAYGROUND_MODEL, usage),
+      model: env.PLAYGROUND_MODEL,
+    };
+  };
   try {
     // Per-request identity, and identity only (SCRUM-188): the agent is an
     // in-process client of our own MCP, which resolves tokens, accounts and
@@ -756,8 +806,13 @@ export const POST = withRoute(async (userId, request) => {
       onStep: () => {
         runStep(threadForTurn);
         onStepStart();
+        writeUsage(null);
       },
-      onEnd: (how) => runEnded(threadForTurn, how),
+      onEnd: (how) => {
+        runEnded(threadForTurn, how);
+        writeUsage(new Date());
+      },
+      summary,
       // The thread row exists by now, which is the whole reason this waits.
       onClosed: () => {
         if (!pendingTitle) return;

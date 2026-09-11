@@ -227,3 +227,12 @@ describe("the run's state after the viewer left (SCRUM-254)", () => {
     expect(replayPart(part)).toEqual(part);
   });
 });
+
+/* SCRUM-257: the run summary line is a data part the runtime keeps, so a
+ * reload shows what the run cost as the user saw it. */
+describe("the run summary line replays (SCRUM-257)", () => {
+  it("passes the stored summary part through", () => {
+    const part = { type: "data-run-summary", data: { steps: 7, weightedTokens: 184_099, costUsd: 0.99, model: "claude-sonnet-5" } };
+    expect(replayPart(part)).toEqual(part);
+  });
+});

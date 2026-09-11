@@ -50,6 +50,23 @@ const runTokens = new Map<string, number>();
  * the weighted total can be split into thinking and visible output from the
  * same object the ceiling reads. Same bound and lifetime as `runTokens`. */
 const runReasoning = new Map<string, number>();
+/** The full buckets per run (SCRUM-257): what the price table needs and
+ * the step count, beside the weighted total. Same bound and lifetime. */
+const runBuckets = new Map<string, RunUsage>();
+
+export interface RunUsage {
+  steps: number;
+  /** Uncached input tokens. */
+  input: number;
+  cacheRead: number;
+  cacheWrite: number;
+  output: number;
+  reasoning: number;
+  /** What the ceiling charged, summed: the same number as `runTokensUsed`. */
+  weighted: number;
+}
+
+const EMPTY_USAGE: RunUsage = { steps: 0, input: 0, cacheRead: 0, cacheWrite: 0, output: 0, reasoning: 0, weighted: 0 };
 
 type UsageBuckets = {
   inputTokens?: { total?: number; noCache?: number; cacheRead?: number; cacheWrite?: number };
@@ -104,11 +121,28 @@ function note(runId: string, usage: UsageBuckets | undefined): void {
     if (oldest !== undefined) {
       runTokens.delete(oldest);
       runReasoning.delete(oldest);
+      runBuckets.delete(oldest);
     }
   }
   runTokens.set(runId, (runTokens.get(runId) ?? 0) + tokens);
   const reasoning = usage?.outputTokens?.reasoning ?? 0;
   if (reasoning > 0) runReasoning.set(runId, (runReasoning.get(runId) ?? 0) + reasoning);
+  const prev = runBuckets.get(runId) ?? EMPTY_USAGE;
+  runBuckets.set(runId, {
+    steps: prev.steps + 1,
+    input: prev.input + uncachedInput(usage?.inputTokens),
+    cacheRead: prev.cacheRead + (usage?.inputTokens?.cacheRead ?? 0),
+    cacheWrite: prev.cacheWrite + (usage?.inputTokens?.cacheWrite ?? 0),
+    output: prev.output + (usage?.outputTokens?.total ?? 0),
+    reasoning: prev.reasoning + reasoning,
+    weighted: prev.weighted + tokens,
+  });
+}
+
+/** The run's buckets and step count so far, as this process has seen them
+ * (SCRUM-257). All zeros for a run it does not know. Returned as a copy. */
+export function runUsage(runId: string): RunUsage {
+  return { ...(runBuckets.get(runId) ?? EMPTY_USAGE) };
 }
 
 /** Tokens the run has consumed so far, as this process has seen them. */
@@ -128,6 +162,7 @@ export function runReasoningTokensUsed(runId: string): number {
 export function resetRunTokenBudgets(): void {
   runTokens.clear();
   runReasoning.clear();
+  runBuckets.clear();
 }
 
 /** The refusal, typed so the chat route can tell it from a provider failure.

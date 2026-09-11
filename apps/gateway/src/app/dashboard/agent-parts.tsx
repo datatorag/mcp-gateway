@@ -5,6 +5,7 @@ import posthog from "posthog-js";
 import { SetupInstructions } from "@/components/setup-instructions";
 import { buttonVariants } from "@/components/ui/button";
 import { EVENTS } from "@/lib/analytics";
+import { formatCost, formatTokens } from "@/lib/usage-format";
 import { getService } from "./connections/services";
 import { GrantPanel } from "./connections/grant-panel";
 import { grantState } from "./connections/grant-state";
@@ -97,6 +98,15 @@ export type AgentDataParts = {
    * back to. The decision cannot be given any more, so this replaces the
    * buttons rather than replaying them. */
   "approval-expired": { toolName: string };
+  /** What the run cost (SCRUM-257): steps, the ceiling's weighted tokens and
+   * the priced cost, null when the model had no price row. Put in the
+   * thread by the chat route at the finish. */
+  "run-summary": {
+    steps: number;
+    weightedTokens: number;
+    costUsd: number | null;
+    model: string;
+  };
 };
 
 /** Exported because the empty state renders the same control before any
@@ -363,6 +373,19 @@ function RunStoppedPart({ limit, steps, cap, skill }: AgentDataParts["run-stoppe
   );
 }
 
+/** One quiet line under a finished run: the size of what just happened, in
+ * the same words the usage page uses. No cost is said when none is known;
+ * a run must never read as free because its model had no price. */
+function RunSummaryPart({ steps, weightedTokens, costUsd }: AgentDataParts["run-summary"]) {
+  const cost = formatCost(costUsd);
+  return (
+    <p className="text-xs text-muted-foreground" data-testid="run-summary">
+      {steps} {steps === 1 ? "step" : "steps"}, {formatTokens(weightedTokens)}
+      {cost ? `, ${cost}` : ""}
+    </p>
+  );
+}
+
 /** Every declared kind, rendered. Total by type: adding a key above without a
  * renderer here is a compile error. */
 const AGENT_PART_RENDERERS: {
@@ -373,6 +396,7 @@ const AGENT_PART_RENDERERS: {
   "account-state": (data) => <AccountStatePart {...data} />,
   "approval-expired": (data) => <ApprovalExpiredPart {...data} />,
   "run-stopped": (data) => <RunStoppedPart {...data} />,
+  "run-summary": (data) => <RunSummaryPart {...data} />,
 };
 
 /**

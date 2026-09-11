@@ -36,6 +36,8 @@ const REPLAYABLE_DATA_PARTS = new Set([
   // The stop card (SCRUM-234). The route puts it in the stream; when the
   // runtime keeps it, a reload shows the same notice the user saw.
   "data-run-stopped",
+  // The run's cost line (SCRUM-257): what the user saw at the finish.
+  "data-run-summary",
 ]);
 
 /** The subset of a stored part this module understands. */

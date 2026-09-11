@@ -14,6 +14,7 @@ export { pluginConnections } from "./plugin-connections";
 export { serviceConnections } from "./service-connections";
 export { connectedAccounts } from "./connected-accounts";
 export { usageEvents, usageEventsDaily } from "./usage";
+export { agentRunUsage } from "./agent-run-usage";
 export { subscriptions, SUBSCRIPTION_STATUS, type SubscriptionStatus } from "./subscriptions";
 export { alertSends } from "./alert-sends";
 export { stripeEvents } from "./stripe-events";

@@ -113,6 +113,13 @@
       "when": 1789061139982,
       "tag": "0015_bitter_whizzer",
       "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "7",
+      "when": 1789148727793,
+      "tag": "0016_open_psylocke",
+      "breakpoints": true
     }
   ]
 }

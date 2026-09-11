@@ -15,6 +15,7 @@ import {
   ResponsiveContainer,
 } from "recharts";
 import { StatCard } from "@/components/stat-card";
+import { formatCost, formatTokens } from "@/lib/usage-format";
 import { BillingCard } from "./billing-card";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card } from "@/components/ui/card";
@@ -66,8 +67,101 @@ export function UsageClient({ plan }: { plan: string }) {
       <TimeseriesChart range={range} />
       <ToolBreakdown range={range} tools={tools} />
       <ToolsTable tools={tools} />
+      <AgentSessions range={range} />
       <RecentActivity />
     </div>
+  );
+}
+
+/** What the agent cost this period (SCRUM-257): the totals over the
+ * caller's runs, and one row per session with what it ran. The words are
+ * the thread's own summary line's words. */
+function AgentSessions({ range }: { range: Range }) {
+  const [totals, setTotals] = useState<{
+    runs: number;
+    steps: number;
+    weightedTokens: number;
+    costUsd: number;
+    unpricedRuns: number;
+  } | null>(null);
+  const [sessions, setSessions] = useState<
+    Array<{
+      threadId: string;
+      runs: number;
+      steps: number;
+      weightedTokens: number;
+      costUsd: number | null;
+      lastAt: string;
+      skills: string[];
+    }>
+  >([]);
+
+  useEffect(() => {
+    fetch(`/api/usage/runs?range=${range}`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j) => setTotals(j?.totals ?? null));
+    fetch(`/api/usage/sessions?range=${range}`)
+      .then((r) => (r.ok ? r.json() : { sessions: [] }))
+      .then((j) => setSessions(j.sessions ?? []));
+  }, [range]);
+
+  return (
+    <section className="mt-10">
+      <h2 className="font-display text-base font-bold text-foreground">Agent sessions</h2>
+      <p className="mt-1 text-sm text-muted-foreground">
+        What the agent used and cost, per session. Tokens are the run
+        ceiling&apos;s weighted count.
+      </p>
+      {totals && (
+        <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-4">
+          <StatCard label="Runs" value={String(totals.runs)} />
+          <StatCard label="Steps" value={String(totals.steps)} />
+          <StatCard label="Tokens" value={formatTokens(totals.weightedTokens).replace(" tokens", "")} />
+          <StatCard
+            label="Cost"
+            value={totals.runs === 0 ? "$0.00" : `$${totals.costUsd.toFixed(2)}`}
+            hint={totals.unpricedRuns > 0 ? `${totals.unpricedRuns} unpriced` : undefined}
+          />
+        </div>
+      )}
+      <Card className="mt-3 overflow-hidden p-0">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Session</TableHead>
+              <TableHead>Ran</TableHead>
+              <TableHead className="text-right">Runs</TableHead>
+              <TableHead className="text-right">Steps</TableHead>
+              <TableHead className="text-right">Tokens</TableHead>
+              <TableHead className="text-right">Cost</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {sessions.map((s) => (
+              <TableRow key={s.threadId}>
+                <TableCell className="text-xs">
+                  <Link className="underline-offset-2 hover:underline" href={`/dashboard/agent?thread=${encodeURIComponent(s.threadId)}`}>
+                    {new Date(s.lastAt).toLocaleString()}
+                  </Link>
+                </TableCell>
+                <TableCell className="font-mono text-xs text-muted-foreground">{s.skills.join(", ") || "chat"}</TableCell>
+                <TableCell className="text-right tabular-nums">{s.runs}</TableCell>
+                <TableCell className="text-right tabular-nums">{s.steps}</TableCell>
+                <TableCell className="text-right tabular-nums">{formatTokens(s.weightedTokens).replace(" tokens", "")}</TableCell>
+                <TableCell className="text-right tabular-nums">{formatCost(s.costUsd)?.replace("about ", "") ?? "not priced"}</TableCell>
+              </TableRow>
+            ))}
+            {sessions.length === 0 && (
+              <TableRow>
+                <TableCell className="py-6 text-center text-sm text-muted-foreground" colSpan={6}>
+                  No agent sessions in this period.
+                </TableCell>
+              </TableRow>
+            )}
+          </TableBody>
+        </Table>
+      </Card>
+    </section>
   );
 }
 
