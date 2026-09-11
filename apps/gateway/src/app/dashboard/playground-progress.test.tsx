@@ -342,3 +342,50 @@ describe("the stop notice and the interrupted card (SCRUM-234)", () => {
     expect(text).not.toContain("Running");
   });
 });
+
+/* SCRUM-262: the progress line's clock has hands that turn while a step
+ * thinks. Motion is a CSS class gated on motion-safe, so a reader who asked
+ * for reduced motion gets the still clock. */
+describe("the progress clock (SCRUM-262)", () => {
+  let clockContainer: HTMLDivElement;
+  let clockRoot: Root;
+
+  beforeEach(() => {
+    (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    clockContainer = document.createElement("div");
+    document.body.appendChild(clockContainer);
+    clockRoot = createRoot(clockContainer);
+  });
+
+  afterEach(() => {
+    act(() => clockRoot.unmount());
+    clockContainer.remove();
+  });
+
+  it("turns its hands while Thinking, CSS only", async () => {
+    const message = await assemble(SECOND_STEP_WRITING);
+    act(() => {
+      clockRoot.render(
+        <MessageList
+          awaitingConfirm={false}
+          busy
+          comments={{}}
+          erroredIds={new Set()}
+          feedback={{}}
+          lastMessageComplete={false}
+          messages={[USER_TURN, message]}
+          onCommentChange={() => {}}
+          onDecide={() => {}}
+          onRate={() => {}}
+          onRegenerate={() => {}}
+          onSendComment={() => {}}
+        />
+      );
+    });
+    const row = clockContainer.querySelector('[data-testid="run-progress"]');
+    expect(row).not.toBeNull();
+    const hands = row!.querySelector('[data-testid="clock-hands"]') as SVGElement | null;
+    expect(hands).not.toBeNull();
+    expect(hands!.getAttribute("class") ?? "").toContain("motion-safe:animate-clock-hands");
+  });
+});

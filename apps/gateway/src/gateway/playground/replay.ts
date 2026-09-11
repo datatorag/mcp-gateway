@@ -109,9 +109,15 @@ export function replayPart(part: StoredPart): unknown | null {
       : null;
   }
 
-  // Reasoning is stored but the live thread does not surface it, so replay
-  // matches what the user saw at the time rather than revealing more.
-  if (type === "reasoning" || type === "step-start") return null;
+  // Reasoning replays as the row the live thread shows (SCRUM-262): the
+  // thinking caret opens the same text after a reload as it did live. An
+  // empty one is nothing, the same as an empty text part.
+  if (type === "reasoning") {
+    return typeof part.text === "string" && part.text !== ""
+      ? { type: "reasoning", text: part.text, state: "done" }
+      : null;
+  }
+  if (type === "step-start") return null;
 
   if (type === "tool-invocation") {
     const call = part.toolInvocation ?? {};
