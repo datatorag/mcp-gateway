@@ -115,11 +115,14 @@ Decide three things before the first call, and write them at the top of the run:
    `needsAction`, with the organiser, the time, and whether it collides with something
    you have already accepted. Never answer one on the user's behalf.
 
-8. **What you owe.** For each NEEDS YOU item that is a thing to do rather than a thing
-   to know, `tasks_create` in the chosen list: a title that names the action, notes
-   that carry the why and a link back to the message or event, and `due` when the item
-   carries a date. One task per line of the brief, so every task is traceable to the
-   line that produced it and every line that asks for action has a task.
+8. **What you owe.** Collect every NEEDS YOU item that is a thing to do rather than a
+   thing to know, then create them all with one `tasks_create` call: pass the chosen
+   list as `tasklist_id` and the items as `tasks`, each with a title that names the
+   action, notes that carry the why and a link back to the message or event, and `due`
+   when the item carries a date. Never one call per task. The reply carries one outcome
+   per task, so a task that failed is named and the rest still land. One task per line
+   of the brief, so every task is traceable to the line that produced it and every line
+   that asks for action has a task.
 
    A task is a thing a person does. "Call the dentist about the 14:30 clash" is a task.
    "Moved the design review" is a false statement, because this routine does not move

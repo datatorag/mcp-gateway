@@ -325,3 +325,18 @@ describe("the effort override in frontmatter (SCRUM-248)", () => {
     expect(parseSkillEffort(undefined)).toBeUndefined();
   });
 });
+
+/* SCRUM-250: tasks are created in one call. A brief used to spend one model
+ * step per task; the tool now takes the whole list, and a skill that names
+ * it must say so, or a reader's agent will fall back to one call per task. */
+describe("tasks are created in one call (SCRUM-250)", () => {
+  it("every published skill that names tasks_create passes the list as tasks and never calls once per task", () => {
+    const naming = readSkillFiles().filter((s) => s.tools.includes("tasks_create"));
+    expect(naming.length).toBeGreaterThan(0);
+    for (const skill of naming) {
+      expect(skill.skillSource, skill.slug).toMatch(/one `tasks_create` call/);
+      expect(skill.skillSource, skill.slug).toMatch(/as `tasks`/);
+      expect(skill.skillSource, skill.slug).toMatch(/never one call per task/i);
+    }
+  });
+});
