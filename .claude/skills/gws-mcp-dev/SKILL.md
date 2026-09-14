@@ -147,11 +147,16 @@ in addition to landing the merge itself:
   `users.messages`, `users.drafts`, `users.messages.attachments` — not
   bare names like `drafts`. Get this wrong and the CLI's API-discovery
   step fails (exit code 4).
-- **Scalar-only query params.** The `gws` CLI's `--params` only serializes
-  flat scalar values. A comma-joined multi-value string (e.g.
-  `metadataHeaders: "From,Subject"`) looks like one opaque scalar to the
-  underlying REST call and silently matches zero results — it does not
-  error, it just returns nothing useful. This exact bug shipped and was
-  fixed in `ab0ffef`: `gmail.ts`'s `fetchMessageList()` now uses plain
-  `format: "metadata"` plus client-side flattening instead. Don't
-  reintroduce a repeated/array query param through `--params`.
+- **Repeated query params are arrays, never comma-joined strings.** The
+  pinned `gws` CLI (0.17.0) sends an array of scalars in `--params` as a
+  repeated query key (`ranges=A&ranges=B`), which is what `ranges`,
+  `metadataHeaders`, `labelIds` and every other `repeated` parameter want.
+  A comma-joined string (`metadataHeaders: "From,Subject"`) is one opaque
+  value that matches nothing and errors nowhere (shipped once, fixed in
+  `ab0ffef`). An array of objects or arrays is refused before the call by
+  `assertCarriableParams` in `gws-client.ts`, because the binary
+  stringifies the element and Google blames the caller's input. Until
+  SCRUM-178 the client refused EVERY array on a belief about the binary
+  that was never measured; `src/gws-cli-transport.test.ts` now runs the
+  real binary with `--dry-run` and pins what it sends, so a claim about
+  the transport is checked against the transport, not remembered.
