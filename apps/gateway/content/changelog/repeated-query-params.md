@@ -1,6 +1,6 @@
 ---
 title: "gws_run takes repeated query parameters"
-date: "2026-09-14"
+date: "2026-09-15"
 tags: ["gws-mcp", "sheets", "gmail"]
 connector: "google-workspace"
 ---
