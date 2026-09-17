@@ -16,29 +16,59 @@ import { faqAnchor, faqAnswerHtml } from "@/lib/faq";
  * Anchors are derived from `q` rather than authored, so a heading and its link
  * cannot disagree. The guard pins that they stay unique within a page.
  */
+
+/** Type scale, and ONLY type scale.
+ *
+ * A closed set of two rather than class props, because the internals are where
+ * the extraction properties live: heading levels, derived ids, self-links and
+ * the refusal to collapse. Those do not vary and are not overridable. What does
+ * vary is that a block under a blog post is a footnote to something else, while
+ * on `/faq` the questions are the entire page and reading them at footnote size
+ * would be worse. Adding a third entry here should feel like a decision. */
+const VARIANTS = {
+  /** A block at the foot of a page about something else: blog, docs. */
+  compact: {
+    heading: "font-display text-lg font-bold text-foreground",
+    question: "group text-sm font-semibold text-foreground",
+    list: "mt-6 space-y-7",
+  },
+  /** A page whose whole subject is the questions. */
+  page: {
+    heading: "text-xl font-semibold text-foreground",
+    question: "group font-medium text-foreground",
+    list: "mt-6 space-y-8",
+  },
+} as const;
+
 export function FaqSection({
   faqs,
+  title = "Frequently asked questions",
+  variant = "compact",
   className = "mt-12 border-t border-border pt-10",
 }: {
   faqs: ContentFaq[];
+  /** The block's own heading. A grouped page passes its section name; every
+   * other surface wants the default, which is also what a reader scanning for
+   * the block is looking for. */
+  title?: string;
+  variant?: keyof typeof VARIANTS;
   /** Surfaces differ in the spacing they need around the block; the internals
    * do not vary and are not overridable, because that is where the extraction
    * properties live. */
   className?: string;
 }) {
   if (faqs.length === 0) return null;
+  const styles = VARIANTS[variant];
 
   return (
     <section className={className}>
-      <h2 className="font-display text-lg font-bold text-foreground">
-        Frequently asked questions
-      </h2>
-      <div className="mt-6 space-y-7">
+      <h2 className={styles.heading}>{title}</h2>
+      <div className={styles.list}>
         {faqs.map((faq) => {
           const anchor = faqAnchor(faq.q);
           return (
             <div key={anchor} id={anchor} className="scroll-mt-28">
-              <h3 className="group text-sm font-semibold text-foreground">
+              <h3 className={styles.question}>
                 {faq.q}{" "}
                 <a
                   href={`#${anchor}`}

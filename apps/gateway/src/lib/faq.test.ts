@@ -35,6 +35,7 @@ import { faqAnchor, faqAnswerHtml, faqAnswerText, type FaqEntry } from "./faq";
 import type { ContentFaq } from "./content-collection";
 import { getAllPosts } from "./blog";
 import { getAllDocs } from "./docs";
+import { siteFaqPages } from "./site-faq";
 
 /** Third parties whose behaviour changes without telling us. Our own product is
  * deliberately absent: "DataToRAG sends email" needs no date, because if it
@@ -111,6 +112,12 @@ function collectionSource(
 const SOURCES: FaqSource[] = [
   { name: "blog", minimum: 18, load: collectionSource("blog", getAllPosts) },
   { name: "docs", minimum: 69, load: collectionSource("docs", getAllDocs) },
+  // The landing pages are TSX and keep their answers in a typed module. They go
+  // through the SAME reader as the two markdown collections, because
+  // `siteFaqPages` hands back the same `{ slug, faqs }` shape; the rules below
+  // never learn which one they are looking at. A second reader for a second
+  // authoring format is the drift this registry exists to prevent.
+  { name: "landing", minimum: 14, load: collectionSource("landing", siteFaqPages) },
 ];
 
 const loaded = SOURCES.map((s) => ({ source: s, result: s.load() }));
@@ -224,10 +231,10 @@ describe("FAQ answers", () => {
 
 describe("the rules do not depend on where an answer came from", () => {
   // SCRUM-213's landing surfaces are TSX and hold their answers in a typed
-  // module, not in markdown. That source registers with its content, but the
-  // rules have to be source-shape-agnostic BEFORE then, or the registry is a
-  // claim nobody tested. These entries are hand-built rather than read off disk,
-  // which is exactly the case the markdown loader cannot cover.
+  // module, not in markdown. That source is registered above now, but these
+  // cases were written before it existed and stay: they are hand-built rather
+  // than read off disk, so they hold the source-shape-agnostic property on its
+  // own, without depending on any particular source still being registered.
   const synthetic: FaqEntry[] = [
     {
       source: "fixture",

@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { readFileSync, readdirSync } from "node:fs";
 import path from "node:path";
 import matter from "gray-matter";
+import { SITE_FAQ_PAGES } from "./site-faq";
 
 /**
  * A retention claim ("we don't store your data") is the line that decides the
@@ -87,31 +88,96 @@ function linesToScan(text: string): string[] {
   return [...text.split("\n"), ...faqAnswerLines(text)];
 }
 
+/** One body of copy and the lines it is judged by.
+ *
+ * WHY A UNIT AND NOT A FILE. Qualification is per file because a file was a
+ * page: a post links the policy once and every claim in it is qualified. The
+ * landing FAQs broke that equivalence, because one module now carries the
+ * answers for several routes, and a `/privacy` link in a `/faq` answer would
+ * silently qualify an unqualified claim on `/pricing`. So the landing module is
+ * scanned one ROUTE at a time, and a route is qualified only by its own
+ * answers. That is stricter than the file rule it replaces for that module, and
+ * stricter is the right direction: a link in the page footer is not the
+ * qualification a quoted answer carries with it. */
+interface CopyUnit {
+  label: string;
+  lines: string[];
+  qualified: boolean;
+}
+
+function landingUnits(): CopyUnit[] {
+  return SITE_FAQ_PAGES.flatMap((page) => {
+    const faqs = page.groups.flatMap((g) => g.faqs);
+    // Qualification is computed once for the ROUTE and then carried by each of
+    // its answers, so an offender names the question to open rather than an
+    // offset into a module nobody reads by line number.
+    const qualified = QUALIFIED.test(faqs.map((f) => f.a).join("\n"));
+    return faqs.map((f) => ({
+      label: `src/lib/site-faq.ts ${page.route} "${f.q}"`,
+      lines: [f.a],
+      qualified,
+    }));
+  });
+}
+
+function unitsToScan(): CopyUnit[] {
+  const units: CopyUnit[] = [];
+  for (const rel of filesToScan()) {
+    let text: string;
+    try {
+      text = readFileSync(path.join(ROOT, rel), "utf8");
+    } catch {
+      continue;
+    }
+    units.push({ label: rel, lines: linesToScan(text), qualified: QUALIFIED.test(text) });
+  }
+  return [...units, ...landingUnits()];
+}
+
 describe("retention claims are qualified", () => {
   it("scans a non-empty set of files", () => {
     // Guards the guard: an empty glob would make every assertion below pass.
     expect(filesToScan().length).toBeGreaterThan(10);
   });
 
+  it("scans the landing pages that hold their copy in a module", () => {
+    // The same control, for the source that has no directory to glob. A renamed
+    // export would empty this silently, and the file count above would not move.
+    const units = landingUnits();
+    expect(units.length).toBeGreaterThan(0);
+    expect(units.every((u) => u.lines.length > 0)).toBe(true);
+  });
+
+  it("does not let one route's privacy link qualify another route's claim", () => {
+    // The property the unit split exists for, pinned rather than left to the
+    // shape of today's content: there is one landing route right now, so a
+    // regression to file-level qualification would pass unnoticed until the
+    // second route shipped a claim. Hand-built for the same reason.
+    const qualifies = (answers: string[]) => QUALIFIED.test(answers.join("\n"));
+
+    const withLink = ["Tokens are stored server side. See the [privacy policy](/privacy)."];
+    const withClaim = ["We never store your data."];
+
+    expect(qualifies(withLink)).toBe(true);
+    expect(qualifies(withClaim)).toBe(false);
+    expect(qualifies([...withLink, ...withClaim])).toBe(true); // same route: qualified
+    expect(
+      RETENTION_CLAIM.test(withClaim[0]) && ABOUT_USER_DATA.test(withClaim[0])
+    ).toBe(true); // and it is a claim this sweep judges, not an inert string
+  });
+
   it("every unqualified retention claim links the privacy policy", () => {
     const offenders: string[] = [];
 
-    for (const rel of filesToScan()) {
-      let text: string;
-      try {
-        text = readFileSync(path.join(ROOT, rel), "utf8");
-      } catch {
-        continue;
-      }
-      const fileQualified = QUALIFIED.test(text);
-      linesToScan(text).forEach((line, i) => {
+    for (const unit of unitsToScan()) {
+      unit.lines.forEach((line, i) => {
         // Frontmatter notes describe a PAST correction, so they legitimately
         // restate the old claim while explaining it.
         if (line.startsWith("updatedNote:")) return;
         if (!RETENTION_CLAIM.test(line)) return;
         if (!ABOUT_USER_DATA.test(line)) return;
-        if (fileQualified) return;
-        offenders.push(`${rel}:${i + 1}  ${line.trim().slice(0, 120)}`);
+        if (unit.qualified) return;
+        offenders.push(`${unit.label}:${i + 1}  ${line.trim().slice(0, 120)}`);
       });
     }
 

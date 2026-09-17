@@ -221,14 +221,30 @@ JSON-LD cannot drift.
 Render with `<FaqSection faqs={...}/>` (`src/components/faq-section.tsx`) and emit the
 node with `faqPageNode` from `src/lib/site-schema.ts`, serialized through
 `<JsonLd nodes={...}/>`. Do not hand-roll the `<` escaping again; that component exists
-because two copies of it had already drifted.
+because two copies of it had already drifted. `FaqSection` takes an optional `title`
+(a grouped page passes its section name) and a `variant`, which is a closed set of two
+and controls TYPE SCALE ONLY: `compact` for a block under a page about something else,
+`page` for a page whose whole subject is the questions. The internals — heading levels,
+derived ids, `scroll-mt-28`, self-links, not collapsing — do not vary and are not
+overridable, because that is where the extraction properties live.
+
+**A page with no markdown file keeps its answers in `src/lib/site-faq.ts`**, keyed by
+route, in the same `{q, a}` type with `a` still markdown. `/faq` was migrated onto this
+in SCRUM-213 and its previous mechanism deleted: it used to hold HTML-string answers,
+hand-written anchors, its own copy of the block and its own copy of the `<` escape, and
+the HTML reached `acceptedAnswer.text` as tags. Answers live in the module rather than
+beside each page because a page holding its own array is a source the registry cannot
+see, which is the failure the rollout exists to remove. Groups are presentation: the
+FAQPage node and the guard both flatten them.
 
 **The guard is a registry, not a directory walk.** `src/lib/faq.test.ts` holds one
 `SOURCES` list and applies every rule to the union. Adding a surface that publishes
 FAQs means appending a source with its current `minimum`, in the same commit as the
 content. Two sweeps drift and the one nobody extended fails by looking at nothing.
-Sources load through the real collections (`getAllPosts`, `getAllDocs`), not a private
-re-parse, so the guard sees exactly the strings the page renders.
+Sources load through the real collections (`getAllPosts`, `getAllDocs`) and, for the
+landing pages, through `siteFaqPages()`, which hands back the same `{ slug, faqs }`
+shape so the rules never learn which authoring format they are looking at. No private
+re-parse anywhere, so the guard sees exactly the strings the page renders.
 
 Rules it enforces, each with a mutation control beside it:
 
@@ -248,6 +264,13 @@ Note what these do NOT do: they cannot tell whether a date is the right date or 
 a claim was ever true. Claims are a person's job. And the retention-claim sweep already
 folds each answer back to one line before scanning, because a per-line regex cannot see
 a claim that straddles a block-scalar line break.
+
+The retention sweep reads `site-faq.ts` too, ONE ROUTE AT A TIME rather than as a file.
+Its qualification rule is per file because a file was a page; a module carrying several
+routes breaks that equivalence, and a `/privacy` link in a `/faq` answer must not
+qualify an unqualified claim on `/pricing`. A route is qualified only by its own
+answers, which is stricter than the file rule and deliberately so: a link in the page
+footer is not a qualification a quoted answer carries with it.
 
 **Do not describe any of this as earning a Google rich result.** Google retired the FAQ
 rich result for every site on 2026-05-07 and removed the documentation on 2026-06-15.
