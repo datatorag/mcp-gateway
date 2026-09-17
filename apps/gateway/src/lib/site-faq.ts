@@ -1,4 +1,18 @@
 import type { ContentFaq } from "./content-collection";
+import { FREE_MONTHLY_CAP } from "@/gateway/billing/plans";
+import { VERIFIED_ON } from "./connector-verification";
+
+/** Numbers and dates are IMPORTED, never retyped.
+ *
+ * An answer is the most quotable surface we publish, so a hand-written copy of
+ * a figure is the copy that outlives the change to it. The free allowance comes
+ * from the constant the gateway enforces, and the comparison date from the
+ * table that was actually retested, so neither can say one thing here and
+ * another where it is decided. Dollar amounts are deliberately absent for the
+ * same reason in reverse: they are hand-written on the pricing page today and
+ * live in no constant, so quoting one here would add a fourth copy in the one
+ * format a machine repeats verbatim. Link to the page instead. */
+const FREE_CALLS = FREE_MONTHLY_CAP.toLocaleString("en-US");
 
 /** Authored FAQs for the pages that are TSX rather than markdown.
  *
@@ -110,6 +124,70 @@ export const SITE_FAQ_PAGES: SiteFaqPage[] = [
           {
             q: "Where do I get help?",
             a: "The [contact form](/contact) reaches us directly, and the [docs](/docs) cover setup per service. If something looks broken, tell us what you asked your client to do and what happened instead, and we will chase it.",
+          },
+        ],
+      },
+    ],
+  },
+  {
+    route: "/",
+    groups: [
+      {
+        title: "Questions people ask first",
+        faqs: [
+          {
+            q: "Can my AI assistant actually edit my files, or only read them?",
+            a: `Edit them, and that is the whole difference. The built-in connectors read well and stop at the point of change: through DataToRAG your assistant appends rows to a spreadsheet you already have, replies inside an existing email thread, puts content into a deck it just made, and updates a Jira issue, with your approval on every one. The capability table on this page was built by enumerating each connector's tool surface on ${VERIFIED_ON}, not by reading documentation.`,
+          },
+          {
+            q: "Which AI clients can connect to it?",
+            a: "Any client that speaks MCP. Claude Desktop, Cursor, Windsurf and your own application all connect the same way, with one URL covering every service you have connected and OAuth sign-in handling the rest. The gateway is hosted, so the same connection works from another machine without setting anything up again.",
+          },
+          {
+            q: "What does DataToRAG connect to?",
+            a: "Google Workspace and Atlassian. Gmail, Drive, Docs, Sheets, Slides, Calendar, Contacts and Tasks, plus Jira and Confluence, all behind one endpoint: connect once and every tool is available to your assistant rather than one integration at a time. The [docs](/docs) list every action per service.",
+          },
+          {
+            q: "What stops it doing something I did not want?",
+            a: "An approval step in front of every write. Reads flow, and anything that changes your data is shown to you and waits. The gate fails closed, so a tool DataToRAG does not positively recognise as a read is treated as a write and asks first, and there is no shell or arbitrary code execution anywhere in the gateway for a prompt injection to reach.",
+          },
+          {
+            q: "Is it safe to connect a hosted gateway to my Google account?",
+            a: "It is the right question to ask of anything asking for Workspace access. DataToRAG has been Google-verified since June 2026 and passed the CASA Tier 2 security assessment that the restricted Workspace scopes require, so you will not see an unverified app warning when you connect. The gateway is also open source: you can read exactly what it does, and run it yourself instead. Here is [what the verification involved](/blog/casa-tier-2-verified).",
+          },
+          {
+            q: "What does it cost to start?",
+            a: `Nothing, and no card. The free tier includes ${FREE_CALLS} tool calls a month with every connector available, and paid plans buy a bigger allowance rather than unlocking features. [Pricing](/pricing) has the current numbers.`,
+          },
+        ],
+      },
+    ],
+  },
+  {
+    route: "/pricing",
+    groups: [
+      {
+        title: "Questions about the plans",
+        faqs: [
+          {
+            q: "What happens when I use up the free allowance?",
+            a: `The next tool call is refused, not billed. The free cap is checked before a call runs, and the refusal tells you the allowance resets at the start of your next period and that Pro is available from your dashboard. Free is ${FREE_CALLS} tool calls a month with no card on file, so there is nothing to surprise you at the end of it.`,
+          },
+          {
+            q: "Which tool calls count against the allowance?",
+            a: "The ones that reached the API. A successful call counts, and so does a request that came back with a legitimate no, because it ran. Server errors are not metered: if the DataToRAG gateway is down, a plugin crashes, or an upstream API returns a 5xx, that call is not counted against you. Your [usage dashboard](/docs/usage) shows what ran.",
+          },
+          {
+            q: "Is any connector or feature behind the paid tier?",
+            a: "No. Every tier gets every connector and every tool, several accounts side by side, and the approval gate on writes. What Pro and Enterprise buy is a larger monthly allowance, not a larger feature set, which is why there is no per-connector upsell anywhere on this page.",
+          },
+          {
+            q: "Can I run the gateway myself instead?",
+            a: "Yes. The DataToRAG gateway is open source and you can self-host it, which is also the Enterprise choice: hosted by us, or run by you, at a committed-volume rate either way.",
+          },
+          {
+            q: "How do I get an Enterprise quote?",
+            a: "Tell us what you are running and a person answers. The [contact form](/contact?from=pricing) reaches us directly, Enterprise includes everything in Pro, and the rate is negotiated against committed volume rather than published as a tier.",
           },
         ],
       },

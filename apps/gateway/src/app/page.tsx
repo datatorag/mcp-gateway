@@ -18,6 +18,13 @@ import { getAllPersonas } from "@/lib/personas";
 import { getSessionUserId } from "@/lib/session";
 import Link from "next/link";
 import Script from "next/script";
+import { FaqSection } from "@/components/faq-section";
+import { JsonLd } from "@/components/json-ld";
+import { faqPageNode } from "@/lib/site-schema";
+import { siteFaqGroups, siteFaqs } from "@/lib/site-faq";
+
+/** Read once at module scope: the answers are static, the page is not. */
+const homeFaqs = siteFaqs("/");
 
 export const dynamic = "force-dynamic";
 
@@ -116,6 +123,11 @@ export default async function HomePage() {
       <Navbar />
 
       <main className="flex-1 overflow-x-hidden">
+        {/* First structured data on this page. An array, so SCRUM-205's
+            Organization and WebSite nodes append here rather than adding a
+            second script element. */}
+        <JsonLd nodes={homeFaqs.length > 0 ? [faqPageNode(homeFaqs)] : []} />
+
         {/* Hero */}
         <ShaderBackground>
           {/* One viewport-height column, centered as a group: extra vertical
@@ -945,6 +957,36 @@ export default async function HomePage() {
 }`}
               </pre>
             </div>
+          </div>
+        </section>
+
+        {/* FAQ. Last thing before the ask, because these are the questions
+            that stand between reading the page and clicking the button, and
+            the answers are the page's own claims rather than new ones. The
+            block, its anchors and its JSON-LD are the shared ones every other
+            surface uses; the answers live in lib/site-faq.ts keyed by route,
+            where one guard can walk them. */}
+        <section className="mx-auto max-w-6xl px-6 pb-20">
+          <div className="animate-fade-in-up mx-auto max-w-3xl">
+            <p className="text-sm font-semibold uppercase tracking-widest text-primary">
+              FAQ
+            </p>
+            {siteFaqGroups("/").map((group) => (
+              <FaqSection
+                key={group.title}
+                title={group.title}
+                faqs={group.faqs}
+                variant="section"
+                className="mt-3"
+              />
+            ))}
+            <p className="mt-8 text-sm text-muted-foreground">
+              More of them on the{" "}
+              <Link href="/faq" className="underline hover:text-foreground">
+                FAQ page
+              </Link>
+              .
+            </p>
           </div>
         </section>
 

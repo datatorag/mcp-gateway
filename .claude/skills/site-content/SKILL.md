@@ -222,20 +222,36 @@ Render with `<FaqSection faqs={...}/>` (`src/components/faq-section.tsx`) and em
 node with `faqPageNode` from `src/lib/site-schema.ts`, serialized through
 `<JsonLd nodes={...}/>`. Do not hand-roll the `<` escaping again; that component exists
 because two copies of it had already drifted. `FaqSection` takes an optional `title`
-(a grouped page passes its section name) and a `variant`, which is a closed set of two
-and controls TYPE SCALE ONLY: `compact` for a block under a page about something else,
-`page` for a page whose whole subject is the questions. The internals — heading levels,
+(a grouped page passes its section name) and a `variant`, which is a closed set of three
+and controls TYPE SCALE ONLY: `compact` for a block under a page about something else
+(blog, docs), `page` for a page whose whole subject is the questions (`/faq`), `section`
+for a block sitting among other sections at a marketing page's heading scale (`/`,
+`/pricing`). The internals — heading levels,
 derived ids, `scroll-mt-28`, self-links, not collapsing — do not vary and are not
 overridable, because that is where the extraction properties live.
 
 **A page with no markdown file keeps its answers in `src/lib/site-faq.ts`**, keyed by
-route, in the same `{q, a}` type with `a` still markdown. `/faq` was migrated onto this
-in SCRUM-213 and its previous mechanism deleted: it used to hold HTML-string answers,
+route, in the same `{q, a}` type with `a` still markdown. `/faq`, `/` and `/pricing` all carry their
+answers there. `/faq` was migrated onto it in SCRUM-213 and its previous mechanism
+deleted: it used to hold HTML-string answers,
 hand-written anchors, its own copy of the block and its own copy of the `<` escape, and
 the HTML reached `acceptedAnswer.text` as tags. Answers live in the module rather than
 beside each page because a page holding its own array is a source the registry cannot
 see, which is the failure the rollout exists to remove. Groups are presentation: the
 FAQPage node and the guard both flatten them.
+
+**Figures and dates in an answer are IMPORTED, never retyped.** An answer is the most
+quotable thing we publish, so a hand-written copy of a number is the copy that outlives
+the change to it. The free allowance comes from `billing/plans.ts`, the constant
+enforcement reads. The built-in-connector comparison date comes from
+`lib/connector-verification.ts`, which exists because the home page's table and the FAQ
+answer beneath it make the same dated claim and a retest must move both (it lived in
+`connector-comparison.tsx` for an afternoon, which pulled the icon library into the
+guard's module graph and took a 0.5s test run to over two minutes). Dollar amounts are
+deliberately absent from every answer, for the same reason in reverse: they are
+hand-written on the pricing page and in the checkout and live in no constant, so quoting
+one in an answer would add a third copy in the format a machine repeats verbatim. Link
+to the page instead.
 
 **The guard is a registry, not a directory walk.** `src/lib/faq.test.ts` holds one
 `SOURCES` list and applies every rule to the union. Adding a surface that publishes
@@ -252,7 +268,10 @@ Rules it enforces, each with a mutation control beside it:
   to be quoted away from its page, so "at the time of writing" evaporates on the way
   out and leaves an undated permanent claim about somebody else's moving product. The
   rule is per ANSWER, not per sentence: an answer that already carries a date satisfies
-  it throughout.
+  it throughout. The pattern covers BOTH vocabularies, "native connector" and "built-in
+  connector": the site calls the same competitor by different names on different pages,
+  and a pattern written against one page's wording went blind the moment an answer was
+  written in the other's. Add the synonym when you notice one, not the example.
 - **No hyphenated word split by folding.** A folded scalar joins lines with spaces, so
   a hyphen broken across two lines becomes "self- hosting". Invisible in the source.
 - **Every answer names its own subject**, because an extracted answer arrives without

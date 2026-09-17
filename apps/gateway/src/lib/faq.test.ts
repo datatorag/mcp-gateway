@@ -39,9 +39,16 @@ import { siteFaqPages } from "./site-faq";
 
 /** Third parties whose behaviour changes without telling us. Our own product is
  * deliberately absent: "DataToRAG sends email" needs no date, because if it
- * stops being true that is our bug to fix, not a surface moving underneath us. */
+ * stops being true that is our bug to fix, not a surface moving underneath us.
+ *
+ * "built-in" was added when the landing FAQs arrived, and the gap is worth
+ * recording: the same competitor is called "native connectors" on /faq and
+ * "built-in connector" on the home page, so a pattern written against one
+ * page's vocabulary went blind the moment an answer was written in the other's.
+ * A claim does not become datable or undatable according to which synonym the
+ * author reached for. */
 const COMPETITOR =
-  /\b(Composio|Zapier|Pipedream|native connectors?|Claude's native|Anthropic)\b/;
+  /\b(Composio|Zapier|Pipedream|(?:native|built-in) connectors?|Claude's (?:native|built-in)|Anthropic)\b/;
 
 const HAS_YEAR = /\b(20\d{2})\b/;
 
@@ -117,7 +124,7 @@ const SOURCES: FaqSource[] = [
   // `siteFaqPages` hands back the same `{ slug, faqs }` shape; the rules below
   // never learn which one they are looking at. A second reader for a second
   // authoring format is the drift this registry exists to prevent.
-  { name: "landing", minimum: 14, load: collectionSource("landing", siteFaqPages) },
+  { name: "landing", minimum: 25, load: collectionSource("landing", siteFaqPages) },
 ];
 
 const loaded = SOURCES.map((s) => ({ source: s, result: s.load() }));
@@ -178,6 +185,16 @@ describe("FAQ answers", () => {
 
     const good = "Composio had no standalone Slides toolkit as of July 2026.";
     expect(COMPETITOR.test(good) && !HAS_YEAR.test(good)).toBe(false);
+
+    // Both vocabularies, because the pages disagree on what to call it and the
+    // rule must not.
+    for (const phrase of [
+      "The native connector cannot send.",
+      "The built-in connector cannot send.",
+      "Claude's built-in Drive connector cannot edit a file you already have.",
+    ]) {
+      expect(COMPETITOR.test(phrase), phrase).toBe(true);
+    }
   });
 
   it("matches the competitors our shipped answers actually name", () => {

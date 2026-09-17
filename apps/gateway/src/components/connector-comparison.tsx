@@ -1,4 +1,5 @@
 import { CircleCheckIcon, CircleMinusIcon } from "lucide-react";
+import { CALENDAR_VERIFIED_ON, VERIFIED_ON } from "@/lib/connector-verification";
 
 /**
  * The full capability comparison against Claude's built-in Google connectors.
@@ -62,14 +63,9 @@ import { CircleCheckIcon, CircleMinusIcon } from "lucide-react";
  *    every row Yes and the table meaningless.
  */
 
-/** Rendered, not just recorded. See rule 2. Change it only when the rows have
- * actually been retested. */
-const VERIFIED_ON = "7 August 2026";
-/** The Calendar rows were re-checked separately and later, and the standfirst
- * says so rather than moving the sitewide date: claiming the whole table was
- * re-verified when only one section was would be the same kind of overclaim
- * the correction exists to remove. */
-const CALENDAR_VERIFIED_ON = "10 August 2026";
+// Both dates live in `lib/connector-verification.ts` now, because the home
+// page's FAQ makes the same claim in prose and must carry the same date. See
+// rule 2 there and here: rendered, not just recorded.
 
 type Row = {
   capability: string;

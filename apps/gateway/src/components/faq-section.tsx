@@ -38,6 +38,16 @@ const VARIANTS = {
     question: "group font-medium text-foreground",
     list: "mt-6 space-y-8",
   },
+  /** A section of a marketing page, sitting among other sections at that
+   * page's heading scale. Added for the home and pricing blocks: at `page`
+   * scale the FAQ heading would read as a subheading of whatever came before
+   * it, and the alternative to a third entry here was those two pages
+   * hand-rolling the block, which is the thing this component removed. */
+  section: {
+    heading: "font-display text-2xl font-bold text-foreground sm:text-3xl",
+    question: "group font-medium text-foreground",
+    list: "mt-8 space-y-8",
+  },
 } as const;
 
 export function FaqSection({
