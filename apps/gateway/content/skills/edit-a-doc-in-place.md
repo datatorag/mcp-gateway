@@ -5,6 +5,28 @@ situation: "The assistant reads my doc, tells me what to change, and then makes 
 produces: "The edit applied in the document, in the right place, without a rewrite of everything around it."
 tools: [docs_get, docs_batch_update]
 accounts: single
+faqs:
+  - q: Does it rewrite the whole document?
+    a: >-
+      No. Google Docs edits are positional, so the skill deletes a known range and
+      inserts the replacement in the same batch, and the rest of the paragraph
+      around it is untouched.
+  - q: Why does it read the document again between edits?
+    a: >-
+      Because the positions move. Replacing a 28 character sentence with a 59
+      character one shifted every position after it by 31, and nothing errors: a
+      second edit using the first read's positions lands in the wrong place and
+      reports success.
+  - q: Can it rename a term everywhere in a document?
+    a: >-
+      Yes, and without positions at all. A fixed string replaced everywhere is a
+      replaceAllText request in the Google Docs batch update, which cannot drift;
+      positional editing is for a change that depends on where it is.
+  - q: What is this skill not for?
+    a: >-
+      Appending and creating. Adding to the end of a document is an insert at the
+      end, and a new document is a create. Reach for positional editing when
+      something already there has to change.
 ---
 
 # Changing a paragraph, not replacing a document

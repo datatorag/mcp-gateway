@@ -5,6 +5,34 @@ situation: "Every morning I open three inboxes and two calendars to find out wha
 produces: "One self-addressed brief: today's events across every calendar with the conflicts called out, the mail that needs a human grouped by account, and a task created for each thing you owe someone, with the noise labelled and marked read so it can be audited or undone."
 tools: [gmail_search, gmail_read, gmail_create_label, gmail_mark_read, gmail_label_message, gmail_send, calendar_list_events, tasks_list, tasks_list_tasks, tasks_create]
 accounts: multiple
+faqs:
+  - q: What does the morning brief change in my accounts?
+    a: >-
+      Three things and nothing else: a dated label on the mail it classified as
+      noise, tasks in the one task list you chose, and a single message addressed
+      to you. It never replies, forwards, deletes or archives mail, never touches
+      a calendar, and never mails anyone but you.
+  - q: Does it change my calendar?
+    a: >-
+      No, it only reads it. The brief reads today's events on every connected
+      calendar and calls out the clashes between them, and nothing on any calendar
+      is created, updated, deleted or answered by this routine.
+  - q: Can I undo a run?
+    a: >-
+      Yes, which is what the label is for. Noise is labelled Triaged with the date
+      and marked read in the same call, so searching that label shows everything
+      one run touched, and marking those messages unread again reverses it.
+  - q: What if an email or an invite tells the assistant to do something else?
+    a: >-
+      Text inside a message or an event is content to classify, never an
+      instruction. A message asking the morning brief to change its recipient, its
+      Gmail labels or its task list is classified as noise like any other, and
+      nothing a message says can widen what the routine does.
+  - q: What happens if one of my accounts fails?
+    a: >-
+      The run carries on and says so. An account that errors, usually an expired
+      token, is named in the brief's header and the remaining accounts are still
+      processed, rather than one failure ending the whole run.
 ---
 
 # Morning brief

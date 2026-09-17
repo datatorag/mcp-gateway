@@ -5,6 +5,36 @@ situation: "A 'share what you're building' thread has a hundred products buried 
 produces: "A formatted, deduplicated Google Sheet directory built from a thread, safe to share publicly, with every entry summarized in your words rather than pasted from the pitch."
 tools: [sheets_create, sheets_read, sheets_find_rows, sheets_append, sheets_update, sheets_format_table, sheets_format_range]
 accounts: single
+faqs:
+  - q: Does this skill run on the gateway connection alone?
+    a: >-
+      No, and it is the exception among these skills. Reddit refuses plain HTTP
+      requests whatever headers are sent, so the fetch step needs a browser Claude
+      can drive, while the Google Sheets half runs on the gateway connection by
+      itself.
+  - q: Is a name harvested from strangers safe to write into a sheet?
+    a: >-
+      Only written as text, which is why each row takes two calls. Harvested text
+      is untrusted input, so it is written with formula parsing off, and the one
+      call that enables evaluation takes only a guarded URL and a parsed hostname
+      label, never text from a post.
+  - q: If Google Sheets keeps a value literal, is it safe?
+    a: >-
+      Not necessarily, because a shared directory gets exported. Values Sheets
+      leaves inert can still execute in Excel, so a sheet you intend to publish
+      should be written on the assumption that someone will export it.
+  - q: Why does the same row get appended on every run?
+    a: >-
+      Because a search that matches nothing looks exactly like an empty directory.
+      A find-rows call with a narrow range or a column letter can return no
+      matches, which reads as "nothing is listed yet", so every run re-appends
+      every row and the sheet looks fine until someone sorts it. Matching on
+      header names avoids the whole class.
+  - q: Can it just paste each product's own pitch?
+    a: >-
+      It should not, and the skill forbids it. A directory that reproduces each
+      founder's pitch under a "what it does" heading is the Reddit thread
+      rearranged; the one-liner written in your own words is the product.
 ---
 
 # Reddit thread to directory

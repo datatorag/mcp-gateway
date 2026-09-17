@@ -5,6 +5,37 @@ situation: "Our notes are scattered and half of them are stale. I want one place
 produces: "A Google Sheet your agent reads and writes reliably, without the traps that make spreadsheets bad interfaces."
 tools: [sheets_create, sheets_add_tab, sheets_read, sheets_update, sheets_append]
 accounts: single
+faqs:
+  - q: What belongs in a sheet and what does not?
+    a: >-
+      Put things whose current value is the point: inventories, statuses,
+      registries, anything you would filter or sort. Keep things whose history is
+      the point somewhere else, because a spreadsheet makes history editable and
+      unsearchable, which destroys the two properties that made those documents
+      worth keeping.
+  - q: Why does an agent misread the sheet we already have?
+    a: >-
+      Usually the schema rather than the model. Merged headers arrive as repeated
+      text with no indication of which columns they spanned, spacer columns come
+      back as empty strings that shift every column index after them, and a
+      formula reads back as its result.
+  - q: Can a colour or a strikethrough carry meaning?
+    a: >-
+      Not to anything reading the sheet through the API. Formatting is not in the
+      response, so a struck-through row means nothing to an agent, and unlike a
+      missing column there is no gap to notice. Every convention a team keeps in
+      bold, colour or strikethrough has to become a column first.
+  - q: Which trap costs the most time?
+    a: >-
+      HYPERLINK formulas, because the sheet looks correct. Every link is clickable
+      and every label is meaningful, while the agent sees a column of words with
+      no addresses in it and has no way to report what is missing.
+  - q: How should rows be matched when something is updated?
+    a: >-
+      On an id column, never on a display name. AcmeCorp and Acme Corp are
+      different strings and the same company, and a failed match reads as "this
+      record does not exist" rather than as an error, which is the shape that
+      quietly duplicates rows.
 ---
 
 # A sheet your agent can actually read

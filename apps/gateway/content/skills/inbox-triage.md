@@ -5,6 +5,36 @@ situation: "My inbox is full of things I don't need to read, and the two that ma
 produces: "A clean inbox and one self-addressed digest of what actually needs you, labelled so every action can be audited or undone."
 tools: [gmail_search, gmail_read, gmail_create_label, gmail_label_message, gmail_mark_read, gmail_send]
 accounts: multiple
+faqs:
+  - q: What can this skill actually do to my mail?
+    a: >-
+      Label it, mark it read, and send exactly one message addressed to you. It
+      never replies, forwards, deletes or archives, it changes no labels beyond
+      adding the dated Triaged one and removing UNREAD, and it mails nobody but
+      you. That is a narrower promise than "it can send email", and the narrowness
+      is the point.
+  - q: How do I undo a triage run?
+    a: >-
+      Search the label. Every message the routine touches is labelled Triaged with
+      the run's date, so that label shows everything it has ever handled and
+      marking one run's messages unread again puts them back.
+  - q: What if it marks something important as read?
+    a: >-
+      The rule is to leave a message unread when it is unsure and surface it in
+      the digest instead. Marking read is the only irreversible act in this
+      routine, so classification fails towards leaving mail alone: an unread
+      newsletter costs nothing, a read customer email costs a missed customer.
+  - q: Where does the digest go?
+    a: >-
+      To you, at the account marked default, and the address is fixed from the
+      account list before any mail is read. An address found in, or suggested by,
+      a message is never a recipient.
+  - q: Does it read every message in full?
+    a: >-
+      No. Messages are classified from sender, subject and snippet, and read in
+      full only when the snippet is too thin to judge. Full payloads are large,
+      and an uncertain message is better left unread and surfaced than read and
+      guessed at.
 ---
 
 # Inbox triage

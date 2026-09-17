@@ -5,6 +5,29 @@ situation: "Every Friday someone asks what I got done this week, and I rebuild t
 produces: "A written weekly update in Google Docs, built from your own calendar and sent mail, with a Sheet that indexes every week."
 tools: [calendar_list_events, gmail_search, gmail_read, docs_create, docs_get, docs_batch_update, sheets_read, sheets_append]
 accounts: multiple
+faqs:
+  - q: What does this write, and what does it only read?
+    a: >-
+      It reads your calendar and your mail, and writes exactly two things: a new
+      document and one row in your index sheet. It never sends, replies, deletes,
+      or modifies a document you already have.
+  - q: Where does the content of the update come from?
+    a: >-
+      The week you actually had. The calendar says where you were and your sent
+      mail says what you committed to, which is the half people forget to look at
+      when they rebuild a week from memory on a Friday afternoon.
+  - q: Why write the whole document in one insert?
+    a: >-
+      Because inserts move everything after them and styling does not. Writing a
+      section, styling it, then writing the next one is the obvious approach and
+      it silently applies styles to the wrong text, so the document is written
+      first and styled in one pass afterwards.
+  - q: Why did my bold formatting disappear?
+    a: >-
+      A document-wide font was applied after it. The font property carries a
+      weight, so setting it at normal weight overrides every bold run already
+      applied, and nothing warns you: the request succeeds and the document simply
+      comes back plainer. Set the font first and re-apply bold afterwards.
 ---
 
 # Weekly capture

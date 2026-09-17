@@ -5,6 +5,33 @@ situation: "The same report lands in my inbox every week and I file it by hand, 
 produces: "Attachments filed into the right Drive folder, without the files ever passing through the conversation."
 tools: [gmail_search, gmail_read, gmail_save_attachment_to_drive, drive_create_folder]
 accounts: single
+faqs:
+  - q: Does the attachment pass through the conversation?
+    a: >-
+      No, and that is the point of this skill. The file moves from Gmail to Drive
+      server-side, so a 5MB spreadsheet costs nothing in context and the cost is
+      the same whether the file is 5KB or 50MB.
+  - q: Why not just read the attachment and save it?
+    a: >-
+      Because of the arithmetic. Attachments are base64 encoded in the MIME
+      payload, which inflates them by roughly a third, so reading one 5MB
+      attachment the naive way spends about 6.7MB of context on a file nobody was
+      going to read.
+  - q: Will it create duplicate folders in Drive?
+    a: >-
+      Not if it checks first, which is why the skill says to. Creating a folder
+      that already exists gives you two folders with the same name and no error at
+      all, and Drive will let you keep doing it, so the pattern is one folder per
+      cadence rather than one per file.
+  - q: Will it search my whole mailbox?
+    a: >-
+      No. Searching for attachments alone matches years of mail, so every search
+      here is bounded by a sender and a date.
+  - q: What order does it do things in?
+    a: >-
+      File, then confirm, then mark. If the mail is also marked read, that happens
+      after the file has landed, because a failure the other way round leaves a
+      read message and no file, which is invisible.
 ---
 
 # Filing the attachment, not reading it

@@ -137,7 +137,7 @@ const SOURCES: FaqSource[] = [
   // Skills read through `skillFaqPages`, which goes to the FILES rather than
   // to the skills table: the answers are published page copy keyed by slug,
   // never part of the artifact a reader copies and never on a user's own row.
-  { name: "skills", minimum: 0, load: collectionSource("skills", skillFaqPages) },
+  { name: "skills", minimum: 50, load: collectionSource("skills", skillFaqPages) },
   { name: "personas", minimum: 16, load: collectionSource("personas", personaFaqPages) },
 ];
 

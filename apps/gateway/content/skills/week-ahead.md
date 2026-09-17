@@ -5,6 +5,26 @@ situation: "I have meetings across three calendars and I find out about conflict
 produces: "A week-ahead agenda across every account, with conflicts and unanswered invites called out."
 tools: [calendar_list_events, calendar_get_event, calendar_freebusy]
 accounts: multiple
+faqs:
+  - q: Does the week ahead skill change anything in my calendars?
+    a: >-
+      No. It is read-only: nothing is created, moved, deleted or answered, and
+      every invitation it finds is surfaced for you to answer yourself.
+  - q: What does it show that my calendar app does not?
+    a: >-
+      The collision between two calendars. Each calendar app already shows its own
+      week, and the clash between a work calendar and a personal one is the thing
+      no single view can show, which is why this reads every connected account in
+      one pass.
+  - q: How does it know which invitations still need me?
+    a: >-
+      From the needsAction status on the event. Unanswered invitations are called
+      out in the agenda because they are the most common source of a meeting that
+      quietly does not happen.
+  - q: How far ahead is worth asking for?
+    a: >-
+      Seven days. A wider window returns more than anyone reads, so the week ahead
+      skill asks Google Calendar for a window rather than for everything on it.
 ---
 
 # Week ahead
