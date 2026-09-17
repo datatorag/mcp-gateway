@@ -10,7 +10,11 @@ import {
   getAllSkills,
   getRelatedSkills,
   getSkillBySlug,
+  publishedSkillFaqs,
 } from "@/lib/skills";
+import { FaqSection } from "@/components/faq-section";
+import { JsonLd } from "@/components/json-ld";
+import { faqPageNode } from "@/lib/site-schema";
 
 type Props = { params: Promise<{ slug: string }> };
 
@@ -44,11 +48,16 @@ export default async function SkillPage({ params }: Props) {
 
   const related = await getRelatedSkills(slug);
   const connectors = connectorsFor(skill.tools);
+  // From the files, by slug, never off the row: this page always renders the
+  // PUBLISHED skill, and the answers are page copy about it rather than part
+  // of the artifact the copy button hands over.
+  const faqs = publishedSkillFaqs(skill.slug);
 
   return (
     <>
       <Navbar />
       <main className="flex-1 bg-background">
+        <JsonLd nodes={faqs.length > 0 ? [faqPageNode(faqs)] : []} />
         <article className="mx-auto max-w-3xl px-6 pb-16 pt-32 sm:pb-20 sm:pt-36">
           <Link
             className="inline-flex items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground"
@@ -124,6 +133,15 @@ export default async function SkillPage({ params }: Props) {
           <div
             className="prose mt-10"
             dangerouslySetInnerHTML={{ __html: skill.notesHtml }}
+          />
+
+          {/* Answers before the ask, and before "Other skills": someone who
+              has read this far is deciding whether to paste it in, and the
+              questions they have are about what it touches. Anything said
+              here is bound by the rails in the skill above it, never wider. */}
+          <FaqSection
+            className="mt-14 border-t border-border pt-8"
+            faqs={faqs}
           />
 
           {/* The CTA, never a wall: everything above reads signed-out. It is

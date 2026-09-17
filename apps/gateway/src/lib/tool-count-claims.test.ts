@@ -28,7 +28,7 @@ const ROOT = path.join(process.cwd());
  * them saying 48 long after the real figure had moved, found only by a manual
  * sweep. A guard that covers the pages nobody edits weekly is worth more than
  * one covering the pages everybody watches. */
-const CONTENT_DIRS = ["content/blog", "content/docs", "content/changelog"];
+const CONTENT_DIRS = ["content/blog", "content/docs", "content/changelog", "content/skills", "content/personas"];
 
 const COPY_FILES = [
   "src/app/page.tsx",

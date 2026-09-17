@@ -36,6 +36,8 @@ import type { ContentFaq } from "./content-collection";
 import { getAllPosts } from "./blog";
 import { getAllDocs } from "./docs";
 import { siteFaqPages } from "./site-faq";
+import { skillFaqPages } from "./skills";
+import { personaFaqPages } from "./personas";
 
 /** Third parties whose behaviour changes without telling us. Our own product is
  * deliberately absent: "DataToRAG sends email" needs no date, because if it
@@ -125,6 +127,18 @@ const SOURCES: FaqSource[] = [
   // never learn which one they are looking at. A second reader for a second
   // authoring format is the drift this registry exists to prevent.
   { name: "landing", minimum: 30, load: collectionSource("landing", siteFaqPages) },
+  // Registered at zero, with content following in its own commit. `scanned`
+  // is what makes that safe: these two report how many pages they resolved,
+  // so a source wired to a collection that later stops loading fails here
+  // even while its authored count is legitimately nothing yet. A source
+  // registered only when it has content is a source nobody notices is
+  // missing.
+  //
+  // Skills read through `skillFaqPages`, which goes to the FILES rather than
+  // to the skills table: the answers are published page copy keyed by slug,
+  // never part of the artifact a reader copies and never on a user's own row.
+  { name: "skills", minimum: 0, load: collectionSource("skills", skillFaqPages) },
+  { name: "personas", minimum: 0, load: collectionSource("personas", personaFaqPages) },
 ];
 
 const loaded = SOURCES.map((s) => ({ source: s, result: s.load() }));

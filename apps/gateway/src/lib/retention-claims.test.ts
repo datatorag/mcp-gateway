@@ -25,7 +25,7 @@ import { SITE_FAQ_PAGES } from "./site-faq";
  */
 
 const ROOT = process.cwd();
-const CONTENT_DIRS = ["content/blog", "content/docs", "content/changelog"];
+const CONTENT_DIRS = ["content/blog", "content/docs", "content/changelog", "content/skills", "content/personas"];
 const COPY_FILES = ["src/app/page.tsx", "src/app/pricing/page.tsx"];
 
 /** Assertions that we do not retain the user's content. Deliberately broad on

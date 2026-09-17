@@ -149,6 +149,7 @@ skills get no reverse-chronological feed and do not use `getRelatedPosts`. Sorte
 | `tools` | string array — bare tool names | `[]` |
 | `accounts` | `"single"` \| `"multiple"` | `"single"` |
 | `order` | number | `99` |
+| `faqs` | list of `{q, a}` | `[]` (file-only, see **Per-page FAQs** below) |
 
 **The load-bearing mechanism is `skillSource`.** The body is split around its first
 ```` ```markdown ```` fence: prose before it becomes `introHtml` (with the leading `#`
@@ -192,7 +193,7 @@ skill operates over, not a strict call list.
 
 ## Per-page FAQs
 
-Blog and docs pages can carry a `faqs:` list in frontmatter. Read through
+Blog, docs, skill and persona pages can carry a `faqs:` list in frontmatter. Read through
 `field.faqList` like every other field; a malformed entry is dropped, never coerced.
 
 ```yaml
@@ -240,6 +241,19 @@ beside each page because a page holding its own array is a source the registry c
 see, which is the failure the rollout exists to remove. Groups are presentation: the
 FAQPage node and the guard both flatten them.
 
+**A skill's FAQs are FILE-ONLY and never touch the row.** Since SCRUM-226 a published
+skill is a database row seeded from its file, so a new frontmatter field has a choice to
+make. `faqs` stays out of `SkillContent`, out of `skillVersion`, and out of the table.
+Three reasons, each sufficient: a reader copies the fenced artifact and page copy about
+the skill is not in what they copy; the content hash is what tells a fork whether the
+skill it came from changed, and a new question must not re-version a skill whose
+behaviour is identical; and a user's own skill row must never inherit our published
+answers. `parseSkill` fills a slug-keyed map while the files parse, and the page calls
+`publishedSkillFaqs(slug)` rather than reading a field, so a row cannot carry it by
+accident. THE ANSWERS ARE BOUND BY THE SKILL'S RAILS, never wider: the same review
+standard as the fenced block applies, because an answer that widens a rail is a promise
+made outside the artifact the rail lives in.
+
 **Figures and dates in an answer are IMPORTED, never retyped.** An answer is the most
 quotable thing we publish, so a hand-written copy of a number is the copy that outlives
 the change to it. The free allowance comes from `billing/plans.ts`, the constant
@@ -283,6 +297,11 @@ Note what these do NOT do: they cannot tell whether a date is the right date or 
 a claim was ever true. Claims are a person's job. And the retention-claim sweep already
 folds each answer back to one line before scanning, because a per-line regex cannot see
 a claim that straddles a block-scalar line break.
+
+Both sweeps now glob `content/skills` and `content/personas` too, which they did not
+before this rollout: the directories were outside every content sweep, so a claim in a
+skill or a persona page was structurally invisible to them. Adding the two dirs turned
+up nothing, which is the point at which a gap is cheapest to close.
 
 `site-faq.ts` is in the tool-count sweep's file list as well, alongside
 `hosted-google-workspace-mcp/page.tsx`, which was not in it despite its own header

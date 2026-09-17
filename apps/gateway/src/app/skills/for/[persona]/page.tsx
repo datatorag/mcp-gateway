@@ -9,6 +9,9 @@ import {
   getPersonaBySlug,
   skillsForPersona,
 } from "@/lib/personas";
+import { FaqSection } from "@/components/faq-section";
+import { JsonLd } from "@/components/json-ld";
+import { faqPageNode } from "@/lib/site-schema";
 
 type Props = { params: Promise<{ persona: string }> };
 
@@ -50,6 +53,7 @@ export default async function PersonaPage({ params }: Props) {
     <>
       <Navbar />
       <main className="flex-1 bg-background">
+        <JsonLd nodes={persona.faqs.length > 0 ? [faqPageNode(persona.faqs)] : []} />
         <div className="mx-auto max-w-5xl px-6 pb-16 pt-32 sm:pb-20 sm:pt-36">
           <Link
             className="inline-flex items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground"
@@ -77,6 +81,15 @@ export default async function PersonaPage({ params }: Props) {
               <SkillCard key={skill.slug} skill={skill} />
             ))}
           </div>
+
+          {/* After the skills, because the questions a reader has here are
+              about the ones they just saw, and before the escape hatch. */}
+          <FaqSection
+            className="mt-14"
+            faqs={persona.faqs}
+            title="Questions from people in this situation"
+            variant="section"
+          />
 
           {/* The flat list stays one click away: someone who knows what they
               want should never have to go through a persona. */}
