@@ -137,7 +137,14 @@ export const SITE_FAQ_PAGES: SiteFaqPage[] = [
         faqs: [
           {
             q: "Can my AI assistant actually edit my files, or only read them?",
-            a: `Edit them, and that is the whole difference. The built-in connectors read well and stop at the point of change: through DataToRAG your assistant appends rows to a spreadsheet you already have, replies inside an existing email thread, puts content into a deck it just made, and updates a Jira issue, with your approval on every one. The capability table on this page was built by enumerating each connector's tool surface on ${VERIFIED_ON}, not by reading documentation.`,
+            // NOT the email example, deliberately. Claude's native Gmail
+            // connector gained send, reply and forward in August 2026, which
+            // our own three-way comparison enumerated on 24 August 2026. The
+            // table above this block still carries the older reading and that
+            // is a claims question for a person, not something an FAQ answer
+            // should quietly restate in the surface built to be quoted away
+            // from the page. The four edits named here held on both dates.
+            a: `Edit them. The built-in connectors read well and stop one verb past creating something: through DataToRAG your assistant changes cells in a spreadsheet you already have, writes content into an existing doc, puts slides into a deck that arrived empty, and files and updates Jira issues, with your approval on every one. Those gaps come from enumerating each connector's tool surface on ${VERIFIED_ON}, and the [three way comparison](/blog/hosted-google-workspace-mcp) re-enumerated all three surfaces on 24 August 2026.`,
           },
           {
             q: "Which AI clients can connect to it?",
@@ -188,6 +195,36 @@ export const SITE_FAQ_PAGES: SiteFaqPage[] = [
           {
             q: "How do I get an Enterprise quote?",
             a: "Tell us what you are running and a person answers. The [contact form](/contact?from=pricing) reaches us directly, Enterprise includes everything in Pro, and the rate is negotiated against committed volume rather than published as a tier.",
+          },
+        ],
+      },
+    ],
+  },
+  {
+    route: "/hosted-google-workspace-mcp",
+    groups: [
+      {
+        title: "Questions about the hosted endpoint",
+        faqs: [
+          {
+            q: "Do I need a Google Cloud project to use a hosted Google Workspace MCP?",
+            a: "Not for this one. You add one endpoint and sign in with Google, and there is no Cloud project, no OAuth client of your own and no per-product endpoint to wire up. Google's own official MCP servers are the other route and they do ask for that setup: a Cloud project, sixteen service enablements and your own OAuth client when we checked on 24 August 2026.",
+          },
+          {
+            q: "Which Google products does the one endpoint cover?",
+            a: "Gmail, Drive, Sheets, Docs, Slides, Calendar, Contacts and Tasks, with Jira and Confluence on the same endpoint. The gap worth naming is Google Chat: DataToRAG has no Chat tools, and Google has an official Chat MCP if that is the job.",
+          },
+          {
+            q: "Can it change a file, or only create new ones?",
+            a: "Change them, and that is the line this page is about. Changing a cell in a spreadsheet you already have, writing content into an existing doc and putting content onto slides are the three jobs where the built-in connectors stopped when all three surfaces were enumerated on 24 August 2026.",
+          },
+          {
+            q: "When are Claude's native connectors the better answer?",
+            a: "When calendars or file management are the whole job. The native connectors cover both better than DataToRAG does and they are free, and as of the 24 August 2026 enumeration their Google surface is Gmail, Calendar and Drive, with no Sheets, Docs, Slides, Contacts or Tasks connector and one Google account at a time.",
+          },
+          {
+            q: "What if having a third party in the path is not acceptable?",
+            a: "Then run it yourself. The DataToRAG gateway is open source and self-hosting is the version of it that answers that objection honestly, rather than the one that argues you out of it.",
           },
         ],
       },

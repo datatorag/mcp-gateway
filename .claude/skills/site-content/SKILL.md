@@ -226,13 +226,13 @@ because two copies of it had already drifted. `FaqSection` takes an optional `ti
 and controls TYPE SCALE ONLY: `compact` for a block under a page about something else
 (blog, docs), `page` for a page whose whole subject is the questions (`/faq`), `section`
 for a block sitting among other sections at a marketing page's heading scale (`/`,
-`/pricing`). The internals — heading levels,
+`/pricing`, `/hosted-google-workspace-mcp`). The internals — heading levels,
 derived ids, `scroll-mt-28`, self-links, not collapsing — do not vary and are not
 overridable, because that is where the extraction properties live.
 
 **A page with no markdown file keeps its answers in `src/lib/site-faq.ts`**, keyed by
-route, in the same `{q, a}` type with `a` still markdown. `/faq`, `/` and `/pricing` all carry their
-answers there. `/faq` was migrated onto it in SCRUM-213 and its previous mechanism
+route, in the same `{q, a}` type with `a` still markdown. `/faq`, `/`, `/pricing` and
+`/hosted-google-workspace-mcp` all carry their answers there. `/faq` was migrated onto it in SCRUM-213 and its previous mechanism
 deleted: it used to hold HTML-string answers,
 hand-written anchors, its own copy of the block and its own copy of the `<` escape, and
 the HTML reached `acceptedAnswer.text` as tags. Answers live in the module rather than
@@ -283,6 +283,11 @@ Note what these do NOT do: they cannot tell whether a date is the right date or 
 a claim was ever true. Claims are a person's job. And the retention-claim sweep already
 folds each answer back to one line before scanning, because a per-line regex cannot see
 a claim that straddles a block-scalar line break.
+
+`site-faq.ts` is in the tool-count sweep's file list as well, alongside
+`hosted-google-workspace-mcp/page.tsx`, which was not in it despite its own header
+comment saying it kept no counts BECAUSE that guard would fail one. Any new hand-written
+copy surface has to be added to BOTH sweeps; neither globs `src/`.
 
 The retention sweep reads `site-faq.ts` too, ONE ROUTE AT A TIME rather than as a file.
 Its qualification rule is per file because a file was a page; a module carrying several

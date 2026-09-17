@@ -34,6 +34,17 @@ const COPY_FILES = [
   "src/app/page.tsx",
   "src/app/pricing/page.tsx",
   "src/components/contact-page.tsx",
+  // Two surfaces this list did not name. The phrase-owning landing page states
+  // in its own header comment that it keeps no tool counts BECAUSE this guard
+  // fails a bare one, which was not true of it: the file was never scanned, so
+  // the discipline was the author's alone. `site-faq.ts` is newer and has the
+  // same shape of exposure, and an FAQ answer is the worst place to leave a
+  // stale figure because it is the surface built to be quoted away from its
+  // page. Found while adding answers to the landing page, which is the way
+  // this keeps happening: a list of files is a claim about coverage that ages
+  // every time a page is added.
+  "src/app/hosted-google-workspace-mcp/page.tsx",
+  "src/lib/site-faq.ts",
   ...CONTENT_DIRS.flatMap((dir) =>
     readdirSync(path.join(ROOT, dir))
       .filter((f) => f.endsWith(".md"))

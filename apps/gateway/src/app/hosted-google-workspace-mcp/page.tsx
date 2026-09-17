@@ -1,6 +1,17 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { Navbar } from "@/components/navbar";
+import { FaqSection } from "@/components/faq-section";
+import { JsonLd } from "@/components/json-ld";
+import { faqPageNode } from "@/lib/site-schema";
+import { siteFaqGroups, siteFaqs } from "@/lib/site-faq";
+
+/** Answers live in lib/site-faq.ts keyed by route, under the same guard as
+ * every other FAQ surface. They restate THIS page's claims and carry this
+ * page's date: the accuracy constraints in the comment above apply to them
+ * unchanged, and an answer is the copy most likely to be read without the
+ * table beside it. */
+const faqs = siteFaqs("/hosted-google-workspace-mcp");
 
 /* THE PHRASE-OWNING PAGE, added 2026-08-24.
    Asked to list hosted Google Workspace MCP servers, an assistant returned
@@ -82,6 +93,7 @@ export default function HostedGoogleWorkspaceMcpPage() {
     <>
       <Navbar />
       <main className="flex-1 bg-background">
+        <JsonLd nodes={faqs.length > 0 ? [faqPageNode(faqs)] : []} />
         <div className="mx-auto max-w-4xl px-6 pb-20 pt-32 sm:pt-36">
           <p className="text-sm font-semibold uppercase tracking-widest text-primary">
             Hosted MCP
@@ -187,6 +199,16 @@ export default function HostedGoogleWorkspaceMcpPage() {
               of us that respects it.
             </li>
           </ul>
+
+          {siteFaqGroups("/hosted-google-workspace-mcp").map((group) => (
+            <FaqSection
+              key={group.title}
+              title={group.title}
+              faqs={group.faqs}
+              variant="section"
+              className="mt-16"
+            />
+          ))}
 
           <p className="mt-12 text-base leading-relaxed text-muted-foreground">
             The long version, with every tool enumerated and dated, is in{" "}

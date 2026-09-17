@@ -44,7 +44,12 @@ const VARIANTS = {
    * it, and the alternative to a third entry here was those two pages
    * hand-rolling the block, which is the thing this component removed. */
   section: {
-    heading: "font-display text-2xl font-bold text-foreground sm:text-3xl",
+    // Flat 2xl, NOT the home page's 2xl/sm:3xl section scale. Measured on the
+    // page rather than reasoned about: at sm:3xl the FAQ heading came out a
+    // step larger than the landing page's own h2 three inches above it, which
+    // reads as a hierarchy error. One step small is invisible; one step large
+    // is not.
+    heading: "font-display text-2xl font-bold text-foreground",
     question: "group font-medium text-foreground",
     list: "mt-8 space-y-8",
   },

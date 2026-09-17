@@ -124,7 +124,7 @@ const SOURCES: FaqSource[] = [
   // `siteFaqPages` hands back the same `{ slug, faqs }` shape; the rules below
   // never learn which one they are looking at. A second reader for a second
   // authoring format is the drift this registry exists to prevent.
-  { name: "landing", minimum: 25, load: collectionSource("landing", siteFaqPages) },
+  { name: "landing", minimum: 30, load: collectionSource("landing", siteFaqPages) },
 ];
 
 const loaded = SOURCES.map((s) => ({ source: s, result: s.load() }));
