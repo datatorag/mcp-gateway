@@ -83,9 +83,14 @@ export default async function PersonaPage({ params }: Props) {
           </div>
 
           {/* After the skills, because the questions a reader has here are
-              about the ones they just saw, and before the escape hatch. */}
+              about the ones they just saw, and before the escape hatch.
+              Constrained to a prose measure: this page is max-w-5xl because a
+              two-column card grid needs it, and answers set to that width run
+              to about 140 characters a line, which is a worse read than
+              anywhere else the block appears. The page's own intro is
+              constrained for the same reason. */}
           <FaqSection
-            className="mt-14"
+            className="mt-14 max-w-3xl"
             faqs={persona.faqs}
             title="Questions from people in this situation"
             variant="section"

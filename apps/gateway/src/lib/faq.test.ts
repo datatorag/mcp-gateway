@@ -138,7 +138,7 @@ const SOURCES: FaqSource[] = [
   // to the skills table: the answers are published page copy keyed by slug,
   // never part of the artifact a reader copies and never on a user's own row.
   { name: "skills", minimum: 0, load: collectionSource("skills", skillFaqPages) },
-  { name: "personas", minimum: 0, load: collectionSource("personas", personaFaqPages) },
+  { name: "personas", minimum: 16, load: collectionSource("personas", personaFaqPages) },
 ];
 
 const loaded = SOURCES.map((s) => ({ source: s, result: s.load() }));
