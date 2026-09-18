@@ -70,8 +70,19 @@ const LINK_TARGET = /\]\(([^)]*)\)/g;
 /** Where an answer's link may point: a site-relative path, an on-page anchor,
  * or an absolute http(s) URL. Everything else, `javascript:` and `data:`
  * included, is refused rather than enumerated, because a deny list of
- * protocols is the shape that misses the next one. */
-const SAFE_HREF = /^(\/[^/]|#|https?:\/\/)/;
+ * protocols is the shape that misses the next one. An allow list also refuses
+ * what a deny list would have to anticipate: an uppercase scheme, and an
+ * entity-encoded one like `java&#9;script:` that a browser decodes back into a
+ * working URL, both fail simply by not starting with something allowed.
+ *
+ * NEITHER SLASH-LIKE CHARACTER MAY FOLLOW THE FIRST SLASH. `//evil.com` is
+ * protocol-relative and lands offsite while looking site-relative in the
+ * source. `/\evil.com` does the same thing, because the URL parser treats a
+ * backslash as a slash in that position; today `marked` percent-encodes it
+ * back to same-origin, but that is the renderer saving us rather than this
+ * rule, and this rule is the one documented as not depending on the content or
+ * the renderer behaving. A bare `/` is allowed: it is the home page. */
+const SAFE_HREF = /^(\/([^/\\]|$)|#|https?:\/\/)/;
 
 interface LoadResult {
   entries: FaqEntry[];
@@ -287,8 +298,13 @@ describe("FAQ answers", () => {
     // And the renderer really does emit it, so this is not a hypothetical.
     expect(faqAnswerHtml(attack)).toContain("javascript:alert(1)");
 
-    for (const good of ["/docs/sheets", "#faq-x", "https://datatorag.com/x", "http://example.com"]) {
+    for (const good of ["/docs/sheets", "/", "#faq-x", "https://datatorag.com/x", "http://example.com"]) {
       expect(SAFE_HREF.test(good), good).toBe(true);
+    }
+    // The two that read as site-relative and are not, plus the two shapes an
+    // allow list refuses without having to recognise them.
+    for (const bad of ["//evil.com", "/\\evil.com", "JaVaScRiPt:alert(1)", "java&#9;script:alert(1)", "data:text/html,x"]) {
+      expect(SAFE_HREF.test(bad), bad).toBe(false);
     }
   });
 
