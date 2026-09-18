@@ -17,12 +17,12 @@ The Gmail connector gives your AI assistant full access to your inbox: searching
 | `gmail_search` | Search emails using Gmail query syntax (e.g., `from:boss subject:Q2 has:attachment`). Results include flattened from/to/subject/date plus snippet and labels |
 | `gmail_list` | List recent messages from your inbox with flattened from/to/subject/date fields |
 | `gmail_read` | Read a full email by message ID. `text_only` returns a compact view (flattened headers, decoded text body, attachment metadata); `max_body_chars` truncates long bodies |
-| `gmail_send` | Send a new email |
-| `gmail_reply` | Reply to an existing thread |
-| `gmail_forward` | Forward a message to another recipient |
-| `gmail_create_draft` | Create a draft without sending |
+| `gmail_send` | Send a new email. Your Gmail signature is added; `signature: false` sends without it |
+| `gmail_reply` | Reply to an existing thread. Your Gmail signature goes under your note, above the quoted message |
+| `gmail_forward` | Forward a message to another recipient, signed the same way as a reply |
+| `gmail_create_draft` | Create a draft without sending. Drafts are never signed |
 | `gmail_update_draft` | Update an existing draft |
-| `gmail_send_draft` | Send an existing draft |
+| `gmail_send_draft` | Send an existing draft. The signature is added at this point, once |
 | `gmail_delete_draft` | Delete a draft |
 | `gmail_mark_read` | Mark messages as read, for a single message or a batch of up to 1,000 IDs. For label changes beyond read state, use `gmail_label_message` |
 | `gmail_label_message` | Label many messages in one call: `message_ids` (up to 1,000) with `add_labels` and `remove_labels`, one `batchModify` request, a per-message outcome in the result; `message_id` for a single message. Removing INBOX archives a message; removing UNREAD marks it read |
@@ -31,6 +31,28 @@ The Gmail connector gives your AI assistant full access to your inbox: searching
 | `gmail_update_label` | Rename a label or change its visibility. Takes the label ID, not the name. Renaming keeps the label on already-labeled messages |
 | `gmail_delete_label` | Delete a label by ID. The label is removed from every message carrying it; the messages themselves are not deleted. System labels (INBOX, UNREAD, SENT) cannot be deleted |
 | `gmail_save_attachment_to_drive` | Save an email attachment directly to Google Drive |
+
+## Signatures
+
+Mail sent with `gmail_send`, `gmail_reply`, `gmail_forward` or `gmail_send_draft` ends with the signature set in Gmail for the address it is sent from. Nothing needs configuring, and an alias uses its own signature.
+
+- On a new message the signature closes the body. On a reply or forward it sits under your note and above the quoted message.
+- `gmail_create_draft` and `gmail_update_draft` never sign. A draft is signed once, when `gmail_send_draft` sends it.
+- Pass `signature: false` to send a message exactly as written.
+- Messages go out with a plain-text and an HTML version. The signature is in the HTML version only.
+
+Every send response carries a `signature` field:
+
+| Value | Meaning |
+|-------|---------|
+| `applied` | The signature was added |
+| `none_set` | The account has no signature in Gmail |
+| `suppressed` | You passed `signature: false` |
+| `already_present` | The body already ended with the signature, so it was not added again |
+| `unavailable` | The signature could not be read; the message was sent unsigned |
+| `skipped_unsupported_draft` | The draft's format is one we send untouched rather than rewrite |
+
+Gmail's mobile apps fold a signature they recognise behind the three-dot button. The signature is still in the message.
 
 ## Required scopes
 
