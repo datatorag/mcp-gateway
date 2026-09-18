@@ -7,8 +7,12 @@ connector: "google-workspace"
 faqs:
   - q: If I write a value starting with an equals sign, does it become a formula?
     a: >-
-      No. Values written through the DataToRAG Sheets connector that begin with
-      an equals sign are stored as text and never run as formulas.
+      Not unless that call asked for it. Values written through the DataToRAG
+      Sheets connector are stored as text by default, so a product named =1+1
+      stays the literal string, and evaluation is switched on per call with
+      parse_formulas rather than per cell. Text you did not author yourself
+      belongs in a call with parsing off, because a stranger's string evaluating
+      in your sheet is exactly what that ordering prevents.
   - q: Why does my spreadsheet look unreadable even though the values are right?
     a: >-
       Column width. The Google Sheets API defaults to 100px columns, so anything
@@ -43,7 +47,7 @@ faqs:
       ranges.
 ---
 
-The Sheets connector lets your AI assistant read data from spreadsheets, write to cells, append rows, create new sheets, and manage the tabs inside them. Values written through the connector that begin with `=` are stored as text, never run as formulas.
+The Sheets connector lets your AI assistant read data from spreadsheets, write to cells, append rows, create new sheets, and manage the tabs inside them. Values written through the connector are stored as text by default, so a value beginning with `=` stays literal unless that call sets `parse_formulas`, which turns evaluation on for the whole call rather than for one cell.
 
 ![A sheets_update call rewriting two existing rows in place, with the updated range and cell count it returned](/docs/sheets-update.png)
 

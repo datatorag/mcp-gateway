@@ -64,6 +64,15 @@ const HYPHEN_SPLIT = /\w+- \w+/g;
  * read like coverage it does not provide. */
 const MARKUP = /\]\(|<\/?[a-z]/i;
 
+/** The target of a markdown link, read off the AUTHORED string. */
+const LINK_TARGET = /\]\(([^)]*)\)/g;
+
+/** Where an answer's link may point: a site-relative path, an on-page anchor,
+ * or an absolute http(s) URL. Everything else, `javascript:` and `data:`
+ * included, is refused rather than enumerated, because a deny list of
+ * protocols is the shape that misses the next one. */
+const SAFE_HREF = /^(\/[^/]|#|https?:\/\/)/;
+
 interface LoadResult {
   entries: FaqEntry[];
   /** How many candidate files or pages the loader actually looked at. Separate
@@ -241,6 +250,46 @@ describe("FAQ answers", () => {
       .filter((f) => !/\b[A-Z][A-Za-z]+/.test(f.a.replace(/^[^.]*\.\s*/, "")))
       .map(label);
     expect(subjectless).toEqual([]);
+  });
+
+  it("every link in an answer points somewhere a link may point", () => {
+    // WHY THIS IS NOT COVERED BY THE MARKUP RULE, which is what it looks like.
+    // `marked` does not strip dangerous protocols any more: parseInline on
+    // "[x](javascript:alert(1))" renders the anchor with that href intact. The
+    // markup rule cannot see it, because `faqAnswerText` strips the link syntax
+    // BEFORE the rule runs, so the rule only ever inspects the link's label.
+    // That leaves a hole in the one defence `faq.ts` documents as not depending
+    // on content being well behaved, so it is checked on the RAW authored
+    // string instead of on either projection.
+    const bad = allFaqs.flatMap((f) =>
+      [...f.a.matchAll(LINK_TARGET)]
+        .map((m) => m[1].trim())
+        .filter((href) => !SAFE_HREF.test(href))
+        .map((href) => `${label(f)} -> "${href}"`)
+    );
+    expect(bad, `FAQ answers may only link a site path, an anchor or http(s):\n${bad.join("\n")}`)
+      .toEqual([]);
+  });
+
+  it("the link rule can go red, and sees what the markup rule cannot", () => {
+    const attack = "See [the roundup](javascript:alert(1)) for more.";
+    const targets = [...attack.matchAll(LINK_TARGET)].map((m) => m[1]);
+    // The capture stops at the first ")", so a target containing parentheses
+    // arrives truncated. Harmless for THIS rule and only because of its shape:
+    // SAFE_HREF is an allow list anchored at the start, so a shorter string can
+    // never acquire a safe prefix it did not already have. Do not reuse
+    // LINK_TARGET for anything that needs the whole href.
+    expect(targets).toEqual(["javascript:alert(1"]);
+    expect(SAFE_HREF.test(targets[0])).toBe(false);
+    // The rule this one exists beside would pass the same string, which is the
+    // whole reason it exists: the flattened projection keeps only the label.
+    expect(MARKUP.test(faqAnswerText(attack))).toBe(false);
+    // And the renderer really does emit it, so this is not a hypothetical.
+    expect(faqAnswerHtml(attack)).toContain("javascript:alert(1)");
+
+    for (const good of ["/docs/sheets", "#faq-x", "https://datatorag.com/x", "http://example.com"]) {
+      expect(SAFE_HREF.test(good), good).toBe(true);
+    }
   });
 
   it("gives every question a unique, stable anchor within its page", () => {

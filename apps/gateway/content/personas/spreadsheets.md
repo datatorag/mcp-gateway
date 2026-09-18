@@ -32,8 +32,11 @@ faqs:
       else.
   - q: If a value starts with an equals sign, does it become a formula?
     a: >-
-      No. Values written through the DataToRAG Sheets connector that begin with an
-      equals sign are stored as text and never run as formulas.
+      Not unless that call asked for it. Values written through the DataToRAG
+      Sheets connector are stored as text by default, and evaluation is turned on
+      per call with parse_formulas rather than per cell. Anything harvested from
+      somewhere else belongs in a call with parsing off, which is why the Reddit
+      directory skill writes each row in two calls rather than one.
 ---
 
 Inventory, pipeline, roadmap, who-owes-what. It started as a tab and became
