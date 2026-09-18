@@ -113,6 +113,12 @@ Two docs-specific mechanisms added by SCRUM-24:
   needs no wiring here because the dashboard fires it on `?signup=1`. The layout
   deliberately does NOT read the session (`cookies()` would force every docs page
   dynamic) — the CTA always renders its signed-out state.
+  While the promo campaign is active the SIDEBAR variant carries the campaign
+  headline (`promoCopy().headline`) as a smaller second line and its click adds
+  `promo: true|false`; the `cta` value is unchanged so the series stays comparable
+  (SCRUM-287). Docs mount no promo banner. The line is decided in a client effect,
+  never on the server, since docs are prerendered; mobile and inline variants are
+  unchanged.
 
 Docs screenshots live in `apps/gateway/public/docs/` and must be personally-scrubbed
 before commit (public repo). Pending-capture spots use HTML-comment placeholders

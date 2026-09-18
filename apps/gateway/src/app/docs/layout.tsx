@@ -4,7 +4,6 @@ import { getConnectorGroups, getTopLevelDocs } from "@/lib/docs";
 import { DocsSidebar } from "./sidebar";
 import { DocsNavClient } from "./nav-client";
 import { DocsCta } from "./cta";
-import { PromoBanner } from "@/components/promo-banner";
 
 // NOTE: deliberately no session read here — cookies() would force every
 // /docs/* page to render dynamically, and docs are a static, cacheable,
@@ -28,10 +27,10 @@ export default function DocsLayout({
   }));
 
   return (
-    <>
-      {/* SCRUM-231: docs pages render no navbar, so the banner mounts here. */}
-      <PromoBanner />
-      <div className="flex min-h-screen flex-col md:flex-row">
+    /* SCRUM-287: no promo banner here. On docs the campaign copy lives in the
+       sidebar CTA button (see cta.tsx); a banner above this layout pushed the
+       sidebar and the content down. */
+    <div className="flex min-h-screen flex-col md:flex-row">
       {/* Mobile header */}
       <div className="flex h-14 items-center justify-between border-b border-border px-4 md:hidden">
         <div className="flex items-center gap-3">
@@ -99,6 +98,5 @@ export default function DocsLayout({
         </div>
       </main>
     </div>
-    </>
   );
 }

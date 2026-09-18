@@ -43,7 +43,7 @@ const render = (props: Partial<Parameters<typeof PromoBanner>[0]> = {}) => {
 const link = () => container.querySelector('a[href="/pricing?promo=DTR50"]');
 const dismiss = () => Array.from(container.querySelectorAll("button")).find((b) => b.getAttribute("aria-label") === "Dismiss");
 
-/* SCRUM-231: one banner, three mount points, decided on the client. */
+/* SCRUM-231: one banner, decided on the client. Two mount points since SCRUM-287 took it off docs. */
 describe("PromoBanner", () => {
   it("shows both windows of the copy and links to pricing with the code, before the end date", () => {
     render();
