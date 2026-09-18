@@ -81,7 +81,13 @@ export const SITE_FAQ_PAGES: SiteFaqPage[] = [
           },
           {
             q: "Claude already connects to Gmail, Calendar and Drive. Why would I need this?",
-            a: "For reading, you often don't. The difference is changing things. As of our last check of the native connectors' tool lists (August 7, 2026): the native Gmail connector creates drafts it can neither send nor delete, and now labels and archives, but still has no send, reply or forward. The native Drive connector can create a Slides deck, but the deck arrives empty and nothing in the native surface can put a slide or a word into it, and it cannot edit a file you already have. Native Calendar is genuinely strong, with full create, update and delete, and if calendars on one account are your whole job the native connector is the answer. We publish claim by claim comparisons and re-test them when the connectors change: [Gmail](/blog/claude-gmail-connector-vs-datatorag-send-reply), [Drive and Docs](/blog/claude-google-drive-vs-datatorag-editing), [Calendar](/blog/claude-google-calendar-vs-datatorag-multi-account), and [the full map of your options](/blog/claude-google-workspace-mcp-alternatives).",
+            // Mail came OUT of this answer on 18 September 2026. The native
+            // Gmail connector gained send, reply and forward in August 2026,
+            // and this answer said the opposite for three weeks after our own
+            // blog post had been rewritten to say so. The Gmail post IS linked,
+            // and it is the strongest link in the set: it is the one that
+            // carries the correction, title and all.
+            a: "For reading, you often don't, and mail is no longer part of the difference: the native Gmail connector sends, replies and forwards, which it gained in August 2026 and we re-checked on September 18, 2026. Where the native surface still stops, as of our August 7, 2026 check of its tool lists, is everything around the document: it can create a Slides deck, but the deck arrives empty and nothing native can put a slide or a word into it, and it cannot edit a file you already have. It also works one Google account at a time, where connecting a work and a personal account here is one endpoint and one prompt. Native Calendar is genuinely strong, with full create, update and delete, and if calendars on one account are your whole job the native connector is the answer. We publish claim by claim comparisons and re-test them when the connectors change, including when the change goes against us: [we said Claude could not send email, and it can](/blog/claude-gmail-connector-vs-datatorag-send-reply), plus [Drive and Docs](/blog/claude-google-drive-vs-datatorag-editing), [Calendar](/blog/claude-google-calendar-vs-datatorag-multi-account), and [the full map of your options](/blog/claude-google-workspace-mcp-alternatives).",
           },
           {
             q: "Can it work across multiple accounts?",

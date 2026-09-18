@@ -1,5 +1,5 @@
 import { CircleCheckIcon, CircleMinusIcon } from "lucide-react";
-import { CALENDAR_VERIFIED_ON, VERIFIED_ON } from "@/lib/connector-verification";
+import { CALENDAR_VERIFIED_ON, GMAIL_VERIFIED_ON, VERIFIED_ON } from "@/lib/connector-verification";
 
 /**
  * The full capability comparison against Claude's built-in Google connectors.
@@ -121,9 +121,12 @@ const GROUPS: Group[] = [
     rows: [
       { capability: "Read and search mail", builtIn: true, ours: true },
       { capability: "Write a draft", builtIn: true, ours: true },
-      { capability: "Send it", builtIn: false, ours: true, emphasis: true },
-      { capability: "Reply in thread", builtIn: false, ours: true, emphasis: true },
-      { capability: "Forward", builtIn: false, ours: true, emphasis: true },
+      // Conceded on 18 September 2026 after re-enumerating the built-in
+      // connector's tool surface: send, reply with reply-all, and forward all
+      // exist. No emphasis on a row we lose; see rule 3.
+      { capability: "Send it", builtIn: true, ours: true },
+      { capability: "Reply in thread", builtIn: true, ours: true },
+      { capability: "Forward", builtIn: true, ours: true },
       { capability: "Label, star, mark read, archive a message", builtIn: true, ours: true },
       {
         capability: "Label or unlabel a whole thread at once",
@@ -134,7 +137,7 @@ const GROUPS: Group[] = [
       { capability: "Delete a draft", builtIn: false, ours: true },
       { capability: "Save an attachment to Drive", builtIn: false, ours: true },
     ],
-    note: "The built-in connector creates drafts it can neither send nor delete. It also files a whole thread in one call, where we work a message at a time, so a long thread means one call per message. It gained full label management recently, so it can label, star, mark read and archive, which it could not do earlier this year. If you read otherwise somewhere, including on this site before August 2026, that is out of date.",
+    note: "The built-in connector sends, replies and forwards. It gained those verbs in August 2026, and this table claimed otherwise until 18 September 2026: if you read the older version of this row anywhere, including here, it was wrong. What is left is narrower and still holds. Nothing in the built-in surface deletes a draft it wrote. It labels a whole thread in one call, where we work a message at a time, so a long thread means one call per message. And it gained full label management earlier in 2026, so it can label, star, mark read and archive.",
   },
   {
     service: "Google Calendar",
@@ -231,6 +234,8 @@ export function ConnectorComparison() {
         <p className="mx-auto mt-3 max-w-xl text-sm text-muted-foreground">
           Everything below was checked by hand against both products on{" "}
           {VERIFIED_ON}. Calendar section re-verified {CALENDAR_VERIFIED_ON}.
+          Gmail section re-verified {GMAIL_VERIFIED_ON}, and three rows changed
+          in the built-in connector&rsquo;s favour.
         </p>
       </div>
 

@@ -249,11 +249,17 @@ export default async function HomePage() {
                   built-in Drive connector can create new files) — never a
                   general "no write access" claim.
 
-                  The column header below stays unnamed on purpose: these rows
-                  span Drive ("Read a file", "Edit an existing sheet") AND
-                  Gmail ("Send an email"), so naming it "Drive" would make the
-                  email row false. Claude has three Google connectors — Drive,
-                  Gmail, Calendar — and this table compares two of them. */}
+                  The column header below stays unnamed on purpose: the rows
+                  span more than one built-in connector, and the last one spans
+                  all of them, so naming the column after any single connector
+                  would make another row false. Claude has three Google
+                  connectors — Drive, Gmail, Calendar.
+
+                  There is no Gmail row here as of 18 September 2026: the
+                  built-in connector sends, replies and forwards, so the row
+                  that used to live here now reads Yes/Yes. The full table at
+                  #comparison concedes those three rows rather than dropping
+                  them, which is the right place for a concession. */}
               <div
                 className="animate-fade-in-up mx-auto mt-8 w-full max-w-md lg:mx-0"
                 style={{ animationDelay: "0.2s" }}
@@ -290,7 +296,14 @@ export default async function HomePage() {
                       // with a single slide and an empty title and subtitle.
                       { capability: "Create a deck", builtIn: true },
                       { capability: "Put content in it", builtIn: false },
-                      { capability: "Send an email", builtIn: false },
+                      // Was "Send an email", which was true until the built-in
+                      // connector gained send, reply and forward in August 2026
+                      // and false afterwards. Replaced rather than flipped: a
+                      // Yes/Yes row in a five-row hero is a row that says
+                      // nothing, and this one is already enumerated on the
+                      // hosted-google-workspace-mcp page and carried as its own
+                      // row further down this page.
+                      { capability: "Work across two Google accounts", builtIn: false },
                     ].map(({ capability, builtIn }) => (
                       <tr
                         key={capability}

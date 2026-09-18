@@ -13,6 +13,15 @@
  * been retested, and see the rules in `components/connector-comparison.tsx`. */
 export const VERIFIED_ON = "7 August 2026";
 
+/** The Gmail rows were re-enumerated on this date and three of them changed:
+ * the built-in connector sends, replies and forwards. It gained those verbs in
+ * August 2026, our own three-way comparison recorded that on 24 August 2026,
+ * and this table went on claiming the opposite for another three weeks. That is
+ * the failure rule 2 in `connector-comparison.tsx` exists to prevent, and a
+ * separate date is how the correction stays legible: the rest of the table was
+ * NOT re-checked on this date and must not be presented as though it was. */
+export const GMAIL_VERIFIED_ON = "18 September 2026";
+
 /** The Calendar rows were re-checked separately and later, and the standfirst
  * says so rather than moving the sitewide date: claiming the whole table was
  * re-verified when only one section was would be the same kind of overclaim
