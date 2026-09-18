@@ -63,6 +63,17 @@ describe("pricing page copy", () => {
     expect(page).toContain("Approval gate");
   });
 
+  it("the Pro card says agent and skill runs carry no separate model bill (SCRUM-290)", () => {
+    // True because the run's model spend is ours: the allowance in
+    // billing/plans.ts is sized from it. The bullet names no run count on
+    // purpose, so it must never grow the word "unlimited": the allowance is
+    // finite and enforced.
+    expect(page).toContain('"Agent and skill runs included, no separate bill for the model"');
+    expect(page).not.toMatch(/unlimited/i);
+    const pro = page.slice(page.indexOf('name: "Pro"'), page.indexOf('name: "Enterprise"'));
+    expect(pro).toContain("Agent and skill runs included");
+  });
+
   it("Enterprise copy promises nothing we would have to build", () => {
     // The tier name is ruled; what would commit us operationally is copy.
     // Quote-only means no self-serve promises: none of these may appear.

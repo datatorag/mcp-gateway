@@ -86,6 +86,7 @@ const tiers: Tier[] = [
     features: [
       "Everything in Free",
       `${PRO_CALLS} tool calls a month included`,
+      "Agent and skill runs included, no separate bill for the model",
       "No feature gates, just a bigger allowance",
     ],
     cta: "checkout",
