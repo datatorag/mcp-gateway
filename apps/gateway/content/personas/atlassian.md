@@ -41,7 +41,7 @@ becomes a paragraph someone rewrites by hand.
 
 Both are behind the same endpoint here, so one prompt can read the document
 and file the issues. That matters less as a feature list than as a removed
-step — the gap between "we agreed this" and "it is in the tracker" is where
+step: the gap between "we agreed this" and "it is in the tracker" is where
 most of it quietly goes missing.
 
 Jira and Confluence tools are covered alongside the Workspace ones. Start

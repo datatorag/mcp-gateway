@@ -46,5 +46,5 @@ and a formula reads back as its result. Most "let the AI read our
 spreadsheet" attempts fail on that and not on the model.
 
 The skills below are about making the sheet legible to something that is not
-you — a schema that survives being read, and the traps worth knowing before
+you: a schema that survives being read, and the traps worth knowing before
 you find them the expensive way.

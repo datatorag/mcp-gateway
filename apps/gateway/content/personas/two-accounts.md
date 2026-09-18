@@ -46,6 +46,6 @@ No disconnecting and reconnecting to switch sides.
 
 This is the thing that is hard to bolt on afterwards. An integration that
 holds one token per service can only ever see one account, so "check both"
-is not a feature it is missing — it is a shape it does not have. The first
+is not a feature it is missing, it is a shape it does not have. The first
 skill below is the one to read if you want to see the difference rather than
 take it on trust.

@@ -43,7 +43,7 @@ approves the app, a domain to verify, a plan to be on. If you are the whole
 company, that is a wall before the first useful minute.
 
 An ordinary personal Google account connects here exactly like a Workspace
-one. You click Connect, you approve the scopes yourself, and you are done —
+one. You click Connect, you approve the scopes yourself, and you are done,
 because the account you are approving is the account you own.
 
 The skills below are the ones that pay off fastest when nobody else is going
