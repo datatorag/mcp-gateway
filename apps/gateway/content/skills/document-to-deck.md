@@ -5,6 +5,30 @@ situation: "The summary already exists. Turning it into slides is an hour of wor
 produces: "A structured deck built from the document you already wrote, ready to edit rather than ready to present."
 tools: [docs_get, slides_create, slides_batch_update, slides_get]
 accounts: single
+faqs:
+  - q: Does it create the deck and fill it in separate passes?
+    a: >-
+      No, one pass. A new slide's placeholders can be named as the slide is
+      created, so creating a slide and inserting its title and body go in a single
+      Google Slides batch update: a five slide deck took two calls in total, where
+      the obvious create-then-read-then-write loop costs a round trip per slide.
+  - q: Why does the first slide behave differently from the rest?
+    a: >-
+      Its placeholders are named differently. Creating a presentation returns
+      CENTERED_TITLE and SUBTITLE for the title slide, while every slide added
+      afterwards uses TITLE and BODY, so anything that looks for TITLE on every
+      slide misses the cover.
+  - q: How do I know the text actually landed on the slides?
+    a: >-
+      By reading the deck back. Batch replies are positional and mostly empty: a
+      create-slide reply carries the object id and an insert-text reply comes back
+      as an empty object, so counting non-empty replies tells you nothing about
+      what is on the deck.
+  - q: Do bullets need one call each?
+    a: >-
+      No. Newlines inside a single insert render as separate lines in the body
+      placeholder, so a slide's bullets go in one request rather than one per
+      line.
 ---
 
 # The deck is a reformatting job

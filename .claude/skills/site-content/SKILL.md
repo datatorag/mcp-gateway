@@ -52,6 +52,7 @@ Slug = filename without `.md`. Frontmatter fields, with fallback if omitted:
 | `ogImage` | string, optional | `undefined` |
 | `coverImage` | string, optional | `undefined` |
 | `tags` | string array | `[]` (any non-array value is discarded, not coerced) |
+| `faqs` | list of `{q, a}` | `[]` (see **Per-page FAQs** below) |
 
 `readTime` is **not** frontmatter — it's computed: word count from `content.split(/\s+/)`,
 then `` `${Math.max(1, Math.ceil(words / 230))} min read` ``. There's also a `postsBySlug`
@@ -84,6 +85,7 @@ Slug = filename.
 | `order` | number | `99` (no explicit order sorts last, both top-level and per-connector) |
 | `section` | string | `"general"` (captured, sent in a PostHog `DOCS_VIEWED` event, but **not** used for sidebar grouping) |
 | `connector` | string \| null | `null` |
+| `faqs` | list of `{q, a}` | `[]` (see **Per-page FAQs** below) |
 
 `connector` is what actually drives sidebar grouping, via the static `CONNECTORS` registry
 in `docs-connectors.ts` (`{id, title, slug}`, currently `google-workspace` and `atlassian`).
@@ -147,6 +149,7 @@ skills get no reverse-chronological feed and do not use `getRelatedPosts`. Sorte
 | `tools` | string array — bare tool names | `[]` |
 | `accounts` | `"single"` \| `"multiple"` | `"single"` |
 | `order` | number | `99` |
+| `faqs` | list of `{q, a}` | `[]` (file-only, see **Per-page FAQs** below) |
 
 **The load-bearing mechanism is `skillSource`.** The body is split around its first
 ```` ```markdown ```` fence: prose before it becomes `introHtml` (with the leading `#`
@@ -187,6 +190,136 @@ connectors actually ship. A skill naming a tool we do not ship is worse than no 
 a reader pastes it in and it fails on them. Extend that list only after confirming the
 tool exists on the live wire, never to make a test pass. Note `tools` is the surface the
 skill operates over, not a strict call list.
+
+## Per-page FAQs
+
+Blog, docs, skill and persona pages can carry a `faqs:` list in frontmatter. Read through
+`field.faqList` like every other field; a malformed entry is dropped, never coerced.
+
+```yaml
+faqs:
+  - q: Does Zapier MCP support Google Slides?
+    a: >-
+      Zapier MCP does not expose Google Slides on its MCP surface as of the
+      mid-2026 check behind this comparison. See
+      [the roundup](/blog/claude-google-workspace-mcp-alternatives).
+```
+
+**Answers use `>-` folded block scalars, and that is load-bearing rather than
+cosmetic.** Inside a block scalar, inner double quotes, apostrophes, a `colon: space`
+sequence, backticks and markdown links all survive with zero escaping, which
+neutralises the defect class that once made `main` unbuildable. A double-quoted `q:`
+can still break the build.
+
+**One authored string, two derived projections, no second copy.** `a` is markdown and
+is the only definition. `faqAnswerHtml` renders it for the page via
+`marked.parseInline`, so links and inline code work and block-level markdown does not,
+keeping an answer to one paragraph by construction. `faqAnswerText` flattens the same
+string for `acceptedAnswer.text`. Both live in `src/lib/faq.ts` (NOT `blog.ts`, they
+moved when docs gained the block) and neither is hand-maintained, so the page and the
+JSON-LD cannot drift.
+
+Render with `<FaqSection faqs={...}/>` (`src/components/faq-section.tsx`) and emit the
+node with `faqPageNode` from `src/lib/site-schema.ts`, serialized through
+`<JsonLd nodes={...}/>`. Do not hand-roll the `<` escaping again; that component exists
+because two copies of it had already drifted. `FaqSection` takes an optional `title`
+(a grouped page passes its section name) and a `variant`, which is a closed set of three
+and controls TYPE SCALE ONLY: `compact` for a block under a page about something else
+(blog, docs), `page` for a page whose whole subject is the questions (`/faq`), `section`
+for a block sitting among other sections at a marketing page's heading scale (`/`,
+`/pricing`, `/hosted-google-workspace-mcp`). The internals — heading levels,
+derived ids, `scroll-mt-28`, self-links, not collapsing — do not vary and are not
+overridable, because that is where the extraction properties live.
+
+**A page with no markdown file keeps its answers in `src/lib/site-faq.ts`**, keyed by
+route, in the same `{q, a}` type with `a` still markdown. `/faq`, `/`, `/pricing` and
+`/hosted-google-workspace-mcp` all carry their answers there. `/faq` was migrated onto it in SCRUM-213 and its previous mechanism
+deleted: it used to hold HTML-string answers,
+hand-written anchors, its own copy of the block and its own copy of the `<` escape, and
+the HTML reached `acceptedAnswer.text` as tags. Answers live in the module rather than
+beside each page because a page holding its own array is a source the registry cannot
+see, which is the failure the rollout exists to remove. Groups are presentation: the
+FAQPage node and the guard both flatten them.
+
+**A skill's FAQs are FILE-ONLY and never touch the row.** Since SCRUM-226 a published
+skill is a database row seeded from its file, so a new frontmatter field has a choice to
+make. `faqs` stays out of `SkillContent`, out of `skillVersion`, and out of the table.
+Three reasons, each sufficient: a reader copies the fenced artifact and page copy about
+the skill is not in what they copy; the content hash is what tells a fork whether the
+skill it came from changed, and a new question must not re-version a skill whose
+behaviour is identical; and a user's own skill row must never inherit our published
+answers. `parseSkill` fills a slug-keyed map while the files parse, and the page calls
+`publishedSkillFaqs(slug)` rather than reading a field, so a row cannot carry it by
+accident. THE ANSWERS ARE BOUND BY THE SKILL'S RAILS, never wider: the same review
+standard as the fenced block applies, because an answer that widens a rail is a promise
+made outside the artifact the rail lives in.
+
+**Figures and dates in an answer are IMPORTED, never retyped.** An answer is the most
+quotable thing we publish, so a hand-written copy of a number is the copy that outlives
+the change to it. The free allowance comes from `billing/plans.ts`, the constant
+enforcement reads. The built-in-connector comparison date comes from
+`lib/connector-verification.ts`, which exists because the home page's table and the FAQ
+answer beneath it make the same dated claim and a retest must move both (it lived in
+`connector-comparison.tsx` for an afternoon, which pulled the icon library into the
+guard's module graph and took a 0.5s test run to over two minutes). Dollar amounts are
+deliberately absent from every answer, for the same reason in reverse: they are
+hand-written on the pricing page and in the checkout and live in no constant, so quoting
+one in an answer would add a third copy in the format a machine repeats verbatim. Link
+to the page instead.
+
+**The guard is a registry, not a directory walk.** `src/lib/faq.test.ts` holds one
+`SOURCES` list and applies every rule to the union. Adding a surface that publishes
+FAQs means appending a source with its current `minimum`, in the same commit as the
+content. Two sweeps drift and the one nobody extended fails by looking at nothing.
+Sources load through the real collections (`getAllPosts`, `getAllDocs`) and, for the
+landing pages, through `siteFaqPages()`, which hands back the same `{ slug, faqs }`
+shape so the rules never learn which authoring format they are looking at. No private
+re-parse anywhere, so the guard sees exactly the strings the page renders.
+
+Rules it enforces, each with a mutation control beside it:
+
+- **Every answer naming a competitor carries a literal year.** An FAQ answer is built
+  to be quoted away from its page, so "at the time of writing" evaporates on the way
+  out and leaves an undated permanent claim about somebody else's moving product. The
+  rule is per ANSWER, not per sentence: an answer that already carries a date satisfies
+  it throughout. The pattern covers BOTH vocabularies, "native connector" and "built-in
+  connector": the site calls the same competitor by different names on different pages,
+  and a pattern written against one page's wording went blind the moment an answer was
+  written in the other's. Add the synonym when you notice one, not the example.
+- **No hyphenated word split by folding.** A folded scalar joins lines with spaces, so
+  a hyphen broken across two lines becomes "self- hosting". Invisible in the source.
+- **Every answer names its own subject**, because an extracted answer arrives without
+  its question.
+- **Anchors unique within a page**, derived from `q` by `faqAnchor`, never authored.
+- **No markup surviving into the JSON-LD projection.**
+
+Note what these do NOT do: they cannot tell whether a date is the right date or whether
+a claim was ever true. Claims are a person's job. And the retention-claim sweep already
+folds each answer back to one line before scanning, because a per-line regex cannot see
+a claim that straddles a block-scalar line break.
+
+Both sweeps now glob `content/skills` and `content/personas` too, which they did not
+before this rollout: the directories were outside every content sweep, so a claim in a
+skill or a persona page was structurally invisible to them. Adding the two dirs turned
+up nothing, which is the point at which a gap is cheapest to close.
+
+`site-faq.ts` is in the tool-count sweep's file list as well, alongside
+`hosted-google-workspace-mcp/page.tsx`, which was not in it despite its own header
+comment saying it kept no counts BECAUSE that guard would fail one. Any new hand-written
+copy surface has to be added to BOTH sweeps; neither globs `src/`.
+
+The retention sweep reads `site-faq.ts` too, ONE ROUTE AT A TIME rather than as a file.
+Its qualification rule is per file because a file was a page; a module carrying several
+routes breaks that equivalence, and a `/privacy` link in a `/faq` answer must not
+qualify an unqualified claim on `/pricing`. A route is qualified only by its own
+answers, which is stricter than the file rule and deliberately so: a link in the page
+footer is not a qualification a quoted answer carries with it.
+
+**Do not describe any of this as earning a Google rich result.** Google retired the FAQ
+rich result for every site on 2026-05-07 and removed the documentation on 2026-06-15.
+The justification is answer-engine extraction; the on-page block is what pays and the
+schema is packaging. There is no verified consumer of the markup, and this work cannot
+be measured.
 
 ## Page conventions
 

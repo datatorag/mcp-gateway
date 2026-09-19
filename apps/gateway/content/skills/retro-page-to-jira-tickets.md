@@ -5,6 +5,34 @@ situation: "We agreed the action items in the retro. They are on the page. Nobod
 produces: "One Jira issue per agreed action, filed with enough context to still make sense in six weeks."
 tools: [confluence_search, confluence_get_page, jira_create_issue, jira_get_issue]
 accounts: single
+faqs:
+  - q: Can one prompt read the retro page and file the tickets?
+    a: >-
+      Yes. Confluence and Jira sit behind the same endpoint, so the page is read
+      and one issue is filed per agreed action, with enough context in each to
+      still make sense six weeks later.
+  - q: Does it file anything before I see it?
+    a: >-
+      No. The skill shows the list it is about to create and what each issue will
+      say, and it takes owners from the page rather than guessing: if the notes
+      name nobody, the issue is left unassigned rather than assigned to an
+      invented owner.
+  - q: Will running it twice file everything twice?
+    a: >-
+      Not if it is run as written. Re-running against a page already processed
+      means searching Jira for the summary first, and the skill files one issue
+      per agreed action rather than one per sentence.
+  - q: Why does reading a Confluence page fail while search still works?
+    a: >-
+      Scopes, and the failure looks like something else. Confluence's v2 API
+      rejects Atlassian's classic scopes with a 401 saying the scope does not
+      match, which reads like a broken connection rather than a permissions gap,
+      and search keeps working because it is the one call still on the older API.
+  - q: Why did fixing the scopes not fix my existing connection?
+    a: >-
+      Because a grant is fixed at consent time. Refreshing a token never widens
+      it, so an account connected before the scopes changed keeps the old ones
+      until it is reconnected by hand, and nothing prompts you to do that.
 ---
 
 # The gap between agreeing and filing

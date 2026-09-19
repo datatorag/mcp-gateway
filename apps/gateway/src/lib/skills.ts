@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { marked } from "marked";
-import { defineCollection, field, type ParsedFile } from "./content-collection";
+import { defineCollection, field, type ContentFaq, type ParsedFile } from "./content-collection";
 import { connectorsFor, runClockLine, servicesFor, type RunClock } from "./skill-links";
 import type { SkillRunEffort } from "@/gateway/billing/plans";
 
@@ -125,6 +125,7 @@ function parseSkill({ slug, data, content }: ParsedFile): Skill | null {
     skillSource,
     notes,
   };
+  fileFaqs.set(slug, field.faqList(data.faqs));
   const effort = parseSkillEffort(data.effort);
   return renderSkill({
     ...c,
@@ -153,6 +154,35 @@ const collection = defineCollection<Skill>({
  * accuracy and boundary tests' subject, and the cold-start fallback. */
 export function readSkillFiles(): Skill[] {
   return collection.getAll();
+}
+
+/** Published FAQ copy for a skill page, keyed by slug and read from the
+ * FILES. Deliberately NOT a field on `Skill` and not part of `SkillContent`.
+ *
+ * It is not part of the artifact. A reader copies the fenced block and runs
+ * it; page copy about the skill is not in what they copy, and putting it on
+ * the type invites a page to render it off a row that never carried it.
+ *
+ * It must not reach the content hash. `skillVersion` is what tells a fork
+ * whether the skill it was taken from has changed, so adding a question would
+ * re-version a skill whose behaviour is identical and make every fork of it
+ * look stale over marketing copy.
+ *
+ * And a user's own skill must never inherit our published answers, which a
+ * column on the table would quietly allow. This map is filled while the files
+ * parse and is only ever read by slug, so a row cannot carry it by accident.
+ */
+const fileFaqs = new Map<string, ContentFaq[]>();
+
+export function publishedSkillFaqs(slug: string): ContentFaq[] {
+  readSkillFiles(); // cached; the first call is what fills the map
+  return fileFaqs.get(slug) ?? [];
+}
+
+/** Every published skill's FAQs in the `{ slug, faqs }` shape the guard
+ * registry reads every source in. */
+export function skillFaqPages(): { slug: string; faqs: ContentFaq[] }[] {
+  return readSkillFiles().map((s) => ({ slug: s.slug, faqs: publishedSkillFaqs(s.slug) }));
 }
 
 /* ---------------------------------------------------------------------- */

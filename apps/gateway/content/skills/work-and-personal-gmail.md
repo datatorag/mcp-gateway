@@ -5,6 +5,28 @@ situation: "The receipt is in my personal inbox and the thread about it is in my
 produces: "One answer assembled from every account you connected, or from exactly the one you name."
 tools: [gmail_search, gmail_read]
 accounts: multiple
+faqs:
+  - q: How does it know which mailbox to use?
+    a: >-
+      You name it, or your default answers. Every Gmail tool takes an optional
+      account argument: omit it and the default account is used, name an address
+      and that mailbox is.
+  - q: Does it merge results from my accounts?
+    a: >-
+      No. Each account is searched separately and every result is labelled with
+      the account it came from, because the receipt and which inbox the receipt is
+      in are both part of the answer.
+  - q: Is writing across accounts as safe as reading across them?
+    a: >-
+      It needs more care, and the skill says so rather than leaving it to a note.
+      A write with no account named goes to the default mailbox, which may not be
+      the Gmail account you were just reading, so the sending account is confirmed
+      explicitly instead of inherited.
+  - q: Can it read a mailbox I have not connected?
+    a: >-
+      No. These are separately connected accounts, each authorised by you, and
+      this is not delegated or shared mailbox access: nothing in this skill
+      reaches mail you have not personally connected.
 ---
 
 # Two mailboxes, one question

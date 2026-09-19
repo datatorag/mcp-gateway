@@ -4,6 +4,27 @@ description: "List, create, update, complete, and delete Google Tasks."
 order: 8
 section: "connectors"
 connector: "google-workspace"
+faqs:
+  - q: How does DataToRAG target a specific Google Tasks list?
+    a: >-
+      By its ID. One tool lists the account's task lists, such as My Tasks, Work
+      or Personal, along with the IDs that the other Tasks tools take.
+  - q: Can it mark a task complete?
+    a: >-
+      Yes. The Google Tasks tools create a task with a title, notes and an
+      optional due date, update those fields, mark a task completed, and delete
+      it.
+  - q: What does listing tasks actually return?
+    a: >-
+      Titles, completion status, due dates and notes. Listing the tasks in one
+      Google Tasks list returns each task with those fields, which is enough to
+      answer what is due without a second call.
+  - q: Can it work across a personal and a work account?
+    a: >-
+      Yes. Every tool on this page takes an optional account argument naming the
+      connected Google account to act on, and omitting it uses the default
+      account, so your assistant can read from one account and write to the other
+      in the same turn.
 ---
 
 The Tasks connector lets your AI assistant manage your Google Tasks: listing task lists, creating items, marking them complete, and organizing your to-dos.

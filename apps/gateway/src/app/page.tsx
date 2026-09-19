@@ -18,6 +18,13 @@ import { getAllPersonas } from "@/lib/personas";
 import { getSessionUserId } from "@/lib/session";
 import Link from "next/link";
 import Script from "next/script";
+import { FaqSection } from "@/components/faq-section";
+import { JsonLd } from "@/components/json-ld";
+import { faqPageNode } from "@/lib/site-schema";
+import { siteFaqGroups, siteFaqs } from "@/lib/site-faq";
+
+/** Read once at module scope: the answers are static, the page is not. */
+const homeFaqs = siteFaqs("/");
 
 export const dynamic = "force-dynamic";
 
@@ -116,6 +123,11 @@ export default async function HomePage() {
       <Navbar />
 
       <main className="flex-1 overflow-x-hidden">
+        {/* First structured data on this page. An array, so SCRUM-205's
+            Organization and WebSite nodes append here rather than adding a
+            second script element. */}
+        <JsonLd nodes={homeFaqs.length > 0 ? [faqPageNode(homeFaqs)] : []} />
+
         {/* Hero */}
         <ShaderBackground>
           {/* One viewport-height column, centered as a group: extra vertical
@@ -237,11 +249,17 @@ export default async function HomePage() {
                   built-in Drive connector can create new files) — never a
                   general "no write access" claim.
 
-                  The column header below stays unnamed on purpose: these rows
-                  span Drive ("Read a file", "Edit an existing sheet") AND
-                  Gmail ("Send an email"), so naming it "Drive" would make the
-                  email row false. Claude has three Google connectors — Drive,
-                  Gmail, Calendar — and this table compares two of them. */}
+                  The column header below stays unnamed on purpose: the rows
+                  span more than one built-in connector, and the last one spans
+                  all of them, so naming the column after any single connector
+                  would make another row false. Claude has three Google
+                  connectors — Drive, Gmail, Calendar.
+
+                  There is no Gmail row here as of 18 September 2026: the
+                  built-in connector sends, replies and forwards, so the row
+                  that used to live here now reads Yes/Yes. The full table at
+                  #comparison concedes those three rows rather than dropping
+                  them, which is the right place for a concession. */}
               <div
                 className="animate-fade-in-up mx-auto mt-8 w-full max-w-md lg:mx-0"
                 style={{ animationDelay: "0.2s" }}
@@ -278,7 +296,14 @@ export default async function HomePage() {
                       // with a single slide and an empty title and subtitle.
                       { capability: "Create a deck", builtIn: true },
                       { capability: "Put content in it", builtIn: false },
-                      { capability: "Send an email", builtIn: false },
+                      // Was "Send an email", which was true until the built-in
+                      // connector gained send, reply and forward in August 2026
+                      // and false afterwards. Replaced rather than flipped: a
+                      // Yes/Yes row in a five-row hero is a row that says
+                      // nothing, and this one is already enumerated on the
+                      // hosted-google-workspace-mcp page and carried as its own
+                      // row further down this page.
+                      { capability: "Work across two Google accounts", builtIn: false },
                     ].map(({ capability, builtIn }) => (
                       <tr
                         key={capability}
@@ -945,6 +970,36 @@ export default async function HomePage() {
 }`}
               </pre>
             </div>
+          </div>
+        </section>
+
+        {/* FAQ. Last thing before the ask, because these are the questions
+            that stand between reading the page and clicking the button, and
+            the answers are the page's own claims rather than new ones. The
+            block, its anchors and its JSON-LD are the shared ones every other
+            surface uses; the answers live in lib/site-faq.ts keyed by route,
+            where one guard can walk them. */}
+        <section className="mx-auto max-w-6xl px-6 pb-20">
+          <div className="animate-fade-in-up mx-auto max-w-3xl">
+            <p className="text-sm font-semibold uppercase tracking-widest text-primary">
+              FAQ
+            </p>
+            {siteFaqGroups("/").map((group) => (
+              <FaqSection
+                key={group.title}
+                title={group.title}
+                faqs={group.faqs}
+                variant="section"
+                className="mt-3"
+              />
+            ))}
+            <p className="mt-8 text-sm text-muted-foreground">
+              More of them on the{" "}
+              <Link href="/faq" className="underline hover:text-foreground">
+                FAQ page
+              </Link>
+              .
+            </p>
           </div>
         </section>
 

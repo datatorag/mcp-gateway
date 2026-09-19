@@ -4,6 +4,31 @@ description: "Search with CQL, read and edit pages, manage comments and attachme
 order: 22
 section: "connectors"
 connector: "atlassian"
+faqs:
+  - q: Why does Confluence need granular scopes rather than classic ones?
+    a: >-
+      Because of the API version. Every Confluence tool except search calls
+      Atlassian's v2 API, which rejects a classic grant with a scope does not
+      match error. Jira on the same connection still uses classic scopes.
+  - q: What format does Confluence page content have to be in?
+    a: >-
+      XHTML storage format. The DataToRAG create-page tool takes content in
+      Confluence's XHTML storage format, and reading a page returns its XHTML
+      body along with version info.
+  - q: Do I have to supply a version number when editing a Confluence page?
+    a: >-
+      No. The Confluence edit tool auto-increments the version if you do not
+      provide one.
+  - q: Can it search Confluence, and how?
+    a: >-
+      Yes, with CQL. The Confluence search tool takes Confluence Query Language,
+      and a separate tool lists the pages in a space with their id, title,
+      version and link.
+  - q: Can DataToRAG reply to an existing Confluence comment?
+    a: >-
+      Yes. The Confluence comment tool adds a comment to a page and can
+      optionally reply to an existing comment, and a companion tool reads every
+      comment on a page with its body content and version info.
 ---
 
 The Confluence tools let your AI assistant search space content, read and author pages, and manage comments and attachments.

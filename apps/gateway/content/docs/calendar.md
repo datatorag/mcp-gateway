@@ -4,9 +4,32 @@ description: "List, create, update, and delete events. Check free/busy availabil
 order: 2
 section: "connectors"
 connector: "google-workspace"
+faqs:
+  - q: Can DataToRAG check when several people are free?
+    a: >-
+      Yes. The Calendar free/busy tool checks free and busy status for one or
+      more people across a time range, which is what makes finding a slot across
+      several calendars a single request.
+  - q: Can it search my calendar, or only list a date range?
+    a: >-
+      Both. The Calendar list tool takes an optional free-text query that matches
+      an event's title, description, location and attendees, applied within the
+      date range you give it.
+  - q: Why does an event come back without the full attendee list?
+    a: >-
+      Because the Calendar listing is compact by default. It returns an attendee
+      count and your own response status, and includes the full roster only on
+      meetings of ten or fewer, alongside plain-text descriptions, join links, a
+      recurring flag and attachments. Asking for the full payload returns the raw
+      Google response instead.
+  - q: Are event descriptions returned as HTML?
+    a: >-
+      No, as plain text. The Calendar tools convert an event's description to
+      plain text by default, and the full payload option keeps the original HTML
+      if you need it.
 ---
 
-The Calendar connector lets your AI assistant manage your Google Calendar — viewing your schedule, creating events, and checking availability.
+The Calendar connector lets your AI assistant manage your Google Calendar: viewing your schedule, creating events, and checking availability.
 
 ## Available operations
 

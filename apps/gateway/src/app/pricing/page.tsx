@@ -9,12 +9,25 @@ import { Navbar } from "@/components/navbar";
 import {
   FREE_MONTHLY_CAP,
   PRO_MONTHLY_INCLUDED,
+  planLimits,
 } from "@/gateway/billing/plans";
 import {
   FreeCta,
   PricingConversionListener,
   ProCheckout,
 } from "./pricing-ctas";
+import { FaqSection } from "@/components/faq-section";
+import { JsonLd } from "@/components/json-ld";
+import { faqPageNode } from "@/lib/site-schema";
+import { siteFaqGroups, siteFaqs } from "@/lib/site-faq";
+
+/** Answers live in lib/site-faq.ts keyed by route, with the free allowance
+ * imported from the same constants this page renders and the gateway enforces,
+ * so an answer cannot quote a cap nobody applies. No dollar amounts in an
+ * answer: those are hand-written here and in the checkout, and a third copy in
+ * the format a machine repeats verbatim is how a stale price gets quoted back
+ * at us. */
+const pricingFaqs = siteFaqs("/pricing");
 
 export const dynamic = "force-dynamic";
 
@@ -24,8 +37,13 @@ export const dynamic = "force-dynamic";
 // checkout that charges them.
 const FREE_CALLS = FREE_MONTHLY_CAP.toLocaleString("en-US");
 const PRO_CALLS = PRO_MONTHLY_INCLUDED.toLocaleString("en-US");
+const FREE_RUNS = planLimits("free").agentRuns.toLocaleString("en-US");
+const PRO_RUNS = planLimits("pro").agentRuns.toLocaleString("en-US");
 
-const description = `Free tier with ${FREE_CALLS} tool calls a month, no card required. Pro is $20 a month or $200 a year with ${PRO_CALLS} calls included. Every tier gets all connectors, multi-account, and the approval gate on writes.`;
+// Both allowances, like the cards and the answers below them. Naming only the
+// calls was complete until agent runs became the second dimension (SCRUM-290),
+// and the run cap is the one expected to bind first.
+const description = `Free tier with ${FREE_CALLS} tool calls and ${FREE_RUNS} agent runs a month, no card required. Pro is $20 a month or $200 a year with ${PRO_CALLS} calls and ${PRO_RUNS} runs included. Every tier gets all connectors, multi-account, and the approval gate on writes.`;
 
 export const metadata: Metadata = {
   title: "Pricing | DataToRAG",
@@ -122,6 +140,7 @@ export default async function PricingPage({
       <Navbar />
       <PricingConversionListener />
       <main>
+        <JsonLd nodes={pricingFaqs.length > 0 ? [faqPageNode(pricingFaqs)] : []} />
         <div className="mx-auto max-w-6xl px-6 pb-16 pt-32 sm:pt-36">
           <div className="mx-auto max-w-2xl text-center">
             <p className="text-sm font-semibold uppercase tracking-widest text-primary">
@@ -206,6 +225,21 @@ export default async function PricingPage({
                 </span>
               ))}
             </div>
+          </div>
+
+          {/* The questions that decide a plan, before the ask that follows.
+              Left-aligned inside a centered column: these are read, not
+              scanned, and centered prose at this length is harder to read. */}
+          <div className="mx-auto mt-14 max-w-3xl">
+            {siteFaqGroups("/pricing").map((group) => (
+              <FaqSection
+                key={group.title}
+                title={group.title}
+                faqs={group.faqs}
+                variant="section"
+                className=""
+              />
+            ))}
           </div>
 
           <div className="mx-auto mt-14 max-w-2xl text-center">

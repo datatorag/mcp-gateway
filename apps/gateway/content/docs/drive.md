@@ -4,6 +4,40 @@ description: "Search files, read content, and create folders in Google Drive."
 order: 3
 section: "connectors"
 connector: "google-workspace"
+faqs:
+  - q: Can DataToRAG read a PDF from Drive?
+    a: >-
+      No. The Drive read tool answers with an Unsupported file type error for
+      PDFs. It reads text out of documents rather than out of scanned or rendered
+      pages, which makes PDFs the common surprise.
+  - q: Which file types can the Drive reader handle?
+    a: >-
+      Four kinds. Google Docs, Sheets and Slides come back as extracted text,
+      using the same extraction the dedicated tools use; .docx, .xlsx and .pptx
+      are converted to the matching Google format in a temporary copy that is
+      read and then deleted; .txt and .csv are returned as they are. Anything
+      else, PDFs included, returns an Unsupported file type error.
+  - q: Does reading a Drive file download it to my computer?
+    a: >-
+      No. Reading happens server-side and the text comes back in the response, so
+      nothing is downloaded to a local filesystem and a large file does not have
+      to pass through the conversation to be read.
+  - q: Can it copy a folder in Drive?
+    a: >-
+      No. Google Drive refuses to copy a folder and answers with a 403 that reads
+      like a permissions problem. It is not one, and retrying with wider access
+      will not change it. Files copy fine, optionally into another folder.
+  - q: Should I copy a template or ask the assistant to rebuild it?
+    a: >-
+      Copy it. Rebuilding a document from scratch gives you something that looks
+      close and drifts a little each time, while a Drive copy carries the
+      original's tabs, formatting and formulas exactly, because it is the same
+      file. Copy first, then fill in the copy.
+  - q: Does renaming a file in Drive change anything else about it?
+    a: >-
+      No. The Drive rename tool changes the name only, and the file's content,
+      location and sharing are untouched. It works on Google Docs, Sheets, Slides
+      and folders.
 ---
 
 The Drive connector lets your AI assistant search across your Google Drive, read file contents, and organize files into folders.

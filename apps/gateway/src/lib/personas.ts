@@ -1,5 +1,5 @@
 import { marked } from "marked";
-import { defineCollection, field, type ParsedFile } from "./content-collection";
+import { defineCollection, field, type ContentFaq, type ParsedFile } from "./content-collection";
 import { getSkillBySlug, type Skill } from "./skills";
 
 /** Who a set of skills is for.
@@ -33,6 +33,10 @@ export interface Persona {
   skillSlugs: string[];
   /** Prose above the skill list. */
   introHtml: string;
+  /** Page FAQs, same `{q, a}` shape and the same guard as every other
+   * surface. A persona page answers "is this me", which is a question shape
+   * the FAQ block fits exactly. */
+  faqs: ContentFaq[];
 }
 
 const collection = defineCollection<Persona>({
@@ -47,6 +51,12 @@ export function getAllPersonas(): Persona[] {
 
 export function getPersonaBySlug(slug: string): Persona | null {
   return collection.getBySlug(slug);
+}
+
+/** Every persona's FAQs in the `{ slug, faqs }` shape the guard registry
+ * reads every source in. */
+export function personaFaqPages(): { slug: string; faqs: ContentFaq[] }[] {
+  return getAllPersonas().map((p) => ({ slug: p.slug, faqs: p.faqs }));
 }
 
 /** The persona's skills, resolved and in authored order. Silently drops a
@@ -71,5 +81,6 @@ function parsePersona({ slug, data, content }: ParsedFile): Persona | null {
     order: field.number(data.order, 99),
     skillSlugs,
     introHtml: marked.parse(content) as string,
+    faqs: field.faqList(data.faqs),
   };
 }
