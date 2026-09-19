@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { eq, sql } from "drizzle-orm";
 import { PROMO, isPromoCode } from "@/lib/promo";
+import { PRO_RUNS_BULLET, freeAllowanceBullet, proAllowanceBullet } from "./allowances";
 import { db } from "@/lib/db";
 import { mcpServers, tools } from "@datatorag-mcp/db";
 import { Navbar } from "@/components/navbar";
@@ -75,7 +76,7 @@ const tiers: Tier[] = [
       "Every connector and every tool",
       "Multi-account: work and personal side by side",
       "Approval gate on every write",
-      `${FREE_CALLS} tool calls a month, then a hard stop, never a surprise bill`,
+      freeAllowanceBullet(),
     ],
     price: { amount: "$0" },
     cta: "free",
@@ -85,8 +86,8 @@ const tiers: Tier[] = [
     blurb: "For people who run real work through their agent every day.",
     features: [
       "Everything in Free",
-      `${PRO_CALLS} tool calls a month included`,
-      "Agent and skill runs included, no separate bill for the model",
+      proAllowanceBullet(),
+      PRO_RUNS_BULLET,
       "No feature gates, just a bigger allowance",
     ],
     cta: "checkout",
