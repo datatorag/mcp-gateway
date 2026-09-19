@@ -74,9 +74,9 @@ The Gmail connector gives your AI assistant full access to your inbox: searching
 | `gmail_send` | Send a new email. Your Gmail signature is added; `signature: false` sends without it |
 | `gmail_reply` | Reply to an existing thread. Your Gmail signature goes under your note, above the quoted message |
 | `gmail_forward` | Forward a message to another recipient, signed the same way as a reply |
-| `gmail_create_draft` | Create a draft without sending. Drafts are never signed |
+| `gmail_create_draft` | Create a draft without sending. Your Gmail signature is added to the draft; `signature: false` leaves it out |
 | `gmail_update_draft` | Update an existing draft |
-| `gmail_send_draft` | Send an existing draft. The signature is added at this point, once |
+| `gmail_send_draft` | Send an existing draft. A draft that already carries the signature is sent unchanged; one without gets it |
 | `gmail_delete_draft` | Delete a draft |
 | `gmail_mark_read` | Mark messages as read, for a single message or a batch of up to 1,000 IDs. For label changes beyond read state, use `gmail_label_message` |
 | `gmail_label_message` | Label many messages in one call: `message_ids` (up to 1,000) with `add_labels` and `remove_labels`, one `batchModify` request, a per-message outcome in the result; `message_id` for a single message. Removing INBOX archives a message; removing UNREAD marks it read |
@@ -91,7 +91,7 @@ The Gmail connector gives your AI assistant full access to your inbox: searching
 Mail sent with `gmail_send`, `gmail_reply`, `gmail_forward` or `gmail_send_draft` ends with the signature set in Gmail for the address it is sent from. Nothing needs configuring, and an alias uses its own signature.
 
 - On a new message the signature closes the body. On a reply or forward it sits under your note and above the quoted message.
-- `gmail_create_draft` and `gmail_update_draft` never sign. A draft is signed once, when `gmail_send_draft` sends it.
+- `gmail_create_draft` and `gmail_update_draft` sign the draft as Gmail's Compose does. `gmail_send_draft` adds a signature only to a draft that has none, so a draft is never signed twice.
 - Pass `signature: false` to send a message exactly as written.
 - Messages go out with a plain-text and an HTML version. The signature is in the HTML version only.
 

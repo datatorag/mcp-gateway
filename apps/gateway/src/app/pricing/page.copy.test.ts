@@ -1,6 +1,13 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
+import {
+  FREE_MONTHLY_AGENT_RUNS,
+  FREE_MONTHLY_CAP,
+  PRO_MONTHLY_INCLUDED,
+  planLimits,
+} from "@/gateway/billing/plans";
+import { PRO_RUNS_BULLET, freeAllowanceBullet, proAllowanceBullet } from "./allowances";
 
 /**
  * Accuracy pins for the published pricing copy. Each rule here is
@@ -14,6 +21,7 @@ const read = (...segments: string[]) =>
 
 const page = read("src", "app", "pricing", "page.tsx");
 const ctas = read("src", "app", "pricing", "pricing-ctas.tsx");
+const allowances = read("src", "app", "pricing", "allowances.ts");
 const comparisonPost = read(
   "content",
   "blog",
@@ -61,6 +69,51 @@ describe("pricing page copy", () => {
     expect(page).toContain("no per-connector upsell");
     expect(page).toContain("Multi-account");
     expect(page).toContain("Approval gate");
+  });
+
+  /* SCRUM-290. "Runs included" with no number read as unmetered, and the
+   * allowance is finite and enforced. The cards now state it, from the same
+   * plan table enforcement reads. */
+  it("the Free and Pro cards state the run allowance that billing/plans.ts enforces", () => {
+    const free = planLimits("free");
+    const pro = planLimits("pro");
+    // Built from the plan table, whatever it holds.
+    expect(freeAllowanceBullet()).toBe(
+      `${free.monthlyIncluded.toLocaleString("en-US")} tool calls and ${free.agentRuns.toLocaleString("en-US")} agent runs a month, then a hard stop, never a surprise bill`
+    );
+    expect(proAllowanceBullet()).toBe(
+      `${pro.monthlyIncluded.toLocaleString("en-US")} tool calls and ${pro.agentRuns.toLocaleString("en-US")} agent runs a month included`
+    );
+    expect(free.monthlyIncluded).toBe(FREE_MONTHLY_CAP);
+    expect(free.agentRuns).toBe(FREE_MONTHLY_AGENT_RUNS);
+    expect(pro.monthlyIncluded).toBe(PRO_MONTHLY_INCLUDED);
+    // Free is a hard stop and says so; the word must go if that ever changes.
+    expect(free.hardCap).toBe(true);
+  });
+
+  it("pins the published sentences, so a change to a plan number is a change someone reads", () => {
+    // The test above would pass for ANY numbers. These are the words on the
+    // page today; when plans.ts moves, this fails and the copy (and any image
+    // or email quoting it) gets re-read rather than silently re-rendered.
+    expect(freeAllowanceBullet()).toBe("250 tool calls and 25 agent runs a month, then a hard stop, never a surprise bill");
+    expect(proAllowanceBullet()).toBe("2,000 tool calls and 100 agent runs a month included");
+    expect(PRO_RUNS_BULLET).toBe("Skill and agent runs come out of that, no separate bill for the model");
+  });
+
+  it("the page renders those bullets, in order on the Pro card, and holds no run count of its own", () => {
+    expect(page).toContain("freeAllowanceBullet(),");
+    const pro = page.slice(page.indexOf('name: "Pro"'), page.indexOf('name: "Enterprise"'));
+    // "that" in the second bullet refers to the first, so the order is copy.
+    expect(pro.indexOf("proAllowanceBullet(),")).toBeGreaterThan(-1);
+    expect(pro.indexOf("PRO_RUNS_BULLET,")).toBeGreaterThan(pro.indexOf("proAllowanceBullet(),"));
+    const freeCard = page.slice(page.indexOf('name: "Free"'), page.indexOf('name: "Pro"'));
+    expect(freeCard).not.toContain("PRO_RUNS_BULLET");
+    // No literal allowance anywhere in the page or the helper.
+    for (const source of [page, allowances]) {
+      expect(source).not.toMatch(/\d[\d,]* (tool calls|agent runs)/);
+    }
+    expect(page).not.toMatch(/unlimited/i);
+    expect(allowances).not.toMatch(/unlimited/i);
   });
 
   it("Enterprise copy promises nothing we would have to build", () => {
