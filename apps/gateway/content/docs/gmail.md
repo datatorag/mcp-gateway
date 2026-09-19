@@ -52,7 +52,9 @@ faqs:
       send response also carries a signature field saying which happened: applied,
       none_set when the account has no signature in Gmail, suppressed when you
       passed signature false, already_present when the body already ended with it,
-      or unavailable when it could not be read and the message went out unsigned.
+      unavailable when it could not be read and the message went out unsigned,
+      or skipped_unsupported_draft when the draft is in a format DataToRAG sends
+      untouched rather than rewrites.
   - q: What Gmail permission does DataToRAG ask for?
     a: >-
       One scope, gmail.modify. That single Google scope covers everything the

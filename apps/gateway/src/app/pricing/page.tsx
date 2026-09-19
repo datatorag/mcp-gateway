@@ -9,6 +9,7 @@ import { Navbar } from "@/components/navbar";
 import {
   FREE_MONTHLY_CAP,
   PRO_MONTHLY_INCLUDED,
+  planLimits,
 } from "@/gateway/billing/plans";
 import {
   FreeCta,
@@ -36,8 +37,13 @@ export const dynamic = "force-dynamic";
 // checkout that charges them.
 const FREE_CALLS = FREE_MONTHLY_CAP.toLocaleString("en-US");
 const PRO_CALLS = PRO_MONTHLY_INCLUDED.toLocaleString("en-US");
+const FREE_RUNS = planLimits("free").agentRuns.toLocaleString("en-US");
+const PRO_RUNS = planLimits("pro").agentRuns.toLocaleString("en-US");
 
-const description = `Free tier with ${FREE_CALLS} tool calls a month, no card required. Pro is $20 a month or $200 a year with ${PRO_CALLS} calls included. Every tier gets all connectors, multi-account, and the approval gate on writes.`;
+// Both allowances, like the cards and the answers below them. Naming only the
+// calls was complete until agent runs became the second dimension (SCRUM-290),
+// and the run cap is the one expected to bind first.
+const description = `Free tier with ${FREE_CALLS} tool calls and ${FREE_RUNS} agent runs a month, no card required. Pro is $20 a month or $200 a year with ${PRO_CALLS} calls and ${PRO_RUNS} runs included. Every tier gets all connectors, multi-account, and the approval gate on writes.`;
 
 export const metadata: Metadata = {
   title: "Pricing | DataToRAG",
