@@ -1,5 +1,5 @@
 import type { ContentFaq } from "./content-collection";
-import { FREE_MONTHLY_CAP } from "@/gateway/billing/plans";
+import { planLimits } from "@/gateway/billing/plans";
 import { VERIFIED_ON } from "./connector-verification";
 
 /** Numbers and dates are IMPORTED, never retyped.
@@ -12,7 +12,14 @@ import { VERIFIED_ON } from "./connector-verification";
  * same reason in reverse: they are hand-written on the pricing page today and
  * live in no constant, so quoting one here would add a fourth copy in the one
  * format a machine repeats verbatim. Link to the page instead. */
-const FREE_CALLS = FREE_MONTHLY_CAP.toLocaleString("en-US");
+const FREE = planLimits("free");
+const count = (n: number) => n.toLocaleString("en-US");
+/** BOTH allowances, because Free has two and naming only one is a half-truth
+ * on a page that lists both. The run cap is the one expected to bind first: a
+ * single agent run normally makes several tool calls. Read from the plan table
+ * the pricing cards and enforcement both read, never retyped. */
+const FREE_CALLS = count(FREE.monthlyIncluded);
+const FREE_RUNS = count(FREE.agentRuns);
 
 /** Authored FAQs for the pages that are TSX rather than markdown.
  *
@@ -170,7 +177,7 @@ export const SITE_FAQ_PAGES: SiteFaqPage[] = [
           },
           {
             q: "What does it cost to start?",
-            a: `Nothing, and no card. The free tier includes ${FREE_CALLS} tool calls a month with every connector available, and paid plans buy a bigger allowance rather than unlocking features. [Pricing](/pricing) has the current numbers.`,
+            a: `Nothing, and no card. The free tier includes ${FREE_CALLS} tool calls and ${FREE_RUNS} agent runs a month with every connector available, and paid plans buy a bigger allowance rather than unlocking features. [Pricing](/pricing) has the current numbers.`,
           },
         ],
       },
@@ -184,7 +191,7 @@ export const SITE_FAQ_PAGES: SiteFaqPage[] = [
         faqs: [
           {
             q: "What happens when I use up the free allowance?",
-            a: `The next tool call is refused, not billed. The free cap is checked before a call runs, and the refusal tells you the allowance resets at the start of your next period and that Pro is available from your dashboard. Free is ${FREE_CALLS} tool calls a month with no card on file, so there is nothing to surprise you at the end of it.`,
+            a: `The next tool call is refused, not billed. The free cap is checked before a call runs, and the refusal tells you the allowance resets at the start of your next period and that Pro is available from your dashboard. Free carries two allowances, ${FREE_CALLS} tool calls and ${FREE_RUNS} agent runs a month, and the runs are usually what you reach first, because one agent run normally makes several tool calls. There is no card on file either way, so nothing arrives as a bill.`,
           },
           {
             q: "Which tool calls count against the allowance?",
