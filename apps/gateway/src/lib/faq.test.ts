@@ -140,7 +140,7 @@ function collectionSource(
  * for it. The entry count alone cannot tell those apart. */
 const SOURCES: FaqSource[] = [
   { name: "blog", minimum: 18, load: collectionSource("blog", getAllPosts) },
-  { name: "docs", minimum: 69, load: collectionSource("docs", getAllDocs) },
+  { name: "docs", minimum: 72, load: collectionSource("docs", getAllDocs) },
   // The landing pages are TSX and keep their answers in a typed module. They go
   // through the SAME reader as the two markdown collections, because
   // `siteFaqPages` hands back the same `{ slug, faqs }` shape; the rules below

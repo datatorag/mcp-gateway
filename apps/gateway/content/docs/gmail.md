@@ -31,6 +31,28 @@ faqs:
       Yes. One Gmail tool saves an email attachment straight to Google Drive, and
       DataToRAG's search tool can find the messages carrying attachments first
       using Gmail's own query syntax.
+  - q: Will my Gmail signature be added to mail DataToRAG sends?
+    a: >-
+      Yes, the one set in Gmail for the address it is sent from, and an alias uses
+      its own. Nothing needs configuring. On a new message the signature closes
+      the body, and on a reply or forward it sits under your note and above the
+      quoted message. Pass signature false on the call to send a message exactly
+      as written.
+  - q: Are drafts signed as well?
+    a: >-
+      Yes. The DataToRAG draft tools sign a draft the way Gmail's own Compose
+      does, and sending a draft adds a signature only to one that has none, so a
+      draft is never signed twice.
+  - q: Why does the signature look like it is missing?
+    a: >-
+      Usually because of where it lives rather than whether it was added. Messages
+      go out with a plain-text and an HTML version and the signature is in the
+      HTML version only, and Gmail's mobile apps fold a signature they recognise
+      behind the three-dot button, where it is still part of the message. Every
+      send response also carries a signature field saying which happened: applied,
+      none_set when the account has no signature in Gmail, suppressed when you
+      passed signature false, already_present when the body already ended with it,
+      or unavailable when it could not be read and the message went out unsigned.
   - q: What Gmail permission does DataToRAG ask for?
     a: >-
       One scope, gmail.modify. That single Google scope covers everything the
