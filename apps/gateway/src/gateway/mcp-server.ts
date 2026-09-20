@@ -537,12 +537,19 @@ export function createMcpServer(
      * getter for it. Rides on the tools-listed event beside the client
      * name and version the SDK does keep. */
     protocolVersion?: string;
+    /** Set only by the test runner (SCRUM-303), which builds this server in
+     * process for the triggering admin and has no credential of its own.
+     * Stamped on every tool_call this server emits, so a run's traffic can
+     * be excluded or isolated with one filter and a single call can be
+     * traced back to the result row it produced. */
+    testRunId?: string;
   }
 ): Server {
   const connectionsUrl = `${opts?.baseUrl ?? ""}/dashboard/connections`;
   const surface = opts?.surface ?? "mcp";
   const clientId = opts?.clientId ?? null;
   const protocolVersion = opts?.protocolVersion;
+  const testRunId = opts?.testRunId ?? null;
   const server = new Server(
     { name: "datatorag-mcp", version: "0.1.0" },
     // Prompts (SCRUM-224): the skill catalogue as the native "apply a
@@ -664,6 +671,7 @@ export function createMcpServer(
           userId,
           clientId,
           clientName: clientName(),
+        testRunId,
           toolName: name,
           connectorType: null,
           accountEmail: undefined,
@@ -681,6 +689,7 @@ export function createMcpServer(
           userId,
           clientId,
           clientName: clientName(),
+        testRunId,
           toolName: name,
           connectorType: null,
           accountEmail: undefined,
@@ -843,6 +852,7 @@ export function createMcpServer(
           userId,
           clientId,
           clientName: clientName(),
+        testRunId,
           toolName: name,
           connectorType: requiredService,
           accountEmail,
@@ -944,6 +954,7 @@ export function createMcpServer(
         userId,
         clientId,
         clientName: clientName(),
+        testRunId,
         toolName: name,
         connectorType: requiredService ?? null,
         accountEmail,
@@ -969,6 +980,7 @@ export function createMcpServer(
         userId,
         clientId,
         clientName: clientName(),
+        testRunId,
         toolName: name,
         connectorType: requiredService ?? null,
         accountEmail,

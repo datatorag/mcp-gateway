@@ -35,6 +35,25 @@ const MAX_LEN = 500;
 /** The blanket scrubbers, applied in the original order. This is both the
  * fallback for unrecognised messages and the per-value scrub inside kept
  * diagnostic fields. */
+/**
+ * The pattern scrub ALONE, without the 500-character cap or the envelope
+ * rebuilding that `redactErrorMessage` layers on top (SCRUM-303).
+ *
+ * Exported for test-run evidence, which is a different shape of text from an
+ * upstream error message: it is multi-line, it is meant to be read by a
+ * person deciding whether to believe a result, and it has its own 4 KB cap.
+ * Running it through `redactErrorMessage` truncated it to 500 characters and
+ * collapsed a long run into `[redacted-id]`, which is correct for an error
+ * message and destroys evidence.
+ *
+ * What must NOT be duplicated is the pattern list, so evidence and the usage
+ * sink cannot come to disagree about what looks like a credential. Hence one
+ * exported function rather than a second copy of the regexes.
+ */
+export function scrubSensitiveText(text: string): string {
+  return scrubText(text);
+}
+
 function scrubText(text: string): string {
   let out = text;
   out = out.replace(EMAIL_RE, "[redacted-email]");

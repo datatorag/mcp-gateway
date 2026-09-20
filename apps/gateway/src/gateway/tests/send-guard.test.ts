@@ -1,0 +1,387 @@
+/**
+ * The send guard (SCRUM-303). Every rule gets a case that it refuses and,
+ * where the rule could be satisfied trivially, a control it allows.
+ *
+ * The addresses here are invented. A real mailbox must never appear in this
+ * repo, and a mangled prefix of a real one is still evidence of it.
+ */
+
+import { describe, expect, it, vi } from "vitest";
+import { checkSend, SUBJECT_PREFIX, type GuardLookups } from "./send-guard";
+import { parseAddressList, AddressParseError } from "./address-list";
+
+const READER = "reader@example.test";
+const STRANGER = "someone.else@example.test";
+const SUBJECT = `${SUBJECT_PREFIX} round trip`;
+
+const lookups = (over: Partial<GuardLookups> = {}): GuardLookups => ({
+  readDraft: vi.fn().mockResolvedValue(null),
+  readMessage: vi.fn().mockResolvedValue(null),
+  ...over,
+});
+
+const check = (tool: string, args: Record<string, unknown>, over?: Partial<GuardLookups>, reader: string | null = READER) =>
+  checkSend(tool, args, { readerEmail: reader, lookups: lookups(over) });
+
+describe("a tool that is not a send is not this guard's business", () => {
+  it.each(["gws-mcp__gmail_search", "gws-mcp__sheets_read", "atlassian-mcp__jira_search"])(
+    "%s passes straight through",
+    async (tool) => {
+      expect(await check(tool, {})).toEqual({ ok: true });
+    }
+  );
+});
+
+describe("the tools that carry recipients in their arguments", () => {
+  const tools = [
+    "gws-mcp__gmail_send",
+    "gws-mcp__gmail_forward",
+    "gws-mcp__gmail_create_draft",
+    "gws-mcp__gmail_update_draft",
+  ];
+
+  it.each(tools)("%s allows the reader with the prefix", async (tool) => {
+    expect(await check(tool, { to: READER, subject: SUBJECT })).toEqual({ ok: true });
+  });
+
+  it.each(tools)("%s refuses a stranger in to", async (tool) => {
+    const res = await check(tool, { to: STRANGER, subject: SUBJECT });
+    expect(res).toMatchObject({ ok: false });
+    expect((res as { reason: string }).reason).toContain("to holds an address");
+  });
+
+  it.each(["cc", "bcc"])("refuses a stranger hiding in %s", async (field) => {
+    const res = await check("gws-mcp__gmail_send", { to: READER, [field]: STRANGER, subject: SUBJECT });
+    expect(res).toMatchObject({ ok: false });
+    expect((res as { reason: string }).reason).toContain(field);
+  });
+
+  it("allows the reader repeated across to, cc and bcc", async () => {
+    expect(
+      await check("gws-mcp__gmail_send", { to: READER, cc: READER, bcc: READER, subject: SUBJECT })
+    ).toEqual({ ok: true });
+  });
+
+  it("refuses a subject with no prefix", async () => {
+    const res = await check("gws-mcp__gmail_send", { to: READER, subject: "hello" });
+    expect((res as { reason: string }).reason).toContain(SUBJECT_PREFIX);
+  });
+
+  it("refuses an empty recipient list, which would otherwise pass vacuously", async () => {
+    // Every address in an empty list is the reader, so a loop-only check
+    // says yes. This is the case that catches that.
+    const res = await check("gws-mcp__gmail_send", { to: "", subject: SUBJECT });
+    expect((res as { reason: string }).reason).toContain("no recipient");
+  });
+
+  it("refuses when no reader is mapped at all", async () => {
+    const res = await check("gws-mcp__gmail_send", { to: READER, subject: SUBJECT }, {}, null);
+    expect((res as { reason: string }).reason).toContain("no reader mailbox is mapped");
+  });
+
+  it("accepts a display name and compares only the address", async () => {
+    expect(
+      await check("gws-mcp__gmail_send", { to: `Smoke Reader <${READER}>`, subject: SUBJECT })
+    ).toEqual({ ok: true });
+  });
+
+  it("is not fooled by a quoted display name containing a comma", async () => {
+    // The reason this parses rather than splits: a naive split makes two
+    // entries out of one address, and the first parses as nothing.
+    const res = await check("gws-mcp__gmail_send", {
+      to: `"Reader, Smoke" <${READER}>, ${STRANGER}`,
+      subject: SUBJECT,
+    });
+    expect(res).toMatchObject({ ok: false });
+    expect((res as { reason: string }).reason).toContain("to holds an address");
+  });
+
+  it("refuses a recipient field it cannot parse rather than skipping it", async () => {
+    const res = await check("gws-mcp__gmail_send", { to: `"unterminated <${READER}>`, subject: SUBJECT });
+    expect((res as { reason: string }).reason).toContain("could not be parsed");
+  });
+});
+
+describe("gmail_send_draft reads the STORED draft", () => {
+  it("allows a stored draft addressed to the reader", async () => {
+    const readDraft = vi.fn().mockResolvedValue({ to: READER, subject: SUBJECT });
+    expect(await check("gws-mcp__gmail_send_draft", { draft_id: "d1" }, { readDraft })).toEqual({ ok: true });
+    expect(readDraft).toHaveBeenCalledWith("d1");
+  });
+
+  it("refuses a draft that was edited to a stranger after it was created", async () => {
+    // The whole reason this reads the stored object: the arguments the draft
+    // was CREATED with passed the guard, and are not what will be sent.
+    const readDraft = vi.fn().mockResolvedValue({ to: STRANGER, subject: SUBJECT });
+    const res = await check("gws-mcp__gmail_send_draft", { draft_id: "d1" }, { readDraft });
+    expect(res).toMatchObject({ ok: false });
+  });
+
+  it("refuses a stranger added to the stored bcc", async () => {
+    const readDraft = vi.fn().mockResolvedValue({ to: READER, bcc: STRANGER, subject: SUBJECT });
+    expect(await check("gws-mcp__gmail_send_draft", { draft_id: "d1" }, { readDraft })).toMatchObject({ ok: false });
+  });
+
+  it("refuses when the draft cannot be read, rather than assuming it is fine", async () => {
+    const res = await check("gws-mcp__gmail_send_draft", { draft_id: "gone" });
+    expect((res as { reason: string }).reason).toContain("could not be read");
+  });
+});
+
+describe("gmail_reply reads the message being answered", () => {
+  it("allows a reply to a message from the reader", async () => {
+    const readMessage = vi.fn().mockResolvedValue({ from: READER, subject: `Re: ${SUBJECT}` });
+    expect(await check("gws-mcp__gmail_reply", { message_id: "m1" }, { readMessage })).toEqual({ ok: true });
+  });
+
+  it("prefers Reply-To over From, because that is where a reply goes", async () => {
+    const readMessage = vi.fn().mockResolvedValue({ from: READER, replyTo: STRANGER, subject: SUBJECT });
+    expect(await check("gws-mcp__gmail_reply", { message_id: "m1" }, { readMessage })).toMatchObject({ ok: false });
+  });
+
+  it("refuses a reply to a message from a stranger", async () => {
+    const readMessage = vi.fn().mockResolvedValue({ from: STRANGER, subject: SUBJECT });
+    expect(await check("gws-mcp__gmail_reply", { message_id: "m1" }, { readMessage })).toMatchObject({ ok: false });
+  });
+
+  it("refuses when the original's subject does not carry the prefix", async () => {
+    const readMessage = vi.fn().mockResolvedValue({ from: READER, subject: "unrelated thread" });
+    const res = await check("gws-mcp__gmail_reply", { message_id: "m1" }, { readMessage });
+    expect((res as { reason: string }).reason).toContain(SUBJECT_PREFIX);
+  });
+
+  it("refuses when the original cannot be read", async () => {
+    const res = await check("gws-mcp__gmail_reply", { message_id: "m1" });
+    expect((res as { reason: string }).reason).toContain("could not be read");
+  });
+});
+
+describe("gws_run, the generic escape hatch", () => {
+  it.each([
+    ["gmail", "users.messages", "send"],
+    ["gmail", "users.drafts", "send"],
+    ["gmail", "users.messages", "import"],
+    ["gmail", "users.messages", "insert"],
+    ["gmail", "users.settings.forwardingAddresses", "create"],
+    ["gmail", "users.settings.filters", "create"],
+    ["gmail", "users.settings.sendAs", "create"],
+    ["gmail", "users.settings.delegates", "create"],
+    ["drive", "permissions", "create"],
+    ["calendar", "events", "delete"],
+    ["calendar", "events", "insert"],
+  ])("refuses %s %s.%s", async (service, resource, method) => {
+    const res = await check("gws-mcp__gws_run", { service, resource, method });
+    expect(res).toMatchObject({ ok: false });
+  });
+
+  it.each([
+    ["gmail", "users.messages", "list"],
+    ["gmail", "users.messages", "get"],
+    ["sheets", "spreadsheets", "get"],
+    ["drive", "files", "list"],
+  ])("allows the read %s %s.%s, so the refusals above are not blanket", async (service, resource, method) => {
+    expect(await check("gws-mcp__gws_run", { service, resource, method })).toEqual({ ok: true });
+  });
+
+  it.each(["Gmail", "GMAIL", " gmail ", "gMaIl"])(
+    "refuses a send through %j, because a caller chooses the spelling",
+    async (service) => {
+      // An exact-string lookup is a guard that any other case walks straight
+      // past, and nothing promises the plugin normalises this for us.
+      expect(
+        await check("gws-mcp__gws_run", { service, resource: "users.messages", method: "send" })
+      ).toMatchObject({ ok: false });
+    }
+  );
+
+  it.each([
+    ["chat", "spaces.messages", "create"],
+    ["admin", "users", "insert"],
+    ["groupssettings", "groups", "update"],
+    ["people", "people", "createContact"],
+  ])("refuses %s %s.%s, a service the denylist has never heard of", async (service, resource, method) => {
+    // A denylist that does not know a service allows everything in it, and
+    // gws_run reaches every Google API. Unknown services may only read.
+    const res = await check("gws-mcp__gws_run", { service, resource, method });
+    expect(res).toMatchObject({ ok: false });
+    expect((res as { reason: string }).reason).toContain("may only read");
+  });
+
+  it.each([
+    ["chat", "spaces", "list"],
+    ["admin", "users", "get"],
+    ["tasks", "tasks", "list"],
+  ])("still allows the read %s %s.%s", async (service, resource, method) => {
+    expect(await check("gws-mcp__gws_run", { service, resource, method })).toEqual({ ok: true });
+  });
+
+  it.each(["gmail", "Gmail", " GMAIL "])(
+    "names the hazard for %j, rather than giving the generic read refusal",
+    async (service) => {
+      // What the normalisation is for now that every service is read-only:
+      // a send gets the specific refusal naming the service and method, not
+      // the catch-all. Both refuse, so this is about the message a failing
+      // case shows a person.
+      const res = await check("gws-mcp__gws_run", {
+        service,
+        resource: "users.messages",
+        method: "send",
+      });
+      expect((res as { reason: string }).reason).toContain("may not reach gmail");
+    }
+  );
+
+  it.each([
+    ["calendar", "events", "move"],
+    ["calendar", "events", "quickAdd"],
+    ["gmail", "users.labels", "create"],
+    ["sheets", "spreadsheets", "batchUpdate"],
+    ["drive", "files", "create"],
+  ])("refuses the write %s %s.%s even in a service the denylist knows", async (service, resource, method) => {
+    // The hole this closes: a known service whose method missed the pattern
+    // went straight through. events.move carries sendUpdates and mails an
+    // existing event's attendees, and it matched nothing.
+    const res = await check("gws-mcp__gws_run", { service, resource, method });
+    expect(res).toMatchObject({ ok: false });
+    expect((res as { reason: string }).reason).toContain("may only read");
+  });
+
+  it("refuses a gws_run with no service named at all", async () => {
+    expect(await check("gws-mcp__gws_run", { resource: "x", method: "create" })).toMatchObject({ ok: false });
+  });
+});
+
+describe("calendar invitations, updates and cancellations are sends", () => {
+  it("allows an event with no attendees and no notifications", async () => {
+    expect(
+      await check("gws-mcp__calendar_create_event", { summary: SUBJECT, send_updates: "none" })
+    ).toEqual({ ok: true });
+  });
+
+  it("reads the attendee list as the COMMA-SEPARATED STRING the tool takes", async () => {
+    // The shape that matters. An earlier version tested Array.isArray, so a
+    // real call skipped the check entirely and the guard was inert against
+    // the only shape it would ever see.
+    expect(
+      await check("gws-mcp__calendar_create_event", { attendees: READER, send_updates: "none" })
+    ).toEqual({ ok: true });
+  });
+
+  it("refuses a stranger given as a bare string, the real argument shape", async () => {
+    expect(
+      await check("gws-mcp__calendar_create_event", { attendees: STRANGER, send_updates: "none" })
+    ).toMatchObject({ ok: false });
+  });
+
+  it("refuses a stranger hiding in a comma-separated list", async () => {
+    expect(
+      await check("gws-mcp__calendar_create_event", {
+        attendees: `${READER}, ${STRANGER}`,
+        send_updates: "none",
+      })
+    ).toMatchObject({ ok: false });
+  });
+
+  it.each([
+    ["a string entry holding two addresses", [`${READER}, ${STRANGER}`]],
+    ["an object entry holding two addresses", [{ email: `${READER}, ${STRANGER}` }]],
+    ["a stranger in the second entry", [READER, STRANGER]],
+  ])("refuses %s, rather than reading only the first", async (_label, attendees) => {
+    // Keeping only the first parsed address is exactly how the string
+    // branch's bug got reintroduced in the array branch: the entry reported
+    // one address, matched the reader, and passed with a stranger on it.
+    expect(
+      await check("gws-mcp__calendar_create_event", { attendees, send_updates: "none" })
+    ).toMatchObject({ ok: false });
+  });
+
+  it.each([
+    ["a quoted comma hiding a second address", `"Doe, ${STRANGER}" <${READER}>`],
+    ["a comment hiding one", `${READER}(${STRANGER})`],
+  ])("refuses %s, because the tool splits on commas and would read it differently", async (_label, attendees) => {
+    // The guard parses RFC 5322 and the tool does a plain split, so these
+    // two disagree about how many addresses are present. Refusing is the
+    // only answer that does not depend on which one is right.
+    expect(
+      await check("gws-mcp__calendar_create_event", { attendees, send_updates: "none" })
+    ).toMatchObject({ ok: false });
+  });
+
+  it("accepts an array shape too, without requiring one", async () => {
+    expect(
+      await check("gws-mcp__calendar_create_event", {
+        attendees: [{ email: READER }],
+        send_updates: "none",
+      })
+    ).toEqual({ ok: true });
+  });
+
+  it("refuses an attendee list it cannot parse", async () => {
+    const res = await check("gws-mcp__calendar_create_event", {
+      attendees: `"unterminated <${READER}>`,
+      send_updates: "none",
+    });
+    expect((res as { reason: string }).reason).toContain("could not be parsed");
+  });
+
+  it.each([
+    "gws-mcp__calendar_create_event",
+    "gws-mcp__calendar_update_event",
+    "gws-mcp__calendar_delete_event",
+  ])("%s refuses to notify, because the tool defaults send_updates to all", async (tool) => {
+    // Verified against the plugin's own handler: send_updates arrives through
+    // a spread and defaults to "all", so omitting it mails every attendee.
+    const res = await check(tool, { attendees: READER });
+    expect((res as { reason: string }).reason).toContain("send_updates none");
+  });
+
+  it.each(["all", "externalOnly", ""])("refuses send_updates %j", async (value) => {
+    expect(
+      await check("gws-mcp__calendar_create_event", { attendees: READER, send_updates: value })
+    ).toMatchObject({ ok: false });
+  });
+
+  it("guards a cancellation, which has no attendee argument to check at all", async () => {
+    expect(
+      await check("gws-mcp__calendar_delete_event", { event_id: "e1", send_updates: "none" })
+    ).toEqual({ ok: true });
+    expect(await check("gws-mcp__calendar_delete_event", { event_id: "e1" })).toMatchObject({ ok: false });
+  });
+});
+
+describe("the denylist lookup cannot be steered by a prototype key", () => {
+  it.each(["constructor", "__proto__", "toString"])("refuses a write through %j", async (service) => {
+    // A bare lookup on an object literal returns something truthy and not a
+    // regex for these, and `.test` then throws where a refusal belongs.
+    const res = await check("gws-mcp__gws_run", { service, resource: "x", method: "create" });
+    expect(res).toMatchObject({ ok: false });
+  });
+});
+
+describe("the address parser on its own", () => {
+  it("keeps a comma inside a quoted display name", () => {
+    const parsed = parseAddressList(`"Reader, Smoke" <${READER}>`);
+    expect(parsed.map((p) => p.address)).toEqual([READER]);
+  });
+
+  it("reads several addresses", () => {
+    expect(parseAddressList(`${READER}, Smoke <${STRANGER}>`).map((p) => p.address)).toEqual([READER, STRANGER]);
+  });
+
+  it("treats an absent header as no addresses, not as an error", () => {
+    expect(parseAddressList(undefined)).toEqual([]);
+    expect(parseAddressList("")).toEqual([]);
+  });
+
+  it.each([
+    ["an unterminated quote", `"Reader <${READER}>`],
+    ["a group syntax with no address", "undisclosed-recipients:;"],
+    ["a bare word", "nobody"],
+    ["two @ signs", "a@b@example.test"],
+    ["a domain with no dot", "reader@localhost"],
+    ["trailing text after the angle brackets", `<${READER}> and friends`],
+    ["an empty entry between commas", `${READER}, , ${READER}`],
+  ])("refuses %s", (_label, input) => {
+    expect(() => parseAddressList(input)).toThrow(AddressParseError);
+  });
+});

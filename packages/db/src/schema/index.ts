@@ -29,3 +29,7 @@ export {
 } from "./skill-schedules";
 export { skillRuns, RUN_STATUSES, DELIVERIES, type RunStatus, type Delivery } from "./skill-runs";
 export { skills, SKILL_VISIBILITIES, SKILL_ACCOUNTS, type SkillVisibility, type SkillAccounts } from "./skills";
+export { testRuns, TEST_ENVIRONMENTS, TEST_RUN_TRIGGERS, TEST_RUN_STATUSES } from "./test-runs";
+export type { TestEnvironment, TestRunTrigger, TestRunStatus, TestRunScope, TestRunTotals } from "./test-runs";
+export { testResults, TEST_RESULT_KINDS, TEST_RESULT_STATUSES, TEST_CLEANUPS } from "./test-results";
+export type { TestResultKind, TestResultStatus, TestCleanup } from "./test-results";

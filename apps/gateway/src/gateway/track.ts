@@ -39,6 +39,13 @@ export async function trackToolCall(
      * answer both how many tools a run used and what that run cost, which are
      * otherwise in two event streams with nothing in common. */
     runId?: string | null;
+    /** The test run this call belongs to (SCRUM-303), when one does. The
+     * runner calls the tool layer in process as the triggering admin, with
+     * no credential of its own, so nothing else on the event distinguishes
+     * its traffic from that admin's own. This property plus the client name
+     * is the whole mechanism for excluding or isolating a run in analytics,
+     * and it is what joins a usage event back to its result row. */
+    testRunId?: string | null;
     /** Client identity (SCRUM-189): provenance as PROPERTIES of the one
      * event, never a second event or a second count. clientId is the OAuth
      * client id the session authenticated with — ours and stable, but it
@@ -90,6 +97,7 @@ export async function trackToolCall(
           metered: meter,
           surface: props.outcome.source,
           run_id: props.runId ?? null,
+          test_run_id: props.testRunId ?? null,
           client_id: props.clientId ?? null,
           client_name: props.clientName ?? null,
           service: props.service ?? null,

@@ -56,7 +56,12 @@ $SSH 'df -h / | tail -1'
 
 echo "##### build + restart gateway"
 BEFORE_CREATED=$($SSH 'docker ps --filter name=gateway --format "{{.CreatedAt}}" | head -1')
-$SSH 'cd ~/datatorag-mcp/docker && docker compose --env-file ../.env -f docker-compose.prod.yml up -d --build gateway > /tmp/deploy-build.log 2>&1; rc=$?; tail -15 /tmp/deploy-build.log; exit $rc' \
+# GATEWAY_SHA is the VERIFIED sha from above, not a fresh rev-parse on the
+# host: by this line the checkout has been pulled, and reading HEAD again is
+# how the rollback tag got named after the wrong commit twice (SCRUM-230).
+# It travels as a build argument because the container has never known which
+# commit it is, and a test run records it (SCRUM-303).
+$SSH "cd ~/datatorag-mcp/docker && GATEWAY_SHA=$WANT docker compose --env-file ../.env -f docker-compose.prod.yml up -d --build gateway > /tmp/deploy-build.log 2>&1; rc=\$?; tail -15 /tmp/deploy-build.log; exit \$rc" \
   || { echo "BUILD/UP FAILED; the old container keeps serving; deployed sha NOT recorded. Full log on the host: /tmp/deploy-build.log"; exit 1; }
 AFTER_CREATED=$($SSH 'docker ps --filter name=gateway --format "{{.CreatedAt}}" | head -1')
 $SSH 'docker ps --filter name=gateway --format "{{.Names}} {{.Image}} {{.Status}} created={{.CreatedAt}}"'

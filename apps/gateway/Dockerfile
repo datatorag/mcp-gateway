@@ -29,6 +29,12 @@ ENV DATABASE_URL=postgresql://placeholder:placeholder@placeholder:5432/placehold
 
 # Build-time: Next.js inlines NEXT_PUBLIC_* into the client bundle during `next build`.
 # Pass the value via `docker build --build-arg NEXT_PUBLIC_POSTHOG_KEY=...` or docker-compose build.args.
+# The gateway's own commit, baked in at build time (SCRUM-303). It cannot be
+# rendered into .env like a secret: .env is written on the host and the sha
+# has to travel INTO the image, so the run that records it knows which build
+# answered. Empty here is honest, and a run stores null rather than a guess.
+ARG GATEWAY_SHA=""
+ENV GATEWAY_SHA=$GATEWAY_SHA
 ARG NEXT_PUBLIC_POSTHOG_KEY=""
 ENV NEXT_PUBLIC_POSTHOG_KEY=$NEXT_PUBLIC_POSTHOG_KEY
 ARG NEXT_PUBLIC_GOOGLE_ADS_CONVERSION_LABEL=""

@@ -3,6 +3,7 @@ import express from "express";
 import cookieParser from "cookie-parser";
 import { randomUUID } from "node:crypto";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
+import { markInterruptedRuns } from "./src/gateway/tests/store";
 import { createMcpServer } from "./src/gateway/mcp-server";
 import { ConnectionPool } from "./src/gateway/pool";
 import { createDb } from "@datatorag-mcp/db";
@@ -75,6 +76,13 @@ async function main() {
   // Initialize plugin manager and start all active plugins
   const pluginManager = getPluginManager(db, pool);
   await pluginManager.startAll();
+
+  // A test run dies with the process that started it (SCRUM-303), and its
+  // row would otherwise stay `running` and hold the one-run claim forever.
+  // Best effort: a failure here must not stop the server coming up.
+  await markInterruptedRuns(db).catch((err) =>
+    console.error("[test-runner] could not mark interrupted runs:", err)
+  );
 
   const rollupJob = cron.schedule(
     "0 2 * * *",

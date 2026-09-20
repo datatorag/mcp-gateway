@@ -56,6 +56,25 @@ const envSchema = z.object({
   // Comma-separated; values live in env/SSM only — never in this public repo.
   // Keep mirrored with the PostHog "Internal / Test users" cohort.
   INTERNAL_EXCLUDE_EMAILS: z.string().default(""),
+  /** The gateway build's own sha (SCRUM-303), baked into the image as a
+   * BUILD ARGUMENT rather than rendered into `.env`: the container has never
+   * known which commit it is, because the deploy script writes the sha to a
+   * file on the HOST, outside it. A run records this beside each plugin's
+   * sha, which is what makes "these eleven results changed between X and Y"
+   * answerable. Empty in a local build, and a run then stores null rather
+   * than guessing. `/health` does not expose it. */
+  GATEWAY_SHA: z.string().default(""),
+  /** Which environment a test run says it executed in (SCRUM-303). Defaults
+   * to `local` and is set to `prod` only in the production compose file, so
+   * a forgotten value can never mislabel a local run as the prod baseline.
+   * Never inferred from a hostname. */
+  TEST_RUNNER_ENVIRONMENT: z.enum(["local", "prod"]).default("local"),
+  /** JSON, parsed by `gateway/tests/fixtures.ts`. Maps the roles and fixture
+   * keys a case declares onto real accounts and ids. It is NOT in this repo
+   * and never can be: a case names `reader` and `sheet`, never a mailbox or
+   * a file id. Absent means every case needing a mapping skips with the
+   * reason named; it never falls back to a default account. */
+  TEST_RUNNER_FIXTURES: z.string().default(""),
   INTERNAL_EXCLUDE_IDS: z.string().default(""),
   // Dashboard playground (capped LLM chat). Empty ANTHROPIC_API_KEY = playground disabled.
   ANTHROPIC_API_KEY: z.string().default(""),
