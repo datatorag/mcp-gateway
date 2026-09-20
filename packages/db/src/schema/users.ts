@@ -5,6 +5,21 @@ import { boolean, integer, pgTable, text, timestamp, uuid } from "drizzle-orm/pg
 export const PLAN_VALUES = ["free", "pro", "payg"] as const;
 export type Plan = (typeof PLAN_VALUES)[number];
 
+/** The first authorization primitive in this schema (SCRUM-302).
+ *
+ * Deliberately not a check constraint, for the same reason `plan` has none:
+ * the READ decides, and it treats any value other than the exact string
+ * "admin" as an ordinary user. A typo, a future value this build has never
+ * heard of, or a hand-edited row therefore grants nothing.
+ *
+ * It exists because the internal-email predicate in usage/period.ts is a
+ * domain heuristic, not an authorization rule, and reusing it for one would
+ * make every account at our domain an admin. `role` grants the admin
+ * surfaces and NOTHING else: it does not lift the call cap, the agent-run
+ * allowance or any rate limit. */
+export const ROLE_VALUES = ["user", "admin"] as const;
+export type Role = (typeof ROLE_VALUES)[number];
+
 export const users = pgTable("users", {
   id: uuid("id").primaryKey().defaultRandom(),
   email: text("email").notNull().unique(),
@@ -16,6 +31,10 @@ export const users = pgTable("users", {
   // checks plan in the tier gate, and joining to subscriptions per call is too
   // expensive. Kept in sync by the Stripe webhook handlers (see billing/webhook-handlers.ts).
   plan: text("plan").$type<Plan>().notNull().default("free"),
+  // SCRUM-302. Set by hand for the founder accounts, never by the product:
+  // nothing in the application writes this column, so there is no path that
+  // grants it. See ROLE_VALUES above for why it is unconstrained.
+  role: text("role").$type<Role>().notNull().default("user"),
   // Gateway tool calls in the current period, and agent runs in the same
   // period. Both are COUNTERS, not a ledger: incremented in place, approximate
   // is fine, a little lag is harmless. Billing needs dedup and an audit trail

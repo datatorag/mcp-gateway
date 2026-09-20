@@ -23,6 +23,7 @@ import { EVENTS } from "../lib/analytics";
 import { createUserSkill, deleteUserSkill, forkSkill, updateUserSkill, type WriteResult } from "./skills/catalogue-store";
 import { eq, and } from "drizzle-orm";
 import type { Database } from "@datatorag-mcp/db";
+import { isAdmin } from "./admin";
 import { mcpServers, pluginConnections } from "@datatorag-mcp/db";
 import type { ConnectionPool } from "./pool";
 import { NAMESPACE_SEPARATOR } from "./plugin-manager";
@@ -148,6 +149,12 @@ export const BUILT_IN_TOOLS: {
    * test asserts every entry declares one. "read" runs unprompted; anything
    * that changes state declares "write" and gets the confirm card. */
   approval: "read" | "write";
+  /** Restricts the tool to `users.role = 'admin'` (SCRUM-302). Absent means
+   * everyone, which is every entry today. Enforced in BOTH directions by
+   * `visibleBuiltins` and `findVisibleBuiltin` below: the listing filter is
+   * presentation, the call lookup is the guard, and a guard that lives only
+   * in the listing is not one. */
+  audience?: "admin";
   handler: (
     args: Record<string, unknown> | undefined,
     ctx: { db: Database; userId: string; connectionsUrl: string }
@@ -463,6 +470,46 @@ async function applySkillFor(
  * Dynamically serves tools from the registry and routes calls to backend
  * processes (local plugins) or Docker containers.
  */
+/**
+ * The built-ins this user may SEE. Everything without an `audience`, plus the
+ * admin-only ones when the user is an admin.
+ *
+ * The role read happens only if some entry actually declares an audience, so
+ * the ordinary path costs nothing. Today no entry does (SCRUM-303 registers
+ * the first three), and the tests inject one.
+ */
+export async function visibleBuiltins(
+  db: Database,
+  userId: string,
+  entries: typeof BUILT_IN_TOOLS = BUILT_IN_TOOLS
+): Promise<typeof BUILT_IN_TOOLS> {
+  if (!entries.some((t) => t.audience)) return entries;
+  const admin = await isAdmin(db, userId);
+  return entries.filter((t) => !t.audience || admin);
+}
+
+/**
+ * The built-in this user may CALL, by name. Undefined for a non-admin naming
+ * an admin tool, which is the point: the caller then falls through to the
+ * dispatch's existing unknown-tool branch and gets the answer a name nobody
+ * has ever registered gets. The refusal is not written twice and cannot drift
+ * from the real thing, because it IS the real thing.
+ *
+ * The role read happens only when the named tool is admin-only, so an
+ * ordinary call pays nothing for this.
+ */
+export async function findVisibleBuiltin(
+  db: Database,
+  userId: string,
+  name: string,
+  entries: typeof BUILT_IN_TOOLS = BUILT_IN_TOOLS
+): Promise<(typeof BUILT_IN_TOOLS)[number] | undefined> {
+  const entry = entries.find((t) => t.definition.name === name);
+  if (!entry) return undefined;
+  if (!entry.audience) return entry;
+  return (await isAdmin(db, userId)) ? entry : undefined;
+}
+
 export function createMcpServer(
   userId: string,
   db: Database,
@@ -577,7 +624,8 @@ export function createMcpServer(
       }
     }
 
-    for (const t of BUILT_IN_TOOLS) toolList.push(t.definition);
+    const builtins = await visibleBuiltins(db, userId);
+    for (const t of builtins) toolList.push(t.definition);
 
     // A user who lists tools and then stops is a very different activation
     // signal from one whose client never connected. Counts and the asker's
@@ -586,7 +634,7 @@ export function createMcpServer(
     // asked, and the client fields say which client and protocol did.
     void trackMcpToolsListed(db, userId, {
       connectorTools: rows.length,
-      builtinTools: BUILT_IN_TOOLS.length,
+      builtinTools: builtins.length,
       clientName: clientName(),
       clientVersion: server.getClientVersion()?.version ?? null,
       protocolVersion,
@@ -598,7 +646,7 @@ export function createMcpServer(
   server.setRequestHandler(CallToolRequestSchema, async (request) => {
     const { name, arguments: rawArgs } = request.params;
 
-    const builtin = BUILT_IN_TOOLS.find((t) => t.definition.name === name);
+    const builtin = await findVisibleBuiltin(db, userId, name);
     if (builtin) {
       const startTime = Date.now();
       try {

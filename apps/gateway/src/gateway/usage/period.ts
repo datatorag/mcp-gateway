@@ -91,10 +91,11 @@ function rollAndBump(userId: string, bump: Counter | null, guard?: SQL) {
  * server-side check, not an email-shaped heuristic. If you are here because you
  * want an admin capability, this is not the thing to reuse.
  *
- * No new column for it: there is no role or admin concept in the schema, and
- * one boolean is not the reason to introduce one. This predicate already makes
- * the same class of decision for lifecycle email, already covers the domain,
- * and already takes additions through configuration rather than a deploy.
+ * THAT COLUMN NOW EXISTS: `users.role`, read through `isAdmin` in
+ * gateway/admin.ts (SCRUM-302). This predicate did not move to it and must
+ * not. The two answer different questions — "do we absorb this cost" and "may
+ * this caller act" — and a test pins that an admin on an outside address is
+ * still capped, so the role cannot quietly start granting exemptions either.
  */
 export async function capExempt(db: Database, userId: string): Promise<boolean> {
   const email = await resolveUserEmail(db, userId);

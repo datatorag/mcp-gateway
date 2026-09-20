@@ -22,6 +22,7 @@
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
+import { checkAdminPages } from "@/gateway/admin-surface-walk";
 
 const DASHBOARD_DIR = join(import.meta.dirname, ".");
 
@@ -105,6 +106,16 @@ describe("dashboard routes resolve the session for themselves", () => {
   });
 
   it.each(pages)("%s checks the session, or is a declared exception", (page) => {
+    // The admin subtree is guarded by a DIFFERENT rule and is checked by a
+    // different assertion below (SCRUM-302): one layout calls
+    // requireAdminPage, and nested layouts compose, so no page under it can
+    // opt out. Requiring the login redirect here as well would be wrong, not
+    // merely redundant: an admin path must answer a signed-in non-admin with
+    // the ordinary 404, and bouncing them to login would tell them a path
+    // they may not use exists. This is a redirect of the obligation, never a
+    // waiver of it.
+    if (page.startsWith("admin/")) return;
+
     const code = stripComments(readFileSync(join(DASHBOARD_DIR, page), "utf8"));
     // The CALL, not the words. `await getSessionUserId()` has to be invoked and
     // its result has to gate a redirect, so quoting the pattern in prose does
@@ -133,6 +144,15 @@ describe("dashboard routes resolve the session for themselves", () => {
         `forged cookie. Add getSessionUserId() + redirect("/auth/login"), or add it to EXEMPT ` +
         `with a reason if it genuinely renders nothing.`
     ).toBe(true);
+  });
+
+  it("the admin subtree is guarded by its layout, and the redirect above is the right one to skip", () => {
+    // The obligation the branch above hands off. If the admin layout ever
+    // stops awaiting requireAdminPage, this fails here rather than the whole
+    // subtree quietly becoming the one part of /dashboard nothing checks.
+    const adminPages = pages.filter((p) => p.startsWith("admin/"));
+    expect(adminPages.length).toBeGreaterThan(0);
+    expect(checkAdminPages(join(DASHBOARD_DIR, "admin"))).toEqual([]);
   });
 
   it("is not satisfied by a page that only TALKS about checking", () => {

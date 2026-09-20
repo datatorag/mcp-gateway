@@ -9,6 +9,8 @@ export interface CurrentUser {
   avatarUrl: string | null;
   /** "free" | "pro" (SCRUM-231); absent from older cached responses. */
   plan?: string;
+  /** "admin" or "user" (SCRUM-302). Presentation only; see /api/me. */
+  role?: string;
 }
 
 let cached: CurrentUser | null | undefined;

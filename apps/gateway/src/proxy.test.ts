@@ -26,6 +26,35 @@ describe("the dashboard gate carries the requested route into login", () => {
     );
   });
 
+  /* SCRUM-302: the admin subtree gets NO exception here, and that is the
+   * decision, not an oversight. An earlier draft of the design had anonymous
+   * requests fall through to a 404 so the path would not be confirmed by a
+   * login bounce. It has the opposite effect: every other /dashboard path
+   * bounces, so the one path that answers 404 is the one path worth probing.
+   * These cases exist so that exception cannot be reintroduced quietly. */
+  it.each([
+    ["/dashboard/admin", "/dashboard/admin"],
+    ["/dashboard/admin/tests", "/dashboard/admin/tests"],
+    ["/dashboard/admin/tests/abc?filter=fail", "/dashboard/admin/tests/abc?filter=fail"],
+  ])("bounces %s to login exactly as a sibling path does", (path, expected) => {
+    const res = proxy(new NextRequest(`http://localhost${path}`));
+    const location = new URL(res.headers.get("location")!);
+    expect(location.pathname).toBe("/auth/login");
+    expect(location.searchParams.get("next")).toBe(expected);
+  });
+
+  it("answers an admin path and an ordinary one identically when signed out", () => {
+    // The claim in full: not merely that both redirect, but that a prober
+    // cannot tell the two apart from the response.
+    const admin = proxy(new NextRequest("http://localhost/dashboard/admin"));
+    const sibling = proxy(new NextRequest("http://localhost/dashboard/usage"));
+    expect(admin.status).toBe(sibling.status);
+    const a = new URL(admin.headers.get("location")!);
+    const b = new URL(sibling.headers.get("location")!);
+    expect(a.pathname).toBe(b.pathname);
+    expect([...a.searchParams.keys()]).toEqual([...b.searchParams.keys()]);
+  });
+
   it("lets a request with a session cookie through untouched", () => {
     const req = new NextRequest("http://localhost/dashboard/agent?skill=morning-brief", {
       headers: { cookie: "dtrmcp_session=abc" },

@@ -18,7 +18,7 @@ export { agentRunUsage } from "./agent-run-usage";
 export { subscriptions, SUBSCRIPTION_STATUS, type SubscriptionStatus } from "./subscriptions";
 export { alertSends } from "./alert-sends";
 export { stripeEvents } from "./stripe-events";
-export { PLAN_VALUES, type Plan } from "./users";
+export { PLAN_VALUES, type Plan, ROLE_VALUES, type Role } from "./users";
 export { leads, TEAM_SIZE_VALUES, type TeamSize } from "./leads";
 export {
   skillSchedules,

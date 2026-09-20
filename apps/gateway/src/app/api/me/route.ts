@@ -16,6 +16,11 @@ export const GET = withRoute(async (userId) => {
       // Same denormalised column the checkout route refuses "Already on Pro"
       // from, so the banner and the checkout agree on who is paying.
       plan: users.plan,
+      // SCRUM-302. The caller's OWN role, for the dashboard rail: the admin
+      // entry renders only when this says "admin". Presentation only — every
+      // admin surface re-reads the column server-side, so a client that lies
+      // to itself about this gains nothing.
+      role: users.role,
     })
     .from(users)
     .where(eq(users.id, userId))
