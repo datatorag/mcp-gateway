@@ -1,7 +1,10 @@
 # A role column, and a test runner the gateway runs against itself (SCRUM-302, SCRUM-303)
 
 Date: 2026-09-20
-Status: spec for review. No code, no migration and no plan exist yet.
+Status: accepted, revision 2. Review settled the open questions (see
+Rulings) and this revision folds in the security review's design notes. The
+build plan is `docs/plans/2026-09-20-scrum-302-303-admin-test-runner-plan.md`.
+No code and no migration exist yet.
 
 ## Problem
 
@@ -56,13 +59,31 @@ One module, `src/gateway/admin.ts`:
   and calls Next's `notFound()` unless `isAdmin`. No session also gives 404,
   not a login redirect. A redirect on an admin path tells a stranger the
   path exists.
-- `withAdminRoute(handler)` for JSON routes, built on `withRoute`: same
-  rate limit and error envelope, but every refusal (no session, not admin)
-  is the app's ordinary 404 body with status 404. Never 401, never 403.
+- `withAdminRoute(handler)` for JSON routes. Same error envelope as
+  `withRoute`, but it is its own wrapper and not a layer over it, because
+  the order of the checks is the point: session, then role, then the rate
+  limit. Every refusal before the rate limit (no session, not admin) is the
+  app's ordinary 404 body with status 404. Never 401, never 403, and never
+  429: `withRoute` rate-limits any signed-in user, so a non-admin hammering
+  an admin path would get a 429 that an unknown path never gives, and that
+  difference names the path. Only an admin can reach the limiter.
+- The admin routes accept the session cookie and nothing else. An API key
+  or an OAuth bearer in an `Authorization` header is ignored, so the key a
+  run mints for `/mcp` cannot open the admin JSON routes. A test sends a
+  live admin key to an admin route and requires the 404.
+- Every page under `/dashboard/admin` gets the check from one place, a
+  `layout.tsx` in that directory that calls `requireAdminPage()`. A layout
+  alone is not proof (a route handler or a page in a parallel segment can
+  sit outside it), so a test walks `src/app/dashboard/admin` and
+  `src/app/api/admin` and fails on any `page.tsx` not under the guarded
+  layout and any `route.ts` whose exports are not wrapped.
 - `src/proxy.ts` gates `/dashboard/*` on the session cookie and would bounce
   an anonymous request for `/dashboard/admin/*` to login. It gets one
   exception: under `/dashboard/admin`, no cookie means fall through to the
-  page, which answers 404. The middleware cannot read the role (no database
+  page, which answers 404. The match is on a path boundary (the path equals
+  `/dashboard/admin` or starts with `/dashboard/admin/`), never a bare
+  prefix: `/dashboard/administrator` is an ordinary dashboard path and still
+  bounces to login. The middleware cannot read the role (no database
   at the edge of the request), so the page is the authority and the
   middleware only stays out of its way.
 
@@ -79,7 +100,15 @@ both reading `isAdmin`:
 - `CallTool` answers a non-admin exactly as it answers a tool name that does
   not exist. This is the MCP form of the 404 rule: the listing filter is
   presentation, the call check is the guard, and a guard that lives only in
-  the listing is not one.
+  the listing is not one. It is built as a lookup that does not find the
+  entry for a non-admin, so the call falls through to the existing
+  unknown-tool branch rather than imitating it: same text, same usage
+  event, same timing class, by construction.
+
+`role = admin` grants these surfaces and nothing else. It does not exempt
+an account from the call cap, the run allowance or any rate limit. The cap
+exemption stays where it is, on the internal-account check, and a test pins
+that an admin on a non-internal address is still capped.
 
 `builtinTools` on the tools-listed event counts what was served, so it moves
 for admins only.
@@ -108,6 +137,7 @@ test_runs
   status          text  'running' | 'finished' | 'aborted' | 'interrupted'
   started_at      timestamptz
   finished_at     timestamptz null
+  runner_key_id   uuid null    the API key minted for this run; see Credential
   gateway_sha     text null    the build that served the run
   plugin_shas     jsonb        {slug: sha} as read at run start
   tools_served    integer      size of tools/list for the run's identity
@@ -176,7 +206,7 @@ export interface CaseContext {
   stamp: string;                       // unique per run and case, for names
   call(tool: string, args: object, opts?: { as?: AccountRole }): Promise<ToolResult>;
   rpc(method: string, params?: object): Promise<unknown>;   // tools/list etc.
-  http(path: string, init?: RequestInit): Promise<Response>; // own origin only
+  http(path: string, init?: RequestInit): Promise<Response>; // loopback only, see below
   fixture(key: FixtureKey): string;
   from(caseId: string): Record<string, unknown>;  // what a needed case shared
   share(values: Record<string, unknown>): void;
@@ -189,6 +219,14 @@ export interface CaseContext {
 A case passes by returning and fails by throwing. Assertions are plain
 `expect`-style helpers that throw an error whose message is the evidence.
 There is no model anywhere in the path.
+
+`http` cannot leave the machine. It builds every URL from one fixed base,
+`http://127.0.0.1:<GATEWAY_PORT>`, and takes a path, not a URL. Input is
+refused unless it starts with exactly one `/`: no scheme, no `//host`
+protocol-relative form, no backslash, no control character. After building,
+the URL's origin is compared with the base and a mismatch throws. Redirects
+are not followed. It sends no credential by default, because its cases are
+the anonymous ones (health, the metadata documents, a 401 from `/mcp`).
 
 `until` is the one way to wait. Mail arrival, a deleted file going absent
 and similar are polls with a stated budget, never a sleep.
@@ -209,11 +247,31 @@ as the wrong account is worse than one that does not run.
 the mapping. A case cannot pass a literal account.
 
 The send rule is enforced in `call`, not left to each case: any tool in the
-send set (`gmail_send`, `gmail_reply`, `gmail_forward`, `gmail_send_draft`,
-and a draft's recipients) is refused before dispatch unless every recipient
-equals the `reader` mailbox and the subject starts with `[smoke]`. A case
-that tries anything else fails with that reason. A unit test pins it, and
-deleting the check must turn that test red.
+send set is refused before dispatch unless every recipient equals the
+`reader` mailbox and the subject starts with `[smoke]`. A case that tries
+anything else fails with that reason.
+
+- Recipients means `to`, `cc` and `bcc`, each split on commas and compared
+  as a bare lowercased address. One stray address in any of the three
+  refuses the call. An empty `to` refuses too.
+- `gmail_send`, `gmail_forward`, `gmail_create_draft` and
+  `gmail_update_draft` are checked on their arguments. A draft is checked
+  when it is written so that a bad one never exists.
+- `gmail_reply` has no recipient argument: the reply goes wherever the
+  original message says. So the guard reads the message being replied to
+  through `/mcp` first, and requires that its `Reply-To` (or `From` when
+  there is none) is the `reader` mailbox and that its subject carries the
+  `[smoke]` prefix, with or without a leading `Re:`.
+- `gmail_send_draft` has no recipients in its arguments at all. The guard
+  reads the **stored** draft through `/mcp` at send time and checks its
+  `To`, `Cc`, `Bcc` and `Subject` headers. The arguments the draft was
+  created with are not trusted: a draft can be edited between the two calls.
+- `gws_run` is refused for any Gmail method that sends (`send` on messages
+  or drafts, and `import`/`insert`). The generic tool must not be a way
+  around the named ones.
+
+A unit test pins each bullet, and deleting any one check must turn its own
+test red.
 
 ### How the runner reaches `/mcp`, and as whom
 
@@ -232,10 +290,18 @@ what it cannot reach, by the rule above, and says so.
 **Credential: an API key minted for the run, not a session.**
 
 - At run start the runner mints a key for the triggering admin through the
-  same function the dashboard uses, named `test-runner <run id>`, and
-  revokes it in a `finally` when the run ends. At boot and at each run
-  start, any live key with that name prefix older than the run ceiling is
-  revoked, so a crash cannot leave one behind.
+  same function the dashboard uses, named `test-runner <run id>`, writes the
+  key's **id** to `test_runs.runner_key_id`, and revokes that id in a
+  `finally` when the run ends.
+- Revocation is always by the id on the run row, never by matching a name.
+  A name is something a user types: a person can call their own key
+  `test-runner something`, and a sweep by prefix would revoke it. At boot
+  and at each run start, the sweep reads run rows that are not `running`
+  and still point at a live key, and revokes those ids. The name is a label
+  for a person reading the keys page and carries no logic.
+- The key opens `/mcp` and nothing else. The admin JSON routes are
+  cookie-only (Part 1), so a leaked run key cannot start or read runs
+  through them.
 - A session token would work and is the wrong shape: it is a browser
   credential with `client_id: web`, so runner traffic would be
   indistinguishable from a person clicking in the dashboard. A key gives
@@ -253,9 +319,12 @@ what it cannot reach, by the rule above, and says so.
 The runner never resolves, reads or handles a provider token. It sends tool
 calls; the gateway does what it does for any client.
 
-Runner calls are metered like any call. Internal accounts are exempt from
-the cap, so a run cannot exhaust an allowance. It does add `tool_call`
-events; the client name is how to filter them.
+Runner calls are metered like any call. Today's admins are internal
+accounts, which are exempt from the cap, so a run cannot exhaust an
+allowance. That exemption comes from the internal-account check and only
+from it. The runner adds no exemption of its own and `role` grants none, so
+an admin on an outside address would spend their own allowance on a run.
+The run does add `tool_call` events; the client name is how to filter them.
 
 ### Run lifecycle
 
@@ -341,14 +410,21 @@ The contract check, per served tool, no case needed:
    `type: "object"`. The validator is `ajv`, which the MCP SDK already
    brings in; it becomes a direct dependency of the gateway rather than one
    reached through another package.
-3. If the schema has at least one `required` property, call the tool with
-   `{}` and require an `isError` result whose text names a missing argument.
-   A thrown protocol error, a 5xx-shaped message or a success is a fail.
-   A tool with no required property gets steps 1 and 2 only and says so.
+3. **Read tools only.** If the tool is a read and its schema has at least
+   one `required` property, call it with `{}` and require an `isError`
+   result whose text names a missing argument. A thrown protocol error, a
+   5xx-shaped message or a success is a fail. A read tool with no required
+   property gets steps 1 and 2 only and says so.
 
-Step 3 sends an empty object, so nothing is addressed and nothing can be
-written. It stays on for write tools on that basis; if review disagrees, the
-switch is one line (skip step 3 where `classifyWrite` says write).
+Write tools get steps 1 and 2 and never step 3 (ruled in review). `required`
+is a declaration in a schema, not proof that the handler validates before
+it acts, and the plugin is about to be rewritten four times. A write
+handler that reads an optional default and acts on `{}` would be found by
+the probe acting. Read or write comes from the same place the agent's
+approval gate uses: `classifyWrite` for a plugin tool, the declared
+`approval` for a built-in. That classifier fails closed, so a tool nobody
+has classified counts as a write and is not probed. Each contract result
+says which steps ran.
 
 ### What moves from the sheet's A4 into the runner
 
@@ -447,9 +523,13 @@ most 100 results a call with a cursor. With evidence capped at 4 KB a page
 is bounded; the playground's output cap is not on this path and is not
 relied on.
 
-A run started over MCP is driven by a key, and the run mints its own second
-key. Both belong to the same admin, and the second is gone when the run
-ends.
+The daily run is the box calling `tests_run` over its ordinary OAuth
+connection to `/mcp`, as the founder account. It needs no API key of its
+own and the gateway has no scheduler: the three calls are `tests_run`, poll
+`tests_status`, read `tests_results`. The caller's OAuth token is never
+reused by the runner. The run still mints its own per-run key for its
+loopback client, for the reason under Credential: that key is what makes
+runner traffic separable from the caller's, whichever door started the run.
 
 ---
 
@@ -510,8 +590,8 @@ queries user grants is a different trust question from one that calls tools.
 ## Left out of v1, on purpose
 
 - An interactive playground for one-off calls (its own ticket).
-- A schedule. The box calls `tests_run` daily; the gateway does not run
-  itself on a timer yet.
+- A schedule. The box calls `tests_run` daily over its OAuth connection;
+  the gateway does not run itself on a timer (ruled).
 - A CLI. It would be a thin client of the same API.
 - Database and analytics assertions (the nine agent-only rows).
 - Deleting leftovers the current run did not create. Reported, not removed.
@@ -525,17 +605,20 @@ queries user grants is a different trust question from one that calls tools.
   hand before it is trusted, and the commit says so; automating that is
   later work.
 
-## Open questions for review
+## Rulings from review
 
-1. The contract check calls write tools with `{}`. Keep, or skip where the
-   classifier says write?
-2. Identity is the triggering admin. If a second admin should be able to
-   run the full suite, the fixture accounts have to be connected under that
-   user too, or v2 needs a runner user.
-3. Baking `GATEWAY_SHA` into the image is a new value with the usual hops
-   (build argument, compose, config schema). Acceptable for v1, or record
-   null until a later ticket?
-4. SCRUM-302's last line names SCRUM-302 as the first consumer. Read here as
+1. **Contract probe.** `{}` is sent to read tools only. Write tools get the
+   schema checks and nothing is ever called.
+2. **Identity.** The triggering admin. There is no runner user.
+3. **`GATEWAY_SHA`** is baked into the image in v1. The hops: a build
+   argument and `ENV` in the gateway Dockerfile, the argument in the prod
+   compose file's `build.args`, and the deploy script exporting the checked
+   out sha before it builds. It is a build-time value, so it is not in the
+   parameter store and not in the compose `environment` list. A local build
+   without it records null.
+4. **The daily run** needs no API key and no scheduler: the box calls
+   `tests_run` over its OAuth connection.
+5. SCRUM-302's last line names SCRUM-302 as its own first consumer. Read as
    SCRUM-303.
 
 ## Verification, when it is built
@@ -543,7 +626,11 @@ queries user grants is a different trust question from one that calls tools.
 Unit: the case registry invariants, the send guard, the undo ordering
 (a case that throws after two defers runs both, in reverse, and a failing
 undo does not stop the next), the diff, the scope selection, `isAdmin` and
-both 404 paths. Each guard deleted once to see red.
+both 404 paths, the admin-route check order (a non-admin never reaches the
+limiter), the path-boundary match in the middleware, the directory walk
+over admin pages and routes, `ctx.http`'s refusals, revoke-by-id with a
+user key that shares the name prefix left alone, and the probe skipping
+every write tool. Each guard deleted once to see red.
 
 Against real Postgres (the testcontainers harness): the two tables, the
 one-run-at-a-time claim, `interrupted` on boot, key mint and revoke around a
