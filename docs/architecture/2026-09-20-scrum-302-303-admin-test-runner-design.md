@@ -1,8 +1,9 @@
 # A role column, and a test runner the gateway runs against itself (SCRUM-302, SCRUM-303)
 
 Date: 2026-09-20
-Status: accepted, revision 2. Review settled the open questions (see
-Rulings) and this revision folds in the security review's design notes. The
+Status: accepted, revision 3. Two rounds of review are folded in (see
+Rulings). The second reversed the run credential: the runner is in-process
+and there is no minted key. The
 build plan is `docs/plans/2026-09-20-scrum-302-303-admin-test-runner-plan.md`.
 No code and no migration exist yet.
 
@@ -28,7 +29,7 @@ not an authorization rule, and it would make every test account an admin.
 `users.role` (`user | admin`) is the first authorization primitive
 (SCRUM-302). On top of it sits a runner inside the gateway (SCRUM-303):
 cases are TypeScript modules, the runner is an MCP client of the gateway's
-own `/mcp` over loopback, results are rows in two tables, an admin page
+own tool layer, in-process, results are rows in two tables, an admin page
 starts runs and compares them, and three admin-only built-in tools let an
 agent do the same in three calls.
 
@@ -56,37 +57,45 @@ One module, `src/gateway/admin.ts`:
 - `isAdmin(db, userId): Promise<boolean>` reads the column and nothing else.
   Never the email, never the domain, never the plan.
 - `requireAdminPage()` for server components: resolves the session user,
-  and calls Next's `notFound()` unless `isAdmin`. No session also gives 404,
-  not a login redirect. A redirect on an admin path tells a stranger the
-  path exists.
+  and calls Next's `notFound()` unless `isAdmin`. It answers a **signed-in
+  non-admin** with the ordinary 404. An anonymous visitor never reaches it:
+  `src/proxy.ts` bounces every `/dashboard/*` path without a session cookie
+  to login, and `/dashboard/admin/*` gets no exception (ruled). Every
+  sibling path bounces, so a 404 for an anonymous visitor would be the one
+  answer that differs, and it would mark the path. The middleware is not
+  changed at all. A cookie that is present but dead reaches the page like
+  it does on any dashboard page, and gets what that page's siblings give.
 - `withAdminRoute(handler)` for JSON routes. Same error envelope as
   `withRoute`, but it is its own wrapper and not a layer over it, because
-  the order of the checks is the point: session, then role, then the rate
-  limit. Every refusal before the rate limit (no session, not admin) is the
-  app's ordinary 404 body with status 404. Never 401, never 403, and never
-  429: `withRoute` rate-limits any signed-in user, so a non-admin hammering
+  the order of the checks is the point: session, then role, then the
+  cross-site check, then the rate limit. Every refusal before the rate limit (no session, not admin) is the
+  app's ordinary 404 body with status 404. JSON routes have no login bounce
+  to match, so the sibling to match is an API path that does not exist,
+  and that gives 404 to everyone, signed in or not. Never 401, never 403,
+  and never 429: `withRoute` rate-limits any signed-in user, so a non-admin hammering
   an admin path would get a 429 that an unknown path never gives, and that
   difference names the path. Only an admin can reach the limiter.
 - The admin routes accept the session cookie and nothing else. An API key
-  or an OAuth bearer in an `Authorization` header is ignored, so the key a
-  run mints for `/mcp` cannot open the admin JSON routes. A test sends a
-  live admin key to an admin route and requires the 404.
+  or an OAuth bearer in an `Authorization` header is ignored. A test sends
+  a live admin key to an admin route and requires the 404.
+- **Parity is the whole response, not the status.** The 404 a non-admin
+  gets carries the same body and the same headers as the 404 for a path
+  that does not exist: cache headers, content type, no rate-limit or
+  `Retry-After` header, no cookie set or cleared. The tests compare the two
+  responses header by header, with a short list of headers that may differ
+  by nature (date, request id).
+- **Cross-site requests.** Starting a run is a cookie-authenticated POST
+  that sends mail. The session cookie is `SameSite=Lax`, which already
+  keeps it off a cross-site POST, and the wrapper does not lean on that
+  alone: any method other than GET or HEAD must carry an `Origin` equal to
+  the gateway's own origin and a JSON content type, or it gets the same
+  404. A test posts from a foreign origin with a valid admin cookie.
 - Every page under `/dashboard/admin` gets the check from one place, a
   `layout.tsx` in that directory that calls `requireAdminPage()`. A layout
   alone is not proof (a route handler or a page in a parallel segment can
   sit outside it), so a test walks `src/app/dashboard/admin` and
   `src/app/api/admin` and fails on any `page.tsx` not under the guarded
   layout and any `route.ts` whose exports are not wrapped.
-- `src/proxy.ts` gates `/dashboard/*` on the session cookie and would bounce
-  an anonymous request for `/dashboard/admin/*` to login. It gets one
-  exception: under `/dashboard/admin`, no cookie means fall through to the
-  page, which answers 404. The match is on a path boundary (the path equals
-  `/dashboard/admin` or starts with `/dashboard/admin/`), never a bare
-  prefix: `/dashboard/administrator` is an ordinary dashboard path and still
-  bounces to login. The middleware cannot read the role (no database
-  at the edge of the request), so the page is the authority and the
-  middleware only stays out of its way.
-
 No caching of the role. It is one indexed primary-key read on surfaces that
 see a handful of requests a day, and a cached role is a revocation that
 does not take effect.
@@ -116,9 +125,10 @@ for admins only.
 ### Tests
 
 Helper unit tests (admin, user, unknown value, missing row). One route test
-with a real session for a `user`-role account: 404, and the body is the same
-body an unknown path gives. One for an admin: through. One for no session:
-404, no redirect. For the MCP side: a non-admin's `tools/list` has no admin
+with a real session for a `user`-role account: 404, and the body and headers
+are what an unknown path gives. One for an admin: through. For no session:
+the page bounces to login exactly as a sibling dashboard page does, and the
+JSON route gives the unknown-path 404. For the MCP side: a non-admin's `tools/list` has no admin
 entry, and a direct call returns the unknown-tool error byte for byte. Each
 guard is deleted once to see its test fail.
 
@@ -137,7 +147,8 @@ test_runs
   status          text  'running' | 'finished' | 'aborted' | 'interrupted'
   started_at      timestamptz
   finished_at     timestamptz null
-  runner_key_id   uuid null    the API key minted for this run; see Credential
+  environment     text  'local' | 'prod'   where the run executed; see Environments
+  imported_from   text null    set on a copy of another environment's run
   gateway_sha     text null    the build that served the run
   plugin_shas     jsonb        {slug: sha} as read at run start
   tools_served    integer      size of tools/list for the run's identity
@@ -234,7 +245,8 @@ and similar are polls with a stated budget, never a sleep.
 ### Accounts and fixtures are named, never written down
 
 This repo is public, so a case never contains a mailbox, a file id or an
-event id. A case declares a **role** (`sender`, `reader`, `atlassian`) and a
+event id. A case declares a **role** (`sender`, `reader`, `atlassian`, and
+`nonAdmin`, which names a user of ours rather than a connected account) and a
 **fixture key** (`sheet`, `scratchTab`, `folder`, `doc`, `deck`,
 `calendarEvent`, `querySheet`). The mapping from role to connected account,
 and from key to id, is one config value, `TEST_RUNNER_FIXTURES` (JSON,
@@ -251,70 +263,89 @@ send set is refused before dispatch unless every recipient equals the
 `reader` mailbox and the subject starts with `[smoke]`. A case that tries
 anything else fails with that reason.
 
-- Recipients means `to`, `cc` and `bcc`, each split on commas and compared
-  as a bare lowercased address. One stray address in any of the three
+- Recipients means `to`, `cc` and `bcc`, each parsed as an address list
+  (below) and compared as a bare lowercased address. One stray address in any of the three
   refuses the call. An empty `to` refuses too.
 - `gmail_send`, `gmail_forward`, `gmail_create_draft` and
   `gmail_update_draft` are checked on their arguments. A draft is checked
   when it is written so that a bad one never exists.
 - `gmail_reply` has no recipient argument: the reply goes wherever the
   original message says. So the guard reads the message being replied to
-  through `/mcp` first, and requires that its `Reply-To` (or `From` when
+  first, through the same call path, and requires that its `Reply-To` (or `From` when
   there is none) is the `reader` mailbox and that its subject carries the
   `[smoke]` prefix, with or without a leading `Re:`.
 - `gmail_send_draft` has no recipients in its arguments at all. The guard
-  reads the **stored** draft through `/mcp` at send time and checks its
+  reads the **stored** draft at send time and checks its
   `To`, `Cc`, `Bcc` and `Subject` headers. The arguments the draft was
   created with are not trusted: a draft can be edited between the two calls.
 - `gws_run` is refused for any Gmail method that sends (`send` on messages
-  or drafts, and `import`/`insert`). The generic tool must not be a way
-  around the named ones.
+  or drafts, and `import`/`insert`), and for every Gmail settings method
+  that can redirect mail: forwarding addresses, filters, send-as and
+  delegates. The generic tool must not be a way around the named ones.
+- Addresses are parsed as RFC 5322 address lists, not split on commas: a
+  quoted display name can hold a comma. A header the parser cannot read
+  refuses the call.
+- Mail is not the only thing that sends mail. A calendar event with
+  attendees, a Drive share and a Docs comment that mentions someone all
+  notify people. The same recipient rule applies to them: attendees,
+  share targets and mentioned addresses must be the `reader` mailbox or
+  the call is refused, and where the tool offers a way to suppress the
+  notification the runner sets it.
+- Between the guard reading a stored draft and the send there is a small
+  window. The mail cases hold one serial lock, and only the run writes to
+  these drafts, so it is accepted rather than closed.
 
 A unit test pins each bullet, and deleting any one check must turn its own
 test red.
 
-### How the runner reaches `/mcp`, and as whom
+### How the runner calls tools, and as whom
 
-The runner is an MCP client (the SDK's Streamable HTTP client) pointed at
-`http://127.0.0.1:<GATEWAY_PORT>/mcp`. Same bearer check, same session
-handling, same `ListTools` filter, same `CallTool` path, same metering, same
-plugin dispatch as any outside client. The dashboard agent's in-process
-construction would be shorter and would skip the door the refactors are
-most likely to break.
+**In-process, with no credential (ruled).** The runner builds the gateway's
+own MCP server for the triggering admin's user id and talks to it over a
+linked in-memory transport pair, which is how the dashboard agent already
+calls tools. Everything after the bearer check is the real path: the
+`ListTools` filter, the `CallTool` dispatch, the scope gate, the allowance
+check, metering, the per-user token resolution and the plugin call over
+HTTP to the plugin process. Nothing is minted, stored, swept or revoked,
+so there is no run credential to leak and no key cap to hit.
+
+An earlier revision had the runner mint an API key per run and call `/mcp`
+over loopback, to exercise the front door too. Review reversed it: a live
+admin credential held for twenty minutes is a cost paid on every run, to
+test a door that one case can test. What the in-process path skips is the
+HTTP layer of `/mcp`: the bearer lookup, session handling and the 401s.
+Those are covered three ways. The anonymous half is `ctx.http` cases (a
+missing and a bad bearer get the documented 401 and header). The positive
+half is the door case below. And the daily trigger itself arrives through
+`/mcp` with a real OAuth token, so a broken door means no run at all, which
+is the loudest failure the suite has.
 
 **Identity: the admin who triggered the run.** The run lists and calls as
-that user, with that user's connected accounts. There is no separate runner
-user. Today one admin holds the fixture accounts; another admin's run skips
-what it cannot reach, by the rule above, and says so.
+that user, with that user's connected accounts. There is no runner user.
+Today one admin holds the fixture accounts; another admin's run skips what
+it cannot reach, by the rule above, and says so.
 
-**Credential: an API key minted for the run, not a session.**
+**Telling runner traffic apart.** The in-process client announces itself as
+`datatorag-test-runner` in the handshake, which lands as `client_name` on
+every usage event the way the agent's name does. The server construction
+gains one option, the run id, stamped on the same events as `test_run_id`.
+Analytics can exclude or isolate a run with one filter, and a single call
+can be traced back to its result row.
 
-- At run start the runner mints a key for the triggering admin through the
-  same function the dashboard uses, named `test-runner <run id>`, writes the
-  key's **id** to `test_runs.runner_key_id`, and revokes that id in a
-  `finally` when the run ends.
-- Revocation is always by the id on the run row, never by matching a name.
-  A name is something a user types: a person can call their own key
-  `test-runner something`, and a sweep by prefix would revoke it. At boot
-  and at each run start, the sweep reads run rows that are not `running`
-  and still point at a live key, and revokes those ids. The name is a label
-  for a person reading the keys page and carries no logic.
-- The key opens `/mcp` and nothing else. The admin JSON routes are
-  cookie-only (Part 1), so a leaked run key cannot start or read runs
-  through them.
-- A session token would work and is the wrong shape: it is a browser
-  credential with `client_id: web`, so runner traffic would be
-  indistinguishable from a person clicking in the dashboard. A key gives
-  `client_id: api-key` and `auth_kind: api_key` for free, and the runner
-  sends `clientInfo.name: datatorag-test-runner`, so analytics can exclude
-  or isolate it with one filter.
-- A long-lived key in config was the other option. Rejected: a standing
-  secret for an admin identity that has to be stored, rendered and rotated,
-  to save one insert and one update per run.
-- The raw key exists only in the runner's memory for the length of the run.
-  It is never written to a row, an event, a log line or evidence.
-- The key counts against the ten-live-keys cap. If the admin is at the cap,
-  the run refuses to start and says why.
+**The door case.** One case exercises the real front door when it honestly
+can. When the run was started over MCP, the `tests_run` call arrived with
+the caller's own OAuth bearer. The handler passes that token to the run in
+memory, the door case uses it once for a loopback `initialize` and
+`tools/list` against `http://127.0.0.1:<GATEWAY_PORT>/mcp`, requires the
+same tool names the in-process list gave, and drops it. The token is never
+written to a row, an event, a log line or evidence, and it is the caller's
+own token presented back to the gateway that issued it, so nothing is
+handed to a third party. It reaches this one case and no other: it is not
+in the case context, the case runs at the gate step, the reference is
+cleared on every exit, and the request follows no redirect. When the run was started from the UI there is no
+bearer, only a browser session, and the case records `skip` with the
+evidence `door not exercised`. It does not pass: a control that did not run
+is not a pass.
 
 The runner never resolves, reads or handles a provider token. It sends tool
 calls; the gateway does what it does for any client.
@@ -324,12 +355,20 @@ accounts, which are exempt from the cap, so a run cannot exhaust an
 allowance. That exemption comes from the internal-account check and only
 from it. The runner adds no exemption of its own and `role` grants none, so
 an admin on an outside address would spend their own allowance on a run.
-The run does add `tool_call` events; the client name is how to filter them.
+
+**The trust boundary, written down.** `tests_run` is reachable by any OAuth
+client the founder account has authorized on `/mcp`, not only the daily box.
+Such a client can start a run. That is accepted (ruled) because of what a
+run can do: `case_ids` selects registered cases and nothing in the
+arguments reaches a tool argument, so reads cannot be aimed either; it
+sends only to the reader mailbox under the send guard, it
+touches only stamped artifacts in the fixture zones, only one runs at a
+time, and it holds no credential while it executes. It cannot be aimed.
 
 ### Run lifecycle
 
-1. **Gate.** `GET /health` on loopback and an `initialize` plus
-   `tools/list`. If either fails, the run is `aborted`, the section-A cases
+1. **Gate.** `GET /health` on loopback, then the in-process `initialize`
+   plus `tools/list`. If either fails, the run is `aborted`, the section-A cases
    are recorded as failed, and nothing else runs. Forty cascading failures
    say nothing the first did not.
 2. **Enumerate.** The served `tools/list` for this identity is the run's
@@ -339,7 +378,7 @@ The run does add `tool_call` events; the client name is how to filter them.
 4. **Execute** with bounded concurrency (below).
 5. **Contract** checks, one per served tool.
 6. **Uncovered** rows, one per served tool no case covers.
-7. **Finish.** Totals, `finished_at`, status. Revoke the key.
+7. **Finish.** Totals, `finished_at`, status.
 
 The run executes in the background of the server process. The HTTP request
 or tool call that started it returns the run id at once. Results are written
@@ -471,7 +510,8 @@ executed, and says how many it left out.
 
 ### UI: `/dashboard/admin/tests`
 
-All under `requireAdminPage`, all 404 otherwise. One rail entry, rendered
+All under `requireAdminPage`: a signed-in non-admin gets the 404, an
+anonymous visitor the login bounce. One rail entry, rendered
 only when `/api/me` reports `role: admin`.
 
 - `/dashboard/admin/tests` : start a run (all, tier 1, tier 2), the running
@@ -524,12 +564,47 @@ is bounded; the playground's output cap is not on this path and is not
 relied on.
 
 The daily run is the box calling `tests_run` over its ordinary OAuth
-connection to `/mcp`, as the founder account. It needs no API key of its
-own and the gateway has no scheduler: the three calls are `tests_run`, poll
-`tests_status`, read `tests_results`. The caller's OAuth token is never
-reused by the runner. The run still mints its own per-run key for its
-loopback client, for the reason under Credential: that key is what makes
-runner traffic separable from the caller's, whichever door started the run.
+connection to `/mcp`, as the founder account. No API key exists anywhere in
+this design and the gateway has no scheduler: the three calls are
+`tests_run`, poll `tests_status`, read `tests_results`.
+
+**Invisible and unreachable for a non-admin (ruled), proven twice.** In the
+unit suite: a non-admin's `tools/list` does not contain the three names, and
+`tools/call` for each of them as a non-admin returns the identical error a
+made-up tool name returns, compared whole with only the echoed name
+allowed to differ. And as runner case `R2`, against the running gateway:
+the fixture mapping's `nonAdmin` role names a user of ours whose role is
+`user`. For that case only, the runner builds a second in-process server
+for that user id. That context can do two things and nothing else: list
+tools, and call the three admin names plus one made-up name. It cannot call
+a plugin tool, so the runner never acts on another user's connected
+accounts. If the mapped user is missing, or turns out to be an admin, the
+case skips and says why.
+
+### Environments: local and prod
+
+`test_runs.environment` is `local` or `prod`, from one config value that
+defaults to `local` and is set to `prod` only in the production compose
+file. It is never inferred from a hostname.
+
+The comparison that matters before a deploy is a **local run of the
+candidate against the current prod baseline** (ruled). The two runs live in
+different databases, so the diff cannot be a join. It is already a pure
+function over two result sets, and one of them can arrive as data:
+
+- `tests_results` can return a whole run, passes included, as the export.
+- The local gateway's `POST /api/admin/tests/runs/import`, which does not
+  exist when the environment is `prod`, validates that export and stores
+  it as a run row with its own `environment` kept (`prod`) and
+  `imported_from` set to the source run id. Imported rows are read-only
+  and can only ever be the other side of a diff.
+- The diff header names both environments beside both sets of shas. Cases
+  that skipped on one side only (a fixture the local gateway lacks) are
+  listed as left out, never as regressions or fixes.
+
+The deploy rule this feeds is in the plan's handover: no plugin or gateway
+deploy without a local run of the candidate showing no regression against
+the prod baseline, and a prod run after.
 
 ---
 
@@ -562,9 +637,13 @@ formula instead), B1 (the refresh event; the runner asserts the call), and
 E8 (the runner asserts the served schema and the registry row, which is the
 strict reading). The dropped halves stay with the agent as one line each.
 
-Two get stronger in code. A4 gains the plugin's own list, which the agent
-could not reach. F7 gains its positive half: the runner's own key being
-accepted is the control the sheet says it was waiting for.
+One gets stronger in code. A4 gains the plugin's own list, which the agent
+could not reach. F7 ports its refusal half through `ctx.http`; its positive
+half is the door case.
+
+**Two cases the sheet does not have**, so they carry runner ids and sit
+outside the 52: `R1`, the door case above, and `R2`, the admin tools being
+invisible and unreachable for a non-admin (see The three MCP tools).
 
 **Agent-only (9).**
 
@@ -595,7 +674,9 @@ queries user grants is a different trust question from one that calls tools.
 - A CLI. It would be a thin client of the same API.
 - Database and analytics assertions (the nine agent-only rows).
 - Deleting leftovers the current run did not create. Reported, not removed.
-- Parallel runs, and runs as a user other than the one who triggered.
+- Parallel runs, and runs as a user other than the one who triggered. The
+  one narrow exception is case `R2`, which lists and probes as the mapped
+  non-admin and can call no plugin tool.
 - Alerts. A red run is a row and a page; nothing posts to chat.
 - Writing the "covered by" column back to the smoke sheet. `GET
   /api/admin/tests/cases` is the source; the sheet is updated by whoever
@@ -606,6 +687,8 @@ queries user grants is a different trust question from one that calls tools.
   later work.
 
 ## Rulings from review
+
+First round, on the spec:
 
 1. **Contract probe.** `{}` is sent to read tools only. Write tools get the
    schema checks and nothing is ever called.
@@ -621,20 +704,35 @@ queries user grants is a different trust question from one that calls tools.
 5. SCRUM-302's last line names SCRUM-302 as its own first consumer. Read as
    SCRUM-303.
 
+Second round, on the plan:
+
+6. **No minted key.** The runner is in-process as the triggering admin,
+   tagged by client name and run id. One door case uses the caller's own
+   OAuth token when there is one.
+7. **Anonymous visitors bounce to login** on admin pages like every sibling.
+   404 is for a signed-in non-admin, and parity covers headers.
+8. **The three tools are invisible and unreachable** for a non-admin, with a
+   unit test and a runner case, which adds the `nonAdmin` fixture role.
+9. **`environment: local | prod`**, and the local-against-prod diff is a
+   first-class comparison that gates deploys.
+10. The review's later notes are in: cross-site protection on run start, the
+    boot marking of interrupted runs, the send-guard edges, and the trust
+    boundary.
+
 ## Verification, when it is built
 
 Unit: the case registry invariants, the send guard, the undo ordering
 (a case that throws after two defers runs both, in reverse, and a failing
 undo does not stop the next), the diff, the scope selection, `isAdmin` and
 both 404 paths, the admin-route check order (a non-admin never reaches the
-limiter), the path-boundary match in the middleware, the directory walk
-over admin pages and routes, `ctx.http`'s refusals, revoke-by-id with a
-user key that shares the name prefix left alone, and the probe skipping
-every write tool. Each guard deleted once to see red.
+limiter), header parity on the 404, the cross-origin POST, the directory walk
+over admin pages and routes, `ctx.http`'s refusals, the door case never
+writing its token anywhere, the non-admin context refusing any plugin tool,
+and the probe skipping every write tool. Each guard deleted once to see red.
 
 Against real Postgres (the testcontainers harness): the two tables, the
-one-run-at-a-time claim, `interrupted` on boot, key mint and revoke around a
-run including the crash sweep.
+one-run-at-a-time claim, `interrupted` on boot, and import of another
+environment's run.
 
 Live: a tier-1 run against production, then a full run, recorded as the
 baseline. Before the baseline is trusted, three cases are broken on purpose
