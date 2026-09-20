@@ -43,11 +43,21 @@ vi.mock("./user-tools", () => ({
   buildPluginServerUrl: () => "http://127.0.0.1:40000/mcp",
   callPluginToolOnce: vi.fn(),
 }));
+// This suite is about the COUNTS on the tools-listed event, and since
+// SCRUM-303 the built-in count depends on who is asking: three of them are
+// admin-only. It lists as a non-admin, which is the ordinary case, so the
+// expected built-in count is the non-admin subset rather than the registry
+// size.
+vi.mock("./admin", () => ({ isAdmin: vi.fn().mockResolvedValue(false) }));
+
 vi.mock("./billing/enforce", () => ({
   checkCallAllowance: vi.fn().mockResolvedValue({ allowed: true }),
 }));
 
 import { createMcpServer, BUILT_IN_TOOLS } from "./mcp-server";
+
+/** What a NON-admin is served: everything without an audience. */
+const PUBLIC_BUILTINS = BUILT_IN_TOOLS.filter((t) => !t.audience).length;
 import type { ConnectionPool } from "./pool";
 
 const dbMock = {
@@ -89,10 +99,10 @@ beforeEach(() => {
 describe("tools/list says who asked (SCRUM-256)", () => {
   it("splits the count into connector tools and built-ins", async () => {
     const { tools } = await listWith();
-    expect(tools).toHaveLength(ROWS.length + BUILT_IN_TOOLS.length);
+    expect(tools).toHaveLength(ROWS.length + PUBLIC_BUILTINS);
     expect(trackMcpToolsListed).toHaveBeenCalledTimes(1);
     const listed = trackMcpToolsListed.mock.calls[0]![2] as Record<string, unknown>;
-    expect(listed).toMatchObject({ connectorTools: ROWS.length, builtinTools: BUILT_IN_TOOLS.length });
+    expect(listed).toMatchObject({ connectorTools: ROWS.length, builtinTools: PUBLIC_BUILTINS });
   });
 
   it("names the client the handshake carried and the protocol version the server was told", async () => {
@@ -119,6 +129,6 @@ describe("tools/list says who asked (SCRUM-256)", () => {
     listUserToolRows.mockResolvedValue([]);
     await listWith();
     const listed = trackMcpToolsListed.mock.calls[0]![2] as Record<string, unknown>;
-    expect(listed).toMatchObject({ connectorTools: 0, builtinTools: BUILT_IN_TOOLS.length });
+    expect(listed).toMatchObject({ connectorTools: 0, builtinTools: PUBLIC_BUILTINS });
   });
 });

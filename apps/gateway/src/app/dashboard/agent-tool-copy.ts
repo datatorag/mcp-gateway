@@ -31,7 +31,10 @@
 import type { LucideIcon } from "lucide-react";
 import {
   BookOpenIcon,
+  CheckCircleIcon,
+  ClipboardListIcon,
   CodeIcon,
+  PlayIcon,
   Link2Icon,
   PlugIcon,
   SearchIcon,
@@ -59,6 +62,21 @@ export const INTERNAL_TOOL_DISPLAY: Record<
     icon: PlugIcon,
   },
   // The skill catalogue over MCP (SCRUM-224), reachable from the agent too.
+  // The test runner (SCRUM-303). Admin-only, so most readers never see
+  // these cards; they are here because the map is ground truth in both
+  // directions and a built-in with no label shows its snake_case id.
+  tests_run: {
+    label: "Starting a test run",
+    icon: PlayIcon,
+  },
+  tests_status: {
+    label: "Checking the test run",
+    icon: CheckCircleIcon,
+  },
+  tests_results: {
+    label: "Reading the test results",
+    icon: ClipboardListIcon,
+  },
   skills_search: {
     label: "Searching the skill catalogue",
     icon: SearchIcon,

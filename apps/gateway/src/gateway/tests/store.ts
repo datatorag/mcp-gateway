@@ -8,6 +8,7 @@ import type {
   TestRunTrigger,
 } from "@datatorag-mcp/db";
 import type { CaseCleanup, CaseStatus } from "./runner";
+import { formatEvidence } from "./evidence";
 
 /**
  * The run's rows (SCRUM-303).
@@ -86,7 +87,11 @@ export type ResultRow = {
   status: CaseStatus | "uncovered";
   cleanup: CaseCleanup;
   durationMs: number;
-  evidence: string;
+  /** The LINES a case recorded, not a finished string. Capping and scrubbing
+   * happen here rather than in every caller, so a case author who writes a
+   * result directly cannot store an unscrubbed payload into a table a
+   * dashboard page renders. An invariant nobody has to remember. */
+  evidence: string[];
 };
 
 /** Written as each case finishes, so a poll sees progress rather than
@@ -101,7 +106,7 @@ export async function recordResult(db: Database, runId: string, row: ResultRow):
       status: row.status,
       cleanup: row.cleanup,
       durationMs: row.durationMs,
-      evidence: row.evidence,
+      evidence: formatEvidence(row.evidence),
     })
     .onConflictDoNothing();
 }

@@ -155,16 +155,55 @@ describe.skipIf(!dockerAvailable)("test_runs and test_results (SCRUM-303)", () =
       status: "pass" as const,
       cleanup: "clean" as const,
       durationMs: 42,
-      evidence: "expected 3 ranges, got 3",
+      evidence: ["expected 3 ranges, got 3"],
     };
     await recordResult(db, runId, row);
-    await recordResult(db, runId, { ...row, evidence: "a second write" });
+    await recordResult(db, runId, { ...row, evidence: ["a second write"] });
 
     const rows = await db.execute<{ evidence: string }>(
       sql`SELECT evidence FROM test_results WHERE run_id = ${runId}::uuid AND case_id = 'D15'`
     );
     expect(rows).toHaveLength(1);
     expect(rows[0].evidence).toBe("expected 3 ranges, got 3");
+  });
+
+  it("scrubs and caps evidence on the way IN, not in the caller", async () => {
+    // The invariant made structural: a case author writing a result directly
+    // cannot store an unscrubbed payload into a table a dashboard renders.
+    await clearRuns();
+    const started = await start();
+    const runId = (started as { runId: string }).runId;
+    await recordResult(db, runId, {
+      caseId: "D9",
+      kind: "case",
+      status: "fail",
+      cleanup: "none_needed",
+      durationMs: 1,
+      evidence: ["created file Ab3xYz9Qw7Lm2Kp5Rt8Nv1 in the fixture folder"],
+    });
+    const [stored] = await db.execute<{ evidence: string }>(
+      sql`SELECT evidence FROM test_results WHERE run_id = ${runId}::uuid AND case_id = 'D9'`
+    );
+    expect(stored.evidence).not.toContain("Ab3xYz9Qw7Lm2Kp5Rt8Nv1");
+    expect(stored.evidence).toContain("[redacted-id]");
+  });
+
+  it("caps a long evidence block on the way in", async () => {
+    await clearRuns();
+    const started = await start();
+    const runId = (started as { runId: string }).runId;
+    await recordResult(db, runId, {
+      caseId: "D8",
+      kind: "case",
+      status: "fail",
+      cleanup: "none_needed",
+      durationMs: 1,
+      evidence: Array.from({ length: 400 }, (_, i) => `step ${i}: expected 3 ranges, got 3`),
+    });
+    const [stored] = await db.execute<{ evidence: string }>(
+      sql`SELECT evidence FROM test_results WHERE run_id = ${runId}::uuid AND case_id = 'D8'`
+    );
+    expect(stored.evidence.length).toBeLessThanOrEqual(4096);
   });
 
   it("deletes a run's results with the run", async () => {
@@ -177,7 +216,7 @@ describe.skipIf(!dockerAvailable)("test_runs and test_results (SCRUM-303)", () =
       status: "pass",
       cleanup: "none_needed",
       durationMs: 1,
-      evidence: "",
+      evidence: [],
     });
     await db.execute(sql`DELETE FROM test_runs WHERE id = ${runId}::uuid`);
     const [{ n }] = await db.execute<{ n: number }>(

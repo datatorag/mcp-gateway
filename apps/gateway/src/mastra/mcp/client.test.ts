@@ -21,6 +21,12 @@ import type { Database } from "@datatorag-mcp/db";
  */
 
 const trackToolCall = vi.fn().mockResolvedValue(undefined);
+// SCRUM-303: three built-ins are admin-only, so what the agent is served
+// depends on who is asking. This suite lists as an ADMIN, which exercises
+// the whole registry and makes the approval-parity assertions below cover
+// every entry. The non-admin case is asserted on its own, further down.
+vi.mock("@/gateway/admin", () => ({ isAdmin: vi.fn().mockResolvedValue(true) }));
+
 vi.mock("@/gateway/track", () => ({
   trackToolCall: (...args: unknown[]) => trackToolCall(...args),
   trackConnectCardShown: vi.fn(),
@@ -241,6 +247,18 @@ describe("a skill run sees its own tools (SCRUM-238)", () => {
     expect(Object.keys(tools)).toEqual(
       expect.arrayContaining(["gws-mcp__gmail_search", "gws-mcp__gmail_send", "gws-mcp__totally_new_tool"])
     );
+  });
+
+  it("does not offer the admin-only built-ins to a non-admin", async () => {
+    // The agent is an in-process client of the same server, so it inherits
+    // the audience filter rather than having one of its own. Proven by
+    // flipping the role for one resolve, since the suite otherwise runs as
+    // an admin to cover every entry.
+    const { isAdmin } = await import("@/gateway/admin");
+    vi.mocked(isAdmin).mockResolvedValueOnce(false);
+    const names = Object.keys(await resolve());
+    expect(names).not.toContain("tests_run");
+    expect(names).toContain("echo");
   });
 
   it("offers only the built-ins when the slug names no skill", async () => {

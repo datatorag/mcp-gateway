@@ -148,6 +148,30 @@ export function checkAdminPages(adminDir: string): GuardViolation[] {
  * other route in the app uses, and it answers 401 and 429 where an admin
  * route must answer 404.
  */
+/**
+ * Is this exported method wrapped, directly or through one local delegate?
+ *
+ * The delegate form is not a convenience: `withAdminRoute` takes its route
+ * context optionally so that param-less routes typecheck, and Next's route
+ * validator rejects that shape on a dynamic segment. So a `[id]` route has
+ * to re-export with the context required, exactly as `/api/keys/[id]` does.
+ *
+ * The delegation is followed rather than waved through: the local name the
+ * export forwards to must itself be assigned from `withAdminRoute(`, so an
+ * export that forwards to a bare handler still fails.
+ */
+function methodIsGuarded(code: string, method: string): boolean {
+  if (new RegExp(`export\\s+const\\s+${method}\\s*=\\s*withAdminRoute\\s*\\(`).test(code)) return true;
+
+  const delegated = new RegExp(
+    `export\\s+const\\s+${method}\\s*=\\s*(?:async\\s*)?\\([^)]*\\)\\s*=>\\s*(\\w+)\\s*\\(`
+  ).exec(code);
+  if (!delegated) return false;
+
+  const local = delegated[1];
+  return new RegExp(`const\\s+${local}\\s*=\\s*withAdminRoute\\s*(?:<[^>]*>)?\\s*\\(`).test(code);
+}
+
 export function checkAdminRoutes(apiAdminDir: string): GuardViolation[] {
   const out: GuardViolation[] = [];
   for (const file of findAdminRoutes(apiAdminDir)) {
@@ -161,10 +185,7 @@ export function checkAdminRoutes(apiAdminDir: string): GuardViolation[] {
       continue;
     }
     for (const method of exported) {
-      const wrapped = new RegExp(
-        `export\\s+const\\s+${method}\\s*=\\s*withAdminRoute\\s*\\(`
-      ).test(code);
-      if (!wrapped) {
+      if (!methodIsGuarded(code, method)) {
         out.push({
           file,
           problem: `${method} is not exported as withAdminRoute(...): an admin route must refuse with the app's 404, which withRoute and a bare handler do not`,

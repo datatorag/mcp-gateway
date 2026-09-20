@@ -54,6 +54,22 @@ vi.mock("./billing/enforce", () => ({
   checkCallAllowance: vi.fn().mockResolvedValue({ allowed: true }),
 }));
 
+// SCRUM-303 put three ADMIN-ONLY built-ins in the registry, and this suite
+// iterates the whole registry and calls every handler. So it runs as an
+// admin, and the runner is stubbed: the point here is the metering shape of
+// a built-in call, and actually starting a test run from this suite would be
+// a side effect nobody asked for. The audience filter itself has its own
+// suite (mcp-server.admin-audience.test.ts).
+vi.mock("./admin", () => ({ isAdmin: vi.fn().mockResolvedValue(true) }));
+vi.mock("./tests/execute", () => ({
+  startTestRun: vi.fn().mockResolvedValue({ ok: true, runId: "11111111-2222-4333-8444-555555555555", cases: 0 }),
+}));
+vi.mock("./tests/read", () => ({
+  readRunStatus: vi.fn().mockResolvedValue({ run_id: "r", status: "finished" }),
+  readRunResults: vi.fn().mockResolvedValue({ run_id: "r", results: [], next_cursor: null }),
+  readRunDiff: vi.fn().mockResolvedValue({ regressed: [] }),
+}));
+
 import { createMcpServer, BUILT_IN_TOOLS } from "./mcp-server";
 import type { ConnectionPool } from "./pool";
 
@@ -108,7 +124,10 @@ describe("built-in tools", () => {
       trackToolCall.mockClear();
       const result = await client.callTool({
         name: t.definition.name,
-        arguments: { message: "smoke" },
+        // One argument bag for every built-in: `message` for echo, `run_id`
+        // for the runner tools. A tool that needs something else will fail
+        // the isError assertion below, which is the right way to find out.
+        arguments: { message: "smoke", run_id: "11111111-2222-4333-8444-555555555555" },
       });
       expect(result.isError ?? false).toBe(false);
       expect(trackToolCall).toHaveBeenCalledTimes(1);

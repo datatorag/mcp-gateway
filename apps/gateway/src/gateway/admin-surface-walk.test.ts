@@ -196,6 +196,37 @@ export async function GET() { return Response.json({}); }`,
     expect(checkAdminRoutes(root)[0].problem).toContain("GET is not exported as withAdminRoute");
   });
 
+  it("accepts the delegate form a dynamic route is forced into", () => {
+    // Next's route validator rejects the wrapper's optional context on a
+    // [id] segment, so the export re-declares it as required and forwards.
+    const root = tree({
+      "runs/[id]/route.ts": `import { withAdminRoute } from "@/lib/with-admin-route";
+type Ctx = { params: Promise<{ id: string }> };
+const handler = withAdminRoute<Ctx>(async (_u, _r, ctx) => Response.json(await ctx.params));
+export const GET = (request: Parameters<typeof handler>[0], ctx: Ctx) => handler(request, ctx);`,
+    });
+    expect(checkAdminRoutes(root)).toEqual([]);
+  });
+
+  it("does NOT accept a delegate that forwards to an unwrapped handler", () => {
+    // The delegation is followed, not waved through. This is the shape that
+    // would otherwise let the whole rule be bypassed by adding one arrow.
+    const root = tree({
+      "runs/[id]/route.ts": `const handler = async () => Response.json({});
+export const GET = (request: Request, ctx: unknown) => handler(request, ctx);`,
+    });
+    expect(checkAdminRoutes(root)[0].problem).toContain("GET is not exported as withAdminRoute");
+  });
+
+  it("does NOT accept a delegate that forwards to withRoute", () => {
+    const root = tree({
+      "runs/[id]/route.ts": `import { withRoute } from "@/lib/with-route";
+const handler = withRoute(async () => Response.json({}));
+export const GET = (request: Request, ctx: unknown) => handler(request, ctx);`,
+    });
+    expect(checkAdminRoutes(root)[0].problem).toContain("GET is not exported as withAdminRoute");
+  });
+
   it("says nothing when there are no admin routes yet", () => {
     // True in SCRUM-302 and the reason the fixtures above exist: this rule
     // would otherwise be unproven until SCRUM-303 writes the first route.

@@ -103,7 +103,12 @@ afterEach(() => {
 describe("the injected entry is really in the registry", () => {
   it("guards every test below against being vacuous", () => {
     expect(BUILT_IN_TOOLS.some((t) => t.definition.name === ADMIN_TOOL)).toBe(true);
-    expect(BUILT_IN_TOOLS.filter((t) => t.audience === "admin")).toHaveLength(1);
+    // The injected one plus the three the runner registers (SCRUM-303).
+    // Asserted as "the injected one is among them" rather than a count, so
+    // registering a fourth admin tool does not fail this for no reason.
+    const adminNames = BUILT_IN_TOOLS.filter((t) => t.audience === "admin").map((t) => t.definition.name);
+    expect(adminNames).toContain(ADMIN_TOOL);
+    expect(adminNames).toEqual(expect.arrayContaining(["tests_run", "tests_status", "tests_results"]));
   });
 });
 

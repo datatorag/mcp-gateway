@@ -135,6 +135,30 @@ type BuiltinResult = {
  * construction, and mcp-server.builtins.test.ts iterates the registry, so a
  * new entry is covered without anyone remembering to cover it.
  */
+/**
+ * A missing or malformed `run_id`, refused in the words a VALIDATION
+ * failure is refused in (SCRUM-303).
+ *
+ * Not cosmetic. The contract check probes every read tool with `{}` and
+ * requires an error that reads as "you left out an argument"; a built-in is
+ * served by a raw request handler with nothing validating its input schema
+ * first, so without this the runner's own two read tools answer "No run with
+ * that id." and the first baseline contains two failures that mean nothing.
+ * A suite whose first run cries wolf is a suite people learn to skim.
+ */
+function missingRunId(value: unknown, tool: string): BuiltinResult | null {
+  if (typeof value === "string" && value.trim() !== "") return null;
+  return {
+    content: [
+      {
+        type: "text" as const,
+        text: `${tool}: run_id is required. Pass the run id that tests_run returned.`,
+      },
+    ],
+    isError: true,
+  };
+}
+
 export const BUILT_IN_TOOLS: {
   definition: {
     name: string;
@@ -157,9 +181,159 @@ export const BUILT_IN_TOOLS: {
   audience?: "admin";
   handler: (
     args: Record<string, unknown> | undefined,
-    ctx: { db: Database; userId: string; connectionsUrl: string }
+    /** `pool` is here for the test runner (SCRUM-303), which builds a second
+     * in-process server and needs the same plugin connections this one uses.
+     * Passed through rather than reached for as a singleton: the server is
+     * already given its pool, and a module-level one would be a second
+     * lifetime to get wrong. */
+    ctx: { db: Database; userId: string; connectionsUrl: string; pool: ConnectionPool }
   ) => Promise<BuiltinResult>;
 }[] = [
+  /* THE TEST RUNNER, AS THREE TOOLS (SCRUM-303). Admin-only: they are
+   * filtered out of tools/list for everyone else AND refused by the call
+   * lookup, so a non-admin naming one gets the answer a name nobody ever
+   * registered gets.
+   *
+   * They exist so the daily check is three calls rather than a person
+   * reading a sheet and executing it by hand, and so the same thing the
+   * dashboard page does is available to whatever is driving the day. */
+  {
+    definition: {
+      name: "tests_run",
+      description:
+        "Start a run of the gateway's own test suite. Returns at once with a run id; poll tests_status for progress and read tests_results when it finishes. Optionally scope the run to one tier or to named case ids, but not both. Refuses if a run is already going, and names the one that is.",
+      inputSchema: {
+        type: "object" as const,
+        properties: {
+          tier: {
+            type: "number",
+            enum: [1, 2],
+            description: "Run only this tier. Tier 1 is the fast reachability and read set.",
+          },
+          case_ids: {
+            type: "array",
+            items: { type: "string" },
+            description: 'Run only these cases, by id (for example ["D15", "C1"]).',
+          },
+        },
+      },
+    },
+    /* WRITE, not read: a run sends mail and creates files. The send guard
+     * bounds where that mail goes; it does not make the run read-only. */
+    approval: "write",
+    audience: "admin",
+    handler: async (args, { db, userId, pool }) => {
+      const tier = args?.tier;
+      const caseIds = args?.case_ids;
+      if (tier !== undefined && Array.isArray(caseIds) && caseIds.length > 0) {
+        return {
+          content: [{ type: "text" as const, text: "Pass tier or case_ids, not both." }],
+          isError: true,
+        };
+      }
+      const { startTestRun } = await import("./tests/execute");
+      const scope: { tier?: 1 | 2; caseIds?: string[] } = {};
+      if (tier === 1 || tier === 2) scope.tier = tier;
+      if (Array.isArray(caseIds) && caseIds.length > 0) {
+        scope.caseIds = caseIds.filter((id): id is string => typeof id === "string");
+      }
+      const started = await startTestRun({ db, pool, userId, trigger: "mcp", scope });
+      if (!started.ok) {
+        return {
+          content: [
+            {
+              type: "text" as const,
+              text: `A run is already in progress: ${started.runId}. Wait for it, or read its results.`,
+            },
+          ],
+          isError: true,
+        };
+      }
+      return {
+        content: [
+          {
+            type: "text" as const,
+            text: JSON.stringify({ run_id: started.runId, status: "running", cases: started.cases }, null, 2),
+          },
+        ],
+      };
+    },
+  },
+  {
+    definition: {
+      name: "tests_status",
+      description:
+        "Progress of one test run: its status, when it started and finished, the gateway and plugin shas it ran against, how many results are in, and the totals so far.",
+      inputSchema: {
+        type: "object" as const,
+        properties: { run_id: { type: "string", description: "The run id tests_run returned" } },
+        required: ["run_id"],
+      },
+    },
+    approval: "read",
+    audience: "admin",
+    handler: async (args, { db }) => {
+      const invalid = missingRunId(args?.run_id, "tests_status");
+      if (invalid) return invalid;
+      const { readRunStatus } = await import("./tests/read");
+      const status = await readRunStatus(db, String(args?.run_id));
+      if (!status) {
+        return { content: [{ type: "text" as const, text: "No run with that id." }], isError: true };
+      }
+      return { content: [{ type: "text" as const, text: JSON.stringify(status, null, 2) }] };
+    },
+  },
+  {
+    definition: {
+      name: "tests_results",
+      description:
+        "Results of one test run. Defaults to everything that is NOT a pass, because that is what a run is read for; the passes are in the totals. At most 100 results per call, with a cursor for the next page. Pass against with another run id to get the diff between the two instead.",
+      inputSchema: {
+        type: "object" as const,
+        properties: {
+          run_id: { type: "string", description: "The run to read" },
+          against: {
+            type: "string",
+            description: "Another run id. Returns the diff between the two runs instead of a result list.",
+          },
+          status: {
+            type: "array",
+            items: { type: "string", enum: ["pass", "fail", "skip", "uncovered"] },
+            description: "Filter to these statuses. Omit for everything that is not a pass.",
+          },
+          cursor: { type: "string", description: "Continue a previous page" },
+        },
+        required: ["run_id"],
+      },
+    },
+    approval: "read",
+    audience: "admin",
+    handler: async (args, { db }) => {
+      const invalid = missingRunId(args?.run_id, "tests_results");
+      if (invalid) return invalid;
+      const { readRunResults, readRunDiff } = await import("./tests/read");
+      const runId = String(args?.run_id);
+      const against = args?.against;
+      if (typeof against === "string" && against !== "") {
+        const diff = await readRunDiff(db, runId, against);
+        if (!diff) {
+          return { content: [{ type: "text" as const, text: "One of those runs does not exist." }], isError: true };
+        }
+        return { content: [{ type: "text" as const, text: JSON.stringify(diff, null, 2) }] };
+      }
+      const statuses = Array.isArray(args?.status)
+        ? args.status.filter((s): s is string => typeof s === "string")
+        : undefined;
+      const page = await readRunResults(db, runId, {
+        statuses,
+        cursor: typeof args?.cursor === "string" ? args.cursor : undefined,
+      });
+      if (!page) {
+        return { content: [{ type: "text" as const, text: "No run with that id." }], isError: true };
+      }
+      return { content: [{ type: "text" as const, text: JSON.stringify(page, null, 2) }] };
+    },
+  },
   /* THE SKILL CATALOGUE AS TOOLS (SCRUM-224), for clients that render tools
    * only. Both read the one catalogue the public pages, the dashboard and
    * the prompts read; `skills_get` hands over EXACTLY the text the prompt
@@ -659,7 +833,7 @@ export function createMcpServer(
       try {
         const result = await builtin.handler(
           rawArgs as Record<string, unknown> | undefined,
-          { db, userId, connectionsUrl }
+          { db, userId, connectionsUrl, pool }
         );
         // Same fire-and-forget shape as the plugin path below. This call
         // going missing is a real regression we have shipped before: built-ins
