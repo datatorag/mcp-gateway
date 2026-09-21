@@ -103,11 +103,26 @@ const GWS_RUN_FORBIDDEN: Record<string, RegExp> = {
 /**
  * Verbs that are never a read, wherever they appear in a path.
  *
- * Deliberately a denylist HERE, unlike the read allowlist below, and the
- * difference matters: the allowlist decides whether a call proceeds and so
- * has to fail closed, while this one only catches a verb hiding in a
- * position the allowlist does not inspect. An unknown segment is still
- * refused by the allowlist on the method.
+ * WHAT THIS DOES AND DOES NOT CATCH, stated precisely, because the last
+ * version of this comment overclaimed and that is how the original defect
+ * survived.
+ *
+ * It catches a KNOWN write verb hiding in the resource path, which the read
+ * allowlist never inspects because that only looks at `method`. It does NOT
+ * catch an unknown one: `spreadsheets.batchUpdate` with method `get` is a
+ * write this list has never heard of, and nothing here refuses it.
+ *
+ * The residual risk is small and worth naming rather than papering over.
+ * For it to matter the CLI would have to resolve a verb from the middle of
+ * the path rather than from the last argument, which is not how it reads
+ * an argument vector; every case in this suite passes a noun resource and
+ * a verb in `method`; and the read allowlist still gates `method` itself.
+ * The honest description of this list is a second lock on a door that is
+ * already shut, not the lock.
+ *
+ * Extending it is cheap. Adding a verb here is a one-line change, so when
+ * the next write shape turns up, add it rather than reasoning about
+ * whether it is reachable.
  */
 /**
  * The address the REPLY TOOL will actually use, extracted the way the tool

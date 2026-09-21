@@ -792,3 +792,41 @@ describe("gws_run and a write verb hidden in the resource path", () => {
     }
   });
 });
+
+/**
+ * THE LIMIT OF THE RESOURCE-PATH CHECK, asserted rather than described.
+ *
+ * The list catches KNOWN write verbs. An unknown one in the resource path
+ * is not caught, and pretending otherwise is how the original defect
+ * survived a comment. This test exists so the gap is a fact in the suite
+ * rather than a claim in a paragraph: if someone later makes the check
+ * complete, this goes red and gets deleted, which is the right outcome.
+ */
+describe("what the resource-path check does not catch", () => {
+  const opts = {
+    readerEmail: "reader@example.test",
+    senderEmail: "sender@example.test",
+    lookups: { readDraft: async () => null, readMessage: async () => null },
+  };
+
+  it("lets an unknown write verb through the resource path, which is the stated limit", async () => {
+    const verdict = await checkSend(
+      "gws-mcp__gws_run",
+      { service: "sheets", resource: "spreadsheets.batchUpdate", method: "get" },
+      opts
+    );
+    // NOT an endorsement. The read allowlist still gates `method`, and the
+    // client resolves its verb from the last argument, so this is a second
+    // lock rather than the lock. Documented in WRITE_VERBS.
+    expect(verdict.ok).toBe(true);
+  });
+
+  it("but the method itself is still gated, which is the lock that matters", async () => {
+    const verdict = await checkSend(
+      "gws-mcp__gws_run",
+      { service: "sheets", resource: "spreadsheets", method: "batchUpdate" },
+      opts
+    );
+    expect(verdict.ok).toBe(false);
+  });
+});
