@@ -62,3 +62,63 @@ describe("formatEvidence", () => {
     expect(formatEvidence([])).toBe("");
   });
 });
+
+/**
+ * The scrub ate things a reader needs (SCRUM-303).
+ *
+ * The shared pattern list replaces any run of 20+ word characters with
+ * `[redacted-id]`, which is right for a Drive id and wrong for
+ * `gws-mcp__sheets_query` at 21 characters: the skip reason "this run does
+ * not serve gws-mcp__sheets_query" arrived naming nothing. Same for the
+ * fixture address a send refusal names. The fix holds those tokens back
+ * rather than loosening the pattern, because loosening it would loosen it
+ * for real ids too.
+ */
+describe("tokens the scrub must not eat", () => {
+  const TOOL = "gws-mcp__sheets_query";
+  const ADDRESS = "reader@example.test";
+
+  it("keeps a served tool name in a skip reason", () => {
+    const out = formatEvidence([`this run does not serve ${TOOL}`], [TOOL]);
+    expect(out).toContain(TOOL);
+    expect(out).not.toContain("[redacted-id]");
+  });
+
+  it("keeps a configured address in a send refusal", () => {
+    const out = formatEvidence([`refused: may only send to ${ADDRESS}`], [ADDRESS]);
+    expect(out).toContain(ADDRESS);
+  });
+
+  it("STILL redacts an id that is not on the safe list", () => {
+    // The half that proves the fix did not just turn the scrub off.
+    const out = formatEvidence([`created 1SyntheticFixtureIdNotARealSheet0123456789ab`], [TOOL]);
+    expect(out).toContain("[redacted-id]");
+    expect(out).not.toContain("1SyntheticFixture");
+  });
+
+  it("STILL redacts an address that is not configured", () => {
+    const out = formatEvidence([`mail from stranger@elsewhere.test`], [ADDRESS]);
+    expect(out).toContain("[redacted-email]");
+    expect(out).not.toContain("stranger@elsewhere.test");
+  });
+
+  it("protects the longer token when one safe token contains another", () => {
+    const out = formatEvidence(
+      ["gws-mcp__sheets_read and gws-mcp__sheets_read_extra_long_name"],
+      ["gws-mcp__sheets_read", "gws-mcp__sheets_read_extra_long_name"]
+    );
+    expect(out).toContain("gws-mcp__sheets_read_extra_long_name");
+  });
+
+  it("FAILS CLOSED when the text already carries the sentinel", () => {
+    // Restoring could otherwise corrupt the line, so nothing is protected
+    // and everything is scrubbed. Over-redaction, never under.
+    const out = formatEvidence([`«0» saw ${TOOL}`], [TOOL]);
+    expect(out).toContain("[redacted-id]");
+    expect(out).not.toContain(TOOL);
+  });
+
+  it("scrubs normally when nothing is declared safe", () => {
+    expect(formatEvidence([`serve ${TOOL}`])).toContain("[redacted-id]");
+  });
+});

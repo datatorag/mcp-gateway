@@ -31,9 +31,64 @@ export const TRUNCATION_MARKER = "\n... evidence truncated";
  * bodies would be a second copy of a mailbox, sitting in a table that a
  * whole dashboard page renders.
  */
-export function formatEvidence(lines: readonly string[]): string {
+export function formatEvidence(lines: readonly string[], safe: readonly string[] = []): string {
   const joined = lines.join("\n");
-  const redacted = scrubSensitiveText(joined);
+  const redacted = protect(joined, safe, scrubSensitiveText);
   if (redacted.length <= EVIDENCE_CAP) return redacted;
   return redacted.slice(0, EVIDENCE_CAP - TRUNCATION_MARKER.length) + TRUNCATION_MARKER;
+}
+
+/** The sentinel that stands in for a protected token while the scrub runs.
+ * Chosen so no pattern in the list can match it: the guillemets are outside
+ * `[A-Za-z0-9_-]`, so the id pattern's word run is only the digits, and it
+ * carries no `@` and no key prefix. */
+const OPEN = "\u00ab";
+const CLOSE = "\u00bb";
+
+/**
+ * Runs `scrub` over `text` with `safe` tokens held back (SCRUM-303).
+ *
+ * THE PATTERN LIST IS NOT FORKED, and that is the point. The shared list
+ * replaces any run of 20 or more word characters with `[redacted-id]`
+ * because that is the shape of a Drive id; `gws-mcp__sheets_query` is 21
+ * characters, so the skip reason "this run does not serve
+ * gws-mcp__sheets_query" arrived unreadable, and so did the fixture address
+ * a send refusal named. Both are things a reader NEEDS. Loosening the
+ * pattern would have loosened it for real ids too.
+ *
+ * So the tokens are masked before the scrub and restored after. What counts
+ * as safe is decided by the caller and is deliberately narrow: names this
+ * run actually served, and the addresses this run was configured with.
+ * An arbitrary long string is not safe, a customer's address is not safe,
+ * and an id this run happened to create is not safe.
+ *
+ * FAILS CLOSED. If the text already contains the sentinel, restoring could
+ * corrupt it, so nothing is protected and everything is scrubbed.
+ */
+export function protect(
+  text: string,
+  safe: readonly string[],
+  scrub: (value: string) => string
+): string {
+  const tokens = [...new Set(safe)].filter((t) => t.length > 0);
+  if (tokens.length === 0) return scrub(text);
+  if (text.includes(OPEN) || text.includes(CLOSE)) return scrub(text);
+
+  // Longest first, so a token that contains another is masked whole.
+  tokens.sort((a, b) => b.length - a.length);
+
+  let masked = text;
+  const used: string[] = [];
+  for (const token of tokens) {
+    if (!masked.includes(token)) continue;
+    const slot = used.length;
+    used.push(token);
+    masked = masked.split(token).join(`${OPEN}${slot}${CLOSE}`);
+  }
+
+  let out = scrub(masked);
+  for (let i = 0; i < used.length; i += 1) {
+    out = out.split(`${OPEN}${i}${CLOSE}`).join(used[i]);
+  }
+  return out;
 }

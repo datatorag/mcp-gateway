@@ -96,7 +96,15 @@ export type ResultRow = {
 
 /** Written as each case finishes, so a poll sees progress rather than
  * nothing until the end. */
-export async function recordResult(db: Database, runId: string, row: ResultRow): Promise<void> {
+export async function recordResult(
+  db: Database,
+  runId: string,
+  row: ResultRow,
+  /** Tokens the scrub must not eat: the tool names this run served and the
+   * addresses it was configured with. Narrow by construction, and empty by
+   * default so a caller that forgets gets the safe behaviour. */
+  safe: readonly string[] = []
+): Promise<void> {
   await db
     .insert(testResults)
     .values({
@@ -106,7 +114,7 @@ export async function recordResult(db: Database, runId: string, row: ResultRow):
       status: row.status,
       cleanup: row.cleanup,
       durationMs: row.durationMs,
-      evidence: formatEvidence(row.evidence),
+      evidence: formatEvidence(row.evidence, safe),
     })
     .onConflictDoNothing();
 }

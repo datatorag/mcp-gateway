@@ -93,3 +93,39 @@ describe("a value that is absent or unusable", () => {
     expect(map.account("reader")).toBeNull();
   });
 });
+
+/**
+ * `nonAdmin` names one of OUR USERS, not a connected account, and it lives
+ * under `users` in the config. R2 skipped with "no mapping for
+ * account:nonAdmin" while the mapping was there the whole time — a case that
+ * did not run, reporting a reason that sends you to fix configuration that
+ * was already correct.
+ */
+describe("a role that names a user rather than an account", () => {
+  const mapped = parseFixtureMap(
+    JSON.stringify({
+      accounts: { sender: "sender@example.test" },
+      users: { nonAdmin: "11111111-2222-3333-4444-555555555555" },
+    })
+  );
+
+  it("finds nonAdmin under users, so a case declaring it RUNS", () => {
+    expect(mapped.missingFor({ accounts: ["nonAdmin"] })).toEqual([]);
+  });
+
+  it("still reports it missing when it really is, and says user not account", () => {
+    const bare = parseFixtureMap(JSON.stringify({ accounts: { sender: "s@example.test" } }));
+    expect(bare.missingFor({ accounts: ["nonAdmin"] })).toEqual(["user:nonAdmin"]);
+  });
+
+  it("does not let a user id stand in for a connected account", () => {
+    // The inverse of the bug. `nonAdmin` has no address, so nothing may
+    // resolve it as one and hand it to a tool as `account`.
+    expect(mapped.account("nonAdmin")).toBeNull();
+    expect(mapped.missingFor({ accounts: ["reader"] })).toEqual(["account:reader"]);
+  });
+
+  it("lists only real addresses as configured, never the user id", () => {
+    expect(mapped.configuredAddresses()).toEqual(["sender@example.test"]);
+  });
+});

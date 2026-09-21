@@ -25,6 +25,10 @@ export type FixtureMap = {
   user(name: "nonAdmin"): string | null;
   /** The id behind a fixture key, or null. */
   fixture(key: FixtureKey): string | null;
+  /** Every address this run was configured with, for the evidence scrub to
+   * hold back. Addresses only: a user id or a file id is exactly what the
+   * scrub exists to eat. */
+  configuredAddresses(): string[];
   /** What a case needs but this run does not have, for the skip reason. */
   missingFor(needs: { accounts?: readonly AccountRole[]; fixtures?: readonly FixtureKey[] }): string[];
   /** True when the value was absent or unusable, so everything is missing. */
@@ -32,6 +36,19 @@ export type FixtureMap = {
 };
 
 const EMPTY = { accounts: {}, users: {}, fixtures: {} };
+
+/**
+ * The roles that name one of OUR USERS rather than a connected account.
+ *
+ * Declared as a set rather than inferred, so adding a second user role is a
+ * deliberate edit in one place instead of a string comparison copied to
+ * wherever the distinction next matters.
+ */
+const USER_ROLES = new Set<AccountRole>(["nonAdmin"]);
+
+export function isUserRole(role: AccountRole): role is "nonAdmin" {
+  return USER_ROLES.has(role);
+}
 
 /**
  * Never throws. A malformed value reads as "nothing is mapped", which skips
@@ -76,9 +93,25 @@ export function parseFixtureMap(raw: string | undefined): FixtureMap {
     user,
     fixture,
     empty,
+    configuredAddresses() {
+      return ACCOUNT_ROLES.filter((r) => !isUserRole(r))
+        .map((r) => account(r))
+        .filter((a): a is string => a !== null);
+    },
     missingFor(needs) {
       const missing: string[] = [];
-      for (const role of needs.accounts ?? []) if (account(role) === null) missing.push(`account:${role}`);
+      for (const role of needs.accounts ?? []) {
+        // `nonAdmin` IS NOT A CONNECTED ACCOUNT, and looking it up as one
+        // could only ever miss. It names one of our own USERS and lives
+        // under `users` in the config; every other role names an address
+        // under `accounts`. R2 skipped with "no mapping for
+        // account:nonAdmin" while the mapping was present the whole time,
+        // which is the worst shape of bug this runner can have: a case
+        // that does not run, reporting a reason that sends you to fix
+        // configuration that was already correct.
+        const resolved = isUserRole(role) ? user(role) : account(role);
+        if (resolved === null) missing.push(`${isUserRole(role) ? "user" : "account"}:${role}`);
+      }
       for (const key of needs.fixtures ?? []) if (fixture(key) === null) missing.push(`fixture:${key}`);
       return missing;
     },

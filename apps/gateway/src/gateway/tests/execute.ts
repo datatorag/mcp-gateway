@@ -16,7 +16,8 @@ import { checkSend, type GuardLookups } from "./send-guard";
 import type { AccountRole, FixtureKey } from "./types";
 import { finishRun, recordResult, startRun } from "./store";
 import { missingCheckouts, readPluginShas } from "./plugin-sha";
-import { mcpServers } from "@datatorag-mcp/db";
+import { mcpServers, serviceConnections } from "@datatorag-mcp/db";
+import { PLUGIN_SERVICE_MAP } from "../service-token";
 import { eq } from "drizzle-orm";
 import { join } from "node:path";
 import { homedir } from "node:os";
@@ -169,14 +170,23 @@ async function driveRun(opts: {
 }): Promise<void> {
   const { db, runId } = opts;
   const totals: TestRunTotals = { pass: 0, fail: 0, skip: 0, uncovered: 0 };
+  /* WHAT THE SCRUB MUST NOT EAT. Filled once the gate knows what this run
+   * serves. Tool names are 20+ characters often enough that the id pattern
+   * ate them, which made a skip reason name nothing; the configured
+   * addresses matter for the same reason on a send refusal. Nothing else
+   * goes in here: an id this run created is exactly what the scrub is for. */
+  const safe: string[] = [];
   const record = async (row: Parameters<typeof recordResult>[2]) => {
-    await recordResult(db, runId, row);
+    await recordResult(db, runId, row, safe);
     if (row.status === "pass") totals.pass += 1;
     else if (row.status === "fail") totals.fail += 1;
     else if (row.status === "skip") totals.skip += 1;
     else totals.uncovered += 1;
   };
 
+  const fixtures = parseFixtureMap(getEnv().TEST_RUNNER_FIXTURES);
+  /** Plugin slug -> why this machine cannot exercise it. See `unusablePlugins`. */
+  let unusable = new Map<string, string>();
   const client = await createRunnerClient(db, opts.pool, opts.userId, runId);
   let served: { name: string; inputSchema?: Record<string, unknown> }[] = [];
 
@@ -191,6 +201,7 @@ async function driveRun(opts: {
       if (!health.ok) throw new Error(`/health answered ${health.status}`);
       served = await client.listTools();
       gate.push(`tools/list served ${served.length} tools`);
+      safe.push(...served.map((t) => t.name), ...fixtures.configuredAddresses());
 
       // NOT A FAILURE, A NAMED GAP. A plugin active in the registry with no
       // checkout on this machine still has its tools advertised from the
@@ -201,6 +212,8 @@ async function driveRun(opts: {
       if (absent.length > 0) {
         gate.push(`not installed on this machine: ${absent.join(", ")}`);
       }
+      unusable = await unusablePlugins(db, opts.userId, absent);
+      for (const [slug, why] of unusable) gate.push(`${slug}: ${why}`);
     } catch (err) {
       await record({
         caseId: "A0",
@@ -243,7 +256,6 @@ async function driveRun(opts: {
     }
 
     // 3. EXECUTE, four at a time, with locks honoured.
-    const fixtures = parseFixtureMap(getEnv().TEST_RUNNER_FIXTURES);
     const shared = new Map<string, Record<string, unknown>>();
     const failed = new Set<string>();
 
@@ -258,6 +270,25 @@ async function driveRun(opts: {
       // happened: sheets_query shipped and the dev branch's registry never
       // got the row, so every run there would have reported a working tool
       // as broken. A skip still counts against green, and it names the tool.
+      // THE ENVIRONMENT, NOT THE PRODUCT. A plugin that is not installed on
+      // this machine, or whose service this identity has never connected,
+      // still has its tools in the registry and therefore in tools/list. So
+      // the case runs, the call fails, and the run reports a working
+      // connector as broken. B1 and C7 did exactly that. Neither fact is
+      // about the code under test, and neither is fixed by looking at it.
+      const blockedPlugins = pluginsBlocking(testCase, unusable);
+      if (blockedPlugins.length > 0) {
+        await record({
+          caseId: testCase.id,
+          kind: "case",
+          status: "skip",
+          cleanup: "none_needed",
+          durationMs: 0,
+          evidence: blockedPlugins.map(([slug, why]) => `${slug} cannot be exercised here: ${why}`),
+        });
+        failed.add(testCase.id);
+        continue;
+      }
       const unserved = unservedToolsFor(testCase, servedNames);
       if (unserved.length > 0) {
         await record({
@@ -423,6 +454,62 @@ export function missingMappingsFor(
   fixtures: ReturnType<typeof parseFixtureMap>
 ): string[] {
   return fixtures.missingFor({ accounts: testCase.accounts, fixtures: testCase.fixtures });
+}
+
+/**
+ * Plugins this machine and this identity cannot actually exercise, with the
+ * reason in words.
+ *
+ * Two different facts, both about the ENVIRONMENT rather than the product:
+ * the plugin has no checkout here, or the identity running the suite has
+ * never connected that plugin's service. Either way its tools are in the
+ * registry, so they are served, so a case calling one fails on something
+ * nobody can fix by reading the code.
+ *
+ * Failing to read the connections is NOT treated as "not connected": that
+ * would turn a database hiccup into a run that skipped half its cases and
+ * called it environment. It reports nothing blocked and lets the cases run
+ * and fail honestly.
+ */
+export async function unusablePlugins(
+  db: Database,
+  userId: string,
+  notInstalled: readonly string[]
+): Promise<Map<string, string>> {
+  const out = new Map<string, string>();
+  for (const slug of notInstalled) out.set(slug, "the plugin is not installed on this machine");
+
+  let connected: Set<string>;
+  try {
+    const rows = await db
+      .select({ service: serviceConnections.service })
+      .from(serviceConnections)
+      .where(eq(serviceConnections.userId, userId));
+    connected = new Set(rows.map((r) => r.service));
+  } catch {
+    return out;
+  }
+
+  for (const [slug, service] of Object.entries(PLUGIN_SERVICE_MAP)) {
+    if (out.has(slug)) continue;
+    if (!connected.has(service)) {
+      out.set(slug, `this identity has no ${service} connection on this database`);
+    }
+  }
+  return out;
+}
+
+/** The unusable plugins a case's covered tools belong to. */
+export function pluginsBlocking(
+  testCase: { covers: readonly string[] },
+  unusable: ReadonlyMap<string, string>
+): [string, string][] {
+  const slugs = new Set(
+    testCase.covers.filter((t) => t.includes("__")).map((t) => t.split("__", 1)[0])
+  );
+  return [...slugs]
+    .filter((slug) => unusable.has(slug))
+    .map((slug) => [slug, unusable.get(slug)!] as [string, string]);
 }
 
 /**

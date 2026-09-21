@@ -1,5 +1,5 @@
 import type { TestCase } from "../types";
-import { firstArray, resultJson } from "../result-json";
+import { firstArray, resultJson, resultText } from "../result-json";
 
 /**
  * C13 (tier 1): the gateway's own skills tools answer.
@@ -32,12 +32,25 @@ export const c13SkillsSurface: TestCase = {
       throw new Error("a search hit came back without a slug or a title, so nothing can be loaded from it");
     }
 
+    // TEXT, NOT JSON, and the tool is right. skills_get exists to load a
+    // skill INTO a session: its declared contract is "returns the skill
+    // file to follow", prefaced by which services this user has connected.
+    // A markdown file is the payload a model acts on, and wrapping it in
+    // JSON would serve the test and nobody else. The first draft of this
+    // case asserted JSON and was wrong about which side owned the contract.
     const loaded = await ctx.call("skills_get", { slug: first.slug });
-    const body = resultJson<{ source?: string; body?: string }>("skills_get", loaded);
-    const text = body.source ?? body.body ?? "";
+    const text = resultText(loaded).trim();
     ctx.evidence(`skills_get returned ${text.length} characters for the first hit`);
-    if (text.trim() === "") {
+
+    if (loaded.isError) throw new Error(`skills_get answered with an error for ${first.slug}`);
+    if (text === "") {
       throw new Error(`skills_get answered nothing for ${first.slug}, so the catalogue lists a skill it cannot serve`);
+    }
+    // The catalogue must serve THE SKILL IT WAS ASKED FOR. An unknown slug
+    // is answered, deliberately, with the list of real slugs rather than an
+    // error, so "text came back" on its own cannot tell a hit from a miss.
+    if (/^No skill named /.test(text)) {
+      throw new Error(`skills_get does not have ${first.slug}, which skills_search just returned`);
     }
   },
 };

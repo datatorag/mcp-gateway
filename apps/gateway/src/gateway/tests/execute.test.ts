@@ -8,7 +8,7 @@
  */
 
 import { describe, expect, it } from "vitest";
-import { contractSubjectFor, coverageMismatch, makeContextParts, missingMappingsFor, selectCases, unservedToolsFor } from "./execute";
+import { contractSubjectFor, coverageMismatch, makeContextParts, missingMappingsFor, selectCases, unservedToolsFor, pluginsBlocking } from "./execute";
 import { parseFixtureMap } from "./fixtures";
 import { vi } from "vitest";
 import type { TestCase } from "./types";
@@ -267,5 +267,39 @@ describe("unservedToolsFor", () => {
 
   it("reports every unserved tool, not just the first", () => {
     expect(unservedToolsFor({ covers: ["a", "b", "echo"] }, served)).toEqual(["a", "b"]);
+  });
+});
+
+/**
+ * B1 and C7 failed on a machine with no atlassian-mcp checkout and a
+ * database with no Atlassian connection. Neither fact is about the code
+ * under test, and neither is fixed by reading it: the tools are in the
+ * registry, so they are served, so the case runs and the call fails.
+ */
+describe("pluginsBlocking", () => {
+  const unusable = new Map([["atlassian-mcp", "the plugin is not installed on this machine"]]);
+
+  it("names the plugin and the reason for a case that covers its tools", () => {
+    expect(pluginsBlocking({ covers: ["atlassian-mcp__jira_search"] }, unusable)).toEqual([
+      ["atlassian-mcp", "the plugin is not installed on this machine"],
+    ]);
+  });
+
+  it("blocks a mixed case, because the half it cannot run is still the whole case", () => {
+    expect(
+      pluginsBlocking({ covers: ["gws-mcp__gmail_list_labels", "atlassian-mcp__jira_search"] }, unusable)
+    ).toHaveLength(1);
+  });
+
+  it("leaves a case alone when every plugin it covers is usable", () => {
+    expect(pluginsBlocking({ covers: ["gws-mcp__gmail_list_labels"] }, unusable)).toEqual([]);
+  });
+
+  it("ignores built-ins, which belong to no plugin", () => {
+    expect(pluginsBlocking({ covers: ["echo", "skills_get"] }, unusable)).toEqual([]);
+  });
+
+  it("says nothing when the environment is fine", () => {
+    expect(pluginsBlocking({ covers: ["atlassian-mcp__jira_search"] }, new Map())).toEqual([]);
   });
 });
