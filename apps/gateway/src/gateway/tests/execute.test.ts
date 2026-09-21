@@ -8,7 +8,9 @@
  */
 
 import { describe, expect, it } from "vitest";
-import { contractSubjectFor, selectCases } from "./execute";
+import { contractSubjectFor, coverageMismatch, makeContextParts, missingMappingsFor, selectCases } from "./execute";
+import { parseFixtureMap } from "./fixtures";
+import { vi } from "vitest";
 import type { TestCase } from "./types";
 
 const c = (id: string, tier: 1 | 2): TestCase => ({
@@ -48,6 +50,24 @@ describe("selectCases", () => {
   });
 });
 
+describe("activePluginSlugs", () => {
+  it("reads the slugs from the registry rather than a list in the file", async () => {
+    // The list was hardcoded, which is right until someone installs a third
+    // plugin and the run quietly stops recording its sha.
+    const { activePluginSlugs } = await import("./execute");
+    const rows = [{ slug: "gws-mcp" }, { slug: "atlassian-mcp" }];
+    const db = { select: () => ({ from: () => ({ where: () => Promise.resolve(rows) }) }) };
+    expect(await activePluginSlugs(db as never)).toEqual(["atlassian-mcp", "gws-mcp"]);
+  });
+
+  it("answers an empty list rather than throwing when the registry cannot be read", async () => {
+    // A run must not die because the sha column could not be filled in.
+    const { activePluginSlugs } = await import("./execute");
+    const db = { select: () => { throw new Error("db down"); } };
+    expect(await activePluginSlugs(db as never)).toEqual([]);
+  });
+});
+
 describe("contractSubjectFor", () => {
   it("treats a known read plugin tool as probeable", () => {
     expect(contractSubjectFor({ name: "gws-mcp__sheets_read", inputSchema: { type: "object" } })).toMatchObject({
@@ -76,5 +96,122 @@ describe("contractSubjectFor", () => {
     // A built-in has no row BY DESIGN. Reporting it as missing one would
     // make every run fail on every built-in.
     expect(contractSubjectFor({ name: "echo" }).registryEnabled).toBe(true);
+  });
+});
+
+
+describe("coverageMismatch", () => {
+  it("says nothing when the declaration and the calls agree", () => {
+    expect(coverageMismatch(["gws-mcp__sheets_read"], ["gws-mcp__sheets_read"])).toEqual([]);
+  });
+
+  it("allows a case that declares nothing and calls nothing", () => {
+    // A1 reads /health, R1 pokes the front door. Inventing a declaration for
+    // them would be worse than an empty list.
+    expect(coverageMismatch([], [])).toEqual([]);
+  });
+
+  it("catches a declaration the case never exercised", () => {
+    const [problem] = coverageMismatch(["gws-mcp__gmail_send"], []);
+    expect(problem).toContain("never called it");
+  });
+
+  it("catches a call the case never declared, which would read as uncovered", () => {
+    // The quieter half: the tool is exercised and still reported uncovered,
+    // so the suite understates itself and nobody notices.
+    const [problem] = coverageMismatch([], ["gws-mcp__gmail_search"]);
+    expect(problem).toContain("without declaring it");
+  });
+
+  it("reports both directions at once", () => {
+    expect(coverageMismatch(["a"], ["b"])).toHaveLength(2);
+  });
+});
+
+describe("missingMappingsFor", () => {
+  const fixtures = parseFixtureMap(JSON.stringify({ accounts: { sender: "s@example.test" } }));
+
+  it("names the roles and keys this run cannot supply", () => {
+    expect(missingMappingsFor({ accounts: ["sender", "reader"], fixtures: ["sheet"] }, fixtures)).toEqual([
+      "account:reader",
+      "fixture:sheet",
+    ]);
+  });
+
+  it("says nothing for a case whose needs are all mapped", () => {
+    expect(missingMappingsFor({ accounts: ["sender"] }, fixtures)).toEqual([]);
+  });
+
+  it("says nothing for a case that needs no account at all", () => {
+    expect(missingMappingsFor({ accounts: [] }, fixtures)).toEqual([]);
+  });
+});
+
+describe("the context a case is handed", () => {
+  const fixtures = parseFixtureMap(
+    JSON.stringify({ accounts: { sender: "sender@example.test", reader: "reader@example.test" } })
+  );
+  const makeClient = () => ({
+    listTools: vi.fn().mockResolvedValue([{ name: "gws-mcp__sheets_read" }]),
+    callTool: vi.fn().mockResolvedValue({ content: [{ type: "text", text: "{}" }] }),
+    close: vi.fn(),
+  });
+
+  it("injects the account for the declared role, so a case never names one", () => {
+    const client = makeClient();
+    const called: string[] = [];
+    const parts = makeContextParts({ client, fixtures, called });
+    return parts.call("gws-mcp__sheets_read", { range: "A1" }, { as: "reader" }).then(() => {
+      expect(client.callTool).toHaveBeenCalledWith("gws-mcp__sheets_read", {
+        range: "A1",
+        account: "reader@example.test",
+      });
+      expect(called).toEqual(["gws-mcp__sheets_read"]);
+    });
+  });
+
+  it("REFUSES a case that passes its own account argument", async () => {
+    // That would be a case choosing whose mailbox to touch, which is the one
+    // decision the role mapping exists to take away from it.
+    const client = makeClient();
+    const parts = makeContextParts({ client, fixtures, called: [] });
+    await expect(
+      parts.call("gws-mcp__sheets_read", { account: "someone@example.test" })
+    ).rejects.toThrow(/may not pass account/);
+    expect(client.callTool).not.toHaveBeenCalled();
+  });
+
+  it("refuses a send the guard rejects, BEFORE it reaches the tool", async () => {
+    const client = makeClient();
+    const parts = makeContextParts({ client, fixtures, called: [] });
+    await expect(
+      parts.call("gws-mcp__gmail_send", { to: "stranger@example.test", subject: "[smoke] x" })
+    ).rejects.toThrow(/send refused/);
+    expect(client.callTool).not.toHaveBeenCalled();
+  });
+
+  it("allows a send to the reader mailbox with the prefix", async () => {
+    const client = makeClient();
+    const parts = makeContextParts({ client, fixtures, called: [] });
+    await parts.call("gws-mcp__gmail_send", { to: "reader@example.test", subject: "[smoke] x" });
+    expect(client.callTool).toHaveBeenCalled();
+  });
+
+  it("does not record a tool that was refused, so coverage cannot be claimed by trying", async () => {
+    const client = makeClient();
+    const called: string[] = [];
+    const parts = makeContextParts({ client, fixtures, called });
+    await parts.call("gws-mcp__gmail_send", { to: "stranger@example.test" }).catch(() => {});
+    expect(called).toEqual([]);
+  });
+
+  it("offers only tools/list through rpc", async () => {
+    const parts = makeContextParts({ client: makeClient(), fixtures, called: [] });
+    await expect(parts.rpc("resources/list")).rejects.toThrow(/only tools\/list/);
+  });
+
+  it("throws for a fixture this run has no mapping for", () => {
+    const parts = makeContextParts({ client: makeClient(), fixtures, called: [] });
+    expect(() => parts.fixture("sheet")).toThrow(/no fixture is mapped/);
   });
 });

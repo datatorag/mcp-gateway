@@ -26,7 +26,11 @@ export function checkRegistry(cases: readonly TestCase[]): RegistryProblem[] {
 
     if (!c.title.trim()) problems.push({ caseId: c.id, problem: "has no title" });
     if (c.tier !== 1 && c.tier !== 2) problems.push({ caseId: c.id, problem: "tier must be 1 or 2" });
-    if (c.covers.length === 0) problems.push({ caseId: c.id, problem: "declares no tools in covers" });
+    // `covers` may be EMPTY. A case about the gateway itself (health,
+    // tools/list, the front door) exercises no tool, and requiring a
+    // declaration there would mean inventing one. What protects coverage is
+    // the runtime check in execute.ts, which fails a case whose declaration
+    // and whose actual calls disagree IN EITHER DIRECTION.
     for (const role of c.accounts) {
       if (!ACCOUNT_ROLES.includes(role)) problems.push({ caseId: c.id, problem: `unknown account role ${role}` });
     }

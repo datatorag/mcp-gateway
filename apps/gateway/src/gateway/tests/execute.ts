@@ -8,9 +8,15 @@ import { classifyWrite } from "../playground/tools";
 import { checkContract, type ContractSubject } from "./contract";
 import { createHttpFetcher, loopbackBase } from "./http";
 import { CASES } from "./cases";
-import { orderByNeeds } from "./runner";
+import { orderByNeeds, runOneCase, type ContextParts } from "./runner";
+import { runPool } from "./pool";
+import { parseFixtureMap } from "./fixtures";
+import { checkSend, type GuardLookups } from "./send-guard";
+import type { AccountRole, FixtureKey } from "./types";
 import { finishRun, recordResult, startRun } from "./store";
 import { readPluginShas } from "./plugin-sha";
+import { mcpServers } from "@datatorag-mcp/db";
+import { eq } from "drizzle-orm";
 import { join } from "node:path";
 import { homedir } from "node:os";
 
@@ -32,7 +38,21 @@ import { homedir } from "node:os";
  */
 
 const PLUGINS_DIR = join(homedir(), ".datatorag", "plugins");
-const PLUGIN_SLUGS = ["gws-mcp", "atlassian-mcp"] as const;
+
+/**
+ * How many contract probes run at once.
+ *
+ * The probes were SEQUENTIAL and that is what made the first baseline take
+ * nine and a half minutes for 101 tools. Each probe is a real call: for a
+ * service-mapped plugin it resolves a token, opens a one-shot client, and
+ * the plugin then shells out to its own binary, which discovers the API
+ * before refusing the empty arguments. None of that is work we control, and
+ * all of it is waiting.
+ *
+ * Four, matching the case pool, because the constraint is the plugin process
+ * at the other end rather than us.
+ */
+const PROBE_CONCURRENCY = 4;
 
 export type RunnerClient = {
   listTools(): Promise<{ name: string; inputSchema?: Record<string, unknown> }[]>;
@@ -103,7 +123,7 @@ export async function startTestRun(opts: {
     scope: opts.scope,
     environment: env.TEST_RUNNER_ENVIRONMENT,
     gatewaySha: env.GATEWAY_SHA || null,
-    pluginShas: readPluginShas(PLUGINS_DIR, PLUGIN_SLUGS),
+    pluginShas: readPluginShas(PLUGINS_DIR, await activePluginSlugs(opts.db)),
   });
   if (!claim.ok) return claim;
 
@@ -197,33 +217,122 @@ async function driveRun(opts: {
       });
     }
 
-    // 3. EXECUTE. No case is registered yet (SCRUM-303 phase 2 shipped the
-    // engine alone), so this is empty today and the run is still worth
-    // starting: the contract and uncovered steps below are the whole of the
-    // first honest baseline.
-    void order;
+    // 3. EXECUTE, four at a time, with locks honoured.
+    const fixtures = parseFixtureMap(getEnv().TEST_RUNNER_FIXTURES);
+    const shared = new Map<string, Record<string, unknown>>();
+    const failed = new Set<string>();
 
-    // 4. CONTRACT, one per served tool.
-    const covered = new Set(opts.selected.flatMap((c) => c.covers));
-    for (const tool of served) {
-      const subject = contractSubjectFor(tool);
-      const outcome = await checkContract(subject, async (name) => {
-        const result = await client.callTool(name, {});
-        return { content: result.content, isError: result.isError };
+    const runnable: typeof order = [];
+    for (const testCase of order) {
+      const missing = missingMappingsFor(testCase, fixtures);
+      if (missing.length > 0) {
+        // A missing mapping SKIPS and names what was missing. It never falls
+        // back to a default account: a case that silently ran as the wrong
+        // account would report a pass about something nobody checked.
+        await record({
+          caseId: testCase.id,
+          kind: "case",
+          status: "skip",
+          cleanup: "none_needed",
+          durationMs: 0,
+          evidence: [`this run has no mapping for ${missing.join(", ")}`],
+        });
+        failed.add(testCase.id);
+        continue;
+      }
+      runnable.push(testCase);
+    }
+
+    const executed = await runPool(runnable, async (testCase) => {
+      const blockedBy = (testCase.needs ?? []).filter((n) => failed.has(n));
+      if (blockedBy.length > 0) {
+        return {
+          caseId: testCase.id,
+          status: "skip" as const,
+          cleanup: "none_needed" as const,
+          durationMs: 0,
+          evidence: [`${blockedBy.join(", ")} did not pass, so this case cannot run`],
+          toolsCalled: [] as string[],
+        };
+      }
+      const called: string[] = [];
+      const outcome = await runOneCase(testCase, {
+        runId,
+        makeParts: () => makeContextParts({ client, fixtures, called }),
+        toolsCalled: () => called,
       });
+      if (outcome.status !== "pass") failed.add(testCase.id);
+      // COVERAGE IS CHECKED IN BOTH DIRECTIONS, which is what lets a case
+      // about the gateway itself declare nothing. Declaring a tool it never
+      // called would overstate what the suite proves; calling one it never
+      // declared would leave that tool reported as uncovered while a case
+      // exercises it, which is the quieter of the two and the reason the
+      // second half exists.
+      const mismatch = coverageMismatch(testCase.covers, called);
+      if (outcome.status === "pass" && mismatch.length > 0) {
+        return { ...outcome, status: "fail" as const, evidence: [...outcome.evidence, ...mismatch] };
+      }
+      return outcome;
+    });
+
+    for (const { testCase, result, skipped } of executed) {
+      if (skipped) {
+        await record({
+          caseId: testCase.id,
+          kind: "case",
+          status: "skip",
+          cleanup: "none_needed",
+          durationMs: 0,
+          evidence: [skipped],
+        });
+        continue;
+      }
+      if (!result) continue;
+      shared.set(testCase.id, shared.get(testCase.id) ?? {});
       await record({
-        caseId: `contract:${tool.name}`,
-        kind: "contract",
-        status: outcome.status,
-        cleanup: "none_needed",
-        durationMs: 0,
-        evidence: [`steps: ${outcome.steps.join(", ")}`, ...outcome.evidence],
+        caseId: result.caseId,
+        kind: "case",
+        status: result.status,
+        cleanup: result.cleanup,
+        durationMs: result.durationMs,
+        evidence: result.evidence,
       });
     }
+    void shared;
+
+    // 4. CONTRACT, one per served tool, four at a time.
+    const covered = new Set(opts.selected.flatMap((c) => c.covers));
+    const queue = [...served];
+    const contractStarted = Date.now();
+    await Promise.all(
+      Array.from({ length: Math.min(PROBE_CONCURRENCY, Math.max(served.length, 1)) }, async () => {
+        for (;;) {
+          const tool = queue.shift();
+          if (!tool) return;
+          const started = Date.now();
+          const outcome = await checkContract(contractSubjectFor(tool), async (name) => {
+            const result = await client.callTool(name, {});
+            return { content: result.content, isError: result.isError };
+          });
+          await record({
+            caseId: `contract:${tool.name}`,
+            kind: "contract",
+            status: outcome.status,
+            cleanup: "none_needed",
+            // REAL, because the first baseline recorded zero here and so
+            // could not say which half of nine minutes was the probes.
+            durationMs: Date.now() - started,
+            evidence: [`steps: ${outcome.steps.join(", ")}`, ...outcome.evidence],
+          });
+        }
+      })
+    );
+    const contractMs = Date.now() - contractStarted;
 
     // 5. UNCOVERED, one per served tool no case exercises. A run with any of
     // these is not fully green, which is the point: the honest first number
     // is every tool uncovered.
+    const uncoveredStarted = Date.now();
     for (const tool of served) {
       if (covered.has(tool.name)) continue;
       await record({
@@ -236,9 +345,162 @@ async function driveRun(opts: {
       });
     }
 
+    // Where the wall clock went, as a row rather than as a log line nobody
+    // will have kept. A run that is slow and cannot say why gets optimised
+    // by guesswork.
+    await record({
+      caseId: "timing",
+      kind: "case",
+      status: "pass",
+      cleanup: "none_needed",
+      durationMs: contractMs,
+      evidence: [
+        `contract probes: ${served.length} tools in ${contractMs} ms at concurrency ${PROBE_CONCURRENCY}`,
+        `uncovered rows: ${Date.now() - uncoveredStarted} ms`,
+      ],
+    });
+
     await finishRun(db, runId, { status: "finished", totals, toolsServed: served.length });
   } finally {
     await client.close().catch(() => {});
+  }
+}
+
+/**
+ * What a case declares but this run cannot supply. Exported so the rule can
+ * be tested directly: a case with an unmapped role must SKIP, and never fall
+ * back to whatever account happens to be default.
+ */
+export function missingMappingsFor(
+  testCase: { accounts: AccountRole[]; fixtures?: FixtureKey[] },
+  fixtures: ReturnType<typeof parseFixtureMap>
+): string[] {
+  return fixtures.missingFor({ accounts: testCase.accounts, fixtures: testCase.fixtures });
+}
+
+/**
+ * Coverage checked in BOTH directions.
+ *
+ * Declaring a tool a case never called overstates what the suite proves.
+ * Calling one it never declared leaves that tool reported as uncovered while
+ * a case exercises it, which is the quieter of the two and the reason the
+ * second half exists. An empty declaration is fine: a case about the gateway
+ * itself exercises no tool.
+ */
+export function coverageMismatch(covers: readonly string[], called: readonly string[]): string[] {
+  const declaredButUncalled = covers.filter((t) => !called.includes(t));
+  const calledButUndeclared = [...new Set(called)].filter((t) => !covers.includes(t));
+  return [
+    declaredButUncalled.length ? `declares ${declaredButUncalled.join(", ")} but never called it` : "",
+    calledButUndeclared.length ? `called ${calledButUndeclared.join(", ")} without declaring it in covers` : "",
+  ].filter(Boolean);
+}
+
+/**
+ * The half of a case's context that talks to the outside.
+ *
+ * `call` is where the ACCOUNT is injected and where the send guard sits. A
+ * case names a role and never an address, and it cannot pass an `account`
+ * argument of its own: that would be a case choosing whose mailbox to touch.
+ */
+export function makeContextParts(opts: {
+  client: RunnerClient;
+  fixtures: ReturnType<typeof parseFixtureMap>;
+  called: string[];
+}): ContextParts {
+  const { client, fixtures, called } = opts;
+
+  const lookups: GuardLookups = {
+    async readDraft(draftId) {
+      const result = await client.callTool("gws-mcp__gmail_read", { message_id: draftId });
+      return parseHeaders(result);
+    },
+    async readMessage(messageId) {
+      const result = await client.callTool("gws-mcp__gmail_read", { message_id: messageId });
+      return parseHeaders(result);
+    },
+  };
+
+  return {
+    async call(tool, args, callOpts) {
+      if ("account" in args) {
+        throw new Error(`${tool}: a case may not pass account; declare a role and use { as }`);
+      }
+      const role = (callOpts?.as ?? "sender") as AccountRole;
+      const account = fixtures.account(role);
+      const withAccount = account ? { ...args, account } : { ...args };
+
+      const verdict = await checkSend(tool, withAccount, {
+        readerEmail: fixtures.account("reader"),
+        lookups,
+      });
+      if (!verdict.ok) throw new Error(verdict.reason);
+
+      called.push(tool);
+      return client.callTool(tool, withAccount);
+    },
+    async rpc(method) {
+      if (method !== "tools/list") {
+        throw new Error(`ctx.rpc: only tools/list is available, got ${JSON.stringify(method)}`);
+      }
+      return { tools: await client.listTools() };
+    },
+    http: createHttpFetcher(loopbackBase(getEnv().GATEWAY_PORT)),
+    fixture(key: FixtureKey) {
+      const value = fixtures.fixture(key);
+      if (!value) throw new Error(`no fixture is mapped for ${key}`);
+      return value;
+    },
+    from() {
+      return {};
+    },
+    share() {},
+  };
+}
+
+/** Headers out of a gmail_read result, for the send guard's two lookups. */
+function parseHeaders(result: { content: { text?: string }[]; isError?: boolean }) {
+  if (result.isError) return null;
+  try {
+    const parsed = JSON.parse(result.content.map((c) => c.text ?? "").join("")) as Record<string, unknown>;
+    const pick = (...names: string[]) => {
+      for (const name of names) {
+        const value = parsed[name];
+        if (typeof value === "string") return value;
+      }
+      return undefined;
+    };
+    return {
+      to: pick("to", "To"),
+      cc: pick("cc", "Cc"),
+      bcc: pick("bcc", "Bcc"),
+      subject: pick("subject", "Subject"),
+      from: pick("from", "From"),
+      replyTo: pick("reply_to", "replyTo", "Reply-To"),
+    };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * The plugins to record a sha for, from the REGISTRY rather than a list in
+ * this file.
+ *
+ * It was a hardcoded pair, which is the kind of list that is right until
+ * someone installs a third plugin and the run quietly stops recording it.
+ * A slug with no checkout still reports null, which is the honest answer and
+ * is what a local gateway says about a plugin it does not have installed.
+ */
+export async function activePluginSlugs(db: Database): Promise<string[]> {
+  try {
+    const rows = await db
+      .select({ slug: mcpServers.slug })
+      .from(mcpServers)
+      .where(eq(mcpServers.status, "active"));
+    return rows.map((r) => r.slug).sort();
+  } catch {
+    return [];
   }
 }
 
