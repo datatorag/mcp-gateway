@@ -11,7 +11,7 @@ import { SCENARIOS, scenario } from "./scenarios";
  * which inputs were refusable. The failures all had the same shape and the
  * same consequence:
  *
- *   `scenario: "gmail"`   unregistered key -> selected nothing -> ran green
+ *   an unregistered key  selected nothing -> ran green
  *   `case_ids: [10, 11]`  unusable elements -> scope {} -> ran all 55
  *   `case_ids: []`        empty list       -> scope {} -> ran all 55
  *   `case_ids: "A1"`      not an array     -> scope {} -> ran all 55

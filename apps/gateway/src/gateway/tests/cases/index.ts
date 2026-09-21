@@ -57,6 +57,9 @@ import { sh2SheetsBatch } from "./sh2-sheets-batch";
 import { sh3SheetsFormatTable } from "./sh3-sheets-format-table";
 import { sh4SheetsRename } from "./sh4-sheets-rename";
 import { sh5SheetsDelete } from "./sh5-sheets-delete";
+import { gm1GmailUpdateLabel } from "./gm1-gmail-update-label";
+import { gm2GmailList } from "./gm2-gmail-list";
+import { gm3GmailMarkRead } from "./gm3-gmail-mark-read";
 import { r1FrontDoor } from "./r1-front-door";
 import { r2AdminOnly } from "./r2-admin-only";
 
@@ -154,6 +157,9 @@ export const CASES: TestCase[] = [
   sh3SheetsFormatTable,
   sh4SheetsRename,
   sh5SheetsDelete,
+  gm1GmailUpdateLabel,
+  gm2GmailList,
+  gm3GmailMarkRead,
   r1FrontDoor,
   r2AdminOnly,
 ];

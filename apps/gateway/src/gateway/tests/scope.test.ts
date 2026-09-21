@@ -17,11 +17,27 @@
 
 import { describe, expect, it } from "vitest";
 import { parseScope } from "./scope";
+import { SCENARIOS, SCENARIO_KEYS } from "./scenarios";
+
+/**
+ * A key the registry does not hold, DERIVED rather than written down.
+ *
+ * This row used to name "gmail", which was a planned-but-unregistered key
+ * when it was written and stopped being one the moment the Gmail scenario
+ * landed: the test then failed for a reason that had nothing to do with
+ * what it was testing. A row that goes stale every time the regroup
+ * advances teaches whoever hits it to edit the test rather than read it.
+ *
+ * Once every planned key is registered there is no unregistered key left
+ * to borrow, so it falls back to a name no scenario could ever have.
+ */
+const UNREGISTERED =
+  SCENARIO_KEYS.find((k) => !SCENARIOS.some((s) => s.key === k)) ?? "not-a-scenario";
 
 const refused: [string, unknown, string][] = [
   ["a scenario that is not a string (round 4)", { scenario: 7 }, "scenario must be a string."],
   ["a scenario that is a bare true", { scenario: true }, "scenario must be a string."],
-  ["an unregistered scenario (round 1)", { scenario: "gmail" }, "No scenario named gmail"],
+  ["an unregistered scenario (round 1)", { scenario: UNREGISTERED }, `No scenario named ${UNREGISTERED}`],
   ["an empty scenario name", { scenario: "" }, "No scenario named"],
   ["a scenario that is an array", { scenario: ["gateway"] }, "scenario must be a string."],
   ["case_ids that is a bare string (round 4)", { case_ids: "A1" }, "case_ids must be an array of strings."],
@@ -121,7 +137,7 @@ describe("no input can widen a request", () => {
    * something, and "something" must never come back as everything. */
   const inputs: unknown[] = [
     undefined, null, {}, [], "", "A1", 7, true,
-    { scenario: "gateway" }, { scenario: "gmail" }, { scenario: 7 }, { scenario: null },
+    { scenario: "gateway" }, { scenario: UNREGISTERED }, { scenario: 7 }, { scenario: null },
     { case_ids: [] }, { case_ids: ["A1"] }, { case_ids: "A1" }, { case_ids: [10] },
     { case_ids: ["A1", 10] }, { scenario: "gateway", case_ids: [] },
     { case_ids: null, scenario: null },

@@ -148,10 +148,19 @@ describe("what the everything-run warns about", () => {
     expect(sendsMail("nope")).toBe(false);
   });
 
-  it("still knows the mail cases are in this run", () => {
-    // The concrete reason the assumption above is not paranoia.
+  it("knows WHERE the mail cases are, wherever that is", () => {
+    /* The concrete reason "everything" warns about mail. It used to be
+     * that D10 to D13 were unplaced and ran under everything without any
+     * scenario claiming them; now they are Gmail's steps and Gmail carries
+     * the flag. The assertion follows them rather than assuming either
+     * arrangement, because the thing that must stay true is that no run
+     * which sends mail can show the weaker words. */
+    const gmail = SCENARIOS.find((s) => s.key === "gmail");
     for (const id of ["D10", "D11", "D12", "D13"]) {
-      expect(REGROUP_PENDING, `${id} still runs under everything`).toContain(id);
+      const placed = gmail?.steps.includes(id) ?? false;
+      expect(placed || REGROUP_PENDING.includes(id), `${id} is neither a gmail step nor pending`).toBe(true);
+      if (placed) expect(gmail?.sendsMail, "gmail holds mail cases and must say it sends").toBe(true);
     }
+    expect(sendsMail("all"), "a run that includes the mail cases must warn").toBe(true);
   });
 });

@@ -148,7 +148,14 @@ export const e13SignatureApplied: TestCase = {
     if (richBlocks !== 1) throw new Error(`the html send carries ${richBlocks} signature blocks, not one`);
     const closing = richHtml.toLowerCase().lastIndexOf("</body>");
     if (closing !== -1) {
-      const marker = richHtml.toLowerCase().search(/class\s*=\s*["'][^"']*gmail_signature/i);
+      /* The character class is `[^'"]` rather than `[^"']` deliberately. The
+       * argument scanner walks source tracking string state and cannot tell a
+       * regex from a division, so the four quotes here have to PAIR: with
+       * `["'][^"']` they read as open, close, open, and the last one never
+       * closes, putting everything below this line outside the guard.
+       * Swapping the class makes them read as open, content, content, close.
+       * Same regex, one fewer trap. */
+      const marker = richHtml.toLowerCase().search(/class\s*=\s*["'][^'"]*gmail_signature/i);
       if (marker > closing) {
         throw new Error("the signature block sits after </body>, so a client may not render it");
       }

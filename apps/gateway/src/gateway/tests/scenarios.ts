@@ -129,6 +129,47 @@ export const SCENARIOS: Scenario[] = [
       "SH5", // delete the spreadsheet, and prove it is gone from Drive
     ],
   },
+  {
+    key: "gmail",
+    title: "label it, draft it, send it, read it, reply, forward, file the attachment",
+    /* THE ONLY SCENARIO THAT PUTS MAIL IN SOMEBODY'S INBOX, so it is the
+     * only one whose confirmation says so. A tier-wide warning fired on
+     * runs that sent nothing, which is how a warning stops being read.
+     * Every send goes to the reader mailbox we own, carries the smoke
+     * prefix and this run's stamp, and is trashed by `trashOwnMessage`,
+     * which refuses any message whose subject does not carry that stamp. */
+    sendsMail: true,
+    steps: [
+      /* Labels first: they are the cheapest thing to create and the only
+       * part of this lifecycle that touches nothing else. */
+      "E1", //  creating a label answers with its id, and it is removed again
+      "GM1", // a renamed label drops its old name
+      "E2", //  an account with no filters answers an empty list, not ""
+      /* Drafts. D3's never leaves; E15's does, which makes E15 THE FIRST
+       * STEP THAT SENDS, because sending a draft is still sending. */
+      "D3", //  a draft is created, read back by id, and deleted
+      "E15", // a draft is signed once on write and not again on send
+      /* THE MESSAGE THE REST OF THE LIFECYCLE IS ABOUT. Three steps below
+       * consume it, and they are exactly the three that declare
+       * `needs: ["D10"]`: GM3 marks it, D12 replies to it, D13 forwards
+       * it. The others send their own mail or act on what is already
+       * there, so they do not wait for this one. */
+      "D10", // a sent message arrives in the reader mailbox with its token
+      "E13", // the signature is applied once, in the HTML part only
+      "E14", // signature false suppresses it, and the send says so
+      "D11", // a sent draft arrives and is gone from drafts
+      /* Reading what is now there. */
+      "C2", //  search returns a message with its headers populated
+      "GM2", // listing is bounded, and a filter that matches nothing is empty
+      "GM3", // marking read clears UNREAD, and unread restores it
+      "E16", // three messages labelled in one call, and unlabelled together
+      /* Answering it. */
+      "D12", // a reply lands in the original's thread
+      "D13", // a forward carries both the note and the original's token
+      /* And taking something out of it. */
+      "D15", // an attachment saved to Drive matches in size and md5
+    ],
+  },
 ];
 
 /**
@@ -144,8 +185,6 @@ export const SCENARIOS: Scenario[] = [
  * it cannot yet do is be selected by scenario, because it is not in one.
  */
 export const REGROUP_PENDING: string[] = [
-  // gmail
-  "C2", "D3", "D10", "D11", "D12", "D13", "D15", "E1", "E2", "E13", "E14", "E15", "E16",
   // docs
   "C5", "D4", "E9", "E10",
   // drive
