@@ -17,11 +17,16 @@ export const d14SheetsFormat: TestCase = {
   title: "a bold background written to a cell reads back, and clears again",
   covers: ["gws-mcp__sheets_format_range", "gws-mcp__gws_run"],
   accounts: ["sender"],
-  fixtures: ["sheet", "scratchTab"],
-  serial: "scratch-tab",
+  needs: ["SH1"],
   run: async (ctx) => {
-    const spreadsheet_id = ctx.fixture("sheet");
-    const tab = ctx.fixture("scratchTab");
+  /* WRITES ON THE SCENARIO'S OWN SPREADSHEET, not the standing fixture
+   * (HQ, 2026-09-21). This used to write to the fixture sheet's scratch
+   * tab, so a cleanup that failed halfway damaged the artefact four read
+   * steps and two other scenarios depend on. SH1 creates it, SH5 removes
+   * it, and `needs` means this skips with a reason rather than failing
+   * against a spreadsheet that was never made. */
+    const spreadsheet_id = ctx.from("SH1").spreadsheetId as string;
+    const tab = ctx.from("SH1").firstTab as string;
     const cell = `${tab}!E1`;
 
     const readFormat = async () => {

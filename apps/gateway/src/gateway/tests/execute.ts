@@ -1,4 +1,4 @@
-import { SCENARIOS, scenario } from "./scenarios";
+import { SCENARIOS, scenario, scenarioOf } from "./scenarios";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import type { Database, TestRunScope, TestRunTotals } from "@datatorag-mcp/db";
@@ -175,24 +175,44 @@ export function selectCases(scope: TestRunScope, all = CASES) {
   /* PRESENT BUT EMPTY IS NOT ABSENT. `scope.caseIds?.length` treated an
    * empty list as "no case filter" and fell through to everything, so a
    * request that asked for two cases and named neither usably ran the whole
-   * suite, mail included.
-   *
-   * THIS IS THE LAYER THAT ACTUALLY DECIDES. The entry points refuse a list
-   * whose elements are unusable, but an EMPTY list is not unusable, it is
-   * empty, and both of them used to drop it before reaching here. They hand
-   * it through now and this line gives it its meaning: named nothing,
-   * selects nothing. The backstop then refuses the run. It also covers a
-   * scope replayed from a stored row, which no entry point sees. */
+   * suite, mail included. This is the layer that decides: named nothing,
+   * selects nothing, and the backstop then refuses the run. It also covers
+   * a scope replayed from a stored row, which no entry point sees. */
   if (scope.caseIds !== undefined) {
     const wanted = new Set(scope.caseIds);
-    return all.filter((c) => wanted.has(c.id));
+    /* AND ORDERED LIKE EVERY OTHER SCOPE. Filtering the registry kept
+     * REGISTRATION order, so naming a scenario's steps by id ran them in
+     * whatever order their files happen to be listed in: the sheets delete
+     * landed NINTH of fifteen, ahead of six writers, which then wrote to a
+     * spreadsheet that no longer existed and reported four working tools as
+     * broken. A scope chooses WHICH steps run, never in what order. */
+    return inScenarioOrder(all.filter((c) => wanted.has(c.id)));
   }
-  const byId = new Map(all.map((c) => [c.id, c]));
+
+  /* CASE IDS STILL WIN OVER A SCENARIO when a scope somehow carries both.
+   * `parseScope` refuses that pair, so it can only arrive from a stored row
+   * replayed later; the precedence is kept as it was rather than quietly
+   * inverted while fixing the ordering. */
   if (scope.scenario) {
     const chosen = scenario(scope.scenario);
     if (!chosen) return [];
+    const byId = new Map(all.map((c) => [c.id, c]));
     return chosen.steps.map((id) => byId.get(id)).filter((c): c is TestCase => c !== undefined);
   }
+
+  return inScenarioOrder(all);
+}
+
+/**
+ * Scenario steps first, each scenario's in its declared order, then
+ * whatever is not yet regrouped, in registration order.
+ *
+ * ONE function, so no caller can order a run differently from another. The
+ * two that did disagreed, and the disagreement only ever showed itself as a
+ * delete running before the writes it was meant to follow.
+ */
+function inScenarioOrder(cases: readonly TestCase[]): TestCase[] {
+  const byId = new Map(cases.map((c) => [c.id, c]));
   const ordered: TestCase[] = [];
   const placed = new Set<string>();
   for (const s of SCENARIOS) {
@@ -204,9 +224,10 @@ export function selectCases(scope: TestRunScope, all = CASES) {
       }
     }
   }
-  for (const c of all) if (!placed.has(c.id)) ordered.push(c);
+  for (const c of cases) if (!placed.has(c.id)) ordered.push(c);
   return ordered;
 }
+
 
 async function driveRun(opts: {
   db: Database;
@@ -375,7 +396,35 @@ async function driveRun(opts: {
       runnable.push(testCase);
     }
 
-    const executed = await runPool(runnable, async (testCase) => {
+    /* A LIFECYCLE IS SEQUENTIAL, AND THAT IS NOT A PROPERTY EACH CASE
+     * SHOULD HAVE TO REMEMBER.
+     *
+     * The pool runs four cases at once. A scenario's steps create a thing,
+     * write to it, read it back and delete it, so running two of them at
+     * once means reading a document before it exists, or deleting the sheet
+     * another step is still appending to. Requiring every step to declare
+     * the same `serial` by hand would work exactly until somebody forgot,
+     * and the symptom of forgetting is an intermittent red that looks like
+     * a product defect.
+     *
+     * So belonging to a scenario IS the lock. Steps of one scenario never
+     * overlap and run in the order the scenario declares; different
+     * scenarios still run in parallel, because they touch different
+     * services.
+     *
+     * THE SCENARIO LOCK WINS over a case's own. Letting a case keep its
+     * `serial` sounds respectful and is a hazard: the five sheets writers
+     * shared a `scratch-tab` lock, so they would have serialised against
+     * each other while running CONCURRENTLY with the step that deletes the
+     * spreadsheet they are all writing to. A lock that only holds against
+     * some of the things it needs to hold against is worse than none,
+     * because it looks like protection. */
+    const serialised = runnable.map((c) => {
+      const scenarioKey = scenarioOf(c.id)?.key;
+      return scenarioKey ? { ...c, serial: `scenario:${scenarioKey}` } : c;
+    });
+
+    const executed = await runPool(serialised, async (testCase) => {
       const blockedBy = (testCase.needs ?? []).filter((n) => failed.has(n));
       if (blockedBy.length > 0) {
         return {
@@ -398,6 +447,8 @@ async function driveRun(opts: {
             db: opts.db,
             pool: opts.pool,
             runStamp: runId.slice(0, 8),
+            shared,
+            caseId,
           }),
         toolsCalled: () => called,
       });
@@ -428,7 +479,6 @@ async function driveRun(opts: {
         continue;
       }
       if (!result) continue;
-      shared.set(testCase.id, shared.get(testCase.id) ?? {});
       await record({
         caseId: result.caseId,
         kind: "case",
@@ -438,7 +488,6 @@ async function driveRun(opts: {
         evidence: result.evidence,
       });
     }
-    void shared;
 
     // 4. CONTRACT, one per served tool, four at a time.
     const covered = new Set(opts.selected.flatMap((c) => c.covers));
@@ -631,6 +680,22 @@ export function makeContextParts(opts: {
    * rather than reading a made-up answer. */
   db?: Database;
   pool?: ConnectionPool;
+  /**
+   * What each case shared, keyed by case id, and WHICH case is asking.
+   *
+   * These were stubs: `from()` returned `{}` and `share()` did nothing, so
+   * a case reading `ctx.from("D10").messageId` got undefined and carried on
+   * with it. Nothing failed, because the value only had to be absent, not
+   * wrong. D12 and D13 have ridden on D10's share since batch 4d against
+   * exactly nothing, and the Sheets lifecycle would have called eleven
+   * steps with `spreadsheet_id: undefined`.
+   *
+   * Optional so the pure half of this context stays testable with no run
+   * around it; a case that shares without them is told so rather than
+   * silently writing into the void.
+   */
+  shared?: Map<string, Record<string, unknown>>;
+  caseId?: string;
 }): ContextParts {
   const { client, fixtures, called } = opts;
   // A value nothing can contain, so an absent stamp refuses every trash
@@ -805,10 +870,32 @@ export function makeContextParts(opts: {
       if (!value) throw new Error(`no fixture is mapped for ${key}`);
       return value;
     },
-    from() {
-      return {};
+    /* READ-ONLY, AND A COPY. A case handing another case its own mutable
+     * object would let step nine change what step two believes it shared,
+     * and the failure would surface somewhere with no connection to either. */
+    from(caseId: string) {
+      if (!opts.shared) throw new Error(`ctx.from is not available here, so ${caseId} cannot be read`);
+      const found = opts.shared.get(caseId);
+      if (!found) {
+        /* Named, and refused. Returning `{}` is how this went unnoticed:
+         * every read off it was undefined and every case carried on.
+         *
+         * The message says what is TRUE rather than guessing the cause. An
+         * earlier version told the reader to declare `needs`, which sent
+         * whoever hit it to a declaration that was already correct while
+         * the real fault was the scheduler starting them too early. */
+        throw new Error(
+          `${caseId} shared nothing this run, so there is nothing for this case to read from it`
+        );
+      }
+      return { ...found };
     },
-    share() {},
+    share(values: Record<string, unknown>) {
+      if (!opts.shared || !opts.caseId) {
+        throw new Error("ctx.share is not available here, so nothing would read what this case shared");
+      }
+      opts.shared.set(opts.caseId, { ...(opts.shared.get(opts.caseId) ?? {}), ...values });
+    },
   };
 }
 

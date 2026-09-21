@@ -121,7 +121,17 @@ export interface TestCase {
   /** Case ids whose shared output this one rides on. */
   needs?: string[];
   timeoutMs?: number;
-  /** A lock name. Cases sharing one never overlap. */
+  /**
+   * A lock name. Cases sharing one never overlap.
+   *
+   * IGNORED FOR A CASE IN A SCENARIO, which gets the scenario's own lock so
+   * a lifecycle's steps cannot interleave. Letting a case keep its own lock
+   * there was a hazard rather than a courtesy: the sheets writers shared a
+   * `scratch-tab` lock and would have serialised against each other while
+   * running concurrently with the step deleting the spreadsheet they were
+   * all writing to. This field is therefore only for cases outside a
+   * scenario, and there are none left once the regroup finishes.
+   */
   serial?: string;
   run(ctx: CaseContext): Promise<void>;
 }

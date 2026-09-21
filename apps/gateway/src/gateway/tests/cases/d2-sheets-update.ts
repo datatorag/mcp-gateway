@@ -11,14 +11,19 @@ import { resultJson } from "../result-json";
  */
 export const d2SheetsUpdate: TestCase = {
   id: "D2",
-  title: "an updated scratch cell reads back changed and is then restored",
+  title: "an updated cell reads back changed and is then restored",
   covers: ["gws-mcp__sheets_update", "gws-mcp__sheets_read"],
   accounts: ["sender"],
-  fixtures: ["sheet", "scratchTab"],
-  serial: "scratch-tab",
+  needs: ["SH1"],
   run: async (ctx) => {
-    const spreadsheet_id = ctx.fixture("sheet");
-    const cell = `${ctx.fixture("scratchTab")}!D1`;
+  /* WRITES ON THE SCENARIO'S OWN SPREADSHEET, not the standing fixture
+   * (HQ, 2026-09-21). This used to write to the fixture sheet's scratch
+   * tab, so a cleanup that failed halfway damaged the artefact four read
+   * steps and two other scenarios depend on. SH1 creates it, SH5 removes
+   * it, and `needs` means this skips with a reason rather than failing
+   * against a spreadsheet that was never made. */
+    const spreadsheet_id = ctx.from("SH1").spreadsheetId as string;
+    const cell = `${ctx.from("SH1").firstTab as string}!D1`;
 
     const before = await ctx.call("gws-mcp__sheets_read", { spreadsheet_id, range: cell }, { as: "sender" });
     const original = resultJson<{ values?: string[][] }>("sheets_read", before).values?.[0]?.[0] ?? "";

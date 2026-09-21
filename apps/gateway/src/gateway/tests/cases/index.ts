@@ -52,6 +52,11 @@ import { f2UnapprovedScopes } from "./f2-unapproved-scopes";
 import { f7ApiKeyRefused } from "./f7-api-key-refused";
 import { g1ErrorShape } from "./g1-error-shape";
 import { gw1ConnectedAccounts } from "./gw1-connected-accounts";
+import { sh1SheetsCreate } from "./sh1-sheets-create";
+import { sh2SheetsBatch } from "./sh2-sheets-batch";
+import { sh3SheetsFormatTable } from "./sh3-sheets-format-table";
+import { sh4SheetsRename } from "./sh4-sheets-rename";
+import { sh5SheetsDelete } from "./sh5-sheets-delete";
 import { r1FrontDoor } from "./r1-front-door";
 import { r2AdminOnly } from "./r2-admin-only";
 
@@ -144,6 +149,11 @@ export const CASES: TestCase[] = [
   f7ApiKeyRefused,
   g1ErrorShape,
   gw1ConnectedAccounts,
+  sh1SheetsCreate,
+  sh2SheetsBatch,
+  sh3SheetsFormatTable,
+  sh4SheetsRename,
+  sh5SheetsDelete,
   r1FrontDoor,
   r2AdminOnly,
 ];

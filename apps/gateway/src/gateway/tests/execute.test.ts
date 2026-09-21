@@ -1,17 +1,24 @@
 /**
  * The orchestrator's decisions (SCRUM-303), tested where they are pure.
  *
- * `driveRun` itself needs a gateway and a database and is covered by the
- * run-store suite and, when cases exist, by the live baseline. What is
- * tested here is what it DECIDES: which cases a scope selects, and whether a
- * tool gets probed.
+ * `driveRun` itself needs a gateway and a database, and HAS NO UNIT TEST:
+ * it is unexported, the run-store suite covers only the four persistence
+ * helpers and never reaches it, and only a live baseline run exercises its
+ * decisions. An earlier version of this header claimed the run-store suite
+ * covered it, which was untrue and contradicted the note in
+ * `pool.test.ts` that says the same branch is unasserted.
+ *
+ * What is tested here is what it DECIDES where that is pure: which cases a
+ * scope selects and in what order, and whether a tool gets probed.
  */
 
 import { describe, expect, it } from "vitest";
-import { startTestRun, contractSubjectFor, coverageMismatch, makeContextParts, missingMappingsFor, selectCases, unservedToolsFor, pluginsBlocking } from "./execute";
+import { makeContextParts, startTestRun, contractSubjectFor, coverageMismatch, missingMappingsFor, selectCases, unservedToolsFor, pluginsBlocking } from "./execute";
 import { parseFixtureMap } from "./fixtures";
 import { vi } from "vitest";
 import type { TestCase } from "./types";
+import { SCENARIOS } from "./scenarios";
+import { orderByNeeds } from "./runner";
 
 const c = (id: string): TestCase => ({
   id,
@@ -27,8 +34,12 @@ const c = (id: string): TestCase => ({
 const all = [c("A1"), c("A2"), c("D15"), c("E17")];
 
 describe("selectCases", () => {
-  it("takes everything when the scope asks for nothing", () => {
-    expect(selectCases({}, all).map((x) => x.id)).toEqual(["A1", "A2", "D15", "E17"]);
+  it("takes everything when the scope asks for nothing, scenarios first", () => {
+    /* A1 and A2 are Gateway steps 1 and 2; E17 is a Sheets step; D15 is not
+     * yet regrouped. Placed cases run in scenario order and the rest
+     * follow, so "everything" is still everything while the regroup is
+     * half done. */
+    expect(selectCases({}, all).map((x) => x.id)).toEqual(["A1", "A2", "E17", "D15"]);
   });
 
   it("takes one scenario, in the order its steps are declared", () => {
@@ -52,6 +63,63 @@ describe("selectCases", () => {
     // Silently dropping an unknown id is right here: the run's scope records
     // what was asked for, so a caller can see their typo in the row.
     expect(selectCases({ caseIds: ["D15", "NOPE"] }, all).map((x) => x.id)).toEqual(["D15"]);
+  });
+
+  it("keeps SCENARIO ORDER when the scope names ids, not registration order", () => {
+    /* The bug this pins ran a lifecycle backwards. `case_ids` filtered the
+     * registry, which is ordered by however the case files happen to be
+     * listed, so naming the sheets steps by id put the DELETE ninth of
+     * fifteen, ahead of six writers (D1 D2 D7 E3 E4 D14).
+     *
+     * Measured through the WHOLE pipeline, `selectCases` then
+     * `orderByNeeds`, because the raw selection alone says something else
+     * entirely: there SH5 sits last and nothing looks wrong. It is
+     * `orderByNeeds` placing the SH1-dependent writers in a later pass that
+     * moves them behind the delete. Measuring the wrong artifact here gives
+     * a confident, wrong answer, so the number in this comment came from
+     * running the pipeline rather than reading the filter. They then wrote to a spreadsheet that
+     * no longer existed and reported four working tools as broken: a
+     * deterministic red about correct code.
+     *
+     * Asserted against the REAL registry and the REAL scenario, because the
+     * defect was a disagreement between two orderings and a hand-built
+     * fixture would have reproduced neither. */
+    const sheets = SCENARIOS.find((s) => s.key === "sheets");
+    // Not `if (!sheets) return`: a silent green when the scenario is gone
+    // is exactly how the strongest assertion in this file would stop
+    // assert anything without anyone noticing.
+    expect(sheets, "the sheets scenario must exist for this to mean anything").toBeDefined();
+    if (!sheets) return;
+    const shuffled = [...sheets.steps].reverse();
+    const picked = selectCases({ caseIds: shuffled }).map((c) => c.id);
+    expect(picked).toEqual(sheets.steps);
+    // Said plainly, because it is the property that broke.
+    expect(picked[picked.length - 1]).toBe("SH5");
+    expect(picked.indexOf("SH1")).toBe(0);
+  });
+
+  it("orders a mixed scope with placed steps first and the rest after", () => {
+    const picked = selectCases({ caseIds: ["D15", "SH5", "A1", "SH1"] }).map((c) => c.id);
+    // The whole list, not a slice: asserting only the first three would
+    // miss a fifth entry arriving from nowhere.
+    expect(picked).toEqual(["A1", "SH1", "SH5", "D15"]);
+  });
+
+  it("keeps the delete last THROUGH orderByNeeds, not only out of selectCases", () => {
+    /* WHAT PROTECTS SH5 IS A COMPOSITION: `selectCases` orders, then
+     * `orderByNeeds` must leave that order alone, then the scenario lock
+     * keeps the steps from overlapping. The tests above cover only the
+     * first link. A change that made `orderByNeeds` unstable would put the
+     * delete back in the middle of the lifecycle with every test green,
+     * which is the same symptom by a different route. */
+    const sheets = SCENARIOS.find((s) => s.key === "sheets");
+    expect(sheets).toBeDefined();
+    if (!sheets) return;
+
+    const selected = selectCases({ caseIds: [...sheets.steps].reverse() });
+    const { order, unresolved } = orderByNeeds(selected);
+    expect(unresolved, "a step named a dependency this scope did not select").toEqual([]);
+    expect(order.map((c) => c.id)).toEqual(sheets.steps);
   });
 
   it("prefers case ids over a scenario when both are given", () => {
@@ -363,5 +431,67 @@ describe("an empty scope is refused rather than run", () => {
     // claimed it would block every real run behind a claim nobody holds.
     expect(db.execute).not.toHaveBeenCalled();
     expect(db.insert).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * WHAT ONE CASE SHARES, THE NEXT ONE READS (SCRUM-303).
+ *
+ * `ctx.from` returned `{}` and `ctx.share` did nothing. Nothing failed,
+ * because every read off an empty object is `undefined` and a case that
+ * passes `undefined` as an id simply calls a tool with a missing argument.
+ * D12 and D13 rode on D10's share for a whole batch against exactly that,
+ * and the Sheets lifecycle would have run eleven steps against
+ * `spreadsheet_id: undefined`.
+ *
+ * The lesson is the shape, not the stub: a helper whose failure mode is
+ * "returns empty" cannot be caught by a test that only checks nothing threw.
+ */
+describe("sharing between cases", () => {
+  const parts = (shared: Map<string, Record<string, unknown>>, caseId: string) =>
+    makeContextParts({
+      client: { listTools: async () => [], callTool: async () => ({ content: [] }), close: async () => {} },
+      fixtures: parseFixtureMap(""),
+      called: [],
+      shared,
+      caseId,
+    });
+
+  it("hands a later case what an earlier one shared", () => {
+    const shared = new Map<string, Record<string, unknown>>();
+    parts(shared, "SH1").share({ spreadsheetId: "sheet-1", title: "t" });
+    expect(parts(shared, "D1").from("SH1")).toEqual({ spreadsheetId: "sheet-1", title: "t" });
+  });
+
+  it("merges two shares from the same case rather than replacing", () => {
+    const shared = new Map<string, Record<string, unknown>>();
+    const p = parts(shared, "SH1");
+    p.share({ a: 1 });
+    p.share({ b: 2 });
+    expect(parts(shared, "D1").from("SH1")).toEqual({ a: 1, b: 2 });
+  });
+
+  it("REFUSES a read of a case that shared nothing, instead of answering {}", () => {
+    // The whole defect in one assertion: an empty answer is indistinguishable
+    // from a real one until something downstream uses it.
+    const shared = new Map<string, Record<string, unknown>>();
+    expect(() => parts(shared, "D1").from("SH1")).toThrow(/SH1 shared nothing/);
+  });
+
+  it("hands out a copy, so one case cannot edit another's shared values", () => {
+    const shared = new Map<string, Record<string, unknown>>();
+    parts(shared, "SH1").share({ ids: "original" });
+    const got = parts(shared, "D1").from("SH1") as Record<string, unknown>;
+    got.ids = "tampered";
+    expect(parts(shared, "D2").from("SH1")).toEqual({ ids: "original" });
+  });
+
+  it("refuses to share when there is no run to share into", () => {
+    const orphan = makeContextParts({
+      client: { listTools: async () => [], callTool: async () => ({ content: [] }), close: async () => {} },
+      fixtures: parseFixtureMap(""),
+      called: [],
+    });
+    expect(() => orphan.share({ a: 1 })).toThrow(/not available/);
   });
 });

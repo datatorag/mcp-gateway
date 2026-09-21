@@ -14,9 +14,15 @@ export const d7SheetsTab: TestCase = {
   title: "a created tab returns a real sheet id and is then deleted",
   covers: ["gws-mcp__sheets_add_tab", "gws-mcp__sheets_delete_tab"],
   accounts: ["sender"],
-  fixtures: ["sheet"],
+  needs: ["SH1"],
   run: async (ctx) => {
-    const spreadsheet_id = ctx.fixture("sheet");
+  /* WRITES ON THE SCENARIO'S OWN SPREADSHEET, not the standing fixture
+   * (HQ, 2026-09-21). This used to write to the fixture sheet's scratch
+   * tab, so a cleanup that failed halfway damaged the artefact four read
+   * steps and two other scenarios depend on. SH1 creates it, SH5 removes
+   * it, and `needs` means this skips with a reason rather than failing
+   * against a spreadsheet that was never made. */
+    const spreadsheet_id = ctx.from("SH1").spreadsheetId as string;
     // Tab titles are short; the run stamp keeps two runs from colliding.
     const title = `smoke-${ctx.stamp}`.slice(0, 40);
 

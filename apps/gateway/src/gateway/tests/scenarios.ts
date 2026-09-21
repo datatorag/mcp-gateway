@@ -98,6 +98,37 @@ export const SCENARIOS: Scenario[] = [
       "G1", // a read against something that does not exist names the cause
     ],
   },
+  {
+    key: "sheets",
+    title: "create a spreadsheet, work in it, and take it away again",
+    steps: [
+      /* THE WRITE PATH RUNS ON A SPREADSHEET THIS SCENARIO CREATES, and the
+       * standing fixture sheet is read-only (HQ, 2026-09-21). Every writer
+       * used to work in the fixture's scratch tab, so a cleanup that failed
+       * halfway damaged the artefact the read steps below, and two other
+       * scenarios, depend on. SH1 opens it and SH5 closes it; the steps
+       * between declare `needs: ["SH1"]`, so a failed create skips them
+       * with a reason instead of failing each one separately against a
+       * spreadsheet that does not exist. */
+      "SH1", // create the spreadsheet this lifecycle works in
+      "D7", //  add a tab, and it answers with a real sheet id
+      "D1", //  append a row, read it back, clear it
+      "E3", //  values beginning = and + are stored as text
+      "E4", //  a leading zero and a leading plus survive the round trip
+      "D2", //  update a cell and read the change back
+      "SH2", // a batch applies both requests and replies in order
+      "SH3", // format a table: header frozen, values untouched
+      "D14", // a bold background reads back, and clears again
+      "SH4", // a renamed tab drops its old name
+      /* The read guards, which stay on the STANDING FIXTURE. They are about
+       * values and shapes that only exist on a sheet nobody rewrites. */
+      "C1", //  the fixture sheet reads back its exact control values
+      "E11", // a range naming a missing tab names the tabs that do exist
+      "E17", // many ranges answer in request order, duplicates and all
+      "C12", // a query returns rows and refuses a column out of range
+      "SH5", // delete the spreadsheet, and prove it is gone from Drive
+    ],
+  },
 ];
 
 /**
@@ -113,8 +144,6 @@ export const SCENARIOS: Scenario[] = [
  * it cannot yet do is be selected by scenario, because it is not in one.
  */
 export const REGROUP_PENDING: string[] = [
-  // sheets
-  "C1", "C12", "D1", "D2", "D7", "D14", "E3", "E4", "E11", "E17",
   // gmail
   "C2", "D3", "D10", "D11", "D12", "D13", "D15", "E1", "E2", "E13", "E14", "E15", "E16",
   // docs

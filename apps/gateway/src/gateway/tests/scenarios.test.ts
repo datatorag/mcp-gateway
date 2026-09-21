@@ -69,11 +69,13 @@ describe("the registry's own shape", () => {
     expect(new Set(keys).size, `duplicate scenario keys: ${keys.join(", ")}`).toBe(keys.length);
     const expected = SCENARIO_KEYS.filter((k) => keys.includes(k));
     expect(keys).toEqual(expected);
-    /* NEITHER ASSERTION ABOVE CAN FAIL AT ONE SCENARIO, and pretending
-     * otherwise is worse than saying it: they get teeth at the second. This
-     * line fails the moment that stops being true without the guards having
-     * been reconsidered. */
-    expect(keys.length, "more than one scenario: re-read the two assertions above").toBeLessThanOrEqual(1);
+    /* The tripwire that used to sit here has done its job. Both assertions
+     * above were vacuous while one scenario was registered, and it failed
+     * the moment a second landed so they would be reconsidered rather than
+     * left decorative. They are real now: two keys can collide, and two can
+     * be declared out of order, which matters because the order here IS the
+     * order scenarios run in. */
+    expect(keys.length, "at least two scenarios, so the assertions above can fail").toBeGreaterThan(1);
   });
 
   it("gives every scenario a title and at least one step", () => {
