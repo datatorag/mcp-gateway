@@ -73,6 +73,20 @@ export interface CaseContext {
    * public repo still never contains an address, and the send guard still
    * decides independently whether that recipient is allowed. */
   address(role: AccountRole): string;
+  /**
+   * Trash a message THIS RUN SENT, and prove it is gone.
+   *
+   * The only cleanup that reaches a mailbox, and the only `gws_run` write
+   * the runner may make. It refuses any message whose subject does not
+   * carry this case's own stamp and the smoke prefix, so it cannot reach
+   * mail this run did not create even if a case hands it the wrong id.
+   *
+   * Returns true when the message is gone, false when it could not be
+   * trashed — a case records the id as residue rather than failing, because
+   * an uncleaned message is a fact to report, not a reason to call the
+   * feature broken.
+   */
+  trashOwnMessage(messageId: string, opts?: { as?: AccountRole }): Promise<boolean>;
   /** What a case named in `needs` shared. */
   from(caseId: string): Record<string, unknown>;
   share(values: Record<string, unknown>): void;

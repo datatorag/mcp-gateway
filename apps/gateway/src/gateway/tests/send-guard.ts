@@ -43,6 +43,24 @@ export interface GuardLookups {
   readMessage(messageId: string): Promise<StoredRecipients | null>;
 }
 
+/**
+ * The addresses a given tool may reach.
+ *
+ * The reader always. The configured SENDER as well, for `gmail_reply` and
+ * `gmail_forward` only, ruled by HQ on 2026-09-20: D12 proves a reply lands
+ * in the same thread, which needs a message to travel back to us, and no
+ * restructuring avoids that. It is an allowlist of two configured
+ * addresses, never a relaxation — `gmail_send`, the drafts and everything
+ * else still reach the reader and nothing else.
+ */
+const SENDER_REACHABLE = new Set(["gmail_reply", "gmail_forward"]);
+
+function permittedFor(name: string, reader: string, sender: string | null): Set<string> {
+  const permitted = new Set([reader]);
+  if (sender && SENDER_REACHABLE.has(name)) permitted.add(sender);
+  return permitted;
+}
+
 /** Tools whose arguments carry the recipients directly. */
 const ARG_RECIPIENT_TOOLS = new Set([
   "gmail_send",
@@ -154,7 +172,14 @@ function subjectOk(subject: unknown): boolean {
 
 function checkRecipients(
   fields: { to?: unknown; cc?: unknown; bcc?: unknown },
-  readerEmail: string
+  /** The addresses this call may reach. Almost always just the reader; a
+   * reply or a forward may also reach the configured sender, because a
+   * threading test needs a message to come BACK to us and there is no other
+   * way to prove it. Never more than these two, and both are configured. */
+  permitted: ReadonlySet<string>,
+  /** For the refusal text, which must keep saying "reader mailbox" in the
+   * common case rather than becoming vaguer for every caller. */
+  describe = "the reader mailbox"
 ): SendCheck {
   for (const field of ["to", "cc", "bcc"] as const) {
     let parsed;
@@ -165,10 +190,10 @@ function checkRecipients(
       return { ok: false, reason: `send refused: ${field} could not be parsed (${why})` };
     }
     for (const { address } of parsed) {
-      if (address !== readerEmail) {
+      if (!permitted.has(address)) {
         return {
           ok: false,
-          reason: `send refused: ${field} holds an address that is not the reader mailbox`,
+          reason: `send refused: ${field} holds an address that is not ${describe}`,
         };
       }
     }
@@ -192,10 +217,11 @@ function checkRecipients(
 export async function checkSend(
   tool: string,
   args: Record<string, unknown>,
-  opts: { readerEmail: string | null; lookups: GuardLookups }
+  opts: { readerEmail: string | null; senderEmail?: string | null; lookups: GuardLookups }
 ): Promise<SendCheck> {
   const name = toolSuffix(tool);
   const reader = opts.readerEmail?.trim().toLowerCase() ?? null;
+  const sender = opts.senderEmail?.trim().toLowerCase() ?? null;
 
   const needsGuard =
     ARG_RECIPIENT_TOOLS.has(name) ||
@@ -227,6 +253,25 @@ export async function checkSend(
         ok: false,
         reason: `send refused: gws_run may not reach ${service} ${path} from a test run`,
       };
+    }
+
+    /* THE ONE WRITE `gws_run` MAY MAKE, and it is this narrow on purpose.
+     *
+     * We ship no tool that trashes a message, so without this every mail
+     * case leaves its evidence in two mailboxes for ever: roughly ten
+     * messages a run, which is why the smoke sheet runs them weekly and
+     * asks for a residue count. HQ ruled the runner may clean up after
+     * itself the same way the agent smoke does.
+     *
+     * It is ONE service, ONE resource and ONE verb. Everything else about
+     * `gws_run` is unchanged, including the read allowlist that carries the
+     * real guarantee. And it is only reachable through
+     * `ctx.trashOwnMessage`, which refuses any message whose subject does
+     * not carry this run's own stamp and the smoke prefix — so the blast
+     * radius is mail this run sent. A test refuses any case that calls it
+     * directly, because that check lives in the source, not here. */
+    if (service === "gmail" && path === "users.messages.trash") {
+      return { ok: true };
     }
 
     if (!READ_METHODS.has(verb)) {
@@ -285,7 +330,14 @@ export async function checkSend(
   }
 
   if (ARG_RECIPIENT_TOOLS.has(name)) {
-    const recipients = checkRecipients(args, reader);
+    // `gmail_forward` may also reach the configured sender; every other
+    // tool in this set is reader-only and the refusal text says so.
+    const permitted = permittedFor(name, reader, sender);
+    const recipients = checkRecipients(
+      args,
+      permitted,
+      permitted.size > 1 ? "the reader or sender mailbox" : "the reader mailbox"
+    );
     if (!recipients.ok) return recipients;
     if (!subjectOk(args.subject)) {
       return { ok: false, reason: `send refused: the subject must carry ${SUBJECT_PREFIX}` };
@@ -297,7 +349,11 @@ export async function checkSend(
     const draftId = String(args.draft_id ?? "");
     const stored = await opts.lookups.readDraft(draftId);
     if (!stored) return { ok: false, reason: "send refused: the draft could not be read before sending" };
-    const recipients = checkRecipients(stored, reader);
+    // A STORED DRAFT IS READER-ONLY, whatever the tool that sends it. The
+    // widening is for reply and forward, which is where the threading
+    // evidence has to come back to us; a draft chooses its own recipients
+    // at creation and has no such need.
+    const recipients = checkRecipients(stored, new Set([reader]));
     if (!recipients.ok) return recipients;
     if (!subjectOk(stored.subject)) {
       return { ok: false, reason: `send refused: the stored draft's subject must carry ${SUBJECT_PREFIX}` };
@@ -317,7 +373,8 @@ export async function checkSend(
     const why = err instanceof AddressParseError ? err.message : String(err);
     return { ok: false, reason: `send refused: the original's reply address could not be parsed (${why})` };
   }
-  if (parsed.length !== 1 || parsed[0].address !== reader) {
+  const replyPermitted = permittedFor(name, reader, sender);
+  if (parsed.length !== 1 || !replyPermitted.has(parsed[0].address)) {
     return { ok: false, reason: "send refused: a reply would not go to the reader mailbox" };
   }
   if (!subjectOk(original.subject)) {

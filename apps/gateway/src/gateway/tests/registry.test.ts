@@ -42,6 +42,9 @@ describe("the real registry", () => {
     expect(ids).toEqual(
       expect.arrayContaining(["C11", "D14", "D15", "E2", "E5", "E8", "E9", "E10", "E11", "E16", "E17"])
     );
+    expect(ids).toEqual(
+      expect.arrayContaining(["D10", "D11", "D12", "D13", "E13", "E14", "E15"])
+    );
     /* NINE ROWS ARE NOT PORTED, and that is a decision rather than a gap:
      * they need a browser, a human judgement or a third-party console, so
      * they stay with the agent. Pinned so nobody ports one halfway and

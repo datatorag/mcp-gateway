@@ -31,9 +31,13 @@ export const TRUNCATION_MARKER = "\n... evidence truncated";
  * bodies would be a second copy of a mailbox, sitting in a table that a
  * whole dashboard page renders.
  */
-export function formatEvidence(lines: readonly string[], safe: readonly string[] = []): string {
+export function formatEvidence(
+  lines: readonly string[],
+  safe: readonly string[] = [],
+  shapes: readonly RegExp[] = []
+): string {
   const joined = lines.join("\n");
-  const redacted = protect(joined, safe, scrubSensitiveText);
+  const redacted = protect(joined, safe, scrubSensitiveText, shapes);
   if (redacted.length <= EVIDENCE_CAP) return redacted;
   return redacted.slice(0, EVIDENCE_CAP - TRUNCATION_MARKER.length) + TRUNCATION_MARKER;
 }
@@ -83,9 +87,25 @@ function standalone(token: string): RegExp {
 export function protect(
   text: string,
   safe: readonly string[],
-  scrub: (value: string) => string
+  scrub: (value: string) => string,
+  shapes: readonly RegExp[] = []
 ): string {
-  const tokens = [...new Set(safe)].filter((t) => t.length > 0);
+  /* A SHAPE, not a longer list. A4's whole job is naming tools that are
+   * NOT in `tools/list`: one the plugin serves and the registry lacks, or
+   * one the registry has and nothing serves. Neither can ever appear in a
+   * safe list derived from what was served, so A4's finding arrived as
+   * "registry lacks: [redacted-id]" — the redaction eating the one word
+   * that made the finding actionable.
+   *
+   * Widening the list cannot fix that. What identifies a tool name is its
+   * STRUCTURE: a known plugin slug, then `__`, then a name. A Google id
+   * cannot take that form at a token boundary, because it would have to
+   * begin with a literal installed slug. So matches of that shape join the
+   * tokens and go through exactly the same masking, boundaries and padding
+   * as the rest — no second code path, no second set of properties to
+   * keep true. */
+  const found = shapes.flatMap((shape) => [...text.matchAll(shape)].map((m) => m[0]));
+  const tokens = [...new Set([...safe, ...found])].filter((t) => t.length > 0);
   if (tokens.length === 0) return scrub(text);
   if (text.includes(OPEN) || text.includes(CLOSE) || text.includes(PAD)) return scrub(text);
 
@@ -125,4 +145,34 @@ export function protect(
     out = out.split(sentinel(i, used[i].length)).join(used[i]);
   }
   return out;
+}
+
+/**
+ * The shape of a namespaced tool name, for the plugins actually installed.
+ *
+ * Built from the registry's own slugs rather than a pattern like
+ * `\\w+__\\w+`, so the only strings it can protect are ones that begin with
+ * a plugin this gateway really has. A slug that is not a plain name is
+ * dropped rather than compiled in, which a test pins: slugs are registry
+ * data, and registry data does not get to extend a regex.
+ *
+ * THE LOOKAROUNDS HERE ARE BELT AND BRACES, and that is stated rather than
+ * left to be assumed. Deleting them turns no test red, because what
+ * actually keeps a tool name from being carved out of a longer id is the
+ * boundary check in `standalone`, applied when the token is masked. They
+ * stay because this regex is the thing that decides what a tool name IS,
+ * and it should say so on its own terms rather than relying on a property
+ * enforced two functions away. Do not "cover" them with a test that
+ * reaches past the masking to call this directly.
+ */
+export function toolNameShapes(slugs: readonly string[]): RegExp[] {
+  const usable = slugs.filter((s) => /^[A-Za-z0-9-]+$/.test(s));
+  if (usable.length === 0) return [];
+  const alternation = usable.map((s) => s.replace(/-/g, "\\-")).join("|");
+  return [
+    new RegExp(
+      `(?<![A-Za-z0-9_.@+-])(?:${alternation})__[A-Za-z0-9_]+(?![A-Za-z0-9_.@+-])`,
+      "g"
+    ),
+  ];
 }

@@ -36,6 +36,14 @@ export function withoutStringLiterals(source: string): string {
 }
 
 /** The TOP-LEVEL keys of one object literal, ignoring anything nested. */
+/** Line comments removed. A comment inside an object literal can contain
+ * anything, including `subject:`, and a key reader that does not strip them
+ * reports a comment as an argument. That is not hypothetical: it flagged a
+ * comment explaining that the tool HAS no subject argument. */
+export function withoutLineComments(source: string): string {
+  return source.replace(/\/\/[^\n]*/g, "");
+}
+
 export function topLevelKeys(objectBody: string): string[] {
   let depth = 0;
   let flat = "";
@@ -85,7 +93,10 @@ export function readCaseCalls(dir: string): CaseCall[] {
       calls.push({
         file,
         tool,
-        args: end === -1 ? null : topLevelKeys(withoutStringLiterals(src.slice(open + 1, end))),
+        args:
+          end === -1
+            ? null
+            : topLevelKeys(withoutLineComments(withoutStringLiterals(src.slice(open + 1, end)))),
       });
     }
   }

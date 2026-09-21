@@ -6,13 +6,14 @@ import { createMcpServer, BUILT_IN_TOOLS } from "../mcp-server";
 import type { ConnectionPool } from "../pool";
 import { classifyWrite } from "../playground/tools";
 import { checkContract, type ContractSubject } from "./contract";
+import { toolNameShapes } from "./evidence";
 import { createHttpFetcher, loopbackBase } from "./http";
 import { classifyTools, nonAdminView, registrySurface } from "./surface";
 import { CASES } from "./cases";
-import { orderByNeeds, runOneCase, type ContextParts } from "./runner";
+import { orderByNeeds, runOneCase, stampFor, type ContextParts } from "./runner";
 import { runPool } from "./pool";
 import { parseFixtureMap } from "./fixtures";
-import { checkSend, type GuardLookups } from "./send-guard";
+import { checkSend, SUBJECT_PREFIX, type GuardLookups } from "./send-guard";
 import type { AccountRole, FixtureKey } from "./types";
 import { finishRun, recordResult, startRun } from "./store";
 import { missingCheckouts, readPluginShas } from "./plugin-sha";
@@ -176,8 +177,13 @@ async function driveRun(opts: {
    * addresses matter for the same reason on a send refusal. Nothing else
    * goes in here: an id this run created is exactly what the scrub is for. */
   const safe: string[] = [];
+  /** Names no safe list can hold: a tool the plugin serves that the
+   * registry lacks, or one the registry has that nothing serves. Those are
+   * exactly what A4 reports, and they are absent from `tools/list` by
+   * definition. */
+  let safeShapes: RegExp[] = [];
   const record = async (row: Parameters<typeof recordResult>[2]) => {
-    await recordResult(db, runId, row, safe);
+    await recordResult(db, runId, row, safe, safeShapes);
     if (row.status === "pass") totals.pass += 1;
     else if (row.status === "fail") totals.fail += 1;
     else if (row.status === "skip") totals.skip += 1;
@@ -208,7 +214,9 @@ async function driveRun(opts: {
       // registry, so the run would otherwise record `sha unknown` and let
       // A4's third leg fail with a pool error, neither of which says the
       // actual thing: it is not installed here.
-      const absent = missingCheckouts(PLUGINS_DIR, await activePluginSlugs(db));
+      const slugs = await activePluginSlugs(db);
+      safeShapes = toolNameShapes(slugs);
+      const absent = missingCheckouts(PLUGINS_DIR, slugs);
       if (absent.length > 0) {
         gate.push(`not installed on this machine: ${absent.join(", ")}`);
       }
@@ -336,7 +344,15 @@ async function driveRun(opts: {
       const called: string[] = [];
       const outcome = await runOneCase(testCase, {
         runId,
-        makeParts: () => makeContextParts({ client, fixtures, called, db: opts.db, pool: opts.pool }),
+        makeParts: (caseId: string) =>
+          makeContextParts({
+            client,
+            fixtures,
+            called,
+            db: opts.db,
+            pool: opts.pool,
+            stamp: stampFor(runId, caseId),
+          }),
         toolsCalled: () => called,
       });
       if (outcome.status !== "pass") failed.add(testCase.id);
@@ -557,6 +573,9 @@ export function coverageMismatch(covers: readonly string[], called: readonly str
  */
 export function makeContextParts(opts: {
   client: RunnerClient;
+  /** This case's stamp, so the trash helper can recognise mail this run
+   * sent. Absent in the unit tests that exercise the pure half. */
+  stamp?: string;
   fixtures: ReturnType<typeof parseFixtureMap>;
   called: string[];
   /** Only the three `ctx.gateway` questions need these, and both are
@@ -567,6 +586,7 @@ export function makeContextParts(opts: {
   pool?: ConnectionPool;
 }): ContextParts {
   const { client, fixtures, called } = opts;
+  const stamp = opts.stamp ?? "\u0000no-stamp";
 
   const needs = (what: string) => {
     throw new Error(`ctx.gateway.${what}: this run has no database or plugin pool`);
@@ -600,6 +620,9 @@ export function makeContextParts(opts: {
 
       const verdict = await checkSend(tool, withAccount, {
         readerEmail: fixtures.account("reader"),
+        // Reply and forward only, and the guard decides which: passing it
+        // here does not widen anything on its own.
+        senderEmail: fixtures.account("sender"),
         lookups,
       });
       if (!verdict.ok) throw new Error(verdict.reason);
@@ -620,6 +643,47 @@ export function makeContextParts(opts: {
       classify: (names) => classifyTools(names),
       nonAdminView: () =>
         opts.db ? nonAdminView(opts.db, fixtures.user("nonAdmin") ?? undefined) : needs("nonAdminView"),
+    },
+    async trashOwnMessage(messageId: string, callOpts?: { as?: AccountRole }) {
+      const role = (callOpts?.as ?? "sender") as AccountRole;
+      const account = fixtures.account(role);
+      const withAccount = (extra: Record<string, unknown>) =>
+        account ? { ...extra, account } : { ...extra };
+
+      /* THE STAMP IS THE WHOLE GUARD. A trash call is the one write the
+       * runner may make through `gws_run`, and what keeps it from reaching
+       * real mail is not the caller's good intentions but this check: the
+       * message's own subject must carry this case's stamp AND the smoke
+       * prefix. A case that passes somebody else's message id gets a
+       * refusal, not a trashed mailbox. */
+      const read = await client.callTool("gws-mcp__gmail_read", withAccount({ message_id: messageId }));
+      const headers = parseHeaders(read);
+      const subject = headers?.subject ?? "";
+      if (!subject.includes(stamp) || !subject.includes(SUBJECT_PREFIX)) {
+        throw new Error(
+          `trashOwnMessage refused: that message's subject does not carry this run's stamp and ${SUBJECT_PREFIX}`
+        );
+      }
+
+      const trashed = await client.callTool(
+        "gws-mcp__gws_run",
+        withAccount({
+          service: "gmail",
+          resource: "users.messages",
+          method: "trash",
+          params: { userId: "me", id: messageId },
+        })
+      );
+      if (trashed.isError) return false;
+
+      // VERIFIED BY ABSENCE, never by the trash call's own answer. The
+      // whole batch exists because a success response is not evidence.
+      const found = await client.callTool(
+        "gws-mcp__gmail_search",
+        withAccount({ query: `subject:"${stamp}"`, max_results: 5 })
+      );
+      const text = found.content.map((c) => c.text ?? "").join("");
+      return !text.includes(messageId);
     },
     address(role: AccountRole) {
       const value = fixtures.account(role);

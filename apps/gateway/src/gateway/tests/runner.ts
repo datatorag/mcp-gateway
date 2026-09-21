@@ -97,6 +97,13 @@ export function createUntil(clock: Clock) {
   };
 }
 
+/** A run-and-case stamp. Exported because the trash helper has to recognise
+ * this run's own mail, and two copies of this formula would be two chances
+ * for a cleanup to stop recognising what it created. */
+export function stampFor(runId: string, caseId: string): string {
+  return `${runId.slice(0, 8)}-${caseId}`;
+}
+
 export type ContextParts = Omit<CaseContext, "defer" | "evidence" | "until" | "runId" | "stamp">;
 
 /**
@@ -121,7 +128,7 @@ export async function runOneCase(
   const ctx: CaseContext = {
     ...opts.makeParts(testCase.id),
     runId: opts.runId,
-    stamp: `${opts.runId.slice(0, 8)}-${testCase.id}`,
+    stamp: stampFor(opts.runId, testCase.id),
     defer: (label, undo) => {
       undos.push({ label, undo });
     },

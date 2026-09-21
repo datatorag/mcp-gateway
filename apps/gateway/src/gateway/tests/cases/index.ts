@@ -40,6 +40,13 @@ import { e10DocsReplace } from "./e10-docs-replace";
 import { e11SheetsBadRange } from "./e11-sheets-bad-range";
 import { e16BatchLabel } from "./e16-batch-label";
 import { e17MultiRange } from "./e17-multi-range";
+import { d10MailArrives } from "./d10-mail-arrives";
+import { d11DraftSent } from "./d11-draft-sent";
+import { d12ReplyThreads } from "./d12-reply-threads";
+import { d13ForwardCarries } from "./d13-forward-carries";
+import { e13SignatureApplied } from "./e13-signature-applied";
+import { e14SignatureSuppressed } from "./e14-signature-suppressed";
+import { e15DraftSignature } from "./e15-draft-signature";
 import { f1ApprovalBoundary } from "./f1-approval-boundary";
 import { f2UnapprovedScopes } from "./f2-unapproved-scopes";
 import { f7ApiKeyRefused } from "./f7-api-key-refused";
@@ -66,6 +73,13 @@ import { r2AdminOnly } from "./r2-admin-only";
  * C11 IS A ROUND TRIP WEARING A C NUMBER. It sits in the sheet's read
  * section and creates and deletes a real Jira issue, with a whole-board
  * baseline either side, so it is here in 4c rather than in the read batch.
+ *
+ * Batch 4d is the MAIL, and it is last for a reason: it is the only batch
+ * whose failure mode reaches a person. Every send goes to the reader
+ * mailbox, which we own and can read, carries the smoke prefix and this
+ * run's stamp, and is trashed by `ctx.trashOwnMessage` — which refuses any
+ * message whose subject does not carry that stamp. What a run cannot trash
+ * it reports as residue rather than leaving silent.
  *
  * NINE ROWS ARE DELIBERATELY NOT PORTED AT ALL (E6, E7, E12, F3, F4, F5,
  * F6, G2, H1). They need a browser, a human judgement or a third-party
@@ -117,6 +131,13 @@ export const CASES: TestCase[] = [
   e11SheetsBadRange,
   e16BatchLabel,
   e17MultiRange,
+  d10MailArrives,
+  d11DraftSent,
+  d12ReplyThreads,
+  d13ForwardCarries,
+  e13SignatureApplied,
+  e14SignatureSuppressed,
+  e15DraftSignature,
   f1ApprovalBoundary,
   f2UnapprovedScopes,
   f7ApiKeyRefused,

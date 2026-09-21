@@ -25,6 +25,7 @@ const parts = (): ContextParts => ({
   http: vi.fn().mockResolvedValue(new Response("ok")),
   fixture: vi.fn().mockReturnValue("fixture-id"),
   address: vi.fn().mockReturnValue("role@example.test"),
+  trashOwnMessage: vi.fn().mockResolvedValue(true),
   from: vi.fn().mockReturnValue({}),
   share: vi.fn(),
   gateway: {

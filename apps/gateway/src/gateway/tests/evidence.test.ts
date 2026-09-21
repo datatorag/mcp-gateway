@@ -3,7 +3,7 @@
  */
 
 import { describe, expect, it } from "vitest";
-import { EVIDENCE_CAP, TRUNCATION_MARKER, formatEvidence } from "./evidence";
+import { EVIDENCE_CAP, TRUNCATION_MARKER, formatEvidence, toolNameShapes } from "./evidence";
 
 describe("formatEvidence", () => {
   it("joins the lines a case recorded", () => {
@@ -172,5 +172,55 @@ describe("masking must not change what the other patterns see", () => {
   it("fails closed on the padding character too", () => {
     const out = formatEvidence([`· saw ${TOOL}`], [TOOL]);
     expect(out).toContain("[redacted-id]");
+  });
+});
+
+/**
+ * A4 names tools that are NOT in `tools/list` — one the plugin serves that
+ * the registry lacks, one the registry has that nothing serves. No safe
+ * list built from what was served can ever hold them, so its finding
+ * arrived as "registry lacks: [redacted-id]", with the redaction eating
+ * the one word that made it actionable. A shape fixes what a list cannot.
+ */
+describe("tool names no safe list can hold", () => {
+  const SHAPES = toolNameShapes(["gws-mcp", "atlassian-mcp"]);
+
+  it("keeps a tool name the registry lacks, which is never in the served list", () => {
+    const out = formatEvidence(
+      ["gws-mcp: serves but the registry lacks: gws-mcp__sheets_brand_new"],
+      [],
+      SHAPES
+    );
+    expect(out).toContain("gws-mcp__sheets_brand_new");
+    expect(out).not.toContain("[redacted-id]");
+  });
+
+  it("keeps a second plugin's names too", () => {
+    const out = formatEvidence(["atlassian-mcp__jira_something_long_here"], [], SHAPES);
+    expect(out).toContain("atlassian-mcp__jira_something_long_here");
+  });
+
+  it("STILL redacts a real id, including one that embeds a tool name", () => {
+    // The shape must not become a way to smuggle an id through. It requires
+    // a literal installed slug at a token boundary, and an id that merely
+    // contains one is flanked, so it stays redacted.
+    const out = formatEvidence(
+      ["created 1AbCdEfgws-mcp__sheets_read9XyZ0123456789 in the folder"],
+      [],
+      SHAPES
+    );
+    expect(out).toContain("[redacted-id]");
+    expect(out).not.toContain("1AbCdEf");
+  });
+
+  it("protects nothing when no plugin is installed", () => {
+    expect(toolNameShapes([])).toEqual([]);
+    expect(formatEvidence(["gws-mcp__sheets_read"], [], toolNameShapes([]))).toContain("[redacted-id]");
+  });
+
+  it("refuses a slug that is not a plain name, so the pattern cannot be widened by one", () => {
+    // A slug is registry data. If one ever contained regex metacharacters it
+    // would be dropped rather than compiled into the alternation.
+    expect(toolNameShapes([".*"])).toEqual([]);
   });
 });

@@ -103,7 +103,10 @@ export async function recordResult(
   /** Tokens the scrub must not eat: the tool names this run served and the
    * addresses it was configured with. Narrow by construction, and empty by
    * default so a caller that forgets gets the safe behaviour. */
-  safe: readonly string[] = []
+  safe: readonly string[] = [],
+  /** Structural protections, for names no safe list can hold: see
+   * `toolNameShapes`. */
+  shapes: readonly RegExp[] = []
 ): Promise<void> {
   await db
     .insert(testResults)
@@ -114,7 +117,7 @@ export async function recordResult(
       status: row.status,
       cleanup: row.cleanup,
       durationMs: row.durationMs,
-      evidence: formatEvidence(row.evidence, safe),
+      evidence: formatEvidence(row.evidence, safe, shapes),
     })
     .onConflictDoNothing();
 }

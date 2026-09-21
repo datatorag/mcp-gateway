@@ -89,6 +89,26 @@ describe("case arguments against the served registry", () => {
       rows.map((r) => [r.name, (r.schema as { properties?: Record<string, unknown> } | null) ?? {}])
     );
 
+    /* PARAMETERS THE PLUGIN HAS AND THIS REGISTRY DOES NOT, named rather
+     * than waved through.
+     *
+     * The registry says what a caller is TOLD, not what the plugin accepts:
+     * the gateway forwards arguments, so a parameter the plugin declares
+     * works whether or not the registry row mentions it. The dev branch's
+     * registry is frozen at 2026-09-08 (see the registry-drift brief) and
+     * the signature switch shipped on 09-18 under SCRUM-278 and 09-19 under
+     * SCRUM-291, so these two are real parameters on a stale row.
+     *
+     * Each entry is a debt, not a decision. Delete it when the registry is
+     * written, and the test below refuses an entry naming a tool the
+     * registry does not have at all, so this cannot become a way to hide a
+     * mistyped tool name. */
+    const KNOWN_REGISTRY_DRIFT = new Set([
+      "gws-mcp__gmail_send:signature",
+      "gws-mcp__gmail_create_draft:signature",
+      "gws-mcp__gmail_update_draft:signature",
+    ]);
+
     const problems: string[] = [];
     const unregistered = new Set<string>();
     for (const call of readCaseCalls(CASES_DIR)) {
@@ -102,8 +122,17 @@ describe("case arguments against the served registry", () => {
       if (!call.args) continue;
       const declared = new Set(Object.keys(schema.properties ?? {}));
       for (const arg of call.args) {
-        if (!declared.has(arg)) problems.push(`${call.file}: ${call.tool} has no argument ${arg}`);
+        if (declared.has(arg)) continue;
+        if (KNOWN_REGISTRY_DRIFT.has(`${call.tool}:${arg}`)) continue;
+        problems.push(`${call.file}: ${call.tool} has no argument ${arg}`);
       }
+    }
+
+    // An allowlist entry for a tool the registry has never heard of would
+    // be a typo wearing a waiver.
+    for (const entry of KNOWN_REGISTRY_DRIFT) {
+      const [tool] = entry.split(":");
+      expect(schemas.has(tool), `${tool} is allowlisted but is not in the registry at all`).toBe(true);
     }
 
     if (unregistered.size > 0) {
@@ -150,5 +179,38 @@ describe("what a case declares and what it calls", () => {
       }
     }
     expect(problems).toEqual([]);
+  });
+});
+
+/**
+ * NO CASE REACHES THE TRASH WRITE DIRECTLY.
+ *
+ * `gws_run` gained exactly one permitted write so a mail run can clean up
+ * after itself, and the thing that keeps it narrow is not the guard — the
+ * guard only knows it is a gmail trash call. What keeps it to THIS RUN'S
+ * OWN MAIL is `ctx.trashOwnMessage`, which refuses any message whose
+ * subject lacks this case's stamp and the smoke prefix.
+ *
+ * So a case that assembled the trash call itself would walk straight past
+ * that check while passing the guard. That cannot be caught at run time by
+ * anything that is not this rule, and it is a fixed token in the source, so
+ * it is checked here.
+ */
+describe("the trash write", () => {
+  it("is reached only through ctx.trashOwnMessage, never assembled by a case", async () => {
+    const { readdirSync, readFileSync } = await import("node:fs");
+    const { join } = await import("node:path");
+
+    const offenders: string[] = [];
+    for (const file of readdirSync(CASES_DIR).filter((f) => f.endsWith(".ts") && f !== "index.ts")) {
+      const source = readFileSync(join(CASES_DIR, file), "utf8");
+      for (const call of readCaseCalls(CASES_DIR).filter((c) => c.file === file)) {
+        if (call.tool.endsWith("gws_run") && call.args?.includes("method")) {
+          // A gws_run call in a case is fine; a trash one is not.
+          if (/method:\s*"trash"/.test(source)) offenders.push(`${file} assembles a gws_run trash call`);
+        }
+      }
+    }
+    expect([...new Set(offenders)]).toEqual([]);
   });
 });

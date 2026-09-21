@@ -385,3 +385,141 @@ describe("the address parser on its own", () => {
     expect(() => parseAddressList(input)).toThrow(AddressParseError);
   });
 });
+
+/**
+ * THE TWO WIDENINGS, ruled by HQ on 2026-09-20, each pinned in both
+ * directions. A widening nobody can see the edge of is not a widening, it
+ * is a hole.
+ */
+describe("the sender mailbox, for reply and forward only", () => {
+  const reader = "reader@example.test";
+  const sender = "sender@example.test";
+  const lookups = {
+    readDraft: async () => null,
+    readMessage: async () => ({
+      to: reader,
+      from: sender,
+      subject: "[smoke] original",
+      replyTo: undefined,
+      cc: undefined,
+      bcc: undefined,
+    }),
+  };
+
+  it("ALLOWS a reply that goes back to the configured sender", async () => {
+    // D12 cannot exist otherwise: proving a reply lands in the same thread
+    // needs a message to travel back to us.
+    const verdict = await checkSend(
+      "gws-mcp__gmail_reply",
+      { message_id: "m1", body: "x" },
+      { readerEmail: reader, senderEmail: sender, lookups }
+    );
+    expect(verdict.ok).toBe(true);
+  });
+
+  it("REFUSES that same reply when no sender is configured", async () => {
+    const verdict = await checkSend(
+      "gws-mcp__gmail_reply",
+      { message_id: "m1", body: "x" },
+      { readerEmail: reader, senderEmail: null, lookups }
+    );
+    expect(verdict.ok).toBe(false);
+  });
+
+  it("ALLOWS a forward to the configured sender", async () => {
+    const verdict = await checkSend(
+      "gws-mcp__gmail_forward",
+      { message_id: "m1", to: sender, subject: "[smoke] fwd" },
+      { readerEmail: reader, senderEmail: sender, lookups }
+    );
+    expect(verdict.ok).toBe(true);
+  });
+
+  it("STILL REFUSES gmail_send to the sender, because the widening is reply and forward only", async () => {
+    const verdict = await checkSend(
+      "gws-mcp__gmail_send",
+      { to: sender, subject: "[smoke] x" },
+      { readerEmail: reader, senderEmail: sender, lookups }
+    );
+    expect(verdict.ok).toBe(false);
+    if (!verdict.ok) expect(verdict.reason).toContain("not the reader mailbox");
+  });
+
+  it("STILL REFUSES a stored draft addressed to the sender", async () => {
+    const verdict = await checkSend(
+      "gws-mcp__gmail_send_draft",
+      { draft_id: "d1" },
+      {
+        readerEmail: reader,
+        senderEmail: sender,
+        lookups: {
+          readDraft: async () => ({
+            to: sender,
+            subject: "[smoke] x",
+            cc: undefined,
+            bcc: undefined,
+            from: undefined,
+            replyTo: undefined,
+          }),
+          readMessage: async () => null,
+        },
+      }
+    );
+    expect(verdict.ok).toBe(false);
+  });
+
+  it("STILL REFUSES a forward to a stranger", async () => {
+    const verdict = await checkSend(
+      "gws-mcp__gmail_forward",
+      { message_id: "m1", to: "stranger@elsewhere.test", subject: "[smoke] x" },
+      { readerEmail: reader, senderEmail: sender, lookups }
+    );
+    expect(verdict.ok).toBe(false);
+  });
+});
+
+describe("the one gws_run write", () => {
+  const opts = {
+    readerEmail: "reader@example.test",
+    senderEmail: "sender@example.test",
+    lookups: { readDraft: async () => null, readMessage: async () => null },
+  };
+
+  it("ALLOWS trashing a gmail message, which is how a run cleans up after itself", async () => {
+    const verdict = await checkSend(
+      "gws-mcp__gws_run",
+      { service: "gmail", resource: "users.messages", method: "trash", params: { id: "m1" } },
+      opts
+    );
+    expect(verdict.ok).toBe(true);
+  });
+
+  it("REFUSES every other gmail write, including delete", async () => {
+    for (const method of ["delete", "send", "insert", "import", "batchDelete", "untrash"]) {
+      const verdict = await checkSend(
+        "gws-mcp__gws_run",
+        { service: "gmail", resource: "users.messages", method },
+        opts
+      );
+      expect(verdict.ok, `gmail users.messages.${method} must be refused`).toBe(false);
+    }
+  });
+
+  it("REFUSES trash on another service and another resource", async () => {
+    // The allowance is one service, one resource, one verb. Anything that
+    // reads as "trash" elsewhere is still a write and still refused.
+    for (const args of [
+      { service: "drive", resource: "files", method: "trash" },
+      { service: "gmail", resource: "users.threads", method: "trash" },
+      { service: "gmail", resource: "users.settings", method: "trash" },
+    ]) {
+      const verdict = await checkSend("gws-mcp__gws_run", args, opts);
+      expect(verdict.ok, `${args.service} ${args.resource}.${args.method} must be refused`).toBe(false);
+    }
+  });
+
+  it("still lets reads through and still refuses the settings paths", async () => {
+    expect((await checkSend("gws-mcp__gws_run", { service: "gmail", resource: "users.messages", method: "get" }, opts)).ok).toBe(true);
+    expect((await checkSend("gws-mcp__gws_run", { service: "gmail", resource: "users.settings", method: "update" }, opts)).ok).toBe(false);
+  });
+});
