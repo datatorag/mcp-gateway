@@ -183,6 +183,16 @@ export const SCENARIOS: Scenario[] = [
       "E9", //  a partial read returns the slice and says the doc is longer
     ],
   },
+  {
+    key: "drive",
+    title: "make a folder, copy a file into view, find it, read it",
+    steps: [
+      "DR1", // a folder is created inside the fixture folder, then removed
+      "D9", //  a copy is renamed, found by its new name, and deleted
+      "C4", //  search lists the fixture folder and the doc inside it
+      "DR2", // reading the fixture doc returns the document's own text
+    ],
+  },
 ];
 
 /**
@@ -198,8 +208,6 @@ export const SCENARIOS: Scenario[] = [
  * it cannot yet do is be selected by scenario, because it is not in one.
  */
 export const REGROUP_PENDING: string[] = [
-  // drive
-  "C4", "D9",
   // calendar
   "C3", "D5",
   // jira

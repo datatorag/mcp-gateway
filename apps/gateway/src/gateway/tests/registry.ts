@@ -1,5 +1,6 @@
 import { REGROUP_PENDING, scenarioOf } from "./scenarios";
 import { readdirSync } from "node:fs";
+import { isCaseFile } from "./case-arguments";
 import { join } from "node:path";
 import type { TestCase } from "./types";
 import { CASES } from "./cases";
@@ -73,7 +74,7 @@ export function checkRegistry(cases: readonly TestCase[]): RegistryProblem[] {
 export function caseFilesOnDisk(dir: string): string[] {
   try {
     return readdirSync(dir)
-      .filter((f) => f.endsWith(".ts") && f !== "index.ts" && !f.endsWith(".test.ts"))
+      .filter(isCaseFile)
       .sort();
   } catch {
     return [];

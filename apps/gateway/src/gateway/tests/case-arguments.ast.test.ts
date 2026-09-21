@@ -33,13 +33,13 @@ import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import ts from "typescript";
 import { CASES_DIR } from "./registry";
-import { readCaseCalls, type CaseCall } from "./case-arguments";
+import { readCaseCalls, type CaseCall, isCaseFile } from "./case-arguments";
 
 /** Every `ctx.call("tool", { ... })` the compiler can see, in source order. */
 function readWithCompiler(dir: string): CaseCall[] {
   const found: CaseCall[] = [];
 
-  for (const file of readdirSync(dir).filter((f) => f.endsWith(".ts") && f !== "index.ts").sort()) {
+  for (const file of readdirSync(dir).filter(isCaseFile).sort()) {
     const source = ts.createSourceFile(
       file,
       readFileSync(join(dir, file), "utf8"),

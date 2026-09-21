@@ -60,6 +60,8 @@ import { sh5SheetsDelete } from "./sh5-sheets-delete";
 import { gm1GmailUpdateLabel } from "./gm1-gmail-update-label";
 import { gm2GmailList } from "./gm2-gmail-list";
 import { gm3GmailMarkRead } from "./gm3-gmail-mark-read";
+import { dr1DriveFolder } from "./dr1-drive-folder";
+import { dr2DriveRead } from "./dr2-drive-read";
 import { r1FrontDoor } from "./r1-front-door";
 import { r2AdminOnly } from "./r2-admin-only";
 
@@ -160,6 +162,8 @@ export const CASES: TestCase[] = [
   gm1GmailUpdateLabel,
   gm2GmailList,
   gm3GmailMarkRead,
+  dr1DriveFolder,
+  dr2DriveRead,
   r1FrontDoor,
   r2AdminOnly,
 ];

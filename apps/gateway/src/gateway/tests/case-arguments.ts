@@ -21,6 +21,20 @@ import { join } from "node:path";
  * and produced a false positive on the first version.
  */
 
+/**
+ * A case module, as opposed to the barrel or a test beside it.
+ *
+ * ONE PREDICATE, because there were five copies and they had already
+ * diverged: `registry.ts` excluded `.test.ts` and the three argument
+ * walkers did not. That was inert only while no case had a test file next
+ * to it. The first one that mocks a `ctx.call` would be read as a case and
+ * fail the declare-versus-call check with a message naming a file that is
+ * not a case.
+ */
+export function isCaseFile(file: string): boolean {
+  return file.endsWith(".ts") && file !== "index.ts" && !file.endsWith(".test.ts");
+}
+
 /** `args` is null when the call passes a variable rather than an inline
  * object literal: unchecked, and said so rather than guessed. */
 export type CaseCall = { file: string; tool: string; args: string[] | null };
@@ -282,7 +296,7 @@ export function topLevelKeys(objectBody: string): string[] {
  */
 export function readCaseCalls(dir: string): CaseCall[] {
   const calls: CaseCall[] = [];
-  for (const file of readdirSync(dir).filter((f) => f.endsWith(".ts") && f !== "index.ts").sort()) {
+  for (const file of readdirSync(dir).filter(isCaseFile).sort()) {
     /* COMMENTS OUT FIRST, so a `ctx.call` written inside one is not read
      * as a call. Offsets stay consistent because every later index is
      * computed against this same string, which is the mistake an earlier

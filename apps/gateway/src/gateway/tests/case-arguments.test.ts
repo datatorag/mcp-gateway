@@ -13,7 +13,7 @@ import { CASES_DIR } from "./registry";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { readCaseCalls, topLevelKeys, withoutComments, withoutStringLiterals } from "./case-arguments";
+import { readCaseCalls, topLevelKeys, withoutComments, withoutStringLiterals, isCaseFile } from "./case-arguments";
 
 describe("the source reader", () => {
   it("does not mistake a query string for object keys", () => {
@@ -165,7 +165,7 @@ describe("what a case declares and what it calls", () => {
     const { join } = await import("node:path");
 
     const problems: string[] = [];
-    for (const file of readdirSync(CASES_DIR).filter((f) => f.endsWith(".ts") && f !== "index.ts")) {
+    for (const file of readdirSync(CASES_DIR).filter(isCaseFile)) {
       const source = readFileSync(join(CASES_DIR, file), "utf8");
       /* EVERY KIND OF COMMENT COMES OUT FIRST, and the second kind was
        * learned the hard way twice.
@@ -222,7 +222,7 @@ describe("the trash write", () => {
     const { join } = await import("node:path");
 
     const offenders: string[] = [];
-    for (const file of readdirSync(CASES_DIR).filter((f) => f.endsWith(".ts") && f !== "index.ts")) {
+    for (const file of readdirSync(CASES_DIR).filter(isCaseFile)) {
       const source = readFileSync(join(CASES_DIR, file), "utf8");
       for (const call of readCaseCalls(CASES_DIR).filter((c) => c.file === file)) {
         if (call.tool.endsWith("gws_run") && call.args?.includes("method")) {
