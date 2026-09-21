@@ -62,6 +62,9 @@ import { gm2GmailList } from "./gm2-gmail-list";
 import { gm3GmailMarkRead } from "./gm3-gmail-mark-read";
 import { dr1DriveFolder } from "./dr1-drive-folder";
 import { dr2DriveRead } from "./dr2-drive-read";
+import { ca1CalendarGet } from "./ca1-calendar-get";
+import { ca2CalendarUpdate } from "./ca2-calendar-update";
+import { ca3CalendarFreebusy } from "./ca3-calendar-freebusy";
 import { r1FrontDoor } from "./r1-front-door";
 import { r2AdminOnly } from "./r2-admin-only";
 
@@ -164,6 +167,9 @@ export const CASES: TestCase[] = [
   gm3GmailMarkRead,
   dr1DriveFolder,
   dr2DriveRead,
+  ca1CalendarGet,
+  ca2CalendarUpdate,
+  ca3CalendarFreebusy,
   r1FrontDoor,
   r2AdminOnly,
 ];

@@ -2,6 +2,15 @@ import type { TestCase } from "../types";
 import { firstArray, resultJson } from "../result-json";
 
 /**
+ * The fixture event's exact summary.
+ *
+ * EXPORTED so CA1, which reads the same event through `calendar_get_event`,
+ * checks the same string. Two copies of a control literal drift, and the
+ * one that drifts is the one nobody edits when the fixture is renamed.
+ */
+export const FIXTURE_SUMMARY = "[smoke-fixture] C3 calendar read fixture - DO NOT DELETE";
+
+/**
  * C3: the permanent calendar fixture is where it should be.
  *
  * The event is dated years out so it cannot collide with a real meeting,
@@ -40,8 +49,7 @@ export const c3CalendarRead: TestCase = {
       throw new Error("the permanent fixture event is not in its own window, so either calendar reads are broken or the fixture was deleted");
     }
 
-    const expected = "[smoke-fixture] C3 calendar read fixture - DO NOT DELETE";
-    if (found.summary !== expected) {
+    if (found.summary !== FIXTURE_SUMMARY) {
       throw new Error(`the fixture event's summary is ${JSON.stringify(found.summary ?? null)}, not the control string`);
     }
     ctx.evidence("the fixture event is present with its exact control summary");

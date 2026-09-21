@@ -193,6 +193,20 @@ export const SCENARIOS: Scenario[] = [
       "DR2", // reading the fixture doc returns the document's own text
     ],
   },
+  {
+    key: "calendar",
+    title: "put something on the calendar, read it, change it, check the time is taken, remove it",
+    steps: [
+      /* D5 owns the whole create-list-delete arc on its own event, so it
+       * runs first. C3 and CA1 then read the standing fixture, and CA2 and
+       * CA3 each create, use and remove an event of their own. */
+      "D5", //  a created event is listed, then deleted, and the listing loses it
+      "C3", //  the permanent fixture event is listed in its window
+      "CA1", // a get by id returns that event, with its control summary
+      "CA2", // an update changes what a later get returns
+      "CA3", // freebusy is busy where an event was made and free beside it
+    ],
+  },
 ];
 
 /**
@@ -208,8 +222,6 @@ export const SCENARIOS: Scenario[] = [
  * it cannot yet do is be selected by scenario, because it is not in one.
  */
 export const REGROUP_PENDING: string[] = [
-  // calendar
-  "C3", "D5",
   // jira
   "C7", "C11",
   // tasks
