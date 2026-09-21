@@ -94,20 +94,20 @@ describe("case arguments against the served registry", () => {
      *
      * The registry says what a caller is TOLD, not what the plugin accepts:
      * the gateway forwards arguments, so a parameter the plugin declares
-     * works whether or not the registry row mentions it. The dev branch's
-     * registry is frozen at 2026-09-08 (see the registry-drift brief) and
-     * the signature switch shipped on 09-18 under SCRUM-278 and 09-19 under
-     * SCRUM-291, so these two are real parameters on a stale row.
+     * works whether or not the registry row mentions it.
      *
-     * Each entry is a debt, not a decision. Delete it when the registry is
-     * written, and the test below refuses an entry naming a tool the
-     * registry does not have at all, so this cannot become a way to hide a
-     * mistyped tool name. */
-    const KNOWN_REGISTRY_DRIFT = new Set([
-      "gws-mcp__gmail_send:signature",
-      "gws-mcp__gmail_create_draft:signature",
-      "gws-mcp__gmail_update_draft:signature",
-    ]);
+     * EMPTY, AND THAT IS THE POINT. It held the three gmail `signature`
+     * parameters, which existed on the plugin from SCRUM-278 and SCRUM-291
+     * but not on a dev registry frozen at 2026-09-08. The dev branch was
+     * reset from prod on 2026-09-20, which brought those rows across, so the
+     * debt is paid rather than forgiven, and this set being empty while the
+     * cases still pass `signature` is the proof: an entry here is what was
+     * hiding the gap, and with none left the schemas must really declare it.
+     *
+     * Each entry is a debt, not a decision. The test below refuses an entry
+     * naming a tool the registry does not have at all, so this cannot become
+     * a way to hide a mistyped tool name. */
+    const KNOWN_REGISTRY_DRIFT = new Set<string>([]);
 
     const problems: string[] = [];
     const unregistered = new Set<string>();

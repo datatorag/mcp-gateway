@@ -22,35 +22,72 @@ export function RunsPanel({
   const [confirming, setConfirming] = useState<null | "all" | 1 | 2>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  /** The run this page started, until it shows up in the list. See the poll. */
+  const [startedId, setStartedId] = useState<string | null>(null);
 
   const reload = useCallback(async () => {
     const listed = await fetch("/api/admin/tests/runs");
     if (listed.ok) setRuns((await listed.json()).runs ?? []);
   }, []);
 
-  /* THE LIST REFRESHES ITSELF WHILE A RUN IS GOING (SCRUM-303).
+  /* THE LIST REFRESHES ITSELF, AND NOT ONLY WHEN IT ALREADY KNOWS A RUN
+   * IS GOING (SCRUM-303).
    *
-   * It did not, and the symptom was the one that wastes somebody's
-   * afternoon: a watcher sat on this page while a run started, finished in
-   * 23 seconds, and the row still said `running` until they reloaded. The
-   * page had a poll on the run DETAIL view and none here, so the first
-   * thing anyone looks at was the one thing that never updated, and the
-   * elapsed time they read off it was their own waiting rather than the
-   * run's.
+   * The first version polled only while `runs` already held a `running`
+   * row, which reads fine and is a trap: the condition is computed from the
+   * very list the poll exists to fetch. A page rendered when the history
+   * was EMPTY therefore never polled at all, and "No runs yet" was an
+   * absorbing state, nothing could ever leave it. That is not a corner: it
+   * is every page load on a fresh database, and it is what Manuel sat in
+   * front of while a run he had started ran to completion in another tab.
+   * The server log for that run is unambiguous, the list endpoint was not
+   * requested once between the start and the next manual reload.
    *
-   * It polls only while a run is actually running and stops as soon as none
-   * is, so an idle admin page is not a request every three seconds forever.
-   * A failed poll is ignored rather than surfaced: a dropped request during
-   * a deploy is not something to tell an operator about, and the next tick
-   * fixes it. */
-  const anyRunning = runs.some((r) => r.status === "running");
+   * So the poll always runs. The cadence, not its existence, is what the
+   * state decides: 3 s while something is in flight, 15 s otherwise, which
+   * is cheap enough for a page only admins open and is what lets a run
+   * started ANYWHERE ELSE appear here, from another tab, from the MCP tool,
+   * from a deploy gate.
+   *
+   * `startedId` covers the gap between starting a run and seeing it: until
+   * the id we were handed shows up in the list, this page keeps the fast
+   * cadence, so a refresh that failed right after the start is recovered by
+   * the next tick rather than waiting for somebody to press reload.
+   *
+   * A hidden tab polls not at all, and refetches the moment it is looked at
+   * again. That keeps the original intent, an idle page is quiet, without
+   * paying for it in correctness.
+   *
+   * A failed poll stays ignored: a dropped request during a deploy is not
+   * something to tell an operator about, and the next tick fixes it. */
+  const awaitingStarted = startedId !== null && !runs.some((r) => r.run_id === startedId);
+  const inFlight = runs.some((r) => r.status === "running") || awaitingStarted;
   useEffect(() => {
-    if (!anyRunning) return;
-    const timer = setInterval(() => {
+    const period = inFlight ? 3000 : 15000;
+    let timer: ReturnType<typeof setInterval> | null = null;
+    const stop = () => {
+      if (timer !== null) clearInterval(timer);
+      timer = null;
+    };
+    const schedule = () => {
+      stop();
+      timer = setInterval(() => void reload().catch(() => {}), period);
+    };
+    const onVisibility = () => {
+      if (document.hidden) {
+        stop();
+        return;
+      }
       void reload().catch(() => {});
-    }, 3000);
-    return () => clearInterval(timer);
-  }, [anyRunning, reload]);
+      schedule();
+    };
+    if (!document.hidden) schedule();
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => {
+      stop();
+      document.removeEventListener("visibilitychange", onVisibility);
+    };
+  }, [inFlight, reload]);
 
   async function start(scope: "all" | 1 | 2) {
     setBusy(true);
@@ -70,7 +107,12 @@ export function RunsPanel({
         );
         return;
       }
-      await reload();
+      setStartedId(typeof body.run_id === "string" ? body.run_id : null);
+      /* The refresh is attempted here for the common case and allowed to
+       * fail: the poll above is what GUARANTEES the row appears, and an
+       * unhandled rejection out of a click handler would leave the page
+       * silently stale, which is the defect this whole block exists for. */
+      await reload().catch(() => {});
     } finally {
       setBusy(false);
       setConfirming(null);

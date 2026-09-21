@@ -410,9 +410,13 @@ export async function checkSend(
      * `users.settings.sendAs` — so a segment that is a write verb has no
      * legitimate reason to be there. */
     const segments = String(args.resource ?? "")
-      .trim()
       .toLowerCase()
       .split(".")
+      /* PER SEGMENT, NOT THE WHOLE STRING. Trimming the resource before
+       * splitting it leaves interior whitespace inside a segment, and
+       * `users.messages. send` then read as a segment the set does not
+       * hold. Probe-confirmed against this guard before the change. */
+      .map((segment) => segment.trim())
       .filter(Boolean);
     const smuggled = segments.find((segment) => WRITE_VERBS.has(segment));
     if (smuggled) {

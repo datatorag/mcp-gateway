@@ -781,6 +781,29 @@ describe("gws_run and a write verb hidden in the resource path", () => {
     }
   });
 
+  it("REFUSES a write verb padded with whitespace, which the old trim let past", async () => {
+    /* The trim ran on the WHOLE resource string before it was split, so
+     * whitespace INSIDE a segment survived into the set lookup and
+     * `users.messages. send` read as a segment the set does not hold.
+     * Probe-confirmed allowed against the previous code, which is the only
+     * reason this test is here: a guard nobody has seen fail is a comment.
+     * Each spelling below is one way to reach the same argv. */
+    for (const resource of [
+      "users.messages. send",
+      "users.messages .send",
+      "users.messages.\tsend",
+      "users.messages.\nsend",
+      " users.messages . delete ",
+    ]) {
+      const verdict = await checkSend(
+        "gws-mcp__gws_run",
+        { service: "gmail", resource, method: "get" },
+        opts
+      );
+      expect(verdict.ok, `${JSON.stringify(resource)} must be refused`).toBe(false);
+    }
+  });
+
   it("still ALLOWS ordinary noun resources with a read method", async () => {
     for (const resource of ["users.messages", "users.drafts", "users.labels"]) {
       const verdict = await checkSend(
