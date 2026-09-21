@@ -207,6 +207,23 @@ export const SCENARIOS: Scenario[] = [
       "CA3", // freebusy is busy where an event was made and free beside it
     ],
   },
+  {
+    key: "jira",
+    title: "find the board, raise an issue, work it, comment on it, close it out",
+    steps: [
+      /* The two reads that need nothing created run first, so a failure in
+       * them is the connector rather than anything this scenario did. */
+      "C7",  // a bounded search returns issues from our own project
+      "JR1", // the field catalogue answers with identified fields
+      "JR2", // a user search answers with accounts carrying an account id
+      "C11", // a created issue is deleted and it is the only thing that changed
+      "JR3", // updating a summary changes what a later get returns
+      "JR4", // a comment is added, edited and deleted, each seen by a re-read
+      "JR5", // an issue transitions to a status the board offered
+      "JR6", // the attachment endpoint agrees with the issue
+      "JR7", // a delete is refused locally when the key is not a jira key
+    ],
+  },
 ];
 
 /**
@@ -222,8 +239,6 @@ export const SCENARIOS: Scenario[] = [
  * it cannot yet do is be selected by scenario, because it is not in one.
  */
 export const REGROUP_PENDING: string[] = [
-  // jira
-  "C7", "C11",
   // tasks
   "C10",
   // contacts

@@ -65,6 +65,13 @@ import { dr2DriveRead } from "./dr2-drive-read";
 import { ca1CalendarGet } from "./ca1-calendar-get";
 import { ca2CalendarUpdate } from "./ca2-calendar-update";
 import { ca3CalendarFreebusy } from "./ca3-calendar-freebusy";
+import { jr1JiraFields } from "./jr1-jira-fields";
+import { jr2JiraUsers } from "./jr2-jira-users";
+import { jr3JiraUpdate } from "./jr3-jira-update";
+import { jr4JiraComments } from "./jr4-jira-comments";
+import { jr5JiraTransitions } from "./jr5-jira-transitions";
+import { jr6JiraAttachment } from "./jr6-jira-attachment";
+import { jr7JiraKeyRefused } from "./jr7-jira-key-refused";
 import { r1FrontDoor } from "./r1-front-door";
 import { r2AdminOnly } from "./r2-admin-only";
 
@@ -170,6 +177,13 @@ export const CASES: TestCase[] = [
   ca1CalendarGet,
   ca2CalendarUpdate,
   ca3CalendarFreebusy,
+  jr1JiraFields,
+  jr2JiraUsers,
+  jr3JiraUpdate,
+  jr4JiraComments,
+  jr5JiraTransitions,
+  jr6JiraAttachment,
+  jr7JiraKeyRefused,
   r1FrontDoor,
   r2AdminOnly,
 ];

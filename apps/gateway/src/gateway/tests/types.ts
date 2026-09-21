@@ -30,6 +30,11 @@ export const FIXTURE_KEYS = [
   "doc",
   "deck",
   "calendarEvent",
+  /** The Jira project new issues are created in, and the issue carrying the
+   * standing attachment. Keys rather than literals: the project and the
+   * issue belong to our tenant and this repo is public. */
+  "jiraProject",
+  "jiraAttachmentIssue",
   "querySheet",
   /** The TAB inside `querySheet` that C12 runs over. A key rather than a
    * literal in a case, for the same reason every id is: this repo is public

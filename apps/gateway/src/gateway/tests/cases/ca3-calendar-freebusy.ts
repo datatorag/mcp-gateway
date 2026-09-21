@@ -120,7 +120,7 @@ export const ca3CalendarFreebusy: TestCase = {
     const occupiedBefore = await askBusy(busyStart, busyEnd);
     if (occupiedBefore.length > 0) {
       throw new Error(
-        `the window this case creates into is already busy (${occupiedBefore.length} interval(s)) before it has created anything, so a later busy answer would not be evidence of this run's event; the causes are a retry re-running this body after an earlier attempt already created, and residue from a run whose cleanup leaked`
+        `the window this case creates into is already busy (${occupiedBefore.length} interval(s)) before it has created anything, so a later busy answer would not be evidence of this run's event; the usual causes are a retry re-running this body after an earlier attempt already created, and residue from a run whose cleanup leaked`
       );
     }
     ctx.evidence("both windows are free before anything is created");
