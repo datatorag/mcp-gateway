@@ -621,6 +621,11 @@ export function makeContextParts(opts: {
       nonAdminView: () =>
         opts.db ? nonAdminView(opts.db, fixtures.user("nonAdmin") ?? undefined) : needs("nonAdminView"),
     },
+    address(role: AccountRole) {
+      const value = fixtures.account(role);
+      if (!value) throw new Error(`no address is mapped for ${role}`);
+      return value;
+    },
     fixture(key: FixtureKey) {
       const value = fixtures.fixture(key);
       if (!value) throw new Error(`no fixture is mapped for ${key}`);

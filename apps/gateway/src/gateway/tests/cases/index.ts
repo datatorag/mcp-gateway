@@ -18,6 +18,28 @@ import { c9ContactsList } from "./c9-contacts-list";
 import { c10TasksList } from "./c10-tasks-list";
 import { c12SheetsQuery } from "./c12-sheets-query";
 import { c13SkillsSurface } from "./c13-skills-surface";
+import { d1SheetsAppend } from "./d1-sheets-append";
+import { d2SheetsUpdate } from "./d2-sheets-update";
+import { d3GmailDraft } from "./d3-gmail-draft";
+import { d4DocsRoundTrip } from "./d4-docs-roundtrip";
+import { d5CalendarRoundTrip } from "./d5-calendar-roundtrip";
+import { d6SlidesRoundTrip } from "./d6-slides-roundtrip";
+import { d7SheetsTab } from "./d7-sheets-tab";
+import { d9DriveRoundTrip } from "./d9-drive-roundtrip";
+import { e1GmailLabel } from "./e1-gmail-label";
+import { e3SheetsText } from "./e3-sheets-text";
+import { e4SheetsCoercion } from "./e4-sheets-coercion";
+import { c11JiraRoundTrip } from "./c11-jira-roundtrip";
+import { d14SheetsFormat } from "./d14-sheets-format";
+import { d15AttachmentBytes } from "./d15-attachment-bytes";
+import { e2GmailFilters } from "./e2-gmail-filters";
+import { e5Annotations } from "./e5-annotations";
+import { e8ServedSchema } from "./e8-served-schema";
+import { e9DocsPartial } from "./e9-docs-partial";
+import { e10DocsReplace } from "./e10-docs-replace";
+import { e11SheetsBadRange } from "./e11-sheets-bad-range";
+import { e16BatchLabel } from "./e16-batch-label";
+import { e17MultiRange } from "./e17-multi-range";
 import { f1ApprovalBoundary } from "./f1-approval-boundary";
 import { f2UnapprovedScopes } from "./f2-unapproved-scopes";
 import { f7ApiKeyRefused } from "./f7-api-key-refused";
@@ -34,11 +56,21 @@ import { r2AdminOnly } from "./r2-admin-only";
  * `registry.test.ts` asserts the list and the directory agree, so a file
  * nobody listed fails rather than silently not running.
  *
- * C11 IS NOT HERE AND THAT IS ON PURPOSE. It sits in the sheet's read
- * section but it creates and deletes a real Jira issue, with a
- * whole-board baseline either side of the delete. It is a round trip
- * wearing a C number, so it goes with the round trips in 4c rather than
- * making the read batch a batch that writes.
+ * Batch 4c, part one: the write round trips. Every one of them creates
+ * something and removes it again in the same run, and every removal is
+ * VERIFIED by a read or a listing rather than assumed from a success
+ * response. Three carry a deviation from their smoke row, ruled by HQ on
+ * 2026-09-20 and stated in the case's own text so the tab can be brought
+ * into line: D3's recipient, D4 and D6's containment, D5's delete check.
+ *
+ * C11 IS A ROUND TRIP WEARING A C NUMBER. It sits in the sheet's read
+ * section and creates and deletes a real Jira issue, with a whole-board
+ * baseline either side, so it is here in 4c rather than in the read batch.
+ *
+ * NINE ROWS ARE DELIBERATELY NOT PORTED AT ALL (E6, E7, E12, F3, F4, F5,
+ * F6, G2, H1). They need a browser, a human judgement or a third-party
+ * console, so they stay with the agent rather than becoming cases that
+ * quietly assert less than their row says.
  *
  * The cases carry the smoke sheet's ids on purpose. A ported case that
  * renamed itself would break every reference in three years of run logs.
@@ -63,6 +95,28 @@ export const CASES: TestCase[] = [
   c10TasksList,
   c12SheetsQuery,
   c13SkillsSurface,
+  d1SheetsAppend,
+  d2SheetsUpdate,
+  d3GmailDraft,
+  d4DocsRoundTrip,
+  d5CalendarRoundTrip,
+  d6SlidesRoundTrip,
+  d7SheetsTab,
+  d9DriveRoundTrip,
+  e1GmailLabel,
+  e3SheetsText,
+  e4SheetsCoercion,
+  c11JiraRoundTrip,
+  d14SheetsFormat,
+  d15AttachmentBytes,
+  e2GmailFilters,
+  e5Annotations,
+  e8ServedSchema,
+  e9DocsPartial,
+  e10DocsReplace,
+  e11SheetsBadRange,
+  e16BatchLabel,
+  e17MultiRange,
   f1ApprovalBoundary,
   f2UnapprovedScopes,
   f7ApiKeyRefused,

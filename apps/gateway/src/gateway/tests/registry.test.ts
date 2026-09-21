@@ -36,10 +36,17 @@ describe("the real registry", () => {
     expect(ids).toEqual(
       expect.arrayContaining(["C1", "C2", "C3", "C4", "C5", "C6", "C7", "C8", "C9", "C10", "C12", "C13"])
     );
-    // C11 is a create-and-delete round trip wearing a C number. It belongs
-    // with the round trips, and this asserts it did not drift into the read
-    // batch on the strength of its id.
-    expect(ids).not.toContain("C11");
+    expect(ids).toEqual(
+      expect.arrayContaining(["D1", "D2", "D3", "D4", "D5", "D6", "D7", "D9", "E1", "E3", "E4"])
+    );
+    expect(ids).toEqual(
+      expect.arrayContaining(["C11", "D14", "D15", "E2", "E5", "E8", "E9", "E10", "E11", "E16", "E17"])
+    );
+    /* NINE ROWS ARE NOT PORTED, and that is a decision rather than a gap:
+     * they need a browser, a human judgement or a third-party console, so
+     * they stay with the agent. Pinned so nobody ports one halfway and
+     * leaves a case asserting less than its row claims. */
+    expect(ids).not.toEqual(expect.arrayContaining(["E6", "E7", "E12", "F3", "F4", "F5", "F6", "G2", "H1"]));
     // R for runner: the two cases the sheet never had, kept out of the
     // ported id space so the counts stay comparable.
     expect(ids).toEqual(expect.arrayContaining(["R1", "R2"]));

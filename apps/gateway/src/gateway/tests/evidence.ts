@@ -44,6 +44,8 @@ export function formatEvidence(lines: readonly string[], safe: readonly string[]
  * carries no `@` and no key prefix. */
 const OPEN = "\u00ab";
 const CLOSE = "\u00bb";
+/** Padding, outside every pattern's character class. */
+const PAD = "\u00b7";
 
 /**
  * Runs `scrub` over `text` with `safe` tokens held back (SCRUM-303).
@@ -65,6 +67,19 @@ const CLOSE = "\u00bb";
  * FAILS CLOSED. If the text already contains the sentinel, restoring could
  * corrupt it, so nothing is protected and everything is scrubbed.
  */
+/** `«n»` padded to `width` so masking never changes the text's length. */
+function sentinel(slot: number, width: number): string {
+  const core = `${OPEN}${slot}${CLOSE}`;
+  if (width <= core.length) return core;
+  return core + PAD.repeat(width - core.length);
+}
+
+/** The token where it stands alone, never inside a longer address or id. */
+function standalone(token: string): RegExp {
+  const escaped = token.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return new RegExp(`(?<![A-Za-z0-9_.@+-])${escaped}(?![A-Za-z0-9_.@+-])`, "g");
+}
+
 export function protect(
   text: string,
   safe: readonly string[],
@@ -72,7 +87,7 @@ export function protect(
 ): string {
   const tokens = [...new Set(safe)].filter((t) => t.length > 0);
   if (tokens.length === 0) return scrub(text);
-  if (text.includes(OPEN) || text.includes(CLOSE)) return scrub(text);
+  if (text.includes(OPEN) || text.includes(CLOSE) || text.includes(PAD)) return scrub(text);
 
   // Longest first, so a token that contains another is masked whole.
   tokens.sort((a, b) => b.length - a.length);
@@ -82,13 +97,32 @@ export function protect(
   for (const token of tokens) {
     if (!masked.includes(token)) continue;
     const slot = used.length;
+    const stand = sentinel(slot, token.length);
+    // Two properties the naive replace did not have, both found by review
+    // with worked examples rather than reasoned about:
+    //
+    // BOUNDARIES. Replacing every occurrence broke a safe token out of a
+    // string that merely CONTAINED it, so `runner@ours.test` protected
+    // `notrunner@ours.test`, and a long id with a tool name inside it
+    // survived in two sub-20 halves. Only a standalone occurrence is
+    // protected now.
+    //
+    // LENGTH. The stand-in is padded to the token's own length, because
+    // the quoted-content rule triggers on runs over 40 characters and
+    // shortening the line could drop a genuine payload under the
+    // threshold. Masking must not change what the other patterns see.
+    const before = masked;
+    masked = masked.replace(standalone(token), stand);
+    if (masked === before) continue;
     used.push(token);
-    masked = masked.split(token).join(`${OPEN}${slot}${CLOSE}`);
+    if (stand !== sentinel(used.length - 1, token.length)) {
+      throw new Error("evidence: sentinel slots drifted");
+    }
   }
 
   let out = scrub(masked);
   for (let i = 0; i < used.length; i += 1) {
-    out = out.split(`${OPEN}${i}${CLOSE}`).join(used[i]);
+    out = out.split(sentinel(i, used[i].length)).join(used[i]);
   }
   return out;
 }

@@ -122,3 +122,55 @@ describe("tokens the scrub must not eat", () => {
     expect(formatEvidence([`serve ${TOOL}`])).toContain("[redacted-id]");
   });
 });
+
+/**
+ * The two ways masking could WEAKEN the scrub, both found by review with
+ * worked examples rather than reasoned about, both now closed.
+ */
+describe("masking must not change what the other patterns see", () => {
+  const TOOL = "gws-mcp__sheets_query";
+  const ADDRESS = "reader@example.test";
+
+  it("does not break a safe address out of a longer one", () => {
+    // `notreader@example.test` merely CONTAINS the configured address. It is
+    // a different mailbox and must still be redacted.
+    const out = formatEvidence(["mail from notreader@example.test"], [ADDRESS]);
+    expect(out).toContain("[redacted-email]");
+    expect(out).not.toContain("notreader@example.test");
+  });
+
+  it("does not let an id survive by embedding a tool name", () => {
+    const id = `1AbCdEf${TOOL}9XyZ0123456789`;
+    const out = formatEvidence([`created ${id}`], [TOOL]);
+    expect(out).toContain("[redacted-id]");
+    expect(out).not.toContain(id);
+  });
+
+  it("still protects the token where it stands alone in the same line", () => {
+    const out = formatEvidence([`${TOOL} failed for notreader@example.test`], [TOOL, ADDRESS]);
+    expect(out).toContain(TOOL);
+    expect(out).toContain("[redacted-email]");
+  });
+
+  it("keeps a long quoted payload over the threshold, so masking cannot smuggle it through", () => {
+    /* The quoted-content rule triggers over 40 characters. This payload is
+     * JUST over, and contains the safe token, so an unpadded stand-in would
+     * shrink it under the line and let a real payload through unredacted.
+     * The lengths are asserted rather than eyeballed: the first version of
+     * this test used a payload long enough to stay over the threshold
+     * either way, so it passed against the unpadded code and proved
+     * nothing. A guard is not a guard until it has been seen to fail. */
+    const payload = `${TOOL} ${"x".repeat(23)}`;
+    expect(payload).toHaveLength(45);
+    expect(payload.length - TOOL.length + 3).toBeLessThan(41);
+
+    const out = formatEvidence([`answered "${payload}"`], [TOOL]);
+    expect(out).toContain("[redacted-content]");
+    expect(out).not.toContain("xxxxxxxxxxxxxxxxxxxxxxx");
+  });
+
+  it("fails closed on the padding character too", () => {
+    const out = formatEvidence([`· saw ${TOOL}`], [TOOL]);
+    expect(out).toContain("[redacted-id]");
+  });
+});

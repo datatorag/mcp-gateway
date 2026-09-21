@@ -67,6 +67,12 @@ export interface CaseContext {
   http(path: string, init?: RequestInit): Promise<Response>;
   gateway: GatewaySurface;
   fixture(key: FixtureKey): string;
+  /** The configured address for a role, for the rare case that needs one in
+   * a field rather than as the acting account: a draft has to carry a
+   * recipient. Resolved from config like everything else, so a case in this
+   * public repo still never contains an address, and the send guard still
+   * decides independently whether that recipient is allowed. */
+  address(role: AccountRole): string;
   /** What a case named in `needs` shared. */
   from(caseId: string): Record<string, unknown>;
   share(values: Record<string, unknown>): void;
