@@ -704,3 +704,91 @@ describe("gws_run and the gmail settings tree", () => {
     expect((await run("files", "update", "drive")).ok).toBe(false);
   });
 });
+
+/**
+ * THE THREE RESIDUALS THE SECOND GATE NAMED, closed. None was reachable by
+ * any case in the batch; all three were the guard promising more than it
+ * delivered, which is the shape of defect that gets believed.
+ */
+describe("the guard and the tool must agree", () => {
+  const reader = "reader@example.test";
+  const sender = "sender@example.test";
+  const stranger = "stranger@evil.test";
+
+  const replyTo = (from: string) =>
+    checkSend(
+      "gws-mcp__gmail_reply",
+      { message_id: "m1", body: "x" },
+      {
+        readerEmail: reader,
+        senderEmail: sender,
+        lookups: {
+          readDraft: async () => null,
+          readMessage: async () =>
+            ({ from, subject: `${SUBJECT_PREFIX} x`, replyTo: undefined }) as never,
+        },
+      }
+    );
+
+  it("REFUSES a From the tool reads differently than this guard does", async () => {
+    /* The guard parses RFC 5322 and takes the first address, ignoring
+     * comments; the tool takes the LAST angle pair and does not know what a
+     * comment is. On this header they disagree, and the tool's reading is
+     * the one that gets mailed. */
+    for (const from of [
+      `<${reader}> (<${stranger}>)`,
+      `${reader} (<${stranger}>)`,
+      `"${sender}" <${sender}> <${stranger}>`,
+    ]) {
+      const verdict = await replyTo(from);
+      expect(verdict.ok, `${from} must be refused`).toBe(false);
+    }
+  });
+
+  it("still ALLOWS the ordinary forms both read the same way", async () => {
+    for (const from of [sender, `<${sender}>`, `Someone <${sender}>`]) {
+      const verdict = await replyTo(from);
+      expect(verdict.ok, `${from} must be allowed`).toBe(true);
+    }
+  });
+});
+
+describe("gws_run and a write verb hidden in the resource path", () => {
+  const opts = {
+    readerEmail: "reader@example.test",
+    senderEmail: "sender@example.test",
+    lookups: { readDraft: async () => null, readMessage: async () => null },
+  };
+
+  it("REFUSES a write verb anywhere in the path, not just as the method", async () => {
+    /* The client builds its argv as [service, ...resource.split("."),
+     * method], so the verb the CLI resolves need not be the one in
+     * `method`. Checking only the method let `users.messages.send` with
+     * method `get` read as a permitted READ while the argv carried `send`.
+     * The comment promising gws_run may only read was wider than the code. */
+    for (const resource of [
+      "users.messages.send",
+      "users.messages.delete",
+      "users.settings.forwardingAddresses.create",
+      "users.drafts.send",
+    ]) {
+      const verdict = await checkSend(
+        "gws-mcp__gws_run",
+        { service: "gmail", resource, method: "get" },
+        opts
+      );
+      expect(verdict.ok, `${resource} must be refused`).toBe(false);
+    }
+  });
+
+  it("still ALLOWS ordinary noun resources with a read method", async () => {
+    for (const resource of ["users.messages", "users.drafts", "users.labels"]) {
+      const verdict = await checkSend(
+        "gws-mcp__gws_run",
+        { service: "gmail", resource, method: "get" },
+        opts
+      );
+      expect(verdict.ok, `${resource} must be allowed`).toBe(true);
+    }
+  });
+});

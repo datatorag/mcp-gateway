@@ -595,33 +595,47 @@ export function makeContextParts(opts: {
     throw new Error(`ctx.gateway.${what}: this run has no database or plugin pool`);
   };
 
-  const lookups: GuardLookups = {
-    /* A DRAFT ID IS NOT A MESSAGE ID. This asked `gmail_read` for the draft,
-     * which is `users.messages.get` underneath, and that errors on a draft
-     * id — so the lookup returned null and `gmail_send_draft` refused every
-     * time. Fail-closed, and also a guard that could never say yes. Drafts
-     * are read through their own resource; it is a read, so the read-only
-     * rule covers it unchanged. */
-    async readDraft(draftId) {
-      const account = fixtures.account("sender");
-      const result = await client.callTool("gws-mcp__gws_run", {
-        service: "gmail",
-        resource: "users.drafts",
-        method: "get",
-        params: { userId: "me", id: draftId, format: "metadata" },
-        ...(account ? { account } : {}),
-      });
-      return parseHeaders(result);
-    },
-    async readMessage(messageId) {
-      const account = fixtures.account("sender");
-      const result = await client.callTool("gws-mcp__gmail_read", {
-        message_id: messageId,
-        ...(account ? { account } : {}),
-      });
-      return parseHeaders(result);
-    },
+  /**
+   * THE GUARD MUST INSPECT THE OBJECT THE TOOL WILL ACT ON, which means the
+   * same account. These pinned `sender` while the call might be dispatched
+   * as `reader` — D12 replies as the reader — so the guard could read one
+   * mailbox and the tool act in another. It failed closed (an id from the
+   * other mailbox is simply not found, so the guard refused), but a guard
+   * whose safety rests on a lookup MISSING is not a guard, it is a
+   * coincidence. Built per call now, for the role that call runs as.
+   */
+  const lookupsFor = (role: AccountRole): GuardLookups => {
+    const account = fixtures.account(role);
+    const withAccount = (extra: Record<string, unknown>) =>
+      account ? { ...extra, account } : { ...extra };
+    return {
+      /* A DRAFT ID IS NOT A MESSAGE ID: `gmail_read` is
+       * `users.messages.get` underneath and errors on a draft id, so this
+       * asked the wrong resource and the lookup returned null, which meant
+       * `gmail_send_draft` refused every time. Drafts have their own
+       * resource, and reading one is a read. */
+      async readDraft(draftId) {
+        const result = await client.callTool(
+          "gws-mcp__gws_run",
+          withAccount({
+            service: "gmail",
+            resource: "users.drafts",
+            method: "get",
+            params: { userId: "me", id: draftId, format: "metadata" },
+          })
+        );
+        return parseHeaders(result);
+      },
+      async readMessage(messageId) {
+        const result = await client.callTool(
+          "gws-mcp__gmail_read",
+          withAccount({ message_id: messageId })
+        );
+        return parseHeaders(result);
+      },
+    };
   };
+
 
   /* Ids the trash helper has stamp-verified, for the one call each. The
    * guard refuses a trash for anything not in here, so the helper cannot be
@@ -640,7 +654,9 @@ export function makeContextParts(opts: {
     const verdict = await checkSend(tool, withAccount, {
       readerEmail: fixtures.account("reader"),
       senderEmail: fixtures.account("sender"),
-      lookups,
+      // The role this call runs as, so the guard reads the mailbox the tool
+      // will act in rather than a different one.
+      lookups: lookupsFor(role),
       trashable,
     });
     if (!verdict.ok) throw new Error(verdict.reason);

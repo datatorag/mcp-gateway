@@ -100,6 +100,63 @@ const GWS_RUN_FORBIDDEN: Record<string, RegExp> = {
  * actually perform has a dedicated tool, and `gws_run` is the fallback for
  * surfaces nobody has wrapped yet.
  */
+/**
+ * Verbs that are never a read, wherever they appear in a path.
+ *
+ * Deliberately a denylist HERE, unlike the read allowlist below, and the
+ * difference matters: the allowlist decides whether a call proceeds and so
+ * has to fail closed, while this one only catches a verb hiding in a
+ * position the allowlist does not inspect. An unknown segment is still
+ * refused by the allowlist on the method.
+ */
+/**
+ * The address the REPLY TOOL will actually use, extracted the way the tool
+ * extracts it.
+ *
+ * The guard parses `From` as RFC 5322 and takes the first address, ignoring
+ * comments. The tool takes the LAST angle pair and does not know what a
+ * comment is. Those disagree on a header somebody else can write:
+ * `From: <reader@ours.test> (<stranger@evil.test>)` parses as ours and
+ * composes to the stranger.
+ *
+ * Rather than argue about which reading is correct, the guard now computes
+ * BOTH and requires them to agree. RFC parsing catches malformed input;
+ * this catches the case where the tool and the standard differ, which is
+ * the one an attacker gets to choose. If the tool's extraction ever
+ * changes, this mirror has to change with it — a comment in the tool's repo
+ * says so too.
+ */
+export function addressAsTheToolReadsIt(from: string): string {
+  const safe = from.replace(/[\r\n]+/g, " ");
+  const open = safe.lastIndexOf("<");
+  if (open === -1) return safe.trim().toLowerCase();
+  const close = safe.indexOf(">", open);
+  if (close === -1) return safe.trim().toLowerCase();
+  return safe.slice(open + 1, close).trim().toLowerCase();
+}
+
+const WRITE_VERBS = new Set([
+  "send",
+  "delete",
+  "batchdelete",
+  "trash",
+  "untrash",
+  "insert",
+  "create",
+  "update",
+  "patch",
+  "modify",
+  "batchmodify",
+  "import",
+  "move",
+  "copy",
+  "stop",
+  "watch",
+  "setup",
+  "enable",
+  "disable",
+]);
+
 const READ_METHODS = new Set([
   "get",
   "list",
@@ -323,6 +380,33 @@ export async function checkSend(
       return { ok: true };
     }
 
+    /* EVERY SEGMENT, NOT JUST THE LAST ONE.
+     *
+     * The client builds its argument vector as
+     * `[service, ...resource.split("."), method]`, so the verb the CLI ends
+     * up resolving does not have to be the one in `method`. Checking only
+     * `method` let a write ride in the resource: `users.messages.send` with
+     * method `get` read as a permitted read here, while the argv carried
+     * `send`. Nothing in this suite does that, and the comment above
+     * promising `gws_run` MAY ONLY READ was still wider than the code.
+     *
+     * A write verb anywhere in the path is now refused, whichever position
+     * the CLI resolves. Real resources are nouns — `users.messages`,
+     * `users.settings.sendAs` — so a segment that is a write verb has no
+     * legitimate reason to be there. */
+    const segments = String(args.resource ?? "")
+      .trim()
+      .toLowerCase()
+      .split(".")
+      .filter(Boolean);
+    const smuggled = segments.find((segment) => WRITE_VERBS.has(segment));
+    if (smuggled) {
+      return {
+        ok: false,
+        reason: `send refused: gws_run may only read, and ${smuggled} in the resource path is not a read`,
+      };
+    }
+
     if (!READ_METHODS.has(verb)) {
       return {
         ok: false,
@@ -471,6 +555,15 @@ export async function checkSend(
 
   const fromOk = headerOk(original.from, "From");
   if (!fromOk.ok) return fromOk;
+
+  // AND the same header as the TOOL reads it, which is not always the same
+  // address. See `addressAsTheToolReadsIt`.
+  if (!replyPermitted.has(addressAsTheToolReadsIt(original.from ?? ""))) {
+    return {
+      ok: false,
+      reason: "send refused: the original's From reads as a different address to the tool than to this guard",
+    };
+  }
   if ((original.replyTo ?? "").trim() !== "") {
     const replyToOk = headerOk(original.replyTo, "Reply-To");
     if (!replyToOk.ok) return replyToOk;
