@@ -170,6 +170,19 @@ export const SCENARIOS: Scenario[] = [
       "D15", // an attachment saved to Drive matches in size and md5
     ],
   },
+  {
+    key: "docs",
+    title: "create a document, write it, edit it, read it back, delete it",
+    steps: [
+      /* D4 and E10 each create and delete their own document, so neither
+       * depends on the other and neither touches the fixture doc. */
+      "D4", //  created, written, read back, deleted
+      "E10", // nested replaceAllText works; the flat shape is refused
+      /* Read guards, on the standing fixture doc. */
+      "C5", //  the fixture doc's first line is its control heading
+      "E9", //  a partial read returns the slice and says the doc is longer
+    ],
+  },
 ];
 
 /**
@@ -185,8 +198,6 @@ export const SCENARIOS: Scenario[] = [
  * it cannot yet do is be selected by scenario, because it is not in one.
  */
 export const REGROUP_PENDING: string[] = [
-  // docs
-  "C5", "D4", "E9", "E10",
   // drive
   "C4", "D9",
   // calendar
