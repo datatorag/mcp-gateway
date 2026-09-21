@@ -101,14 +101,35 @@ beforeEach(() => {
   poolMock.acquire = vi.fn().mockResolvedValue({ callTool: poolCallTool });
 });
 
-/** The smallest valid call for each built-in. */
-function argumentsFor(name: string): Record<string, unknown> {
-  if (name === "echo") return { message: "smoke" };
-  if (name === "tests_status" || name === "tests_results") {
-    return { run_id: "11111111-2222-4333-8444-555555555555" };
+/**
+ * The smallest valid call for each built-in, DERIVED FROM ITS OWN SCHEMA.
+ *
+ * A name switch here would drift from the schema silently, and worse, it
+ * would let anyone quiet a real validation defect by adding a branch. This
+ * reads `required` instead, so a tool that gains a required field is
+ * covered without touching this file, and one that gains a field nobody
+ * can supply turns the test red.
+ */
+function argumentsFor(tool: (typeof BUILT_IN_TOOLS)[number]): Record<string, unknown> {
+  const schema = tool.definition.inputSchema as {
+    required?: string[];
+    properties?: Record<string, { type?: string }>;
+  };
+  const args: Record<string, unknown> = {};
+  for (const field of schema.required ?? []) {
+    const type = schema.properties?.[field]?.type;
+    args[field] =
+      field.endsWith("_id")
+        ? "11111111-2222-4333-8444-555555555555"
+        : type === "number"
+          ? 1
+          : type === "boolean"
+            ? true
+            : type === "array"
+              ? []
+              : "smoke";
   }
-  // Everything else, `tests_run` included, is valid with no arguments.
-  return {};
+  return args;
 }
 
 describe("built-in tools", () => {
@@ -141,7 +162,7 @@ describe("built-in tools", () => {
          * the WHOLE SUITE with its mail sends, so it refuses a field it
          * does not know. This test is about telemetry, not about argument
          * validation, so it should hand each tool what that tool takes. */
-        arguments: argumentsFor(t.definition.name),
+        arguments: argumentsFor(t),
       });
       expect(result.isError ?? false).toBe(false);
       expect(trackToolCall).toHaveBeenCalledTimes(1);
@@ -210,5 +231,40 @@ describe("built-in tools", () => {
     const outcome = trackToolCall.mock.calls[0][1].outcome;
     expect(outcome.source).toBe("mcp");
     expect(outcome.builtin).toBeUndefined();
+  });
+});
+
+/**
+ * THE REFUSAL IS LOAD-BEARING ON THE SDK, so it is pinned THROUGH the SDK.
+ *
+ * `tests_run` refuses a field it does not know, because an unread field
+ * left the run scope empty and an empty scope means the whole suite with
+ * its real mail sends. Every test of that refusal so far called the parser
+ * directly or went over HTTP, and neither sees what the MCP layer does to
+ * an argument object on the way in.
+ *
+ * That gap is not hypothetical: the SDK strips a literal `__proto__` key
+ * before a handler runs, so that one body is refused on the route and
+ * accepted as "no scope" here. If a future SDK release stripped unknown
+ * keys generally, every typo would silently go back to meaning "run
+ * everything" and nothing in the suite would notice.
+ */
+describe("tests_run refuses an unknown field through a real client", () => {
+  it("refuses the camelCase spelling rather than running everything", async () => {
+    const client = await connectedClient();
+    const result = await client.callTool({
+      name: "tests_run",
+      arguments: { caseIds: ["A1"] },
+    });
+    expect(result.isError).toBe(true);
+    expect(JSON.stringify(result.content)).toContain("caseIds");
+  });
+
+  it("still accepts an empty argument object as a full run request", async () => {
+    // The other half: the refusal must not break the ordinary call. This
+    // does not start a run, because the store is mocked.
+    const client = await connectedClient();
+    const result = await client.callTool({ name: "tests_run", arguments: {} });
+    expect(result.isError ?? false).toBe(false);
   });
 });

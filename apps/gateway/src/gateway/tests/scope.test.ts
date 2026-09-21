@@ -133,24 +133,77 @@ describe("no input can widen a request", () => {
   it.each(inputs.map((i) => [JSON.stringify(i) ?? String(i), i] as const))(
     "%s either refuses or narrows",
     (_label, input) => {
+      /* Taken BEFORE the call, and deeply, so an in-place edit by the
+       * parser cannot hide inside a shared reference. */
+      const snapshot = structuredClone(
+        input !== null && typeof input === "object" ? input : {}
+      ) as Record<string, unknown>;
+
       const parsed = parseScope(input);
       if (!parsed.ok) return;
 
       const gotEverything =
         parsed.scope.scenario === undefined && parsed.scope.caseIds === undefined;
-      if (!gotEverything) return;
+
+      if (!gotEverything) {
+        /* NOT ONLY THE EXTREME. The first version bailed out here, so "no
+         * wider than asked" was checked at exactly one point of the
+         * lattice: a parser that turned `{case_ids: ["A1"]}` into two ids,
+         * or mapped an input onto the broadest scenario, would have
+         * asserted nothing while the block claimed to forbid widening.
+         * What came back must be exactly what was named. */
+        const asked = input as Record<string, unknown>;
+
+        /* COMPARED AGAINST A COPY, taken before the parser ran. The parser
+         * returns the caller's own array by reference, so comparing the
+         * result to `asked.case_ids` compared an array with itself: a
+         * parser that pushed an extra id into it in place passed every row
+         * here. The mutation that convinced me this worked happened to
+         * build a NEW array, which is the only reason it went red. */
+        if (Array.isArray(asked?.case_ids)) {
+          expect(parsed.scope.caseIds, "the ids returned are not the ids asked for").toEqual(
+            snapshot.case_ids
+          );
+        } else {
+          // A FIELD NOBODY NAMED MUST NOT COME BACK. `caseIds` takes
+          // precedence over `scenario` in selection, so a scenario request
+          // that grew a case list is the widening that matters most.
+          expect(parsed.scope.caseIds, "ids came back for a request that named none").toBeUndefined();
+        }
+
+        if (typeof asked?.scenario === "string") {
+          expect(parsed.scope.scenario, "a different scenario came back").toBe(snapshot.scenario);
+        } else {
+          expect(parsed.scope.scenario, "a scenario came back for a request that named none").toBeUndefined();
+        }
+        return;
+      }
 
       /* Everything came back. That is only allowed if the caller genuinely
        * asked for nothing: no body, or a body with no keys at all, or keys
        * whose values are all null. Note this never mentions `scenario` or
        * `case_ids`, so a field the parser does not read cannot slip past by
        * being unnamed here too. */
-      const keys =
-        input !== null && typeof input === "object" && !Array.isArray(input)
-          ? Object.keys(input as Record<string, unknown>)
-          : [];
-      const meaningful = keys.filter(
-        (k) => (input as Record<string, unknown>)[k] !== null && (input as Record<string, unknown>)[k] !== undefined
+      /* A NON-OBJECT BODY NAMED SOMETHING TOO. Treating `"A1"` or `7` as
+       * "no keys, so they asked for nothing" let a parser that accepted a
+       * bare string and ran everything pass this block. Anything that is
+       * not an empty object counts as having asked. */
+      const isPlainObject =
+        input !== null && typeof input === "object" && !Array.isArray(input);
+      /* FROM THE SNAPSHOT, like the narrow branch. Reading the post-call
+       * `input` here left the same aliasing hazard one branch over: a
+       * parser that DELETED the unknown keys in place and then accepted
+       * would be judged against a body it had already emptied, so it went
+       * green while running the whole suite. That is exactly the
+       * strip-unknown-keys regression this file's header is written
+       * against. */
+      const keys = isPlainObject
+        ? Object.keys(snapshot)
+        : input === undefined || input === null
+          ? []
+          : ["<a body that is not an object>"];
+      const meaningful = keys.filter((k) =>
+        isPlainObject ? snapshot[k] !== null && snapshot[k] !== undefined : true
       );
       expect(
         meaningful,
