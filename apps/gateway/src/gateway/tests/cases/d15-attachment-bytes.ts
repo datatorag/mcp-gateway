@@ -27,8 +27,10 @@ export const d15AttachmentBytes: TestCase = {
     "gws-mcp__gmail_search",
     "gws-mcp__gmail_read",
     "gws-mcp__gmail_save_attachment_to_drive",
-    "gws-mcp__drive_search",
+    // Drive metadata comes through gws_run, not drive_search: the size and
+    // the checksum are fields drive_search does not return.
     "gws-mcp__gws_run",
+    "gws-mcp__docs_delete",
   ],
   accounts: ["sender"],
   fixtures: ["folder"],

@@ -16,7 +16,15 @@ export const d9DriveRoundTrip: TestCase = {
   id: "D9",
   title: "a copied file is renamed, found by its new name, and deleted",
   tier: 2,
-  covers: ["gws-mcp__drive_copy_file", "gws-mcp__drive_rename_file", "gws-mcp__drive_search"],
+  covers: [
+    "gws-mcp__drive_copy_file",
+    "gws-mcp__drive_rename_file",
+    "gws-mcp__drive_search",
+    // The cleanup calls it, and the runtime check counts cleanup: a case
+    // that deletes with a tool it never declared reports that tool as
+    // uncovered while exercising it.
+    "gws-mcp__docs_delete",
+  ],
   accounts: ["sender"],
   fixtures: ["folder", "doc"],
   run: async (ctx) => {

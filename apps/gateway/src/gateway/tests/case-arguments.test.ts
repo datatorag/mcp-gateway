@@ -112,3 +112,43 @@ describe("case arguments against the served registry", () => {
     expect(problems).toEqual([]);
   });
 });
+
+/**
+ * A case must DECLARE every tool it calls, cleanup included.
+ *
+ * The runner already checks this at run time, in both directions, and
+ * fails the case. This is the same claim made statically, because the run
+ * time version only speaks during a real run against real accounts: D9 and
+ * D15 both called `docs_delete` in their cleanup without declaring it, and
+ * D15 declared a tool it never called, and none of that would have
+ * surfaced until somebody triggered a full run and read three confusing
+ * failures. Cheap to check here, expensive to discover there.
+ */
+describe("what a case declares and what it calls", () => {
+  it("declares every tool it calls, and calls every tool it declares", async () => {
+    const { readdirSync, readFileSync } = await import("node:fs");
+    const { join } = await import("node:path");
+
+    const problems: string[] = [];
+    for (const file of readdirSync(CASES_DIR).filter((f) => f.endsWith(".ts") && f !== "index.ts")) {
+      const source = readFileSync(join(CASES_DIR, file), "utf8");
+      const called = new Set([...source.matchAll(/ctx\.call\(\s*"([^"]+)"/g)].map((m) => m[1]));
+      /* COMMENTS COME OUT FIRST. A `covers` array now carries a comment
+       * explaining an entry, comments contain commas, and splitting on
+       * commas cut one in half and threw away the real entry sitting after
+       * it — so the test reported two cases as undeclared when the fault
+       * was in the reader. */
+      const block = /covers:\s*\[([^\]]*)\]/.exec(source.replace(/\/\/[^\n]*/g, ""));
+      const covers = new Set(
+        [...(block?.[1] ?? "").matchAll(/"([^"]+)"/g)].map((m) => m[1])
+      );
+      for (const tool of called) {
+        if (!covers.has(tool)) problems.push(`${file} calls ${tool} without declaring it`);
+      }
+      for (const tool of covers) {
+        if (!called.has(tool)) problems.push(`${file} declares ${tool} but never calls it`);
+      }
+    }
+    expect(problems).toEqual([]);
+  });
+});
