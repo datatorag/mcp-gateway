@@ -20,19 +20,7 @@ export const r2AdminOnly: TestCase = {
   covers: [],
   accounts: ["nonAdmin"],
   run: async (ctx) => {
-    const res = await ctx.http(`/api/admin/tests/as-non-admin?stamp=${ctx.stamp}`);
-    if (res.status !== 200) {
-      throw new Error(`the non-admin probe answered ${res.status}`);
-    }
-    const body = (await res.json()) as {
-      listed: number;
-      visibleAdminTools: string[];
-      /** Each probed name's refusal, with the name itself replaced by NAME
-       * so the four answers are directly comparable. */
-      normalisedRefusals: Record<string, string>;
-      unregisteredName: string;
-      skipped?: string;
-    };
+    const body = await ctx.gateway.nonAdminView();
 
     if (body.skipped) throw new Error(`could not probe as a non-admin: ${body.skipped}`);
 

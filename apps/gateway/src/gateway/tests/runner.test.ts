@@ -26,6 +26,16 @@ const parts = (): ContextParts => ({
   fixture: vi.fn().mockReturnValue("fixture-id"),
   from: vi.fn().mockReturnValue({}),
   share: vi.fn(),
+  gateway: {
+    registrySurface: vi.fn().mockResolvedValue({ plugins: [] }),
+    classify: vi.fn().mockReturnValue({}),
+    nonAdminView: vi.fn().mockResolvedValue({
+      listed: 0,
+      visibleAdminTools: [],
+      normalisedRefusals: {},
+      unregisteredName: "zz",
+    }),
+  },
 });
 
 const testCase = (over: Partial<TestCase> & { id: string }): TestCase => ({

@@ -27,13 +27,7 @@ export const a4ThreeWay: TestCase = {
     const { tools } = (await ctx.rpc("tools/list")) as { tools: { name: string }[] };
     const served = new Set(tools.filter((t) => t.name.includes("__")).map((t) => t.name));
 
-    const res = await ctx.http("/api/admin/tests/registry-surface");
-    if (res.status !== 200) {
-      throw new Error(`the three-way comparison endpoint answered ${res.status}`);
-    }
-    const surface = (await res.json()) as {
-      plugins: { slug: string; live: string[] | null; registry: string[]; error?: string }[];
-    };
+    const surface = await ctx.gateway.registrySurface();
 
     const problems: string[] = [];
     for (const plugin of surface.plugins) {

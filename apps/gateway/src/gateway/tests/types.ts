@@ -29,6 +29,21 @@ export const FIXTURE_KEYS = [
 ] as const;
 export type FixtureKey = (typeof FIXTURE_KEYS)[number];
 
+import type { NonAdminView, PluginSurface } from "./surface";
+
+/**
+ * Three questions a case asks of the gateway it is running INSIDE.
+ *
+ * On the context rather than imported by the case directly, so a case stays
+ * drivable with no database and no plugin process. See `surface.ts` for why
+ * these are in-process calls and not loopback fetches.
+ */
+export interface GatewaySurface {
+  registrySurface(): Promise<{ plugins: PluginSurface[] }>;
+  classify(names: readonly string[]): Record<string, boolean>;
+  nonAdminView(): Promise<NonAdminView>;
+}
+
 export type ToolResult = {
   content: { type: string; text?: string }[];
   isError?: boolean;
@@ -42,8 +57,11 @@ export interface CaseContext {
   stamp: string;
   call(tool: string, args: Record<string, unknown>, opts?: { as?: AccountRole }): Promise<ToolResult>;
   rpc(method: string, params?: Record<string, unknown>): Promise<unknown>;
-  /** Loopback only, path only. See `http.ts`. */
+  /** Loopback only, path only, and NO credential. See `http.ts`. A surface
+   * behind the admin guard is therefore unreachable here by construction;
+   * ask `ctx.gateway` for those. */
   http(path: string, init?: RequestInit): Promise<Response>;
+  gateway: GatewaySurface;
   fixture(key: FixtureKey): string;
   /** What a case named in `needs` shared. */
   from(caseId: string): Record<string, unknown>;

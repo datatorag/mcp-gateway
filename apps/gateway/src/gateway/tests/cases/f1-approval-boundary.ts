@@ -7,6 +7,10 @@ import type { TestCase } from "../types";
  * it prompts on everything, and whoever that blocks deletes the guard. So a
  * reviewed read must NOT prompt, and that half is the one that keeps the
  * guard usable.
+ *
+ * It asks the same classifier the playground asks, and says so rather than
+ * claiming independence it does not have. What is proven here is the shape
+ * of the boundary, not that two implementations agree.
  */
 export const f1ApprovalBoundary: TestCase = {
   id: "F1",
@@ -15,12 +19,10 @@ export const f1ApprovalBoundary: TestCase = {
   covers: [],
   accounts: [],
   run: async (ctx) => {
-    const res = await ctx.http("/api/admin/tests/classification?tools=gws-mcp__gmail_send,gws-mcp__gmail_search");
-    if (res.status !== 200) throw new Error(`the classification endpoint answered ${res.status}`);
-    const body = (await res.json()) as { classification: Record<string, boolean> };
+    const classification = ctx.gateway.classify(["gws-mcp__gmail_send", "gws-mcp__gmail_search"]);
 
-    const write = body.classification["gws-mcp__gmail_send"];
-    const read = body.classification["gws-mcp__gmail_search"];
+    const write = classification["gws-mcp__gmail_send"];
+    const read = classification["gws-mcp__gmail_search"];
     ctx.evidence(`gmail_send requiresApproval=${write}, gmail_search requiresApproval=${read}`);
 
     if (write !== true) throw new Error("a write-verb tool does not require approval");

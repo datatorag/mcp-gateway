@@ -7,6 +7,7 @@ import type { ConnectionPool } from "../pool";
 import { classifyWrite } from "../playground/tools";
 import { checkContract, type ContractSubject } from "./contract";
 import { createHttpFetcher, loopbackBase } from "./http";
+import { classifyTools, nonAdminView, registrySurface } from "./surface";
 import { CASES } from "./cases";
 import { orderByNeeds, runOneCase, type ContextParts } from "./runner";
 import { runPool } from "./pool";
@@ -258,7 +259,7 @@ async function driveRun(opts: {
       const called: string[] = [];
       const outcome = await runOneCase(testCase, {
         runId,
-        makeParts: () => makeContextParts({ client, fixtures, called }),
+        makeParts: () => makeContextParts({ client, fixtures, called, db: opts.db, pool: opts.pool }),
         toolsCalled: () => called,
       });
       if (outcome.status !== "pass") failed.add(testCase.id);
@@ -407,8 +408,18 @@ export function makeContextParts(opts: {
   client: RunnerClient;
   fixtures: ReturnType<typeof parseFixtureMap>;
   called: string[];
+  /** Only the three `ctx.gateway` questions need these, and both are
+   * optional so the pure half of this context stays testable with neither a
+   * database nor a plugin process. A case that asks without them is told so
+   * rather than reading a made-up answer. */
+  db?: Database;
+  pool?: ConnectionPool;
 }): ContextParts {
   const { client, fixtures, called } = opts;
+
+  const needs = (what: string) => {
+    throw new Error(`ctx.gateway.${what}: this run has no database or plugin pool`);
+  };
 
   const lookups: GuardLookups = {
     async readDraft(draftId) {
@@ -446,6 +457,13 @@ export function makeContextParts(opts: {
       return { tools: await client.listTools() };
     },
     http: createHttpFetcher(loopbackBase(getEnv().GATEWAY_PORT)),
+    gateway: {
+      registrySurface: () =>
+        opts.db && opts.pool ? registrySurface(opts.db, opts.pool) : needs("registrySurface"),
+      classify: (names) => classifyTools(names),
+      nonAdminView: () =>
+        opts.db ? nonAdminView(opts.db, fixtures.user("nonAdmin") ?? undefined) : needs("nonAdminView"),
+    },
     fixture(key: FixtureKey) {
       const value = fixtures.fixture(key);
       if (!value) throw new Error(`no fixture is mapped for ${key}`);

@@ -4,6 +4,8 @@
  * that only ever looked at it would pass while checking nothing.
  */
 
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { CASES, CASES_DIR, caseFilesOnDisk, checkRegistry, registryMatchesDisk } from "./registry";
 import type { TestCase } from "./types";
@@ -34,6 +36,23 @@ describe("the real registry", () => {
     // R for runner: the two cases the sheet never had, kept out of the
     // ported id space so the counts stay comparable.
     expect(ids).toEqual(expect.arrayContaining(["R1", "R2"]));
+  });
+
+  /* THE ONE THAT ALREADY CAUGHT SOMETHING. Batch 4a shipped three cases
+   * that fetched `/api/admin/tests/...` through `ctx.http`, which sends no
+   * credential by design, against routes that 404 anyone without a session
+   * cookie. All three would have failed for a reason that has nothing to do
+   * with what they claim, and nothing in the suite noticed: a case that
+   * cannot pass still typechecks and still runs.
+   *
+   * A path prefix is a fixed token, so this is the kind of rule a test can
+   * actually hold. Ask `ctx.gateway` for anything behind the admin guard. */
+  it("never sends an uncredentialed fetch at a surface behind the admin guard", () => {
+    const offenders = caseFilesOnDisk(CASES_DIR)
+      .map((file) => ({ file, source: readFileSync(join(CASES_DIR, file), "utf8") }))
+      .filter(({ source }) => /ctx\.http\(\s*[`"']\/api\/admin/.test(source))
+      .map(({ file }) => file);
+    expect(offenders).toEqual([]);
   });
 
   it("declares a role for every case that touches an account, and none for the rest", () => {
