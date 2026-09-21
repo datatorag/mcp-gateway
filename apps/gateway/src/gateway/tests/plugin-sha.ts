@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 
 /**
@@ -59,6 +59,23 @@ export function readGitSha(repoDir: string): string | null {
 
 function looksLikeSha(value: string): boolean {
   return /^[0-9a-f]{40}$/.test(value);
+}
+
+/**
+ * Which of the named plugins have no checkout at all.
+ *
+ * `readGitSha` answers null for "there is no such directory" and for "the
+ * git metadata is unreadable", and those are different facts about the
+ * world. A run that records `sha unknown` for a plugin nobody installed
+ * reads as a defect in the sha reader; it is not one, and the atlassian
+ * plugin spent a run being reported that way.
+ *
+ * Absence of a directory is the only thing claimed here. A checkout that
+ * exists but whose metadata cannot be read is NOT reported as missing,
+ * because that one IS a sha the reader should have got.
+ */
+export function missingCheckouts(pluginsDir: string, slugs: readonly string[]): string[] {
+  return slugs.filter((slug) => !existsSync(join(pluginsDir, slug)));
 }
 
 /** `{slug: sha|null}` for the plugins named, read from `<pluginsDir>/<slug>`. */

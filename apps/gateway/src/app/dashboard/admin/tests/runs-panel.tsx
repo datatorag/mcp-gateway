@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import type { RunSummary } from "@/gateway/tests/read";
 
@@ -23,6 +23,35 @@ export function RunsPanel({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const reload = useCallback(async () => {
+    const listed = await fetch("/api/admin/tests/runs");
+    if (listed.ok) setRuns((await listed.json()).runs ?? []);
+  }, []);
+
+  /* THE LIST REFRESHES ITSELF WHILE A RUN IS GOING (SCRUM-303).
+   *
+   * It did not, and the symptom was the one that wastes somebody's
+   * afternoon: a watcher sat on this page while a run started, finished in
+   * 23 seconds, and the row still said `running` until they reloaded. The
+   * page had a poll on the run DETAIL view and none here, so the first
+   * thing anyone looks at was the one thing that never updated, and the
+   * elapsed time they read off it was their own waiting rather than the
+   * run's.
+   *
+   * It polls only while a run is actually running and stops as soon as none
+   * is, so an idle admin page is not a request every three seconds forever.
+   * A failed poll is ignored rather than surfaced: a dropped request during
+   * a deploy is not something to tell an operator about, and the next tick
+   * fixes it. */
+  const anyRunning = runs.some((r) => r.status === "running");
+  useEffect(() => {
+    if (!anyRunning) return;
+    const timer = setInterval(() => {
+      void reload().catch(() => {});
+    }, 3000);
+    return () => clearInterval(timer);
+  }, [anyRunning, reload]);
+
   async function start(scope: "all" | 1 | 2) {
     setBusy(true);
     setError(null);
@@ -41,8 +70,7 @@ export function RunsPanel({
         );
         return;
       }
-      const listed = await fetch("/api/admin/tests/runs");
-      if (listed.ok) setRuns((await listed.json()).runs ?? []);
+      await reload();
     } finally {
       setBusy(false);
       setConfirming(null);

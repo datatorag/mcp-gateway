@@ -33,6 +33,13 @@ describe("the real registry", () => {
   it("carries the smoke sheet's own ids, so three years of run logs still resolve", () => {
     const ids = CASES.map((c) => c.id);
     expect(ids).toEqual(expect.arrayContaining(["A1", "A2", "A3", "A4", "A5", "B1", "B2", "F1", "F2", "F7", "G1"]));
+    expect(ids).toEqual(
+      expect.arrayContaining(["C1", "C2", "C3", "C4", "C5", "C6", "C7", "C8", "C9", "C10", "C12", "C13"])
+    );
+    // C11 is a create-and-delete round trip wearing a C number. It belongs
+    // with the round trips, and this asserts it did not drift into the read
+    // batch on the strength of its id.
+    expect(ids).not.toContain("C11");
     // R for runner: the two cases the sheet never had, kept out of the
     // ported id space so the counts stay comparable.
     expect(ids).toEqual(expect.arrayContaining(["R1", "R2"]));

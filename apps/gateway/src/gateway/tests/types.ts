@@ -26,6 +26,10 @@ export const FIXTURE_KEYS = [
   "deck",
   "calendarEvent",
   "querySheet",
+  /** The TAB inside `querySheet` that C12 runs over. A key rather than a
+   * literal in a case, for the same reason every id is: this repo is public
+   * and that tab belongs to a private sheet. */
+  "queryTab",
 ] as const;
 export type FixtureKey = (typeof FIXTURE_KEYS)[number];
 

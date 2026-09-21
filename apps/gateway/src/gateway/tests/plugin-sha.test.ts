@@ -8,7 +8,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { readGitSha, readPluginShas } from "./plugin-sha";
+import { missingCheckouts, readGitSha, readPluginShas } from "./plugin-sha";
 
 const SHA = "0123456789abcdef0123456789abcdef01234567";
 const OTHER = "fedcba9876543210fedcba9876543210fedcba98";
@@ -87,5 +87,31 @@ describe("readPluginShas", () => {
       "gws-mcp": SHA,
       "atlassian-mcp": null,
     });
+  });
+});
+
+/**
+ * `missingCheckouts` exists because `readGitSha` answers null for two
+ * different facts, and a run that says "sha unknown" about a plugin nobody
+ * installed reads as a defect in the sha reader. It is not one.
+ */
+describe("missingCheckouts", () => {
+  it("names a plugin with no directory at all", () => {
+    const dir = repo({ "installed/.git/HEAD": `${SHA}\n` });
+    expect(missingCheckouts(dir, ["installed", "never-installed"])).toEqual(["never-installed"]);
+  });
+
+  it("does NOT name a checkout that exists but has unreadable git metadata", () => {
+    // The distinction is the whole point. That case IS a sha the reader
+    // should have got, and reporting it as "not installed" would send
+    // somebody to install something that is already there.
+    const dir = repo({ "broken/not-git.txt": "x" });
+    expect(readGitSha(join(dir, "broken"))).toBeNull();
+    expect(missingCheckouts(dir, ["broken"])).toEqual([]);
+  });
+
+  it("answers an empty list when everything is installed", () => {
+    const dir = repo({ "a/.git/HEAD": `${SHA}\n` });
+    expect(missingCheckouts(dir, ["a"])).toEqual([]);
   });
 });

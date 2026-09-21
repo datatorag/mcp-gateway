@@ -8,7 +8,7 @@
  */
 
 import { describe, expect, it } from "vitest";
-import { contractSubjectFor, coverageMismatch, makeContextParts, missingMappingsFor, selectCases } from "./execute";
+import { contractSubjectFor, coverageMismatch, makeContextParts, missingMappingsFor, selectCases, unservedToolsFor } from "./execute";
 import { parseFixtureMap } from "./fixtures";
 import { vi } from "vitest";
 import type { TestCase } from "./types";
@@ -205,6 +205,32 @@ describe("the context a case is handed", () => {
     expect(called).toEqual([]);
   });
 
+  it("passes a gateway BUILT-IN no account at all", async () => {
+    // A built-in has no notion of which connected account it runs as, and
+    // an undeclared argument is both a rejection waiting to happen and an
+    // address in a call that had no reason to carry one. The pair below is
+    // the whole rule: same context, same role, different tool name shape.
+    const client = makeClient();
+    const parts = makeContextParts({ client, fixtures, called: [] });
+
+    await parts.call("skills_search", { query: "email" });
+    expect(client.callTool).toHaveBeenCalledWith("skills_search", { query: "email" });
+
+    await parts.call("gws-mcp__sheets_read", { range: "A1" });
+    expect(client.callTool).toHaveBeenLastCalledWith("gws-mcp__sheets_read", {
+      range: "A1",
+      account: "sender@example.test",
+    });
+  });
+
+  it("still records a built-in as called, so its coverage is honest", async () => {
+    const client = makeClient();
+    const called: string[] = [];
+    const parts = makeContextParts({ client, fixtures, called });
+    await parts.call("echo", { message: "x" });
+    expect(called).toEqual(["echo"]);
+  });
+
   it("offers only tools/list through rpc", async () => {
     const parts = makeContextParts({ client: makeClient(), fixtures, called: [] });
     await expect(parts.rpc("resources/list")).rejects.toThrow(/only tools\/list/);
@@ -213,5 +239,33 @@ describe("the context a case is handed", () => {
   it("throws for a fixture this run has no mapping for", () => {
     const parts = makeContextParts({ client: makeClient(), fixtures, called: [] });
     expect(() => parts.fixture("sheet")).toThrow(/no fixture is mapped/);
+  });
+});
+
+/**
+ * A tool this run does not serve is a missing prerequisite, not a product
+ * finding. Written after `sheets_query` shipped and the dev branch's
+ * registry never got the row: every run there would have reported a working
+ * tool as a broken one, because an unserved name fails with "unknown tool".
+ */
+describe("unservedToolsFor", () => {
+  const served = new Set(["gws-mcp__sheets_read", "echo"]);
+
+  it("names the covered tool that tools/list does not carry", () => {
+    expect(unservedToolsFor({ covers: ["gws-mcp__sheets_query"] }, served)).toEqual([
+      "gws-mcp__sheets_query",
+    ]);
+  });
+
+  it("says nothing when every covered tool is served", () => {
+    expect(unservedToolsFor({ covers: ["gws-mcp__sheets_read", "echo"] }, served)).toEqual([]);
+  });
+
+  it("leaves a case that covers nothing alone, so gateway cases run anywhere", () => {
+    expect(unservedToolsFor({ covers: [] }, new Set())).toEqual([]);
+  });
+
+  it("reports every unserved tool, not just the first", () => {
+    expect(unservedToolsFor({ covers: ["a", "b", "echo"] }, served)).toEqual(["a", "b"]);
   });
 });

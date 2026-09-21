@@ -15,7 +15,7 @@ import { parseFixtureMap } from "./fixtures";
 import { checkSend, type GuardLookups } from "./send-guard";
 import type { AccountRole, FixtureKey } from "./types";
 import { finishRun, recordResult, startRun } from "./store";
-import { readPluginShas } from "./plugin-sha";
+import { missingCheckouts, readPluginShas } from "./plugin-sha";
 import { mcpServers } from "@datatorag-mcp/db";
 import { eq } from "drizzle-orm";
 import { join } from "node:path";
@@ -191,6 +191,16 @@ async function driveRun(opts: {
       if (!health.ok) throw new Error(`/health answered ${health.status}`);
       served = await client.listTools();
       gate.push(`tools/list served ${served.length} tools`);
+
+      // NOT A FAILURE, A NAMED GAP. A plugin active in the registry with no
+      // checkout on this machine still has its tools advertised from the
+      // registry, so the run would otherwise record `sha unknown` and let
+      // A4's third leg fail with a pool error, neither of which says the
+      // actual thing: it is not installed here.
+      const absent = missingCheckouts(PLUGINS_DIR, await activePluginSlugs(db));
+      if (absent.length > 0) {
+        gate.push(`not installed on this machine: ${absent.join(", ")}`);
+      }
     } catch (err) {
       await record({
         caseId: "A0",
@@ -203,6 +213,20 @@ async function driveRun(opts: {
       await finishRun(db, runId, { status: "aborted", totals, toolsServed: 0 });
       return;
     }
+
+    // THE GATE IS RECORDED WHEN IT PASSES TOO. It held these lines only on
+    // the way to an abort, so a healthy run kept no record of what the front
+    // door answered, how many tools it served, or which plugins were not
+    // installed. A fact worth aborting on is worth writing down when it is
+    // fine, or the run cannot be compared with the next one.
+    await record({
+      caseId: "A0",
+      kind: "case",
+      status: "pass",
+      cleanup: "none_needed",
+      durationMs: 0,
+      evidence: gate,
+    });
 
     // 2. PLAN. A case whose dependency is not in this run is a skip naming
     // it, never a silent omission.
@@ -223,8 +247,30 @@ async function driveRun(opts: {
     const shared = new Map<string, Record<string, unknown>>();
     const failed = new Set<string>();
 
+    const servedNames = new Set(served.map((t) => t.name));
     const runnable: typeof order = [];
     for (const testCase of order) {
+      // A TOOL THIS RUN DOES NOT SERVE IS A MISSING PREREQUISITE, NOT A
+      // PRODUCT FINDING. A case whose covered tool is absent from
+      // tools/list would otherwise fail on "unknown tool", which reads as
+      // "the connector is broken" when what actually happened is that the
+      // registry on this database has no row for it. It has already
+      // happened: sheets_query shipped and the dev branch's registry never
+      // got the row, so every run there would have reported a working tool
+      // as broken. A skip still counts against green, and it names the tool.
+      const unserved = unservedToolsFor(testCase, servedNames);
+      if (unserved.length > 0) {
+        await record({
+          caseId: testCase.id,
+          kind: "case",
+          status: "skip",
+          cleanup: "none_needed",
+          durationMs: 0,
+          evidence: [`this run does not serve ${unserved.join(", ")}, so the case has nothing to exercise`],
+        });
+        failed.add(testCase.id);
+        continue;
+      }
       const missing = missingMappingsFor(testCase, fixtures);
       if (missing.length > 0) {
         // A missing mapping SKIPS and names what was missing. It never falls
@@ -380,6 +426,24 @@ export function missingMappingsFor(
 }
 
 /**
+ * What a case covers that this run's `tools/list` does not carry.
+ *
+ * Separate from `missingMappingsFor` because the remedy is different: an
+ * unmapped role is a configuration gap, an unserved tool is a registry gap
+ * on whichever database this gateway is pointed at. Both skip, and both say
+ * which.
+ *
+ * A case covering nothing is unaffected, which is what lets the cases about
+ * the gateway itself run anywhere.
+ */
+export function unservedToolsFor(
+  testCase: { covers: readonly string[] },
+  served: ReadonlySet<string>
+): string[] {
+  return testCase.covers.filter((tool) => !served.has(tool));
+}
+
+/**
  * Coverage checked in BOTH directions.
  *
  * Declaring a tool a case never called overstates what the suite proves.
@@ -438,7 +502,13 @@ export function makeContextParts(opts: {
         throw new Error(`${tool}: a case may not pass account; declare a role and use { as }`);
       }
       const role = (callOpts?.as ?? "sender") as AccountRole;
-      const account = fixtures.account(role);
+      // A GATEWAY BUILT-IN TAKES NO ACCOUNT. `account` picks between a
+      // user's connected accounts for a PLUGIN tool; a built-in has no such
+      // notion, and handing one an argument its schema never declared is
+      // both a rejection waiting to happen and an address in a call that
+      // had no business carrying one. Built-ins are the unnamespaced names.
+      const isPluginTool = tool.includes("__");
+      const account = isPluginTool ? fixtures.account(role) : null;
       const withAccount = account ? { ...args, account } : { ...args };
 
       const verdict = await checkSend(tool, withAccount, {
