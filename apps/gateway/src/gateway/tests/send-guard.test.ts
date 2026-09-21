@@ -14,9 +14,21 @@ const READER = "reader@example.test";
 const STRANGER = "someone.else@example.test";
 const SUBJECT = `${SUBJECT_PREFIX} round trip`;
 
+/** A readable original, so the branches that read one are exercised rather
+ * than refused for want of a message. `from` is the reader, which is the
+ * permitted address in the default configuration. */
+const ORIGINAL = {
+  to: READER,
+  from: READER,
+  subject: SUBJECT,
+  cc: undefined,
+  bcc: undefined,
+  replyTo: undefined,
+};
+
 const lookups = (over: Partial<GuardLookups> = {}): GuardLookups => ({
   readDraft: vi.fn().mockResolvedValue(null),
-  readMessage: vi.fn().mockResolvedValue(null),
+  readMessage: vi.fn().mockResolvedValue(ORIGINAL),
   ...over,
 });
 
@@ -41,11 +53,22 @@ describe("the tools that carry recipients in their arguments", () => {
   ];
 
   it.each(tools)("%s allows the reader with the prefix", async (tool) => {
-    expect(await check(tool, { to: READER, subject: SUBJECT })).toEqual({ ok: true });
+    // `gmail_forward` takes no subject of its own — it derives one from the
+    // message it forwards — so its prefix check reads the ORIGINAL. Giving
+    // it `message_id` here is not a workaround; it is what the tool takes.
+    const args =
+      tool === "gws-mcp__gmail_forward"
+        ? { to: READER, message_id: "m-smoke" }
+        : { to: READER, subject: SUBJECT };
+    expect(await check(tool, args)).toEqual({ ok: true });
   });
 
   it.each(tools)("%s refuses a stranger in to", async (tool) => {
-    const res = await check(tool, { to: STRANGER, subject: SUBJECT });
+    const args =
+      tool === "gws-mcp__gmail_forward"
+        ? { to: STRANGER, message_id: "m-smoke" }
+        : { to: STRANGER, subject: SUBJECT };
+    const res = await check(tool, args);
     expect(res).toMatchObject({ ok: false });
     expect((res as { reason: string }).reason).toContain("to holds an address");
   });
@@ -151,7 +174,9 @@ describe("gmail_reply reads the message being answered", () => {
   });
 
   it("refuses when the original cannot be read", async () => {
-    const res = await check("gws-mcp__gmail_reply", { message_id: "m1" });
+    const res = await check("gws-mcp__gmail_reply", { message_id: "m1" }, {
+      readMessage: vi.fn().mockResolvedValue(null),
+    });
     expect((res as { reason: string }).reason).toContain("could not be read");
   });
 });
@@ -485,13 +510,39 @@ describe("the one gws_run write", () => {
     lookups: { readDraft: async () => null, readMessage: async () => null },
   };
 
-  it("ALLOWS trashing a gmail message, which is how a run cleans up after itself", async () => {
+  it("ALLOWS trashing a message the helper has stamp-verified", async () => {
     const verdict = await checkSend(
       "gws-mcp__gws_run",
       { service: "gmail", resource: "users.messages", method: "trash", params: { id: "m1" } },
-      opts
+      { ...opts, trashable: new Set(["m1"]) }
     );
     expect(verdict.ok).toBe(true);
+  });
+
+  it("REFUSES a trash the helper did not authorise, which is the whole point", async () => {
+    /* The first version of this allowance said yes to any id, and the stamp
+     * check lived in a helper nothing obliged a case to call. A case could
+     * assemble the call itself and trash arbitrary mail in a real mailbox,
+     * with a source grep as the only thing in the way. The guard enforces it
+     * now, so this is the direction that matters. */
+    for (const trashable of [undefined, new Set<string>(), new Set(["a-different-id"])]) {
+      const verdict = await checkSend(
+        "gws-mcp__gws_run",
+        { service: "gmail", resource: "users.messages", method: "trash", params: { id: "m1" } },
+        { ...opts, trashable }
+      );
+      expect(verdict.ok).toBe(false);
+      if (!verdict.ok) expect(verdict.reason).toContain("trashOwnMessage");
+    }
+  });
+
+  it("REFUSES a trash that names no message", async () => {
+    const verdict = await checkSend(
+      "gws-mcp__gws_run",
+      { service: "gmail", resource: "users.messages", method: "trash", params: {} },
+      { ...opts, trashable: new Set(["m1"]) }
+    );
+    expect(verdict.ok).toBe(false);
   });
 
   it("REFUSES every other gmail write, including delete", async () => {
@@ -521,5 +572,135 @@ describe("the one gws_run write", () => {
   it("still lets reads through and still refuses the settings paths", async () => {
     expect((await checkSend("gws-mcp__gws_run", { service: "gmail", resource: "users.messages", method: "get" }, opts)).ok).toBe(true);
     expect((await checkSend("gws-mcp__gws_run", { service: "gmail", resource: "users.settings", method: "update" }, opts)).ok).toBe(false);
+  });
+});
+
+/**
+ * THE HOLE THE GATE FOUND, pinned in the direction that was missing.
+ *
+ * The guard resolved a reply's recipient as `replyTo ?? from`, reasoning
+ * that a reply goes where Reply-To points. `gmail_reply` does not agree: it
+ * composes `To:` from the original's `From` alone and never reads Reply-To.
+ * So an original with `From: <stranger>`, `Reply-To: <our sender>` and a
+ * smoke subject passed the guard and would have been replied to at the
+ * stranger's address — and the reader mailbox takes outside mail, so both
+ * headers are somebody else's to set.
+ *
+ * The old test pinned only the harmless direction and wrote the false
+ * reasoning into a comment, which is how it survived review twice.
+ */
+describe("a reply is addressed by From, not by Reply-To", () => {
+  const reader = "reader@example.test";
+  const sender = "sender@example.test";
+  const stranger = "stranger@elsewhere.test";
+
+  const replyTo = (original: Record<string, unknown>) =>
+    checkSend(
+      "gws-mcp__gmail_reply",
+      { message_id: "m1", body: "x" },
+      {
+        readerEmail: reader,
+        senderEmail: sender,
+        lookups: {
+          readDraft: async () => null,
+          readMessage: async () => original as never,
+        },
+      }
+    );
+
+  it("REFUSES a stranger's message that points Reply-To at us", async () => {
+    const verdict = await replyTo({
+      from: stranger,
+      replyTo: sender,
+      subject: `${SUBJECT_PREFIX} looks legitimate`,
+    });
+    expect(verdict.ok).toBe(false);
+  });
+
+  it("REFUSES our own message that points Reply-To at a stranger", async () => {
+    // The mirror. A tool that ever starts honouring Reply-To must not
+    // silently widen this, so both headers have to be permitted.
+    const verdict = await replyTo({
+      from: sender,
+      replyTo: stranger,
+      subject: `${SUBJECT_PREFIX} looks legitimate`,
+    });
+    expect(verdict.ok).toBe(false);
+  });
+
+  it("ALLOWS our own message with no Reply-To at all", async () => {
+    const verdict = await replyTo({
+      from: sender,
+      replyTo: undefined,
+      subject: `${SUBJECT_PREFIX} ordinary`,
+    });
+    expect(verdict.ok).toBe(true);
+  });
+
+  it("ALLOWS our own message whose Reply-To is also ours", async () => {
+    const verdict = await replyTo({
+      from: sender,
+      replyTo: reader,
+      subject: `${SUBJECT_PREFIX} ordinary`,
+    });
+    expect(verdict.ok).toBe(true);
+  });
+});
+
+/**
+ * THE ONE READ PERMITTED UNDER `settings`, ruled by HQ 2026-09-20 so E13 can
+ * assert the signature a message carries is the ACCOUNT'S OWN rather than
+ * merely present. The settings denylist guards against writes — a
+ * forwarding address or a filter with a forward action sends every future
+ * message to a stranger without looking like a send — and a read of which
+ * addresses an account may send as cannot send anything.
+ *
+ * Both directions, because an allowance nobody can see the edge of is a
+ * hole. The refusals below are the edge.
+ */
+describe("gws_run and the gmail settings tree", () => {
+  const opts = {
+    readerEmail: "reader@example.test",
+    senderEmail: "sender@example.test",
+    lookups: { readDraft: async () => null, readMessage: async () => null },
+  };
+  const run = (resource: string, method: string, service = "gmail") =>
+    checkSend("gws-mcp__gws_run", { service, resource, method }, opts);
+
+  it.each([
+    ["users.settings.sendAs", "list"],
+    ["users.settings.sendAs", "get"],
+    ["users.settings.sendas", "LIST"],
+  ])("ALLOWS reading %s.%s", async (resource, method) => {
+    expect((await run(resource, method)).ok).toBe(true);
+  });
+
+  it.each(["update", "patch", "create", "delete", "insert"])(
+    "REFUSES sendAs.%s, which is how an account is made to send as somebody else",
+    async (method) => {
+      expect((await run("users.settings.sendAs", method)).ok).toBe(false);
+    }
+  );
+
+  it.each([
+    ["users.settings.forwardingAddresses", "list"],
+    ["users.settings.filters", "list"],
+    ["users.settings", "get"],
+    ["users.settings.delegates", "list"],
+  ])("REFUSES %s.%s, because only sendAs was opened", async (resource, method) => {
+    // The allowance is two exact paths. A pattern over `settings.sendas`
+    // would have admitted its writes; a pattern over `settings` would have
+    // admitted the forwarding tree, which is the original hazard.
+    expect((await run(resource, method)).ok).toBe(false);
+  });
+
+  it("grants no WRITE on another service, which is the only thing it could have leaked", async () => {
+    /* The first version of this asserted that the same READ is refused on
+     * drive. That is false and it was testing the wrong thing: gws_run
+     * already permits reads on every service, so a drive read passing says
+     * nothing about this carve-out. What the carve-out must not do is
+     * carry write permission anywhere, so that is what is asserted. */
+    expect((await run("users.settings.sendAs", "update", "drive")).ok).toBe(false);
+    expect((await run("files", "update", "drive")).ok).toBe(false);
   });
 });

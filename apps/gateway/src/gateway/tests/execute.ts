@@ -351,7 +351,7 @@ async function driveRun(opts: {
             called,
             db: opts.db,
             pool: opts.pool,
-            stamp: stampFor(runId, caseId),
+            runStamp: runId.slice(0, 8),
           }),
         toolsCalled: () => called,
       });
@@ -573,9 +573,10 @@ export function coverageMismatch(covers: readonly string[], called: readonly str
  */
 export function makeContextParts(opts: {
   client: RunnerClient;
-  /** This case's stamp, so the trash helper can recognise mail this run
-   * sent. Absent in the unit tests that exercise the pure half. */
-  stamp?: string;
+  /** This RUN's stamp prefix, so the trash helper can recognise mail this
+   * run sent, including mail another case in the same run sent. Absent in
+   * the unit tests that exercise the pure half. */
+  runStamp?: string;
   fixtures: ReturnType<typeof parseFixtureMap>;
   called: string[];
   /** Only the three `ctx.gateway` questions need these, and both are
@@ -586,21 +587,64 @@ export function makeContextParts(opts: {
   pool?: ConnectionPool;
 }): ContextParts {
   const { client, fixtures, called } = opts;
-  const stamp = opts.stamp ?? "\u0000no-stamp";
+  // A value nothing can contain, so an absent stamp refuses every trash
+  // rather than permitting any.
+  const runStamp = opts.runStamp ?? "\u0000no-stamp";
 
   const needs = (what: string) => {
     throw new Error(`ctx.gateway.${what}: this run has no database or plugin pool`);
   };
 
   const lookups: GuardLookups = {
+    /* A DRAFT ID IS NOT A MESSAGE ID. This asked `gmail_read` for the draft,
+     * which is `users.messages.get` underneath, and that errors on a draft
+     * id — so the lookup returned null and `gmail_send_draft` refused every
+     * time. Fail-closed, and also a guard that could never say yes. Drafts
+     * are read through their own resource; it is a read, so the read-only
+     * rule covers it unchanged. */
     async readDraft(draftId) {
-      const result = await client.callTool("gws-mcp__gmail_read", { message_id: draftId });
+      const account = fixtures.account("sender");
+      const result = await client.callTool("gws-mcp__gws_run", {
+        service: "gmail",
+        resource: "users.drafts",
+        method: "get",
+        params: { userId: "me", id: draftId, format: "metadata" },
+        ...(account ? { account } : {}),
+      });
       return parseHeaders(result);
     },
     async readMessage(messageId) {
-      const result = await client.callTool("gws-mcp__gmail_read", { message_id: messageId });
+      const account = fixtures.account("sender");
+      const result = await client.callTool("gws-mcp__gmail_read", {
+        message_id: messageId,
+        ...(account ? { account } : {}),
+      });
       return parseHeaders(result);
     },
+  };
+
+  /* Ids the trash helper has stamp-verified, for the one call each. The
+   * guard refuses a trash for anything not in here, so the helper cannot be
+   * bypassed by a case assembling the call itself — and the helper routes
+   * through this same dispatch rather than round the side of it, which is
+   * what it did at first. A second path is a second set of rules. */
+  const trashable = new Set<string>();
+
+  /** The ONE place a tool is dispatched: account injection, then the send
+   * guard, then the call. Everything the context offers goes through it. */
+  const dispatch = async (tool: string, args: Record<string, unknown>, role: AccountRole) => {
+    const isPluginTool = tool.includes("__");
+    const account = isPluginTool ? fixtures.account(role) : null;
+    const withAccount = account ? { ...args, account } : { ...args };
+
+    const verdict = await checkSend(tool, withAccount, {
+      readerEmail: fixtures.account("reader"),
+      senderEmail: fixtures.account("sender"),
+      lookups,
+      trashable,
+    });
+    if (!verdict.ok) throw new Error(verdict.reason);
+    return client.callTool(tool, withAccount);
   };
 
   return {
@@ -614,21 +658,9 @@ export function makeContextParts(opts: {
       // notion, and handing one an argument its schema never declared is
       // both a rejection waiting to happen and an address in a call that
       // had no business carrying one. Built-ins are the unnamespaced names.
-      const isPluginTool = tool.includes("__");
-      const account = isPluginTool ? fixtures.account(role) : null;
-      const withAccount = account ? { ...args, account } : { ...args };
-
-      const verdict = await checkSend(tool, withAccount, {
-        readerEmail: fixtures.account("reader"),
-        // Reply and forward only, and the guard decides which: passing it
-        // here does not widen anything on its own.
-        senderEmail: fixtures.account("sender"),
-        lookups,
-      });
-      if (!verdict.ok) throw new Error(verdict.reason);
-
+      const result = await dispatch(tool, args, role);
       called.push(tool);
-      return client.callTool(tool, withAccount);
+      return result;
     },
     async rpc(method) {
       if (method !== "tools/list") {
@@ -646,41 +678,57 @@ export function makeContextParts(opts: {
     },
     async trashOwnMessage(messageId: string, callOpts?: { as?: AccountRole }) {
       const role = (callOpts?.as ?? "sender") as AccountRole;
-      const account = fixtures.account(role);
-      const withAccount = (extra: Record<string, unknown>) =>
-        account ? { ...extra, account } : { ...extra };
+      /* AN UNMAPPED ROLE REFUSES rather than falling through to whatever
+       * account happens to be default. `ctx.address` already works this
+       * way; a cleanup that trashes mail in an account nobody chose is the
+       * version of that mistake with consequences. */
+      if (fixtures.account(role) === null) {
+        throw new Error(`trashOwnMessage: no account is mapped for ${role}`);
+      }
 
-      /* THE STAMP IS THE WHOLE GUARD. A trash call is the one write the
-       * runner may make through `gws_run`, and what keeps it from reaching
-       * real mail is not the caller's good intentions but this check: the
-       * message's own subject must carry this case's stamp AND the smoke
-       * prefix. A case that passes somebody else's message id gets a
-       * refusal, not a trashed mailbox. */
-      const read = await client.callTool("gws-mcp__gmail_read", withAccount({ message_id: messageId }));
-      const headers = parseHeaders(read);
-      const subject = headers?.subject ?? "";
-      if (!subject.includes(stamp) || !subject.includes(SUBJECT_PREFIX)) {
+      /* THE RUN STAMP, not this case's.
+       *
+       * Every case in a run shares the run prefix, and a cross-case ride
+       * needs it: D12 trashes a reply to D10's message, so the subject it
+       * has to recognise carries D10's stamp. Checking the case stamp
+       * refused exactly the cleanups that matter, which would have left
+       * live mail behind while reporting success. The run prefix is still
+       * bounded to mail THIS RUN sent. */
+      const read = await dispatch("gws-mcp__gmail_read", { message_id: messageId }, role);
+      const subject = parseHeaders(read)?.subject ?? "";
+      if (!subject.includes(runStamp) || !subject.includes(SUBJECT_PREFIX)) {
         throw new Error(
           `trashOwnMessage refused: that message's subject does not carry this run's stamp and ${SUBJECT_PREFIX}`
         );
       }
 
-      const trashed = await client.callTool(
-        "gws-mcp__gws_run",
-        withAccount({
-          service: "gmail",
-          resource: "users.messages",
-          method: "trash",
-          params: { userId: "me", id: messageId },
-        })
-      );
+      // The capability, for this one call. The guard refuses a trash for
+      // any id not in here, so this is what authorises it rather than a
+      // comment saying the helper is careful.
+      trashable.add(messageId);
+      let trashed;
+      try {
+        trashed = await dispatch(
+          "gws-mcp__gws_run",
+          {
+            service: "gmail",
+            resource: "users.messages",
+            method: "trash",
+            params: { userId: "me", id: messageId },
+          },
+          role
+        );
+      } finally {
+        trashable.delete(messageId);
+      }
       if (trashed.isError) return false;
 
       // VERIFIED BY ABSENCE, never by the trash call's own answer. The
       // whole batch exists because a success response is not evidence.
-      const found = await client.callTool(
+      const found = await dispatch(
         "gws-mcp__gmail_search",
-        withAccount({ query: `subject:"${stamp}"`, max_results: 5 })
+        { query: `subject:"${runStamp}"`, max_results: 25 },
+        role
       );
       const text = found.content.map((c) => c.text ?? "").join("");
       return !text.includes(messageId);
@@ -703,17 +751,50 @@ export function makeContextParts(opts: {
 }
 
 /** Headers out of a gmail_read result, for the send guard's two lookups. */
+/**
+ * Headers out of a `gmail_read` result, for the send guard's two lookups.
+ *
+ * IT READ ONLY THE TOP LEVEL AND THAT MADE THE GUARD A STUB. Called without
+ * `text_only`, the tool returns the raw Gmail resource, where headers live
+ * in `payload.headers[]` as `{name, value}` pairs; nothing lifts them to
+ * the top. So every field came back undefined, which meant `gmail_reply`
+ * refused every time (its target was the empty string) and `gmail_send_draft`
+ * refused every time. Fail-closed, so nothing unsafe happened — but D11,
+ * D12 and E15 could never have passed, and a guard that refuses everything
+ * is indistinguishable from a guard that works until the day it stops
+ * refusing.
+ *
+ * Both shapes are read, flattened first. A header the message does not
+ * carry stays undefined rather than becoming "", because the reply guard
+ * treats a present-but-empty Reply-To differently from an absent one.
+ */
 function parseHeaders(result: { content: { text?: string }[]; isError?: boolean }) {
   if (result.isError) return null;
   try {
     const parsed = JSON.parse(result.content.map((c) => c.text ?? "").join("")) as Record<string, unknown>;
+
+    const raw = (parsed.payload ?? (parsed.message as Record<string, unknown> | undefined)?.payload) as
+      | { headers?: { name?: string; value?: string }[] }
+      | undefined;
+    const fromPayload = new Map<string, string>();
+    for (const header of raw?.headers ?? []) {
+      if (typeof header?.name === "string" && typeof header.value === "string") {
+        fromPayload.set(header.name.toLowerCase(), header.value);
+      }
+    }
+
     const pick = (...names: string[]) => {
       for (const name of names) {
         const value = parsed[name];
         if (typeof value === "string") return value;
       }
+      for (const name of names) {
+        const value = fromPayload.get(name.toLowerCase().replace(/_/g, "-"));
+        if (typeof value === "string") return value;
+      }
       return undefined;
     };
+
     return {
       to: pick("to", "To"),
       cc: pick("cc", "Cc"),
@@ -726,6 +807,7 @@ function parseHeaders(result: { content: { text?: string }[]; isError?: boolean 
     return null;
   }
 }
+
 
 /**
  * The plugins to record a sha for, from the REGISTRY rather than a list in

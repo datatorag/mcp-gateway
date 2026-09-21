@@ -18,8 +18,8 @@ export const d13ForwardCarries: TestCase = {
   needs: ["D10"],
   timeoutMs: 180_000,
   run: async (ctx) => {
-    const from = ctx.from("D10") as { receivedId?: string; token?: string };
-    if (!from.receivedId || !from.token) {
+    const from = ctx.from("D10") as { receivedId?: string; token?: string; runStamp?: string };
+    if (!from.receivedId || !from.token || !from.runStamp) {
       throw new Error("D10 shared no delivered message, so there is nothing to forward");
     }
 
@@ -42,7 +42,7 @@ export const d13ForwardCarries: TestCase = {
       async () => {
         const found = await ctx.call(
           "gws-mcp__gmail_search",
-          { query: `subject:"${ctx.stamp}" ${note}`, max_results: 5 },
+          { query: `"${from.runStamp}" ${note}`, max_results: 10 },
           { as: "reader" }
         );
         return ((firstArray(resultJson("gmail_search", found)) ?? []) as { id?: string }[]).find((h) => h.id)?.id;

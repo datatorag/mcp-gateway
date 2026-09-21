@@ -52,7 +52,10 @@ export const d10MailArrives: TestCase = {
       { everyMs: 5_000, forMs: 120_000 }
     );
 
-    ctx.share({ receivedId: received, token, subject });
+    // The RUN stamp, not this case's: D12 and D13 hunt for mail that
+    // carries D10's subject, and the trash helper recognises the same
+    // prefix. Sharing it is what makes a cross-case ride findable.
+    ctx.share({ receivedId: received, token, subject, runStamp: ctx.runId.slice(0, 8) });
     ctx.defer("trash the received message", async () => {
       const gone = await ctx.trashOwnMessage(received, { as: "reader" });
       if (!gone) ctx.evidence(`RESIDUE: a received message could not be trashed`);

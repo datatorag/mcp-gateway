@@ -217,7 +217,14 @@ function checkRecipients(
 export async function checkSend(
   tool: string,
   args: Record<string, unknown>,
-  opts: { readerEmail: string | null; senderEmail?: string | null; lookups: GuardLookups }
+  opts: {
+    readerEmail: string | null;
+    senderEmail?: string | null;
+    lookups: GuardLookups;
+    /** Message ids the trash helper has JUST stamp-verified. See the trash
+     * branch below: the guard will not permit a trash for anything else. */
+    trashable?: ReadonlySet<string>;
+  }
 ): Promise<SendCheck> {
   const name = toolSuffix(tool);
   const reader = opts.readerEmail?.trim().toLowerCase() ?? null;
@@ -239,6 +246,26 @@ export async function checkSend(
     const service = String(args.service ?? "").trim().toLowerCase();
     const verb = String(args.method ?? "").trim().toLowerCase();
     const path = `${String(args.resource ?? "").trim().toLowerCase()}.${verb}`;
+
+    /* THE ONE READ PERMITTED UNDER `settings`, ruled by HQ 2026-09-20.
+     *
+     * The settings denylist exists because a forwarding address, or a
+     * filter with a forward action, sends every future message to a
+     * stranger without ever looking like a send. That hazard is about
+     * WRITES. Reading which addresses the account can send as cannot send
+     * anything, and E13 needs it to assert that the signature a message
+     * carries is the account's own rather than merely present.
+     *
+     * TWO EXACT PATHS, not a pattern. `users.settings.sendas` with a
+     * pattern would also admit `.update`, `.create`, `.patch` and
+     * `.delete`, which are the writes that let an account send as somebody
+     * else. Listing the two readable verbs by name means a new verb on
+     * that resource is refused by default and has to be added
+     * deliberately. Everything else under `settings` is untouched. */
+    const SETTINGS_READS = new Set(["users.settings.sendas.list", "users.settings.sendas.get"]);
+    if (service === "gmail" && SETTINGS_READS.has(path)) {
+      return { ok: true };
+    }
 
     // Object.hasOwn, not a bare lookup: `constructor` and `__proto__` are
     // truthy on an object literal and are not regexes, so `forbidden.test`
@@ -271,6 +298,28 @@ export async function checkSend(
      * radius is mail this run sent. A test refuses any case that calls it
      * directly, because that check lives in the source, not here. */
     if (service === "gmail" && path === "users.messages.trash") {
+      /* THE GUARD ENFORCES THIS, NOT A COMMENT ABOUT THE HELPER.
+       *
+       * The first version returned ok for ANY trash with ANY id, and the
+       * stamp check that made it safe lived in `ctx.trashOwnMessage` —
+       * which nothing obliged a case to use. A case could assemble the call
+       * itself and trash arbitrary mail in a real mailbox, with a source
+       * grep as the only thing in the way, and any spelling that grep did
+       * not anticipate walked past it.
+       *
+       * So the helper hands the guard the id it has just verified, for that
+       * one call. An id the helper did not verify is refused here, where
+       * the decision is made, and the guard and the check can no longer
+       * drift apart. The grep test stays as belt and braces. */
+      const id = String((args.params as Record<string, unknown> | undefined)?.id ?? "").trim();
+      if (id === "") return { ok: false, reason: "send refused: a trash call names no message" };
+      if (!opts.trashable?.has(id)) {
+        return {
+          ok: false,
+          reason:
+            "send refused: a message may only be trashed through trashOwnMessage, which checks it carries this run's stamp",
+        };
+      }
       return { ok: true };
     }
 
@@ -329,6 +378,29 @@ export async function checkSend(
     return { ok: true };
   }
 
+  /* FORWARD CARRIES NO SUBJECT OF ITS OWN. It derives one from the message
+   * it forwards, so requiring `[smoke]` in `args.subject` asked for an
+   * argument the tool does not accept and refused every forward there could
+   * ever be. The subject that matters is the ORIGINAL's, which is the same
+   * thing the reply branch checks and for the same reason. */
+  if (name === "gmail_forward") {
+    const permitted = permittedFor(name, reader, sender);
+    const recipients = checkRecipients(args, permitted, "the reader or sender mailbox");
+    if (!recipients.ok) return recipients;
+
+    const original = await opts.lookups.readMessage(String(args.message_id ?? ""));
+    if (!original) {
+      return { ok: false, reason: "send refused: the message being forwarded could not be read" };
+    }
+    if (!subjectOk(original.subject)) {
+      return {
+        ok: false,
+        reason: `send refused: the forwarded message's subject does not carry ${SUBJECT_PREFIX}`,
+      };
+    }
+    return { ok: true };
+  }
+
   if (ARG_RECIPIENT_TOOLS.has(name)) {
     // `gmail_forward` may also reach the configured sender; every other
     // tool in this set is reader-only and the refusal text says so.
@@ -361,21 +433,47 @@ export async function checkSend(
     return { ok: true };
   }
 
-  // gmail_reply. The reply goes wherever the original says, so the original
-  // is what has to be checked.
+  /* gmail_reply. The reply goes wherever the ORIGINAL says, so the original
+   * is what has to be checked — and the header that decides is `From`.
+   *
+   * THIS GUARD CHECKED THE WRONG HEADER AND IT WAS A REAL HOLE. It resolved
+   * the recipient as `replyTo ?? from`, reasoning that a reply goes where
+   * Reply-To points. The tool does not agree: it composes `To:` from the
+   * original's `From` alone and never reads Reply-To. So a message with
+   * `From: <a stranger>`, `Reply-To: <our configured sender>` and a
+   * `[smoke]` subject passed the guard and would have been replied to at
+   * the stranger's address. The reader mailbox receives outside mail, so
+   * both headers are things somebody else can set. The old test pinned only
+   * the harmless direction and recorded the false reasoning as if it were a
+   * fact.
+   *
+   * BOTH headers are now required to be permitted: `From`, because that is
+   * where the reply is actually addressed, and `Reply-To` when present,
+   * because a tool that started honouring it must not silently widen this.
+   * If the tool changes, this refuses rather than permits. */
   const original = await opts.lookups.readMessage(String(args.message_id ?? ""));
   if (!original) return { ok: false, reason: "send refused: the message being replied to could not be read" };
-  const target = (original.replyTo ?? original.from ?? "").trim();
-  let parsed;
-  try {
-    parsed = parseAddressList(target);
-  } catch (err) {
-    const why = err instanceof AddressParseError ? err.message : String(err);
-    return { ok: false, reason: `send refused: the original's reply address could not be parsed (${why})` };
-  }
   const replyPermitted = permittedFor(name, reader, sender);
-  if (parsed.length !== 1 || !replyPermitted.has(parsed[0].address)) {
-    return { ok: false, reason: "send refused: a reply would not go to the reader mailbox" };
+
+  const headerOk = (raw: string | undefined, which: string): SendCheck => {
+    let parsed;
+    try {
+      parsed = parseAddressList(raw);
+    } catch (err) {
+      const why = err instanceof AddressParseError ? err.message : String(err);
+      return { ok: false, reason: `send refused: the original's ${which} could not be parsed (${why})` };
+    }
+    if (parsed.length !== 1 || !replyPermitted.has(parsed[0].address)) {
+      return { ok: false, reason: "send refused: a reply would not go to the reader mailbox" };
+    }
+    return { ok: true };
+  };
+
+  const fromOk = headerOk(original.from, "From");
+  if (!fromOk.ok) return fromOk;
+  if ((original.replyTo ?? "").trim() !== "") {
+    const replyToOk = headerOk(original.replyTo, "Reply-To");
+    if (!replyToOk.ok) return replyToOk;
   }
   if (!subjectOk(original.subject)) {
     return { ok: false, reason: `send refused: the original's subject does not carry ${SUBJECT_PREFIX}` };

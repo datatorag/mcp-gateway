@@ -21,7 +21,9 @@ import { countSignatureBlocks, isMultipartAlternative, partText, type MailPart }
  *
  * The expected signature text is read from the account's own settings once
  * per run and never hardcoded: it is a real person's sign-off, it changes,
- * and this repository is public.
+ * and this repository is public. That read is the one path permitted under
+ * `settings` (HQ, 2026-09-20), and it is a read: it cannot send anything,
+ * which is what the rest of that denylist is for.
  */
 export const e13SignatureApplied: TestCase = {
   id: "E13",
@@ -34,7 +36,7 @@ export const e13SignatureApplied: TestCase = {
     const token = `token-${ctx.stamp}`;
 
     /** The stored sign-off, from the account's own settings. */
-    const signatureHtml = await (async () => {
+    const needle = await (async () => {
       const res = await ctx.call(
         "gws-mcp__gws_run",
         { service: "gmail", resource: "users.settings.sendAs", method: "list", params: { userId: "me" } },
@@ -44,15 +46,22 @@ export const e13SignatureApplied: TestCase = {
         isDefault?: boolean;
         signature?: string;
       }[];
-      return (rows.find((r) => r.isDefault)?.signature ?? rows[0]?.signature ?? "").trim();
+      const stored = (rows.find((r) => r.isDefault)?.signature ?? rows[0]?.signature ?? "").trim();
+      ctx.evidence(`the stored signature is ${stored.length} characters`);
+      if (stored === "") {
+        throw new Error("the sending account has no stored signature, so nothing below can be concluded");
+      }
+      /* Compared by a distinctive WORD rather than the whole block: Gmail
+       * rewrites the wrapper markup on the way out, so the stored html and
+       * the delivered html are not equal even when the signature is right.
+       * The text is what a reader sees and what the customer report was
+       * about. Never recorded in evidence: it is a person's sign-off. */
+      const [first] = stored.replace(/<[^>]+>/g, " ").match(/[A-Za-z]{4,}/g) ?? [];
+      if (!first) {
+        throw new Error("the stored signature has no word long enough to match on");
+      }
+      return first;
     })();
-    ctx.evidence(`the stored signature is ${signatureHtml.length} characters`);
-    if (signatureHtml === "") {
-      throw new Error("the sending account has no stored signature, so nothing below can be concluded");
-    }
-    // Compared by a distinctive WORD rather than the whole block: Gmail
-    // rewrites the wrapper markup, and the text is what a reader sees.
-    const needle = (signatureHtml.replace(/<[^>]+>/g, " ").match(/[A-Za-z]{4,}/g) ?? [])[0] ?? "";
 
     /** Sends, waits for delivery, returns the full payload. Used twice. */
     const sendAndRead = async (suffix: string, extra: Record<string, unknown>) => {
@@ -119,11 +128,14 @@ export const e13SignatureApplied: TestCase = {
     ctx.evidence(`plain send: ${blocks} signature block(s) in the html part`);
 
     if (blocks !== 1) throw new Error(`the html part carries ${blocks} signature blocks, not one`);
-    if (needle && !html.includes(needle)) {
+    // THE ACCOUNT'S OWN SIGNATURE, not merely a signature. A structurally
+    // applied but empty block would satisfy a count and deliver nothing,
+    // which is what the customer reported in the first place.
+    if (!html.includes(needle)) {
       throw new Error("the html part's signature block does not carry the account's stored signature");
     }
     if (!text.includes(token)) throw new Error("the plain part does not carry the token");
-    if (needle && text.includes(needle)) {
+    if (text.includes(needle) || /gmail_signature/.test(text)) {
       throw new Error("the plain-text part carries the signature, which the HTML-only ruling forbids");
     }
 

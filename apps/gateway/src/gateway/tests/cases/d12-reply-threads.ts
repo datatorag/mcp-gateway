@@ -24,7 +24,8 @@ export const d12ReplyThreads: TestCase = {
   needs: ["D10"],
   timeoutMs: 180_000,
   run: async (ctx) => {
-    const from = ctx.from("D10") as { receivedId?: string; subject?: string };
+    const from = ctx.from("D10") as { receivedId?: string; subject?: string; runStamp?: string };
+    if (!from.runStamp) throw new Error("D10 shared no run stamp");
     if (!from.receivedId) throw new Error("D10 shared no received message, so there is nothing to reply to");
 
     const original = resultJson<{ threadId?: string; thread_id?: string }>(
@@ -41,12 +42,31 @@ export const d12ReplyThreads: TestCase = {
       { as: "reader" }
     );
 
+    /* REGISTERED BEFORE THE WAIT. The reply has already been sent by this
+     * point, so a `until` that times out would otherwise leave live mail in
+     * two mailboxes with nothing recording it. This sweeps whatever this
+     * run put there, whether or not the search below ever succeeds. */
+    ctx.defer("trash any reply this case sent", async () => {
+      const found = await ctx.call(
+        "gws-mcp__gmail_search",
+        { query: `"${from.runStamp}" ${token}`, max_results: 10 },
+        { as: "sender" }
+      );
+      const hits = (firstArray(resultJson("gmail_search", found)) ?? []) as { id?: string }[];
+      for (const hit of hits) {
+        if (!hit.id) continue;
+        if (!(await ctx.trashOwnMessage(hit.id, { as: "sender" }))) {
+          ctx.evidence("RESIDUE: a reply could not be trashed");
+        }
+      }
+    });
+
     const reply = await ctx.until(
       "the reply to arrive back with the sender",
       async () => {
         const found = await ctx.call(
           "gws-mcp__gmail_search",
-          { query: `subject:"${ctx.stamp}"`, max_results: 10 },
+          { query: `"${from.runStamp}"`, max_results: 25 },
           { as: "sender" }
         );
         const hits = (firstArray(resultJson("gmail_search", found)) ?? []) as { id?: string }[];
@@ -61,12 +81,6 @@ export const d12ReplyThreads: TestCase = {
       },
       { everyMs: 5_000, forMs: 120_000 }
     );
-    ctx.defer("trash the reply", async () => {
-      if (!(await ctx.trashOwnMessage(reply, { as: "sender" }))) {
-        ctx.evidence("RESIDUE: a reply could not be trashed");
-      }
-    });
-
     const replyRead = resultJson<{ threadId?: string; thread_id?: string; subject?: string }>(
       "gmail_read",
       await ctx.call("gws-mcp__gmail_read", { message_id: reply }, { as: "sender" })
