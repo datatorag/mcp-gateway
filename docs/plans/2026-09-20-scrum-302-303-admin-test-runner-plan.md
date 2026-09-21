@@ -1,10 +1,16 @@
 # Build plan: the role column and the admin test runner (SCRUM-302, SCRUM-303)
 
 Date: 2026-09-20
-Status: approved with six rulings, all folded into this revision. No code
-and no migration exist. Building starts only on a separate go.
+Status: approved with six rulings, all folded into this revision. Phases 1
+to 4 are BUILT: the role column, the engine, the admin surface and all 54
+cases, with migrations 0018 and 0019 applied on the dev branch. Phase 5 and
+the scenario regroup remain.
 Spec: `docs/architecture/2026-09-20-scrum-302-303-admin-test-runner-design.md`
-(revision 3). Where the two disagree, the spec wins and this file is wrong.
+(revision 4). Where the two disagree, the spec wins and this file is wrong.
+Revision 4 replaced tiers with lifecycle scenarios, one per service. Phases
+1 to 4 were WRITTEN in tier vocabulary and built that way; read them with
+`scenario` substituted for `tier`, as the record of what exists rather than
+as instructions to rebuild it.
 
 ## Shape
 
@@ -211,7 +217,7 @@ Branch `scrum-303-runner-surface`.
    and can return the whole run as the export. Tests: a non-admin's
    `tools/list` contains none of the three, and `tools/call` for each by
    name returns the identical error a made-up name returns, compared whole
-   (mutation: remove the call-side check and leave the list filter); at most one of `tier` and `case_ids`; a second
+   (mutation: remove the call-side check and leave the list filter); at most one of `scenario` and `case_ids`; a second
    start returns the running id. The existing built-ins suite iterates the
    registry and calls every handler, so it would start a run. It is changed
    to call admin entries as an admin with the runner stubbed, and to assert
@@ -271,9 +277,9 @@ and then deleted.
 
 ## Phase 5: baseline and handover
 
-1. Tier 1 against production, then a full run. Recorded as the prod
-   baseline.
-2. Three cases broken on purpose (a read, a round trip, a mail case), each
+1. The Gateway scenario against production, then everything. Recorded as
+   the prod baseline. (Revision 4: there is no tier 1 to run first.)
+2. Three steps broken on purpose (a read, a round trip, a mail step), each
    must go red for its own reason, then restored. Until this is done the
    baseline is not trusted and SCRUM-289 stays held.
 3. **The local leg, proven once end to end.** A local gateway with a

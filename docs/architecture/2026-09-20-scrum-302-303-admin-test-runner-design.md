@@ -1,11 +1,17 @@
 # A role column, and a test runner the gateway runs against itself (SCRUM-302, SCRUM-303)
 
 Date: 2026-09-20
-Status: accepted, revision 3. Two rounds of review are folded in (see
-Rulings). The second reversed the run credential: the runner is in-process
-and there is no minted key. The
-build plan is `docs/plans/2026-09-20-scrum-302-303-admin-test-runner-plan.md`.
-No code and no migration exist yet.
+Status: accepted, revision 4. Review rounds one and two are folded into the
+body and recorded under Rulings; round two reversed the run credential, so
+the runner is in-process and there is no minted key. Revision 4 replaced
+tiers with lifecycle scenarios, one per service; its section at the end is
+NORMATIVE, and where the body below and Revision 4 disagree, Revision 4
+wins. The build plan is
+`docs/plans/2026-09-20-scrum-302-303-admin-test-runner-plan.md`.
+Phases 1 to 4 of that plan are built: the role column, the runner engine,
+the admin surface and all 54 cases, with migrations 0018 and 0019 applied on
+the dev branch. Phase 5, the baseline, and the scenario regroup itself are
+what remain.
 
 ## Problem
 
@@ -143,7 +149,7 @@ test_runs
   id              uuid pk
   triggered_by    uuid  -> users.id   (who pressed the button or called the tool)
   trigger         text  'ui' | 'mcp'
-  scope           jsonb {tier?: 1|2, caseIds?: string[]}   what was asked for
+  scope           jsonb {scenario?: string, caseIds?: string[]}  what was asked for
   status          text  'running' | 'finished' | 'aborted' | 'interrupted'
   started_at      timestamptz
   finished_at     timestamptz null
@@ -168,7 +174,7 @@ test_results
 ```
 
 Two tables for the runner plus the role column: three schema changes. No
-cases table. A case is code; its id, tier and description are read from the
+cases table. A case is code; its id, scenario and description are read from the
 module, so a case cannot exist in one place and not the other.
 
 `cleanup` is its own column because "the assertion passed and the cleanup
@@ -202,7 +208,7 @@ barrel and the directory agree, ids are unique, and every id is well formed.
 export interface TestCase {
   id: string;                 // the smoke row it descends from: "D15"
   title: string;
-  tier: 1 | 2;
+  scenario: ScenarioKey;      // which service lifecycle this step belongs to
   covers: string[];           // namespaced tool names this case exercises
   accounts: AccountRole[];    // roles it needs: "sender", "reader", "atlassian"
   fixtures?: FixtureKey[];    // named fixtures it needs
@@ -433,7 +439,8 @@ already do.
 `covered = union of every registered case's covers`. For each name in the
 served list that is not in `covered`, the run writes
 `uncovered:<tool>` with status `uncovered`. A run with any `uncovered`,
-`fail`, `leaked` cleanup or tier-1 `skip` is not fully green.
+`fail`, `leaked` cleanup or `skip` in the Gateway scenario is not fully
+green.
 
 Two honest limits. `covers` is a declaration, so the runner also records the
 tool names each case actually called and fails a case that declares a tool
@@ -505,7 +512,7 @@ gateway and plugin shas, which is the point: "these eleven changed between
 plugin sha X and Y". Duration changes are shown and never counted as
 regressions.
 
-A run scoped to a tier or a case list diffs only over the cases both runs
+A run scoped to a scenario or a case list diffs only over the cases both runs
 executed, and says how many it left out.
 
 ### UI: `/dashboard/admin/tests`
@@ -514,7 +521,7 @@ All under `requireAdminPage`: a signed-in non-admin gets the 404, an
 anonymous visitor the login bounce. One rail entry, rendered
 only when `/api/me` reports `role: admin`.
 
-- `/dashboard/admin/tests` : start a run (all, tier 1, tier 2), the running
+- `/dashboard/admin/tests` : start a run (everything, or one scenario), the running
   run's progress, history (newest first: when, who, trigger, shas, totals),
   and the current uncovered list from the latest full run.
 - `/dashboard/admin/tests/[runId]` : results grouped by section, filter by
@@ -538,7 +545,7 @@ creates files.
 
 ```
 tests_run
-  input:  { tier?: 1 | 2, case_ids?: string[] }   at most one; neither = all
+  input:  { scenario?: string, case_ids?: string[] }  at most one; neither = all
   output: { run_id, status: "running", cases: <n> }
           or isError naming the run already in progress
 
@@ -719,6 +726,122 @@ Second round, on the plan:
     boot marking of interrupted runs, the send-guard edges, and the trust
     boundary.
 
+## Revision 4: scenarios replace tiers
+
+Tiers said how expensive a case was. They did not say what a case was FOR,
+so a red tier 2 named a number and a service and left you to work out which
+step of which flow had actually broken.
+
+The cases become **lifecycle scenarios, one per service**. A scenario is the
+sequence a real user runs end to end, and every tool that service ships is a
+named step in it, with one named exception below. Three
+things follow, and they are the reason for the change:
+
+- a failure names the STEP, so "the doc was created and written and the read
+  back came home empty" is the report, not "D4 failed";
+- `uncovered` stops meaning "nobody wrote a case" and starts meaning "the
+  lifecycle forgot a tool", which is a claim about the product rather than
+  about us;
+- the scenario is reviewable by somebody who does not read the suite, because
+  it is just the flow.
+
+Nothing is discarded. All 54 cases survive as steps, and every guard they
+carry survives with them: a guard is a step with an assertion, not a case of
+its own.
+
+Steps below that carry a case id in brackets are those 54. Steps named
+without one are NEW, written by the regroup to reach a tool no case had:
+they take fresh ids in their scenario's own series, `GW1` being the first.
+So the id set here is the 54 plus the new steps, and a reader counting ids
+should expect more than 54, not exactly 54.
+
+**Order is deliberate, not alphabetical.** The basis for the ranking is
+recorded in the internal brief rather than here.
+
+The order: Gateway, Sheets, Gmail, Docs, Drive, Calendar, Jira, Tasks,
+Contacts, Slides, Confluence, Skills. Gateway leads because it is the
+handshake and the registry agreement; when it is red, a later red is likely
+a consequence of it rather than a finding of its own, so it is the one to
+read first.
+
+The sequences, with the case each step comes from:
+
+- **Gateway**: health (A1), handshake and a tool answers (A2), the
+  per-identity `tools/list` formula (A3), plugin and registry and served list
+  agree (A4), the analytics guard (A5), `/mcp` over real HTTP (R1), a stored
+  token per provider (B1), two accounts answer differently (B2), the
+  connected accounts built-in answers for this identity (GW1), annotations
+  match the names (E5), the schema carries the registry's parameters (E8),
+  a write prompts and a reviewed read does not (F1), unapproved scopes are
+  absent (F2), a fabricated key is refused (F7), a non-admin can neither see
+  nor call the runner's tools (R2), and an error names its cause (G1).
+- **Sheets** runs create, add tab, append (D1), read back (C1),
+  update (D2), find_rows (E11), batch_update, format_table, format_range
+  (D14), query (C12), clear (D1), rename tab, delete tab (D7), delete.
+  Guards inside it: `=` and `+` stored as text (E3), a leading zero and plus
+  survive (E4), many ranges answer in request order keeping duplicates and
+  empty blocks (E17). It creates its own spreadsheet for the write path and
+  leaves the standing fixture to the read guards, so a failed cleanup cannot
+  damage what every other scenario reads.
+- **Gmail**, today the only scenario that sends mail, and so the only one
+  whose confirm dialog says so. It stops being the only one the moment
+  another gains an attendee, a share or a comment step:
+  create_label (E1), label three in one call (E16), list_labels (B1),
+  update_label, create_draft (D3), update_draft (E15), send_draft (D11),
+  delete_draft (D3), send (D10), search (C2), list, read (D10), mark_read,
+  reply (D12), forward (D13), save_attachment_to_drive (D15), list_filters
+  (E2), delete_label (E1). Guards: the signature applies once and in the HTML
+  part only (E13), `signature: false` suppresses it and the send says so
+  (E14), a draft signed on write is not signed again on send (E15).
+- **Docs**: create, write (D4), nested replaceAllText (E10), get (C5), a
+  partial read says the document is longer (E9), the flat replaceAllText
+  shape is refused by name (E10), delete (D4).
+- **Drive**: create_folder, copy (D9), rename (D9), search finds it by its
+  new name (C4), read_file, an attachment saved from mail matches in size and
+  md5 (D15), delete.
+- **Calendar**: create (D5), list in its window (C3), get, update, freebusy,
+  delete (D5), and the listing no longer has it (D5). Google's tombstone
+  becomes an explicit step: deletion is verified by absence from
+  `calendar_list_events`, and `calendar_get_event` still answering with
+  `status: cancelled` is asserted as expected rather than tripped over.
+- **Jira**: search (C7), list_fields, search_users, create (C11), get
+  (C11), update, add_comment, get_comments, edit_comment, delete_comment,
+  get_transitions, transition, get_attachment against the standing fixture
+  issue, delete (C11), and it is the only thing that changed (C11).
+- **Tasks**: create_tasklist, create, list_tasks, update, complete, delete,
+  and the first page has a list shape (C10).
+- **Contacts**: create, get, update, search, directory_search, the first
+  page has a list shape (C9), delete.
+- **Slides**: create, a text box (D6), exactly one slide with its control
+  title (C6), delete (D6).
+- **Confluence**: search (C8), create_page, get_page, list_pages, edit_page,
+  add_comment, get_comments, get_attachment against the standing fixture
+  page, delete_page.
+- **Skills**: search returns a skill (C13), get loads it (C13), then create,
+  update, fork and delete against the admin's own skills.
+
+Four questions went to review with this map and were answered, so they are
+settled rather than open: Gateway runs first and gains a
+`list_connected_accounts` step; the Sheets lifecycle writes on a spreadsheet
+it creates and the standing fixture sheet stays read-only; Confluence ships
+now, last and thin; and the skills write tools get steps against the
+admin's own skills.
+
+Left uncovered on purpose, and it is now a list of one:
+
+- `gws_auth_setup` starts an auth flow. There is no safe call.
+
+`jira_get_attachment` and `confluence_get_attachment` ARE steps, reading a
+standing fixture issue and page created for them. The connector ships no
+tool that creates an attachment, so the file on each is attached by hand
+once; that is a fixture cost, not a gap in the lifecycle, and it is the one
+part of the suite a person has to set up before a run can be green.
+
+The UI loses the tier buttons. One **Run everything**, and one control per
+scenario. The sends-mail confirmation belongs to the Gmail scenario alone,
+rather than to a whole tier, which is what made the old dialog warn about
+mail on runs that sent none.
+
 ## Verification, when it is built
 
 Unit: the case registry invariants, the send guard, the undo ordering
@@ -734,6 +857,8 @@ Against real Postgres (the testcontainers harness): the two tables, the
 one-run-at-a-time claim, `interrupted` on boot, and import of another
 environment's run.
 
-Live: a tier-1 run against production, then a full run, recorded as the
-baseline. Before the baseline is trusted, three cases are broken on purpose
-(a read, a round trip, a mail case) and each must go red for its own reason.
+Live: a run against production, recorded as the baseline. Revision 4 removes
+tiers, so this is the Gateway scenario first and then everything, rather than
+tier 1 and then a full run. Before the baseline is trusted, three steps are
+broken on purpose (a read, a round trip, a mail step) and each must go red
+for its own reason.
