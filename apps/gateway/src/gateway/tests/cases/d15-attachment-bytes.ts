@@ -3,7 +3,7 @@ import type { TestCase } from "../types";
 import { firstArray, resultJson, resultText } from "../result-json";
 
 /**
- * D15 (smoke row D15, tier 2): an attachment saved to Drive is THE SAME
+ * D15 (smoke row D15): an attachment saved to Drive is THE SAME
  * BYTES.
  *
  * Guards SCRUM-289, which rewrites the save path from decode-to-temp-file
@@ -22,7 +22,6 @@ import { firstArray, resultJson, resultText } from "../result-json";
 export const d15AttachmentBytes: TestCase = {
   id: "D15",
   title: "an attachment saved to Drive matches the original in size and md5",
-  tier: 2,
   covers: [
     "gws-mcp__gmail_search",
     "gws-mcp__gmail_read",

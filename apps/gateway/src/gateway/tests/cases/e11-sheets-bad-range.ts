@@ -2,7 +2,7 @@ import type { TestCase } from "../types";
 import { resultText } from "../result-json";
 
 /**
- * E11 (smoke row E11, tier 1): a range naming a tab that does not exist must
+ * E11 (smoke row E11): a range naming a tab that does not exist must
  * NAME THE TABS THAT DO.
  *
  * A regression guard with a proven failure: a caller copied the placeholder
@@ -15,7 +15,6 @@ import { resultText } from "../result-json";
 export const e11SheetsBadRange: TestCase = {
   id: "E11",
   title: "a range naming a tab that does not exist names the tabs that do",
-  tier: 1,
   covers: ["gws-mcp__sheets_find_rows"],
   accounts: ["sender"],
   fixtures: ["sheet", "scratchTab"],

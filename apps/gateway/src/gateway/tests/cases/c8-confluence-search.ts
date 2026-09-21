@@ -2,7 +2,7 @@ import type { TestCase } from "../types";
 import { resultJson } from "../result-json";
 
 /**
- * C8 (tier 2): Confluence answers a bounded search.
+ * C8: Confluence answers a bounded search.
  *
  * ALSO A TENANT-EXPIRY ALARM, which is why it earns a case despite asserting
  * so little. A free tenant suspends after months idle and keeps its data for
@@ -16,7 +16,6 @@ import { resultJson } from "../result-json";
 export const c8ConfluenceSearch: TestCase = {
   id: "C8",
   title: "a bounded confluence search returns without error",
-  tier: 2,
   covers: ["atlassian-mcp__confluence_search"],
   accounts: ["atlassian"],
   run: async (ctx) => {

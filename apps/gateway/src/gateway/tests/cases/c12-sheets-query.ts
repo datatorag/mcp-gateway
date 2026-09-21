@@ -2,10 +2,10 @@ import type { TestCase } from "../types";
 import { resultJson, resultText } from "../result-json";
 
 /**
- * C12 (tier 1): the QUERY() path returns rows, and an out-of-range column is
+ * C12: the QUERY() path returns rows, and an out-of-range column is
  * REFUSED rather than answered with emptiness.
  *
- * The second half is the regression guard and the reason this is tier 1. A
+ * The second half is the regression guard and the reason this runs early. A
  * range check that silently returns zero rows for a column that does not
  * exist hands a caller "no results" for what is actually a typo, and that
  * failure mode has already cost a debugging session once.
@@ -20,7 +20,6 @@ import { resultJson, resultText } from "../result-json";
 export const c12SheetsQuery: TestCase = {
   id: "C12",
   title: "a sheet query returns rows and refuses a column outside the range",
-  tier: 1,
   covers: ["gws-mcp__sheets_query"],
   accounts: ["sender"],
   fixtures: ["querySheet", "queryTab"],

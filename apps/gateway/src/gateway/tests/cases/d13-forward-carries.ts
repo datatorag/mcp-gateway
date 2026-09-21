@@ -2,7 +2,7 @@ import type { TestCase } from "../types";
 import { firstArray, resultJson, resultText } from "../result-json";
 
 /**
- * D13 (smoke row D13, tier 2): a forward must CARRY THE ORIGINAL.
+ * D13 (smoke row D13): a forward must CARRY THE ORIGINAL.
  *
  * A self-forward, reader to reader, so no third mailbox is involved. The
  * assertion is that BOTH the new note and D10's original token survive: a
@@ -12,7 +12,6 @@ import { firstArray, resultJson, resultText } from "../result-json";
 export const d13ForwardCarries: TestCase = {
   id: "D13",
   title: "a forward carries both the note and the original's token",
-  tier: 2,
   covers: ["gws-mcp__gmail_forward", "gws-mcp__gmail_search", "gws-mcp__gmail_read"],
   accounts: ["reader"],
   needs: ["D10"],

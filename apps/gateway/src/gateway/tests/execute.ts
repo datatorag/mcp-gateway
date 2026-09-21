@@ -1,3 +1,4 @@
+import { SCENARIOS, scenario } from "./scenarios";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import type { Database, TestRunScope, TestRunTotals } from "@datatorag-mcp/db";
@@ -14,7 +15,7 @@ import { orderByNeeds, runOneCase, stampFor, type ContextParts } from "./runner"
 import { runPool } from "./pool";
 import { parseFixtureMap } from "./fixtures";
 import { checkSend, SUBJECT_PREFIX, type GuardLookups } from "./send-guard";
-import type { AccountRole, FixtureKey } from "./types";
+import type { AccountRole, FixtureKey, TestCase } from "./types";
 import { finishRun, recordResult, startRun } from "./store";
 import { missingCheckouts, readPluginShas } from "./plugin-sha";
 import { mcpServers, serviceConnections } from "@datatorag-mcp/db";
@@ -103,7 +104,8 @@ export async function createRunnerClient(
 
 export type StartResult =
   | { ok: true; runId: string; cases: number }
-  | { ok: false; reason: "already_running"; runId: string };
+  | { ok: false; reason: "already_running"; runId: string }
+  | { ok: false; reason: "empty_scope"; runId?: undefined };
 
 /**
  * Claims the run slot and returns at once; the run itself proceeds in the
@@ -119,6 +121,13 @@ export async function startTestRun(opts: {
 }): Promise<StartResult> {
   const env = getEnv();
   const selected = selectCases(opts.scope);
+
+  /* THE BACKSTOP. Both callers validate their own input, and one of them
+   * got it wrong: an unregistered scenario key selected nothing and the run
+   * finished with no failures, which reads as a pass. A run of no cases is
+   * never what anybody asked for, so it is refused here too, where every
+   * entry point has to come through. */
+  if (selected.length === 0) return { ok: false, reason: "empty_scope" };
 
   const claim = await startRun(opts.db, {
     triggeredBy: opts.userId,
@@ -152,14 +161,51 @@ export async function startTestRun(opts: {
   return { ok: true, runId: claim.runId, cases: selected.length };
 }
 
-/** Cases the scope asks for. Neither field means everything. */
+/**
+ * Cases the scope asks for, IN THE ORDER THEY RUN. Neither field means
+ * everything.
+ *
+ * A scenario's steps run in the order `scenarios.ts` lists them, because a
+ * lifecycle whose steps ran in registration order would create a document
+ * after reading it. Everything not yet regrouped keeps registration order
+ * and follows the scenarios, so "run everything" still runs all of it while
+ * the regroup is in progress.
+ */
 export function selectCases(scope: TestRunScope, all = CASES) {
-  if (scope.caseIds?.length) {
+  /* PRESENT BUT EMPTY IS NOT ABSENT. `scope.caseIds?.length` treated an
+   * empty list as "no case filter" and fell through to everything, so a
+   * request that asked for two cases and named neither usably ran the whole
+   * suite, mail included.
+   *
+   * THIS IS THE LAYER THAT ACTUALLY DECIDES. The entry points refuse a list
+   * whose elements are unusable, but an EMPTY list is not unusable, it is
+   * empty, and both of them used to drop it before reaching here. They hand
+   * it through now and this line gives it its meaning: named nothing,
+   * selects nothing. The backstop then refuses the run. It also covers a
+   * scope replayed from a stored row, which no entry point sees. */
+  if (scope.caseIds !== undefined) {
     const wanted = new Set(scope.caseIds);
     return all.filter((c) => wanted.has(c.id));
   }
-  if (scope.tier) return all.filter((c) => c.tier === scope.tier);
-  return [...all];
+  const byId = new Map(all.map((c) => [c.id, c]));
+  if (scope.scenario) {
+    const chosen = scenario(scope.scenario);
+    if (!chosen) return [];
+    return chosen.steps.map((id) => byId.get(id)).filter((c): c is TestCase => c !== undefined);
+  }
+  const ordered: TestCase[] = [];
+  const placed = new Set<string>();
+  for (const s of SCENARIOS) {
+    for (const id of s.steps) {
+      const found = byId.get(id);
+      if (found && !placed.has(id)) {
+        ordered.push(found);
+        placed.add(id);
+      }
+    }
+  }
+  for (const c of all) if (!placed.has(c.id)) ordered.push(c);
+  return ordered;
 }
 
 async function driveRun(opts: {

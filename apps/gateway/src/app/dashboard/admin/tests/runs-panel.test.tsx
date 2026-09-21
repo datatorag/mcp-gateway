@@ -176,7 +176,7 @@ describe("a page that opened with no history at all", () => {
 
     await act(async () => {
       [...container.querySelectorAll("button")]
-        .find((b) => b.textContent === "Run tier 1")!
+        .find((b) => b.textContent === "gateway")!
         .click();
     });
     await act(async () => {

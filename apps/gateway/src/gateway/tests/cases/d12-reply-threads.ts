@@ -2,7 +2,7 @@ import type { TestCase } from "../types";
 import { firstArray, resultJson, resultText } from "../result-json";
 
 /**
- * D12 (smoke row D12, tier 2): a reply lands in the SAME THREAD.
+ * D12 (smoke row D12): a reply lands in the SAME THREAD.
  *
  * Rides D10's delivered message rather than sending another.
  *
@@ -18,7 +18,6 @@ import { firstArray, resultJson, resultText } from "../result-json";
 export const d12ReplyThreads: TestCase = {
   id: "D12",
   title: "a reply to the delivered message lands in its thread",
-  tier: 2,
   covers: ["gws-mcp__gmail_reply", "gws-mcp__gmail_search", "gws-mcp__gmail_read"],
   accounts: ["sender", "reader"],
   needs: ["D10"],

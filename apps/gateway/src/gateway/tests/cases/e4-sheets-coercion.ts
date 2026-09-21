@@ -2,7 +2,7 @@ import type { TestCase } from "../types";
 import { resultJson } from "../result-json";
 
 /**
- * E4 (smoke row E4, tier 2): a leading-zero string and a phone number keep
+ * E4 (smoke row E4): a leading-zero string and a phone number keep
  * their shape.
  *
  * The sheet says to record EXACTLY what came back, and that wording is
@@ -14,7 +14,6 @@ import { resultJson } from "../result-json";
 export const e4SheetsCoercion: TestCase = {
   id: "E4",
   title: "a leading zero and a leading plus survive a round trip unchanged",
-  tier: 2,
   covers: ["gws-mcp__sheets_append", "gws-mcp__sheets_read", "gws-mcp__sheets_clear"],
   accounts: ["sender"],
   fixtures: ["sheet", "scratchTab"],

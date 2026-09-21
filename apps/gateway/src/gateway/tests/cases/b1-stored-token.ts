@@ -1,7 +1,7 @@
 import type { TestCase } from "../types";
 
 /**
- * B1 (tier 1): a stored provider token still works.
+ * B1 (Gateway scenario): a stored provider token still works.
  *
  * The failure here is silent and delayed: a token that expired last night
  * breaks every write today, and nobody learns until they try a tool. One
@@ -14,7 +14,6 @@ import type { TestCase } from "../types";
 export const b1StoredToken: TestCase = {
   id: "B1",
   title: "a stored token authenticates a call to each connected provider",
-  tier: 1,
   covers: ["gws-mcp__gmail_list_labels", "atlassian-mcp__jira_search"],
   accounts: ["sender", "atlassian"],
   run: async (ctx) => {

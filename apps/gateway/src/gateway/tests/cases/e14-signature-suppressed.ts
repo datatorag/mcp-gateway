@@ -2,7 +2,7 @@ import type { TestCase } from "../types";
 import { firstArray, resultJson, resultText } from "../result-json";
 
 /**
- * E14 (smoke row E14, tier 2): `signature: false` must SUPPRESS, and the
+ * E14 (smoke row E14): `signature: false` must SUPPRESS, and the
  * send must say so.
  *
  * The escape hatch for the signature feature, and the setting the triage
@@ -15,7 +15,6 @@ import { firstArray, resultJson, resultText } from "../result-json";
 export const e14SignatureSuppressed: TestCase = {
   id: "E14",
   title: "signature false suppresses the signature and the send reports it",
-  tier: 2,
   covers: ["gws-mcp__gmail_send", "gws-mcp__gmail_search", "gws-mcp__gmail_read"],
   accounts: ["sender", "reader"],
   timeoutMs: 180_000,

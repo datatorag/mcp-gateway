@@ -2,7 +2,7 @@ import type { TestCase } from "../types";
 import { resultJson } from "../result-json";
 
 /**
- * D2 (smoke row D2, tier 1): an updated cell reads back changed, and is put
+ * D2 (smoke row D2): an updated cell reads back changed, and is put
  * back the way it was found.
  *
  * It restores the ORIGINAL VALUE rather than clearing, because the cell it
@@ -12,7 +12,6 @@ import { resultJson } from "../result-json";
 export const d2SheetsUpdate: TestCase = {
   id: "D2",
   title: "an updated scratch cell reads back changed and is then restored",
-  tier: 1,
   covers: ["gws-mcp__sheets_update", "gws-mcp__sheets_read"],
   accounts: ["sender"],
   fixtures: ["sheet", "scratchTab"],

@@ -1,3 +1,4 @@
+import { REGROUP_PENDING, scenarioOf } from "./scenarios";
 import { readdirSync } from "node:fs";
 import { join } from "node:path";
 import type { TestCase } from "./types";
@@ -12,20 +13,38 @@ import { ACCOUNT_ROLES, FIXTURE_KEYS } from "./types";
 
 export type RegistryProblem = { caseId: string; problem: string };
 
-/** `D15`, `C1`, `R1`: a section letter, a number, an optional suffix. */
-const ID_SHAPE = /^[A-Z][0-9]{1,2}[a-z]?$/;
+/**
+ * `D15`, `C1`, `R1`: a section letter, a number, an optional suffix, which
+ * is the smoke sheet's own shape. The ported cases keep their sheet ids on
+ * purpose, so three years of run logs still resolve.
+ *
+ * A TWO-LETTER prefix (`GW1`) is a step the regroup added to reach a tool
+ * no smoke row ever covered. The shapes are kept distinguishable so nobody
+ * reads a new step as a row that exists on the sheet, and so the sheet's
+ * one-letter space can never collide with a scenario's series: `GW1` is not
+ * `G1`, and neither can be mistyped into the other.
+ */
+const ID_SHAPE = /^[A-Z]{1,2}[0-9]{1,2}[a-z]?$/;
 
 export function checkRegistry(cases: readonly TestCase[]): RegistryProblem[] {
   const problems: RegistryProblem[] = [];
   const seen = new Set<string>();
 
   for (const c of cases) {
-    if (!ID_SHAPE.test(c.id)) problems.push({ caseId: c.id, problem: "id is not of the form D15" });
+    if (!ID_SHAPE.test(c.id)) problems.push({ caseId: c.id, problem: "id is not of the form D15 or GW1" });
     if (seen.has(c.id)) problems.push({ caseId: c.id, problem: "duplicate id" });
     seen.add(c.id);
 
     if (!c.title.trim()) problems.push({ caseId: c.id, problem: "has no title" });
-    if (c.tier !== 1 && c.tier !== 2) problems.push({ caseId: c.id, problem: "tier must be 1 or 2" });
+    /* EVERY CASE HAS A HOME. A case in no scenario and not listed as
+     * pending would still run under "everything" and be unreachable by any
+     * scenario control, which is how a step goes quietly missing during the
+     * regroup. Placed and pending are checked against each other in
+     * `scenarios.test.ts`; here it is per case, so the problem names the
+     * case rather than a set difference. */
+    if (!scenarioOf(c.id) && !REGROUP_PENDING.includes(c.id)) {
+      problems.push({ caseId: c.id, problem: "belongs to no scenario and is not listed as pending" });
+    }
     // `covers` may be EMPTY. A case about the gateway itself (health,
     // tools/list, the front door) exercises no tool, and requiring a
     // declaration there would mean inventing one. What protects coverage is

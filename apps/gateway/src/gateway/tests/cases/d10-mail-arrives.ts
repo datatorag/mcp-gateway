@@ -2,7 +2,7 @@ import type { TestCase } from "../types";
 import { firstArray, resultJson, resultText } from "../result-json";
 
 /**
- * D10 (smoke row D10, tier 2): mail actually leaves us and arrives.
+ * D10 (smoke row D10): mail actually leaves us and arrives.
  *
  * THE ONLY CASE THAT PROVES IT. `gmail_send` went untested for months
  * because there was nowhere safe to send: every address we had belonged to
@@ -20,7 +20,6 @@ import { firstArray, resultJson, resultText } from "../result-json";
 export const d10MailArrives: TestCase = {
   id: "D10",
   title: "a sent message arrives in the reader mailbox carrying its token",
-  tier: 2,
   covers: ["gws-mcp__gmail_send", "gws-mcp__gmail_search", "gws-mcp__gmail_read"],
   accounts: ["sender", "reader"],
   timeoutMs: 180_000,

@@ -2,7 +2,7 @@ import type { TestCase } from "../types";
 import { firstArray, resultJson, resultText } from "../result-json";
 
 /**
- * E16 (smoke row E16, tier 1): several messages labelled in ONE call, and
+ * E16 (smoke row E16): several messages labelled in ONE call, and
  * every one of them really carries it.
  *
  * Guards the change that let `gmail_label_message` take several ids at once.
@@ -20,7 +20,6 @@ import { firstArray, resultJson, resultText } from "../result-json";
 export const e16BatchLabel: TestCase = {
   id: "E16",
   title: "three messages labelled in one call all carry it, and lose it together",
-  tier: 1,
   covers: [
     "gws-mcp__gmail_search",
     "gws-mcp__gmail_create_label",

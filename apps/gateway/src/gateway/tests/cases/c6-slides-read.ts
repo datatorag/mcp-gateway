@@ -2,7 +2,7 @@ import type { TestCase } from "../types";
 import { resultJson } from "../result-json";
 
 /**
- * C6 (tier 1): the fixture deck reads back one slide and its control title.
+ * C6: the fixture deck reads back one slide and its control title.
  *
  * The slide COUNT is asserted as well as the text. A deck that gained a
  * slide would still have the right title on the first one, and the count is
@@ -11,7 +11,6 @@ import { resultJson } from "../result-json";
 export const c6SlidesRead: TestCase = {
   id: "C6",
   title: "the fixture deck has exactly one slide with its control title",
-  tier: 1,
   covers: ["gws-mcp__slides_get"],
   accounts: ["sender"],
   fixtures: ["deck"],

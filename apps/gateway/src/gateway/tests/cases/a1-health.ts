@@ -2,7 +2,7 @@ import { getEnv } from "@datatorag-mcp/config";
 import type { TestCase } from "../types";
 
 /**
- * A1 (tier 1): the gateway answers.
+ * A1 (Gateway scenario): the gateway answers.
  *
  * If this fails every result below it is noise, which is why the run aborts
  * on the gate rather than reporting forty cascading failures.
@@ -15,7 +15,6 @@ import type { TestCase } from "../types";
 export const a1Health: TestCase = {
   id: "A1",
   title: "GET /health answers ok",
-  tier: 1,
   covers: [],
   accounts: [],
   run: async (ctx) => {

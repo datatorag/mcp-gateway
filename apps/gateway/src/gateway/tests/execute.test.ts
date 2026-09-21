@@ -8,29 +8,44 @@
  */
 
 import { describe, expect, it } from "vitest";
-import { contractSubjectFor, coverageMismatch, makeContextParts, missingMappingsFor, selectCases, unservedToolsFor, pluginsBlocking } from "./execute";
+import { startTestRun, contractSubjectFor, coverageMismatch, makeContextParts, missingMappingsFor, selectCases, unservedToolsFor, pluginsBlocking } from "./execute";
 import { parseFixtureMap } from "./fixtures";
 import { vi } from "vitest";
 import type { TestCase } from "./types";
 
-const c = (id: string, tier: 1 | 2): TestCase => ({
+const c = (id: string): TestCase => ({
   id,
   title: id,
-  tier,
   covers: ["x"],
   accounts: [],
   run: async () => {},
 });
 
-const all = [c("A1", 1), c("A2", 1), c("D15", 2), c("E17", 2)];
+/* A1 and A2 are Gateway steps 1 and 2; D15 and E17 are not yet regrouped.
+ * The mix is deliberate: selection has to keep working while the two
+ * populations coexist. */
+const all = [c("A1"), c("A2"), c("D15"), c("E17")];
 
 describe("selectCases", () => {
   it("takes everything when the scope asks for nothing", () => {
     expect(selectCases({}, all).map((x) => x.id)).toEqual(["A1", "A2", "D15", "E17"]);
   });
 
-  it("takes one tier", () => {
-    expect(selectCases({ tier: 1 }, all).map((x) => x.id)).toEqual(["A1", "A2"]);
+  it("takes one scenario, in the order its steps are declared", () => {
+    // Order is the claim, not membership: a lifecycle whose steps ran in
+    // registration order would read a document before creating it.
+    expect(selectCases({ scenario: "gateway" }, all).map((x) => x.id)).toEqual(["A1", "A2"]);
+  });
+
+  it("takes nothing for a scenario that does not exist", () => {
+    // Refused at both entry points before it reaches here; this pins that
+    // an unknown key can never quietly mean "everything".
+    expect(selectCases({ scenario: "nope" }, all)).toEqual([]);
+  });
+
+  it("runs placed cases before pending ones when everything is asked for", () => {
+    const shuffled = [c("E17"), c("D15"), c("A2"), c("A1")];
+    expect(selectCases({}, shuffled).map((x) => x.id)).toEqual(["A1", "A2", "E17", "D15"]);
   });
 
   it("takes named cases, and ignores a name that is not registered", () => {
@@ -39,8 +54,16 @@ describe("selectCases", () => {
     expect(selectCases({ caseIds: ["D15", "NOPE"] }, all).map((x) => x.id)).toEqual(["D15"]);
   });
 
-  it("prefers case ids over a tier when both are given", () => {
-    expect(selectCases({ tier: 1, caseIds: ["E17"] }, all).map((x) => x.id)).toEqual(["E17"]);
+  it("prefers case ids over a scenario when both are given", () => {
+    expect(selectCases({ scenario: "gateway", caseIds: ["E17"] }, all).map((x) => x.id)).toEqual(["E17"]);
+  });
+
+  it("treats an empty case list as nothing, never as everything", () => {
+    /* The bug this pins widened rather than narrowed: `case_ids: [10, 11]`
+     * filtered to [], `[]?.length` is falsy, and the scope collapsed to {}.
+     * A request naming two cases ran all of them, mail sends included. */
+    expect(selectCases({ caseIds: [] }, all)).toEqual([]);
+    expect(selectCases({ caseIds: [] }, all).length).not.toBe(all.length);
   });
 
   it("returns a copy, so a caller cannot mutate the registry", () => {
@@ -301,5 +324,44 @@ describe("pluginsBlocking", () => {
 
   it("says nothing when the environment is fine", () => {
     expect(pluginsBlocking({ covers: ["atlassian-mcp__jira_search"] }, new Map())).toEqual([]);
+  });
+});
+
+/**
+ * A RUN OF NOTHING IS NEVER WHAT ANYBODY ASKED FOR (SCRUM-303).
+ *
+ * Found by review, not by a test: the MCP tool validated a scenario key
+ * against the twelve PLANNED keys while one was registered, so
+ * `tests_run {"scenario":"gmail"}` passed validation, selected no cases,
+ * claimed the run slot, and finished with no failures. An empty run does
+ * not look empty on the page, it looks green.
+ *
+ * Both entry points validate their own input now, and this is the backstop
+ * behind both of them, because the one that got it wrong was the one whose
+ * comment claimed it could not.
+ */
+describe("an empty scope is refused rather than run", () => {
+  it("refuses a scenario that selects nothing, without claiming the run slot", async () => {
+    const db = {
+      execute: vi.fn(),
+      select: vi.fn(),
+      insert: vi.fn(),
+      update: vi.fn(),
+    } as unknown as Parameters<typeof startTestRun>[0]["db"];
+
+    const started = await startTestRun({
+      db,
+      pool: {} as Parameters<typeof startTestRun>[0]["pool"],
+      userId: "00000000-0000-0000-0000-000000000000",
+      trigger: "mcp",
+      scope: { caseIds: ["NOT-A-CASE"] },
+    });
+
+    expect(started.ok).toBe(false);
+    expect(started.ok === false && started.reason).toBe("empty_scope");
+    // The slot is the thing worth protecting: a refused run that still
+    // claimed it would block every real run behind a claim nobody holds.
+    expect(db.execute).not.toHaveBeenCalled();
+    expect(db.insert).not.toHaveBeenCalled();
   });
 });

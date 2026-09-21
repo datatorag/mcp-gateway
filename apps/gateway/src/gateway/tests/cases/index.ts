@@ -51,6 +51,7 @@ import { f1ApprovalBoundary } from "./f1-approval-boundary";
 import { f2UnapprovedScopes } from "./f2-unapproved-scopes";
 import { f7ApiKeyRefused } from "./f7-api-key-refused";
 import { g1ErrorShape } from "./g1-error-shape";
+import { gw1ConnectedAccounts } from "./gw1-connected-accounts";
 import { r1FrontDoor } from "./r1-front-door";
 import { r2AdminOnly } from "./r2-admin-only";
 
@@ -142,6 +143,7 @@ export const CASES: TestCase[] = [
   f2UnapprovedScopes,
   f7ApiKeyRefused,
   g1ErrorShape,
+  gw1ConnectedAccounts,
   r1FrontDoor,
   r2AdminOnly,
 ];

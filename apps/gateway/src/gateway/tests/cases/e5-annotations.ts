@@ -1,7 +1,7 @@
 import type { TestCase } from "../types";
 
 /**
- * E5 (smoke row E5, tier 2): the annotations on the wire are the ones we
+ * E5 (smoke row E5, Gateway scenario): the annotations on the wire are the ones we
  * think we ship.
  *
  * Read from `tools/list`, never from the repo: the point is what a CLIENT
@@ -16,7 +16,6 @@ import type { TestCase } from "../types";
 export const e5Annotations: TestCase = {
   id: "E5",
   title: "the served tool list carries read-only annotations that match the names",
-  tier: 2,
   covers: [],
   accounts: [],
   run: async (ctx) => {

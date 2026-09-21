@@ -33,7 +33,7 @@ describe.skipIf(!dockerAvailable)("test_runs and test_results (SCRUM-303)", () =
     startRun(db, {
       triggeredBy: userId,
       trigger: "ui",
-      scope: { tier: 1 },
+      scope: { scenario: "gateway" },
       environment: "local",
       gatewaySha: null,
       pluginShas: { "gws-mcp": null },

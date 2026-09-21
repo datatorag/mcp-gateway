@@ -1,7 +1,7 @@
 import type { TestCase } from "../types";
 
 /**
- * F1 (tier 1): the write-approval boundary holds in BOTH directions.
+ * F1 (Gateway scenario): the write-approval boundary holds in BOTH directions.
  *
  * Asserting only that writes prompt lets an over-broad classifier pass while
  * it prompts on everything, and whoever that blocks deletes the guard. So a
@@ -15,7 +15,6 @@ import type { TestCase } from "../types";
 export const f1ApprovalBoundary: TestCase = {
   id: "F1",
   title: "a write prompts for approval and a reviewed read does not",
-  tier: 1,
   covers: [],
   accounts: [],
   run: async (ctx) => {

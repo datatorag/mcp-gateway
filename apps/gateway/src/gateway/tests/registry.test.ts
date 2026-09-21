@@ -12,7 +12,6 @@ import type { TestCase } from "./types";
 
 const c = (over: Partial<TestCase> & { id: string }): TestCase => ({
   title: "a case",
-  tier: 1,
   covers: ["gws-mcp__sheets_read"],
   accounts: [],
   run: async () => {},
@@ -92,7 +91,7 @@ describe("what it rejects", () => {
   it.each([
     ["an id of the wrong shape", c({ id: "not-an-id" }), "id is not of the form"],
     ["no title", c({ id: "C1", title: "  " }), "no title"],
-    ["an impossible tier", c({ id: "C2", tier: 3 as 1 }), "tier must be"],
+    ["no scenario and not pending", c({ id: "Z9" }), "belongs to no scenario"],
     ["an unknown account role", c({ id: "C4", accounts: ["auditor" as "reader"] }), "unknown account role"],
     ["an unknown fixture key", c({ id: "C5", fixtures: ["mailbox" as "sheet"] }), "unknown fixture key"],
   ])("rejects %s", (_label, testCase, expected) => {

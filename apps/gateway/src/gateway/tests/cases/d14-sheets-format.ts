@@ -2,7 +2,7 @@ import type { TestCase } from "../types";
 import { resultJson } from "../result-json";
 
 /**
- * D14 (smoke row D14, tier 2): a formatting write lands and can be read
+ * D14 (smoke row D14): a formatting write lands and can be read
  * back.
  *
  * The `sheets_format_*` tools shipped 2026-08-26 with no round trip at all.
@@ -15,7 +15,6 @@ import { resultJson } from "../result-json";
 export const d14SheetsFormat: TestCase = {
   id: "D14",
   title: "a bold background written to a cell reads back, and clears again",
-  tier: 2,
   covers: ["gws-mcp__sheets_format_range", "gws-mcp__gws_run"],
   accounts: ["sender"],
   fixtures: ["sheet", "scratchTab"],

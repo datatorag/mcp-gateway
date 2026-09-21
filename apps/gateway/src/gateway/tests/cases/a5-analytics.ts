@@ -2,7 +2,7 @@ import { getEnv } from "@datatorag-mcp/config";
 import type { TestCase } from "../types";
 
 /**
- * A5 (tier 1): /health reports whether analytics is on, and in production it
+ * A5 (Gateway scenario): /health reports whether analytics is on, and in production it
  * must be on.
  *
  * The failure this catches is an ABSENCE. A production box with the
@@ -18,7 +18,6 @@ import type { TestCase } from "../types";
 export const a5Analytics: TestCase = {
   id: "A5",
   title: "/health reports the analytics guard",
-  tier: 1,
   covers: [],
   accounts: [],
   run: async (ctx) => {

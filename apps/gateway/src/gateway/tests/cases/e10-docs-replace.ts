@@ -2,7 +2,7 @@ import type { TestCase } from "../types";
 import { resultJson, resultText } from "../result-json";
 
 /**
- * E10 (smoke row E10, tier 2): the NESTED `replaceAllText` shape works, and
+ * E10 (smoke row E10): the NESTED `replaceAllText` shape works, and
  * the wrong shape is still refused with something a caller can act on.
  *
  * Guards SCRUM-175, where a caller put `matchCase` at the top level because
@@ -18,7 +18,6 @@ import { resultJson, resultText } from "../result-json";
 export const e10DocsReplace: TestCase = {
   id: "E10",
   title: "replaceAllText works nested and the flat shape is refused by name",
-  tier: 2,
   covers: ["gws-mcp__docs_create", "gws-mcp__docs_write", "gws-mcp__docs_batch_update", "gws-mcp__docs_get", "gws-mcp__docs_delete"],
   accounts: ["sender"],
   run: async (ctx) => {

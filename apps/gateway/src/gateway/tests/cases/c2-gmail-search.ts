@@ -2,7 +2,7 @@ import type { TestCase } from "../types";
 import { firstArray, resultJson } from "../result-json";
 
 /**
- * C2 (tier 1): Gmail search answers, with the fields a caller reads.
+ * C2: Gmail search answers, with the fields a caller reads.
  *
  * The query has to be one that ALWAYS matches. An empty result from a
  * narrow query is indistinguishable from a broken tool, and a case that
@@ -15,7 +15,6 @@ import { firstArray, resultJson } from "../result-json";
 export const c2GmailSearch: TestCase = {
   id: "C2",
   title: "gmail search returns a message with its headers populated",
-  tier: 1,
   covers: ["gws-mcp__gmail_search"],
   accounts: ["sender"],
   run: async (ctx) => {

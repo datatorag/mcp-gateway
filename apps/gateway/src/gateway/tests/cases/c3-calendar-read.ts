@@ -2,7 +2,7 @@ import type { TestCase } from "../types";
 import { firstArray, resultJson } from "../result-json";
 
 /**
- * C3 (tier 1): the permanent calendar fixture is where it should be.
+ * C3: the permanent calendar fixture is where it should be.
  *
  * The event is dated years out so it cannot collide with a real meeting,
  * and it is read through LIST over a window rather than GET by id on
@@ -16,7 +16,6 @@ import { firstArray, resultJson } from "../result-json";
 export const c3CalendarRead: TestCase = {
   id: "C3",
   title: "the permanent fixture event is listed in its window",
-  tier: 1,
   covers: ["gws-mcp__calendar_list_events"],
   accounts: ["sender"],
   fixtures: ["calendarEvent"],

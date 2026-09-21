@@ -2,7 +2,7 @@ import type { TestCase } from "../types";
 import { resultJson } from "../result-json";
 
 /**
- * D7 (smoke row D7, tier 2): a tab created on the fixture gets a REAL id,
+ * D7 (smoke row D7): a tab created on the fixture gets a REAL id,
  * and is gone afterwards.
  *
  * The id is the assertion the sheet asks for. A create that answered with a
@@ -12,7 +12,6 @@ import { resultJson } from "../result-json";
 export const d7SheetsTab: TestCase = {
   id: "D7",
   title: "a created tab returns a real sheet id and is then deleted",
-  tier: 2,
   covers: ["gws-mcp__sheets_add_tab", "gws-mcp__sheets_delete_tab"],
   accounts: ["sender"],
   fixtures: ["sheet"],

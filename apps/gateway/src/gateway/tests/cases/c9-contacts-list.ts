@@ -2,7 +2,7 @@ import type { TestCase } from "../types";
 import { firstArray, resultJson } from "../result-json";
 
 /**
- * C9 (tier 2): the contacts read path answers with a list shape.
+ * C9: the contacts read path answers with a list shape.
  *
  * EMPTY IS ACCEPTABLE and that is the case's whole design. An account with
  * no contacts is a fair state of the world, so what is asserted is the
@@ -12,7 +12,6 @@ import { firstArray, resultJson } from "../result-json";
 export const c9ContactsList: TestCase = {
   id: "C9",
   title: "contacts answers the first page with a list shape",
-  tier: 2,
   covers: ["gws-mcp__contacts_list"],
   accounts: ["sender"],
   run: async (ctx) => {

@@ -20,7 +20,11 @@ export type TestRunTrigger = (typeof TEST_RUN_TRIGGERS)[number];
 export const TEST_RUN_STATUSES = ["running", "finished", "aborted", "interrupted"] as const;
 export type TestRunStatus = (typeof TEST_RUN_STATUSES)[number];
 
-export type TestRunScope = { tier?: 1 | 2; caseIds?: string[] };
+/** What a run was asked for. `scenario` is a key from the gateway's
+ * scenario registry; it is a plain string here because this package must
+ * not depend on the runner. Stored in jsonb, so replacing the retired
+ * `tier` field needed no migration. */
+export type TestRunScope = { scenario?: string; caseIds?: string[] };
 export type TestRunTotals = { pass: number; fail: number; skip: number; uncovered: number };
 
 /**

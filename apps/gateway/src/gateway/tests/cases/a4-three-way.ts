@@ -1,7 +1,7 @@
 import type { TestCase } from "../types";
 
 /**
- * A4 (tier 1): what a plugin serves, what the registry holds, and what the
+ * A4 (Gateway scenario): what a plugin serves, what the registry holds, and what the
  * gateway advertises, compared BY NAME.
  *
  * Comparing only the registry against a snapshot cannot catch this: both are
@@ -19,7 +19,6 @@ import type { TestCase } from "../types";
 export const a4ThreeWay: TestCase = {
   id: "A4",
   title: "plugin, registry and served list agree by name",
-  tier: 1,
   covers: [],
   accounts: [],
   timeoutMs: 120_000,

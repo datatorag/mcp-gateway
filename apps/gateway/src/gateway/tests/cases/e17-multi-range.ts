@@ -2,7 +2,7 @@ import type { TestCase } from "../types";
 import { resultJson } from "../result-json";
 
 /**
- * E17 (smoke row E17, tier 1): many ranges in one call come back IN THE
+ * E17 (smoke row E17): many ranges in one call come back IN THE
  * ORDER GIVEN, and arrays survive the trip through `gws_run`.
  *
  * Guards SCRUM-246/253 and SCRUM-178/269. Order is the whole point: a caller
@@ -16,7 +16,6 @@ import { resultJson } from "../result-json";
 export const e17MultiRange: TestCase = {
   id: "E17",
   title: "many ranges answer in request order, keeping duplicates and empty blocks",
-  tier: 1,
   covers: ["gws-mcp__sheets_read", "gws-mcp__gws_run"],
   accounts: ["sender"],
   fixtures: ["sheet", "scratchTab"],

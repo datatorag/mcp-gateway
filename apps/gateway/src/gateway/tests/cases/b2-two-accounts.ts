@@ -1,7 +1,7 @@
 import type { TestCase } from "../types";
 
 /**
- * B2 (tier 1): the same tool, two accounts, DIFFERENT answers.
+ * B2 (Gateway scenario): the same tool, two accounts, DIFFERENT answers.
  *
  * Asserting that both calls succeed would pass while the gateway served the
  * same account twice, which is the failure worth catching: multi-account is
@@ -12,7 +12,6 @@ import type { TestCase } from "../types";
 export const b2TwoAccounts: TestCase = {
   id: "B2",
   title: "the same tool answers differently for two accounts",
-  tier: 1,
   covers: ["gws-mcp__gmail_list_labels"],
   accounts: ["sender", "reader"],
   run: async (ctx) => {

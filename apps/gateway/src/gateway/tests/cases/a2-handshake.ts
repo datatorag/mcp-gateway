@@ -1,7 +1,7 @@
 import type { TestCase } from "../types";
 
 /**
- * A2 (tier 1): an MCP client can complete a handshake and call a tool.
+ * A2 (Gateway scenario): an MCP client can complete a handshake and call a tool.
  *
  * The LIVE TOOL CALL is the assertion, not an analytics event. The sheet's
  * original version required a session event inside the run window, which was
@@ -15,7 +15,6 @@ import type { TestCase } from "../types";
 export const a2Handshake: TestCase = {
   id: "A2",
   title: "an MCP client completes a handshake and a tool answers",
-  tier: 1,
   covers: ["echo"],
   accounts: [],
   run: async (ctx) => {

@@ -2,7 +2,7 @@ import type { TestCase } from "../types";
 import { firstArray, resultJson, resultText } from "../result-json";
 
 /**
- * C13 (tier 1): the gateway's own skills tools answer.
+ * C13: the gateway's own skills tools answer.
  *
  * The skills surface shipped with no case at all, which meant every Google
  * tool could pass while the front door of that launch was closed. Search
@@ -16,7 +16,6 @@ import { firstArray, resultJson, resultText } from "../result-json";
 export const c13SkillsSurface: TestCase = {
   id: "C13",
   title: "skills search returns a skill and skills get loads it",
-  tier: 1,
   covers: ["skills_search", "skills_get"],
   accounts: [],
   run: async (ctx) => {

@@ -3,7 +3,7 @@ import { firstArray, resultJson, resultText } from "../result-json";
 import { countSignatureBlocks, partText, type MailPart } from "../mail-parts";
 
 /**
- * E15 (smoke row E15, tier 2): a draft is signed WHEN WRITTEN, and sending
+ * E15 (smoke row E15): a draft is signed WHEN WRITTEN, and sending
  * it never signs it twice.
  *
  * Guards SCRUM-291, from the customer flow "Claude drafts, I send it myself
@@ -20,7 +20,6 @@ import { countSignatureBlocks, partText, type MailPart } from "../mail-parts";
 export const e15DraftSignature: TestCase = {
   id: "E15",
   title: "a draft is signed once when written and is not signed again on send",
-  tier: 2,
   covers: [
     "gws-mcp__gmail_create_draft",
     "gws-mcp__gmail_update_draft",

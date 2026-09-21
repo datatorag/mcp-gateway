@@ -1,7 +1,7 @@
 import type { TestCase } from "../types";
 
 /**
- * G1 (tier 1): a bad argument produces an error that names the cause.
+ * G1 (Gateway scenario): a bad argument produces an error that names the cause.
  *
  * A guard whose failure MISDESCRIBES the problem is worse than one that
  * throws. Salvaged bad input once turned a one-character configuration typo
@@ -11,7 +11,6 @@ import type { TestCase } from "../types";
 export const g1ErrorShape: TestCase = {
   id: "G1",
   title: "a read against a spreadsheet that does not exist names the cause",
-  tier: 1,
   covers: ["gws-mcp__sheets_read"],
   accounts: ["sender"],
   run: async (ctx) => {

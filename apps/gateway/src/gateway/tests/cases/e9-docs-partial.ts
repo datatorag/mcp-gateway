@@ -2,7 +2,7 @@ import type { TestCase } from "../types";
 import { resultJson } from "../result-json";
 
 /**
- * E9 (smoke row E9, tier 1): a partial read works AND says it is partial.
+ * E9 (smoke row E9): a partial read works AND says it is partial.
  *
  * A regression guard. `docs_get` once accepted only a document id and a
  * mode, so a caller who wanted part of a long document invented a parameter
@@ -15,7 +15,6 @@ import { resultJson } from "../result-json";
 export const e9DocsPartial: TestCase = {
   id: "E9",
   title: "a partial doc read returns the slice and says the document is longer",
-  tier: 1,
   covers: ["gws-mcp__docs_get"],
   accounts: ["sender"],
   fixtures: ["doc"],

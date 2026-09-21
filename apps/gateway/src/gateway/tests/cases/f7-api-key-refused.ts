@@ -1,7 +1,7 @@
 import type { TestCase } from "../types";
 
 /**
- * F7 (tier 1): a fabricated API key is refused, diagnosably.
+ * F7 (Gateway scenario): a fabricated API key is refused, diagnosably.
  *
  * Two failures, not one: a made-up key being ACCEPTED means the credential
  * path is open, and a bare 401 with nothing to act on means a client with a
@@ -12,7 +12,6 @@ import type { TestCase } from "../types";
 export const f7ApiKeyRefused: TestCase = {
   id: "F7",
   title: "a fabricated API key is refused with a usable challenge",
-  tier: 1,
   covers: [],
   accounts: [],
   run: async (ctx) => {

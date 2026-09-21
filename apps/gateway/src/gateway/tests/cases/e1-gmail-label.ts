@@ -2,7 +2,7 @@ import type { TestCase } from "../types";
 import { resultJson } from "../result-json";
 
 /**
- * E1 (smoke row E1, tier 2): creating a label answers with the label's ID.
+ * E1 (smoke row E1): creating a label answers with the label's ID.
  *
  * A regression guard. A create that returns success but no id leaves the
  * caller with nothing to label anything WITH, and the failure surfaces one
@@ -15,7 +15,6 @@ import { resultJson } from "../result-json";
 export const e1GmailLabel: TestCase = {
   id: "E1",
   title: "creating a label answers with the label id, and the label is removed",
-  tier: 2,
   covers: ["gws-mcp__gmail_create_label", "gws-mcp__gmail_delete_label", "gws-mcp__gmail_list_labels"],
   accounts: ["sender"],
   run: async (ctx) => {

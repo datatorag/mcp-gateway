@@ -1,7 +1,7 @@
 import type { TestCase } from "../types";
 
 /**
- * F2 (tier 1): no tool requiring an unapproved scope is served.
+ * F2 (Gateway scenario): no tool requiring an unapproved scope is served.
  *
  * Requesting a scope the consent screen does not carry triggers the
  * unverified-app screen and a hundred-user cap across every Workspace
@@ -15,7 +15,6 @@ import type { TestCase } from "../types";
 export const f2UnapprovedScopes: TestCase = {
   id: "F2",
   title: "tools needing an unapproved scope are absent, and the allowed one is present",
-  tier: 1,
   covers: [],
   accounts: [],
   run: async (ctx) => {

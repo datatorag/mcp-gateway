@@ -1,7 +1,7 @@
 import type { TestCase } from "../types";
 
 /**
- * A3 (tier 1): the served tool list is not empty and matches the formula.
+ * A3 (Gateway scenario): the served tool list is not empty and matches the formula.
  *
  * THE COUNT IS PER IDENTITY, and that is the trap this case exists around. A
  * run nearly filed a 21-tool drift regression that did not exist, because the
@@ -16,7 +16,6 @@ import type { TestCase } from "../types";
 export const a3ToolsListed: TestCase = {
   id: "A3",
   title: "tools/list serves a non-empty list that fits the per-identity formula",
-  tier: 1,
   covers: [],
   accounts: [],
   run: async (ctx) => {

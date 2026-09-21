@@ -2,7 +2,7 @@ import type { TestCase } from "../types";
 import { resultJson } from "../result-json";
 
 /**
- * C1 (tier 1): a read comes back with the VALUES it should.
+ * C1: a read comes back with the VALUES it should.
  *
  * Comparing against known constants rather than checking the call succeeded
  * is the whole difference between this and a test that cannot fail. A read
@@ -14,7 +14,6 @@ import { resultJson } from "../result-json";
 export const c1SheetsRead: TestCase = {
   id: "C1",
   title: "the fixture sheet reads back its exact control values",
-  tier: 1,
   covers: ["gws-mcp__sheets_read"],
   accounts: ["sender"],
   fixtures: ["sheet"],

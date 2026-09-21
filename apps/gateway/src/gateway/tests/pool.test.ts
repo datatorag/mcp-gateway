@@ -12,7 +12,6 @@ import type { TestCase } from "./types";
 const c = (id: string, serial?: string): TestCase => ({
   id,
   title: id,
-  tier: 1,
   covers: ["x"],
   accounts: [],
   serial,

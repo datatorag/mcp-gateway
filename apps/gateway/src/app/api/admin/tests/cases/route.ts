@@ -1,3 +1,4 @@
+import { scenarioOf, stepNumber } from "@/gateway/tests/scenarios";
 import { NextResponse } from "next/server";
 import { withAdminRoute } from "@/lib/with-admin-route";
 import { CASES } from "@/gateway/tests/cases";
@@ -10,7 +11,8 @@ export const GET = withAdminRoute(async () => {
     cases: CASES.map((c) => ({
       id: c.id,
       title: c.title,
-      tier: c.tier,
+      scenario: scenarioOf(c.id)?.key ?? null,
+      step: stepNumber(c.id) ?? null,
       covers: c.covers,
       accounts: c.accounts,
       fixtures: c.fixtures ?? [],

@@ -2,10 +2,10 @@ import type { TestCase } from "../types";
 import { resultJson } from "../result-json";
 
 /**
- * E3 (smoke row E3, tier 1): a value that LOOKS like a formula is stored as
+ * E3 (smoke row E3): a value that LOOKS like a formula is stored as
  * text and does not evaluate.
  *
- * A regression guard, which is why it is tier 1 rather than a curiosity: a
+ * A regression guard rather than a curiosity: a
  * leading `=` or `+` reaching Sheets as a formula turns a user's data into a
  * computation, and the damage is silent because the cell shows a plausible
  * result. The suite's most valuable cases are the ones with a proven failure
@@ -14,7 +14,6 @@ import { resultJson } from "../result-json";
 export const e3SheetsText: TestCase = {
   id: "E3",
   title: "values beginning = and + are stored as text and do not evaluate",
-  tier: 1,
   covers: ["gws-mcp__sheets_append", "gws-mcp__sheets_read", "gws-mcp__sheets_clear"],
   accounts: ["sender"],
   fixtures: ["sheet", "scratchTab"],

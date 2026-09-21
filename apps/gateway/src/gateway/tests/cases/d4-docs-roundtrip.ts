@@ -2,7 +2,7 @@ import type { TestCase } from "../types";
 import { resultJson } from "../result-json";
 
 /**
- * D4 (smoke row D4, tier 2): a doc is created, written, read back and
+ * D4 (smoke row D4): a doc is created, written, read back and
  * deleted.
  *
  * DEVIATION FROM THE SMOKE ROW, ruled by HQ 2026-09-20 and to be folded into
@@ -18,7 +18,6 @@ import { resultJson } from "../result-json";
 export const d4DocsRoundTrip: TestCase = {
   id: "D4",
   title: "a doc is created, written, read back and deleted",
-  tier: 2,
   covers: ["gws-mcp__docs_create", "gws-mcp__docs_write", "gws-mcp__docs_get", "gws-mcp__docs_delete"],
   accounts: ["sender"],
   run: async (ctx) => {

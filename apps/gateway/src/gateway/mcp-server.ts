@@ -1,3 +1,5 @@
+import { SCENARIOS } from "./tests/scenarios";
+import { parseScope } from "./tests/scope";
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import {
   CallToolRequestSchema,
@@ -201,14 +203,18 @@ export const BUILT_IN_TOOLS: {
     definition: {
       name: "tests_run",
       description:
-        "Start a run of the gateway's own test suite. Returns at once with a run id; poll tests_status for progress and read tests_results when it finishes. Optionally scope the run to one tier or to named case ids, but not both. Refuses if a run is already going, and names the one that is.",
+        "Start a run of the gateway's own test suite. Returns at once with a run id; poll tests_status for progress and read tests_results when it finishes. Optionally scope the run to one scenario or to named case ids, but not both. A scenario is one service's lifecycle, run in order. Refuses if a run is already going, and names the one that is.",
       inputSchema: {
         type: "object" as const,
         properties: {
-          tier: {
-            type: "number",
-            enum: [1, 2],
-            description: "Run only this tier. Tier 1 is the fast reachability and read set.",
+          scenario: {
+            type: "string",
+            // The REGISTERED scenarios, not the planned ones. Advertising a
+            // key that does not exist yet is how an agent is invited to ask
+            // for an empty run.
+            enum: SCENARIOS.map((s) => s.key),
+            description:
+              "Run only this service's lifecycle, its steps in order. Omit to run everything.",
           },
           case_ids: {
             type: "array",
@@ -223,21 +229,30 @@ export const BUILT_IN_TOOLS: {
     approval: "write",
     audience: "admin",
     handler: async (args, { db, userId, pool }) => {
-      const tier = args?.tier;
-      const caseIds = args?.case_ids;
-      if (tier !== undefined && Array.isArray(caseIds) && caseIds.length > 0) {
+      /* ONE PARSER, SHARED WITH THE ADMIN ROUTE. This path is driven by a
+       * model, so the ordinary emissions are the ones that used to widen:
+       * an empty list meaning "no filter", a bare string where an array is
+       * declared, a number where a key is. Every one of them ran the whole
+       * suite and sent real mail. */
+      const parsed = parseScope(args ?? {});
+      if (!parsed.ok) {
+        return { content: [{ type: "text" as const, text: parsed.error }], isError: true };
+      }
+      const scope = parsed.scope;
+
+      const { startTestRun } = await import("./tests/execute");
+      const started = await startTestRun({ db, pool, userId, trigger: "mcp", scope });
+      if (!started.ok && started.reason === "empty_scope") {
         return {
-          content: [{ type: "text" as const, text: "Pass tier or case_ids, not both." }],
+          content: [
+            {
+              type: "text" as const,
+              text: "That scope selects no cases, so there is nothing to run. An empty run would finish with no failures and read as a pass.",
+            },
+          ],
           isError: true,
         };
       }
-      const { startTestRun } = await import("./tests/execute");
-      const scope: { tier?: 1 | 2; caseIds?: string[] } = {};
-      if (tier === 1 || tier === 2) scope.tier = tier;
-      if (Array.isArray(caseIds) && caseIds.length > 0) {
-        scope.caseIds = caseIds.filter((id): id is string => typeof id === "string");
-      }
-      const started = await startTestRun({ db, pool, userId, trigger: "mcp", scope });
       if (!started.ok) {
         return {
           content: [

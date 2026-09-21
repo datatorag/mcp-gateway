@@ -2,7 +2,7 @@ import type { TestCase } from "../types";
 import { firstArray, resultJson } from "../result-json";
 
 /**
- * C7 (tier 1): the Atlassian connector answers a bounded search.
+ * C7: the Atlassian connector answers a bounded search.
  *
  * The account is passed explicitly by ROLE, which matters more here than
  * anywhere else in the suite: the default Atlassian site is not ours, and a
@@ -12,7 +12,6 @@ import { firstArray, resultJson } from "../result-json";
 export const c7JiraSearch: TestCase = {
   id: "C7",
   title: "a bounded jira search returns issues from our own project",
-  tier: 1,
   covers: ["atlassian-mcp__jira_search"],
   accounts: ["atlassian"],
   run: async (ctx) => {

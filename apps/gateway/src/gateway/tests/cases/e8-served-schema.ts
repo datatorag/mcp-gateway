@@ -1,7 +1,7 @@
 import type { TestCase } from "../types";
 
 /**
- * E8 (smoke row E8, tier 1): A4 compares NAMES. This compares the CONTRACT.
+ * E8 (smoke row E8, Gateway scenario): A4 compares NAMES. This compares the CONTRACT.
  *
  * A SCHEMA CHANGE DOES NOT MOVE A COUNT, so a count comparison is
  * structurally blind to it and always was. New parameters once shipped into
@@ -22,7 +22,6 @@ import type { TestCase } from "../types";
 export const e8ServedSchema: TestCase = {
   id: "E8",
   title: "the served schema carries the parameters the registry was updated with",
-  tier: 1,
   covers: [],
   accounts: [],
   run: async (ctx) => {

@@ -2,7 +2,7 @@ import type { TestCase } from "../types";
 import { firstArray, resultJson } from "../result-json";
 
 /**
- * D5 (smoke row D5, tier 2): an event created two years out is listed, then
+ * D5 (smoke row D5): an event created two years out is listed, then
  * deleted, and the deletion is proven by ABSENCE FROM A LISTING.
  *
  * DEVIATION FROM THE SMOKE ROW, ruled by HQ 2026-09-20 and to be folded into
@@ -20,7 +20,6 @@ import { firstArray, resultJson } from "../result-json";
 export const d5CalendarRoundTrip: TestCase = {
   id: "D5",
   title: "a created event is listed, then deleted, and the listing no longer has it",
-  tier: 2,
   covers: [
     "gws-mcp__calendar_create_event",
     "gws-mcp__calendar_list_events",

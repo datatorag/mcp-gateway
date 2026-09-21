@@ -2,7 +2,7 @@ import type { TestCase } from "../types";
 import { firstArray, resultJson } from "../result-json";
 
 /**
- * D11 (smoke row D11, tier 2): a draft that is sent must LEAVE the drafts
+ * D11 (smoke row D11): a draft that is sent must LEAVE the drafts
  * folder.
  *
  * Three claims, and the third is the one that goes wrong quietly: the
@@ -13,7 +13,6 @@ import { firstArray, resultJson } from "../result-json";
 export const d11DraftSent: TestCase = {
   id: "D11",
   title: "a sent draft arrives and is gone from drafts",
-  tier: 2,
   covers: [
     "gws-mcp__gmail_create_draft",
     "gws-mcp__gmail_send_draft",

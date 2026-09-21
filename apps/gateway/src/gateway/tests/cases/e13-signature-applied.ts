@@ -3,7 +3,7 @@ import { firstArray, resultJson, resultText } from "../result-json";
 import { countSignatureBlocks, isMultipartAlternative, partText, type MailPart } from "../mail-parts";
 
 /**
- * E13 (smoke row E13, tier 2): the signature is applied on send, ONCE, and
+ * E13 (smoke row E13): the signature is applied on send, ONCE, and
  * in the HTML part only.
  *
  * Guards SCRUM-278, which came from a customer report that mail our
@@ -28,7 +28,6 @@ import { countSignatureBlocks, isMultipartAlternative, partText, type MailPart }
 export const e13SignatureApplied: TestCase = {
   id: "E13",
   title: "a send applies the signature once, in the HTML part only",
-  tier: 2,
   covers: ["gws-mcp__gmail_send", "gws-mcp__gmail_search", "gws-mcp__gws_run"],
   accounts: ["sender", "reader"],
   timeoutMs: 240_000,

@@ -2,7 +2,7 @@ import type { TestCase } from "../types";
 import { firstArray, resultJson } from "../result-json";
 
 /**
- * D9 (smoke row D9, tier 2): the Drive WRITE path, which had never been
+ * D9 (smoke row D9): the Drive WRITE path, which had never been
  * exercised at all.
  *
  * `drive_rename_file` and `drive_copy_file` shipped 2026-08-30 and section C
@@ -15,7 +15,6 @@ import { firstArray, resultJson } from "../result-json";
 export const d9DriveRoundTrip: TestCase = {
   id: "D9",
   title: "a copied file is renamed, found by its new name, and deleted",
-  tier: 2,
   covers: [
     "gws-mcp__drive_copy_file",
     "gws-mcp__drive_rename_file",

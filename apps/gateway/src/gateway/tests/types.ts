@@ -2,9 +2,14 @@
  * What a test case IS (SCRUM-303).
  *
  * A case is a TypeScript module, not a row and not a prose instruction. Its
- * id, tier and description are read from the module, so a case cannot exist
- * in one place and be missing from another, and there is no cases table to
+ * id and description are read from the module, so a case cannot exist in
+ * one place and be missing from another, and there is no cases table to
  * drift from the code.
+ *
+ * A case is a STEP of a scenario. Which scenario, and in what order, is
+ * declared once in `scenarios.ts` rather than as a field here: put it on
+ * the case and the lifecycle can be reordered by editing a file nobody
+ * opened, and no one place reads as the flow.
  *
  * A case passes by returning and fails by throwing. There is no model
  * anywhere in this path: the assertions are ordinary helpers whose thrown
@@ -107,7 +112,6 @@ export interface TestCase {
   /** The smoke row it descends from (`D15`), or a runner-native id (`R1`). */
   id: string;
   title: string;
-  tier: 1 | 2;
   /** Namespaced tool names this case exercises. A DECLARATION: the runner
    * also records what was actually called and fails a case that declares a
    * tool it never called, so this cannot quietly overstate coverage. */

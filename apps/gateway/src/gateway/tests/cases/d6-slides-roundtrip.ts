@@ -2,7 +2,7 @@ import type { TestCase } from "../types";
 import { resultJson } from "../result-json";
 
 /**
- * D6 (smoke row D6, tier 2): a deck is created, edited, read back and
+ * D6 (smoke row D6): a deck is created, edited, read back and
  * deleted.
  *
  * DEVIATION FROM THE SMOKE ROW, ruled by HQ 2026-09-20 and to be folded into
@@ -14,7 +14,6 @@ import { resultJson } from "../result-json";
 export const d6SlidesRoundTrip: TestCase = {
   id: "D6",
   title: "a deck is created, given a text box, read back and deleted",
-  tier: 2,
   covers: [
     "gws-mcp__slides_create",
     "gws-mcp__slides_batch_update",

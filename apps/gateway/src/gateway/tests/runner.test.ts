@@ -42,7 +42,6 @@ const parts = (): ContextParts => ({
 
 const testCase = (over: Partial<TestCase> & { id: string }): TestCase => ({
   title: over.id,
-  tier: 1,
   covers: [],
   accounts: [],
   run: async () => {},

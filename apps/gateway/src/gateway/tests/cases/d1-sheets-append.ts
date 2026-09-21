@@ -2,7 +2,7 @@ import type { TestCase } from "../types";
 import { resultJson } from "../result-json";
 
 /**
- * D1 (smoke row D1, tier 1): a row appended to the scratch tab is really
+ * D1 (smoke row D1): a row appended to the scratch tab is really
  * there, and is gone afterwards.
  *
  * THE READ-BACK IS THE CASE. `sheets_append` returns success whether or not
@@ -12,7 +12,6 @@ import { resultJson } from "../result-json";
 export const d1SheetsAppend: TestCase = {
   id: "D1",
   title: "a row appended to the scratch tab reads back and is then removed",
-  tier: 1,
   covers: ["gws-mcp__sheets_append", "gws-mcp__sheets_read", "gws-mcp__sheets_clear"],
   accounts: ["sender"],
   fixtures: ["sheet", "scratchTab"],

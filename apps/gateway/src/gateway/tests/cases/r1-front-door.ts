@@ -20,7 +20,6 @@ import type { TestCase } from "../types";
 export const r1FrontDoor: TestCase = {
   id: "R1",
   title: "the /mcp front door answers over real HTTP",
-  tier: 1,
   covers: [],
   accounts: [],
   run: async (ctx) => {

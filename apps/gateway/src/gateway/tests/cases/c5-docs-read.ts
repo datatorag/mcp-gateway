@@ -2,7 +2,7 @@ import type { TestCase } from "../types";
 import { resultJson } from "../result-json";
 
 /**
- * C5 (tier 1): the fixture doc reads back its control heading.
+ * C5: the fixture doc reads back its control heading.
  *
  * FIRST LINE, exactly. A docs read that returned the document in the wrong
  * order, or returned a neighbouring document, would still return text.
@@ -10,7 +10,6 @@ import { resultJson } from "../result-json";
 export const c5DocsRead: TestCase = {
   id: "C5",
   title: "the fixture doc's first line is its control heading",
-  tier: 1,
   covers: ["gws-mcp__docs_get"],
   accounts: ["sender"],
   fixtures: ["doc"],

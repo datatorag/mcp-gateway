@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import type { RunSummary } from "@/gateway/tests/read";
+import { REGROUP_PENDING, SCENARIOS } from "@/gateway/tests/scenarios";
 
 /**
  * Starting a run and reading the history (SCRUM-303).
@@ -11,6 +12,25 @@ import type { RunSummary } from "@/gateway/tests/read";
  * dashboard shell clips inline floating elements, and a control that starts
  * something which sends mail must never be half visible.
  */
+/**
+ * Only the runs that really put mail in an inbox say so.
+ *
+ * "Everything" is the dangerous one and it was briefly the one that stopped
+ * warning: deriving it from the scenario flags alone said "no mail" while
+ * every mail case still ran, because those cases were not yet regrouped
+ * into the Gmail scenario. A warning that is wrong on the run that sends
+ * the most mail is worse than no warning.
+ *
+ * So while ANY case is still unplaced, "everything" assumes mail. It cannot
+ * know what a pending case does, and the safe assumption is the one that
+ * shows the stronger words. When the regroup finishes and the pending list
+ * empties, this falls back to the flags, which is then the whole truth.
+ */
+export function sendsMail(scope: string): boolean {
+  if (scope === "all") return REGROUP_PENDING.length > 0 || SCENARIOS.some((s) => s.sendsMail);
+  return SCENARIOS.find((s) => s.key === scope)?.sendsMail === true;
+}
+
 export function RunsPanel({
   initialRuns,
   caseCount,
@@ -19,7 +39,7 @@ export function RunsPanel({
   caseCount: number;
 }) {
   const [runs, setRuns] = useState(initialRuns);
-  const [confirming, setConfirming] = useState<null | "all" | 1 | 2>(null);
+  const [confirming, setConfirming] = useState<null | string>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   /** The run this page started, until it shows up in the list. See the poll. */
@@ -89,14 +109,14 @@ export function RunsPanel({
     };
   }, [inFlight, reload]);
 
-  async function start(scope: "all" | 1 | 2) {
+  async function start(scope: "all" | string) {
     setBusy(true);
     setError(null);
     try {
       const res = await fetch("/api/admin/tests/runs", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify(scope === "all" ? {} : { tier: scope }),
+        body: JSON.stringify(scope === "all" ? {} : { scenario: scope }),
       });
       const body = await res.json().catch(() => ({}));
       if (!res.ok) {
@@ -131,12 +151,17 @@ export function RunsPanel({
       </p>
 
       <div className="mt-6 flex flex-wrap items-center gap-2">
-        {(["all", 1, 2] as const).map((scope) => (
-          <div key={String(scope)} className="flex items-center gap-2">
+        {["all", ...SCENARIOS.map((s) => s.key)].map((scope) => (
+          <div key={scope} className="flex items-center gap-2">
             {confirming === scope ? (
               <>
                 <span className="text-sm text-muted-foreground">
-                  This sends mail and creates files. Start it?
+                  {/* THE WARNING NAMES WHAT THIS RUN ACTUALLY DOES. The old
+                      dialog warned about sending mail on tier runs that sent
+                      none, which is how a warning stops being read. */}
+                  {sendsMail(scope)
+                    ? "This sends mail and creates files. Start it?"
+                    : "This creates and deletes files. Start it?"}
                 </span>
                 <button
                   type="button"
@@ -158,9 +183,10 @@ export function RunsPanel({
               <button
                 type="button"
                 onClick={() => setConfirming(scope)}
+                title={scope === "all" ? undefined : SCENARIOS.find((s) => s.key === scope)?.title}
                 className="rounded-md border border-border px-3 py-1.5 text-sm font-medium hover:bg-muted"
               >
-                {scope === "all" ? "Run everything" : `Run tier ${scope}`}
+                {scope === "all" ? "Run everything" : scope}
               </button>
             )}
           </div>

@@ -2,7 +2,7 @@ import type { TestCase } from "../types";
 import { firstArray, resultJson } from "../result-json";
 
 /**
- * E2 (smoke row E2, tier 2): an account with no filters answers a
+ * E2 (smoke row E2): an account with no filters answers a
  * WELL-FORMED EMPTY LIST, not an empty string.
  *
  * The distinction is the case. "No filters" and "the call fell over quietly"
@@ -13,7 +13,6 @@ import { firstArray, resultJson } from "../result-json";
 export const e2GmailFilters: TestCase = {
   id: "E2",
   title: "an account with no filters answers an empty list, not an empty string",
-  tier: 2,
   covers: ["gws-mcp__gmail_list_filters"],
   accounts: ["sender"],
   run: async (ctx) => {

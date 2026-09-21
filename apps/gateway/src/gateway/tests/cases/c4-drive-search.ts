@@ -2,7 +2,7 @@ import type { TestCase } from "../types";
 import { firstArray, resultJson } from "../result-json";
 
 /**
- * C4 (tier 1): Drive search resolves the fixture folder's contents.
+ * C4: Drive search resolves the fixture folder's contents.
  *
  * Every Sheets, Docs and Slides path resolves through Drive, so this failing
  * predicts a wide blast radius and is worth its own alarm rather than being
@@ -15,7 +15,6 @@ import { firstArray, resultJson } from "../result-json";
 export const c4DriveSearch: TestCase = {
   id: "C4",
   title: "drive search lists the fixture folder and finds the fixture doc in it",
-  tier: 1,
   covers: ["gws-mcp__drive_search"],
   accounts: ["sender"],
   fixtures: ["folder", "doc"],

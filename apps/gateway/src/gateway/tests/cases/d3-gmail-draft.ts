@@ -2,7 +2,7 @@ import type { TestCase } from "../types";
 import { resultJson } from "../result-json";
 
 /**
- * D3 (smoke row D3, tier 1): a draft is created, read back by id, and
+ * D3 (smoke row D3): a draft is created, read back by id, and
  * deleted.
  *
  * DEVIATION FROM THE SMOKE ROW, ruled by HQ 2026-09-20 and to be folded into
@@ -19,7 +19,6 @@ import { resultJson } from "../result-json";
 export const d3GmailDraft: TestCase = {
   id: "D3",
   title: "a draft is created, read back by id, and deleted",
-  tier: 1,
   covers: ["gws-mcp__gmail_create_draft", "gws-mcp__gmail_delete_draft"],
   accounts: ["sender", "reader"],
   run: async (ctx) => {

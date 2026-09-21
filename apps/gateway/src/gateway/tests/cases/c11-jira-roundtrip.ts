@@ -2,7 +2,7 @@ import type { TestCase } from "../types";
 import { firstArray, resultJson, resultText } from "../result-json";
 
 /**
- * C11 (smoke row C11, tier 1): the most destructive verb in the connector
+ * C11 (smoke row C11): the most destructive verb in the connector
  * deletes what it was asked to and NOTHING ELSE.
  *
  * It sits in the sheet's read section and is not a read: it creates a
@@ -22,7 +22,6 @@ import { firstArray, resultJson, resultText } from "../result-json";
 export const c11JiraRoundTrip: TestCase = {
   id: "C11",
   title: "a created issue is deleted and it is the only thing that changed",
-  tier: 1,
   covers: [
     "atlassian-mcp__jira_search",
     "atlassian-mcp__jira_create_issue",

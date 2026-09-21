@@ -101,6 +101,16 @@ beforeEach(() => {
   poolMock.acquire = vi.fn().mockResolvedValue({ callTool: poolCallTool });
 });
 
+/** The smallest valid call for each built-in. */
+function argumentsFor(name: string): Record<string, unknown> {
+  if (name === "echo") return { message: "smoke" };
+  if (name === "tests_status" || name === "tests_results") {
+    return { run_id: "11111111-2222-4333-8444-555555555555" };
+  }
+  // Everything else, `tests_run` included, is valid with no arguments.
+  return {};
+}
+
 describe("built-in tools", () => {
   it("the registry is not empty and still carries the two originals", () => {
     // Guards the tests below against becoming vacuous: iterating an empty
@@ -124,10 +134,14 @@ describe("built-in tools", () => {
       trackToolCall.mockClear();
       const result = await client.callTool({
         name: t.definition.name,
-        // One argument bag for every built-in: `message` for echo, `run_id`
-        // for the runner tools. A tool that needs something else will fail
-        // the isError assertion below, which is the right way to find out.
-        arguments: { message: "smoke", run_id: "11111111-2222-4333-8444-555555555555" },
+        /* PER TOOL, not one bag for all of them. This used to send
+         * `{message, run_id}` to every built-in and rely on tools ignoring
+         * what they did not recognise. `tests_run` stopped ignoring: an
+         * unread field there left the scope empty, and an empty scope means
+         * the WHOLE SUITE with its mail sends, so it refuses a field it
+         * does not know. This test is about telemetry, not about argument
+         * validation, so it should hand each tool what that tool takes. */
+        arguments: argumentsFor(t.definition.name),
       });
       expect(result.isError ?? false).toBe(false);
       expect(trackToolCall).toHaveBeenCalledTimes(1);

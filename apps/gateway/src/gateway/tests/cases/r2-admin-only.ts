@@ -16,7 +16,6 @@ import type { TestCase } from "../types";
 export const r2AdminOnly: TestCase = {
   id: "R2",
   title: "a non-admin can neither see nor call the runner's own tools",
-  tier: 1,
   covers: [],
   accounts: ["nonAdmin"],
   run: async (ctx) => {
