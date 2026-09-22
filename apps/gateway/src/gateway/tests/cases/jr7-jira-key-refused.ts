@@ -56,6 +56,17 @@ export const jr7JiraKeyRefused: TestCase = {
         );
       }
       const said = resultText(result);
+      /* THE GATEWAY CAN REFUSE FIRST, and that is not the check this case
+       * is about. With no usable Atlassian connection the gateway answers
+       * "No connected account found" before dispatching, so the plugin and
+       * its key-shape check are never reached. Run 1 read that as "may have
+       * reached Jira", which was the opposite of what happened: nothing
+       * left the gateway. It is named for what it is. */
+      if (/no connected account found|is not connected/i.test(said)) {
+        throw new Error(
+          "the gateway refused before dispatch because the atlassian account is not connected, so the key-shape check was never reached"
+        );
+      }
       if (!/not a jira issue key/i.test(said)) {
         throw new Error(
           `deleting ${JSON.stringify(issue_key)} was refused, but not by the local key-shape check, so the request may have reached Jira`
