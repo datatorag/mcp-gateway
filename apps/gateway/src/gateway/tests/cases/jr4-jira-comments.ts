@@ -84,7 +84,20 @@ export const jr4JiraComments: TestCase = {
         "jira_get_comments",
         await ctx.call("atlassian-mcp__jira_get_comments", { issue_key }, { as: "atlassian" })
       );
-      return envelope.comments ?? [];
+      /* AN UNREADABLE RESPONSE MUST NOT READ AS AN EMPTY ONE. `?? []` here
+       * made a body this case cannot parse indistinguishable from an issue
+       * with no comments, so the zero-comment precondition below asserted
+       * nothing and the red landed on `jira_add_comment` for a fault in the
+       * READ. Empty is a fair answer; an unreadable shape is not. */
+      /* STRICT HERE, unlike the Google reads in this suite. Atlassian's
+       * serialiser always emits `comments`, so an absent key is an
+       * unreadable response rather than an issue with none, and accepting
+       * it would put back the vacuous precondition this guard exists for.
+       * The rule follows the SERIALISER, not a taste for consistency. */
+      if (!Array.isArray(envelope.comments)) {
+        throw new Error("jira_get_comments answered without a comments array, so the comments cannot be counted");
+      }
+      return envelope.comments;
     };
 
     /* A NEW ISSUE, so this is zero. Asserted rather than assumed: if Jira

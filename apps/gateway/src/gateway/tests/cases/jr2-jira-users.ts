@@ -1,5 +1,5 @@
 import type { TestCase } from "../types";
-import { firstArray, resultJson } from "../result-json";
+import { resultJson } from "../result-json";
 
 /**
  * JR2 (Jira scenario): a user search answers with identified accounts.
@@ -29,16 +29,28 @@ export const jr2JiraUsers: TestCase = {
   accounts: ["atlassian"],
   fixtures: ["jiraProject"],
   run: async (ctx) => {
-    const users = (firstArray(
-      resultJson(
-        "jira_search_users",
-        await ctx.call(
-          "atlassian-mcp__jira_search_users",
-          { query: ctx.fixture("jiraProject"), max_results: 5 },
-          { as: "atlassian" }
-        )
+    /* THE ANSWER MUST BE THE ARRAY, not merely contain one. This case is
+     * the worst of the family, because the per-row check below is its ONLY
+     * assertion, so anything that reaches it as an empty list passes.
+     *
+     * `firstArray` WAS NOT ENOUGH, and the first version of this fix used
+     * it: it returns the first array under ANY key, so a Jira error
+     * envelope like `{"errorMessages":[],"errors":{}}` handed back an empty
+     * list and the case went green reporting "0 account(s)". `/user/search`
+     * answers a BARE ARRAY, so that is what is required here. An empty one
+     * still passes: nobody matching is a fact about our directory. */
+    const answered = resultJson<unknown>(
+      "jira_search_users",
+      await ctx.call(
+        "atlassian-mcp__jira_search_users",
+        { query: ctx.fixture("jiraProject"), max_results: 5 },
+        { as: "atlassian" }
       )
-    ) ?? []) as { accountId?: string }[];
+    );
+    if (!Array.isArray(answered)) {
+      throw new Error("jira_search_users answered with something that is not a list of accounts, so no account can be checked");
+    }
+    const users = answered as { accountId?: string }[];
     ctx.evidence(`the search answered with ${users.length} account(s)`);
 
     /* AN EMPTY RESULT IS NOT A FAILURE. It says the directory holds nobody

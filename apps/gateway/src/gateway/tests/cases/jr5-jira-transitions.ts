@@ -1,5 +1,5 @@
 import type { TestCase } from "../types";
-import { firstArray, resultJson } from "../result-json";
+import { resultJson } from "../result-json";
 
 /**
  * JR5 (Jira scenario): an issue moves to a status the board offered.
@@ -59,26 +59,67 @@ export const jr5JiraTransitions: TestCase = {
         "jira_get_issue",
         await ctx.call("atlassian-mcp__jira_get_issue", { issue_key }, { as: "atlassian" })
       );
+      /* STRICT, by the same rule as the transitions read above: the
+       * serialiser always emits `status` (as a name or null), so an absent
+       * key is an unreadable body rather than a statusless issue. Not a
+       * live masking path, since an unreadable read nulls both sides and
+       * the comparison reds anyway, but it should follow the same rule as
+       * the read above it. An earlier version of this comment called it
+       * "the last `??` of this family left in these cases", which was
+       * wrong: SK2 and E13 had the same shape and were found afterwards. */
+      if (typeof issue !== "object" || issue === null || Array.isArray(issue)) {
+        throw new Error("jira_get_issue answered with something that is not an issue object, so the status cannot be read");
+      }
+      if (!("status" in issue)) {
+        throw new Error("jira_get_issue answered without a status field, so the transition cannot be checked");
+      }
       return issue.status ?? null;
     };
     const before = await statusOf();
 
-    const offered = (firstArray(
-      resultJson(
-        "jira_get_transitions",
-        await ctx.call("atlassian-mcp__jira_get_transitions", { issue_key }, { as: "atlassian" })
-      )
-    ) ?? []) as { id?: string; name?: string; to?: { name?: string } }[];
+    /* THE NAMED FIELD, NOT ANY ARRAY. An unreadable response became "0
+     * offered" and the throw below then blamed the WORKFLOW, sending
+     * somebody to fix a Jira board when the READ is what failed.
+     *
+     * `firstArray` DID NOT FIX THAT, and the first version of this fix used
+     * it. It returns the first array under ANY key, and a Jira error
+     * envelope carries `errorMessages`, which is an array: an empty one
+     * reproduced the workflow-blaming red exactly, and a populated one was
+     * counted as transitions, so the evidence line said "1 transition(s)"
+     * about an error string. Atlassian answers `{expand, transitions}`, so
+     * the field is read by name, as JR4 reads `comments`. */
+    const envelope = resultJson<{ transitions?: unknown }>(
+      "jira_get_transitions",
+      await ctx.call("atlassian-mcp__jira_get_transitions", { issue_key }, { as: "atlassian" })
+    );
+    if (!Array.isArray(envelope.transitions)) {
+      throw new Error("jira_get_transitions answered without a transitions list, so the board's offer cannot be read");
+    }
+    const offered = envelope.transitions as { id?: string; name?: string; to?: { name?: string } }[];
     ctx.evidence(`the board offers ${offered.length} transition(s) from the created status`);
 
     /* A BOARD PROBLEM, named as one. A workflow with no transition out of
      * its first status is a configuration this case cannot work around, and
      * reporting it as a connector fault would send the reader to the wrong
      * place. */
-    const leaving = offered.find((t) => t.id && t.to?.name && t.to.name !== before);
+    /* A ROW THIS CASE CANNOT READ IS NOT A BOARD WITH NOTHING TO OFFER.
+     * The envelope guard above stops an unreadable RESPONSE reaching the
+     * workflow-blaming red; the same mistake lives one level down, because
+     * a restructured row (no `to`, or a bare string) makes the find below
+     * come back empty and blames the board for it. Rows that carry what a
+     * transition needs are counted first, and a listing that has rows but
+     * none of them usable says so. */
+    const usable = offered.filter((t) => t && typeof t === "object" && t.id && t.to?.name);
+    if (offered.length > 0 && usable.length === 0) {
+      throw new Error(
+        `the board returned ${offered.length} transition(s) and none carries an id and a destination name, so this is the shape of the answer rather than the workflow`
+      );
+    }
+
+    const leaving = usable.find((t) => t.to?.name !== before);
     if (!leaving?.id) {
       throw new Error(
-        `the board offers no transition out of this issue's starting status (${offered.length} offered), so a status change cannot be told from no change; this is the workflow, not the connector`
+        `the board offers no transition out of this issue's starting status (${usable.length} usable of ${offered.length} offered), so a status change cannot be told from no change; this is the workflow, not the connector`
       );
     }
 

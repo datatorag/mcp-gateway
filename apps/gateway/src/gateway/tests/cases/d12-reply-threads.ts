@@ -43,15 +43,31 @@ export const d12ReplyThreads: TestCase = {
 
     /* REGISTERED BEFORE THE WAIT. The reply has already been sent by this
      * point, so a `until` that times out would otherwise leave live mail in
-     * two mailboxes with nothing recording it. This sweeps whatever this
-     * run put there, whether or not the search below ever succeeds. */
+     * two mailboxes with nothing recording it.
+     *
+     * AN UNREADABLE SEARCH LOSES THE SWEEP AND THE RECORD OF LOSING IT, so
+     * it is refused rather than falling back to an empty list. This comment
+     * used to promise the sweep ran "whether or not the search below ever
+     * succeeds", which the code did not do: an unreadable answer trashed
+     * nothing, wrote no RESIDUE line, and the run still reported
+     * `cleanup: clean`. A cleanup that cannot read its own search has to
+     * say so, and a throwing undo is what marks the run leaked.
+     *
+     * The poll further down keeps its `?? []` on purpose: there an
+     * unreadable probe returns undefined, the poll retries and finally
+     * times out under its own label, which is a red rather than a silence. */
     ctx.defer("trash any reply this case sent", async () => {
       const found = await ctx.call(
         "gws-mcp__gmail_search",
         { query: `"${from.runStamp}" ${token}`, max_results: 10 },
         { as: "sender" }
       );
-      const hits = (firstArray(resultJson("gmail_search", found)) ?? []) as { id?: string }[];
+      const listed = firstArray(resultJson("gmail_search", found));
+      if (listed === null) {
+        ctx.evidence("RESIDUE: the sweep could not read its own search, so any reply this run sent is still in both mailboxes");
+        throw new Error("gmail_search answered without a list anywhere in it, so the reply sweep could not run");
+      }
+      const hits = listed as { id?: string }[];
       for (const hit of hits) {
         if (!hit.id) continue;
         if (!(await ctx.trashOwnMessage(hit.id, { as: "sender" }))) {

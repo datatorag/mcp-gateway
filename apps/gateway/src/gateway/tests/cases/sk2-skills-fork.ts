@@ -34,25 +34,44 @@ export const sk2SkillsFork: TestCase = {
   accounts: [],
   timeoutMs: 120_000,
   run: async (ctx) => {
-    /** The catalogue as this caller sees it, by slug. */
-    const catalogue = async (): Promise<Map<string, Hit>> => {
+    /** The catalogue as this caller sees it: every row, and the readable
+     * ones by slug. BOTH COUNTS ARE KEPT, because the builder used to drop
+     * slug-less rows silently, so a renamed `slug` emptied the map and the
+     * red downstream said the catalogue had nothing to fork. The shape
+     * check below cannot see a row the builder has already thrown away. */
+    const catalogue = async (): Promise<{ rows: Hit[]; bySlug: Map<string, Hit> }> => {
       const listed = firstArray(
         resultJson("skills_search", await ctx.call("skills_search", { query: "" }))
       );
       if (listed === null) {
         throw new Error("skills_search answered without a list anywhere in it, so the catalogue cannot be read");
       }
-      return new Map((listed as Hit[]).filter((h) => h.slug).map((h) => [h.slug as string, h]));
+      const rows = listed as Hit[];
+      return { rows, bySlug: new Map(rows.filter((h) => h.slug).map((h) => [h.slug as string, h])) };
     };
 
     const before = await catalogue();
-    ctx.evidence(`the catalogue carries ${before.size} skill(s)`);
+    ctx.evidence(`the catalogue answered ${before.rows.length} row(s), ${before.bySlug.size} of them addressable`);
 
-    const target = [...before.values()].find((h) => h.slug && h.layer && h.layer !== "yours");
+    /* A ROW THIS CASE CANNOT READ IS NOT A CATALOGUE WITH NOTHING TO FORK.
+     * The first version mixed the two in one predicate (`slug` and `layer`
+     * and `layer !== "yours"`), so a renamed field made every row unusable
+     * while the red told the reader to go publish a skill. The second
+     * version split them but counted only rows the BUILDER had already
+     * kept, and the builder drops slug-less rows, so a renamed `slug` still
+     * reached the catalogue red with "0 of 0". It counts the raw rows now. */
+    const readable = before.rows.filter((h) => h.slug && h.layer);
+    if (before.rows.length > 0 && readable.length === 0) {
+      throw new Error(
+        `the catalogue answered ${before.rows.length} row(s) and none carries both a slug and a layer, so this is the shape of the answer rather than the catalogue's contents`
+      );
+    }
+
+    const target = readable.find((h) => h.layer !== "yours");
     if (!target?.slug) {
       // A CATALOGUE problem, named as one: nothing here is forkable.
       throw new Error(
-        `no published skill is available to fork (${before.size} in the catalogue, none outside your own layer), so this step has nothing to work on`
+        `no published skill is available to fork (${readable.length} readable of ${before.rows.length} answered, none outside your own layer), so this step has nothing to work on`
       );
     }
     const slug = target.slug;
@@ -78,7 +97,7 @@ export const sk2SkillsFork: TestCase = {
       throw new Error(`the fork landed in the ${JSON.stringify(forked.layer ?? null)} layer, not yours`);
     }
 
-    const shadowed = (await catalogue()).get(slug);
+    const shadowed = (await catalogue()).bySlug.get(slug);
     if (shadowed?.layer !== "yours") {
       throw new Error(
         `after the fork the catalogue still reports that slug as ${JSON.stringify(shadowed?.layer ?? null)}, so the copy is not running in the published skill's place`
@@ -94,7 +113,7 @@ export const sk2SkillsFork: TestCase = {
     /* THE PUBLISHED SKILL MUST COME BACK. A delete that removed the copy
      * AND the original would satisfy any assertion that only checked the
      * copy was gone, and would be the worst outcome this step could miss. */
-    const restored = (await catalogue()).get(slug);
+    const restored = (await catalogue()).bySlug.get(slug);
     if (!restored) {
       throw new Error("after deleting the fork the published skill is gone from the catalogue entirely, so the delete took both");
     }

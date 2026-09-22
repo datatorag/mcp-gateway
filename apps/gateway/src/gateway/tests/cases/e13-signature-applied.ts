@@ -41,11 +41,38 @@ export const e13SignatureApplied: TestCase = {
         { service: "gmail", resource: "users.settings.sendAs", method: "list", params: { userId: "me" } },
         { as: "sender" }
       );
-      const rows = (firstArray(resultJson("gws_run", res)) ?? []) as {
+      /* THE ENVELOPE FIRST. JR5 got both levels and this got only the row
+       * one: with `?? []` an error body or a scalar became "no rows", which
+       * skipped the shape check below and blamed the ACCOUNT for having no
+       * signature. */
+      const listed = firstArray(resultJson("gws_run", res));
+      if (listed === null) {
+        throw new Error("the sendAs listing answered without a list anywhere in it, so the account's signature cannot be read");
+      }
+      const rows = listed as {
+        sendAsEmail?: string;
         isDefault?: boolean;
         signature?: string;
       }[];
-      const stored = (rows.find((r) => r.isDefault)?.signature ?? rows[0]?.signature ?? "").trim();
+      /* A ROW THIS CASE CANNOT READ IS NOT A MAILBOX WITHOUT A SIGNATURE,
+       * but AN ABSENT `signature` IS NOT AN UNREADABLE ROW EITHER, and an
+       * earlier version of this guard got that backwards. It treated a
+       * missing `signature` as a shape fault, which contradicts the rule
+       * this same change applies to the other Google reads: Google omits a
+       * field at its default, so an alias with no signature legitimately
+       * has no key, and that version would have reported SHAPE for an
+       * account whose signature is simply unset.
+       *
+       * The shape is read from `sendAsEmail` instead, which identifies a
+       * sendAs row and is always present on one. Rows that carry no such
+       * identifier are not sendAs rows. */
+      const readable = rows.filter((r) => typeof r.sendAsEmail === "string");
+      if (rows.length > 0 && readable.length === 0) {
+        throw new Error(
+          `the sendAs listing returned ${rows.length} row(s) and none identifies a send-as address, so this is the shape of the answer rather than the account's settings`
+        );
+      }
+      const stored = ((readable.find((r) => r.isDefault) ?? readable[0])?.signature ?? "").trim();
       ctx.evidence(`the stored signature is ${stored.length} characters`);
       if (stored === "") {
         throw new Error("the sending account has no stored signature, so nothing below can be concluded");
