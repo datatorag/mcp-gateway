@@ -35,6 +35,15 @@ const MAX_LEN = 500;
 /** The blanket scrubbers, applied in the original order. This is both the
  * fallback for unrecognised messages and the per-value scrub inside kept
  * diagnostic fields. */
+function scrubText(text: string): string {
+  let out = text;
+  out = out.replace(EMAIL_RE, "[redacted-email]");
+  out = out.replace(API_KEY_RE, "[redacted-key]");
+  out = out.replace(LONG_QUOTED_RE, (_m, q) => `${q}[redacted-content]${q}`);
+  out = out.replace(GOOGLE_ID_RE, "[redacted-id]");
+  return out;
+}
+
 /**
  * The pattern scrub ALONE, without the 500-character cap or the envelope
  * rebuilding that `redactErrorMessage` layers on top (SCRUM-303).
@@ -50,18 +59,7 @@ const MAX_LEN = 500;
  * sink cannot come to disagree about what looks like a credential. Hence one
  * exported function rather than a second copy of the regexes.
  */
-export function scrubSensitiveText(text: string): string {
-  return scrubText(text);
-}
-
-function scrubText(text: string): string {
-  let out = text;
-  out = out.replace(EMAIL_RE, "[redacted-email]");
-  out = out.replace(API_KEY_RE, "[redacted-key]");
-  out = out.replace(LONG_QUOTED_RE, (_m, q) => `${q}[redacted-content]${q}`);
-  out = out.replace(GOOGLE_ID_RE, "[redacted-id]");
-  return out;
-}
+export { scrubText as scrubSensitiveText };
 
 /** Diagnostic fields we keep, by name. Everything else in an envelope is
  * dropped — not masked, dropped — because an unknown key is exactly where

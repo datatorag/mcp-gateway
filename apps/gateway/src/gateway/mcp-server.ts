@@ -124,20 +124,6 @@ type BuiltinResult = {
 };
 
 /**
- * Gateway built-in tools — served by this process, no plugin behind them.
- *
- * This registry IS the metering boundary for built-ins (SCRUM-66).
- * ListTools appends exactly these definitions, and CallTool dispatches every
- * name found here through one shared path that emits a tool_call event with
- * `builtin: true` — which classifies to metered:false, so the event reaches
- * analytics and neither billing sink runs (see usage/classify.ts). Before the
- * registry, the two built-ins were handled inline and emitted nothing; that
- * silence was undocumented, so a third built-in would have inherited it by
- * default. An entry added here inherits emission and non-metering by
- * construction, and mcp-server.builtins.test.ts iterates the registry, so a
- * new entry is covered without anyone remembering to cover it.
- */
-/**
  * A missing or malformed `run_id`, refused in the words a VALIDATION
  * failure is refused in (SCRUM-303).
  *
@@ -161,6 +147,20 @@ function missingRunId(value: unknown, tool: string): BuiltinResult | null {
   };
 }
 
+/**
+ * Gateway built-in tools — served by this process, no plugin behind them.
+ *
+ * This registry IS the metering boundary for built-ins (SCRUM-66).
+ * ListTools appends exactly these definitions, and CallTool dispatches every
+ * name found here through one shared path that emits a tool_call event with
+ * `builtin: true` — which classifies to metered:false, so the event reaches
+ * analytics and neither billing sink runs (see usage/classify.ts). Before the
+ * registry, the two built-ins were handled inline and emitted nothing; that
+ * silence was undocumented, so a third built-in would have inherited it by
+ * default. An entry added here inherits emission and non-metering by
+ * construction, and mcp-server.builtins.test.ts iterates the registry, so a
+ * new entry is covered without anyone remembering to cover it.
+ */
 export const BUILT_IN_TOOLS: {
   definition: {
     name: string;
@@ -657,17 +657,13 @@ async function applySkillFor(
 }
 
 /**
- * Creates a new MCP Server instance for a client session.
- * Dynamically serves tools from the registry and routes calls to backend
- * processes (local plugins) or Docker containers.
- */
-/**
  * The built-ins this user may SEE. Everything without an `audience`, plus the
  * admin-only ones when the user is an admin.
  *
- * The role read happens only if some entry actually declares an audience, so
- * the ordinary path costs nothing. Today no entry does (SCRUM-303 registers
- * the first three), and the tests inject one.
+ * The role read happens only if some entry actually declares an audience.
+ * The three runner tools do (SCRUM-303), so every tools/list pays one role
+ * read, which is why the handler issues it alongside the tool rows rather
+ * than after them.
  */
 export async function visibleBuiltins(
   db: Database,
@@ -701,6 +697,11 @@ export async function findVisibleBuiltin(
   return (await isAdmin(db, userId)) ? entry : undefined;
 }
 
+/**
+ * Creates a new MCP Server instance for a client session.
+ * Dynamically serves tools from the registry and routes calls to backend
+ * processes (local plugins) or Docker containers.
+ */
 export function createMcpServer(
   userId: string,
   db: Database,
@@ -794,7 +795,12 @@ export function createMcpServer(
     // Shared connected-service policy — see user-tools.ts. This handler only
     // shapes the rows for MCP: inject the `account` param on service-backed
     // tools and append the built-in tools.
-    const rows = await listUserToolRows(db, userId);
+    // Independent reads, issued together: the role read behind
+    // `visibleBuiltins` would otherwise wait for the tool rows.
+    const [rows, builtins] = await Promise.all([
+      listUserToolRows(db, userId),
+      visibleBuiltins(db, userId),
+    ]);
 
     const toolList: {
       name: string;
@@ -822,7 +828,6 @@ export function createMcpServer(
       }
     }
 
-    const builtins = await visibleBuiltins(db, userId);
     for (const t of builtins) toolList.push(t.definition);
 
     // A user who lists tools and then stops is a very different activation
@@ -862,7 +867,7 @@ export function createMcpServer(
           userId,
           clientId,
           clientName: clientName(),
-        testRunId,
+          testRunId,
           toolName: name,
           connectorType: null,
           accountEmail: undefined,
@@ -880,7 +885,7 @@ export function createMcpServer(
           userId,
           clientId,
           clientName: clientName(),
-        testRunId,
+          testRunId,
           toolName: name,
           connectorType: null,
           accountEmail: undefined,
@@ -1043,7 +1048,7 @@ export function createMcpServer(
           userId,
           clientId,
           clientName: clientName(),
-        testRunId,
+          testRunId,
           toolName: name,
           connectorType: requiredService,
           accountEmail,

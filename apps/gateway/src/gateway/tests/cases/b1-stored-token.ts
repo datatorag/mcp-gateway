@@ -1,4 +1,5 @@
 import type { TestCase } from "../types";
+import { resultText } from "../result-json";
 
 /**
  * B1 (Gateway scenario): a stored provider token still works.
@@ -18,7 +19,7 @@ export const b1StoredToken: TestCase = {
   accounts: ["sender", "atlassian"],
   run: async (ctx) => {
     const google = await ctx.call("gws-mcp__gmail_list_labels", {}, { as: "sender" });
-    const googleText = google.content.map((c) => c.text ?? "").join("");
+    const googleText = resultText(google);
     ctx.evidence(`google: ${google.isError ? "error" : `${googleText.length} characters`}`);
     if (google.isError) throw new Error(`the stored Google token did not authenticate: ${googleText}`);
 
@@ -27,7 +28,7 @@ export const b1StoredToken: TestCase = {
       { jql: "project = SCRUM ORDER BY created DESC", max_results: 1 },
       { as: "atlassian" }
     );
-    const atlassianText = atlassian.content.map((c) => c.text ?? "").join("");
+    const atlassianText = resultText(atlassian);
     ctx.evidence(`atlassian: ${atlassian.isError ? "error" : `${atlassianText.length} characters`}`);
     if (atlassian.isError) {
       throw new Error(`the stored Atlassian token did not authenticate: ${atlassianText}`);

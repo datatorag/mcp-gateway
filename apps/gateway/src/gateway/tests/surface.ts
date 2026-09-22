@@ -4,6 +4,7 @@ import { mcpServers, tools, users } from "@datatorag-mcp/db";
 import type { ConnectionPool } from "../pool";
 import { buildPluginServerUrl } from "../user-tools";
 import { classifyWrite } from "../playground/tools";
+import { isUuid } from "./read";
 import { visibleBuiltins, findVisibleBuiltin, BUILT_IN_TOOLS } from "../mcp-server";
 
 /**
@@ -104,11 +105,19 @@ export async function registrySurface(
  */
 export function classifyTools(names: readonly string[]): Record<string, boolean> {
   const classification: Record<string, boolean> = {};
-  for (const name of names.slice(0, 50)) {
-    const builtin = BUILT_IN_TOOLS.find((t) => t.definition.name === name);
-    classification[name] = builtin ? builtin.approval === "write" : classifyWrite(name);
-  }
+  for (const name of names.slice(0, 50)) classification[name] = isWriteTool(name);
   return classification;
+}
+
+/**
+ * Write or read, as the approval gate decides it: a built-in by its own
+ * declaration, anything else by the shared classifier, which fails closed.
+ * ONE copy, used by F1 here and by the contract probe, so the two cannot
+ * come to disagree about the same tool.
+ */
+export function isWriteTool(name: string): boolean {
+  const builtin = BUILT_IN_TOOLS.find((t) => t.definition.name === name);
+  return builtin ? builtin.approval === "write" : classifyWrite(name);
 }
 
 export const ADMIN_TOOL_NAMES = ["tests_run", "tests_status", "tests_results"];
@@ -125,7 +134,6 @@ export type NonAdminView = {
   skipped?: string;
 };
 
-const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /**
  * What the runner's own tools look like to a NON-ADMIN (R2).
@@ -154,7 +162,7 @@ export async function nonAdminView(
   });
 
   if (!candidate) return skip("no nonAdmin user is mapped for this run");
-  if (!UUID.test(candidate)) return skip("the mapped nonAdmin value is not a user id");
+  if (!isUuid(candidate)) return skip("the mapped nonAdmin value is not a user id");
 
   const [row] = await db
     .select({ id: users.id, role: users.role, email: users.email })
@@ -169,17 +177,21 @@ export async function nonAdminView(
     return skip("the mapped nonAdmin user is not one of our own accounts");
   }
 
-  const listed = await visibleBuiltins(db, row.id);
+  // Independent role reads, issued together.
+  const probed = [...ADMIN_TOOL_NAMES, UNREGISTERED_PROBE_NAME];
+  const [listed, ...found] = await Promise.all([
+    visibleBuiltins(db, row.id),
+    ...probed.map((name) => findVisibleBuiltin(db, row.id, name)),
+  ]);
   const listedNames = listed.map((t) => t.definition.name);
 
   const normalisedRefusals: Record<string, string> = {};
-  for (const name of [...ADMIN_TOOL_NAMES, UNREGISTERED_PROBE_NAME]) {
-    const found = await findVisibleBuiltin(db, row.id, name);
+  probed.forEach((name, i) => {
     // `undefined` is what sends a call into the dispatch's unknown-tool
     // branch, so the refusal text is that branch's, with the echoed name
     // normalised away so the answers are directly comparable.
-    normalisedRefusals[name] = found ? "SERVED" : `Unknown tool: ${JSON.stringify("NAME")}`;
-  }
+    normalisedRefusals[name] = found[i] ? "SERVED" : `Unknown tool: ${JSON.stringify("NAME")}`;
+  });
 
   return {
     listed: listedNames.length,

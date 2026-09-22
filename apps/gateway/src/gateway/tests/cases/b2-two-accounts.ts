@@ -1,4 +1,5 @@
 import type { TestCase } from "../types";
+import { resultText } from "../result-json";
 
 /**
  * B2 (Gateway scenario): the same tool, two accounts, DIFFERENT answers.
@@ -21,8 +22,8 @@ export const b2TwoAccounts: TestCase = {
     const first = await ctx.call("gws-mcp__gmail_list_labels", {}, { as: "sender" });
     const second = await ctx.call("gws-mcp__gmail_list_labels", {}, { as: "reader" });
 
-    const a = first.content.map((c) => c.text ?? "").join("");
-    const b = second.content.map((c) => c.text ?? "").join("");
+    const a = resultText(first);
+    const b = resultText(second);
     ctx.evidence(`sender payload ${a.length} characters, reader payload ${b.length}`);
 
     if (first.isError || second.isError) {

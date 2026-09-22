@@ -6,13 +6,6 @@ import type { RunSummary } from "@/gateway/tests/read";
 import { REGROUP_PENDING, SCENARIOS } from "@/gateway/tests/scenarios";
 
 /**
- * Starting a run and reading the history (SCRUM-303).
- *
- * The confirm control is inline and two-step rather than a popover: the
- * dashboard shell clips inline floating elements, and a control that starts
- * something which sends mail must never be half visible.
- */
-/**
  * Only the runs that really put mail in an inbox say so.
  *
  * "Everything" is the dangerous one and it was briefly the one that stopped
@@ -31,6 +24,13 @@ export function sendsMail(scope: string): boolean {
   return SCENARIOS.find((s) => s.key === scope)?.sendsMail === true;
 }
 
+/**
+ * Starting a run and reading the history (SCRUM-303).
+ *
+ * The confirm control is inline and two-step rather than a popover: the
+ * dashboard shell clips inline floating elements, and a control that starts
+ * something which sends mail must never be half visible.
+ */
 export function RunsPanel({
   initialRuns,
   caseCount,

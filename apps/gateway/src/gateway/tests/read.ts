@@ -33,14 +33,15 @@ export type RunStatus = {
 
 export async function readRunStatus(db: Database, runId: string): Promise<RunStatus | null> {
   if (!isUuid(runId)) return null;
-  const [run] = await db.select().from(testRuns).where(eq(testRuns.id, runId)).limit(1);
+  const [[run], [counts]] = await Promise.all([
+    db.select().from(testRuns).where(eq(testRuns.id, runId)).limit(1),
+    db.execute<{ done: number; leaked: number }>(sql`
+      SELECT count(*)::int AS done,
+             count(*) FILTER (WHERE cleanup = 'leaked')::int AS leaked
+      FROM test_results WHERE run_id = ${runId}::uuid
+    `),
+  ]);
   if (!run) return null;
-
-  const [counts] = await db.execute<{ done: number; leaked: number }>(sql`
-    SELECT count(*)::int AS done,
-           count(*) FILTER (WHERE cleanup = 'leaked')::int AS leaked
-    FROM test_results WHERE run_id = ${runId}::uuid
-  `);
 
   const totals = run.totals;
   return {
@@ -143,13 +144,13 @@ export async function readRunExport(db: Database, runId: string): Promise<Diffab
 }
 
 export async function readRunDiff(db: Database, runId: string, againstId: string) {
-  const [after, before] = await Promise.all([readRunExport(db, runId), readRunExport(db, againstId)]);
-  if (!after || !before) return null;
-  const [runStatus, againstStatus] = await Promise.all([
+  const [after, before, runStatus, againstStatus] = await Promise.all([
+    readRunExport(db, runId),
+    readRunExport(db, againstId),
     readRunStatus(db, runId),
     readRunStatus(db, againstId),
   ]);
-  if (!runStatus || !againstStatus) return null;
+  if (!after || !before || !runStatus || !againstStatus) return null;
 
   const diff = diffRuns(before, after);
   return {
@@ -211,6 +212,6 @@ export async function listRuns(db: Database, limit = 25) {
 
 /** A malformed id must read as "no such run", not as a database error: these
  * ids arrive from a URL and from a tool argument. */
-function isUuid(value: string): boolean {
+export function isUuid(value: string): boolean {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value);
 }

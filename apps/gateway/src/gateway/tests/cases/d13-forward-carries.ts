@@ -1,6 +1,6 @@
 import type { TestCase } from "../types";
-import { firstArray, resultJson } from "../result-json";
-import { deliveredIds } from "../mail-parts";
+import { resultJson } from "../result-json";
+import { deliveredFromSearch } from "../mail-parts";
 
 /**
  * D13 (smoke row D13): a forward must CARRY THE ORIGINAL.
@@ -45,7 +45,7 @@ export const d13ForwardCarries: TestCase = {
           { query: `"${from.runStamp}" ${note}`, max_results: 10 },
           { as: "reader" }
         );
-        return deliveredIds(firstArray(resultJson("gmail_search", found)))[0];
+        return deliveredFromSearch(found)[0];
       },
       { everyMs: 5_000, forMs: 120_000 }
     );

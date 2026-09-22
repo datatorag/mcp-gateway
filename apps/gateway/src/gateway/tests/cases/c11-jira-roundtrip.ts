@@ -1,5 +1,5 @@
 import type { TestCase } from "../types";
-import { firstArray, resultJson, resultText } from "../result-json";
+import { firstArray, resultJson } from "../result-json";
 
 /**
  * C11 (smoke row C11): the most destructive verb in the connector

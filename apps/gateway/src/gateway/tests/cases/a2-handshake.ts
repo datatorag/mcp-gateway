@@ -1,4 +1,5 @@
 import type { TestCase } from "../types";
+import { resultText } from "../result-json";
 
 /**
  * A2 (Gateway scenario): an MCP client can complete a handshake and call a tool.
@@ -19,7 +20,7 @@ export const a2Handshake: TestCase = {
   accounts: [],
   run: async (ctx) => {
     const result = await ctx.call("echo", { message: `handshake ${ctx.stamp}` });
-    const text = result.content.map((c) => c.text ?? "").join("");
+    const text = resultText(result);
     ctx.evidence(`echo answered ${text.length} characters`);
     if (result.isError) throw new Error(`echo answered with an error: ${text}`);
     if (!text.includes(ctx.stamp)) {

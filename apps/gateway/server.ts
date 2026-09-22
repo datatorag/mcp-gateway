@@ -73,16 +73,18 @@ async function main() {
     console.error("[skills] seeding failed; serving the published files", err);
   }
 
-  // Initialize plugin manager and start all active plugins
-  const pluginManager = getPluginManager(db, pool);
-  await pluginManager.startAll();
-
-  // A test run dies with the process that started it (SCRUM-303), and its
+  // Initialize plugin manager and start all active plugins. Alongside it:
+  // a test run dies with the process that started it (SCRUM-303), and its
   // row would otherwise stay `running` and hold the one-run claim forever.
-  // Best effort: a failure here must not stop the server coming up.
-  await markInterruptedRuns(db).catch((err) =>
-    console.error("[test-runner] could not mark interrupted runs:", err)
-  );
+  // The two are independent, so boot does not wait for one before the
+  // other. Best effort: a failure marking runs must not stop the server.
+  const pluginManager = getPluginManager(db, pool);
+  await Promise.all([
+    pluginManager.startAll(),
+    markInterruptedRuns(db).catch((err) =>
+      console.error("[test-runner] could not mark interrupted runs:", err)
+    ),
+  ]);
 
   const rollupJob = cron.schedule(
     "0 2 * * *",

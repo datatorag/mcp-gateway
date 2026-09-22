@@ -14,8 +14,10 @@ export default async function AdminTestRunPage({
 }) {
   await requireAdminPage();
   const { runId } = await params;
-  const run = await readRunStatus(db, runId);
+  const [run, results] = await Promise.all([
+    readRunStatus(db, runId),
+    readRunResults(db, runId, { statuses: ["fail", "skip", "uncovered"] }),
+  ]);
   if (!run) notFound();
-  const results = await readRunResults(db, runId, { statuses: ["fail", "skip", "uncovered"] });
   return <RunDetail run={run} initialResults={results?.results ?? []} />;
 }

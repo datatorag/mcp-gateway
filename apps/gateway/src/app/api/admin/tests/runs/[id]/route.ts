@@ -10,14 +10,16 @@ type Ctx = { params: Promise<{ id: string }> };
 const handler = withAdminRoute<Ctx>(
   async (_userId, req: NextRequest, ctx) => {
     const { id } = await ctx.params;
-    const status = await readRunStatus(db, id);
-    if (!status) return NextResponse.json({ error: "Not found" }, { status: 404 });
-
     const url = new URL(req.url);
     const statuses = url.searchParams.getAll("status");
     const kinds = url.searchParams.getAll("kind");
     const cursor = url.searchParams.get("cursor") ?? undefined;
-    const results = await readRunResults(db, id, { statuses, kinds, cursor });
+    // Independent reads, issued together; both answer null for a missing run.
+    const [status, results] = await Promise.all([
+      readRunStatus(db, id),
+      readRunResults(db, id, { statuses, kinds, cursor }),
+    ]);
+    if (!status) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
     return NextResponse.json({ run: status, ...results });
   },

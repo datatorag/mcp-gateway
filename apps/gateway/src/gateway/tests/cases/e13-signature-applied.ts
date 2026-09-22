@@ -1,6 +1,6 @@
 import type { TestCase } from "../types";
 import { firstArray, resultJson, resultText } from "../result-json";
-import { countSignatureBlocks, isMultipartAlternative, partText, type MailPart, deliveredIds } from "../mail-parts";
+import { countSignatureBlocks, isMultipartAlternative, partText, type MailPart, deliveredFromSearch, firstSignatureBlock } from "../mail-parts";
 
 /**
  * E13 (smoke row E13): the signature is applied on send, ONCE, and
@@ -126,7 +126,7 @@ export const e13SignatureApplied: TestCase = {
             { query: `subject:"E13 ${suffix} ${ctx.stamp}"`, max_results: 5 },
             { as: "reader" }
           );
-          return deliveredIds(firstArray(resultJson("gmail_search", found)))[0];
+          return deliveredFromSearch(found)[0];
         },
         { everyMs: 5_000, forMs: 120_000 }
       );
@@ -170,7 +170,7 @@ export const e13SignatureApplied: TestCase = {
     // applied but empty block would satisfy a count and deliver nothing,
     // which is what the customer reported in the first place. Looked for
     // from the block onward, so the body's own words cannot satisfy it.
-    const block = html.search(/class\s*=\s*["'][^'"]*\bgmail_signature\b/i);
+    const block = firstSignatureBlock(html);
     if (block === -1 || !html.slice(block).includes(needle)) {
       throw new Error("the html part's signature block does not carry the account's stored signature");
     }

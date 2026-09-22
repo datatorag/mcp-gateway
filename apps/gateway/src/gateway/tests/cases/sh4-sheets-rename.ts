@@ -1,5 +1,4 @@
 import type { TestCase } from "../types";
-import { resultJson } from "../result-json";
 
 /**
  * SH4 (Sheets scenario): a renamed tab answers to its new name and stops

@@ -1,6 +1,6 @@
 import type { TestCase } from "../types";
 import { firstArray, resultJson } from "../result-json";
-import { deliveredIds } from "../mail-parts";
+import { deliveredFromSearch } from "../mail-parts";
 
 /**
  * D11 (smoke row D11): a draft that is sent must LEAVE the drafts
@@ -55,7 +55,7 @@ export const d11DraftSent: TestCase = {
           { query: `subject:"${ctx.stamp}"`, max_results: 5 },
           { as: "reader" }
         );
-        return deliveredIds(firstArray(resultJson("gmail_search", found)))[0];
+        return deliveredFromSearch(found)[0];
       },
       { everyMs: 5_000, forMs: 120_000 }
     );

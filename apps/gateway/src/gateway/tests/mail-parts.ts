@@ -1,3 +1,6 @@
+import type { ToolResult } from "./types";
+import { firstArray, resultJson } from "./result-json";
+
 /**
  * Reading a Gmail message's actual MIME parts (SCRUM-303).
  *
@@ -46,8 +49,19 @@ export function partText(payload: MailPart | undefined, mimeType: string): strin
  * "signed once" to anything that only asks whether a signature is there.
  */
 export function countSignatureBlocks(html: string): number {
-  return [...html.matchAll(/class\s*=\s*["'][^"']*\bgmail_signature\b/gi)].length;
+  return [...html.matchAll(new RegExp(SIGNATURE_BLOCK.source, "gi"))].length;
 }
+
+/** Where the first signature block starts, or -1. The same marker the
+ * count uses, so "where" and "how many" cannot disagree. */
+export function firstSignatureBlock(html: string): number {
+  return html.search(SIGNATURE_BLOCK);
+}
+
+/* The class Gmail puts on its signature wrapper. The character class is
+ * `[^'"]` rather than `[^"']` so the quotes PAIR for the argument scanner,
+ * which cannot tell a regex from a string; see E13. */
+const SIGNATURE_BLOCK = /class\s*=\s*["'][^'"]*\bgmail_signature\b/i;
 
 /** True when the top level is a multipart/alternative, which is what a
  * plain-body send is promoted to once a signature is applied. */
@@ -80,4 +94,10 @@ export function deliveredIds(hits: unknown): string[] {
     )
     .filter((h) => h.labelIds.includes("INBOX") && !h.labelIds.includes("DRAFT"))
     .map((h) => h.id);
+}
+
+/** The delivered ids in a `gmail_search` answer. A search that found
+ * nothing answers a JSON string, not a list, and reads as none. */
+export function deliveredFromSearch(res: ToolResult): string[] {
+  return deliveredIds(firstArray(resultJson("gmail_search", res)));
 }

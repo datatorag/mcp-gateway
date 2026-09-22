@@ -1,6 +1,6 @@
 import type { TestCase } from "../types";
 import { firstArray, resultJson } from "../result-json";
-import { deliveredIds } from "../mail-parts";
+import { deliveredFromSearch } from "../mail-parts";
 
 /**
  * D12 (smoke row D12): a reply lands in the SAME THREAD.
@@ -95,7 +95,7 @@ export const d12ReplyThreads: TestCase = {
           { as: "sender" }
         );
         // DELIVERED hits only, and the decoded body: see D10.
-        for (const id of deliveredIds(firstArray(resultJson("gmail_search", found)))) {
+        for (const id of deliveredFromSearch(found)) {
           const read = resultJson<{ body?: unknown }>(
             "gmail_read",
             await ctx.call("gws-mcp__gmail_read", { message_id: id, text_only: true }, { as: "sender" })

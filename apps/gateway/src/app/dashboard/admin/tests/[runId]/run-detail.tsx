@@ -2,16 +2,9 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import type { RunStatus } from "@/gateway/tests/read";
+import type { ResultsPage, RunStatus } from "@/gateway/tests/read";
 
-type Result = {
-  case_id: string;
-  kind: string;
-  status: string;
-  cleanup: string;
-  duration_ms: number;
-  evidence: string;
-};
+type Result = ResultsPage["results"][number];
 
 /** One run's results (SCRUM-303). Polls while the run is going, so progress
  * is visible rather than a page that has to be reloaded to mean anything. */
@@ -22,14 +15,33 @@ export function RunDetail({ run, initialResults }: { run: RunStatus; initialResu
 
   useEffect(() => {
     if (current.status !== "running") return;
-    const timer = setInterval(async () => {
+    const poll = async () => {
       const res = await fetch(`/api/admin/tests/runs/${run.run_id}`);
       if (!res.ok) return;
       const body = await res.json();
       setCurrent(body.run);
       setResults(body.results ?? []);
-    }, 3000);
-    return () => clearInterval(timer);
+    };
+    // Paused while the tab is hidden, as the runs panel does: a background
+    // tab polling every three seconds is twenty admin reads a minute for
+    // nobody.
+    let timer: ReturnType<typeof setInterval> | null = null;
+    const stop = () => {
+      if (timer !== null) clearInterval(timer);
+      timer = null;
+    };
+    const onVisibility = () => {
+      stop();
+      if (document.hidden) return;
+      void poll().catch(() => {});
+      timer = setInterval(() => void poll().catch(() => {}), 3000);
+    };
+    if (!document.hidden) timer = setInterval(() => void poll().catch(() => {}), 3000);
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => {
+      stop();
+      document.removeEventListener("visibilitychange", onVisibility);
+    };
   }, [current.status, run.run_id]);
 
   useEffect(() => {

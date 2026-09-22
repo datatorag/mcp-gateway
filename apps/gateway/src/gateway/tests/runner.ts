@@ -9,7 +9,7 @@ import type { TestCase, CaseContext } from "./types";
  * - CLEANUP RUNS WHETHER OR NOT THE BODY DID. A case that fails halfway has
  *   already created things, and it is exactly the failing run whose mess
  *   nobody is watching. So undos are registered as they go and run in
- *   reverse in a `finally`.
+ *   reverse once the body is done, whether it passed, threw or timed out.
  * - A TIMEOUT IS A RESULT, not a hang. A case that never returns would
  *   otherwise take the whole run's ceiling with it and report nothing.
  * - A RETRY IS FOR TRANSPORT, NEVER FOR AN ASSERTION. Retrying a failed
@@ -25,7 +25,6 @@ export type CaseOutcome = {
   cleanup: CaseCleanup;
   durationMs: number;
   evidence: string[];
-  toolsCalled: string[];
 };
 
 export const DEFAULT_CASE_TIMEOUT_MS = 60_000;
@@ -55,7 +54,7 @@ export function isTransient(err: unknown): boolean {
 
 export class CaseTimeout extends Error {}
 
-async function withTimeout<T>(what: string, ms: number, work: () => Promise<T>, clock: Clock): Promise<T> {
+async function withTimeout<T>(what: string, ms: number, work: () => Promise<T>): Promise<T> {
   let timer: ReturnType<typeof setTimeout> | undefined;
   try {
     return await Promise.race([
@@ -64,7 +63,6 @@ async function withTimeout<T>(what: string, ms: number, work: () => Promise<T>, 
         timer = setTimeout(() => reject(new CaseTimeout(`${what} exceeded ${ms} ms`)), ms);
         // Never hold the process open for a timer that is only a deadline.
         (timer as unknown as { unref?: () => void }).unref?.();
-        void clock;
       }),
     ]);
   } finally {
@@ -117,7 +115,6 @@ export async function runOneCase(
     runId: string;
     makeParts: (caseId: string) => ContextParts;
     clock?: Clock;
-    toolsCalled?: () => string[];
   }
 ): Promise<CaseOutcome> {
   const clock = opts.clock ?? realClock;
@@ -142,12 +139,12 @@ export async function runOneCase(
   const timeoutMs = testCase.timeoutMs ?? DEFAULT_CASE_TIMEOUT_MS;
 
   try {
-    await withTimeout(`case ${testCase.id}`, timeoutMs, () => testCase.run(ctx), clock);
+    await withTimeout(`case ${testCase.id}`, timeoutMs, () => testCase.run(ctx));
   } catch (err) {
     if (isTransient(err)) {
       evidence.push(`first attempt failed transiently (${describe(err)}); retried once`);
       try {
-        await withTimeout(`case ${testCase.id} retry`, timeoutMs, () => testCase.run(ctx), clock);
+        await withTimeout(`case ${testCase.id} retry`, timeoutMs, () => testCase.run(ctx));
       } catch (retryErr) {
         status = "fail";
         evidence.push(describe(retryErr));
@@ -156,15 +153,14 @@ export async function runOneCase(
       status = "fail";
       evidence.push(describe(err));
     }
-  } finally {
-    // Reverse order: the last thing created is the first thing undone, which
-    // is the only order that works when one artifact lives inside another.
   }
 
+  // Reverse order: the last thing created is the first thing undone, which
+  // is the only order that works when one artifact lives inside another.
   let cleanup: CaseCleanup = undos.length === 0 ? "none_needed" : "clean";
   for (const { label, undo } of [...undos].reverse()) {
     try {
-      await withTimeout(`undo ${label}`, UNDO_TIMEOUT_MS, undo, clock);
+      await withTimeout(`undo ${label}`, UNDO_TIMEOUT_MS, undo);
     } catch (err) {
       // One failing undo must not stop the next: the rest of the mess is
       // still worth clearing, and every failure is worth naming.
@@ -179,7 +175,6 @@ export async function runOneCase(
     cleanup,
     durationMs: clock.now() - started,
     evidence,
-    toolsCalled: opts.toolsCalled?.() ?? [],
   };
 }
 

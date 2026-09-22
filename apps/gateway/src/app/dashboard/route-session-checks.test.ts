@@ -19,10 +19,10 @@
  * new route is protected, and the exception has to be argued for.
  */
 
-import { readdirSync, readFileSync, statSync } from "node:fs";
+import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { checkAdminPages } from "@/gateway/admin-surface-walk";
+import { checkAdminPages, stripComments, walk } from "@/gateway/admin-surface-walk";
 
 const DASHBOARD_DIR = join(import.meta.dirname, ".");
 
@@ -72,28 +72,8 @@ const EXEMPT: Record<string, string> = {
  * that forgot its check, not an author working to defeat it. Anyone who wants
  * past it can already add unreachable dead code that satisfies both patterns.
  * Do not upgrade this to a security boundary on the strength of the regex. */
-function stripComments(source: string): string {
-  return source
-    .replace(/\/\*[\s\S]*?\*\//g, "")
-    .replace(/(^|[^:])\/\/.*$/gm, "$1");
-}
-
-/** Every `page.tsx` under this directory, relative to it. */
-function findPages(dir: string, prefix = ""): string[] {
-  const out: string[] = [];
-  for (const entry of readdirSync(dir)) {
-    if (entry === "node_modules" || entry.startsWith(".")) continue;
-    const full = join(dir, entry);
-    if (statSync(full).isDirectory()) {
-      out.push(...findPages(full, prefix ? `${prefix}/${entry}` : entry));
-    } else if (entry === "page.tsx") {
-      out.push(prefix ? `${prefix}/${entry}` : entry);
-    }
-  }
-  return out.sort();
-}
-
-const pages = findPages(DASHBOARD_DIR);
+// That limit is `stripComments`'s, now shared from admin-surface-walk with the walk.
+const pages = walk(DASHBOARD_DIR, (entry) => entry === "page.tsx");
 
 describe("dashboard routes resolve the session for themselves", () => {
   it("finds the routes at all", () => {

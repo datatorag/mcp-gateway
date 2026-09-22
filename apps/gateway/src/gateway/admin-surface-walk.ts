@@ -48,13 +48,15 @@ const HANDLES = /^route\.(tsx|ts|jsx|js|mjs)$/;
  * a search for one. Same reasoning as `route-session-checks.test.ts`, and the
  * same honest limit: this is a regex, not a parser. It is aimed at omission,
  * not at an author working to defeat it. */
-function stripComments(source: string): string {
+export function stripComments(source: string): string {
   return source
     .replace(/\/\*[\s\S]*?\*\//g, "")
     .replace(/(^|[^:])\/\/.*$/gm, "$1");
 }
 
-function walk(dir: string, match: (entry: string) => boolean, prefix = ""): string[] {
+/** Files under `dir` whose name matches, relative to it, sorted. A missing
+ * directory answers none; the callers each assert they found something. */
+export function walk(dir: string, match: (entry: string) => boolean, prefix = ""): string[] {
   let entries: string[];
   try {
     entries = readdirSync(dir);

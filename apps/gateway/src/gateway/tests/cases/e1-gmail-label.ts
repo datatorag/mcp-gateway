@@ -1,5 +1,5 @@
 import type { TestCase } from "../types";
-import { resultJson } from "../result-json";
+import { resultJson, resultText } from "../result-json";
 
 /**
  * E1 (smoke row E1): creating a label answers with the label's ID.
@@ -37,7 +37,7 @@ export const e1GmailLabel: TestCase = {
     deleted = true;
 
     const labels = await ctx.call("gws-mcp__gmail_list_labels", {}, { as: "sender" });
-    const text = labels.content.map((c) => c.text ?? "").join("");
+    const text = resultText(labels);
     if (text.includes(labelId)) {
       throw new Error("the label is still listed after a delete that reported success");
     }

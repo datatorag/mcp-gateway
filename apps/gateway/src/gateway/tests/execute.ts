@@ -3,26 +3,25 @@ import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import type { Database, TestRunScope, TestRunTotals } from "@datatorag-mcp/db";
 import { getEnv } from "@datatorag-mcp/config";
-import { createMcpServer, BUILT_IN_TOOLS } from "../mcp-server";
+import { createMcpServer } from "../mcp-server";
+import { NAMESPACE_SEPARATOR, PLUGINS_DIR } from "../plugin-manager";
+import { resultText } from "./result-json";
 import type { ConnectionPool } from "../pool";
-import { classifyWrite } from "../playground/tools";
 import { checkContract, type ContractSubject } from "./contract";
 import { toolNameShapes } from "./evidence";
 import { createHttpFetcher, loopbackBase } from "./http";
-import { classifyTools, nonAdminView, registrySurface } from "./surface";
+import { classifyTools, isWriteTool, nonAdminView, registrySurface } from "./surface";
 import { CASES } from "./cases";
-import { orderByNeeds, runOneCase, stampFor, type ContextParts } from "./runner";
+import { orderByNeeds, runOneCase, type ContextParts } from "./runner";
 import { runPool } from "./pool";
 import { parseFixtureMap } from "./fixtures";
 import { checkSend, SUBJECT_PREFIX, type GuardLookups } from "./send-guard";
-import type { AccountRole, FixtureKey, TestCase } from "./types";
+import type { AccountRole, FixtureKey, TestCase, ToolResult } from "./types";
 import { finishRun, recordResult, startRun } from "./store";
 import { missingCheckouts, readPluginShas } from "./plugin-sha";
 import { mcpServers, serviceConnections } from "@datatorag-mcp/db";
 import { PLUGIN_SERVICE_MAP } from "../service-token";
 import { eq } from "drizzle-orm";
-import { join } from "node:path";
-import { homedir } from "node:os";
 
 /**
  * A run, start to finish (SCRUM-303).
@@ -41,7 +40,6 @@ import { homedir } from "node:os";
  * Nothing here is a model. A case passes by returning and fails by throwing.
  */
 
-const PLUGINS_DIR = join(homedir(), ".datatorag", "plugins");
 
 /**
  * How many contract probes run at once.
@@ -74,8 +72,11 @@ export const PLUGIN_ROLES: Record<string, readonly AccountRole[]> = {
   "atlassian-mcp": ["atlassian"],
 };
 
-/** The role a contract probe of this plugin runs as. */
-const PROBE_ROLE: Record<string, AccountRole> = { "gws-mcp": "sender", "atlassian-mcp": "atlassian" };
+/** The plugin a namespaced tool belongs to, or null for a built-in. */
+function pluginOf(tool: string): string | null {
+  const at = tool.indexOf(NAMESPACE_SEPARATOR);
+  return at === -1 ? null : tool.slice(0, at);
+}
 
 /**
  * `args` with the mapped `account` for `role`, or a throw.
@@ -91,8 +92,8 @@ export function accountArgs(
   args: Record<string, unknown>,
   role: AccountRole
 ): Record<string, unknown> {
-  if (!tool.includes("__")) return { ...args };
-  const slug = tool.slice(0, tool.indexOf("__"));
+  const slug = pluginOf(tool);
+  if (slug === null) return { ...args };
   const allowed = PLUGIN_ROLES[slug];
   if (!allowed) throw new Error(`${tool}: no role is allowed to run ${slug} tools, so it is not called`);
   if (!allowed.includes(role)) {
@@ -384,73 +385,53 @@ async function driveRun(opts: {
     const servedNames = new Set(served.map((t) => t.name));
     const runnable: typeof order = [];
     for (const testCase of order) {
-      // A TOOL THIS RUN DOES NOT SERVE IS A MISSING PREREQUISITE, NOT A
-      // PRODUCT FINDING. A case whose covered tool is absent from
-      // tools/list would otherwise fail on "unknown tool", which reads as
-      // "the connector is broken" when what actually happened is that the
-      // registry on this database has no row for it. It has already
-      // happened: sheets_query shipped and the dev branch's registry never
-      // got the row, so every run there would have reported a working tool
-      // as broken. A skip still counts against green, and it names the tool.
-      // THE ENVIRONMENT, NOT THE PRODUCT. A plugin that is not installed on
-      // this machine, or whose service this identity has never connected,
-      // still has its tools in the registry and therefore in tools/list. So
-      // the case runs, the call fails, and the run reports a working
-      // connector as broken. B1 and C7 did exactly that. Neither fact is
-      // about the code under test, and neither is fixed by looking at it.
-      const blockedPlugins = pluginsBlocking(testCase, unusable);
-      if (blockedPlugins.length > 0) {
-        await record({
-          caseId: testCase.id,
-          kind: "case",
-          status: "skip",
-          cleanup: "none_needed",
-          durationMs: 0,
-          evidence: blockedPlugins.map(([slug, why]) => `${slug} cannot be exercised here: ${why}`),
-        });
-        failed.add(testCase.id);
-        continue;
-      }
-      const unserved = unservedToolsFor(testCase, servedNames);
-      if (unserved.length > 0) {
-        await record({
-          caseId: testCase.id,
-          kind: "case",
-          status: "skip",
-          cleanup: "none_needed",
-          durationMs: 0,
-          evidence: [`this run does not serve ${unserved.join(", ")}, so the case has nothing to exercise`],
-        });
-        failed.add(testCase.id);
-        continue;
-      }
-      const missing = missingMappingsFor(testCase, fixtures);
-      if (missing.length > 0) {
-        // A missing mapping SKIPS and names what was missing. It never falls
-        // back to a default account: a case that silently ran as the wrong
-        // account would report a pass about something nobody checked.
-        await record({
-          caseId: testCase.id,
-          kind: "case",
-          status: "skip",
-          cleanup: "none_needed",
-          durationMs: 0,
-          evidence: [`this run has no mapping for ${missing.join(", ")}`],
-        });
-        failed.add(testCase.id);
-        continue;
-      }
-      const sameAccount = sharedAccountsFor(testCase, fixtures);
-      if (sameAccount.length > 0) {
-        await record({
-          caseId: testCase.id,
-          kind: "case",
-          status: "skip",
-          cleanup: "none_needed",
-          durationMs: 0,
-          evidence: [
+      /* The reasons a case cannot run here, checked in this order, first
+       * one wins. Each is a missing prerequisite rather than a finding, so
+       * each SKIPS, names what was missing, and counts against green.
+       *
+       * THE ENVIRONMENT, NOT THE PRODUCT. A plugin that is not installed on
+       * this machine, or whose service this identity has never connected,
+       * still has its tools in the registry and therefore in tools/list. So
+       * the case runs, the call fails, and the run reports a working
+       * connector as broken. B1 and C7 did exactly that. Neither fact is
+       * about the code under test, and neither is fixed by looking at it.
+       *
+       * A TOOL THIS RUN DOES NOT SERVE would otherwise fail on "unknown
+       * tool", which reads as "the connector is broken" when the registry on
+       * this database has no row for it. It has already happened:
+       * sheets_query shipped and the dev branch's registry never got the
+       * row.
+       *
+       * A MISSING MAPPING never falls back to a default account: a case that
+       * silently ran as the wrong account would report a pass about
+       * something nobody checked. */
+      const skipReason = ((): string[] | null => {
+        const blockedPlugins = pluginsBlocking(testCase, unusable);
+        if (blockedPlugins.length > 0) {
+          return blockedPlugins.map(([slug, why]) => `${slug} cannot be exercised here: ${why}`);
+        }
+        const unserved = unservedToolsFor(testCase, servedNames);
+        if (unserved.length > 0) {
+          return [`this run does not serve ${unserved.join(", ")}, so the case has nothing to exercise`];
+        }
+        const missing = missingMappingsFor(testCase, fixtures);
+        if (missing.length > 0) return [`this run has no mapping for ${missing.join(", ")}`];
+        const sameAccount = sharedAccountsFor(testCase, fixtures);
+        if (sameAccount.length > 0) {
+          return [
             `${sameAccount.join(" and ")} map to the same account this run, and this case compares two different accounts`,
-          ],
+          ];
+        }
+        return null;
+      })();
+      if (skipReason) {
+        await record({
+          caseId: testCase.id,
+          kind: "case",
+          status: "skip",
+          cleanup: "none_needed",
+          durationMs: 0,
+          evidence: skipReason,
         });
         failed.add(testCase.id);
         continue;
@@ -495,7 +476,6 @@ async function driveRun(opts: {
           cleanup: "none_needed" as const,
           durationMs: 0,
           evidence: [`${blockedBy.join(", ")} did not pass, so this case cannot run`],
-          toolsCalled: [] as string[],
         };
       }
       const called: string[] = [];
@@ -512,7 +492,6 @@ async function driveRun(opts: {
             shared,
             caseId,
           }),
-        toolsCalled: () => called,
       });
       if (outcome.status !== "pass") failed.add(testCase.id);
       // COVERAGE IS CHECKED IN BOTH DIRECTIONS, which is what lets a case
@@ -564,11 +543,10 @@ async function driveRun(opts: {
           const outcome = await checkContract(contractSubjectFor(tool), async (name) => {
             /* `{}` apart from the account. A read handler that ignores its
              * required argument would otherwise run on the default account. */
-            const slug = name.includes("__") ? name.slice(0, name.indexOf("__")) : "";
-            const result = await client.callTool(
-              name,
-              accountArgs(fixtures, name, {}, PROBE_ROLE[slug] ?? "sender")
-            );
+            // A probe runs as the first role its plugin accepts. An unknown
+            // plugin gets no role and `accountArgs` refuses it.
+            const probeRole = PLUGIN_ROLES[pluginOf(name) ?? ""]?.[0] ?? "sender";
+            const result = await client.callTool(name, accountArgs(fixtures, name, {}, probeRole));
             return { content: result.content, isError: result.isError };
           });
           await record({
@@ -690,7 +668,7 @@ export function pluginsBlocking(
   unusable: ReadonlyMap<string, string>
 ): [string, string][] {
   const slugs = new Set(
-    testCase.covers.filter((t) => t.includes("__")).map((t) => t.split("__", 1)[0])
+    testCase.covers.map(pluginOf).filter((slug): slug is string => slug !== null)
   );
   return [...slugs]
     .filter((slug) => unusable.has(slug))
@@ -860,7 +838,7 @@ export function makeContextParts(opts: {
       if ("account" in args) {
         throw new Error(`${tool}: a case may not pass account; declare a role and use { as }`);
       }
-      const role = (callOpts?.as ?? "sender") as AccountRole;
+      const role = callOpts?.as ?? "sender";
       // A GATEWAY BUILT-IN TAKES NO ACCOUNT. `account` picks between a
       // user's connected accounts for a PLUGIN tool; a built-in has no such
       // notion, and handing one an argument its schema never declared is
@@ -885,7 +863,7 @@ export function makeContextParts(opts: {
         opts.db ? nonAdminView(opts.db, fixtures.user("nonAdmin") ?? undefined) : needs("nonAdminView"),
     },
     async trashOwnMessage(messageId: string, callOpts?: { as?: AccountRole }) {
-      const role = (callOpts?.as ?? "sender") as AccountRole;
+      const role = callOpts?.as ?? "sender";
       /* AN UNMAPPED ROLE REFUSES rather than falling through to whatever
        * account happens to be default. `ctx.address` already works this
        * way; a cleanup that trashes mail in an account nobody chose is the
@@ -938,7 +916,7 @@ export function makeContextParts(opts: {
         { query: `subject:"${runStamp}"`, max_results: 25 },
         role
       );
-      const text = found.content.map((c) => c.text ?? "").join("");
+      const text = resultText(found);
       return !text.includes(messageId);
     },
     address(role: AccountRole) {
@@ -980,7 +958,6 @@ export function makeContextParts(opts: {
   };
 }
 
-/** Headers out of a gmail_read result, for the send guard's two lookups. */
 /**
  * Headers out of a `gmail_read` result, for the send guard's two lookups.
  *
@@ -998,10 +975,10 @@ export function makeContextParts(opts: {
  * carry stays undefined rather than becoming "", because the reply guard
  * treats a present-but-empty Reply-To differently from an absent one.
  */
-function parseHeaders(result: { content: { text?: string }[]; isError?: boolean }) {
+function parseHeaders(result: ToolResult) {
   if (result.isError) return null;
   try {
-    const parsed = JSON.parse(result.content.map((c) => c.text ?? "").join("")) as Record<string, unknown>;
+    const parsed = JSON.parse(resultText(result)) as Record<string, unknown>;
 
     const raw = (parsed.payload ?? (parsed.message as Record<string, unknown> | undefined)?.payload) as
       | { headers?: { name?: string; value?: string }[] }
@@ -1082,12 +1059,11 @@ export function contractSubjectFor(tool: {
   name: string;
   inputSchema?: Record<string, unknown>;
 }): ContractSubject {
-  const builtin = BUILT_IN_TOOLS.find((t) => t.definition.name === tool.name);
   return {
     name: tool.name,
     schema: tool.inputSchema,
     // A built-in has no registry row by design and is not missing one.
     registryEnabled: true,
-    isRead: builtin ? builtin.approval === "read" : !classifyWrite(tool.name),
+    isRead: !isWriteTool(tool.name),
   };
 }

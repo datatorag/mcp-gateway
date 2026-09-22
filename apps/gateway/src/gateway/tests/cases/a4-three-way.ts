@@ -23,10 +23,10 @@ export const a4ThreeWay: TestCase = {
   accounts: [],
   timeoutMs: 120_000,
   run: async (ctx) => {
-    const { tools } = (await ctx.rpc("tools/list")) as { tools: { name: string }[] };
+    // Two independent reads, issued together.
+    const [listedTools, surface] = await Promise.all([ctx.rpc("tools/list"), ctx.gateway.registrySurface()]);
+    const { tools } = listedTools as { tools: { name: string }[] };
     const served = new Set(tools.filter((t) => t.name.includes("__")).map((t) => t.name));
-
-    const surface = await ctx.gateway.registrySurface();
 
     const problems: string[] = [];
     for (const plugin of surface.plugins) {

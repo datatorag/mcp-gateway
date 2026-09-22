@@ -1,4 +1,5 @@
 import type { TestCase } from "../types";
+import { resultText } from "../result-json";
 
 /**
  * G1 (Gateway scenario): a bad argument produces an error that names the cause.
@@ -19,7 +20,7 @@ export const g1ErrorShape: TestCase = {
       { spreadsheet_id: `no-such-sheet-${ctx.stamp}`, range: "A1:B2" },
       { as: "sender" }
     );
-    const text = result.content.map((c) => c.text ?? "").join("").trim();
+    const text = resultText(result).trim();
     ctx.evidence(`answered isError=${result.isError === true}, ${text.length} characters`);
 
     if (!result.isError) throw new Error("a read of a spreadsheet that does not exist reported success");

@@ -1,6 +1,6 @@
 import type { TestCase } from "../types";
-import { firstArray, resultJson, resultText } from "../result-json";
-import { countSignatureBlocks, deliveredIds, partText, type MailPart } from "../mail-parts";
+import { resultJson, resultText } from "../result-json";
+import { countSignatureBlocks, deliveredFromSearch, partText, type MailPart } from "../mail-parts";
 
 /**
  * E15 (smoke row E15): a draft is signed WHEN WRITTEN, and sending
@@ -120,7 +120,7 @@ export const e15DraftSignature: TestCase = {
           );
           // DELIVERED only: with one mailbox, the other draft still waiting
           // to be sent carries this subject too.
-          return deliveredIds(firstArray(resultJson("gmail_search", found))).find((id) => !seen.has(id));
+          return deliveredFromSearch(found).find((id) => !seen.has(id));
         },
         { everyMs: 5_000, forMs: 120_000 }
       );

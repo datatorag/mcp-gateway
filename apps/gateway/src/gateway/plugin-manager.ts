@@ -16,7 +16,7 @@ import type { McpGatewayManifest } from "@datatorag-mcp/types";
 import type { ConnectionPool } from "./pool";
 import { sendSlack } from "@/lib/slack";
 
-const PLUGINS_DIR = join(homedir(), ".datatorag", "plugins");
+export const PLUGINS_DIR = join(homedir(), ".datatorag", "plugins");
 const BASE_PORT = 40000;
 const SLUG_PATTERN = /^[a-z0-9][a-z0-9-]*$/;
 
