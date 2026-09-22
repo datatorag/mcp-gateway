@@ -1,7 +1,7 @@
 import type { TestCase } from "../types";
 import { resultJson } from "../result-json";
 
-type Attachment = { id?: string; filename?: string; size?: number; mimeType?: string; content?: string };
+type Attachment = { id?: string | number; filename?: string; size?: number; mimeType?: string; content?: string };
 
 /**
  * JR6 (Jira scenario): the attachment endpoint agrees with the issue.
@@ -52,8 +52,19 @@ export const jr6JiraAttachment: TestCase = {
       await ctx.call("atlassian-mcp__jira_get_attachment", { attachment_id: first.id }, { as: "atlassian" })
     );
 
-    if (direct.id !== first.id) {
+    /* THE SAME ATTACHMENT FIRST, THEN THE SAME TYPE, as two claims. Run 2
+     * reported "a different attachment" when it was the same one: Jira types
+     * the id as a string inside an issue and as a number from
+     * /attachment/ID, and the plugin passes both through, so `"10000"` met
+     * `10000`. That is still a disagreement a caller chaining the two tools
+     * will trip on, so it stays a failure, under its own name. */
+    if (String(direct.id) !== String(first.id)) {
       throw new Error("jira_get_attachment answered about a different attachment than the one asked for");
+    }
+    if (typeof direct.id !== typeof first.id) {
+      throw new Error(
+        `the two endpoints name the same attachment but type its id differently (${typeof first.id} in the issue, ${typeof direct.id} from the attachment endpoint)`
+      );
     }
     /* PRESENCE BEFORE EQUALITY. `undefined !== undefined` is false, so a
      * comparison alone is satisfied when BOTH sides lack the field. Both
