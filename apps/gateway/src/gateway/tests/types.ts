@@ -50,6 +50,14 @@ export const FIXTURE_KEYS = [
    * literal in a case, for the same reason every id is: this repo is public
    * and that tab belongs to a private sheet. */
   "queryTab",
+  /** A message in the reader mailbox carrying one attachment over 5 MiB,
+   * sent by hand, and that attachment's md5 as computed from the original
+   * file before it was sent. The md5 is a key because it is the second,
+   * independent source D15 compares Drive against: at that size the
+   * attachment cannot be fetched back through the connector, whose
+   * responses stop at 900 KB. */
+  "attachmentMessage",
+  "attachmentMd5",
 ] as const;
 export type FixtureKey = (typeof FIXTURE_KEYS)[number];
 
@@ -132,6 +140,12 @@ export interface TestCase {
    * tool it never called, so this cannot quietly overstate coverage. */
   covers: string[];
   accounts: AccountRole[];
+  /** The declared accounts must be DIFFERENT accounts. For a case whose
+   * claim is a comparison between two accounts, which one account mapped
+   * to both roles cannot make: the case skips and says so rather than
+   * failing on the configuration or passing on a comparison of a mailbox
+   * with itself. */
+  distinctAccounts?: true;
   fixtures?: FixtureKey[];
   /** Case ids whose shared output this one rides on. */
   needs?: string[];

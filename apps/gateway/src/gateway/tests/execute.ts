@@ -58,6 +58,53 @@ const PLUGINS_DIR = join(homedir(), ".datatorag", "plugins");
  */
 const PROBE_CONCURRENCY = 4;
 
+/**
+ * Which roles may run each plugin's tools.
+ *
+ * A PLUGIN CALL WITH NO `account` RUNS AS THE DEFAULT ACCOUNT, and on the
+ * machine this suite runs on the default Google account is a real person's.
+ * So the account is never optional and never inferred: it comes from the
+ * mapping, for a role this plugin accepts, or the call does not happen. The
+ * pairing matters as much as the presence. `atlassian` maps to an address
+ * too, and handed to a Google tool it would select whatever Google account
+ * shares it.
+ */
+export const PLUGIN_ROLES: Record<string, readonly AccountRole[]> = {
+  "gws-mcp": ["sender", "reader"],
+  "atlassian-mcp": ["atlassian"],
+};
+
+/** The role a contract probe of this plugin runs as. */
+const PROBE_ROLE: Record<string, AccountRole> = { "gws-mcp": "sender", "atlassian-mcp": "atlassian" };
+
+/**
+ * `args` with the mapped `account` for `role`, or a throw.
+ *
+ * EVERY plugin call in this runner goes through here, and a source test
+ * holds that: the send guard's lookups, the contract probes and every
+ * case call. A built-in (an unnamespaced name) takes no account and gets
+ * `args` back unchanged.
+ */
+export function accountArgs(
+  fixtures: Pick<ReturnType<typeof parseFixtureMap>, "account">,
+  tool: string,
+  args: Record<string, unknown>,
+  role: AccountRole
+): Record<string, unknown> {
+  if (!tool.includes("__")) return { ...args };
+  const slug = tool.slice(0, tool.indexOf("__"));
+  const allowed = PLUGIN_ROLES[slug];
+  if (!allowed) throw new Error(`${tool}: no role is allowed to run ${slug} tools, so it is not called`);
+  if (!allowed.includes(role)) {
+    throw new Error(`${tool}: runs as ${allowed.join(" or ")}, never as ${role}`);
+  }
+  const account = fixtures.account(role);
+  if (!account) {
+    throw new Error(`${tool}: no account is mapped for ${role}, and a plugin call never falls back to the default`);
+  }
+  return { ...args, account };
+}
+
 export type RunnerClient = {
   listTools(): Promise<{ name: string; inputSchema?: Record<string, unknown> }[]>;
   callTool(name: string, args: Record<string, unknown>): Promise<{
@@ -393,6 +440,21 @@ async function driveRun(opts: {
         failed.add(testCase.id);
         continue;
       }
+      const sameAccount = sharedAccountsFor(testCase, fixtures);
+      if (sameAccount.length > 0) {
+        await record({
+          caseId: testCase.id,
+          kind: "case",
+          status: "skip",
+          cleanup: "none_needed",
+          durationMs: 0,
+          evidence: [
+            `${sameAccount.join(" and ")} map to the same account this run, and this case compares two different accounts`,
+          ],
+        });
+        failed.add(testCase.id);
+        continue;
+      }
       runnable.push(testCase);
     }
 
@@ -500,7 +562,13 @@ async function driveRun(opts: {
           if (!tool) return;
           const started = Date.now();
           const outcome = await checkContract(contractSubjectFor(tool), async (name) => {
-            const result = await client.callTool(name, {});
+            /* `{}` apart from the account. A read handler that ignores its
+             * required argument would otherwise run on the default account. */
+            const slug = name.includes("__") ? name.slice(0, name.indexOf("__")) : "";
+            const result = await client.callTool(
+              name,
+              accountArgs(fixtures, name, {}, PROBE_ROLE[slug] ?? "sender")
+            );
             return { content: result.content, isError: result.isError };
           });
           await record({
@@ -722,9 +790,6 @@ export function makeContextParts(opts: {
    * coincidence. Built per call now, for the role that call runs as.
    */
   const lookupsFor = (role: AccountRole): GuardLookups => {
-    const account = fixtures.account(role);
-    const withAccount = (extra: Record<string, unknown>) =>
-      account ? { ...extra, account } : { ...extra };
     return {
       /* A DRAFT ID IS NOT A MESSAGE ID: `gmail_read` is
        * `users.messages.get` underneath and errors on a draft id, so this
@@ -734,19 +799,24 @@ export function makeContextParts(opts: {
       async readDraft(draftId) {
         const result = await client.callTool(
           "gws-mcp__gws_run",
-          withAccount({
-            service: "gmail",
-            resource: "users.drafts",
-            method: "get",
-            params: { userId: "me", id: draftId, format: "metadata" },
-          })
+          accountArgs(
+            fixtures,
+            "gws-mcp__gws_run",
+            {
+              service: "gmail",
+              resource: "users.drafts",
+              method: "get",
+              params: { userId: "me", id: draftId, format: "metadata" },
+            },
+            role
+          )
         );
         return parseHeaders(result);
       },
       async readMessage(messageId) {
         const result = await client.callTool(
           "gws-mcp__gmail_read",
-          withAccount({ message_id: messageId })
+          accountArgs(fixtures, "gws-mcp__gmail_read", { message_id: messageId }, role)
         );
         return parseHeaders(result);
       },
@@ -764,11 +834,12 @@ export function makeContextParts(opts: {
   /** The ONE place a tool is dispatched: account injection, then the send
    * guard, then the call. Everything the context offers goes through it. */
   const dispatch = async (tool: string, args: Record<string, unknown>, role: AccountRole) => {
-    const isPluginTool = tool.includes("__");
-    const account = isPluginTool ? fixtures.account(role) : null;
-    const withAccount = account ? { ...args, account } : { ...args };
-
-    const verdict = await checkSend(tool, withAccount, {
+    /* BUILT ONCE, and the same object is checked and sent. Built twice, a
+     * caller changing its own `args` while the guard awaited a lookup
+     * would send something the guard never saw. Deep-copied so a nested
+     * `params` cannot be changed underneath it either. */
+    const sent = accountArgs(fixtures, tool, structuredClone(args), role);
+    const verdict = await checkSend(tool, sent, {
       readerEmail: fixtures.account("reader"),
       senderEmail: fixtures.account("sender"),
       // The role this call runs as, so the guard reads the mailbox the tool
@@ -777,7 +848,7 @@ export function makeContextParts(opts: {
       trashable,
     });
     if (!verdict.ok) throw new Error(verdict.reason);
-    return client.callTool(tool, withAccount);
+    return client.callTool(tool, sent);
   };
 
   return {
@@ -963,6 +1034,22 @@ function parseHeaders(result: { content: { text?: string }[]; isError?: boolean 
   }
 }
 
+
+/** The declared roles that share an account with another declared role,
+ * for a case that says its accounts must differ. Empty otherwise. */
+export function sharedAccountsFor(
+  testCase: { accounts: AccountRole[]; distinctAccounts?: true },
+  fixtures: Pick<ReturnType<typeof parseFixtureMap>, "account">
+): AccountRole[] {
+  if (!testCase.distinctAccounts) return [];
+  const byAddress = new Map<string, AccountRole[]>();
+  for (const role of testCase.accounts) {
+    const address = fixtures.account(role);
+    if (address === null) continue;
+    byAddress.set(address, [...(byAddress.get(address) ?? []), role]);
+  }
+  return [...byAddress.values()].filter((roles) => roles.length > 1).flat();
+}
 
 /**
  * The plugins to record a sha for, from the REGISTRY rather than a list in

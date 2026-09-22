@@ -1,6 +1,5 @@
-import { createHash } from "node:crypto";
 import type { TestCase } from "../types";
-import { firstArray, resultJson, resultText } from "../result-json";
+import { resultJson, resultText } from "../result-json";
 
 /**
  * D15 (smoke row D15): an attachment saved to Drive is THE SAME
@@ -11,10 +10,18 @@ import { firstArray, resultJson, resultText } from "../result-json";
  * rewrite of a byte path is exactly where a truncation or an encoding slip
  * hides: the file arrives, it opens, and it is subtly not the original.
  *
+ * THE ATTACHMENT IS A FIXTURE, OVER 5 MiB, sent by hand. A search for
+ * "any message with an attachment" tested whatever the mailbox happened to
+ * hold, which on a test account is nothing, and a small file never reaches
+ * the part of a streamed path that a large one does.
+ *
  * TWO INDEPENDENT SOURCES, ONE BYTE IDENTITY. Size from the Gmail part list
- * against size from Drive, and then the attachment's own bytes fetched
- * separately, decoded here, and md5'd against the checksum Drive computed.
- * Comparing Drive to itself would pass on any consistent corruption.
+ * against size from Drive, and Drive's md5 against the md5 of the ORIGINAL
+ * FILE, computed before it was sent and held as a fixture key. The earlier
+ * second source fetched the attachment back through `gws_run` and hashed
+ * it here; at this size that response is cut at 900 KB, so it would hash a
+ * prefix and fail on a correct save. Comparing Drive to itself would pass
+ * on any consistent corruption, which is why the md5 comes from outside.
  *
  * Everything it reads is ours and it reads only: the one write is the save,
  * which this case deletes.
@@ -23,7 +30,6 @@ export const d15AttachmentBytes: TestCase = {
   id: "D15",
   title: "an attachment saved to Drive matches the original in size and md5",
   covers: [
-    "gws-mcp__gmail_search",
     "gws-mcp__gmail_read",
     "gws-mcp__gmail_save_attachment_to_drive",
     // Drive metadata comes through gws_run, not drive_search: the size and
@@ -31,38 +37,32 @@ export const d15AttachmentBytes: TestCase = {
     "gws-mcp__gws_run",
     "gws-mcp__docs_delete",
   ],
-  accounts: ["sender"],
-  fixtures: ["folder"],
+  accounts: ["reader"],
+  fixtures: ["folder", "attachmentMessage", "attachmentMd5"],
   run: async (ctx) => {
-    const found = await ctx.call(
-      "gws-mcp__gmail_search",
-      { query: "has:attachment smaller:1M", max_results: 5 },
-      { as: "sender" }
-    );
-    const candidates = (firstArray(resultJson("gmail_search", found)) ?? []) as { id?: string }[];
-    if (candidates.length === 0) throw new Error("no message with an attachment is available to test");
+    const messageId = ctx.fixture("attachmentMessage");
+    const expectedMd5 = ctx.fixture("attachmentMd5").toLowerCase();
 
-    // The first message that really carries an attachment part with an id.
-    let messageId: string | undefined;
-    let part: { attachmentId?: string; filename?: string; size?: number } | undefined;
-    for (const candidate of candidates) {
-      if (!candidate.id) continue;
-      const read = await ctx.call("gws-mcp__gmail_read", { message_id: candidate.id }, { as: "sender" });
-      const body = resultJson<{ attachments?: { attachmentId?: string; filename?: string; size?: number }[] }>(
-        "gmail_read",
-        read
+    const read = await ctx.call("gws-mcp__gmail_read", { message_id: messageId }, { as: "reader" });
+    if (read.isError) throw new Error(`the fixture message could not be read: ${resultText(read).slice(0, 200)}`);
+    const body = resultJson<{ attachments?: { attachmentId?: string; filename?: string; size?: number }[] }>(
+      "gmail_read",
+      read
+    );
+    if (!Array.isArray(body.attachments)) {
+      throw new Error("gmail_read returned no attachments list for the fixture message, so its shape was not read");
+    }
+    const withId = body.attachments.filter((a) => a && a.attachmentId && (a.size ?? 0) > 0);
+    if (withId.length !== 1) {
+      throw new Error(
+        `the fixture message carries ${withId.length} attachments with an id and a size, where it should carry exactly one`
       );
-      const withId = (body.attachments ?? []).find((a) => a.attachmentId && (a.size ?? 0) > 0);
-      if (withId) {
-        messageId = candidate.id;
-        part = withId;
-        break;
-      }
     }
-    if (!messageId || !part?.attachmentId) {
-      throw new Error("none of the candidate messages exposes an attachment with an id and a size");
-    }
+    const part = withId[0];
     ctx.evidence(`the source attachment is ${part.size} bytes according to Gmail`);
+    if ((part.size ?? 0) <= 5 * 1024 * 1024) {
+      throw new Error(`the fixture attachment is ${part.size} bytes, not over 5 MiB, so the large path is not exercised`);
+    }
 
     const saved = await ctx.call(
       "gws-mcp__gmail_save_attachment_to_drive",
@@ -75,7 +75,7 @@ export const d15AttachmentBytes: TestCase = {
         // fixture folder, which is a containment miss nothing would report.
         parent_folder_id: ctx.fixture("folder"),
       },
-      { as: "sender" }
+      { as: "reader" }
     );
     if (saved.isError) throw new Error(`the save failed: ${resultText(saved).slice(0, 200)}`);
     const fileId = resultJson<{ id?: string; fileId?: string }>("gmail_save_attachment_to_drive", saved).id
@@ -83,7 +83,7 @@ export const d15AttachmentBytes: TestCase = {
     if (!fileId) throw new Error("the save returned no file id, so nothing can be verified or cleaned up");
 
     ctx.defer("delete the saved attachment", async () => {
-      await ctx.call("gws-mcp__docs_delete", { document_id: fileId }, { as: "sender" });
+      await ctx.call("gws-mcp__docs_delete", { document_id: fileId }, { as: "reader" });
     });
 
     const meta = resultJson<{ size?: string | number; md5Checksum?: string }>(
@@ -96,7 +96,7 @@ export const d15AttachmentBytes: TestCase = {
           method: "get",
           params: { fileId, fields: "id,size,md5Checksum" },
         },
-        { as: "sender" }
+        { as: "reader" }
       )
     );
     const driveSize = Number(meta.size ?? NaN);
@@ -106,27 +106,9 @@ export const d15AttachmentBytes: TestCase = {
     }
     if (!meta.md5Checksum) throw new Error("Drive returned no md5 for the saved file, so identity cannot be checked");
 
-    // THE SECOND, INDEPENDENT SOURCE: the attachment's own bytes.
-    const raw = resultJson<{ data?: string }>(
-      "gws_run",
-      await ctx.call(
-        "gws-mcp__gws_run",
-        {
-          service: "gmail",
-          resource: "users.messages.attachments",
-          method: "get",
-          params: { userId: "me", messageId, id: part.attachmentId },
-        },
-        { as: "sender" }
-      )
-    );
-    if (!raw.data) throw new Error("the attachment fetch returned no data to compare");
-    const bytes = Buffer.from(raw.data.replace(/-/g, "+").replace(/_/g, "/"), "base64");
-    const md5 = createHash("md5").update(bytes).digest("hex");
-    ctx.evidence(`decoded ${bytes.length} bytes locally; md5 agrees with Drive: ${md5 === meta.md5Checksum}`);
-
-    if (md5 !== meta.md5Checksum) {
-      throw new Error("the bytes in Drive are not the bytes in the mailbox, so the save path corrupts the file");
+    ctx.evidence(`Drive's md5 agrees with the original file's: ${meta.md5Checksum.toLowerCase() === expectedMd5}`);
+    if (meta.md5Checksum.toLowerCase() !== expectedMd5) {
+      throw new Error("the bytes in Drive are not the bytes of the original file, so the save path corrupts it");
     }
   },
 };

@@ -14,6 +14,9 @@ export const b2TwoAccounts: TestCase = {
   title: "the same tool answers differently for two accounts",
   covers: ["gws-mcp__gmail_list_labels"],
   accounts: ["sender", "reader"],
+  /* With one Google account behind both roles there is no second account
+   * to compare, and the payloads would be identical by construction. */
+  distinctAccounts: true,
   run: async (ctx) => {
     const first = await ctx.call("gws-mcp__gmail_list_labels", {}, { as: "sender" });
     const second = await ctx.call("gws-mcp__gmail_list_labels", {}, { as: "reader" });

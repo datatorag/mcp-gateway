@@ -13,7 +13,7 @@
  */
 
 import { describe, expect, it } from "vitest";
-import { makeContextParts, startTestRun, contractSubjectFor, coverageMismatch, missingMappingsFor, selectCases, unservedToolsFor, pluginsBlocking } from "./execute";
+import { makeContextParts, startTestRun, contractSubjectFor, coverageMismatch, missingMappingsFor, selectCases, unservedToolsFor, pluginsBlocking, sharedAccountsFor } from "./execute";
 import { parseFixtureMap } from "./fixtures";
 import { vi } from "vitest";
 import type { TestCase } from "./types";
@@ -238,6 +238,30 @@ describe("missingMappingsFor", () => {
   });
 });
 
+describe("a case whose accounts must differ", () => {
+  const one = parseFixtureMap(
+    JSON.stringify({ accounts: { sender: "same@example.test", reader: "same@example.test" } })
+  );
+  const two = parseFixtureMap(
+    JSON.stringify({ accounts: { sender: "s@example.test", reader: "r@example.test" } })
+  );
+
+  it("names the roles that share an account", () => {
+    expect(sharedAccountsFor({ accounts: ["sender", "reader"], distinctAccounts: true }, one)).toEqual([
+      "sender",
+      "reader",
+    ]);
+  });
+
+  it("says nothing when the accounts differ", () => {
+    expect(sharedAccountsFor({ accounts: ["sender", "reader"], distinctAccounts: true }, two)).toEqual([]);
+  });
+
+  it("says nothing for a case that never asked, so one account behind two roles runs it", () => {
+    expect(sharedAccountsFor({ accounts: ["sender", "reader"] }, one)).toEqual([]);
+  });
+});
+
 describe("the context a case is handed", () => {
   const fixtures = parseFixtureMap(
     JSON.stringify({ accounts: { sender: "sender@example.test", reader: "reader@example.test" } })
@@ -330,6 +354,53 @@ describe("the context a case is handed", () => {
   it("throws for a fixture this run has no mapping for", () => {
     const parts = makeContextParts({ client: makeClient(), fixtures, called: [] });
     expect(() => parts.fixture("sheet")).toThrow(/no fixture is mapped/);
+  });
+
+  /* THE DEFAULT ACCOUNT IS A REAL PERSON'S. A plugin call that reaches the
+   * gateway without `account` runs as it, so each way of getting there
+   * without one is refused before the client is touched. */
+  it("REFUSES a plugin call for a role with no mapped account", async () => {
+    const client = makeClient();
+    const parts = makeContextParts({ client, fixtures, called: [] });
+    await expect(
+      parts.call("atlassian-mcp__jira_search", { jql: "x" }, { as: "atlassian" })
+    ).rejects.toThrow(/no account is mapped for atlassian/);
+    expect(client.callTool).not.toHaveBeenCalled();
+  });
+
+  it("REFUSES a Google tool run as the atlassian role, and the reverse", async () => {
+    const mapped = parseFixtureMap(
+      JSON.stringify({ accounts: { sender: "s@example.test", atlassian: "a@example.test" } })
+    );
+    const client = makeClient();
+    const parts = makeContextParts({ client, fixtures: mapped, called: [] });
+    await expect(parts.call("gws-mcp__sheets_read", {}, { as: "atlassian" })).rejects.toThrow(
+      /never as atlassian/
+    );
+    await expect(parts.call("atlassian-mcp__jira_search", {}, { as: "sender" })).rejects.toThrow(
+      /never as sender/
+    );
+    expect(client.callTool).not.toHaveBeenCalled();
+  });
+
+  it("REFUSES a tool from a plugin no role is allowed to run", async () => {
+    const client = makeClient();
+    const parts = makeContextParts({ client, fixtures, called: [] });
+    await expect(parts.call("other-mcp__thing", {})).rejects.toThrow(/no role is allowed/);
+    expect(client.callTool).not.toHaveBeenCalled();
+  });
+
+  it("gives the send guard's own lookups the account too", async () => {
+    // The guard reads the draft before `gmail_send_draft` is allowed. That
+    // read is a plugin call like any other and used to fall back to the
+    // default when the role was unmapped.
+    const client = makeClient();
+    const parts = makeContextParts({ client, fixtures, called: [] });
+    await parts.call("gws-mcp__gmail_send_draft", { draft_id: "d1" }, { as: "reader" }).catch(() => {});
+    for (const [, args] of client.callTool.mock.calls) {
+      expect(args).toMatchObject({ account: "reader@example.test" });
+    }
+    expect(client.callTool.mock.calls.length).toBeGreaterThan(0);
   });
 });
 
