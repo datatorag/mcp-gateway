@@ -207,6 +207,18 @@ describe("coverageMismatch", () => {
     expect(problem).toContain("never called it");
   });
 
+  it("allows a cleanup-only tool to be called, or not", () => {
+    // D11: the delete runs only when a sent draft survives the send.
+    expect(coverageMismatch(["gws-mcp__gmail_send_draft"], ["gws-mcp__gmail_send_draft"], ["gws-mcp__gmail_delete_draft"])).toEqual([]);
+    expect(
+      coverageMismatch(
+        ["gws-mcp__gmail_send_draft"],
+        ["gws-mcp__gmail_send_draft", "gws-mcp__gmail_delete_draft"],
+        ["gws-mcp__gmail_delete_draft"]
+      )
+    ).toEqual([]);
+  });
+
   it("catches a call the case never declared, which would read as uncovered", () => {
     // The quieter half: the tool is exercised and still reported uncovered,
     // so the suite understates itself and nobody notices.

@@ -24,11 +24,11 @@ export const e15DraftSignature: TestCase = {
     "gws-mcp__gmail_create_draft",
     "gws-mcp__gmail_update_draft",
     "gws-mcp__gmail_send_draft",
-    // Cleanup deletes a draft that was never sent.
-    "gws-mcp__gmail_delete_draft",
     "gws-mcp__gmail_search",
     "gws-mcp__gws_run",
   ],
+  // Cleanup deletes a draft that was never sent, which on a working run is none.
+  cleanupCalls: ["gws-mcp__gmail_delete_draft"],
   accounts: ["sender", "reader"],
   timeoutMs: 300_000,
   run: async (ctx) => {

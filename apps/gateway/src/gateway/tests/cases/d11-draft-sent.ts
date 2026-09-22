@@ -17,8 +17,11 @@ export const d11DraftSent: TestCase = {
     "gws-mcp__gmail_create_draft",
     "gws-mcp__gmail_send_draft",
     "gws-mcp__gmail_search",
-    "gws-mcp__gmail_delete_draft",
   ],
+  /* Only when a send left the draft behind. Gmail removes a draft it sends,
+   * so on a working run this is never called; declared in `covers` it
+   * failed every such run as "declared but never called". */
+  cleanupCalls: ["gws-mcp__gmail_delete_draft"],
   accounts: ["sender", "reader"],
   timeoutMs: 180_000,
   run: async (ctx) => {

@@ -521,7 +521,7 @@ async function driveRun(opts: {
       // declared would leave that tool reported as uncovered while a case
       // exercises it, which is the quieter of the two and the reason the
       // second half exists.
-      const mismatch = coverageMismatch(testCase.covers, called);
+      const mismatch = coverageMismatch(testCase.covers, called, testCase.cleanupCalls);
       if (outcome.status === "pass" && mismatch.length > 0) {
         return { ...outcome, status: "fail" as const, evidence: [...outcome.evidence, ...mismatch] };
       }
@@ -724,9 +724,13 @@ export function unservedToolsFor(
  * second half exists. An empty declaration is fine: a case about the gateway
  * itself exercises no tool.
  */
-export function coverageMismatch(covers: readonly string[], called: readonly string[]): string[] {
+export function coverageMismatch(
+  covers: readonly string[],
+  called: readonly string[],
+  cleanupCalls: readonly string[] = []
+): string[] {
   const declaredButUncalled = covers.filter((t) => !called.includes(t));
-  const calledButUndeclared = [...new Set(called)].filter((t) => !covers.includes(t));
+  const calledButUndeclared = [...new Set(called)].filter((t) => !covers.includes(t) && !cleanupCalls.includes(t));
   return [
     declaredButUncalled.length ? `declares ${declaredButUncalled.join(", ")} but never called it` : "",
     calledButUndeclared.length ? `called ${calledButUndeclared.join(", ")} without declaring it in covers` : "",

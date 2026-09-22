@@ -139,6 +139,13 @@ export interface TestCase {
    * also records what was actually called and fails a case that declares a
    * tool it never called, so this cannot quietly overstate coverage. */
   covers: string[];
+  /** Tools a case calls ONLY to clean up, when there is something left to
+   * clean. Allowed to be called, never required to be, and never counted
+   * as coverage: a delete that runs only when a send failed to consume the
+   * draft proves nothing about the delete on a run where it did not run.
+   * Declaring such a tool in `covers` failed D11 and E15 on every run in
+   * which the product worked, because the cleanup had nothing to do. */
+  cleanupCalls?: string[];
   accounts: AccountRole[];
   /** The declared accounts must be DIFFERENT accounts. For a case whose
    * claim is a comparison between two accounts, which one account mapped

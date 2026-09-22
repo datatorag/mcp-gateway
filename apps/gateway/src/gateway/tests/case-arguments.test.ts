@@ -191,8 +191,15 @@ describe("what a case declares and what it calls", () => {
       const covers = new Set(
         [...(block?.[1] ?? "").matchAll(/"([^"]+)"/g)].map((m) => m[1])
       );
+      // Cleanup-only tools may be called and need not be: see `cleanupCalls`.
+      const cleanupBlock = /cleanupCalls:\s*\[([^\]]*)\]/.exec(stripped);
+      const cleanup = new Set([...(cleanupBlock?.[1] ?? "").matchAll(/"([^"]+)"/g)].map((m) => m[1]));
+      for (const tool of cleanup) {
+        if (covers.has(tool)) problems.push(`${file} lists ${tool} as both covered and cleanup-only`);
+        if (!called.has(tool)) problems.push(`${file} lists ${tool} as cleanup-only but never calls it`);
+      }
       for (const tool of called) {
-        if (!covers.has(tool)) problems.push(`${file} calls ${tool} without declaring it`);
+        if (!covers.has(tool) && !cleanup.has(tool)) problems.push(`${file} calls ${tool} without declaring it`);
       }
       for (const tool of covers) {
         if (!called.has(tool)) problems.push(`${file} declares ${tool} but never calls it`);
