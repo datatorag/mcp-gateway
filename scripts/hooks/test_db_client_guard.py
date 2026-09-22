@@ -163,6 +163,10 @@ MUST_BLOCK = [
 
 MUST_PASS = [
     "pnpm --filter @datatorag-mcp/db db:migrate",
+    # The seed is a scripted write against whatever the local .env names, not
+    # ad hoc SQL, so it is allowed like the migration task (HQ, SCRUM-339).
+    "pnpm db:seed",
+    "pnpm --filter @datatorag-mcp/db db:seed",
     "grep psql README.md",
     "grep -rn 'psql' apps/gateway/src",
     "git log --grep psql",
