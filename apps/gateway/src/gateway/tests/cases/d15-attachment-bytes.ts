@@ -43,7 +43,14 @@ export const d15AttachmentBytes: TestCase = {
     const messageId = ctx.fixture("attachmentMessage");
     const expectedMd5 = ctx.fixture("attachmentMd5").toLowerCase();
 
-    const read = await ctx.call("gws-mcp__gmail_read", { message_id: messageId }, { as: "reader" });
+    /* `text_only`, because only the flattened view lists attachments. The
+     * raw resource carries them as parts, and reading `attachments` off it
+     * found nothing, which run 2 reported as a message without them. */
+    const read = await ctx.call(
+      "gws-mcp__gmail_read",
+      { message_id: messageId, text_only: true },
+      { as: "reader" }
+    );
     if (read.isError) throw new Error(`the fixture message could not be read: ${resultText(read).slice(0, 200)}`);
     const body = resultJson<{ attachments?: { attachmentId?: string; filename?: string; size?: number }[] }>(
       "gmail_read",

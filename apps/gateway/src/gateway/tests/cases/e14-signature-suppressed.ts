@@ -1,6 +1,6 @@
 import type { TestCase } from "../types";
 import { resultJson, resultText } from "../result-json";
-import { deliveredFromSearch } from "../mail-parts";
+import { decodePart, deliveredFromSearch, flattenParts, type MailPart } from "../mail-parts";
 
 /**
  * E14 (smoke row E14): `signature: false` must SUPPRESS, and the
@@ -65,9 +65,17 @@ export const e14SignatureSuppressed: TestCase = {
       throw new Error("the send does not report the signature as suppressed, so a caller cannot tell the flag worked");
     }
 
-    const body = resultText(
+    /* EVERY PART, DECODED. This searched the raw resource's JSON, where part
+     * bodies are base64, so a signature element could never have matched and
+     * the check could not fail. The token was found only through Gmail's
+     * snippet. Both now read the decoded text of every part. */
+    const message = resultJson<{ payload?: MailPart }>(
+      "gmail_read",
       await ctx.call("gws-mcp__gmail_read", { message_id: received }, { as: "reader" })
     );
+    const parts = flattenParts(message.payload);
+    if (parts.length === 0) throw new Error("gmail_read returned no message payload, so no part could be read");
+    const body = parts.map((p) => decodePart(p.body?.data)).join("\n");
     if (/gmail_signature/.test(body)) {
       throw new Error("the delivered message carries a gmail_signature element despite signature false");
     }
