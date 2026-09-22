@@ -256,6 +256,19 @@ export const SCENARIOS: Scenario[] = [
       "C6", // the fixture deck has exactly one slide with its control title
     ],
   },
+  {
+    key: "confluence",
+    title: "find a page, write one, comment on it, take it down",
+    steps: [
+      /* The two reads come first: a failure in them is the connector or the
+       * space rather than anything this scenario wrote. */
+      "C8",  // a bounded CQL search returns content from our own space
+      "CF3", // a page listing of the fixture space answers addressably
+      "CF1", // a page is created, edited, and deleted, and a later read refused
+      "CF2", // a comment added to a page is visible to a later read
+      "CF4", // an attachment named by CQL is found by the attachment endpoint
+    ],
+  },
 ];
 
 /**
@@ -289,8 +302,6 @@ export const UNCOVERED_ON_PURPOSE: Record<string, string> = {
  * it cannot yet do is be selected by scenario, because it is not in one.
  */
 export const REGROUP_PENDING: string[] = [
-  // confluence
-  "C8",
   // skills
   "C13",
 ];

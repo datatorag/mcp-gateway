@@ -76,6 +76,10 @@ import { tk1TasksLifecycle } from "./tk1-tasks-lifecycle";
 import { co1ContactsLifecycle } from "./co1-contacts-lifecycle";
 import { co2ContactsSearch } from "./co2-contacts-search";
 import { co3ContactsDirectory } from "./co3-contacts-directory";
+import { cf1ConfluencePage } from "./cf1-confluence-page";
+import { cf2ConfluenceComments } from "./cf2-confluence-comments";
+import { cf3ConfluenceList } from "./cf3-confluence-list";
+import { cf4ConfluenceAttachment } from "./cf4-confluence-attachment";
 import { r1FrontDoor } from "./r1-front-door";
 import { r2AdminOnly } from "./r2-admin-only";
 
@@ -192,6 +196,10 @@ export const CASES: TestCase[] = [
   co1ContactsLifecycle,
   co2ContactsSearch,
   co3ContactsDirectory,
+  cf1ConfluencePage,
+  cf2ConfluenceComments,
+  cf3ConfluenceList,
+  cf4ConfluenceAttachment,
   r1FrontDoor,
   r2AdminOnly,
 ];

@@ -39,6 +39,12 @@ export const FIXTURE_KEYS = [
    * issue belong to our tenant and this repo is public. */
   "jiraProject",
   "jiraAttachmentIssue",
+  /** The Confluence space new pages are created in, and the page carrying
+   * the standing attachment. The attachment's own filename is NEVER a key
+   * or a literal: it was uploaded by hand and contains a character that
+   * does not survive retyping, so CF4 derives it with a CQL search. */
+  "confluenceSpace",
+  "confluenceAttachmentPage",
   "querySheet",
   /** The TAB inside `querySheet` that C12 runs over. A key rather than a
    * literal in a case, for the same reason every id is: this repo is public
