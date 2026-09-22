@@ -242,6 +242,20 @@ export const SCENARIOS: Scenario[] = [
       "CO3", // the org directory read answers addressably
     ],
   },
+  {
+    key: "slides",
+    title: "make a deck, put something on it, read it back, throw it away",
+    steps: [
+      /* THIN AND ALREADY WHOLE. Both cases predate the regroup and between
+       * them they cover all four slides tools, so this scenario adds no
+       * step: it gives the two a home and an order. D6 owns its whole arc
+       * on a deck it creates, so it runs first; C6 reads the standing
+       * fixture deck, declares no `needs` and shares nothing, so it could
+       * run anywhere. */
+      "D6", // a deck is created, its title placeholder filled, read back, deleted
+      "C6", // the fixture deck has exactly one slide with its control title
+    ],
+  },
 ];
 
 /**
@@ -275,8 +289,6 @@ export const UNCOVERED_ON_PURPOSE: Record<string, string> = {
  * it cannot yet do is be selected by scenario, because it is not in one.
  */
 export const REGROUP_PENDING: string[] = [
-  // slides
-  "C6", "D6",
   // confluence
   "C8",
   // skills

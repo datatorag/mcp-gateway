@@ -11,9 +11,13 @@ import { resultJson } from "../result-json";
  * deck is created where the tool puts it and deleted by this case, proven by
  * a read that must fail.
  */
+/* THE TITLE SAID "given a text box" and no text box is created: the one
+ * request this case sends is an `insertText` against the title placeholder
+ * the create call itself reported. A title is what somebody reads when a
+ * step goes red, so it has to name what the step does. */
 export const d6SlidesRoundTrip: TestCase = {
   id: "D6",
-  title: "a deck is created, given a text box, read back and deleted",
+  title: "a deck is created, its own title placeholder filled in, read back and deleted",
   covers: [
     "gws-mcp__slides_create",
     "gws-mcp__slides_batch_update",
