@@ -30,6 +30,10 @@ export const FIXTURE_KEYS = [
   "doc",
   "deck",
   "calendarEvent",
+  /** A tasklist made for this suite. The connector can create a tasklist
+   * and cannot delete one, so cases never make their own: residue would be
+   * permanent and would land in whatever list a real person uses. */
+  "tasklist",
   /** The Jira project new issues are created in, and the issue carrying the
    * standing attachment. Keys rather than literals: the project and the
    * issue belong to our tenant and this repo is public. */

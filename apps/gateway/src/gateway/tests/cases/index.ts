@@ -72,6 +72,7 @@ import { jr4JiraComments } from "./jr4-jira-comments";
 import { jr5JiraTransitions } from "./jr5-jira-transitions";
 import { jr6JiraAttachment } from "./jr6-jira-attachment";
 import { jr7JiraKeyRefused } from "./jr7-jira-key-refused";
+import { tk1TasksLifecycle } from "./tk1-tasks-lifecycle";
 import { r1FrontDoor } from "./r1-front-door";
 import { r2AdminOnly } from "./r2-admin-only";
 
@@ -184,6 +185,7 @@ export const CASES: TestCase[] = [
   jr5JiraTransitions,
   jr6JiraAttachment,
   jr7JiraKeyRefused,
+  tk1TasksLifecycle,
   r1FrontDoor,
   r2AdminOnly,
 ];

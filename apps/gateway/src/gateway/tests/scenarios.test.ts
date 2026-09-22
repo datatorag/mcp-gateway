@@ -20,6 +20,7 @@ import {
   SCENARIO_KEYS,
   scenarioOf,
   stepNumber,
+  UNCOVERED_ON_PURPOSE,
 } from "./scenarios";
 import { sendsMail } from "@/app/dashboard/admin/tests/runs-panel";
 
@@ -162,5 +163,27 @@ describe("what the everything-run warns about", () => {
       if (placed) expect(gmail?.sendsMail, "gmail holds mail cases and must say it sends").toBe(true);
     }
     expect(sendsMail("all"), "a run that includes the mail cases must warn").toBe(true);
+  });
+});
+
+describe("tools uncovered on purpose", () => {
+  /* NOT "a served tool": the served list exists only at run time, so a
+   * misspelled key would pass this and quietly excuse nothing while the
+   * real tool reappears as an unexplained gap. Fail-safe, but the title
+   * must not claim the check it cannot make here. */
+  it("names a namespaced tool and gives a reason with substance", () => {
+    for (const [tool, why] of Object.entries(UNCOVERED_ON_PURPOSE)) {
+      /* A NAMESPACED TOOL, so an entry cannot quietly excuse a tool that
+       * does not exist, which is how such a list stops meaning anything. */
+      expect(tool).toMatch(/^[a-z0-9-]+__[a-z0-9_]+$/);
+      expect(why.length).toBeGreaterThan(40);
+    }
+  });
+
+  it("does not excuse a tool a case already covers", () => {
+    const covered = new Set(CASES.flatMap((c) => c.covers));
+    for (const tool of Object.keys(UNCOVERED_ON_PURPOSE)) {
+      expect(covered.has(tool), `${tool} is both covered and excused`).toBe(false);
+    }
   });
 });

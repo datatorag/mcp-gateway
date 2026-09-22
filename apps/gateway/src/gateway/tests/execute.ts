@@ -1,4 +1,4 @@
-import { SCENARIOS, scenario, scenarioOf } from "./scenarios";
+import { SCENARIOS, scenario, scenarioOf, UNCOVERED_ON_PURPOSE } from "./scenarios";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import type { Database, TestRunScope, TestRunTotals } from "@datatorag-mcp/db";
@@ -524,13 +524,19 @@ async function driveRun(opts: {
     const uncoveredStarted = Date.now();
     for (const tool of served) {
       if (covered.has(tool.name)) continue;
+      /* A DECISION AND A GAP READ THE SAME in a list of uncovered tools, so
+       * the ones that are decisions say so here rather than in a commit
+       * message nobody has open while looking at the run. */
+      const onPurpose = UNCOVERED_ON_PURPOSE[tool.name];
       await record({
         caseId: `uncovered:${tool.name}`,
         kind: "uncovered",
         status: "uncovered",
         cleanup: "none_needed",
         durationMs: 0,
-        evidence: ["no registered case declares this tool in its covers"],
+        evidence: onPurpose
+          ? [`uncovered on purpose: ${onPurpose}`]
+          : ["no registered case declares this tool in its covers"],
       });
     }
 

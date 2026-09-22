@@ -224,7 +224,33 @@ export const SCENARIOS: Scenario[] = [
       "JR7", // a delete is refused locally when the key is not a jira key
     ],
   },
+  {
+    key: "tasks",
+    title: "see the lists, then make a task, rename it, finish it, remove it",
+    steps: [
+      "C10", // the first page of tasklists answers with a list shape
+      "TK1", // a task is created, renamed, completed and deleted
+    ],
+  },
 ];
+
+/**
+ * Tools NOBODY WILL COVER, and why.
+ *
+ * An uncovered tool is normally a gap: a step the lifecycle forgot. A few
+ * are decisions instead, and the two look identical in a run's output
+ * unless the decision is written down. Without this, the reason lives in a
+ * commit message nobody reads while looking at a red dashboard, and the
+ * next person to notice the gap closes it by writing the case the reason
+ * says not to write.
+ *
+ * An entry is a claim that covering the tool would be WORSE than not, and
+ * it has to say why in terms a reader can check.
+ */
+export const UNCOVERED_ON_PURPOSE: Record<string, string> = {
+  "gws-mcp__tasks_create_tasklist":
+    "creates what the connector cannot delete: no tasks tool removes a tasklist, and gws_run is read-only for every service, so a case covering this would leave one list behind on every run",
+};
 
 /**
  * Cases regrouped into a scenario, one scenario per commit, in map order.
@@ -239,8 +265,6 @@ export const SCENARIOS: Scenario[] = [
  * it cannot yet do is be selected by scenario, because it is not in one.
  */
 export const REGROUP_PENDING: string[] = [
-  // tasks
-  "C10",
   // contacts
   "C9",
   // slides

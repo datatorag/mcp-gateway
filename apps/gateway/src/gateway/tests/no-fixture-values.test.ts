@@ -102,3 +102,25 @@ describe("the runner's own source", () => {
     expect(Array.isArray(values)).toBe(true);
   });
 });
+
+/**
+ * The shape an operator copies has to be the shape the code reads.
+ *
+ * `.env.example` carries a commented example of `TEST_RUNNER_FIXTURES` with
+ * every value elided, and it is the only description of that variable
+ * anybody setting the suite up will see. It had drifted THREE KEYS behind
+ * `FIXTURE_KEYS` before anything noticed, because nothing compared them:
+ * each new key was added to the code and to SSM, and the file an operator
+ * copies from kept describing the old shape. A mapping built from it would
+ * skip every case needing a missing key, naming a mapping the operator had
+ * no reason to think they needed.
+ */
+describe("the documented fixture shape", () => {
+  it("lists exactly the keys FIXTURE_KEYS declares, in order", () => {
+    const example = readFileSync(join(import.meta.dirname, "../../../../../.env.example"), "utf8");
+    const shape = example.slice(example.indexOf('"fixtures":{'));
+    const listed = [...shape.matchAll(/"(\w+)":""/g)].map((m) => m[1]);
+    expect(listed.length).toBeGreaterThan(0);
+    expect(listed).toEqual([...FIXTURE_KEYS]);
+  });
+});
