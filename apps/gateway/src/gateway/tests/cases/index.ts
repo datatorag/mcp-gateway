@@ -73,6 +73,9 @@ import { jr5JiraTransitions } from "./jr5-jira-transitions";
 import { jr6JiraAttachment } from "./jr6-jira-attachment";
 import { jr7JiraKeyRefused } from "./jr7-jira-key-refused";
 import { tk1TasksLifecycle } from "./tk1-tasks-lifecycle";
+import { co1ContactsLifecycle } from "./co1-contacts-lifecycle";
+import { co2ContactsSearch } from "./co2-contacts-search";
+import { co3ContactsDirectory } from "./co3-contacts-directory";
 import { r1FrontDoor } from "./r1-front-door";
 import { r2AdminOnly } from "./r2-admin-only";
 
@@ -186,6 +189,9 @@ export const CASES: TestCase[] = [
   jr6JiraAttachment,
   jr7JiraKeyRefused,
   tk1TasksLifecycle,
+  co1ContactsLifecycle,
+  co2ContactsSearch,
+  co3ContactsDirectory,
   r1FrontDoor,
   r2AdminOnly,
 ];

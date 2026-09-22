@@ -232,6 +232,16 @@ export const SCENARIOS: Scenario[] = [
       "TK1", // a task is created, renamed, completed and deleted
     ],
   },
+  {
+    key: "contacts",
+    title: "add somebody, correct the entry, look them up, remove them",
+    steps: [
+      "C9",  // the first page of contacts answers with a list shape
+      "CO1", // a contact is created, renamed, deleted, and a later get refused
+      "CO2", // a contact search answers addressably
+      "CO3", // the org directory read answers addressably
+    ],
+  },
 ];
 
 /**
@@ -265,8 +275,6 @@ export const UNCOVERED_ON_PURPOSE: Record<string, string> = {
  * it cannot yet do is be selected by scenario, because it is not in one.
  */
 export const REGROUP_PENDING: string[] = [
-  // contacts
-  "C9",
   // slides
   "C6", "D6",
   // confluence
