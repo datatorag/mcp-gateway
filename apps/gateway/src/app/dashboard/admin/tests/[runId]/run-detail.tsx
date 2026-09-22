@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import type { ResultsPage, RunStatus } from "@/gateway/tests/read";
 
@@ -13,12 +13,42 @@ export function RunDetail({ run, initialResults }: { run: RunStatus; initialResu
   const [results, setResults] = useState(initialResults);
   const [showPasses, setShowPasses] = useState(false);
 
+  /* ONE URL FOR THE FILTER, used by the poll and by the toggle alike. The
+   * poll used to fetch the default page, which leaves passes out, so ticking
+   * "Show passes too" showed them until the next tick and then lost them;
+   * unticking did nothing until a poll happened along, and on a finished run
+   * none ever did. */
+  const resultsUrl = `/api/admin/tests/runs/${run.run_id}${
+    showPasses ? "?status=pass&status=fail&status=skip&status=uncovered" : ""
+  }`;
+
+  // The toggle, both directions. A response for a filter since changed is
+  // dropped, so a slow answer cannot put back what the user just asked away.
+  // Not on mount: the server page already rendered the default filter.
+  const mounted = useRef(false);
+  useEffect(() => {
+    if (!mounted.current) {
+      mounted.current = true;
+      return;
+    }
+    let stale = false;
+    void (async () => {
+      const res = await fetch(resultsUrl);
+      if (res.ok && !stale) setResults((await res.json()).results ?? []);
+    })().catch(() => {});
+    return () => {
+      stale = true;
+    };
+  }, [resultsUrl]);
+
   useEffect(() => {
     if (current.status !== "running") return;
+    let stale = false;
     const poll = async () => {
-      const res = await fetch(`/api/admin/tests/runs/${run.run_id}`);
-      if (!res.ok) return;
+      const res = await fetch(resultsUrl);
+      if (!res.ok || stale) return;
       const body = await res.json();
+      if (stale) return;
       setCurrent(body.run);
       setResults(body.results ?? []);
     };
@@ -39,20 +69,11 @@ export function RunDetail({ run, initialResults }: { run: RunStatus; initialResu
     if (!document.hidden) timer = setInterval(() => void poll().catch(() => {}), 3000);
     document.addEventListener("visibilitychange", onVisibility);
     return () => {
+      stale = true;
       stop();
       document.removeEventListener("visibilitychange", onVisibility);
     };
-  }, [current.status, run.run_id]);
-
-  useEffect(() => {
-    if (!showPasses) return;
-    void (async () => {
-      const res = await fetch(
-        `/api/admin/tests/runs/${run.run_id}?status=pass&status=fail&status=skip&status=uncovered`
-      );
-      if (res.ok) setResults((await res.json()).results ?? []);
-    })();
-  }, [showPasses, run.run_id]);
+  }, [current.status, resultsUrl]);
 
   return (
     <div>
