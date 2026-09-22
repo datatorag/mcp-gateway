@@ -268,3 +268,31 @@ describe("tests_run refuses an unknown field through a real client", () => {
     expect(result.isError ?? false).toBe(false);
   });
 });
+
+/**
+ * `echo` requires `message` in its schema, and its handler used to answer
+ * "(no message)" when it was absent, so a client that skipped the schema
+ * got a success the contract said it could not have. The runner's contract
+ * probe caught it (SCRUM-303). A missing message is now refused.
+ */
+describe("echo holds its own schema", () => {
+  it("refuses a call with no message", async () => {
+    const client = await connectedClient();
+    const result = await client.callTool({ name: "echo", arguments: {} });
+    expect(result.isError).toBe(true);
+    expect(JSON.stringify(result.content)).toContain("message");
+  });
+
+  it("refuses a message that is not a string", async () => {
+    const client = await connectedClient();
+    const result = await client.callTool({ name: "echo", arguments: { message: 42 } });
+    expect(result.isError).toBe(true);
+  });
+
+  it("still echoes a message", async () => {
+    const client = await connectedClient();
+    const result = await client.callTool({ name: "echo", arguments: { message: "hi" } });
+    expect(result.isError ?? false).toBe(false);
+    expect(JSON.stringify(result.content)).toContain("hi");
+  });
+});

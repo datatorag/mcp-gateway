@@ -607,14 +607,16 @@ export const BUILT_IN_TOOLS: {
         required: ["message"],
       },
     },
-    handler: async (args) => ({
-      content: [
-        {
-          type: "text" as const,
-          text: `[datatorag-mcp echo] ${args?.message ?? "(no message)"}`,
-        },
-      ],
-    }),
+    // The schema requires `message`, so the handler refuses without one
+    // rather than answering "(no message)": a success the contract says is
+    // impossible is how a client learns to skip the schema.
+    handler: async (args) =>
+      typeof args?.message === "string"
+        ? { content: [{ type: "text" as const, text: `[datatorag-mcp echo] ${args.message}` }] }
+        : {
+            content: [{ type: "text" as const, text: "echo: message is required and must be a string" }],
+            isError: true,
+          },
   },
 ];
 
