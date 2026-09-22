@@ -1,5 +1,6 @@
 import type { TestCase } from "../types";
-import { resultJson } from "../result-json";
+import { resultJson, resultText } from "../result-json";
+import { driveFileState } from "../drive-state";
 
 /**
  * D6 (smoke row D6): a deck is created, edited, read back and
@@ -23,6 +24,7 @@ export const d6SlidesRoundTrip: TestCase = {
     "gws-mcp__slides_batch_update",
     "gws-mcp__slides_get",
     "gws-mcp__slides_delete",
+    "gws-mcp__gws_run",
   ],
   accounts: ["sender"],
   run: async (ctx) => {
@@ -68,15 +70,45 @@ export const d6SlidesRoundTrip: TestCase = {
       throw new Error("the inserted text is not in the deck it was inserted into");
     }
 
-    await ctx.call("gws-mcp__slides_delete", { presentation_id: presentationId }, { as: "sender" });
+    /* VERIFIED BY DRIVE, NOT BY A SLIDES READ: see `drive-state.ts`. In
+     * run 1 `slides_get` still served the deck straight after a permanent
+     * Drive delete. A refused delete no longer disarms the cleanup. */
+    const removed = await ctx.call("gws-mcp__slides_delete", { presentation_id: presentationId }, { as: "sender" });
+    if (removed.isError) throw new Error(`slides_delete refused: ${resultText(removed).slice(0, 200)}`);
+    const state = await ctx.until(
+      "Drive to stop holding the deleted deck",
+      async () => {
+        const s = driveFileState(
+          await ctx.call(
+            "gws-mcp__gws_run",
+            {
+              service: "drive",
+              resource: "files",
+              method: "get",
+              params: { fileId: presentationId, fields: "id,trashed", supportsAllDrives: true },
+            },
+            { as: "sender" }
+          )
+        );
+        return s === "present" ? undefined : s;
+      },
+      { everyMs: 2_000, forMs: 30_000 }
+    );
+    // Only now: a delete Drive never honoured must still be retried by the
+    // cleanup, which this flag would otherwise disarm.
     deleted = true;
+    if (state === "trashed") {
+      ctx.evidence("RESIDUE: the deck is in the trash, which empties itself after 30 days");
+      throw new Error("slides_delete moved the deck to the trash, where its description says it permanently removes it");
+    }
+    ctx.evidence("Drive no longer holds the deck");
 
     const after = await ctx.call(
       "gws-mcp__slides_get",
       { presentation_id: presentationId },
       { as: "sender" }
     );
-    if (!after.isError) throw new Error("the deck still reads after a delete that reported success");
-    ctx.evidence("reading the deleted deck fails, so the delete really removed it");
+    // Recorded, not asserted: see D4.
+    ctx.evidence(`slides_get just after the delete ${after.isError ? "refused" : "still answered"}`);
   },
 };
