@@ -1,5 +1,6 @@
 import type { TestCase } from "../types";
-import { firstArray, resultJson, resultText } from "../result-json";
+import { firstArray, resultJson } from "../result-json";
+import { deliveredIds } from "../mail-parts";
 
 /**
  * D13 (smoke row D13): a forward must CARRY THE ORIGINAL.
@@ -44,7 +45,7 @@ export const d13ForwardCarries: TestCase = {
           { query: `"${from.runStamp}" ${note}`, max_results: 10 },
           { as: "reader" }
         );
-        return ((firstArray(resultJson("gmail_search", found)) ?? []) as { id?: string }[]).find((h) => h.id)?.id;
+        return deliveredIds(firstArray(resultJson("gmail_search", found)))[0];
       },
       { everyMs: 5_000, forMs: 120_000 }
     );
@@ -54,9 +55,18 @@ export const d13ForwardCarries: TestCase = {
       }
     });
 
-    const body = resultText(
-      await ctx.call("gws-mcp__gmail_read", { message_id: forwarded }, { as: "reader" })
+    /* THE DECODED BODY. This read the raw Gmail resource, where the body
+     * parts are base64: the note was found only because Gmail's `snippet`
+     * reaches the first line, and the original's token, further down, was
+     * never in plain text at all. That alone accounts for the run 1 failure
+     * "the quoted message was dropped": the plugin writes the original into
+     * both parts of the forward, and the next run says whether it arrives. */
+    const read = resultJson<{ body?: unknown }>(
+      "gmail_read",
+      await ctx.call("gws-mcp__gmail_read", { message_id: forwarded, text_only: true }, { as: "reader" })
     );
+    const body = typeof read.body === "string" ? read.body : "";
+    if (body === "") throw new Error("gmail_read returned no decoded body for the forward, so nothing was read");
     const hasNote = body.includes(note);
     const hasOriginal = body.includes(from.token);
     ctx.evidence(`the forward carries the note: ${hasNote}, and the original's token: ${hasOriginal}`);

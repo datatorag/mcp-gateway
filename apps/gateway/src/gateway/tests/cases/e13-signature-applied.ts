@@ -1,6 +1,6 @@
 import type { TestCase } from "../types";
 import { firstArray, resultJson, resultText } from "../result-json";
-import { countSignatureBlocks, isMultipartAlternative, partText, type MailPart } from "../mail-parts";
+import { countSignatureBlocks, isMultipartAlternative, partText, type MailPart, deliveredIds } from "../mail-parts";
 
 /**
  * E13 (smoke row E13): the signature is applied on send, ONCE, and
@@ -114,7 +114,7 @@ export const e13SignatureApplied: TestCase = {
             { query: `subject:"E13 ${suffix} ${ctx.stamp}"`, max_results: 5 },
             { as: "reader" }
           );
-          return ((firstArray(resultJson("gmail_search", found)) ?? []) as { id?: string }[]).find((h) => h.id)?.id;
+          return deliveredIds(firstArray(resultJson("gmail_search", found)))[0];
         },
         { everyMs: 5_000, forMs: 120_000 }
       );

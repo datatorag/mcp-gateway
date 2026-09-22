@@ -54,3 +54,30 @@ export function countSignatureBlocks(html: string): number {
 export function isMultipartAlternative(payload: MailPart | undefined): boolean {
   return (payload?.mimeType ?? "").toLowerCase() === "multipart/alternative";
 }
+
+/**
+ * The ids of the search hits that were DELIVERED: labelled INBOX, and not
+ * DRAFT.
+ *
+ * ONE MAILBOX NOW SITS BEHIND BOTH ROLES, and that changes what a search
+ * of "the reader mailbox" can find. Gmail's message search includes drafts,
+ * so a case waiting for its second message to arrive could pick up a draft
+ * it has not sent yet; and a message sent to oneself is one message
+ * carrying SENT and INBOX, so the sent copy is no longer a different id
+ * from the received one. INBOX is what delivery adds, whichever account
+ * sent it, so that is the test, and a hit that carries no label list at
+ * all is not taken as delivered.
+ */
+export function deliveredIds(hits: unknown): string[] {
+  if (!Array.isArray(hits)) return [];
+  return hits
+    .filter(
+      (h): h is { id: string; labelIds: string[] } =>
+        !!h &&
+        typeof h === "object" &&
+        typeof (h as { id?: unknown }).id === "string" &&
+        Array.isArray((h as { labelIds?: unknown }).labelIds)
+    )
+    .filter((h) => h.labelIds.includes("INBOX") && !h.labelIds.includes("DRAFT"))
+    .map((h) => h.id);
+}

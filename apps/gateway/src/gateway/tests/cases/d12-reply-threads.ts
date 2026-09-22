@@ -1,5 +1,6 @@
 import type { TestCase } from "../types";
-import { firstArray, resultJson, resultText } from "../result-json";
+import { firstArray, resultJson } from "../result-json";
+import { deliveredIds } from "../mail-parts";
 
 /**
  * D12 (smoke row D12): a reply lands in the SAME THREAD.
@@ -23,16 +24,25 @@ export const d12ReplyThreads: TestCase = {
   needs: ["D10"],
   timeoutMs: 180_000,
   run: async (ctx) => {
-    const from = ctx.from("D10") as { receivedId?: string; subject?: string; runStamp?: string };
+    const from = ctx.from("D10") as { receivedId?: string; sentId?: string; subject?: string; runStamp?: string };
     if (!from.runStamp) throw new Error("D10 shared no run stamp");
     if (!from.receivedId) throw new Error("D10 shared no received message, so there is nothing to reply to");
+    if (!from.sentId) throw new Error("D10 shared no sent copy, so the sender's thread cannot be read");
 
+    /* THE THREAD IS READ IN THE MAILBOX THE REPLY IS READ IN. A Gmail
+     * thread id belongs to one mailbox: the same conversation has a
+     * different id in each account that holds it. This compared the
+     * READER's thread for the original with the SENDER's thread for the
+     * reply, which could not match whatever the plugin did, and that is the
+     * whole of the run 1 failure "a different thread". The sender's copy of
+     * the original is D10's sent id; with one account behind both roles it
+     * is the same message as the received one. */
     const original = resultJson<{ threadId?: string; thread_id?: string }>(
       "gmail_read",
-      await ctx.call("gws-mcp__gmail_read", { message_id: from.receivedId }, { as: "reader" })
+      await ctx.call("gws-mcp__gmail_read", { message_id: from.sentId }, { as: "sender" })
     );
     const originalThread = original.threadId ?? original.thread_id;
-    if (!originalThread) throw new Error("the delivered message reports no thread id, so threading cannot be checked");
+    if (!originalThread) throw new Error("the sender's copy reports no thread id, so threading cannot be checked");
 
     const token = `reply-${ctx.stamp}`;
     await ctx.call(
@@ -84,21 +94,24 @@ export const d12ReplyThreads: TestCase = {
           { query: `"${from.runStamp}"`, max_results: 25 },
           { as: "sender" }
         );
-        const hits = (firstArray(resultJson("gmail_search", found)) ?? []) as { id?: string }[];
-        for (const hit of hits) {
-          if (!hit.id) continue;
-          const body = resultText(
-            await ctx.call("gws-mcp__gmail_read", { message_id: hit.id }, { as: "sender" })
+        // DELIVERED hits only, and the decoded body: see D10.
+        for (const id of deliveredIds(firstArray(resultJson("gmail_search", found)))) {
+          const read = resultJson<{ body?: unknown }>(
+            "gmail_read",
+            await ctx.call("gws-mcp__gmail_read", { message_id: id, text_only: true }, { as: "sender" })
           );
-          if (body.includes(token)) return hit.id;
+          if (typeof read.body === "string" && read.body.includes(token)) return id;
         }
         return undefined;
       },
       { everyMs: 5_000, forMs: 120_000 }
     );
+    /* `text_only`, because the raw resource has no top-level `subject`:
+     * read that way, the Re: check below could never have passed. The
+     * flattened view carries both the thread id and the subject. */
     const replyRead = resultJson<{ threadId?: string; thread_id?: string; subject?: string }>(
       "gmail_read",
-      await ctx.call("gws-mcp__gmail_read", { message_id: reply }, { as: "sender" })
+      await ctx.call("gws-mcp__gmail_read", { message_id: reply, text_only: true }, { as: "sender" })
     );
     const replyThread = replyRead.threadId ?? replyRead.thread_id;
     ctx.evidence(`threads match: ${replyThread === originalThread}`);

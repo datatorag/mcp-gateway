@@ -1,5 +1,6 @@
 import type { TestCase } from "../types";
-import { firstArray, resultJson, resultText } from "../result-json";
+import { firstArray, resultJson } from "../result-json";
+import { deliveredIds } from "../mail-parts";
 
 /**
  * D10 (smoke row D10): mail actually leaves us and arrives.
@@ -11,8 +12,11 @@ import { firstArray, resultJson, resultText } from "../result-json";
  * returned 200", it is "the message arrived and says what we sent", which
  * requires reading the destination.
  *
- * The received id is the evidence, not the sent id. They differ, and only
- * the received one proves delivery.
+ * The received id is the evidence, not the sent id: the message the search
+ * finds must carry INBOX, which only delivery adds. With two accounts the
+ * two ids differ. With ONE account behind both roles, a message sent to
+ * oneself is a single message carrying SENT and INBOX, so the ids are
+ * equal and that is not a fault; the INBOX label is what proves it arrived.
  *
  * It shares its token with D12 and D13, which ride this message rather than
  * sending three more.
@@ -45,8 +49,7 @@ export const d10MailArrives: TestCase = {
           { query: `subject:"${ctx.stamp}"`, max_results: 5 },
           { as: "reader" }
         );
-        const hits = (firstArray(resultJson("gmail_search", found)) ?? []) as { id?: string }[];
-        return hits.find((h) => h.id)?.id;
+        return deliveredIds(firstArray(resultJson("gmail_search", found)))[0];
       },
       { everyMs: 5_000, forMs: 120_000 }
     );
@@ -54,25 +57,32 @@ export const d10MailArrives: TestCase = {
     // The RUN stamp, not this case's: D12 and D13 hunt for mail that
     // carries D10's subject, and the trash helper recognises the same
     // prefix. Sharing it is what makes a cross-case ride findable.
-    ctx.share({ receivedId: received, token, subject, runStamp: ctx.runId.slice(0, 8) });
+    ctx.share({ receivedId: received, sentId, token, subject, runStamp: ctx.runId.slice(0, 8) });
     ctx.defer("trash the received message", async () => {
       const gone = await ctx.trashOwnMessage(received, { as: "reader" });
       if (!gone) ctx.evidence(`RESIDUE: a received message could not be trashed`);
     });
     ctx.defer("trash the sent copy", async () => {
-      if (!sentId) return;
+      // One mailbox: the sent copy IS the received message, trashed above.
+      if (!sentId || sentId === received) return;
       const gone = await ctx.trashOwnMessage(sentId, { as: "sender" });
       if (!gone) ctx.evidence(`RESIDUE: the sent copy could not be trashed`);
     });
 
-    if (received === sentId) {
-      throw new Error("the received id equals the sent id, so the search matched our own copy rather than the delivered one");
+    if (received === sentId && ctx.address("sender") !== ctx.address("reader")) {
+      throw new Error("the received id equals the sent id across two accounts, so the search matched our own copy");
     }
 
-    const body = resultText(
-      await ctx.call("gws-mcp__gmail_read", { message_id: received }, { as: "reader" })
+    /* THE DECODED BODY, not the raw resource. Without `text_only` the tool
+     * answers the Gmail resource, whose body parts are base64; a token was
+     * only ever found in it because Gmail's short `snippet` happened to
+     * reach it. D13 failed on exactly that once its text ran longer. */
+    const read = resultJson<{ body?: unknown }>(
+      "gmail_read",
+      await ctx.call("gws-mcp__gmail_read", { message_id: received, text_only: true }, { as: "reader" })
     );
-    ctx.evidence(`the received message is ${body.length} characters`);
+    const body = typeof read.body === "string" ? read.body : "";
+    ctx.evidence(`the received message body is ${body.length} characters`);
     if (!body.includes(token)) {
       throw new Error("the delivered message does not carry the token it was sent with");
     }

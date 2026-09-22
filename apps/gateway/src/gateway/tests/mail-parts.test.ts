@@ -12,9 +12,39 @@ import {
   flattenParts,
   isMultipartAlternative,
   partText,
+  deliveredIds,
 } from "./mail-parts";
 
 const b64 = (s: string) => Buffer.from(s, "utf8").toString("base64url");
+
+describe("deliveredIds", () => {
+  it("keeps a hit labelled INBOX, including one also labelled SENT", () => {
+    // A message sent to oneself is one message carrying both.
+    expect(
+      deliveredIds([
+        { id: "a", labelIds: ["SENT", "INBOX", "UNREAD"] },
+        { id: "b", labelIds: ["INBOX"] },
+      ])
+    ).toEqual(["a", "b"]);
+  });
+
+  it("drops a draft, a sent-only copy, and a hit with no label list", () => {
+    expect(
+      deliveredIds([
+        { id: "d", labelIds: ["DRAFT", "INBOX"] },
+        { id: "s", labelIds: ["SENT"] },
+        { id: "n" },
+        null,
+        "x",
+      ])
+    ).toEqual([]);
+  });
+
+  it("answers nothing for a search that did not come back as a list", () => {
+    expect(deliveredIds("No messages found.")).toEqual([]);
+    expect(deliveredIds(null)).toEqual([]);
+  });
+});
 
 describe("decodePart", () => {
   it("decodes base64url, which is what Gmail sends", () => {
