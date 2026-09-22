@@ -10,7 +10,7 @@
 
 import { describe, expect, it } from "vitest";
 import { CASES_DIR } from "./registry";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { readCaseCalls, topLevelKeys, withoutComments, withoutStringLiterals, isCaseFile } from "./case-arguments";
@@ -461,5 +461,55 @@ describe("withoutComments", () => {
     expect(out).not.toContain("two");
     expect(out).toContain("x();");
     expect(out).toContain("y();");
+  });
+});
+
+/**
+ * A SKILL'S `tools` MUST BE TOOLS THE REGISTRY KNOWS.
+ *
+ * `validateSkillInput` refuses any name outside `REGISTRY_TOOL_NAMES`, so a
+ * case that declares a skill with an unknown tool fails at its FIRST call
+ * with prose, and everything the case goes on to assert is unreachable.
+ * SK1 landed that way twice: first naming `skills_search`, then naming it
+ * again after a different defect was fixed. Both times the suite was green,
+ * because a case body only runs against the live services.
+ *
+ * The registry holds BARE plugin names, namespace stripped, and gateway
+ * built-ins are absent from it. `covers` obeys a different rule in the same
+ * object: a plugin tool is NAMESPACED there and a built-in is legitimate,
+ * so SK1 covers four bare `skills_*` names while its `tools` may not name
+ * one. Two adjacent lists, opposite rules, which is how the wrong names
+ * looked right twice.
+ *
+ * WHAT THIS DOES NOT CATCH, so nobody trusts it further than it reaches.
+ * These are the limits found so far, not a complete list of them:
+ *
+ *  - double-quoted literals only, so a single-quoted or backticked name,
+ *    or an array built from a variable, passes UNSEEN;
+ *  - `withoutComments` can blank a whole line (its own test pins that for a
+ *    regex holding an escaped slash pair), so a declaration sharing such a
+ *    line goes UNSCANNED;
+ *  - the same blanking keeps strings, so a `tools: [...]` inside a string
+ *    literal would be FLAGGED;
+ *  - it walks `CASES_DIR` only, so a skill declared anywhere else is never
+ *    looked at.
+ *
+ * The first, second and fourth are false negatives and matter more than the
+ * third: a guard that misses is worse than one that shouts. None of these
+ * shapes is in the corpus today, which is a fact about today.
+ */
+describe("skill tool declarations in cases", () => {
+  it("name only tools the registry knows", async () => {
+    const { REGISTRY_TOOL_NAMES } = await import("../playground/registry-snapshot");
+    const problems: string[] = [];
+    for (const file of readdirSync(CASES_DIR).filter(isCaseFile)) {
+      const source = withoutComments(readFileSync(join(CASES_DIR, file), "utf8"));
+      for (const match of source.matchAll(/\btools:\s*\[([^\]]*)\]/g)) {
+        for (const name of [...match[1].matchAll(/"([^"]+)"/g)].map((m) => m[1])) {
+          if (!REGISTRY_TOOL_NAMES.has(name)) problems.push(`${file}: ${name}`);
+        }
+      }
+    }
+    expect(problems, "a skill declaring an unknown tool is refused at the first call").toEqual([]);
   });
 });

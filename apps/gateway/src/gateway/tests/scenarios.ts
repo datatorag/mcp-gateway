@@ -269,6 +269,18 @@ export const SCENARIOS: Scenario[] = [
       "CF4", // an attachment named by CQL is found by the attachment endpoint
     ],
   },
+  {
+    key: "skills",
+    title: "find a skill, load it, write one of your own, fork one, clean up",
+    steps: [
+      /* C13 reads the catalogue and needs nothing written, so it runs
+       * first. SK2 goes last because it is the only step in the suite that
+       * temporarily changes what a PUBLISHED skill means for this user. */
+      "C13", // search returns a skill and get loads it
+      "SK1", // a skill of your own is created, revised and deleted
+      "SK2", // forking a published skill shadows it; deleting restores it
+    ],
+  },
 ];
 
 /**
@@ -302,8 +314,6 @@ export const UNCOVERED_ON_PURPOSE: Record<string, string> = {
  * it cannot yet do is be selected by scenario, because it is not in one.
  */
 export const REGROUP_PENDING: string[] = [
-  // skills
-  "C13",
 ];
 
 const BY_KEY = new Map(SCENARIOS.map((s) => [s.key, s]));

@@ -80,6 +80,8 @@ import { cf1ConfluencePage } from "./cf1-confluence-page";
 import { cf2ConfluenceComments } from "./cf2-confluence-comments";
 import { cf3ConfluenceList } from "./cf3-confluence-list";
 import { cf4ConfluenceAttachment } from "./cf4-confluence-attachment";
+import { sk1SkillsOwn } from "./sk1-skills-own";
+import { sk2SkillsFork } from "./sk2-skills-fork";
 import { r1FrontDoor } from "./r1-front-door";
 import { r2AdminOnly } from "./r2-admin-only";
 
@@ -200,6 +202,8 @@ export const CASES: TestCase[] = [
   cf2ConfluenceComments,
   cf3ConfluenceList,
   cf4ConfluenceAttachment,
+  sk1SkillsOwn,
+  sk2SkillsFork,
   r1FrontDoor,
   r2AdminOnly,
 ];

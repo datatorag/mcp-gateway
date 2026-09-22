@@ -135,16 +135,25 @@ describe("the sends-mail flag", () => {
  * sends the most mail was the one that stopped warning about it.
  */
 describe("what the everything-run warns about", () => {
-  it("assumes mail while any case is still unplaced", () => {
-    expect(REGROUP_PENDING.length, "this test is about the regroup being unfinished").toBeGreaterThan(0);
+  /* THE REGROUP IS FINISHED, so the reason this warns has changed under it.
+   * It used to be true because cases were still unplaced, and that clause
+   * existed so the everything-run could not stop warning while the mail
+   * cases sat outside every scenario. Now nothing is pending and the
+   * warning rests on the gmail scenario's own flag, which is the state it
+   * was always meant to end in. Both halves are asserted, so neither can
+   * quietly become the only one carrying it. */
+  it("warns because a placed scenario declares that it sends mail", () => {
+    expect(REGROUP_PENDING, "the regroup is finished; nothing is unplaced").toHaveLength(0);
+    expect(SCENARIOS.some((s) => s.sendsMail), "some scenario must declare it").toBe(true);
     expect(sendsMail("all")).toBe(true);
   });
 
-  it("does not warn for a scenario that sends nothing, nor for an unknown one", () => {
-    /* BOTH HALVES ARE NEGATIVE, and the title says so rather than promising
-     * coverage that does not exist: no registered scenario sends mail yet,
-     * so the positive half cannot be written until Gmail is regrouped. A
-     * title that oversells is how a reader stops reading the assertions. */
+  it("warns for the scenario that sends, and not for one that does not", () => {
+    /* THE POSITIVE HALF IS WRITABLE NOW. The earlier version of this test
+     * was negative on both sides and said so, because no registered
+     * scenario sent mail yet. Gmail is placed, so the half that was owed
+     * is here. */
+    expect(sendsMail("gmail")).toBe(true);
     expect(sendsMail("gateway")).toBe(false);
     expect(sendsMail("nope")).toBe(false);
   });
