@@ -16,8 +16,19 @@ import { countSignatureBlocks, isMultipartAlternative, partText, type MailPart, 
  *  - the HTML part carries EXACTLY ONE signature block, counted rather than
  *    checked for presence, because signing twice is the failure that
  *    appending in two places produces;
- *  - the plain-text part carries the token and NO signature text, which is
- *    the 2026-09-17 HTML-only ruling.
+ *  - the plain-text part is the body that was sent and nothing else, which
+ *    is the 2026-09-17 HTML-only ruling.
+ *
+ * THE PLAIN PART IS COMPARED WITH THE BODY, NOT SEARCHED FOR A WORD. It
+ * was searched for one word of the stored signature, and run 1 failed on
+ * it against a plugin whose plain part is the caller's body verbatim: the
+ * installed build writes `body` into the plain half and nothing else, and
+ * the process that ran was started after that build was checked out. So
+ * unless delivery rewrote the part, the word occurred in the body the case
+ * itself sent, and either way a single word is not a signature. Equality is what the plugin promises and what the
+ * ruling means. The same weakness sat in the HTML check, which found the
+ * word anywhere in the part, body included; it is now looked for only
+ * inside the signature block.
  *
  * The expected signature text is read from the account's own settings once
  * per run and never hardcoded: it is a real person's sign-off, it changes,
@@ -94,6 +105,7 @@ export const e13SignatureApplied: TestCase = {
       const subject = `[smoke] E13 ${suffix} ${ctx.stamp}`;
       const sent = await ctx.call(
         "gws-mcp__gmail_send",
+        // The plain part is compared with this exact text below.
         { to: ctx.address("reader"), subject, body: `Signature check. ${token}`, ...extra },
         { as: "sender" }
       );
@@ -156,13 +168,20 @@ export const e13SignatureApplied: TestCase = {
     if (blocks !== 1) throw new Error(`the html part carries ${blocks} signature blocks, not one`);
     // THE ACCOUNT'S OWN SIGNATURE, not merely a signature. A structurally
     // applied but empty block would satisfy a count and deliver nothing,
-    // which is what the customer reported in the first place.
-    if (!html.includes(needle)) {
+    // which is what the customer reported in the first place. Looked for
+    // from the block onward, so the body's own words cannot satisfy it.
+    const block = html.search(/class\s*=\s*["'][^'"]*\bgmail_signature\b/i);
+    if (block === -1 || !html.slice(block).includes(needle)) {
       throw new Error("the html part's signature block does not carry the account's stored signature");
     }
-    if (!text.includes(token)) throw new Error("the plain part does not carry the token");
-    if (text.includes(needle) || /gmail_signature/.test(text)) {
-      throw new Error("the plain-text part carries the signature, which the HTML-only ruling forbids");
+    const normalise = (s: string) => s.replace(/\r\n/g, "\n").trim();
+    const sentBody = `Signature check. ${token}`;
+    const plainIsBody = normalise(text) === sentBody;
+    ctx.evidence(
+      `the plain part is the body that was sent: ${plainIsBody} (${normalise(text).length} vs ${sentBody.length} characters)`
+    );
+    if (!plainIsBody) {
+      throw new Error("the plain-text part is not the body that was sent, so something was added to it");
     }
 
     // 2. THE SAME SEND WITH AN HTML BODY. The signature must sit inside the
