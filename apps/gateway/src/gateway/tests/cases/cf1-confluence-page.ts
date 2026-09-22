@@ -31,9 +31,17 @@ type Page = { id?: string; title?: string; version?: number | null; body?: strin
  * exactly the regression it claimed to cover, skipped the check silently
  * and passed reporting "version ? to ?".
  *
- * DELETION IS PROVEN BY A REFUSED READ. `confluence_delete_page` answers
- * with a sentence, so believing it would pass against a handler that never
- * issued the DELETE.
+ * DELETION IS PROVEN BY THE SPACE, NOT BY A READ. `confluence_delete_page`
+ * answers with a sentence, so believing it would pass against a handler
+ * that never issued the DELETE. It used to be proven by a refused read,
+ * and run 2 failed that: Confluence's DELETE moves a page to the space
+ * TRASH, where a read by id still answers and a second DELETE is refused
+ * (which is where that run's RESIDUE line came from). So the claim is now
+ * the one the delete does make: the page leaves the space's page list, seen
+ * there first so its absence afterwards means something. A page still
+ * readable afterwards is in the trash, and Confluence's trash does not
+ * empty itself; that is reported as a leaked cleanup, not as a failed
+ * delete, until the connector either purges or says it trashes.
  */
 export const cf1ConfluencePage: TestCase = {
   id: "CF1",
@@ -43,6 +51,7 @@ export const cf1ConfluencePage: TestCase = {
     "atlassian-mcp__confluence_get_page",
     "atlassian-mcp__confluence_edit_page",
     "atlassian-mcp__confluence_delete_page",
+    "atlassian-mcp__confluence_list_pages",
   ],
   accounts: ["atlassian"],
   fixtures: ["confluenceSpace"],
@@ -119,14 +128,41 @@ export const cf1ConfluencePage: TestCase = {
     // fire and printed the exact "version ? to ?" this case used to emit.
     ctx.evidence(`the page went from version ${firstVersion} to ${afterEdit.version}`);
 
+    /** Whether the space lists the page. The tool takes no cursor, so the
+     * page has to be within the first 250, and is checked to be. */
+    const listed = async (): Promise<boolean> => {
+      const pages = resultJson<unknown>(
+        "confluence_list_pages",
+        await ctx.call(
+          "atlassian-mcp__confluence_list_pages",
+          { space_key: ctx.fixture("confluenceSpace"), limit: 250 },
+          { as: "atlassian" }
+        )
+      );
+      if (!Array.isArray(pages)) {
+        throw new Error("confluence_list_pages did not answer a list, so the space's pages could not be read");
+      }
+      return pages.some((p) => p && typeof p === "object" && (p as { id?: unknown }).id === page_id);
+    };
+    if (!(await listed())) {
+      throw new Error("the new page is not among the first 250 pages the space lists, so its removal cannot be checked");
+    }
+
     const removed = await ctx.call("atlassian-mcp__confluence_delete_page", { page_id }, { as: "atlassian" });
     if (removed.isError) throw new Error("confluence_delete_page refused, so the page is still in the space");
+    // Disarmed as soon as the delete is accepted: a second DELETE of a
+    // trashed page is refused, so retrying could only add a false residue.
+    deleted = true;
+
+    if (await listed()) throw new Error("the space still lists the page after a delete that was accepted");
+    ctx.evidence("the space no longer lists the page");
 
     const after = await ctx.call("atlassian-mcp__confluence_get_page", { page_id, format: "storage" }, { as: "atlassian" });
     if (!after.isError) {
-      throw new Error("the deleted page can still be read, so the delete was reported rather than made");
+      ctx.evidence("RESIDUE: the page is in the space trash; confluence_delete_page trashes and nothing here can purge it");
+      ctx.defer("the deleted page is still in the space trash", async () => {
+        throw new Error("the page was trashed rather than deleted, and the trash does not empty itself");
+      });
     }
-    deleted = true;
-    ctx.evidence("a read of the deleted page is refused");
   },
 };
