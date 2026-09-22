@@ -196,41 +196,56 @@ export interface SkillReader {
   findForViewer(viewer: string | null, slug: string): Promise<Skill | null>;
 }
 
-let reader: SkillReader | null = null;
-let snapshot: { skills: Skill[]; at: number } | null = null;
+/* ON `globalThis`, NOT IN THIS MODULE (SCRUM-303). `server.ts` sets the
+ * reader at boot in the Express bundle, and Next compiles this module again
+ * into its own bundle, where the admin test route and the dashboard agent
+ * build their MCP server. Module-level state gave that copy a reader of
+ * null, so it served only the published snapshot: a user's own skill was
+ * not found by its slug and a fork did not replace the published one. Both
+ * bundles run in one process, which is why `lib/db` keeps its singleton
+ * here too. */
+const shared = globalThis as unknown as {
+  __skillReader?: SkillReader | null;
+  __skillSnapshot?: { skills: Skill[]; at: number } | null;
+};
+const currentReader = () => shared.__skillReader ?? null;
+const currentSnapshot = () => shared.__skillSnapshot ?? null;
 export const PUBLISHED_SNAPSHOT_TTL_MS = 60_000;
 
 export function setSkillReader(next: SkillReader | null): void {
-  reader = next;
+  shared.__skillReader = next;
 }
 
 /** The seeder warms this at boot so the first request never waits. */
 export function setPublishedSnapshot(skills: Skill[], now: number = Date.now()): void {
-  snapshot = { skills, at: now };
+  shared.__skillSnapshot = { skills, at: now };
 }
 
 /** The published set, synchronously: the snapshot, else the files. For the
  * few callers that cannot await (attributing a login by its `next` path). */
 export function publishedSkillsSync(): Skill[] {
-  return snapshot?.skills ?? readSkillFiles();
+  return currentSnapshot()?.skills ?? readSkillFiles();
 }
 
 async function publishedSkills(now: number = Date.now()): Promise<Skill[]> {
+  const reader = currentReader();
+  const snapshot = currentSnapshot();
   if (reader && (!snapshot || now - snapshot.at > PUBLISHED_SNAPSHOT_TTL_MS)) {
     try {
-      snapshot = { skills: await reader.listForViewer(null), at: now };
+      shared.__skillSnapshot = { skills: await reader.listForViewer(null), at: now };
     } catch (err) {
       // Slightly stale beats down: keep serving what we have.
       console.warn("[skills] published refresh failed; serving the last snapshot", err);
       if (!snapshot) return readSkillFiles();
     }
   }
-  return snapshot?.skills ?? readSkillFiles();
+  return currentSnapshot()?.skills ?? readSkillFiles();
 }
 
 /** Every skill the viewer can see: the published set for `null`, the
  * published set plus their own rows for a user, their own winning a slug. */
 export async function getAllSkills(viewer: string | null = null): Promise<Skill[]> {
+  const reader = currentReader();
   if (viewer === null || !reader) return publishedSkills();
   try {
     return await reader.listForViewer(viewer);
@@ -241,6 +256,7 @@ export async function getAllSkills(viewer: string | null = null): Promise<Skill[
 }
 
 export async function getSkillBySlug(slug: string, viewer: string | null = null): Promise<Skill | null> {
+  const reader = currentReader();
   if (viewer === null || !reader) {
     return (await publishedSkills()).find((s) => s.slug === slug) ?? null;
   }
