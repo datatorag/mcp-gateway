@@ -12,6 +12,12 @@ import type { TestCase } from "../types";
  * classifies writes from the tool name against source-controlled lists
  * precisely because a plugin controls its own annotations; this case checks
  * HONESTY of the published surface, not enforcement.
+ *
+ * EXPECTED RED UNTIL SCRUM-326. Both plugins annotate their tools and the
+ * registry records `read_only_hint` for every row, but the gateway's
+ * `tools/list` builds each tool from its name, description and schema
+ * only, so no annotation reaches the wire. The case is right; the gateway
+ * is what drops them.
  */
 export const e5Annotations: TestCase = {
   id: "E5",
