@@ -1,4 +1,5 @@
 import type { TestCase } from "../types";
+import { jiraProjectKey } from "../jira-project";
 import { resultText } from "../result-json";
 
 /**
@@ -17,6 +18,7 @@ export const b1StoredToken: TestCase = {
   title: "a stored token authenticates a call to each connected provider",
   covers: ["gws-mcp__gmail_list_labels", "atlassian-mcp__jira_search"],
   accounts: ["sender", "atlassian"],
+  fixtures: ["jiraProject"],
   run: async (ctx) => {
     const google = await ctx.call("gws-mcp__gmail_list_labels", {}, { as: "sender" });
     const googleText = resultText(google);
@@ -25,7 +27,7 @@ export const b1StoredToken: TestCase = {
 
     const atlassian = await ctx.call(
       "atlassian-mcp__jira_search",
-      { jql: "project = SCRUM ORDER BY created DESC", max_results: 1 },
+      { jql: `project = ${jiraProjectKey(ctx)} ORDER BY created DESC`, max_results: 1 },
       { as: "atlassian" }
     );
     const atlassianText = resultText(atlassian);

@@ -1,4 +1,5 @@
 import type { TestCase } from "../types";
+import { jiraProjectKey } from "../jira-project";
 import { firstArray, resultJson } from "../result-json";
 
 /**
@@ -14,10 +15,12 @@ export const c7JiraSearch: TestCase = {
   title: "a bounded jira search returns issues from our own project",
   covers: ["atlassian-mcp__jira_search"],
   accounts: ["atlassian"],
+  fixtures: ["jiraProject"],
   run: async (ctx) => {
+    const project = jiraProjectKey(ctx);
     const result = await ctx.call(
       "atlassian-mcp__jira_search",
-      { jql: "project = SCRUM ORDER BY created DESC", max_results: 5 },
+      { jql: `project = ${project} ORDER BY created DESC`, max_results: 5 },
       { as: "atlassian" }
     );
     const issues = firstArray(resultJson("jira_search", result)) ?? [];
@@ -27,9 +30,9 @@ export const c7JiraSearch: TestCase = {
       throw new Error("a search of our own project returned nothing, so the Atlassian connector is down or pointed elsewhere");
     }
     const keys = issues.map((i) => (i as { key?: string }).key ?? "");
-    const wrong = keys.filter((k) => !/^SCRUM-\d+$/.test(k));
+    const wrong = keys.filter((k) => !new RegExp(`^${project}-\\d+$`).test(k));
     if (wrong.length > 0) {
-      throw new Error(`${wrong.length} of ${keys.length} results are not SCRUM keys, so the search reached a different project or tenant`);
+      throw new Error(`${wrong.length} of ${keys.length} results are not keys of the fixture project, so the search reached a different project or tenant`);
     }
   },
 };

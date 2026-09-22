@@ -1,4 +1,5 @@
 import type { TestCase } from "../types";
+import { jiraProjectKey } from "../jira-project";
 import { firstArray, resultJson } from "../result-json";
 
 /**
@@ -29,15 +30,17 @@ export const c11JiraRoundTrip: TestCase = {
     "atlassian-mcp__jira_get_issue",
   ],
   accounts: ["atlassian"],
+  fixtures: ["jiraProject"],
   timeoutMs: 180_000,
   run: async (ctx) => {
+    const project = jiraProjectKey(ctx);
     /** Every key on the board, paginated to exhaustion. */
     const wholeBoard = async (): Promise<Set<string>> => {
       const keys = new Set<string>();
       let token: string | undefined;
       let pages = 0;
       for (;;) {
-        const args: Record<string, unknown> = { jql: "project = SCRUM ORDER BY created DESC", max_results: 100 };
+        const args: Record<string, unknown> = { jql: `project = ${project} ORDER BY created DESC`, max_results: 100 };
         if (token) args.next_page_token = token;
         const res = await ctx.call("atlassian-mcp__jira_search", args, { as: "atlassian" });
         const body = resultJson<{ isLast?: boolean; nextPageToken?: string; next_page_token?: string }>(
@@ -67,7 +70,7 @@ export const c11JiraRoundTrip: TestCase = {
     const created = await ctx.call(
       "atlassian-mcp__jira_create_issue",
       {
-        project_key: "SCRUM",
+        project_key: project,
         summary: `smoke-fixture C11 delete-me ${ctx.stamp}`,
         issue_type: "Task",
         additional_fields: { labels: ["smoke-fixture"] },
