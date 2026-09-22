@@ -1,6 +1,6 @@
 ---
 name: db-query
-description: Use to run read-only psql queries against the DataToRAG Postgres database — local dev or production. Pulls connection details from the agent's private memory; never references infrastructure secrets in this file (it lives in a public repo). Defaults read-only; flags destructive operations.
+description: Use to run read-only queries against the DataToRAG Postgres database through the Neon MCP (production). Direct clients (psql, pg_*, driver one-liners) are blocked by a hook. Pulls connection details from the agent's private memory; never references infrastructure secrets in this file (it lives in a public repo). Defaults read-only; flags destructive operations.
 ---
 
 # DB Query — Local + Production
@@ -19,38 +19,23 @@ Memory files hold the operational details:
 
 If the agent doesn't have the `reference_neon_database.md` entry, run the Neon MCP's `list_projects` to find the production project (its name/id are in memory, not here), or ask the user. If the Neon MCP isn't connected, install it: `claude plugin install neon@claude-plugins-official --scope user`, then `/reload-plugins` and authenticate (OAuth).
 
-## Local (dev)
+## Direct clients are blocked (SCRUM-339)
 
-The local Postgres runs inside the dev docker-compose stack started from `docker/`.
+`scripts/hooks/db-client-guard.py` is a Bash PreToolUse hook. It blocks
+`psql`, `pgcli`, the `pg_*` tools, `drizzle-kit push`/`drop`, the `db:push`
+script, database-driver `node -e` one-liners, and any connection-string URL
+or `$DATABASE_URL` in a command, wherever they sit (behind `sudo`, `ssh`,
+`docker exec`, `bash -c`, a pipe). It has no escape hatch.
 
-**1. Find the local postgres container:**
+The rule that goes with it: **a blocked guard means stop and report the
+exact SQL to a human, never a different client.** Queries go through the
+Neon MCP below, where `db-guard.py` classifies them and holds writes for a
+human. Schema changes go through the journal:
+`pnpm --filter @datatorag-mcp/db db:migrate`.
 
-```bash
-docker ps --filter 'name=postgres' --format '{{.Names}}'
-```
-
-Expected: a container name like `docker-postgres-1` or similar.
-
-**2. Run a query:**
-
-```bash
-docker exec -it <container> psql -U datatoragmcp -d datatoragmcp -c "SELECT ..."
-```
-
-**3. Or open an interactive psql session:**
-
-```bash
-docker exec -it <container> psql -U datatoragmcp -d datatoragmcp
-```
-
-**4. Pipe multi-line SQL via stdin:**
-
-```bash
-cat <<'SQL' | docker exec -i <container> psql -U datatoragmcp -d datatoragmcp
-SELECT ...
-WHERE ...;
-SQL
-```
+The local docker Postgres has no query path from a session any more. Local
+questions are answered by the test suite or the dev server's own endpoints,
+not by a client.
 
 ## Production (Neon MCP)
 
@@ -73,12 +58,6 @@ mcp__plugin_neon_neon__run_sql  { "projectId": "<id from memory>", "sql": "SELEC
 ```text
 mcp__plugin_neon_neon__get_database_tables   { "projectId": "<id>" }
 mcp__plugin_neon_neon__describe_table_schema { "projectId": "<id>", "tableName": "leads" }
-```
-
-**4. Prefer to use psql directly?** Get a connection string, then run psql locally (still read-only unless confirmed):
-
-```text
-mcp__plugin_neon_neon__get_connection_string { "projectId": "<id>" }
 ```
 
 > The Neon MCP is in **write mode** — destructive tools (`delete_project`, `delete_branch`, migrations) are exposed. Never invoke those, or destructive SQL, autonomously. See Safety rails below. For risky changes, test on a temporary Neon branch (`create_branch`) first.

@@ -142,12 +142,20 @@ ssh -i <key> ubuntu@<ip> "docker logs <gateway-container> --since 30m 2>&1"
 ssh -i <key> ubuntu@<ip> \
   "cd ~/datatorag-mcp/docker && docker compose -f docker-compose.prod.yml --env-file ../.env logs --tail 100 gateway"
 
-# Database queries — NOTE: production data lives in Neon (use the db-query skill),
-# NOT in the docker postgres on this host. Only psql the container for local/dev-era data.
-ssh -i <key> ubuntu@<ip> "docker exec <postgres-container> env | grep POSTGRES"
-ssh -i <key> ubuntu@<ip> \
-  "docker exec <postgres-container> psql -U <db-user> -d <db-name> -c '<query>'"
+# Database queries: production data lives in Neon, queried through the Neon
+# MCP (see the db-query skill). Direct clients, over ssh included, are blocked
+# by scripts/hooks/db-client-guard.py (SCRUM-339).
 ```
+
+## Migrations
+
+Schema changes go through the drizzle journal only:
+`pnpm --filter @datatorag-mcp/db db:migrate`, from the repo root. The
+production connection string lives in SSM and is never written into a
+command; a connection-string URL or a `$DATABASE_URL` reference in a command
+is blocked by the same hook. So a production migration is run by a human with
+the environment already set, and verified through the Neon MCP by reading
+`drizzle.__drizzle_migrations`.
 
 ## Plugin Repos
 

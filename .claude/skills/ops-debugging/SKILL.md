@@ -18,7 +18,7 @@ Don't duplicate these — read them first, then come back here for the gap:
   step, rebuild command, health-check curl, plugin reinstall exec, log-tailing,
   its own 5-item Troubleshooting section.
 - **db-query skill** (`.claude/skills/db-query/SKILL.md`) — how to query prod
-  (Neon, via Neon MCP) vs local dev (docker exec psql), safety rails, canned
+  (Neon, via Neon MCP; direct clients are blocked by a hook), safety rails, canned
   recipes including the tool-registry query.
 - **Memory refs** for live values: `reference_mcp_gateway_instance` (host/region),
   `reference_plugin_registry` (installed plugins, reinstall notes),

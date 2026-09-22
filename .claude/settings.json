@@ -10,6 +10,11 @@
           {
             "type": "command",
             "command": "node \"$CLAUDE_PROJECT_DIR/scripts/hooks/pattern-check-on-push.mjs\""
+          },
+          {
+            "type": "command",
+            "command": "python3 \"$CLAUDE_PROJECT_DIR/scripts/hooks/db-client-guard.py\"",
+            "statusMessage": "DB client guard: checking for direct database clients"
           }
         ]
       },
