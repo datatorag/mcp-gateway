@@ -1,0 +1,4 @@
+{
+  "_comment": "The shape of ~/.config/datatorag/db-dev-targets.json, which lives outside the repo and is edited BY HAND only. Dev branch ids (br-...) that db-guard lets run_sql write to. Never the default branch: that is production. See scripts/hooks/db_targets.py.",
+  "neon_branch_ids": []
+}

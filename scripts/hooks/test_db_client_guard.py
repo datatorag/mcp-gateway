@@ -22,7 +22,18 @@ spec.loader.exec_module(guard)
 
 MUST_BLOCK = [
     # the clients, plainly and at a path
+    "psql -c 'select 1'",
     "psql --version",
+    # a dev-looking target is not dev: psql can relay to prod from inside
+    # itself (\\connect, \\!, -f), so dev goes through the Neon MCP
+    "psql -h localhost -c 'select 1'",
+    "psql -h localhost -f x.sql",
+    # the dev-branch allowlist, however it is named
+    "cat ~/.config/datatorag/db-dev-targets.json",
+    "echo '{}' > ~/.config/datatorag/db-dev-targets.json",
+    "cp /tmp/t.json ~/.config/datatorag/x",
+    "cat ~/.config/datatorag/db-dev-targets.js''on",
+    "cat db-dev-tar''gets.json",
     "/usr/bin/psql -c 'select 1'",
     "/opt/homebrew/opt/libpq/bin/psql",
     "pgcli",
@@ -222,7 +233,7 @@ class Hook(unittest.TestCase):
         )
 
     def test_block_exits_2_with_the_rule(self):
-        r = self.run_hook({"tool_name": "Bash", "tool_input": {"command": "psql --version"}})
+        r = self.run_hook({"tool_name": "Bash", "tool_input": {"command": "psql -c 'select 1'"}})
         self.assertEqual(r.returncode, 2)
         self.assertIn("A blocked guard means stop and report the exact SQL to a human", r.stderr)
         self.assertIn("never a different client", r.stderr)
@@ -247,7 +258,7 @@ class Hook(unittest.TestCase):
         env = {**os.environ, "DB_GUARD_CONFIRMED": "1", "DB_CLIENT_GUARD_CONFIRMED": "1"}
         r = subprocess.run(
             [sys.executable, str(HERE / "db-client-guard.py")],
-            input=json.dumps({"tool_name": "Bash", "tool_input": {"command": "psql"}}),
+            input=json.dumps({"tool_name": "Bash", "tool_input": {"command": "psql -c x"}}),
             capture_output=True,
             text=True,
             env=env,

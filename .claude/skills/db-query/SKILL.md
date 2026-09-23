@@ -33,9 +33,16 @@ Neon MCP below, where `db-guard.py` classifies them and holds writes for a
 human. Schema changes go through the journal:
 `pnpm --filter @datatorag-mcp/db db:migrate`.
 
-The local docker Postgres has no query path from a session any more. Local
-questions are answered by the test suite or the dev server's own endpoints,
-not by a client.
+**No psql, for any database: that is what the Neon MCP is for.** Dev
+databases are there to be meddled with, and they are meddled with through
+`run_sql` with a dev `branch_id`: `db-guard.py` allows writes on branches a
+human has listed in `~/.config/datatorag/db-dev-targets.json`, outside the
+repo (shape in `scripts/hooks/db-dev-targets.example.json`). With no
+`branch_id` a write runs on the default branch, which is prod, and still
+needs a human. A psql or driver client allowed against a "dev" host could
+relay to prod from inside itself (`\connect`, `\!`, `-f`), which is why
+clients stay blocked everywhere. Only a human edits the allowlist; the hooks
+refuse it to every tool.
 
 ## Production (Neon MCP)
 

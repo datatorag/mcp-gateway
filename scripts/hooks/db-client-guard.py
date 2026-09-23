@@ -8,6 +8,16 @@ through psql instead. The statement had been approved; the route had not. A
 guard that can be walked round by changing client is not a guard, so this one
 closes the other clients.
 
+DEV DATABASES GO THROUGH THE NEON MCP TOO (Manuel, SCRUM-339 amendment).
+The guards are for production, and dev databases are there to be meddled
+with, but a client allowed against a "dev" target can relay to prod from
+inside itself (psql's \\connect and \\! in -c, a -f script, a subprocess in
+driver code), which no text check can see. The security review showed each.
+So dev writes go through `run_sql` with a dev `branch_id`, which db-guard.py
+allows for branches a human listed in ~/.config/datatorag/db-dev-targets.json
+(see db_targets.py): the MCP runs the SQL on that branch itself. No psql
+is needed for any database, dev or prod; that is what the Neon MCP is for.
+
 WHAT IT BLOCKS, by COMMAND POSITION, never by substring:
   - the Postgres command-line tools (psql, pgcli, usql, pg_dump, pg_restore,
     pg_dumpall, pgbench, createdb, dropdb, postgres, ...) as the command word
@@ -98,7 +108,8 @@ DRIZZLE_WRITES = {"push", "drop"}
 MESSAGE = (
     "DB CLIENT GUARD — BLOCKED: {reason}\n"
     "Direct database clients are blocked. Reads and writes go through the Neon MCP "
-    "(run_sql), where db-guard classifies them. A blocked guard means stop and report "
+    "(run_sql), where db-guard classifies them; dev writes use run_sql with a dev branch_id "
+    "a human has listed. A blocked guard means stop and report "
     "the exact SQL to a human; never a different client. Journaled migrations run only "
     "via `pnpm --filter @datatorag-mcp/db db:migrate` from the repo root.\n"
 )
@@ -433,6 +444,14 @@ def interpreter_of(line: str) -> str | None:
 def scan(text: str, depth: int = 0) -> None:
     if depth > 8:
         raise Blocked("the command nests too deeply to check")
+    # The dev-branch allowlist decides what db-guard lets write, so a session
+    # must not touch it. Quotes and backslashes are dropped first so a split
+    # name reads as bash reads it. BEST EFFORT: a name assembled at run time
+    # gets past any text check; the file lives outside the repo and the
+    # editing tools refuse it by path, and that is the real line.
+    unquoted = re.sub(r"[\\'\"]", "", text)
+    if "db-dev-targets" in unquoted or re.search(r"\.config/datatorag\b", unquoted):
+        raise Blocked("the dev-branch allowlist decides what db-guard lets write, so only a human edits or reads it")
     if CRED_URL.search(text):
         raise Blocked("the command carries a Postgres connection string with credentials")
 

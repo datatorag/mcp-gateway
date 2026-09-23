@@ -8,6 +8,8 @@ dist/
 .envrc
 *.tsbuildinfo
 
+__pycache__/
+
 # Internal planning / strategy docs + local scratch — keep OUT of this public repo
 docs/superpowers/
 docs/architecture/2026-06-22-security-architecture.pdf
