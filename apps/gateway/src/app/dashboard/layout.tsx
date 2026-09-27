@@ -15,6 +15,7 @@ import {
   PanelLeftClose,
   PanelLeftOpen,
   Plug,
+  ShieldCheck,
   Sparkles,
   type LucideIcon,
 } from "lucide-react";
@@ -45,6 +46,16 @@ const navItems: Array<{ href: string; label: string; icon: LucideIcon }> = [
   { href: "/dashboard/api-keys", label: "API keys", icon: KeyRound },
   { href: "/docs", label: "Docs", icon: BookOpen },
 ];
+
+/** The admin pages (SCRUM-351), shown only to a user whose role is admin.
+ * CONVENIENCE, NOT ACCESS CONTROL: the role comes from /api/me for
+ * presentation, and the admin layout's server-side guard (SCRUM-302) is what
+ * refuses everyone else. A member who types the URL still gets the 404. */
+const adminNavItem = { href: "/dashboard/admin", label: "Admin", icon: ShieldCheck };
+
+function navItemsFor(user: CurrentUser | null) {
+  return user?.role === "admin" ? [...navItems, adminNavItem] : navItems;
+}
 
 /** Routes where the page IS one full-height surface rather than a document
  * that scrolls inside the shell. On these the padded content wrapper is
@@ -165,6 +176,7 @@ export default function DashboardLayout({
     });
   }, []);
   const user = useCurrentUser();
+  const items = navItemsFor(user);
   const pathname = usePathname();
   const fullHeight = FULL_HEIGHT_ROUTES.has(pathname);
   const shell = useRef<HTMLDivElement>(null);
@@ -278,7 +290,7 @@ export default function DashboardLayout({
       {menuOpen && (
         <nav className="border-b border-border bg-background px-4 py-3 md:hidden">
           <div className="space-y-1">
-            {navItems.map((item) => (
+            {items.map((item) => (
               <Link
                 key={item.href}
                 href={item.href}
@@ -369,7 +381,7 @@ export default function DashboardLayout({
           className="mt-4 space-y-1 px-2"
           aria-label="Main"
         >
-          {navItems.map((item) => {
+          {items.map((item) => {
             const active =
               pathname === item.href ||
               (item.href !== "/dashboard" && pathname.startsWith(`${item.href}/`));
