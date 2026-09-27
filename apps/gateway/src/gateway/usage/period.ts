@@ -260,3 +260,65 @@ export async function periodStatus(
     ? { agentRuns: row.agent_runs, calls: row.calls, periodStart: row.period_start }
     : null;
 }
+
+/** What the Billing page shows for the current period (SCRUM-352). */
+export interface BillingUsage {
+  plan: Plan;
+  calls: number;
+  /** The plan's monthly allowance; `null` for an exempt internal account. */
+  callsIncluded: number | null;
+  agentRuns: number;
+  agentRunCap: number | null;
+  /** When the counters roll, or `null` when the period has lapsed and the
+   * next call will roll it. */
+  resetsAt: Date | null;
+  lapsed: boolean;
+  /** Free's cap is a hard stop; Pro's is not. */
+  hardCap: boolean;
+}
+
+/**
+ * The Billing page's numbers, READ ONLY, from the same row and the same
+ * interval enforcement uses.
+ *
+ * The reset date is `current_period_start + interval '1 month'` computed by
+ * Postgres, the exact expression the roll compares against, so the page and
+ * the roll cannot disagree about month arithmetic (a Jan 31 start included).
+ *
+ * A LAPSED PERIOD READS AS ZERO. `periodStatus` reports the row as it stands,
+ * which for a user back after a quiet month is last period's numbers. The
+ * Billing page shows what enforcement will actually apply: the next call rolls
+ * the period and starts it at zero, so that is what it shows, with no date,
+ * because the new period starts at that call. Nothing is written here.
+ */
+export async function billingUsage(db: Database, userId: string): Promise<BillingUsage | null> {
+  const rows = await db.execute<{
+    plan: Plan;
+    calls: number;
+    agent_runs: number;
+    resets_at: Date;
+    lapsed: boolean;
+  }>(sql`
+    SELECT plan,
+           current_period_calls                    AS calls,
+           current_period_agent_runs               AS agent_runs,
+           current_period_start + ${PERIOD}        AS resets_at,
+           (current_period_start <= now() - ${PERIOD}) AS lapsed
+    FROM users WHERE id = ${userId}
+  `);
+  const row = rows[0];
+  if (!row) return null;
+  const limits = planLimits(row.plan);
+  const exempt = await capExempt(db, userId);
+  const lapsed = Boolean(row.lapsed);
+  return {
+    plan: row.plan,
+    calls: lapsed ? 0 : Number(row.calls),
+    callsIncluded: exempt ? null : limits.monthlyIncluded,
+    agentRuns: lapsed ? 0 : Number(row.agent_runs),
+    agentRunCap: exempt ? null : limits.agentRuns,
+    resetsAt: lapsed ? null : new Date(row.resets_at),
+    lapsed,
+    hardCap: limits.hardCap,
+  };
+}

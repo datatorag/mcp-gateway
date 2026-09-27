@@ -41,7 +41,7 @@ export function FreeCta({ className }: { className: string }) {
  * route resolves from env. Verified against the live price objects
  * (unit_amount 2000 monthly / 20000 yearly, USD) on 2026-08-14; the copy
  * test pins these strings so they cannot drift apart silently. */
-const PRICE_LABEL: Record<CheckoutInterval, { amount: string; per: string }> = {
+export const PRICE_LABEL: Record<CheckoutInterval, { amount: string; per: string }> = {
   monthly: { amount: "$20", per: "/ month" },
   yearly: { amount: "$200", per: "/ year" },
 };

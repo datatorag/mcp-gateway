@@ -2,7 +2,6 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { eq, sql } from "drizzle-orm";
 import { PROMO, isPromoCode } from "@/lib/promo";
-import { PRO_RUNS_BULLET, freeAllowanceBullet, proAllowanceBullet } from "./allowances";
 import { db } from "@/lib/db";
 import { mcpServers, tools } from "@datatorag-mcp/db";
 import { Navbar } from "@/components/navbar";
@@ -11,11 +10,8 @@ import {
   PRO_MONTHLY_INCLUDED,
   planLimits,
 } from "@/gateway/billing/plans";
-import {
-  FreeCta,
-  PricingConversionListener,
-  ProCheckout,
-} from "./pricing-ctas";
+import { PricingConversionListener } from "./pricing-ctas";
+import { PlanCards } from "@/components/plan-cards";
 import { FaqSection } from "@/components/faq-section";
 import { JsonLd } from "@/components/json-ld";
 import { faqPageNode } from "@/lib/site-schema";
@@ -62,11 +58,6 @@ export const metadata: Metadata = {
 // so these conversations stay separable from ad-driven form fills.
 const CONTACT_HREF = "/contact?from=pricing";
 
-const ctaClass =
-  "mt-8 block rounded-[var(--radius)] px-6 py-2.5 text-center text-sm font-medium transition-all";
-const ctaPrimary = `${ctaClass} bg-primary text-primary-foreground hover:bg-primary/90`;
-const ctaSecondary = `${ctaClass} border border-border text-foreground hover:border-primary/40 hover:bg-secondary/50`;
-
 async function getToolCount(): Promise<number> {
   const [row] = await db
     .select({ count: sql<number>`count(${tools.id})::int` })
@@ -75,54 +66,6 @@ async function getToolCount(): Promise<number> {
     .where(eq(mcpServers.status, "active"));
   return row?.count ?? 0;
 }
-
-interface Tier {
-  name: string;
-  blurb: string;
-  features: string[];
-  /** Static price line; Pro renders its own inside the checkout component. */
-  price?: { amount: string; per?: string };
-  cta: "free" | "checkout" | "contact";
-  highlighted?: boolean;
-}
-
-const tiers: Tier[] = [
-  {
-    name: "Free",
-    blurb: "For individuals proving out an AI workflow. No card required.",
-    features: [
-      "Every connector and every tool",
-      "Multi-account: work and personal side by side",
-      "Approval gate on every write",
-      freeAllowanceBullet(),
-    ],
-    price: { amount: "$0" },
-    cta: "free",
-  },
-  {
-    name: "Pro",
-    blurb: "For people who run real work through their agent every day.",
-    features: [
-      "Everything in Free",
-      proAllowanceBullet(),
-      PRO_RUNS_BULLET,
-      "No feature gates, just a bigger allowance",
-    ],
-    cta: "checkout",
-    highlighted: true,
-  },
-  {
-    name: "Enterprise",
-    blurb: "For teams committing to volume. Quoted directly, by a person.",
-    features: [
-      "Everything in Pro",
-      "Committed volume at a negotiated rate",
-      "Hosted by us, or self-host the open-source gateway",
-    ],
-    price: { amount: "Custom" },
-    cta: "contact",
-  },
-];
 
 export default async function PricingPage({
   searchParams,
@@ -155,54 +98,9 @@ export default async function PricingPage({
             </p>
           </div>
 
-          <div className="mt-14 grid gap-6 lg:grid-cols-3">
-            {tiers.map((tier) => (
-              <div
-                key={tier.name}
-                className={`relative flex flex-col rounded-2xl border p-6 ${
-                  tier.highlighted
-                    ? "border-primary/40 bg-secondary/30"
-                    : "border-border bg-background"
-                }`}
-              >
-                <h2 className="font-display text-xl font-semibold text-foreground">
-                  {tier.name}
-                </h2>
-                <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
-                  {tier.blurb}
-                </p>
-                <ul className="mt-6 flex-1 space-y-3 text-sm text-muted-foreground">
-                  {tier.features.map((feature) => (
-                    <li key={feature} className="flex gap-3">
-                      <span className="mt-1.5 inline-block h-1.5 w-1.5 shrink-0 rounded-full bg-primary" />
-                      {feature}
-                    </li>
-                  ))}
-                </ul>
-                {tier.price && (
-                  <div className="mt-6">
-                    <span className="font-display text-3xl font-bold text-foreground">
-                      {tier.price.amount}
-                    </span>
-                    {tier.price.per && (
-                      <span className="ml-1 text-sm text-muted-foreground">
-                        {tier.price.per}
-                      </span>
-                    )}
-                  </div>
-                )}
-                {tier.cta === "checkout" ? (
-                  <ProCheckout className={ctaPrimary} promo={promo} />
-                ) : tier.cta === "free" ? (
-                  <FreeCta className={ctaSecondary} />
-                ) : (
-                  <Link href={CONTACT_HREF} className={ctaSecondary}>
-                    Talk to us
-                  </Link>
-                )}
-              </div>
-            ))}
-          </div>
+          {/* The tier cards live in components/plan-cards.tsx (SCRUM-352), shared
+              with the dashboard's Billing page so the two cannot drift. */}
+          <PlanCards promo={promo} className="mt-14 grid gap-6 lg:grid-cols-3" />
 
           <div className="mx-auto mt-14 max-w-3xl rounded-2xl border border-border bg-secondary/30 p-8 text-center">
             <h2 className="font-display text-xl font-semibold text-foreground">

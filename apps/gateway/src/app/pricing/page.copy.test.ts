@@ -22,6 +22,9 @@ const read = (...segments: string[]) =>
 const page = read("src", "app", "pricing", "page.tsx");
 const ctas = read("src", "app", "pricing", "pricing-ctas.tsx");
 const allowances = read("src", "app", "pricing", "allowances.ts");
+// The tier cards moved here in SCRUM-352, shared with the Billing page, so
+// every rule about what a tier says reads this file.
+const cards = read("src", "components", "plan-cards.tsx");
 const comparisonPost = read(
   "content",
   "blog",
@@ -35,16 +38,19 @@ describe("pricing page copy", () => {
     // word would describe a product state that cannot occur.
     expect(page).not.toMatch(/trial/i);
     expect(ctas).not.toMatch(/trial/i);
+    expect(cards).not.toMatch(/trial/i);
   });
 
   it("does not name the third tier 'Scale' — it is Enterprise", () => {
     expect(page).not.toMatch(/\bScale\b/);
+    expect(cards).not.toMatch(/\bScale\b/);
   });
 
   it("does not publish an overage rate — metered overage is not built", () => {
     // A published per-call rate we cannot bill is a claim, not a price.
     expect(page).not.toMatch(/\$0\.0|per[ -]call|overage/i);
     expect(ctas).not.toMatch(/\$0\.0|per[ -]call|overage/i);
+    expect(cards).not.toMatch(/\$0\.0|per[ -]call|overage/i);
   });
 
   it("renders call allowances from billing/plans.ts, not literals", () => {
@@ -100,19 +106,20 @@ describe("pricing page copy", () => {
     expect(PRO_RUNS_BULLET).toBe("Skill and agent runs come out of that, no separate bill for the model");
   });
 
-  it("the page renders those bullets, in order on the Pro card, and holds no run count of its own", () => {
-    expect(page).toContain("freeAllowanceBullet(),");
-    const pro = page.slice(page.indexOf('name: "Pro"'), page.indexOf('name: "Enterprise"'));
+  it("the cards render those bullets, in order on the Pro card, and hold no run count of their own", () => {
+    expect(cards).toContain("freeAllowanceBullet(),");
+    const pro = cards.slice(cards.indexOf('name: "Pro"'), cards.indexOf('name: "Enterprise"'));
     // "that" in the second bullet refers to the first, so the order is copy.
     expect(pro.indexOf("proAllowanceBullet(),")).toBeGreaterThan(-1);
     expect(pro.indexOf("PRO_RUNS_BULLET,")).toBeGreaterThan(pro.indexOf("proAllowanceBullet(),"));
-    const freeCard = page.slice(page.indexOf('name: "Free"'), page.indexOf('name: "Pro"'));
+    const freeCard = cards.slice(cards.indexOf('name: "Free"'), cards.indexOf('name: "Pro"'));
     expect(freeCard).not.toContain("PRO_RUNS_BULLET");
     // No literal allowance anywhere in the page or the helper.
-    for (const source of [page, allowances]) {
+    for (const source of [page, cards, allowances]) {
       expect(source).not.toMatch(/\d[\d,]* (tool calls|agent runs)/);
     }
     expect(page).not.toMatch(/unlimited/i);
+    expect(cards).not.toMatch(/unlimited/i);
     expect(allowances).not.toMatch(/unlimited/i);
   });
 
@@ -122,13 +129,14 @@ describe("pricing page copy", () => {
     for (const banned of [/\bSSO\b/, /\bSAML\b/, /\bDPA\b/, /SOC ?2/i, /\bSLA/i, /dedicated support/i, /invoicing|PO terms/i]) {
       expect(page).not.toMatch(banned);
       expect(ctas).not.toMatch(banned);
+      expect(cards).not.toMatch(banned);
     }
   });
 
   it("contains no em-dashes (house style)", () => {
     // File-wide on purpose, comments included: these files are copy-dense,
     // and comment prose next to copy is exactly what drifts into it.
-    for (const source of [page, ctas]) {
+    for (const source of [page, ctas, cards]) {
       expect(source).not.toContain("—");
       expect(source).not.toContain("&mdash;");
     }
