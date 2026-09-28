@@ -11,7 +11,7 @@ connector: "google-workspace"
 
 **Forwarding carries the original's files.** `gmail_forward` now includes the forwarded message's own attachments, counted in the limit. Pass `include_original_attachments: false` to forward the text alone.
 
-**Limits and refusals.** At most 10 files and 25 MB per message. A refusal comes before any download and names the file and the cap. Two attachments may not share a filename.
+**Limits and refusals.** At most 10 files and 25 MB per message. A refusal comes before any download for files whose size Drive reports, and names the file and the cap; an export is counted as it downloads, and one over the cap stops the message before it is sent. Two attachments may not share a filename.
 
 **Drafts with files are signed.** `gmail_send_draft` adds your Gmail signature to a draft that holds files, the way it already does for plain drafts. Updating a draft replaces it whole: files it held are dropped unless you pass them again.
 
