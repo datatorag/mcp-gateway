@@ -24,7 +24,8 @@ faqs:
   - q: Can DataToRAG send email, or only read it?
     a: >-
       It sends. DataToRAG's Gmail tools cover search, read, send, reply, forward
-      and draft, alongside saving attachments and managing labels. The
+      and draft, with files from Google Drive attached, alongside saving
+      attachments and managing labels. The
       [Gmail page](/docs/gmail) lists each operation with the scopes it needs.
   - q: Can DataToRAG edit Google Docs and Sheets, or only read them?
     a: >-
@@ -48,7 +49,7 @@ Google Workspace is DataToRAG's flagship connector. One OAuth flow gives your AI
 
 | Service | Summary |
 |---------|---------|
-| [Gmail](/docs/gmail) | Search, read, send, reply, forward, draft, save attachments, and manage labels |
+| [Gmail](/docs/gmail) | Search, read, send, reply, forward, draft with Drive files attached, save attachments, and manage labels |
 | [Calendar](/docs/calendar) | List, create, update, delete events, and check availability |
 | [Drive](/docs/drive) | Search files, read content, and create folders |
 | [Docs](/docs/docs) | Read, create, write, and batch update documents |

@@ -1,6 +1,6 @@
 ---
 title: "Gmail"
-description: "Search, read, send, reply, forward, and draft emails, and manage labels."
+description: "Search, read, send, reply, forward, and draft emails with Drive files attached, and manage labels."
 order: 1
 section: "connectors"
 connector: "google-workspace"
@@ -9,8 +9,28 @@ faqs:
     a: >-
       It sends. The Gmail tools cover sending a new message, replying to an
       existing thread and forwarding a message, alongside creating, updating,
-      sending and deleting drafts. Searching and reading use Gmail's own query
-      syntax.
+      sending and deleting drafts, and every one of them can attach files from
+      Google Drive. Searching and reading use Gmail's own query syntax.
+  - q: Can it attach files to an email?
+    a: >-
+      Yes, from Google Drive. Sending, replying, forwarding and the draft tools
+      take a list of Drive file ids, up to 10 files and 25 MB per message. A
+      PDF, an image or any other file is attached as it is. A Google Doc, Sheet
+      or Slides deck goes in as a link in the body, the way Gmail sends one,
+      unless you ask for it as a file such as a PDF, a Word document or a
+      spreadsheet. Files have to be in Drive first; nothing is attached from
+      outside it.
+  - q: Can an image show inside the email instead of at the bottom?
+    a: >-
+      Yes. Reference the Drive image in the HTML body as cid followed by its
+      filename, and it renders in place, the same structure Gmail builds when you
+      paste an image into a message. An image nothing references is attached at
+      the bottom as usual.
+  - q: Does forwarding keep the original attachments?
+    a: >-
+      Yes. A forward carries the original message's attachments, and its inline
+      images that carry a filename, counted in the 25 MB limit. Pass include_original_attachments
+      false to forward the text alone.
   - q: How does DataToRAG archive an email?
     a: >-
       By removing the INBOX label. The Gmail label tool adds or removes labels on
@@ -28,7 +48,8 @@ faqs:
       INBOX, UNREAD and SENT, cannot be deleted at all.
   - q: Can it save an email attachment to Drive?
     a: >-
-      Yes. One Gmail tool saves an email attachment straight to Google Drive, and
+      Yes. One Gmail tool saves an email attachment straight to Google Drive,
+      streamed from Gmail into Drive so a large file arrives whole, and
       DataToRAG's search tool can find the messages carrying attachments first
       using Gmail's own query syntax.
   - q: Will my Gmail signature be added to mail DataToRAG sends?
@@ -57,9 +78,12 @@ faqs:
       untouched rather than rewrites.
   - q: What Gmail permission does DataToRAG ask for?
     a: >-
-      One scope, gmail.modify. That single Google scope covers everything the
-      Gmail connector does: searching, reading, sending, replying, forwarding,
-      drafting, saving attachments to Drive and managing labels.
+      One Gmail scope, gmail.modify. That scope covers everything the Gmail
+      tools do in your mailbox: searching, reading, sending, replying,
+      forwarding, drafting and managing labels. Attaching a Drive file or saving
+      an attachment to Drive also uses the Drive access you grant when you
+      connect Google Workspace, and sending one tab of a Sheet as csv or tsv
+      reads it through Sheets.
 ---
 
 The Gmail connector gives your AI assistant full access to your inbox: searching, reading, composing, labeling, and organizing messages.
@@ -73,12 +97,12 @@ The Gmail connector gives your AI assistant full access to your inbox: searching
 | `gmail_search` | Search emails using Gmail query syntax (e.g., `from:boss subject:Q2 has:attachment`). Results include flattened from/to/subject/date plus snippet and labels |
 | `gmail_list` | List recent messages from your inbox with flattened from/to/subject/date fields |
 | `gmail_read` | Read a full email by message ID. `text_only` returns a compact view (flattened headers, decoded text body, attachment metadata); `max_body_chars` truncates long bodies |
-| `gmail_send` | Send a new email. Your Gmail signature is added; `signature: false` sends without it |
-| `gmail_reply` | Reply to an existing thread. Your Gmail signature goes under your note, above the quoted message |
-| `gmail_forward` | Forward a message to another recipient, signed the same way as a reply |
-| `gmail_create_draft` | Create a draft without sending. Your Gmail signature is added to the draft; `signature: false` leaves it out |
-| `gmail_update_draft` | Update an existing draft |
-| `gmail_send_draft` | Send an existing draft. A draft that already carries the signature is sent unchanged; one without gets it |
+| `gmail_send` | Send a new email, with Drive files in `attachments`. Your Gmail signature is added; `signature: false` sends without it |
+| `gmail_reply` | Reply to an existing thread, with Drive files in `attachments`. Your Gmail signature goes under your note, above the quoted message |
+| `gmail_forward` | Forward a message to another recipient, signed the same way as a reply. Carries the original's attachments unless `include_original_attachments: false`; `attachments` adds Drive files |
+| `gmail_create_draft` | Create a draft without sending, with Drive files in `attachments`. Your Gmail signature is added to the draft; `signature: false` leaves it out |
+| `gmail_update_draft` | Update an existing draft. This replaces the whole draft: files it held are dropped unless passed again in `attachments` |
+| `gmail_send_draft` | Send an existing draft. A draft that already carries the signature is sent unchanged; one without gets it, including a draft that holds files |
 | `gmail_delete_draft` | Delete a draft |
 | `gmail_mark_read` | Mark messages as read, for a single message or a batch of up to 1,000 IDs. For label changes beyond read state, use `gmail_label_message` |
 | `gmail_label_message` | Label many messages in one call: `message_ids` (up to 1,000) with `add_labels` and `remove_labels`, one `batchModify` request, a per-message outcome in the result; `message_id` for a single message. Removing INBOX archives a message; removing UNREAD marks it read |
@@ -86,14 +110,41 @@ The Gmail connector gives your AI assistant full access to your inbox: searching
 | `gmail_list_labels` | List every label, system and user-created, with its ID, name, and type. Label IDs feed `gmail_label_message`, `gmail_update_label`, and `gmail_delete_label` |
 | `gmail_update_label` | Rename a label or change its visibility. Takes the label ID, not the name. Renaming keeps the label on already-labeled messages |
 | `gmail_delete_label` | Delete a label by ID. The label is removed from every message carrying it; the messages themselves are not deleted. System labels (INBOX, UNREAD, SENT) cannot be deleted |
-| `gmail_save_attachment_to_drive` | Save an email attachment directly to Google Drive |
+| `gmail_save_attachment_to_drive` | Save an email attachment directly to Google Drive. The file streams from Gmail into Drive, so a large attachment arrives whole |
+
+## Attachments
+
+`gmail_send`, `gmail_reply`, `gmail_forward`, `gmail_create_draft` and `gmail_update_draft` take an `attachments` list of Drive files: at most 10 per message and 25 MB in total. Each entry is a Drive file id, or `{"file_id": "<id>", "as": "<format>"}` to send a Google Doc, Sheet or Slides deck as a file.
+
+- A PDF, an image, a zip or any other Drive file is attached as it is.
+- A Google Doc, Sheet or Slides deck passed by id alone goes in as a link in the body, in both the plain and HTML versions, the way Gmail sends one. Nothing changes who can open it; sharing is up to you.
+- With `as`, it is exported and attached. The formats Google offers for each:
+
+| File | `as` |
+|------|------|
+| Google Docs | `pdf`, `docx`, `txt`, `html`, `md`, `rtf`, `odt`, `epub` |
+| Google Sheets | `pdf`, `xlsx`, `csv`, `tsv`, `html`, `ods` |
+| Google Slides | `pdf`, `pptx`, `txt`, `odp` |
+
+- `csv` and `tsv` export one tab. Add `"tab": "<title>"` to choose it; otherwise the first tab goes. The response always says which tab, for example `exported tab Sheet1 of 3`.
+- A Sheet as `html` arrives as a `.zip` of pages, one per tab. Slides as `txt` is the slides' visible text only.
+
+**Inline images.** Reference an attached image in `html_body` as `<img src="cid:FILENAME">`, where `FILENAME` is its Drive filename with any character other than letters, digits, dot, dash and underscore replaced by an underscore. It renders in place instead of at the bottom, and is not listed again as an attachment.
+
+**Forwarding.** `gmail_forward` carries the original message's attachments, and its inline images that carry a filename, counted in the 25 MB limit. `include_original_attachments: false` forwards the text alone.
+
+**Refusals come first.** A folder, a format a file cannot take, an unknown tab, a missing or unshared id, two attachments with the same filename, or files whose sizes add up to more than 25 MB is refused before anything is downloaded or sent, and the refusal names the file. A Google Doc, Sheet or Slides deck exported with `as` has no size until Google renders it, so it is counted as it downloads; one that takes the total past 25 MB stops the message before it is sent, and nothing goes out.
+
+**The response says what happened.** Each entry is reported in an `attachments` field as `attached`, `inline`, `linked` or `exported`, with its size or link. A call with no attachments has no such field.
+
+Files come from Drive only. To send something that is not in Drive yet, put it there first and pass its id.
 
 ## Signatures
 
 Mail sent with `gmail_send`, `gmail_reply`, `gmail_forward` or `gmail_send_draft` ends with the signature set in Gmail for the address it is sent from. Nothing needs configuring, and an alias uses its own signature.
 
 - On a new message the signature closes the body. On a reply or forward it sits under your note and above the quoted message.
-- `gmail_create_draft` and `gmail_update_draft` sign the draft as Gmail's Compose does. `gmail_send_draft` adds a signature only to a draft that has none, so a draft is never signed twice.
+- `gmail_create_draft` and `gmail_update_draft` sign the draft as Gmail's Compose does. `gmail_send_draft` adds a signature only to a draft that has none, so a draft is never signed twice. A draft that holds files is signed in its text and its files are sent as they are.
 - Pass `signature: false` to send a message exactly as written.
 - Messages go out with a plain-text and an HTML version. The signature is in the HTML version only.
 
@@ -114,11 +165,15 @@ Gmail's mobile apps fold a signature they recognise behind the three-dot button.
 
 - `https://www.googleapis.com/auth/gmail.modify`
 
+Attaching Drive files and saving attachments to Drive also use the Drive access granted when you connect Google Workspace, and a Sheet sent as `csv` or `tsv` is read through Sheets.
+
 ## Example prompts
 
 - "Search my inbox for emails from @acme.com in the last week and summarize the key asks"
 - "Draft a reply to the latest email from Sarah declining the meeting politely"
 - "Find all unread emails with attachments and save the attachments to my Reports folder in Drive"
 - "Forward the Q2 report email to the marketing team with a note"
+- "Email the Q3 board deck to Sarah as a PDF, with the budget sheet attached as xlsx"
+- "Draft a reply with our logo inline at the top and the signed contract from Drive attached"
 - "Draft replies to every unanswered client email from this week, then send the drafts I approve"
 - "Create an Alerts/Invoices label, apply it to every email from our billing provider this month, and archive them"
