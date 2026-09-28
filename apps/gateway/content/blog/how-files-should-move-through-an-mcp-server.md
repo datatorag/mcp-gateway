@@ -12,6 +12,8 @@ Last week we shipped attachments for the Gmail tools. The announcement is its ow
 
 ## Three designs, one survivor
 
+![Three designs: the model hands us base64 bytes (cut at design), a URL (cut at design), or a Drive file id, where the gateway pulls from Drive and uploads to Gmail (shipped)](/blog/attachments-three-designs.png)
+
 **Design 1: the model hands us the bytes.** An `attachments` entry with `filename`, `mime_type` and `content_base64`. Every MCP tutorial's first draft looks like this and ours did too, in the spec. It never reached the code: the arithmetic below killed it at the design review.
 
 **Design 2: the model hands us a URL.** We fetch it. Works for public files, fails for everything a business actually sends, which lives behind a login. Also cut on paper.

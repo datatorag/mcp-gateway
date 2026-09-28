@@ -26,6 +26,8 @@ Limits: 10 files, 25 MB total. For a file Drive knows the size of, the refusal c
 
 ## Why the bytes never touch the model
 
+![Claude passes a 33-character file id; the gateway streams the 9 MB file from Drive into the Gmail draft, never through the model](/blog/attachments-where-the-bytes-go.png)
+
 The obvious design has the model hand us the file as base64 in the tool call. It was in the first draft of the spec and cut before a line of it was written. Base64 tokenizes at roughly one token per two raw bytes, so a 200 KB screenshot is about a hundred thousand output tokens and a 2 MB photo is out of the question. And the model does not have the file anyway: when you drop a PDF into Claude it comes back to the model as content, not as a handle, so the only thing it could put in a tool call is its memory of the bytes.
 
 A Drive id is already the opaque handle the MCP spec is converging on. So the model says "attach this id", our server pulls the bytes from Drive with your token and streams them into the message, and nothing large ever passes through the model. The full reasoning, including what the spec's own proposals did with this question, is in [How a File Should Move Through an MCP Server](/blog/how-files-should-move-through-an-mcp-server).
