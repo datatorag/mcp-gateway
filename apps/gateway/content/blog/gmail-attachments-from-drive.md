@@ -14,7 +14,7 @@ As of today, `gmail_send`, `gmail_reply`, `gmail_forward`, `gmail_create_draft` 
 
 ## What it does
 
-Each entry is a Drive file. A PDF or an image or a zip goes on as an attachment, the way you'd expect. A Google Doc, Sheet or Slides deck by itself goes in as a link in the body, which is what Gmail's own compose does when you attach a Doc, and for the same reason: the recipient gets the live document. If you want a file instead, say so: `{file_id, as: "pdf"}` exports it and attaches the export. Docs also do docx, txt, html and markdown; Sheets do xlsx and csv; Slides do pptx. csv exports one tab, so you name the tab, and the response tells you which one went.
+Each entry is a Drive file. A PDF or an image or a zip goes on as an attachment, the way you'd expect. A Google Doc, Sheet or Slides deck by itself goes in as a link in the body, which is what Gmail's own compose does when you attach a Doc, and for the same reason: the recipient gets the live document. If you want a file instead, say so: `{file_id, as: "pdf"}` exports it and attaches the export. Docs also do docx, txt, html and md (markdown); Sheets do xlsx and csv; Slides do pptx. csv exports one tab, so you name the tab, and the response tells you which one went.
 
 ![A Gmail draft written by the connector: a PDF and an xlsx export attached, a Google Doc linked in the body, the logo inline](/blog/gmail-draft-attachments.png)
 

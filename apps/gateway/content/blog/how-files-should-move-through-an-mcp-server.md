@@ -44,7 +44,7 @@ The replacement under review is SEP-2631, targeting late July. The shape: the cl
 
 That is the whole insight, and it is small. Every Google Workspace user already has a file store the model can search and name. `drive_search` returns ids. The user says "attach the Q3 report" and the model says `{file_id: "1AbC..."}`. Our server does the rest with the user's token: metadata call for size and type, a refusal before any download if a file Drive knows the size of would take the message over 10 files or 25 MB (an export has no size until Google renders it, so it is counted as it streams and stopped before send if it goes over), then a streaming download into a MIME part, then one upload to Gmail, resumable above 5 MB.
 
-Native Google files got their own treatment, because "attach a Google Doc" means two different things. Passed by id alone, a Doc goes in as a link, which is what Gmail's own compose does and what the recipient usually wants: the live document. Passed as `{file_id, as: "pdf"}`, Google renders the export and we stream that. Docs export to pdf, docx, txt, html, markdown, rtf, odt and epub; Sheets to xlsx, csv, tsv, pdf, html, ods; Slides to pptx, pdf, txt, odp. A csv is one tab, so you name it and the response says which one went.
+Native Google files got their own treatment, because "attach a Google Doc" means two different things. Passed by id alone, a Doc goes in as a link, which is what Gmail's own compose does and what the recipient usually wants: the live document. Passed as `{file_id, as: "pdf"}`, Google renders the export and we stream that. Docs export to pdf, docx, txt, html, md, rtf, odt and epub; Sheets to xlsx, csv, tsv, pdf, html (which Google delivers as a zip of one page per tab) and ods; Slides to pptx, pdf, txt and odp. A csv is one tab, so you name it and the response says which one went.
 
 Inline images use the same handle: reference a Drive file in the HTML as `cid:` plus its filename and it becomes a `multipart/related` part with a Content-ID, the structure Gmail builds when you paste an image into a message. No hosted URL, so nothing gets shared "to anyone with the link" as a side effect.
 
@@ -56,7 +56,7 @@ Total bytes through the model for a 9 MB attachment: the length of a Drive id, a
 
 Honesty section. The file has to be in Drive. A screenshot pasted into the chat cannot reach an email through any MCP client today, ours included, and our docs say so rather than implying otherwise. The workaround is one step: drop it in Drive, tell Claude the name. For that customer's docs and zips, which live in Drive already, there is no step.
 
-The other cost is that we depend on Drive's export renderer for native files. A Doc exported as markdown is Google's markdown, and a Sheet exported as csv is one tab. Both are documented, neither is something we can fix.
+The other cost is that we depend on Drive's export renderer for native files. A Doc exported as md is Google's markdown, and a Sheet exported as csv is one tab. Both are documented, neither is something we can fix.
 
 ## What comes next
 

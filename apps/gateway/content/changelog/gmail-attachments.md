@@ -17,4 +17,4 @@ connector: "google-workspace"
 
 **The response says what happened.** Each entry is reported as `attached`, `inline`, `linked` or `exported`, with its size or link.
 
-Files come from Drive only. To send something that is not in Drive yet, put it there first and pass its id.
+Files come from Drive only. To send something that is not in Drive yet, put it there first and pass its id. The design, and why the bytes never pass through the model, is in [Your Agent Can Attach Files to Email Now](/blog/gmail-attachments-from-drive).
