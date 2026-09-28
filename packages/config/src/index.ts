@@ -78,7 +78,7 @@ const envSchema = z.object({
   INTERNAL_EXCLUDE_IDS: z.string().default(""),
   // Dashboard playground (capped LLM chat). Empty ANTHROPIC_API_KEY = playground disabled.
   ANTHROPIC_API_KEY: z.string().default(""),
-  PLAYGROUND_MODEL: z.string().default("claude-sonnet-5"),
+  PLAYGROUND_MODEL: z.string().default("claude-sonnet-5-5"),
   PLAYGROUND_MESSAGE_CAP: z.coerce.number().default(20),
   /** Whether a NEW user is sent to the Agent after signup.
    *

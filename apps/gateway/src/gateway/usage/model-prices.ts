@@ -19,9 +19,12 @@ export interface ModelPrice {
 }
 
 /** The date the prices below were read from the provider's list. */
-export const PRICES_AS_OF = "2026-09-11";
+export const PRICES_AS_OF = "2026-09-28";
 
 export const MODEL_PRICES: Record<string, ModelPrice> = {
+  "claude-sonnet-5-5": { inputPerM: 2.0, outputPerM: 10.0, cacheReadPerM: 0.2, cacheWritePerM: 2.5 },
+  // No longer selectable; kept because past runs are stored under this name
+  // and must go on pricing.
   "claude-sonnet-5": { inputPerM: 2.0, outputPerM: 10.0, cacheReadPerM: 0.2, cacheWritePerM: 2.5 },
   // Not selectable today; priced because the test environment and a future
   // selector may run it, and an unpriced run reads as unknown, not free.
@@ -29,7 +32,7 @@ export const MODEL_PRICES: Record<string, ModelPrice> = {
 };
 
 /** The models the agent can run. One today: the environment default. */
-export const SELECTABLE_MODELS = ["claude-sonnet-5"] as const;
+export const SELECTABLE_MODELS = ["claude-sonnet-5-5"] as const;
 
 export interface PricedBuckets {
   /** Uncached input tokens. */

@@ -292,7 +292,7 @@ describe("the stop notice and the interrupted card (SCRUM-234)", () => {
       parts: [
         STOPPED.parts[0]!,
         STOPPED.parts[1]!,
-        { type: "data-run-summary", data: { steps: 7, weightedTokens: 184_099, costUsd: 0.99, model: "claude-sonnet-5" } },
+        { type: "data-run-summary", data: { steps: 7, weightedTokens: 184_099, costUsd: 0.99, model: "claude-sonnet-5-5" } },
       ] as PlaygroundMessage["parts"],
     };
     render([USER_TURN, summarised]);

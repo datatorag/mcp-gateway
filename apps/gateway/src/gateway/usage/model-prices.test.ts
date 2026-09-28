@@ -1,4 +1,7 @@
+import { readFileSync } from "node:fs";
+import path from "node:path";
 import { describe, expect, it } from "vitest";
+import { envSchema } from "@datatorag-mcp/config";
 
 import {
   costUsd,
@@ -24,7 +27,21 @@ describe("the model price table (SCRUM-257)", () => {
       expect(MODEL_PRICES[model], model).toBeDefined();
     }
     // The default the environment schema falls back to when nothing is set.
-    expect(SELECTABLE_MODELS).toContain("claude-sonnet-5");
+    const configDefault = envSchema.shape.PLAYGROUND_MODEL.parse(undefined);
+    expect(SELECTABLE_MODELS).toContain(configDefault);
+  });
+
+  it("the production compose file falls back to the same model as the config schema", () => {
+    // Prod sets no PLAYGROUND_MODEL, so the compose fallback is what runs
+    // there; a model change that edits only the schema default changes
+    // nothing in production.
+    const compose = readFileSync(path.resolve(process.cwd(), "../../docker/docker-compose.prod.yml"), "utf8");
+    const fallback = compose.match(/PLAYGROUND_MODEL:\s*\$\{PLAYGROUND_MODEL:-([^}]+)\}/)?.[1];
+    expect(fallback).toBe(envSchema.shape.PLAYGROUND_MODEL.parse(undefined));
+  });
+
+  it("keeps pricing a model past runs were stored under", () => {
+    expect(MODEL_PRICES["claude-sonnet-5"]).toBeDefined();
   });
 
   it("every row prices all four buckets as positive USD per million tokens", () => {
@@ -39,12 +56,12 @@ describe("the model price table (SCRUM-257)", () => {
   });
 
   it("prices a run bucket by bucket, in dollars, rounded to a millionth", () => {
-    const sonnet = MODEL_PRICES["claude-sonnet-5"]!;
-    expect(costUsd("claude-sonnet-5", { input: 1_000_000, cacheRead: 0, cacheWrite: 0, output: 0 })).toBe(sonnet.inputPerM);
-    expect(costUsd("claude-sonnet-5", { input: 0, cacheRead: 1_000_000, cacheWrite: 0, output: 0 })).toBe(sonnet.cacheReadPerM);
-    expect(costUsd("claude-sonnet-5", { input: 0, cacheRead: 0, cacheWrite: 1_000_000, output: 0 })).toBe(sonnet.cacheWritePerM);
-    expect(costUsd("claude-sonnet-5", { input: 0, cacheRead: 0, cacheWrite: 0, output: 1_000_000 })).toBe(sonnet.outputPerM);
-    const mixed = costUsd("claude-sonnet-5", { input: 14, cacheRead: 303_511, cacheWrite: 80_858, output: 72_876 })!;
+    const sonnet = MODEL_PRICES["claude-sonnet-5-5"]!;
+    expect(costUsd("claude-sonnet-5-5", { input: 1_000_000, cacheRead: 0, cacheWrite: 0, output: 0 })).toBe(sonnet.inputPerM);
+    expect(costUsd("claude-sonnet-5-5", { input: 0, cacheRead: 1_000_000, cacheWrite: 0, output: 0 })).toBe(sonnet.cacheReadPerM);
+    expect(costUsd("claude-sonnet-5-5", { input: 0, cacheRead: 0, cacheWrite: 1_000_000, output: 0 })).toBe(sonnet.cacheWritePerM);
+    expect(costUsd("claude-sonnet-5-5", { input: 0, cacheRead: 0, cacheWrite: 0, output: 1_000_000 })).toBe(sonnet.outputPerM);
+    const mixed = costUsd("claude-sonnet-5-5", { input: 14, cacheRead: 303_511, cacheWrite: 80_858, output: 72_876 })!;
     const expected =
       (14 * sonnet.inputPerM + 303_511 * sonnet.cacheReadPerM + 80_858 * sonnet.cacheWritePerM + 72_876 * sonnet.outputPerM) /
       1_000_000;
@@ -58,6 +75,6 @@ describe("the model price table (SCRUM-257)", () => {
   });
 
   it("an empty run costs nothing", () => {
-    expect(costUsd("claude-sonnet-5", { input: 0, cacheRead: 0, cacheWrite: 0, output: 0 })).toBe(0);
+    expect(costUsd("claude-sonnet-5-5", { input: 0, cacheRead: 0, cacheWrite: 0, output: 0 })).toBe(0);
   });
 });
