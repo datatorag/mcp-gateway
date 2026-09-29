@@ -112,8 +112,8 @@ in addition to landing the merge itself:
    `apps/gateway/src/gateway/playground/tool-classification.test.ts` and,
    if it is a read, to `KNOWN_READ_TOOLS` in
    `apps/gateway/src/gateway/playground/tools.ts` (same commit; tests
-   enforce the two lists agree and that the snapshot matches the live
-   registry).
+   enforce the two lists agree and, where `LIVE_REGISTRY_DATABASE_URL` is
+   set, that the snapshot matches the live registry).
 4. **Session re-auth note**: gateway MCP sessions are in-memory only — the
    restart in step 1 drops all live sessions for this connector. This is
    expected, not a regression; users just re-auth on their next tool call

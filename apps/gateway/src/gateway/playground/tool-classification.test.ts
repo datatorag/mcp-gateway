@@ -1,7 +1,11 @@
 import { describe, it, expect } from "vitest";
 import { and, desc, eq } from "drizzle-orm";
 import { mcpServers, tools as toolsTable, usageEvents } from "@datatorag-mcp/db";
-import { getDb } from "@/lib/db";
+import {
+  liveRegistryDb,
+  LIVE_REGISTRY_DATABASE_URL,
+  NEEDS_LIVE_REGISTRY,
+} from "@/test-utils/live-registry";
 import { classifyWrite, KNOWN_READ_TOOLS } from "./tools";
 import { REGISTRY_CLASSIFICATION } from "./registry-snapshot";
 
@@ -93,7 +97,7 @@ describe("registry write/read classification snapshot", () => {
  * the same posture as the e2e suite. A drift here is not cosmetic: a tool
  * missing from the snapshot is a tool nobody reviewed the gate decision for.
  */
-describe.runIf(!!process.env.DATABASE_URL)("snapshot vs the live registry", () => {
+describe.runIf(!!LIVE_REGISTRY_DATABASE_URL)(`snapshot vs the live registry ${NEEDS_LIVE_REGISTRY}`, () => {
   /** How stale the connected database may be before its answers stop meaning
    * anything. Generous on purpose: a guard that reddens on a quiet weekend is
    * a guard someone deletes, and then there is no guard. Production writes a
@@ -105,8 +109,8 @@ describe.runIf(!!process.env.DATABASE_URL)("snapshot vs the live registry", () =
     // THE GROUND HAS TO BE CURRENT BEFORE IT CAN BE GROUND TRUTH.
     //
     // Everything below compares the snapshot against "the live registry". That
-    // phrase is doing a lot of work: it is only live if DATABASE_URL points at
-    // the database production actually uses. It did not. A dev branch, forked
+    // phrase is doing a lot of work: it is only live if the database this reads
+    // is the one production actually uses. It was not. A dev branch, forked
     // from prod and then left alone, kept answering — and because the branch
     // and the snapshot had gone stale in the same direction, they agreed and
     // this suite passed. A tool shipped unregistered for weeks underneath a
@@ -115,7 +119,7 @@ describe.runIf(!!process.env.DATABASE_URL)("snapshot vs the live registry", () =
     // That is the two-derived-artifacts trap one layer out: the fixture became
     // a third derived artifact, and nothing compared IT to anything. So the
     // first assertion is about the fixture rather than the subject.
-    const [latest] = await getDb()
+    const [latest] = await liveRegistryDb()
       .select({ at: usageEvents.createdAt })
       .from(usageEvents)
       .orderBy(desc(usageEvents.createdAt))
@@ -127,7 +131,7 @@ describe.runIf(!!process.env.DATABASE_URL)("snapshot vs the live registry", () =
     expect(
       latest,
       "no usage events at all: this is not the production database, or it is an empty copy. " +
-        "Point DATABASE_URL at the database production uses, or refresh the dev branch from it."
+        "Point LIVE_REGISTRY_DATABASE_URL at the database production uses, or refresh the dev branch from it."
     ).toBeDefined();
 
     const ageDays = (Date.now() - new Date(latest!.at).getTime()) / 86_400_000;
@@ -135,13 +139,13 @@ describe.runIf(!!process.env.DATABASE_URL)("snapshot vs the live registry", () =
       ageDays,
       `the connected database's newest usage event is ${ageDays.toFixed(1)} days old. ` +
         `Anything this suite reports about "the live registry" is a statement about a stale copy, ` +
-        `not about production. Refresh the dev branch from its parent, or point DATABASE_URL at ` +
+        `not about production. Refresh the dev branch from its parent, or point LIVE_REGISTRY_DATABASE_URL at ` +
         `production, then re-run. Do NOT edit the snapshot to make this suite green.`
     ).toBeLessThan(MAX_FIXTURE_AGE_DAYS);
   });
 
   it("covers every enabled tool on an active server, and no tools that are gone", async () => {
-    const rows = await getDb()
+    const rows = await liveRegistryDb()
       .select({ namespacedName: toolsTable.namespacedName })
       .from(toolsTable)
       .innerJoin(mcpServers, eq(toolsTable.mcpServerId, mcpServers.id))
@@ -171,7 +175,7 @@ describe.runIf(!!process.env.DATABASE_URL)("snapshot vs the live registry", () =
    * divergence fails here in a diff instead of quietly widening what runs
    * without asking. */
   it("agrees with what the plugins themselves declare read-only", async () => {
-    const rows = await getDb()
+    const rows = await liveRegistryDb()
       .select({
         namespacedName: toolsTable.namespacedName,
         readOnlyHint: toolsTable.readOnlyHint,
