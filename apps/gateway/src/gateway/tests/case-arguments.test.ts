@@ -10,6 +10,11 @@
 
 import { describe, expect, it } from "vitest";
 import { CASES_DIR } from "./registry";
+import {
+  liveRegistryDb,
+  LIVE_REGISTRY_DATABASE_URL,
+  NEEDS_LIVE_REGISTRY,
+} from "@/test-utils/live-registry";
 import { mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -83,12 +88,14 @@ describe("every case call", () => {
  * A tool the registry does not carry is REPORTED AND SKIPPED, not failed:
  * absence is the dev branch's registry drift, a different problem with a
  * different fix, and failing on it here would train people to ignore this.
+ *
+ * It reads the registry through LIVE_REGISTRY_DATABASE_URL and skips without
+ * it, the same opt-in tool-classification's live-registry block uses.
  */
-describe("case arguments against the served registry", () => {
+describe.runIf(!!LIVE_REGISTRY_DATABASE_URL)(`case arguments against the served registry ${NEEDS_LIVE_REGISTRY}`, () => {
   it("passes no argument the tool does not declare", async () => {
-    const { getDb } = await import("@/lib/db");
     const { tools: toolsTable } = await import("@datatorag-mcp/db");
-    const rows = await getDb()
+    const rows = await liveRegistryDb()
       .select({ name: toolsTable.namespacedName, schema: toolsTable.inputSchemaJson })
       .from(toolsTable);
     const schemas = new Map(
