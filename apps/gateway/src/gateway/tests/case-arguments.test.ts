@@ -83,8 +83,11 @@ describe("every case call", () => {
  * A tool the registry does not carry is REPORTED AND SKIPPED, not failed:
  * absence is the dev branch's registry drift, a different problem with a
  * different fix, and failing on it here would train people to ignore this.
+ *
+ * Without a DATABASE_URL there is no served registry to check against, so
+ * the suite skips, the same gate tool-classification's live-registry block uses.
  */
-describe("case arguments against the served registry", () => {
+describe.runIf(!!process.env.DATABASE_URL)("case arguments against the served registry", () => {
   it("passes no argument the tool does not declare", async () => {
     const { getDb } = await import("@/lib/db");
     const { tools: toolsTable } = await import("@datatorag-mcp/db");
