@@ -60,7 +60,7 @@ const SERVICE_PRESENTATION: Record<
     ),
   },
   atlassian: {
-    description: "Jira and Confluence — issues, pages, comments, and search",
+    description: "Jira and Confluence: issues, pages, comments, and search",
     capabilities: [
       {
         text: "Search, create, and update Jira issues",
