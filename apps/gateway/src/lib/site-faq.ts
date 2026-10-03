@@ -198,6 +198,10 @@ export const SITE_FAQ_PAGES: SiteFaqPage[] = [
             a: "The ones that reached the API. A successful call counts, and so does a request that came back with a legitimate no, because it ran. Server errors are not metered: if the DataToRAG gateway is down, a plugin crashes, or an upstream API returns a 5xx, that call is not counted against you. Your [usage dashboard](/docs/usage) shows what ran.",
           },
           {
+            q: "I pay for Pro, so why are my calls counting on the free plan?",
+            a: "You most likely have two DataToRAG accounts. DataToRAG makes one account per sign-in email, and each AI app asks you to sign in to DataToRAG once, when you add the connector. Pick a different Google login in one app and that app is on a second account, usually a free one, and its calls count there. Nothing errors until the free limit. To fix it, remove the DataToRAG connector in that app, add it back, and sign in with the email that holds your plan. Do not disconnect the Google account under the other login to tidy up, because that can break it under the login you keep. The [Usage docs](/docs/usage) have the steps for each app.",
+          },
+          {
             q: "Is any connector or feature behind the paid tier?",
             a: "No. Every tier gets every connector and every tool, several accounts side by side, and the approval gate on writes. What Pro and Enterprise buy is a larger monthly allowance, not a larger feature set, which is why there is no per-connector upsell anywhere on this page.",
           },
