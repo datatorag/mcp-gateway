@@ -93,7 +93,7 @@ DataToRAG makes one account per sign-in email. Each AI app asks you to sign in t
 
 **How to tell.** There is no setting inside the AI app that shows which DataToRAG login it uses, so check from the dashboard:
 
-1. Sign in at [datatorag.com/dashboard](https://datatorag.com/dashboard). The account menu at the bottom of the left rail shows the email you are signed in with, and Billing shows that account's plan.
+1. Sign in at [datatorag.com/dashboard](https://datatorag.com/dashboard). Open the account menu at the bottom of the left rail; the email you are signed in with is shown inside it. The rail itself shows your name, which can be the same on both accounts. Billing shows that account's plan.
 2. Make one tool call from the app you are checking, for example "search my email for invoices".
 3. Open Usage. If the call is there, the app is on this account. If it is not, sign out, sign in with your other Google login, and look again. The account where the call appears is the one that app uses.
 
