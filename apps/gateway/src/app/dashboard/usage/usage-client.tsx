@@ -224,7 +224,7 @@ function SummaryCards() {
       <StatCard
         label="Slow-end latency"
         value={`${data.p95LatencyMs} ms`}
-        hint="95th percentile — 95% of calls are faster than this"
+        hint="95th percentile: 95% of calls are faster than this"
       />
     </div>
   );
@@ -400,14 +400,14 @@ function ToolsTable({ tools }: { tools: ToolRow[] }) {
               <TableHead className="text-right">Success %</TableHead>
               <TableHead
                 className="text-right"
-                title="Median latency — half of calls are faster, half slower"
+                title="Median latency: half of calls are faster, half slower"
               >
                 Median ms
               </TableHead>
               <TableHead
                 onClick={() => setSort("p95")}
                 className="cursor-pointer text-right"
-                title="Slow-end latency (95th percentile) — 95% of calls are faster than this"
+                title="Slow-end latency (95th percentile): 95% of calls are faster than this"
               >
                 Slow ms
               </TableHead>
