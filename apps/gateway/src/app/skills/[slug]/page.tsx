@@ -15,6 +15,7 @@ import {
 import { FaqSection } from "@/components/faq-section";
 import { JsonLd } from "@/components/json-ld";
 import { faqPageNode } from "@/lib/site-schema";
+import { SOCIAL_OPEN_GRAPH, SOCIAL_TWITTER } from "@/lib/social-card";
 
 type Props = { params: Promise<{ slug: string }> };
 
@@ -36,8 +37,8 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
     title,
     description,
     alternates: { canonical: url },
-    openGraph: { title, description, type: "article", url },
-    twitter: { card: "summary_large_image", title, description },
+    openGraph: { ...SOCIAL_OPEN_GRAPH, title, description, type: "article", url },
+    twitter: { ...SOCIAL_TWITTER, title, description },
   };
 }
 

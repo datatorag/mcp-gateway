@@ -3,13 +3,16 @@ import Link from "next/link";
 import Image from "next/image";
 import { getAllPosts } from "@/lib/blog";
 import { Navbar } from "@/components/navbar";
+import { SOCIAL_OPEN_GRAPH, SOCIAL_TWITTER } from "@/lib/social-card";
 
 export const metadata: Metadata = {
   title: "Blog | DataToRAG",
   description:
     "Insights on connecting enterprise data to AI assistants through the Model Context Protocol.",
   alternates: { canonical: "https://datatorag.com/blog" },
+  twitter: SOCIAL_TWITTER,
   openGraph: {
+    ...SOCIAL_OPEN_GRAPH,
     title: "Blog | DataToRAG",
     description:
       "Insights on connecting enterprise data to AI assistants through the Model Context Protocol.",

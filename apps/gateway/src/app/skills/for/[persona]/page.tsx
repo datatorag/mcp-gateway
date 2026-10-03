@@ -12,6 +12,7 @@ import {
 import { FaqSection } from "@/components/faq-section";
 import { JsonLd } from "@/components/json-ld";
 import { faqPageNode } from "@/lib/site-schema";
+import { SOCIAL_OPEN_GRAPH, SOCIAL_TWITTER } from "@/lib/social-card";
 
 type Props = { params: Promise<{ persona: string }> };
 
@@ -33,7 +34,9 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
     title,
     description: persona.situation,
     alternates: { canonical: url },
+    twitter: SOCIAL_TWITTER,
     openGraph: {
+      ...SOCIAL_OPEN_GRAPH,
       title,
       description: persona.situation,
       type: "website",

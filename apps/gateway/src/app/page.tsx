@@ -22,6 +22,7 @@ import { FaqSection } from "@/components/faq-section";
 import { JsonLd } from "@/components/json-ld";
 import { faqPageNode } from "@/lib/site-schema";
 import { siteFaqGroups, siteFaqs } from "@/lib/site-faq";
+import { SOCIAL_OPEN_GRAPH, SOCIAL_TWITTER } from "@/lib/social-card";
 
 /** Read once at module scope: the answers are static, the page is not. */
 const homeFaqs = siteFaqs("/");
@@ -70,13 +71,14 @@ export const metadata: Metadata = {
   description: HOME_DESCRIPTION,
   alternates: { canonical: "https://datatorag.com" },
   openGraph: {
+    ...SOCIAL_OPEN_GRAPH,
     title: HOME_TITLE,
     description: HOME_DESCRIPTION,
     type: "website",
     url: "https://datatorag.com",
   },
   twitter: {
-    card: "summary",
+    ...SOCIAL_TWITTER,
     title: HOME_TITLE,
     description: HOME_DESCRIPTION,
   },

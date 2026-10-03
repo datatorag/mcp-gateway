@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Montserrat, Inter, PT_Mono } from "next/font/google";
 import { PostHogProvider } from "@/components/posthog-provider";
 import { GoogleAds } from "@/components/google-ads";
+import { SOCIAL_OPEN_GRAPH, SOCIAL_TWITTER } from "@/lib/social-card";
 import "./globals.css";
 
 const montserrat = Montserrat({
@@ -22,7 +23,12 @@ const ptMono = PT_Mono({
   weight: "400",
 });
 
+/* The link-preview card for every page that sets no `openGraph` or `twitter`
+ * of its own (SCRUM-367). A page that sets one replaces this object whole, so
+ * it spreads the same constants itself; see lib/social-card.ts. */
 export const metadata: Metadata = {
+  openGraph: SOCIAL_OPEN_GRAPH,
+  twitter: SOCIAL_TWITTER,
   title: "DataToRAG | Connect Your Data to AI",
   description:
     "Link your data sources and let your AI assistant access everything. No engineering required.",

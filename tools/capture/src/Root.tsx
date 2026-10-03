@@ -4,6 +4,7 @@ import "./lib/fonts";
 import { FORMATS } from "./lib/formats";
 import { ConnectorCardShot } from "./shots/connector-card";
 import { DocsDemoShot } from "./shots/docs-demo";
+import { SOCIAL_CARD, SocialCardShot } from "./shots/social-card";
 
 /**
  * One <Still> per shot per format for images; a <Composition> reusing the
@@ -48,6 +49,12 @@ export function Root() {
           defaultProps={{ format }}
         />
       ))}
+      <Still
+        id="social-card"
+        component={SocialCardShot}
+        width={SOCIAL_CARD.width}
+        height={SOCIAL_CARD.height}
+      />
       <Composition
         id="connector-card-video"
         component={ConnectorCardShot}

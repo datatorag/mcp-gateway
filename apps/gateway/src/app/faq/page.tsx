@@ -5,13 +5,16 @@ import { FaqSection } from "@/components/faq-section";
 import { JsonLd } from "@/components/json-ld";
 import { faqPageNode } from "@/lib/site-schema";
 import { siteFaqGroups, siteFaqs } from "@/lib/site-faq";
+import { SOCIAL_OPEN_GRAPH, SOCIAL_TWITTER } from "@/lib/social-card";
 
 export const metadata: Metadata = {
   title: "FAQ | DataToRAG",
   description:
     "Quick answers on setup, what the gateway can do, the approval gate on writes, Google verification, and how DataToRAG compares to Claude's native connectors.",
   alternates: { canonical: "https://datatorag.com/faq" },
+  twitter: SOCIAL_TWITTER,
   openGraph: {
+    ...SOCIAL_OPEN_GRAPH,
     title: "FAQ | DataToRAG",
     description:
       "Quick answers on setup, what the gateway can do, the approval gate on writes, Google verification, and how DataToRAG compares to Claude's native connectors.",

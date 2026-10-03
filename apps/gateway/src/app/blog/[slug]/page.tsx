@@ -9,6 +9,7 @@ import { FaqSection } from "@/components/faq-section";
 import { JsonLd } from "@/components/json-ld";
 import { ZoomableImage } from "@/components/zoomable-image";
 import { formatContentDate } from "@/lib/utils";
+import { SOCIAL_OPEN_GRAPH, SOCIAL_TWITTER } from "@/lib/social-card";
 
 interface Props {
   params: Promise<{ slug: string }>;
@@ -18,10 +19,22 @@ export async function generateStaticParams() {
   return getAllPosts().map((p) => ({ slug: p.slug }));
 }
 
+/** The absolute URL of a post's own image, or undefined when it has none. */
+function postImageUrl(post: { ogImage?: string; coverImage?: string }): string | undefined {
+  const imagePath = post.ogImage ?? post.coverImage;
+  return imagePath ? new URL(imagePath, "https://datatorag.com").toString() : undefined;
+}
+
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { slug } = await params;
   const post = getPostBySlug(slug);
   if (!post) return { title: "Not Found" };
+  // The post's own picture when it has one. With neither, the keys are left
+  // out below and the site-wide card spread in first stands (SCRUM-367).
+  // Absolute, because a crawler fetches it from its own servers: frontmatter
+  // holds a site path, and a bare path would be resolved against whatever
+  // host the build guessed.
+  const image = postImageUrl(post);
 
   return {
     title: `${post.title} | DataToRAG`,
@@ -29,6 +42,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
     authors: [{ name: post.author }],
     alternates: { canonical: `https://datatorag.com/blog/${slug}` },
     openGraph: {
+      ...SOCIAL_OPEN_GRAPH,
       title: post.title,
       description: post.excerpt,
       type: "article",
@@ -36,12 +50,13 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
       ...(post.updated ? { modifiedTime: post.updated } : {}),
       authors: [post.author],
       url: `https://datatorag.com/blog/${slug}`,
-      ...(post.ogImage ? { images: [{ url: post.ogImage }] } : {}),
+      ...(image ? { images: [{ url: image, alt: post.title }] } : {}),
     },
     twitter: {
-      card: "summary_large_image",
+      ...SOCIAL_TWITTER,
       title: post.title,
       description: post.excerpt,
+      ...(image ? { images: [{ url: image, alt: post.title }] } : {}),
     },
   };
 }
@@ -85,7 +100,7 @@ export default async function BlogArticlePage({ params }: Props) {
   if (!post) notFound();
 
   const postUrl = `https://datatorag.com/blog/${slug}`;
-  const imagePath = post.ogImage ?? post.coverImage;
+  const image = postImageUrl(post);
   const jsonLd = [
     {
       "@context": "https://schema.org",
@@ -97,7 +112,7 @@ export default async function BlogArticlePage({ params }: Props) {
       inLanguage: "en",
       isAccessibleForFree: true,
       url: postUrl,
-      ...(imagePath ? { image: `https://datatorag.com${imagePath}` } : {}),
+      ...(image ? { image } : {}),
       ...(post.tags.length > 0 ? { keywords: post.tags.join(", ") } : {}),
       ...(post.category ? { articleSection: post.category } : {}),
       author: {

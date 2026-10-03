@@ -5,6 +5,7 @@ import { FaqSection } from "@/components/faq-section";
 import { JsonLd } from "@/components/json-ld";
 import { faqPageNode } from "@/lib/site-schema";
 import { siteFaqGroups, siteFaqs } from "@/lib/site-faq";
+import { SOCIAL_OPEN_GRAPH, SOCIAL_TWITTER } from "@/lib/social-card";
 
 /** Answers live in lib/site-faq.ts keyed by route, under the same guard as
  * every other FAQ surface. They restate THIS page's claims and carry this
@@ -46,7 +47,9 @@ export const metadata: Metadata = {
   title: TITLE,
   description: DESCRIPTION,
   alternates: { canonical: URL },
+  twitter: SOCIAL_TWITTER,
   openGraph: {
+    ...SOCIAL_OPEN_GRAPH,
     title: TITLE,
     description: DESCRIPTION,
     type: "website",

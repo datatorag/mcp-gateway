@@ -4,6 +4,7 @@ import { Navbar } from "@/components/navbar";
 import { SkillCard } from "@/components/skill-card";
 import { getAllSkills } from "@/lib/skills";
 import { getAllPersonas } from "@/lib/personas";
+import { SOCIAL_OPEN_GRAPH, SOCIAL_TWITTER } from "@/lib/social-card";
 
 const TITLE = "Skills for Claude and Google Workspace | DataToRAG";
 const DESCRIPTION =
@@ -13,7 +14,9 @@ export const metadata: Metadata = {
   title: TITLE,
   description: DESCRIPTION,
   alternates: { canonical: "https://datatorag.com/skills" },
+  twitter: SOCIAL_TWITTER,
   openGraph: {
+    ...SOCIAL_OPEN_GRAPH,
     title: TITLE,
     description: DESCRIPTION,
     type: "website",

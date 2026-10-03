@@ -2,13 +2,16 @@ import type { Metadata } from "next";
 import { getAllEntries } from "@/lib/changelog";
 import { Navbar } from "@/components/navbar";
 import { formatContentDate } from "@/lib/utils";
+import { SOCIAL_OPEN_GRAPH, SOCIAL_TWITTER } from "@/lib/social-card";
 
 export const metadata: Metadata = {
   title: "Changelog | DataToRAG",
   description:
     "What's new in the DataToRAG MCP gateway and its connectors — new tools, improvements, and fixes.",
   alternates: { canonical: "https://datatorag.com/changelog" },
+  twitter: SOCIAL_TWITTER,
   openGraph: {
+    ...SOCIAL_OPEN_GRAPH,
     title: "Changelog | DataToRAG",
     description:
       "What's new in the DataToRAG MCP gateway and its connectors — new tools, improvements, and fixes.",

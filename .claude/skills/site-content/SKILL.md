@@ -353,10 +353,19 @@ be measured.
   `" | DataToRAG"`), `description`, and an `openGraph` block mirroring title/description
   plus `type` (`"article"` for posts, `"website"` for listing/static pages) and
   `url: "https://datatorag.com/<path>"` — always the absolute production URL, even in
-  dev. Blog additionally sets `twitter: { card: "summary_large_image", ... }` and emits a
-  `schema.org` `Article` JSON-LD block (`app/blog/[slug]/page.tsx`). The root layout's
-  metadata (`app/layout.tsx`) has no `openGraph`/`twitter` at all — any page that doesn't
-  define its own inherits a bare title/description with no social card image.
+  dev. Blog additionally emits a `schema.org` `Article` JSON-LD block
+  (`app/blog/[slug]/page.tsx`).
+- **Social card (SCRUM-367)**: one site-wide link-preview image, `public/social-card.png`
+  (1200x630, logo and name, no claim), named once in `src/lib/social-card.ts`. Next
+  REPLACES `openGraph` and `twitter` whole when a page sets its own, so an image in the
+  root layout alone is lost on exactly the pages that describe themselves. The rule: the
+  root layout sets `openGraph: SOCIAL_OPEN_GRAPH` and `twitter: SOCIAL_TWITTER` for pages
+  that set neither, and every page that sets its own starts the object with
+  `...SOCIAL_OPEN_GRAPH` / `...SOCIAL_TWITTER` and sets BOTH keys. `social-card.test.ts`
+  reads the app tree and fails on a page that forgets. A blog post overrides `images`
+  with its own `ogImage ?? coverImage`, made absolute (frontmatter holds a site path, and
+  a bare path resolves against a guessed host). The picture is the `social-card` still in
+  `tools/capture`; chat apps cache a card by URL, so a redrawn card gets a new filename.
 
 ## Adding a route
 

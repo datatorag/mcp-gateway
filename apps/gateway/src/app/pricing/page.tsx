@@ -16,6 +16,7 @@ import { FaqSection } from "@/components/faq-section";
 import { JsonLd } from "@/components/json-ld";
 import { faqPageNode } from "@/lib/site-schema";
 import { siteFaqGroups, siteFaqs } from "@/lib/site-faq";
+import { SOCIAL_OPEN_GRAPH, SOCIAL_TWITTER } from "@/lib/social-card";
 
 /** Answers live in lib/site-faq.ts keyed by route, with the free allowance
  * imported from the same constants this page renders and the gateway enforces,
@@ -45,7 +46,9 @@ export const metadata: Metadata = {
   title: "Pricing | DataToRAG",
   description,
   alternates: { canonical: "https://datatorag.com/pricing" },
+  twitter: SOCIAL_TWITTER,
   openGraph: {
+    ...SOCIAL_OPEN_GRAPH,
     title: "Pricing | DataToRAG",
     description,
     type: "website",
