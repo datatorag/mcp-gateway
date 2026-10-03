@@ -363,8 +363,12 @@ be measured.
   that set neither, and every page that sets its own starts the object with
   `...SOCIAL_OPEN_GRAPH` / `...SOCIAL_TWITTER` and sets BOTH keys. `social-card.test.ts`
   reads the app tree and fails on a page that forgets. A blog post overrides `images`
-  with its own `ogImage ?? coverImage`, made absolute (frontmatter holds a site path, and
-  a bare path resolves against a guessed host). The picture is the `social-card` still in
+  only with a picture fit for a preview (`src/lib/post-card-image.ts`): `ogImage` always,
+  a `coverImage` only when it is a PNG close to 1.91:1 and under 1 MB, served absolute
+  with its width and height. A cover of any other shape stays the article's picture and
+  the post unfurls with the site card, because a preview crops to 1.91:1 and a tall
+  screenshot cropped that way shows an arbitrary band. To give a post its own preview,
+  draw a 1200x630 image and name it in `ogImage`. The picture is the `social-card` still in
   `tools/capture`; chat apps cache a card by URL, so a redrawn card gets a new filename.
 
 ## Adding a route
