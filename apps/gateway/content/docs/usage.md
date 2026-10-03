@@ -10,6 +10,17 @@ faqs:
       request that reached the API and came back with a legitimate no still ran.
       Server errors are not counted: if the DataToRAG gateway is down, a plugin
       crashes, or an upstream API has a 5xx outage, that is not metered.
+  - q: I pay for Pro, so why are my calls counting on the free plan?
+    a: >-
+      You most likely have two DataToRAG accounts. DataToRAG makes one account
+      per sign-in email, and each AI app asks you to sign in to DataToRAG once,
+      when you add the connector. Pick a different Google login in one app and
+      that app is on a second account, usually a free one, and its calls count
+      there. Nothing errors until the free limit. To fix it, remove the
+      DataToRAG connector in that app, add it back, and sign in with the email
+      that holds your plan. Do not disconnect the Google account under the
+      other login to tidy up, because that can break it under the login you
+      keep. The section "Calls counting on the wrong account" on this page has the steps for each app.
   - q: What does DataToRAG record about each tool call?
     a: >-
       The tool name, connector, outcome, latency and response size, plus the
@@ -73,6 +84,39 @@ Not every call is counted the same way:
 - **Server errors**: *not* counted. If our gateway is down, a plugin crashes, or an upstream API has a 5xx outage, that's not your problem and we don't meter it.
 
 Calls you make from the dashboard are counted under the same rules as calls from an MCP client.
+
+## Calls counting on the wrong account
+
+The symptom: you pay for Pro, and an app tells you the free-plan limit is reached, or your usage dashboard looks emptier than it should. The usual cause is two DataToRAG accounts.
+
+DataToRAG makes one account per sign-in email. Each AI app asks you to sign in to DataToRAG once, when you add the connector. If you picked a different Google login in one app than the one that holds your plan, that app is on a second account, usually a free one, and every call it makes counts there.
+
+**How to tell.** There is no setting inside the AI app that shows which DataToRAG login it uses, so check from the dashboard:
+
+1. Sign in at [datatorag.com/dashboard](https://datatorag.com/dashboard). The account menu at the bottom of the left rail shows the email you are signed in with, and Billing shows that account's plan.
+2. Make one tool call from the app you are checking, for example "search my email for invoices".
+3. Open Usage. If the call is there, the app is on this account. If it is not, sign out, sign in with your other Google login, and look again. The account where the call appears is the one that app uses.
+
+If the app's call is refused with a message that the monthly free-plan limit is reached, that already answers it: the app is on a free account.
+
+**The fix, per app.** Three steps, in the app that is on the wrong account:
+
+1. Remove the DataToRAG connector.
+2. Add it back, with the same URL, `https://datatorag.com/mcp`.
+3. When Google's account chooser appears, sign in with the email that holds your plan.
+
+In Claude on the web and Claude Desktop, connectors are listed under Connectors; open the menu next to DataToRAG, choose Remove, then add it again as a custom connector the way the [setup guide](/docs/getting-started) shows. In Claude Code:
+
+```
+claude mcp remove datatorag
+claude mcp add --transport http datatorag https://datatorag.com/mcp
+```
+
+Then run `/mcp` inside Claude Code and sign in when it sends you to the browser. Use the name you gave the server if it is not `datatorag`. If it reconnects without asking you to sign in, open `/mcp`, select the server, choose Clear authentication, and sign in again.
+
+**Do not tidy up by disconnecting.** It is tempting to open the account you are leaving and disconnect your Google account there. Don't: when the same Google account is connected under both logins, disconnecting it under one can break it under the other, and you would have to reconnect it. Re-adding the connector is the whole fix. The unused account can simply be left alone.
+
+Calls already made under the other account stay in that account's usage history. They are not moved.
 
 ## Retention
 

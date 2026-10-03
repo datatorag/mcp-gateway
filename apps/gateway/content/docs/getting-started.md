@@ -30,6 +30,17 @@ faqs:
       and connecting more services afterwards re-runs the same screen. If tools
       are missing in your client, check what your account granted on the
       DataToRAG dashboard and reconnect if it is short.
+  - q: I pay for Pro, so why are my calls counting on the free plan?
+    a: >-
+      You most likely have two DataToRAG accounts. DataToRAG makes one account
+      per sign-in email, and each AI app asks you to sign in to DataToRAG once,
+      when you add the connector. Pick a different Google login in one app and
+      that app is on a second account, usually a free one, and its calls count
+      there. Nothing errors until the free limit. To fix it, remove the
+      DataToRAG connector in that app, add it back, and sign in with the email
+      that holds your plan. Do not disconnect the Google account under the
+      other login to tidy up, because that can break it under the login you
+      keep. The [Usage docs](/docs/usage) have the steps for each app.
   - q: Can I try DataToRAG without connecting an AI client?
     a: >-
       Yes. The dashboard playground is a built-in chat that runs the same tools
@@ -107,6 +118,16 @@ The playground is for trying things out. For day-to-day use, connect your own AI
 ## How it works
 
 DataToRAG runs as a remote MCP server. When your AI assistant calls a tool like `gmail_search`, the request flows through our gateway to your connected Google account. Your data never touches our storage. Every operation is a pass-through to the Google API on your behalf.
+
+## One account per sign-in email
+
+DataToRAG makes one account for each email you sign in with. Your plan, your usage and your connected accounts all belong to that one account.
+
+You sign in to DataToRAG in more than one place: on the dashboard, and once in each AI app when you add the connector there. Google shows its account chooser every time. **Pick the same email every time.** If you pick a different Google login in one app, DataToRAG makes a second account for it, on the free plan, and that app's calls count there instead of on the account you set up. Nothing warns you, and nothing fails until the free limit is reached.
+
+Using more than one Google account does not need more than one DataToRAG login. Sign in with one email, then connect your other Google accounts from the [dashboard](https://datatorag.com/dashboard) under that login. Several connected accounts side by side are part of every plan, and you choose which one is the default.
+
+If an app is already on the wrong account, the fix is in the [Usage docs](/docs/usage), under "Calls counting on the wrong account".
 
 ## Authentication
 
