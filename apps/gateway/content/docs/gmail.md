@@ -9,12 +9,12 @@ faqs:
     a: >-
       It sends. The Gmail tools cover sending a new message, replying to an
       existing thread and forwarding a message, alongside creating, updating,
-      sending and deleting drafts, and every one of them can attach files from
-      Google Drive. Searching and reading use Gmail's own query syntax.
+      sending and deleting drafts. Sending, replying, forwarding, creating a
+      draft and updating one can attach files from Google Drive. Searching and reading use Gmail's own query syntax.
   - q: Can it attach files to an email?
     a: >-
-      Yes, from Google Drive. Sending, replying, forwarding and the draft tools
-      take a list of Drive file ids, up to 10 files and 25 MB per message. A
+      Yes, from Google Drive. Sending, replying, forwarding, creating a draft and
+      updating one take a list of Drive file ids, up to 10 files and 25 MB per message. A
       PDF, an image or any other file is attached as it is. A Google Doc, Sheet
       or Slides deck goes in as a link in the body, the way Gmail sends one,
       unless you ask for it as a file such as a PDF, a Word document or a
@@ -54,8 +54,9 @@ faqs:
       using Gmail's own query syntax.
   - q: Will my Gmail signature be added to mail DataToRAG sends?
     a: >-
-      Yes, the one set in Gmail for the address it is sent from, and an alias uses
-      its own. Nothing needs configuring. On a new message the signature closes
+      Yes, the one set in Gmail for your default sending address. Nothing needs
+      configuring. A draft you wrote in Gmail from an alias gets that alias's
+      signature when DataToRAG sends it. On a new message the signature closes
       the body, and on a reply or forward it sits under your note and above the
       quoted message. Pass signature false on the call to send a message exactly
       as written.
@@ -66,9 +67,9 @@ faqs:
       draft is never signed twice.
   - q: Why does the signature look like it is missing?
     a: >-
-      Usually because of where it lives rather than whether it was added. Messages
-      go out with a plain-text and an HTML version and the signature is in the
-      HTML version only, and Gmail's mobile apps fold a signature they recognise
+      Usually because of where it lives rather than whether it was added. A signed
+      message goes out with a plain-text and an HTML version and the signature is
+      in the HTML version only, and Gmail's mobile apps fold a signature they recognise
       behind the three-dot button, where it is still part of the message. Every
       send response also carries a signature field saying which happened: applied,
       none_set when the account has no signature in Gmail, suppressed when you
@@ -106,7 +107,8 @@ The Gmail connector gives your AI assistant full access to your inbox: searching
 | `gmail_delete_draft` | Delete a draft |
 | `gmail_mark_read` | Mark messages as read, for a single message or a batch of up to 1,000 IDs. For label changes beyond read state, use `gmail_label_message` |
 | `gmail_label_message` | Label many messages in one call: `message_ids` (up to 1,000) with `add_labels` and `remove_labels`, one `batchModify` request, a per-message outcome in the result; `message_id` for a single message. Removing INBOX archives a message; removing UNREAD marks it read |
-| `gmail_create_label` | Create a label. Nested labels use `/` in the name (e.g., `Alerts/Invoices`). Returns the created label, including its ID |
+| `gmail_create_label` | Create a label. Nested labels use `/` in the name (e.g., `Alerts/Invoices`). Returns the created label, including its ID. If a label with that name already exists, it returns that label with `existed: true` instead of an error |
+| `gmail_list_filters` | List the mailbox's Gmail filters with their criteria and actions. Read-only; useful for seeing why a message was archived or labelled before anyone read it |
 | `gmail_list_labels` | List every label, system and user-created, with its ID, name, and type. Label IDs feed `gmail_label_message`, `gmail_update_label`, and `gmail_delete_label` |
 | `gmail_update_label` | Rename a label or change its visibility. Takes the label ID, not the name. Renaming keeps the label on already-labeled messages |
 | `gmail_delete_label` | Delete a label by ID. The label is removed from every message carrying it; the messages themselves are not deleted. System labels (INBOX, UNREAD, SENT) cannot be deleted |
@@ -114,7 +116,7 @@ The Gmail connector gives your AI assistant full access to your inbox: searching
 
 ## Attachments
 
-`gmail_send`, `gmail_reply`, `gmail_forward`, `gmail_create_draft` and `gmail_update_draft` take an `attachments` list of Drive files: at most 10 per message and 25 MB in total. Each entry is a Drive file id, or `{"file_id": "<id>", "as": "<format>"}` to send a Google Doc, Sheet or Slides deck as a file.
+`gmail_send`, `gmail_reply`, `gmail_forward`, `gmail_create_draft` and `gmail_update_draft` take an `attachments` list of Drive files: at most 10 entries per call and 25 MB per message in total. Each entry is a Drive file id, or `{"file_id": "<id>", "as": "<format>"}` to send a Google Doc, Sheet or Slides deck as a file.
 
 - A PDF, an image, a zip or any other Drive file is attached as it is.
 - A Google Doc, Sheet or Slides deck passed by id alone goes in as a link in the body, in both the plain and HTML versions, the way Gmail sends one. Nothing changes who can open it; sharing is up to you.
@@ -131,22 +133,22 @@ The Gmail connector gives your AI assistant full access to your inbox: searching
 
 **Inline images.** Reference an attached image in `html_body` as `<img src="cid:FILENAME">`, where `FILENAME` is its Drive filename with any character other than letters, digits, dot, dash and underscore replaced by an underscore. It renders in place instead of at the bottom, and is not listed again as an attachment.
 
-**Forwarding.** `gmail_forward` carries the original message's attachments, and its inline images that carry a filename, counted in the 25 MB limit. `include_original_attachments: false` forwards the text alone.
+**Forwarding.** `gmail_forward` carries the original message's attachments, and its inline images that carry a filename, counted in the 25 MB limit but not in the 10 entries. `include_original_attachments: false` forwards the text alone.
 
 **Refusals come first.** A folder, a format a file cannot take, an unknown tab, a missing or unshared id, two attachments with the same filename, or files whose sizes add up to more than 25 MB is refused before anything is downloaded or sent, and the refusal names the file. A Google Doc, Sheet or Slides deck exported with `as` has no size until Google renders it, so it is counted as it downloads; one that takes the total past 25 MB stops the message before it is sent, and nothing goes out.
 
-**The response says what happened.** Each entry is reported in an `attachments` field as `attached`, `inline`, `linked` or `exported`, with its size or link. A call with no attachments has no such field.
+**The response says what happened.** Each entry is reported in an `attachments` field as `attached`, `inline`, `linked` or `exported`, with its size or link. A call with no attachments has no such field, except a forward that carried the original's files, which reports those.
 
 Files come from Drive only. To send something that is not in Drive yet, put it there first and pass its id.
 
 ## Signatures
 
-Mail sent with `gmail_send`, `gmail_reply`, `gmail_forward` or `gmail_send_draft` ends with the signature set in Gmail for the address it is sent from. Nothing needs configuring, and an alias uses its own signature.
+Mail sent with `gmail_send`, `gmail_reply`, `gmail_forward` or `gmail_send_draft` ends with the signature set in Gmail for your default sending address. Nothing needs configuring. A draft written in Gmail from an alias is signed with that alias's signature when `gmail_send_draft` sends it.
 
 - On a new message the signature closes the body. On a reply or forward it sits under your note and above the quoted message.
 - `gmail_create_draft` and `gmail_update_draft` sign the draft as Gmail's Compose does. `gmail_send_draft` adds a signature only to a draft that has none, so a draft is never signed twice. A draft that holds files is signed in its text and its files are sent as they are.
 - Pass `signature: false` to send a message exactly as written.
-- Messages go out with a plain-text and an HTML version. The signature is in the HTML version only.
+- A signed message goes out with a plain-text and an HTML version. The signature is in the HTML version only.
 
 Every send response carries a `signature` field:
 
@@ -160,6 +162,12 @@ Every send response carries a `signature` field:
 | `skipped_unsupported_draft` | The draft's format is one we send untouched rather than rewrite |
 
 Gmail's mobile apps fold a signature they recognise behind the three-dot button. The signature is still in the message.
+
+## When Google is busy
+
+Google refuses a request when one account has too many in flight at once, which happens when an assistant runs several searches or reads together. A read that Google refuses this way is tried again inside the same call, up to three requests in all with a short wait between them, so it normally returns its results and you see nothing. If Google keeps refusing, the call fails with Google's message and a note that the failure is transient; running it again a little later is the fix.
+
+A send is never retried. `gmail_send`, `gmail_reply`, `gmail_forward`, `gmail_send_draft` and every other tool that changes something make one attempt and report what Google answered, so nothing can go out twice.
 
 ## Required scopes
 

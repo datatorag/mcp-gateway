@@ -7,8 +7,9 @@ connector: "google-workspace"
 faqs:
   - q: Can DataToRAG edit a Google Doc that already exists?
     a: >-
-      Yes. The Docs tools write or replace content in an existing document and
-      apply batch updates to it, alongside creating new documents and deleting
+      Yes. The Docs tools insert text at the start of an existing document and
+      apply batch updates to it, which is how text is replaced or placed
+      anywhere else, alongside creating new documents and deleting
       them.
   - q: What is the Docs batch update for?
     a: >-
@@ -20,11 +21,11 @@ faqs:
       It includes inline image metadata. The Docs read tool returns the full
       content of a document along with metadata for its inline images, rather
       than the image files themselves.
-  - q: Why does creating or deleting a doc need Drive access?
+  - q: Why does deleting a doc need Drive access?
     a: >-
-      Because creating and deleting are Drive operations. The Docs connector uses
-      the Google Docs scope for reading and writing content, plus the Google
-      Drive scope specifically for creating and deleting documents.
+      Because deleting a file is a Drive operation. The Docs connector uses
+      the Google Docs scope for creating, reading and writing documents, plus
+      the Google Drive scope specifically for deleting them.
 ---
 
 The Docs connector gives your AI assistant the ability to read and write Google Docs: creating documents, inserting content, and applying batch formatting updates.
@@ -34,15 +35,15 @@ The Docs connector gives your AI assistant the ability to read and write Google 
 | Tool | Description |
 |------|-------------|
 | `docs_get` | Read the full content of a Google Doc, including inline image metadata |
-| `docs_create` | Create a new Google Doc with a title and optional initial content |
-| `docs_write` | Write or replace content in a document |
+| `docs_create` | Create a new, empty Google Doc with a title. Add content with `docs_write` or `docs_batch_update` |
+| `docs_write` | Insert text at the beginning of a document. It does not replace what is there; to replace or to insert elsewhere, use `docs_batch_update` |
 | `docs_batch_update` | Apply multiple updates in a single request (insert text, add formatting, replace content) |
-| `docs_delete` | Delete a Google Doc |
+| `docs_delete` | Delete a Google Doc. The delete is permanent, not a move to the trash |
 
 ## Required scopes
 
 - `https://www.googleapis.com/auth/documents`
-- `https://www.googleapis.com/auth/drive` (for create/delete)
+- `https://www.googleapis.com/auth/drive` (for delete, which is a Drive operation)
 
 ## Example prompts
 

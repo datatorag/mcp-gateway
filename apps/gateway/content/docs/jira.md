@@ -31,8 +31,9 @@ faqs:
     a: >-
       Yes. Every Jira tool takes an optional account argument naming the
       connected Atlassian account to act on, and omitting it uses the default
-      account. Connect more than one site and a single request can reach
-      whichever one the work belongs to.
+      account. Connect more than one Atlassian account and a single request can
+      reach whichever one the work belongs to. An account that can reach
+      several sites acts on the first site Atlassian lists for it.
   - q: What Jira permissions does DataToRAG ask for?
     a: >-
       Three classic Atlassian scopes, covering reading and writing Jira work and
@@ -40,7 +41,7 @@ faqs:
       granular scopes instead.
 ---
 
-The Jira tools let your AI assistant search, create, update, and move issues through their workflow, plus manage comments and attachments.
+The Jira tools let your AI assistant search, create, update, and move issues through their workflow, plus add, edit and delete comments and look up an attachment's details.
 
 ## Available operations
 
@@ -82,8 +83,9 @@ the parent. Linked issues are not deleted, only subtasks.
 
 Every tool on this page takes an optional `account` argument: the email address
 of the connected Atlassian account to act on. Omit it and the default account
-is used. Connect more than one site and a single request can reach whichever
-one the work belongs to.
+is used. Connect more than one Atlassian account and a single request can reach
+whichever one the work belongs to. An account that can reach several sites acts
+on the first site Atlassian lists for it.
 
 ## Example prompts
 
@@ -91,4 +93,4 @@ one the work belongs to.
 - "Create a bug ticket in PROJ from the error in this email with steps to reproduce"
 - "Transition JIRA-456 to 'In Review' and add a comment linking the PR"
 - "What Jira tickets did I close this week? Summarize them for the standup"
-- "Update JIRA-789 with the new ETA and CC the product owner in a comment"
+- "Update JIRA-789 with the new ETA and add a comment saying why it moved"

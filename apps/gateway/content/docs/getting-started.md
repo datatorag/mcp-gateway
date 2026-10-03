@@ -141,7 +141,7 @@ DataToRAG currently supports these services:
 
 - **Gmail**: Search, read, send, reply, forward, draft, save attachments, and manage labels
 - **Calendar**: List, create, update, delete events, and check availability
-- **Drive**: Search files, read content, and create folders
+- **Drive**: Search files, read content, create folders, rename and copy files
 - **Docs**: Read, create, write, and batch update documents
 - **Sheets**: Read, create, update, append, and delete spreadsheets, and manage tabs
 - **Slides**: Read, create, batch update, and delete presentations
@@ -150,8 +150,8 @@ DataToRAG currently supports these services:
 
 **Atlassian**
 
-- **Jira**: Search issues with JQL, create, update, transition, comment, and manage attachments
-- **Confluence**: Search with CQL, read and edit pages, manage comments and attachments
+- **Jira**: Search issues with JQL, create, update, transition, comment, and look up attachment details
+- **Confluence**: Search with CQL, read and edit pages, read and add comments, look up attachment details
 
 Each connector is documented on its own page with available operations, required scopes, and example prompts.
 

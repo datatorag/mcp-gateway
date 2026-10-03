@@ -44,7 +44,7 @@ The Slides connector lets your AI assistant read presentation content, create ne
 ## Required scopes
 
 - `https://www.googleapis.com/auth/presentations`
-- `https://www.googleapis.com/auth/drive` (for create/delete)
+- `https://www.googleapis.com/auth/drive` (for delete, which is a Drive operation)
 
 ## Multiple accounts
 

@@ -7,9 +7,10 @@ connector: "google-workspace"
 faqs:
   - q: If I write a value starting with an equals sign, does it become a formula?
     a: >-
-      Not unless that call asked for it. Values written through the DataToRAG
-      Sheets connector are stored as text by default, so a product named =1+1
-      stays the literal string, and evaluation is switched on per call with
+      Not unless that call asked for it. The DataToRAG Sheets connector writes
+      values the way typing them would, so numbers and dates land as numbers and
+      dates, but text that starts with = or + is kept literal, so a product
+      named =1+1 stays that string. Evaluation is switched on per call with
       parse_formulas rather than per cell. Text you did not author yourself
       belongs in a call with parsing off, because a stranger's string evaluating
       in your sheet is exactly what that ordering prevents.
@@ -42,12 +43,12 @@ faqs:
   - q: What if I need a spreadsheet operation the tools do not cover?
     a: >-
       There is a pass-through. Beneath the job-shaped Sheets tools sits the full
-      Google Sheets batchUpdate pass-through, for what they do not cover: borders,
-      merges, inserting or deleting columns, duplicating tabs and protected
+      Google Sheets batchUpdate pass-through, for what they do not cover: custom
+      borders, inserting or deleting columns, duplicating tabs and protected
       ranges.
 ---
 
-The Sheets connector lets your AI assistant read data from spreadsheets, write to cells, append rows, create new sheets, and manage the tabs inside them. Values written through the connector are stored as text by default, so a value beginning with `=` stays literal unless that call sets `parse_formulas`, which turns evaluation on for the whole call rather than for one cell.
+The Sheets connector lets your AI assistant read data from spreadsheets, write to cells, append rows, create new sheets, and manage the tabs inside them. Values are written the way typing them would: numbers, dates and booleans are stored as such. The exception is text beginning with `=` or `+`, which stays literal unless that call sets `parse_formulas`, which turns evaluation on for the whole call rather than for one cell. To store everything verbatim as text, pass `value_input_option: "RAW"`.
 
 ![A sheets_update call rewriting two existing rows in place, with the updated range and cell count it returned](/docs/sheets-update.png)
 
@@ -67,8 +68,8 @@ The Sheets connector lets your AI assistant read data from spreadsheets, write t
 | `sheets_find_rows` | Find the rows whose value in one column matches, and get back their row numbers plus a ready-made A1 range for each, so a lookup can be followed straight by an update. Searches many values in one call |
 | `sheets_query` | Run a query in the QUERY() language over a range and get back only the matching rows: select, where, group by, order by, limit and the aggregates, in one call. Columns by sheet letter. Read-only |
 | `sheets_format_table` | Apply the whole readable-table pass to a range in one atomic call: header styling, frozen header row, column widths, wrapping, optional banding, and an optional trim of the empty grid outside the range |
-| `sheets_format_range` | Set fonts, colours, wrapping, alignment, padding, number formats and merges on named ranges. Takes a list of instructions and applies all of them in one atomic call |
-| `sheets_batch_update` | The full Sheets `batchUpdate` pass-through, beneath the job-shaped tools above. Use it for what they do not cover: borders, merges, inserting or deleting columns, duplicating tabs, protected ranges |
+| `sheets_format_range` | Set fonts, colours, wrapping, alignment, padding, number formats and merges on the A1 ranges you give. Takes a list of instructions and applies all of them in one atomic call |
+| `sheets_batch_update` | The full Sheets `batchUpdate` pass-through, beneath the job-shaped tools above. Use it for what they do not cover: custom borders, inserting or deleting columns, duplicating tabs, protected ranges |
 
 ## Making a sheet readable
 
@@ -86,7 +87,7 @@ you the result is what you meant.
 ## Required scopes
 
 - `https://www.googleapis.com/auth/spreadsheets`
-- `https://www.googleapis.com/auth/drive` (for create/delete)
+- `https://www.googleapis.com/auth/drive` (for delete, which is a Drive operation)
 
 ## Example prompts
 

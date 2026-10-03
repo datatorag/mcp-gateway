@@ -1,6 +1,6 @@
 ---
 title: "Confluence"
-description: "Search with CQL, read and edit pages, manage comments and attachments."
+description: "Search with CQL, read and edit pages, read and add comments, look up attachments."
 order: 22
 section: "connectors"
 connector: "atlassian"
@@ -13,8 +13,9 @@ faqs:
   - q: What format does Confluence page content have to be in?
     a: >-
       XHTML storage format. The DataToRAG create-page tool takes content in
-      Confluence's XHTML storage format, and reading a page returns its XHTML
-      body along with version info.
+      Confluence's XHTML storage format. Reading a page returns clean text by
+      default, along with version info; pass format storage to get the XHTML
+      body, which is what an edit needs.
   - q: Do I have to supply a version number when editing a Confluence page?
     a: >-
       No. The Confluence edit tool auto-increments the version if you do not
@@ -27,11 +28,11 @@ faqs:
   - q: Can DataToRAG reply to an existing Confluence comment?
     a: >-
       Yes. The Confluence comment tool adds a comment to a page and can
-      optionally reply to an existing comment, and a companion tool reads every
+      optionally reply to an existing page comment, and a companion tool reads every
       comment on a page with its body content and version info.
 ---
 
-The Confluence tools let your AI assistant search space content, read and author pages, and manage comments and attachments.
+The Confluence tools let your AI assistant search space content, read and author pages, read and add comments, and look up an attachment's details.
 
 ## Available operations
 
@@ -39,12 +40,12 @@ The Confluence tools let your AI assistant search space content, read and author
 |------|-------------|
 | `confluence_search` | Search content using CQL (Confluence Query Language) |
 | `confluence_list_pages` | List pages in a space with id, title, version, and link |
-| `confluence_get_page` | Get a page by ID, including XHTML body content and version info |
+| `confluence_get_page` | Get a page by ID with its version info. The body comes back as clean text by default; pass `format: "storage"` for the XHTML, which is what `confluence_edit_page` needs |
 | `confluence_create_page` | Create a new page. Content must be in XHTML storage format |
 | `confluence_edit_page` | Update an existing page. Version auto-increments if not provided |
 | `confluence_delete_page` | Delete a page by ID |
 | `confluence_get_comments` | Get all comments on a page with body content and version info |
-| `confluence_add_comment` | Add a comment to a page, optionally replying to an existing comment |
+| `confluence_add_comment` | Add a plain-text comment to a page, optionally replying to an existing page comment. Inline comments cannot be replied to |
 | `confluence_get_attachment` | Get metadata for a page attachment by filename |
 
 ## Required scopes
@@ -63,4 +64,4 @@ the v2 API, which rejects a classic grant with `scope does not match`.
 - "Search Confluence for our on-call runbook and pull out the escalation steps"
 - "List all pages in the Engineering space updated in the last week"
 - "Create a new Confluence page in the Product space with this week's roadmap review notes"
-- "Add a comment on the launch plan page tagging the design team"
+- "Add a comment on the launch plan page listing the open questions for the design team"

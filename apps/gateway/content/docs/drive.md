@@ -12,11 +12,13 @@ faqs:
       pages, which makes PDFs the common surprise.
   - q: Which file types can the Drive reader handle?
     a: >-
-      Four kinds. Google Docs, Sheets and Slides come back as extracted text,
+      Three kinds. Google Docs, Sheets and Slides come back as extracted text,
       using the same extraction the dedicated tools use; .docx, .xlsx and .pptx
       are converted to the matching Google format in a temporary copy that is
       read and then deleted; .txt and .csv are returned as they are. Anything
-      else, PDFs included, returns an Unsupported file type error.
+      else, PDFs included, returns an Unsupported file type error. A Sheet read
+      through the Drive reader is its first tab, up to column Z and row 1000;
+      the Sheets tools read the rest.
   - q: Does reading a Drive file download it to my computer?
     a: >-
       No. Reading happens server-side and the text comes back in the response, so
@@ -60,7 +62,7 @@ the conversation to be read.
 
 | Type | Read as |
 |------|---------|
-| Google Docs, Sheets, Slides | Extracted text, the same extraction the dedicated tools use |
+| Google Docs, Sheets, Slides | Extracted text, the same extraction the dedicated tools use. A Sheet comes back as its first tab only, up to column Z and row 1000; use `sheets_read` for another tab or a larger range |
 | `.docx`, `.xlsx`, `.pptx` | Converted to the matching Google format in a temporary copy, read, and the copy deleted |
 | `.txt`, `.csv` | Returned as-is |
 | Anything else, **PDFs included** | An `Unsupported file type` error |

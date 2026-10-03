@@ -85,6 +85,21 @@ Not every call is counted the same way:
 
 Calls you make from the dashboard are counted under the same rules as calls from an MCP client.
 
+A read that Google refuses for too many requests at once is tried again inside the same call. However many attempts that takes, it is one call here: one row, counted once.
+
+## Your plan, payment method and invoices
+
+These live on the Billing page, [datatorag.com/dashboard/billing](https://datatorag.com/dashboard/billing), which is Billing in the dashboard's left rail.
+
+- **Plan.** The three plans are shown side by side and yours is marked "Current plan". On Free, the Pro card has Upgrade to Pro. On Pro, your card has "Manage or cancel" and the Free card has "Downgrade"; both open the Stripe billing portal, where the change is made. If you cancel, Pro stays active until the end of the period you have paid for.
+- **This period.** Two meters: "Tool calls" and "Agent and skill runs", each against your plan's allowance, with the date the allowance resets. A free account that reaches its tool-call allowance is paused until that date; on Pro, tool calls are not paused past the allowance. Agent and skill runs stop at the plan's number on both plans.
+- **Payment method.** The card on file with its last four digits and expiry. Update opens the billing portal.
+- **Invoices.** Recent invoices with date, amount, status and a PDF link. "All invoices" opens the full list in the billing portal.
+
+Payment method and Invoices are shown once the account has been billed through Stripe. A free account that has never paid sees the plans and the meters only.
+
+The meters on Billing count against your allowance. The Usage page counts every call that was recorded, so the two answer different questions: Billing says how much of the allowance is left, Usage says what ran.
+
 ## Calls counting on the wrong account
 
 The symptom: you pay for Pro, and an app tells you the free-plan limit is reached, or your usage dashboard looks emptier than it should. The usual cause is two DataToRAG accounts.

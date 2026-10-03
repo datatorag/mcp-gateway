@@ -16,18 +16,19 @@ faqs:
   - q: What can DataToRAG do in Jira and Confluence?
     a: >-
       In Jira it searches with JQL, creates, updates and transitions issues, and
-      manages comments and attachments. In Confluence it searches with CQL, reads
-      and edits pages, and manages comments and attachments.
+      manages comments. In Confluence it searches with CQL, reads and edits
+      pages, and reads and adds comments. In both it looks up an attachment's
+      details; it does not upload or download attachment files.
 ---
 
-The Atlassian connector gives your AI assistant access to Jira and Confluence: searching issues with JQL, creating and updating tickets, reading and editing pages, and managing comments and attachments.
+The Atlassian connector gives your AI assistant access to Jira and Confluence: searching issues with JQL, creating and updating tickets, reading and editing pages, working with comments, and looking up attachment details.
 
 ## Services
 
 | Service | Summary |
 |---------|---------|
-| [Jira](/docs/jira) | Search with JQL, create, update, transition issues, manage comments and attachments |
-| [Confluence](/docs/confluence) | Search with CQL, read and edit pages, manage comments and attachments |
+| [Jira](/docs/jira) | Search with JQL, create, update, transition issues, manage comments, look up attachments |
+| [Confluence](/docs/confluence) | Search with CQL, read and edit pages, read and add comments, look up attachments |
 
 ## Connecting
 

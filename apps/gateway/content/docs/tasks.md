@@ -34,6 +34,7 @@ The Tasks connector lets your AI assistant manage your Google Tasks: listing tas
 | Tool | Description |
 |------|-------------|
 | `tasks_list` | List the account's task lists (e.g. "My Tasks", "Work", "Personal") and their IDs, which the other tools take |
+| `tasks_create_tasklist` | Create a new task list, for a workflow that needs its own list |
 | `tasks_list_tasks` | List the tasks in one task list, with titles, completion status, due dates and notes |
 | `tasks_create` | Create a task with title, notes and optional due date, or many tasks in one call (`tasks: [...]`), with one outcome per task |
 | `tasks_update` | Update a task's title, notes, or due date |
