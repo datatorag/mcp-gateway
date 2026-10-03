@@ -79,9 +79,9 @@ Once your client completes its sign-in, ask it something like "search my email f
 
 The full flow for claude.ai in the browser (Claude Desktop is identical):
 
-**1. Open the connector settings.** In Claude, go to Settings, then Connectors, click Add in the top right, and choose "Add custom connector".
+**1. Open the connector settings.** In Claude, go to Customize, then Connectors, click Add, and choose "Add custom connector".
 
-![Claude web Settings → Connectors screen with the Add menu open and "Add custom connector" highlighted](/docs/claude-web-add-custom-connector.png)
+![Claude web Connectors screen with the Add menu open and "Add custom connector" highlighted](/docs/claude-web-add-custom-connector.png)
 
 **2. Name it and paste the endpoint.** Use any name you like and this URL, leaving the advanced OAuth fields empty:
 
