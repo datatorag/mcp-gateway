@@ -66,8 +66,8 @@ function ClientInstructions({
   if (client === "claude-web" || client === "claude-desktop") {
     return (
       <ol className="space-y-2 text-xs text-muted-foreground">
-        <li>1. Open Settings → Connectors</li>
-        <li>2. Click &quot;Add custom connector&quot;</li>
+        <li>1. Open Customize → Connectors</li>
+        <li>2. Click &quot;Add&quot;, then &quot;Add custom connector&quot;</li>
         <li>
           3. Paste this URL:
           <CodeBlock onCopied={onCopied}>{mcpUrl}</CodeBlock>

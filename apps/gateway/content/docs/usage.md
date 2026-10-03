@@ -105,14 +105,14 @@ If the app's call is refused with a message that the monthly free-plan limit is 
 2. Add it back, with the same URL, `https://datatorag.com/mcp`.
 3. When Google's account chooser appears, sign in with the email that holds your plan.
 
-In Claude on the web and Claude Desktop, connectors are listed under Connectors; open the menu next to DataToRAG, choose Remove, then add it again as a custom connector the way the [setup guide](/docs/getting-started) shows. In Claude Code:
+In Claude on the web and Claude Desktop, go to Customize, then Connectors, open the menu next to DataToRAG and choose Remove, then add it again as a custom connector the way the [setup guide](/docs/getting-started) shows. In Claude Code:
 
 ```
 claude mcp remove datatorag
 claude mcp add --transport http datatorag https://datatorag.com/mcp
 ```
 
-Then run `/mcp` inside Claude Code and sign in when it sends you to the browser. Use the name you gave the server if it is not `datatorag`. If it reconnects without asking you to sign in, open `/mcp`, select the server, choose Clear authentication, and sign in again.
+Then run `/mcp` inside Claude Code and sign in when it sends you to the browser. Use the name you gave the server if it is not `datatorag`. Removing the server also deletes its saved sign-in, so Claude Code asks you to sign in again.
 
 **Do not tidy up by disconnecting.** It is tempting to open the account you are leaving and disconnect your Google account there. Don't: when the same Google account is connected under both logins, disconnecting it under one can break it under the other, and you would have to reconnect it. Re-adding the connector is the whole fix. The unused account can simply be left alone.
 
