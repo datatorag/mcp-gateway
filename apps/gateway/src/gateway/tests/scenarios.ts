@@ -125,6 +125,7 @@ export const SCENARIOS: Scenario[] = [
       "C1", //  the fixture sheet reads back its exact control values
       "E11", // a range naming a missing tab names the tabs that do exist
       "E17", // many ranges answer in request order, duplicates and all
+      "E18", // a query over a missing tab is refused, naming the tabs that exist
       "C12", // a query returns rows and refuses a column out of range
       "SH5", // delete the spreadsheet, and prove it is gone from Drive
     ],

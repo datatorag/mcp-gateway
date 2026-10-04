@@ -40,6 +40,7 @@ import { e10DocsReplace } from "./e10-docs-replace";
 import { e11SheetsBadRange } from "./e11-sheets-bad-range";
 import { e16BatchLabel } from "./e16-batch-label";
 import { e17MultiRange } from "./e17-multi-range";
+import { e18QueryUnknownTab } from "./e18-query-unknown-tab";
 import { d10MailArrives } from "./d10-mail-arrives";
 import { d11DraftSent } from "./d11-draft-sent";
 import { d12ReplyThreads } from "./d12-reply-threads";
@@ -162,6 +163,7 @@ export const CASES: TestCase[] = [
   e11SheetsBadRange,
   e16BatchLabel,
   e17MultiRange,
+  e18QueryUnknownTab,
   d10MailArrives,
   d11DraftSent,
   d12ReplyThreads,
