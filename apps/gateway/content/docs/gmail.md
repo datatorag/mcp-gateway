@@ -99,13 +99,13 @@ The Gmail connector gives your AI assistant full access to your inbox: searching
 | `gmail_list` | List recent messages from your inbox with flattened from/to/subject/date fields |
 | `gmail_read` | Read a full email by message ID. `text_only` returns a compact view (flattened headers, decoded text body, attachment metadata); `max_body_chars` truncates long bodies |
 | `gmail_send` | Send a new email, with Drive files in `attachments`. Your Gmail signature is added; `signature: false` sends without it |
-| `gmail_reply` | Reply to an existing thread, with Drive files in `attachments`. Your Gmail signature goes under your note, above the quoted message |
+| `gmail_reply` | Reply to an existing thread, addressed the way Gmail's Reply button does it; `reply_all: true` includes everyone on the original. Takes Drive files in `attachments`. Your Gmail signature goes under your note, above the quoted message |
 | `gmail_forward` | Forward a message to another recipient, signed the same way as a reply. Carries the original's attachments unless `include_original_attachments: false`; `attachments` adds Drive files |
 | `gmail_create_draft` | Create a draft without sending, with Drive files in `attachments`. Your Gmail signature is added to the draft; `signature: false` leaves it out |
 | `gmail_update_draft` | Update an existing draft. This replaces the whole draft: files it held are dropped unless passed again in `attachments` |
 | `gmail_send_draft` | Send an existing draft. A draft that already carries the signature is sent unchanged; one without gets it, including a draft that holds files |
 | `gmail_delete_draft` | Delete a draft |
-| `gmail_mark_read` | Mark messages as read, for a single message or a batch of up to 1,000 IDs. For label changes beyond read state, use `gmail_label_message` |
+| `gmail_mark_read` | Mark messages as read, for a single message or a batch of up to 1,000 IDs. With no labels given it removes UNREAD; with `add_labels` or `remove_labels` given it applies exactly those and nothing else. For label changes beyond read state, use `gmail_label_message` |
 | `gmail_label_message` | Label many messages in one call: `message_ids` (up to 1,000) with `add_labels` and `remove_labels`, one `batchModify` request, a per-message outcome in the result; `message_id` for a single message. Removing INBOX archives a message; removing UNREAD marks it read |
 | `gmail_create_label` | Create a label. Nested labels use `/` in the name (e.g., `Alerts/Invoices`). Returns the created label, including its ID. If a label with that name already exists, it returns that label with `existed: true` instead of an error |
 | `gmail_list_filters` | List the mailbox's Gmail filters with their criteria and actions. Read-only; useful for seeing why a message was archived or labelled before anyone read it |
@@ -140,6 +140,20 @@ The Gmail connector gives your AI assistant full access to your inbox: searching
 **The response says what happened.** Each entry is reported in an `attachments` field as `attached`, `inline`, `linked` or `exported`, with its size or link. A call with no attachments has no such field, except a forward that carried the original's files, which reports those.
 
 Files come from Drive only. To send something that is not in Drive yet, put it there first and pass its id.
+
+## Who a reply goes to
+
+`gmail_reply` takes the message to answer and works out the recipients from that message's own headers, the way Gmail's Reply button does:
+
+- To the Reply-To address when the message has one, otherwise to its sender.
+- To the people the message was sent to, when it is a message you sent.
+- With `reply_all: true`, the original's other To recipients are added to To and its Cc recipients to Cc. Your own addresses, including your send-as aliases, are left out. It is off unless you pass it.
+
+One reply takes at most 100 addresses. A reply that would go to more is refused and nothing is sent.
+
+**The response says who it went to.** A sent reply carries `to`, and `cc` when there is one. When a Reply-To meant the original's sender is not among the recipients, it also carries `reply_to_used: true` and `original_from`, so the difference between who wrote and who was answered is visible.
+
+**`expected_to` is a guard for when it matters.** The recipients come from the original message's headers, and a Reply-To can name someone other than the sender you see. Pass `expected_to` with the address or addresses, comma separated, that you mean the reply to reach, and the reply is refused before anything is sent unless it would go to exactly those. Under `reply_all` that means every To and every Cc address. Order and letter case are ignored. The refusal lists who the reply would have gone to, so the next call can name them or go to someone else.
 
 ## Signatures
 

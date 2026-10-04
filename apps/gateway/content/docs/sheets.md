@@ -66,10 +66,24 @@ The Sheets connector lets your AI assistant read data from spreadsheets, write t
 | `sheets_clear` | Clear values in a range while keeping the tab and its formatting; a bare tab name clears the whole tab |
 | `sheets_delete_tab` | Delete a tab and every row in it; this cannot be undone via the API, so use `sheets_clear` when you only want to empty a tab |
 | `sheets_find_rows` | Find the rows whose value in one column matches, and get back their row numbers plus a ready-made A1 range for each, so a lookup can be followed straight by an update. Searches many values in one call |
-| `sheets_query` | Run a query in the QUERY() language over a range and get back only the matching rows: select, where, group by, order by, limit and the aggregates, in one call. Columns by sheet letter. Read-only |
+| `sheets_query` | Run a query in the QUERY() language over a range and get back only the matching rows: select, where, group by, order by, limit and the aggregates, in one call. Columns by sheet letter. A tab that does not exist is refused with the list of tabs. Read-only |
 | `sheets_format_table` | Apply the whole readable-table pass to a range in one atomic call: header styling, frozen header row, column widths, wrapping, optional banding, and an optional trim of the empty grid outside the range |
 | `sheets_format_range` | Set fonts, colours, wrapping, alignment, padding, number formats and merges on the A1 ranges you give. Takes a list of instructions and applies all of them in one atomic call |
 | `sheets_batch_update` | The full Sheets `batchUpdate` pass-through, beneath the job-shaped tools above. Use it for what they do not cover: custom borders, inserting or deleting columns, duplicating tabs, protected ranges |
+
+## Which tab a range means
+
+`sheets_query`, `sheets_format_table` and `sheets_format_range` check a range against the tabs the spreadsheet actually has before they run.
+
+- A tab that does not exist is refused, and the refusal lists the tabs the spreadsheet has. Nothing is queried or formatted.
+- A bare word that is the name of a tab is that tab, even when it also reads as a cell or a column: a tab called `Q3` or `Log` is the tab. A bare word that is no tab is read as cells on the first tab.
+- Tab names match without regard to case, as they do in Sheets.
+- A tab name with an apostrophe or an exclamation mark in it works when written the way Sheets writes it: in single quotes, with an apostrophe doubled, such as `'Bob''s'!A1:D10`.
+- `sheets_query` with no range queries the first tab.
+
+`sheets_format_table` with `trim_grid` is stricter. Trimming deletes everything outside the range, so a bare word that is both a tab and a cell reference is refused. Name the tab and the block, such as `'Q3'!A1:E60`.
+
+**Columns that mix numbers and text.** Google's query endpoint reads a column as whichever type most of its cells hold, and the cells of the other type come back empty. That is the endpoint's rule and cannot be turned off. For a column like that, use `sheets_read` or `sheets_find_rows`, which return every cell.
 
 ## Making a sheet readable
 
