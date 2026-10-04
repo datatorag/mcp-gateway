@@ -28,14 +28,11 @@ export const gm3GmailMarkRead: TestCase = {
   title: "marking read clears UNREAD, and marking unread restores it",
   covers: [
     "gws-mcp__gmail_mark_read",
-    /* THE ADD DIRECTION GOES THROUGH A DIFFERENT TOOL, and that is a fact
-     * about the plugin rather than a preference. `gmail_mark_read` sets
-     * `removeLabelIds` to ["UNREAD"] whenever `remove_labels` is absent,
-     * EVEN IF `add_labels` was supplied, so asking it to add UNREAD sends
-     * add and remove of the same label in one modify. `gmail_label_message`
-     * has no such default and is the honest way to put a message back.
-     * (The plugin's own schema text says that default applies only when
-     * neither list is given; the code disagrees. Reported separately.) */
+    /* THE ADD DIRECTION GOES THROUGH A DIFFERENT TOOL. `gmail_label_message`
+     * has no default of its own, so it puts the message back without leaning
+     * on the default this file's sibling GM4 is there to check. (When this
+     * case was written `gmail_mark_read` removed UNREAD even when only
+     * `add_labels` was supplied; that is fixed, and GM4 guards it.) */
     "gws-mcp__gmail_label_message",
     "gws-mcp__gws_run",
   ],

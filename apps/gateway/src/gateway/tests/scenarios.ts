@@ -150,10 +150,10 @@ export const SCENARIOS: Scenario[] = [
        * STEP THAT SENDS, because sending a draft is still sending. */
       "D3", //  a draft is created, read back by id, and deleted
       "E15", // a draft is signed once on write and not again on send
-      /* THE MESSAGE THE REST OF THE LIFECYCLE IS ABOUT. Three steps below
-       * consume it, and they are exactly the three that declare
-       * `needs: ["D10"]`: GM3 marks it, D12 replies to it, D13 forwards
-       * it. The others send their own mail or act on what is already
+      /* THE MESSAGE THE REST OF THE LIFECYCLE IS ABOUT. Four steps below
+       * consume it, and they are exactly the ones that declare
+       * `needs: ["D10"]`: GM3 and GM4 mark it, D12 replies to it, D13
+       * forwards it. The others send their own mail or act on what is already
        * there, so they do not wait for this one. */
       "D10", // a sent message arrives in the reader mailbox with its token
       "E13", // the signature is applied once, in the HTML part only
@@ -163,6 +163,7 @@ export const SCENARIOS: Scenario[] = [
       "C2", //  search returns a message with its headers populated
       "GM2", // listing is bounded, and a filter that matches nothing is empty
       "GM3", // marking read clears UNREAD, and unread restores it
+      "GM4", // mark_read with labels applies only those; with none it clears UNREAD
       "E16", // three messages labelled in one call, and unlabelled together
       /* Answering it. */
       "D12", // a reply lands in the original's thread

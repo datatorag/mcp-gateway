@@ -61,6 +61,7 @@ import { sh5SheetsDelete } from "./sh5-sheets-delete";
 import { gm1GmailUpdateLabel } from "./gm1-gmail-update-label";
 import { gm2GmailList } from "./gm2-gmail-list";
 import { gm3GmailMarkRead } from "./gm3-gmail-mark-read";
+import { gm4GmailMarkReadDefault } from "./gm4-gmail-mark-read-default";
 import { dr1DriveFolder } from "./dr1-drive-folder";
 import { dr2DriveRead } from "./dr2-drive-read";
 import { ca1CalendarGet } from "./ca1-calendar-get";
@@ -184,6 +185,7 @@ export const CASES: TestCase[] = [
   gm1GmailUpdateLabel,
   gm2GmailList,
   gm3GmailMarkRead,
+  gm4GmailMarkReadDefault,
   dr1DriveFolder,
   dr2DriveRead,
   ca1CalendarGet,
