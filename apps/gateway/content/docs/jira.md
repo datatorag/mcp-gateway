@@ -58,6 +58,7 @@ The Jira tools let your AI assistant search, create, update, and move issues thr
 | `jira_edit_comment` | Edit an existing comment |
 | `jira_delete_comment` | Delete a comment |
 | `jira_get_attachment` | Get attachment metadata by ID: filename, size, MIME type, content URL |
+| `jira_add_attachment` | Attach a file to an issue from a file reference, such as a Gmail message as its original `.eml`. The file never passes through the conversation; the answer is a receipt with the name, size and SHA-256 of what was sent. See [Moving files between services](/docs/file-references) |
 | `jira_list_fields` | List all available fields (system + custom) to discover field IDs for creates/updates |
 | `jira_search_users` | Search users by name, username, or email. Returns display names and account IDs |
 | `jira_delete_issue` | Permanently delete an issue. See the warning below before using it |
