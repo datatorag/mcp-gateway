@@ -97,6 +97,11 @@ services:
       start_period: 15s
     volumes:
       - plugins-data:/root/.datatorag/plugins
+    # Equal to the memory limit below, so the container gets no swap at all.
+    # Left unset, Docker allows swap equal to the memory limit again. The host
+    # has no swap today; this keeps content held in memory off the disk even
+    # if someone enables swap later.
+    memswap_limit: 3072M
     deploy:
       resources:
         limits:
