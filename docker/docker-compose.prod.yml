@@ -1,34 +1,4 @@
 services:
-  postgres:
-    image: postgres:16
-    environment:
-      POSTGRES_DB: datatoragmcp
-      POSTGRES_USER: datatoragmcp
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-    volumes:
-      - postgres-data:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U datatoragmcp"]
-      interval: 5s
-      timeout: 3s
-      retries: 10
-    networks:
-      - dtrmcp
-    restart: unless-stopped
-
-  db-init:
-    build:
-      context: ..
-      dockerfile: packages/db/Dockerfile
-    environment:
-      DATABASE_URL: postgresql://datatoragmcp:${POSTGRES_PASSWORD}@postgres:5432/datatoragmcp
-    depends_on:
-      postgres:
-        condition: service_healthy
-    networks:
-      - dtrmcp
-    restart: "no"
-
   gateway:
     build:
       context: ..
@@ -116,5 +86,4 @@ networks:
     driver: bridge
 
 volumes:
-  postgres-data:
   plugins-data:

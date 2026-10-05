@@ -77,7 +77,10 @@ It does not render `.env` (step 2b) and does not touch plugins (step 5).
    ```
    - The `.env` file lives at `~/datatorag-mcp/.env` on the server (NOT in `docker/`)
    - Must pass `--env-file ../.env` to docker compose
-   - This rebuilds only the gateway container; postgres data is preserved in a volume
+   - This rebuilds only the gateway container. The compose file defines no
+     database service: production data is in Neon. The old host database's
+     volume (`docker_postgres-data`) was left on the host as an undo and is
+     not managed by compose
    - After the health check in step 4 passes, record the new sha:
      `ssh -i <key> ubuntu@<ip> "cd ~/datatorag-mcp && git rev-parse HEAD > .deployed-sha"`.
      Record it only on a passing health check; a deploy that never came up must
@@ -119,7 +122,7 @@ It does not render `.env` (step 2b) and does not touch plugins (step 5).
    **Verify the deploy** (as of 2026-07-13, `GET /api/servers` requires auth and returns
    `{"error":"Unauthorized"}` to anonymous requests — don't use it for status checks):
    - Compare the plugin's live tool list against the `tools` table in the production DB
-     (Neon — see the db-query skill; do NOT psql the docker postgres, that's dev-only).
+     (Neon, see the db-query skill; there is no database container on the host).
    - Get the live list via Streamable HTTP from inside the gateway container
      (gws-mcp listens on port 40000): POST an `initialize` request to
      `http://localhost:40000/mcp`, capture the `mcp-session-id` response header, then
@@ -165,7 +168,7 @@ the environment already set, and verified through the Neon MCP by reading
 
 ## Troubleshooting
 
-- **db-init fails**: Usually missing `POSTGRES_PASSWORD`. Ensure `--env-file ../.env` is passed.
+- **A compose command warns about an unset variable**: `--env-file ../.env` was not passed.
 - **Plugin build fails**: Check the `build_error` column in the `mcp_servers` table (`GET /api/servers` used to expose this as `buildError`, but the endpoint now requires auth). Common issues: missing system deps in Dockerfile, missing binaries.
 - **Gateway won't start**: Check container logs for errors.
 - **GWS MCP tools load but all API calls fail**: Users must separately connect their Google Workspace account via the DataToRAG web UI. The gateway stores per-user Google OAuth tokens in the `service_connections` table and forwards them to the GWS plugin via `X-User-Token` header. If no row exists for the user, or the token is expired and refresh fails, all tool calls return generic "Error occurred during tool execution" with no detail. Check the `service_connections` table for `token_expires_at` and `updated_at` to diagnose.
