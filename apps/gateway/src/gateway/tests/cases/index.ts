@@ -74,6 +74,8 @@ import { jr4JiraComments } from "./jr4-jira-comments";
 import { jr5JiraTransitions } from "./jr5-jira-transitions";
 import { jr6JiraAttachment } from "./jr6-jira-attachment";
 import { jr7JiraKeyRefused } from "./jr7-jira-key-refused";
+import { jr8JiraAttachEmail } from "./jr8-jira-attach-email";
+import { jr9JiraAttachMissingIssue } from "./jr9-jira-attach-missing-issue";
 import { tk1TasksLifecycle } from "./tk1-tasks-lifecycle";
 import { co1ContactsLifecycle } from "./co1-contacts-lifecycle";
 import { co2ContactsSearch } from "./co2-contacts-search";
@@ -198,6 +200,8 @@ export const CASES: TestCase[] = [
   jr5JiraTransitions,
   jr6JiraAttachment,
   jr7JiraKeyRefused,
+  jr8JiraAttachEmail,
+  jr9JiraAttachMissingIssue,
   tk1TasksLifecycle,
   co1ContactsLifecycle,
   co2ContactsSearch,

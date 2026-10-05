@@ -224,6 +224,10 @@ export const SCENARIOS: Scenario[] = [
       "JR5", // an issue transitions to a status the board offered
       "JR6", // the attachment endpoint agrees with the issue
       "JR7", // a delete is refused locally when the key is not a jira key
+      /* The file crossing. Both steps take a message that is already in the
+       * reader mailbox, so this scenario still sends no mail. */
+      "JR8", // an email is attached as its original file, and the issue lists it
+      "JR9", // attaching to an issue that does not exist sends nothing to Jira
     ],
   },
   {
