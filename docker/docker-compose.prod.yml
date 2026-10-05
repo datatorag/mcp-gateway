@@ -100,7 +100,7 @@ services:
     deploy:
       resources:
         limits:
-          memory: 1024M
+          memory: 3072M
     networks:
       - dtrmcp
     restart: unless-stopped
