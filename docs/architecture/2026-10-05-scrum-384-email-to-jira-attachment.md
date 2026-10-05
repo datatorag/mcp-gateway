@@ -1,7 +1,8 @@
 # SCRUM-384: moving a file from one connector to another
 
-Status: spec, nothing built. Written against gateway 296aa34, gws-mcp 73bc82f
-and atlassian-mcp 9305ce9. Overlaps SCRUM-313 (attach files to Jira issues
+Status: stage 1 is built on branches and not yet released. The spec was
+written against gateway 296aa34, gws-mcp 73bc82f and atlassian-mcp 9305ce9,
+and revised where the build taught something; those places say so. Overlaps SCRUM-313 (attach files to Jira issues
 and Confluence pages), which this spec would absorb.
 
 ## Problem
@@ -110,10 +111,12 @@ file: { ref: {type, ...}, name, mime_type, size, sha256 }
 
 `ref` is passed as is to any consuming tool.
 
-Stage 1: `gmail_export_message`. Takes one message id and returns the
-description of that message's original file. It reads the raw message and
-hashes it; nothing is stored. Name: the sanitised subject, the date and the
-message id, ending `.eml`, cut to 200 characters. Type `message/rfc822`.
+Stage 1 has no producing tool. A caller writes the `gmail_message` reference
+from a message id, and the consuming tool's receipt gives the name, the size
+and the sha256. A `gmail_export_message` tool that returns a file's
+description before anything moves is left to stage 2; the build did not need
+it. The file's name is the sanitised subject, the date and the message id,
+ending `.eml`, cut to 200 characters. Type `message/rfc822`.
 
 ## Tools that consume a file
 
@@ -126,8 +129,10 @@ Stage 1: `jira_add_attachment(issue_key, file)`. One file a call.
 - The user needs Browse Projects and Create Attachments on the project. Jira
   answers 403 without them, and 404 when the issue is not visible or
   attachments are off for the site.
-- Before any bytes move it reads the issue, and refuses a file over the
-  site's limit or over ours.
+- Before anything is sent to Jira it reads the issue and the site's limit,
+  and refuses when the issue cannot be read or the file is over the limit.
+  As built, the file has already been read from its source by then: only our
+  own size cap is checked before any bytes move.
 - Returns a receipt: the attachment's id, name and size as Jira reports
   them, the sha256 and byte count of what was sent, and the issue's key,
   project, summary and site. Jira returns no hash, so the receipt shows that
@@ -148,8 +153,9 @@ inside that one call:
 4. The gateway returns the receipt and lets the bytes go.
 
 Nothing is written to disk. There is no handle, nothing to expire and
-nothing to clean up. The gateway computes the sha256 and the byte count while
-it holds the file; those are the numbers in the receipt.
+nothing to clean up. As built, the gateway does not look inside the bytes at
+all: the destination plugin computes the sha256 and the byte count over what
+it is about to send, and those are the numbers in the receipt.
 
 The private routes are plain HTTP routes on each plugin, beside the MCP route
 and reachable the same way: from the gateway, on the same host. They need the
@@ -162,13 +168,14 @@ Each plugin adds two things once: a route that answers the bytes of a
 reference of its own types, and a route that runs a consuming tool with bytes
 attached. After that every producer works with every consumer.
 
-Limits, sized for a gateway that runs in about 1 GB of memory with its
-plugins:
+Limits. The gateway and its plugins share one memory limit, 3 GB as built
+(it was 1 GB when this was first written), and the container is given no
+swap:
 
 | Limit | Value | Why |
 |---|---|---|
-| One file | 25 MB | The same cap the send tools use; a transfer holds the file about twice, once in the gateway and once in the destination plugin |
-| Transfers at once, whole host | 2 | About 100 MB at the worst |
+| One file | 25 MB | The same cap the send tools use; as built a transfer holds the file about six times over at its worst, by reading the code and not by measurement: about twice in the source plugin while it decodes, once or twice in the gateway while it reads, and two to three times in the destination plugin while it builds the upload |
+| Transfers at once, whole host | 2 | About 300 MB at the worst, estimated |
 | Transfers at once, one user | 1 | One user cannot take both |
 
 The size is known before the bytes are read (the API's estimate matched the
@@ -282,8 +289,8 @@ of one service into another. What keeps intent visible, and what does not:
 
 ## Stage 1
 
-The reference convention with one type, `gmail_export_message`,
-`jira_add_attachment`, the in-memory crossing, the skill.
+The reference convention with one type, `jira_add_attachment`, the
+in-memory crossing, the skill. One new tool.
 
 What was in the first draft and where it goes:
 
@@ -299,31 +306,42 @@ What was in the first draft and where it goes:
 | The held file | 3 | Nothing produces bytes with no source yet |
 
 Volume: stage 1 moves one message per call. A user with many messages runs
-the calls in a loop: one to attach each message, two if the export is called
-first for the name and hash, three with the comment. Fifty emails are 50 to
+the calls in a loop: one to attach each message, two with a comment that
+records the hash, three if the issue is read first. Fifty emails are 50 to
 150 tool calls, counted like any others against the plan. Batches in stage 2
-bring the export and the attach down to one call each per ten messages.
+bring the attach down to one call per ten messages.
 
 Effort, rough:
 
 | Where | Work | Days |
 |---|---|---|
 | Gateway | Seeing a reference at dispatch, the two private-route calls, the limits, classification, tests | 3 |
-| gws-mcp | `gmail_export_message`, the bytes route, tests | 2 |
+| gws-mcp | The bytes route, tests | 2 |
 | atlassian-mcp | A multipart request, `jira_add_attachment` with the receipt, the consume route, tests | 2 |
 | Content | The skill, the docs, the changelog entry, runner cases | 2 |
 
-Three rollouts (each plugin, then the gateway) and two new registry rows,
-in the order any new tool takes: plugins, rows, gateway classification.
+Three rollouts (each plugin, then the gateway) and one new registry row, in
+the order any new tool takes: plugins, row, gateway classification.
 
-Runner cases: export a delivered test message and check its description
-against the message; attach it to an issue the run created and check the
-attachment's name, type and size through the read tools; delete the issue,
-which removes the attachment. Refusals: a file over the cap, an issue that
-does not exist.
+Found in the build, and kept:
+
+- A refusal by the crossing itself (a limit reached, a malformed reference,
+  a timeout) is an error result like any other, so it counts as a call.
+- The private routes require the same provider token as the MCP route and
+  refuse a request without one. The plugins listen on all interfaces, as they
+  always have; only the gateway's own port is published.
+- The runner's attachment steps use only the runner's own smoke mail and
+  fail when they find none. They never fall back to another message.
+
+Runner cases, as built: attach a smoke message to an issue the run created,
+check the receipt, read the issue back and require the attachment Jira lists
+to match the receipt's id and size; delete the issue, which removes the
+attachment. One refusal: an issue that does not exist. A file over the cap
+has no runner case, because no fixture is that large; it is covered by unit
+tests in the gateway and in the source plugin.
 
 Docs: the file reference convention, with the sentence under "Where the file
-is"; the two tools on the Gmail and Jira pages. Changelog: one entry.
+is"; the tool on the Jira page. Changelog: one entry.
 
 ## Later stages
 
