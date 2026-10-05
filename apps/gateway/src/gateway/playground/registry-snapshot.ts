@@ -30,6 +30,7 @@ export const REGISTRY_CLASSIFICATION: ReadonlyArray<readonly [string, "read" | "
   ["atlassian-mcp__confluence_get_page", "read"],
   ["atlassian-mcp__confluence_list_pages", "read"],
   ["atlassian-mcp__confluence_search", "read"],
+  ["atlassian-mcp__jira_add_attachment", "write"],
   ["atlassian-mcp__jira_add_comment", "write"],
   ["atlassian-mcp__jira_create_issue", "write"],
   ["atlassian-mcp__jira_delete_comment", "write"],

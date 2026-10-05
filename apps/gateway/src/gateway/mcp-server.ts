@@ -48,6 +48,7 @@ import {
   rewriteScopeError,
   MISSING_SCOPE_ERROR_MARKER,
 } from "./scope-grant";
+import { crossFile, fileCrossingFor } from "./file-crossing";
 
 const ACCOUNT_PARAM_SCHEMA = {
   type: "string",
@@ -1094,7 +1095,36 @@ export function createMcpServer(
 
     try {
       let result;
-      if (userToken) {
+      if (fileCrossingFor(name)) {
+        // SCRUM-384: a tool that takes a file reference. The crossing stands
+        // exactly where the plugin call would, so the gates above and the
+        // tracking below treat it as the one tool call it is. The source
+        // token is resolved for this session's user and no other.
+        result = await crossFile({
+          userId,
+          tool: name,
+          toolName,
+          args,
+          destinationUrl: serverUrl,
+          destinationToken: userToken,
+          resolveToken: (service, account) =>
+            resolveServiceToken(db, userId, service, account),
+          resolvePluginUrl: async (slug) => {
+            const [row] = await db
+              .select({
+                slug: mcpServers.slug,
+                containerPort: mcpServers.containerPort,
+                githubRepoUrl: mcpServers.githubRepoUrl,
+              })
+              .from(mcpServers)
+              .where(eq(mcpServers.slug, slug))
+              .limit(1);
+            return row ? buildPluginServerUrl(row) : null;
+          },
+          surface,
+          connectionsUrl,
+        });
+      } else if (userToken) {
         result = await callPluginToolOnce({
           serverUrl,
           userToken,
