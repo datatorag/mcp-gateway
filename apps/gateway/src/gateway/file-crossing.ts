@@ -313,7 +313,10 @@ export async function crossFile(opts: CrossFileOptions): Promise<CrossingResult>
         "X-User-Token": source.token,
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({ ref, max_bytes: MAX_FILE_BYTES }),
+      // Only the type and the fields that type declares go to the plugin.
+      // `account` was used here to choose the token, and anything else the
+      // caller put on the reference is dropped rather than passed through.
+      body: JSON.stringify({ ref: closedReference(ref), max_bytes: MAX_FILE_BYTES }),
       signal: controller.signal,
     });
 
@@ -405,4 +408,13 @@ export async function crossFile(opts: CrossFileOptions): Promise<CrossingResult>
     if (left <= 0) userInFlight.delete(opts.userId);
     else userInFlight.set(opts.userId, left);
   }
+}
+
+/** The reference as the source plugin gets it: its type and the string
+ * fields that type requires, and nothing else. */
+function closedReference(ref: FileReference): Record<string, unknown> {
+  const out: Record<string, unknown> = { type: ref.type };
+  const declared = FILE_REFERENCE_TYPES[ref.type as keyof typeof FILE_REFERENCE_TYPES];
+  for (const field of declared.requiredStrings) out[field] = ref[field];
+  return out;
 }

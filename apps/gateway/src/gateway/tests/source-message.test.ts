@@ -28,23 +28,32 @@ describe("the queries", () => {
 });
 
 describe("firstMessageId", () => {
-  it("reads the first id from a wrapped list", () => {
-    expect(firstMessageId(answer({ messages: [{ id: "m-one" }, { id: "m-two" }] }))).toBe("m-one");
+  const smoke = (id: string) => ({ id, subject: `${SUBJECT_PREFIX} a run's own message` });
+
+  it("reads the first smoke message's id from a wrapped list", () => {
+    expect(firstMessageId(answer({ messages: [smoke("m-one"), smoke("m-two")] }))).toBe("m-one");
   });
 
-  it("reads the first id from a bare list", () => {
-    expect(firstMessageId(answer([{ id: "m-one" }]))).toBe("m-one");
+  it("reads it from a bare list", () => {
+    expect(firstMessageId(answer([smoke("m-one")]))).toBe("m-one");
   });
 
-  it("answers undefined for an empty list, so the caller can try the next query", () => {
+  it("answers undefined for an empty list", () => {
     expect(firstMessageId(answer({ messages: [] }))).toBeUndefined();
     expect(firstMessageId(answer({ resultSizeEstimate: 0 }))).toBeUndefined();
   });
 
-  it("skips a row with no usable id rather than returning it", () => {
-    expect(firstMessageId(answer({ messages: [{ id: "" }, { subject: "no id" }, { id: "m-three" }] }))).toBe(
-      "m-three"
-    );
+  it("never picks a message whose subject lacks the literal prefix, whatever the search matched", () => {
+    // Gmail's search ignores punctuation: a subject that only contains the
+    // word can come back for the prefixed query. It must not be attached.
+    const real = { id: "m-real", subject: "smoke test results for the kitchen" };
+    const none = { id: "m-none" };
+    expect(firstMessageId(answer({ messages: [real, none] }))).toBeUndefined();
+    expect(firstMessageId(answer({ messages: [real, smoke("m-ours")] }))).toBe("m-ours");
+  });
+
+  it("skips a smoke row with no usable id rather than returning it", () => {
+    expect(firstMessageId(answer({ messages: [{ ...smoke(""), id: "" }, smoke("m-three")] }))).toBe("m-three");
   });
 
   it("throws on a search that errored, which is not the same as finding nothing", () => {

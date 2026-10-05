@@ -51,13 +51,13 @@ export const jr9JiraAttachMissingIssue: TestCase = {
     let message_id: string | undefined;
     for (const query of SOURCE_MESSAGE_QUERIES) {
       message_id = firstMessageId(
-        await ctx.call("gws-mcp__gmail_search", { query, max_results: 1 }, { as: "reader" })
+        await ctx.call("gws-mcp__gmail_search", { query, max_results: 10 }, { as: "reader" })
       );
       if (message_id) break;
     }
     if (!message_id) {
       throw new Error(
-        "the reader mailbox has no message under 1 MB to offer, neither smoke mail nor anything else, so this step cannot run"
+        "the reader mailbox has no smoke message under 1 MB to offer, so this step cannot run; it needs a standing smoke message"
       );
     }
 

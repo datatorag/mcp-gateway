@@ -70,22 +70,18 @@ export const jr8JiraAttachEmail: TestCase = {
     /* FOUND, NOT SENT. See `source-message.ts` for why only smoke mail
      * is eligible and why this is not a dependency on the Gmail scenario. */
     let message_id: string | undefined;
-    let asked = 0;
     for (const query of SOURCE_MESSAGE_QUERIES) {
-      asked += 1;
       message_id = firstMessageId(
-        await ctx.call("gws-mcp__gmail_search", { query, max_results: 1 }, { as: "reader" })
+        await ctx.call("gws-mcp__gmail_search", { query, max_results: 10 }, { as: "reader" })
       );
       if (message_id) break;
     }
     if (!message_id) {
       throw new Error(
-        "the reader mailbox has no message under 1 MB to attach, neither smoke mail nor anything else, so this step cannot run"
+        "the reader mailbox has no smoke message under 1 MB to attach, so this step cannot run; it needs a standing smoke message"
       );
     }
-    ctx.evidence(
-      asked === 1 ? "the source is one of the runner's own messages" : "no smoke mail was searchable, so the source is another small message in the reader mailbox"
-    );
+    ctx.evidence("the source is one of the runner's own smoke messages");
 
     const created = await ctx.call(
       "atlassian-mcp__jira_create_issue",

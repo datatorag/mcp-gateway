@@ -39,13 +39,17 @@ import type { ToolResult } from "./types";
  */
 export const SOURCE_MESSAGE_QUERIES = [`in:anywhere subject:"${SUBJECT_PREFIX}" smaller:1M`] as const;
 
-/** The first usable message id in a `gmail_search` answer, or undefined when
- * it matched nothing. Throws when the search itself errored: a mailbox that
+/** The id of the first message in a `gmail_search` answer whose subject
+ * literally carries the smoke prefix, or undefined when there is none. Throws when the search itself errored: a mailbox that
  * cannot be searched is not a mailbox with no mail in it. */
 export function firstMessageId(result: ToolResult): string | undefined {
   const rows = firstArray(resultJson("gmail_search", result)) ?? [];
   for (const row of rows) {
-    const id = (row as { id?: unknown } | null)?.id;
+    const { id, subject } = (row ?? {}) as { id?: unknown; subject?: unknown };
+    // Gmail's search ignores punctuation, so the query alone can match a
+    // subject that merely contains the word. The prefix is checked here,
+    // literally, on the row that came back.
+    if (typeof subject !== "string" || !subject.includes(SUBJECT_PREFIX)) continue;
     if (typeof id === "string" && id !== "") return id;
   }
   return undefined;

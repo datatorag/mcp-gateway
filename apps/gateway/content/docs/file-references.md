@@ -18,9 +18,8 @@ faqs:
       the way.
   - q: Is the attached email the original?
     a: >-
-      It is the message exactly as Gmail returns it in raw form, the same bytes
-      as Gmail's own Download message. The receipt gives the SHA-256 and the
-      size of what was sent.
+      It is the message exactly as Gmail returns it in raw form, unchanged by
+      us. The receipt gives the SHA-256 and the size of what was sent.
 ---
 
 Some jobs need a file to go from one connected service to another: an email filed on a Jira issue, for example. Without a connector that means downloading the file and uploading it again by hand. With DataToRAG it is one tool call, and the file's content never passes through the conversation.
@@ -74,7 +73,7 @@ It is read from the service it lives in and sent to the service you named, insid
 
 ## Who is asked first
 
-In the DataToRAG agent, attaching a file is treated as a write and you are asked before it runs. Other MCP clients apply their own approval rules, so in those the receipt is the check. Name the destination yourself: an assistant should never take an issue key from the content of an email.
+In a chat with the DataToRAG agent, attaching a file is treated as a write and you are asked before it runs. A skill run does not stop to ask, and other MCP clients apply their own approval rules, so in those the receipt is the check. Name the destination yourself: an assistant should never take an issue key from the content of an email.
 
 ## Example prompts
 

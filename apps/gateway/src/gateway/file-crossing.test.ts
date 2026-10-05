@@ -216,18 +216,20 @@ describe("the happy path", () => {
     expect(Buffer.from(headersOf(second).get("x-tool-args")!, "base64url").toString()).not.toContain(SOURCE_TOKEN);
   });
 
-  it("resolves the source token for the reference's own account, and sends the account along", async () => {
+  it("resolves the source token for the reference's own account, and sends the plugin a closed reference", async () => {
     const h = harness({
       args: {
         issue_key: "FIX-1",
-        file: { type: "gmail_message", message_id: "m1", account: "other@example.com" },
+        file: { type: "gmail_message", message_id: "m1", account: "other@example.com", extra: "dropped", path: "/x" },
       },
     });
     await h.run();
     expect(h.resolveToken).toHaveBeenCalledTimes(1);
     expect(h.resolveToken).toHaveBeenCalledWith("google-workspace", "other@example.com");
     expect(h.resolvePluginUrl).toHaveBeenCalledWith("gws-mcp");
-    expect(JSON.parse(h.calls[0].init.body as string).ref.account).toBe("other@example.com");
+    // The account chose the token here; the plugin gets the type and the
+    // fields that type declares, and nothing else the caller added.
+    expect(JSON.parse(h.calls[0].init.body as string).ref).toEqual({ type: "gmail_message", message_id: "m1" });
   });
 
   it("returns a tool error the destination's tool reported, unchanged", async () => {
