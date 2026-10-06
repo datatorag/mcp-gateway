@@ -41,7 +41,7 @@ faqs:
       granular scopes instead.
 ---
 
-The Jira tools let your AI assistant search, create, update, and move issues through their workflow, plus add, edit and delete comments and look up an attachment's details.
+The Jira tools let your AI assistant search, create, update, and move issues through their workflow, plus add, edit and delete comments, look up an attachment's details, and add a file from another connected service as an attachment.
 
 ## Available operations
 

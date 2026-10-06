@@ -9,6 +9,13 @@ import { JsonLd } from "@/components/json-ld";
 import { ServiceIcon, serviceFromSlug } from "@/components/service-icon";
 import { DocViewTracker } from "./view-tracker";
 import { DocsCta } from "../cta";
+import { getConnector } from "@/lib/docs-connectors";
+
+/** The connector a doc belongs to, by its `connector` field or because it is
+ * a connector's own overview page; undefined for a general page. */
+function connectorTitleFor(doc: { connector: string | null; slug: string }): string | undefined {
+  return (getConnector(doc.connector ?? "") ?? getConnector(doc.slug))?.title;
+}
 
 // A doc's markdown can place `<!--setup-instructions-->` on its own line to
 // render the shared SetupInstructions component (the same client picker +
@@ -95,7 +102,7 @@ export default async function DocPage({ params }: Props) {
           this one is not. Placed ABOVE prev/next on purpose, because
           prev/next offers more reading and would otherwise be the last
           thing on the page. */}
-      <DocsCta variant="inline" />
+      <DocsCta variant="inline" connectorTitle={connectorTitleFor(doc)} />
 
       {/* Prev / Next navigation */}
       {(prev || next) && (
