@@ -96,6 +96,7 @@ export const SCENARIOS: Scenario[] = [
       "F7", // a fabricated API key is refused with a usable challenge
       "R2", // a non-admin can neither see nor call the runner's tools
       "G1", // a read against something that does not exist names the cause
+      "G2", // a missing or unknown argument is refused by the gateway, by name
     ],
   },
   {
