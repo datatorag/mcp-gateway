@@ -114,7 +114,7 @@ export const SCENARIOS: Scenario[] = [
       "D7", //  add a tab, and it answers with a real sheet id
       "D1", //  append a row, read it back, clear it
       "E3", //  values beginning = and + are stored as text
-      "E4", //  a leading zero and a leading plus survive the round trip
+      "E4", //  the default mode types 007 as 7 and keeps a plus; RAW keeps both
       "D2", //  update a cell and read the change back
       "SH2", // a batch applies both requests and replies in order
       "SH3", // format a table: header frozen, values untouched
