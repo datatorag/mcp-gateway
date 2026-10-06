@@ -1,7 +1,6 @@
 import type { TestCase } from "../types";
 import { jiraProjectKey } from "../jira-project";
 import { resultText } from "../result-json";
-import { firstMessageId, SOURCE_MESSAGE_QUERIES } from "../source-message";
 
 /**
  * JR9 (Jira scenario): attaching to an issue that does not exist sends
@@ -37,29 +36,18 @@ import { firstMessageId, SOURCE_MESSAGE_QUERIES } from "../source-message";
 export const jr9JiraAttachMissingIssue: TestCase = {
   id: "JR9",
   title: "attaching to an issue that does not exist is refused, and nothing is sent to Jira",
-  covers: ["gws-mcp__gmail_search", "atlassian-mcp__jira_add_attachment"],
+  covers: ["atlassian-mcp__jira_add_attachment"],
   accounts: ["reader", "atlassian"],
-  fixtures: ["jiraProject"],
+  fixtures: ["jiraProject", "smokeMessage"],
   timeoutMs: 120_000,
   run: async (ctx) => {
     /* THE PROJECT COMES FROM THE FIXTURE and the number is one no board
      * reaches, so the key is real in shape and absent in fact. */
     const issue_key = `${jiraProjectKey(ctx)}-999999999`;
 
-    // A REAL MESSAGE, found the way JR8 finds it. With a made-up id the
+    // A REAL MESSAGE, the standing one JR8 uses. With a made-up id the
     // gateway would fail on the Gmail leg and the issue check would never run.
-    let message_id: string | undefined;
-    for (const query of SOURCE_MESSAGE_QUERIES) {
-      message_id = firstMessageId(
-        await ctx.call("gws-mcp__gmail_search", { query, max_results: 10 }, { as: "reader" })
-      );
-      if (message_id) break;
-    }
-    if (!message_id) {
-      throw new Error(
-        "the reader mailbox has no smoke message under 1 MB to offer, so this step cannot run; it needs a standing smoke message"
-      );
-    }
+    const message_id = ctx.fixture("smokeMessage");
 
     const result = await ctx.call(
       "atlassian-mcp__jira_add_attachment",
