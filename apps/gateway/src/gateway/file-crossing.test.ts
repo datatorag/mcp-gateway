@@ -12,6 +12,7 @@ import {
   transfersInFlight,
   FILE_CONSUMING_TOOLS,
   FILE_REFERENCE_TYPES,
+  referenceExample,
   MAX_FILE_BYTES,
   MAX_TRANSFERS_HOST,
   MAX_TRANSFERS_PER_USER,
@@ -139,12 +140,21 @@ async function bodyBytes(call: Call): Promise<Buffer> {
 const idle = { host: 0, users: 0 };
 
 describe("the registry", () => {
-  it("is explicit: one consuming tool, one reference type, the stated limits", () => {
+  it("is explicit: one consuming tool, two reference types, the stated limits", () => {
     expect(FILE_CONSUMING_TOOLS).toEqual({
       "atlassian-mcp__jira_add_attachment": { fileArg: "file" },
     });
+    expect(Object.keys(FILE_REFERENCE_TYPES)).toEqual(["gmail_message", "gmail_attachment"]);
     expect(FILE_REFERENCE_TYPES).toMatchObject({
-      gmail_message: { plugin: "gws-mcp", service: "google-workspace" },
+      gmail_message: { plugin: "gws-mcp", service: "google-workspace", requiredStrings: ["message_id"] },
+      // The PART id, never the attachment id: Gmail issues a new attachment
+      // id on every read, so only the part id names the same file twice.
+      gmail_attachment: {
+        plugin: "gws-mcp",
+        service: "google-workspace",
+        requiredStrings: ["message_id", "part_id"],
+        scopeTool: "gmail_read",
+      },
     });
     expect(MAX_FILE_BYTES).toBe(25 * 1024 * 1024);
     expect(MAX_TRANSFERS_HOST).toBe(2);
@@ -159,6 +169,21 @@ describe("the registry", () => {
     // A name that merely exists on Object.prototype is not a tool.
     expect(fileCrossingFor("constructor")).toBeNull();
     expect(fileCrossingFor("toString")).toBeNull();
+  });
+
+  it("builds each type's example from its required fields, so the words cannot drift from the check", () => {
+    expect(referenceExample("gmail_message")).toBe('{"type":"gmail_message","message_id":"..."}');
+    expect(referenceExample("gmail_attachment")).toBe('{"type":"gmail_attachment","message_id":"...","part_id":"..."}');
+  });
+
+  it("shows every type's example in a refusal, once each", async () => {
+    const h = harness({ args: { issue_key: "FIX-1" } });
+    const text = textOf(await h.run());
+    for (const type of Object.keys(FILE_REFERENCE_TYPES)) {
+      const example = referenceExample(type);
+      expect(text).toContain(example);
+      expect(text.indexOf(example)).toBe(text.lastIndexOf(example));
+    }
   });
 });
 
@@ -232,6 +257,35 @@ describe("the happy path", () => {
     expect(JSON.parse(h.calls[0].init.body as string).ref).toEqual({ type: "gmail_message", message_id: "m1" });
   });
 
+  it("sends an attachment reference closed to its type, message id and part id, under the Gmail scope", async () => {
+    const h = harness({
+      args: {
+        issue_key: "FIX-1",
+        file: { type: "gmail_attachment", message_id: "m1", part_id: "0.1", attachment_id: "dropped", account: "other@example.com" },
+      },
+    });
+    expect(await h.run()).toEqual(RECEIPT);
+    expect(h.resolveToken).toHaveBeenCalledWith("google-workspace", "other@example.com");
+    expect(h.resolvePluginUrl).toHaveBeenCalledWith("gws-mcp");
+    // The attachment id a caller copied out of a read is never forwarded:
+    // it would not match the next read anyway.
+    expect(JSON.parse(h.calls[0].init.body as string)).toEqual({
+      ref: { type: "gmail_attachment", message_id: "m1", part_id: "0.1" },
+      max_bytes: MAX_FILE_BYTES,
+    });
+  });
+
+  it("refuses an attachment reference on a grant that lacks Gmail, before any request", async () => {
+    const h = harness({
+      args: { issue_key: "FIX-1", file: { type: "gmail_attachment", message_id: "m1", part_id: "1" } },
+      resolveToken: async () => ({ token: SOURCE_TOKEN, accountEmail: "a@example.com", scopes: IDENTITY_ONLY }),
+    });
+    const result = await h.run();
+    expect(result.isError).toBe(true);
+    expect(textOf(result)).toContain("Gmail access");
+    expect(h.calls).toHaveLength(0);
+  });
+
   it("returns a tool error the destination's tool reported, unchanged", async () => {
     const failed = { content: [{ type: "text", text: "Issue FIX-404 does not exist" }], isError: true };
     const h = harness({ dest: () => Response.json(failed) });
@@ -253,6 +307,9 @@ describe("refusals before any request", () => {
     ["a numeric message_id", { type: "gmail_message", message_id: 7 }, "message_id"],
     ["an empty message_id", { type: "gmail_message", message_id: "" }, "message_id"],
     ["a non-string account", { type: "gmail_message", message_id: "m", account: 3 }, "account"],
+    ["an attachment with no part_id", { type: "gmail_attachment", message_id: "m" }, "part_id"],
+    ["an attachment with a numeric part_id", { type: "gmail_attachment", message_id: "m", part_id: 1 }, "part_id"],
+    ["an attachment with no message_id", { type: "gmail_attachment", part_id: "1" }, "message_id"],
   ];
   it.each(shapes)("refuses a file argument that is %s", async (_label, file, mentions) => {
     const args: Record<string, unknown> = { issue_key: "FIX-1" };
