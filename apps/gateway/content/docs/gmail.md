@@ -97,7 +97,7 @@ The Gmail connector gives your AI assistant full access to your inbox: searching
 |------|-------------|
 | `gmail_search` | Search emails using Gmail query syntax (e.g., `from:boss subject:Q2 has:attachment`). Results include flattened from/to/subject/date plus snippet and labels |
 | `gmail_list` | List recent messages from your inbox with flattened from/to/subject/date fields |
-| `gmail_read` | Read a full email by message ID. `text_only` returns a compact view (flattened headers, decoded text body, attachment metadata); `max_body_chars` truncates long bodies |
+| `gmail_read` | Read a full email by message ID. `text_only` returns a compact view (flattened headers, decoded text body, attachment metadata with each attachment's part id); `max_body_chars` truncates long bodies |
 | `gmail_send` | Send a new email, with Drive files in `attachments`. Your Gmail signature is added; `signature: false` sends without it |
 | `gmail_reply` | Reply to an existing thread, addressed the way Gmail's Reply button does it; `reply_all: true` includes everyone on the original. Takes Drive files in `attachments`. Your Gmail signature goes under your note, above the quoted message |
 | `gmail_forward` | Forward a message to another recipient, signed the same way as a reply. Carries the original's attachments unless `include_original_attachments: false`; `attachments` adds Drive files |

@@ -10,6 +10,12 @@ faqs:
       message, and DataToRAG carries the email's original file from Gmail to
       the issue in one call. Nothing is downloaded to your computer and the
       file's content never enters the conversation.
+  - q: Can Claude attach an email's attachment to a Jira issue?
+    a: >-
+      Yes. A file reference can name one attachment of a Gmail message, by the
+      message and the attachment's part id, and it lands on the issue under
+      the sender's file name and type. Each call moves one file, so an email
+      with three attachments is three calls.
   - q: Where is my file while it is being moved?
     a: >-
       The file is held in the gateway's memory only while the transfer runs,
@@ -31,10 +37,13 @@ A tool that takes a file takes a **file reference**: a small object that says wh
 | Reference | Fields | The file |
 |-----------|--------|----------|
 | `gmail_message` | `message_id`, optional `account` | An email as its original `.eml` file, exactly as Gmail returns it |
+| `gmail_attachment` | `message_id`, `part_id`, optional `account` | One attachment of an email, under the sender's file name and type |
 
 More reference types will follow the same shape.
 
 A reference can only be resolved for you, with your own connection to the service it names. `account` picks which connected Google account holds the message when you have more than one.
+
+An attachment is named by its **part id**, not its attachment id. Gmail issues a new attachment id every time a message is read, so an id copied out of one read does not match the next; the part id (`"1"`, `"0.1"`) is the attachment's place in the message and stays the same. `gmail_read` lists each attachment with its `partId`.
 
 ## Tools that take a file
 
@@ -48,6 +57,17 @@ A reference can only be resolved for you, with your own connection to the servic
   "file": { "type": "gmail_message", "message_id": "<message id>" }
 }
 ```
+
+One attachment of that message, by its part id:
+
+```json
+{
+  "issue_key": "PROJ-123",
+  "file": { "type": "gmail_attachment", "message_id": "<message id>", "part_id": "1" }
+}
+```
+
+Each call moves one file. To attach three PDFs from one email, make three calls, one part id each.
 
 ## The receipt
 
@@ -79,3 +99,4 @@ In a chat with the DataToRAG agent, attaching a file is treated as a write and y
 
 - "Attach the email from Dana about the Q3 renewal to PROJ-123 as the original file"
 - "File this message on OPS-88 and add a comment with the file's name and SHA-256"
+- "Attach the PDFs from Dana's email to PROJ-123" (one call per PDF, each naming its part id)

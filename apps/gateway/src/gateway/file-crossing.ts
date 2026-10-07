@@ -52,7 +52,27 @@ export const FILE_REFERENCE_TYPES: Readonly<
     scopeTool: "gmail_export_message",
     describes: "a Gmail message",
   },
+  /** One attachment of a message, by its PART id (SCRUM-395). Gmail issues
+   * a new attachment id on every read of a message, so only the part id,
+   * which `gmail_read` lists, names the same attachment twice. The scope is
+   * judged as `gmail_read`: every Gmail tool maps to the one Gmail scope,
+   * and that is the tool a caller reads the part id from. */
+  gmail_attachment: {
+    plugin: "gws-mcp",
+    service: "google-workspace",
+    requiredStrings: ["message_id", "part_id"],
+    scopeTool: "gmail_read",
+    describes: "an attachment of a Gmail message",
+  },
 };
+
+/** The example a refusal shows for a reference type: its type and every
+ * field the type requires, values elided. Built from the table so the words
+ * and the check cannot disagree. */
+export function referenceExample(type: string): string {
+  const fields = FILE_REFERENCE_TYPES[type].requiredStrings.map((field) => `,"${field}":"..."`).join("");
+  return `{"type":"${type}"${fields}}`;
+}
 
 export const MAX_FILE_BYTES = 25 * 1024 * 1024;
 export const MAX_TRANSFERS_HOST = 2;
@@ -126,10 +146,8 @@ function readReference(
   fileArg: string,
   toolName: string
 ): { ok: true; ref: FileReference } | { ok: false; text: string } {
-  const known = Object.keys(FILE_REFERENCE_TYPES).join(", ");
-  const shape =
-    `${toolName} takes a file reference in "${fileArg}", an object such as ` +
-    `{"type":"gmail_message","message_id":"..."}. Known types: ${known}.`;
+  const examples = Object.keys(FILE_REFERENCE_TYPES).map(referenceExample).join(" or ");
+  const shape = `${toolName} takes a file reference in "${fileArg}", an object such as ${examples}.`;
   const raw = args[fileArg];
   if (raw === undefined || raw === null) {
     return { ok: false, text: `The "${fileArg}" argument is missing. ${shape}` };

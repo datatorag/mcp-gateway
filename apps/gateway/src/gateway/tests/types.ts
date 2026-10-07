@@ -58,6 +58,12 @@ export const FIXTURE_KEYS = [
    * responses stop at 900 KB. */
   "attachmentMessage",
   "attachmentMd5",
+  /** A message in the reader mailbox whose subject carries the smoke prefix
+   * and which is never trashed: the file the attachment steps move. A
+   * search for the prefix is not enough, because every message the runner
+   * sends is trashed by the case that sent it, so the search can come back
+   * empty with nothing wrong. Pinned, as the attachment message is. */
+  "smokeMessage",
 ] as const;
 export type FixtureKey = (typeof FIXTURE_KEYS)[number];
 

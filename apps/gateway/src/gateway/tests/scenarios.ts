@@ -228,6 +228,7 @@ export const SCENARIOS: Scenario[] = [
        * reader mailbox, so this scenario still sends no mail. */
       "JR8", // an email is attached as its original file, and the issue lists it
       "JR9", // attaching to an issue that does not exist sends nothing to Jira
+      "JR10", // one attachment of the standing message is attached by part id
     ],
   },
   {
