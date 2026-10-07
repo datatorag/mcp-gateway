@@ -10,6 +10,8 @@
  * stay with the plugin.
  */
 
+import { echoName } from "./skills-catalogue";
+
 export type ArgumentValidation =
   | { ok: true }
   | {
@@ -50,7 +52,9 @@ export function validateArguments(
   if (properties && !extrasAllowed) {
     const known = Object.keys(properties);
     for (const name of given) {
-      if (name in properties || allowedExtra.includes(name)) continue;
+      // Own properties only: "constructor" or "toString" is not a declared
+      // argument because every object answers to it.
+      if (Object.hasOwn(properties, name) || allowedExtra.includes(name)) continue;
       unknown.push(name);
       const close = closest(name, known);
       if (close) suggestions[name] = close;
@@ -70,8 +74,10 @@ export function argumentRefusalText(
 ): string {
   const parts: string[] = [];
   for (const u of v.unknown) {
-    const hint = v.suggestions[u] ? ` (did you mean "${v.suggestions[u]}"?)` : "";
-    parts.push(`unknown argument "${u}"${hint}`);
+    const hint = v.suggestions[u] ? ` (did you mean "${echoName(v.suggestions[u])}"?)` : "";
+    // The name is the caller's own text: echoed stripped of control
+    // characters and bounded, as every other echoed name is.
+    parts.push(`unknown argument "${echoName(u)}"${hint}`);
   }
   if (v.missing.length > 0) {
     parts.push(`missing required argument${v.missing.length > 1 ? "s" : ""}: ${v.missing.join(", ")}`);

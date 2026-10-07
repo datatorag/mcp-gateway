@@ -93,3 +93,23 @@ describe("argumentRefusalText", () => {
     expect(text).toMatch(/required|missing/);
   });
 });
+
+describe("hardening", () => {
+  it("treats a prototype name as unknown, not as declared", () => {
+    const schema = { type: "object", properties: { a: {} }, required: [] };
+    const v = validateArguments(schema, { constructor: 1, toString: 2, __proto__: 3 } as Record<string, unknown>);
+    expect(v.ok).toBe(false);
+    if (!v.ok) expect(v.unknown.sort()).toEqual(["constructor", "toString"]);
+  });
+
+  it("echoes an unknown name without control characters and bounded", () => {
+    const schema = { type: "object", properties: { a: {} }, required: [] };
+    const long = "x".repeat(500) + "\u0007\u202e";
+    const v = validateArguments(schema, { [long]: 1 });
+    expect(v.ok).toBe(false);
+    if (v.ok) return;
+    const text = argumentRefusalText("t", v, []);
+    expect(text).not.toMatch(/[\u0007\u202e]/);
+    expect(text.length).toBeLessThan(400);
+  });
+});
