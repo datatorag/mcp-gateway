@@ -1,7 +1,6 @@
 import type { TestCase } from "../types";
 import { jiraProjectKey } from "../jira-project";
 import { resultJson } from "../result-json";
-import { firstMessageId, SOURCE_MESSAGE_QUERIES } from "../source-message";
 
 type Receipt = {
   attachment?: { id?: string | number | null; filename?: string | null; size?: number | null };
@@ -55,33 +54,24 @@ export const jr8JiraAttachEmail: TestCase = {
   id: "JR8",
   title: "an email is attached to an issue as its original file, and the issue lists it",
   covers: [
-    "gws-mcp__gmail_search",
     "atlassian-mcp__jira_create_issue",
     "atlassian-mcp__jira_add_attachment",
     "atlassian-mcp__jira_get_issue",
     "atlassian-mcp__jira_delete_issue",
   ],
   accounts: ["reader", "atlassian"],
-  fixtures: ["jiraProject"],
+  fixtures: ["jiraProject", "smokeMessage"],
   timeoutMs: 180_000,
   run: async (ctx) => {
     const project = jiraProjectKey(ctx);
 
-    /* FOUND, NOT SENT. See `source-message.ts` for why only smoke mail
-     * is eligible and why this is not a dependency on the Gmail scenario. */
-    let message_id: string | undefined;
-    for (const query of SOURCE_MESSAGE_QUERIES) {
-      message_id = firstMessageId(
-        await ctx.call("gws-mcp__gmail_search", { query, max_results: 10 }, { as: "reader" })
-      );
-      if (message_id) break;
-    }
-    if (!message_id) {
-      throw new Error(
-        "the reader mailbox has no smoke message under 1 MB to attach, so this step cannot run; it needs a standing smoke message"
-      );
-    }
-    ctx.evidence("the source is one of the runner's own smoke messages");
+    /* PINNED, NOT SEARCHED. The file is the standing smoke message the
+     * fixture names, the way the attachment case names its message. A
+     * search for the prefix came back empty whenever the runner's own mail
+     * had been trashed, which is most of the time, and a step that fails
+     * for want of a message proves nothing about attaching one. */
+    const message_id = ctx.fixture("smokeMessage");
+    ctx.evidence("the source is the standing smoke message");
 
     const created = await ctx.call(
       "atlassian-mcp__jira_create_issue",

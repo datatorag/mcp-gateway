@@ -52,6 +52,7 @@ import { f1ApprovalBoundary } from "./f1-approval-boundary";
 import { f2UnapprovedScopes } from "./f2-unapproved-scopes";
 import { f7ApiKeyRefused } from "./f7-api-key-refused";
 import { g1ErrorShape } from "./g1-error-shape";
+import { g2ArgumentRefusal } from "./g2-argument-refusal";
 import { gw1ConnectedAccounts } from "./gw1-connected-accounts";
 import { sh1SheetsCreate } from "./sh1-sheets-create";
 import { sh2SheetsBatch } from "./sh2-sheets-batch";
@@ -179,6 +180,7 @@ export const CASES: TestCase[] = [
   f2UnapprovedScopes,
   f7ApiKeyRefused,
   g1ErrorShape,
+  g2ArgumentRefusal,
   gw1ConnectedAccounts,
   sh1SheetsCreate,
   sh2SheetsBatch,

@@ -94,6 +94,14 @@ describe("DocsCta, the surfaces SCRUM-287 leaves alone", () => {
     expect(capture).toHaveBeenCalledWith("docs_cta_clicked", { cta: "sign_in", page: "/docs/gmail" });
   });
 
+  it("the end-of-page CTA names the page's connector, and never Google Workspace on another connector's page", () => {
+    render({ variant: "inline", now: BEFORE, connectorTitle: "Atlassian" });
+    expect(container.textContent).toContain("Connect Atlassian once");
+    expect(container.textContent).not.toContain("Google Workspace");
+    render({ variant: "inline", now: BEFORE });
+    expect(container.textContent).toContain("Connect a service once");
+  });
+
   it("the end-of-page CTA carries no promo words and keeps its own event", () => {
     render({ variant: "inline", now: BEFORE });
     expect(container.textContent).not.toContain(HEADLINE);

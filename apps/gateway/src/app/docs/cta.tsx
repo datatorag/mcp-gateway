@@ -14,9 +14,14 @@ import { promoActive, promoCopy } from "@/lib/promo";
 // PostHog event is what makes docs-sourced signups attributable per-page.
 export function DocsCta({
   variant,
+  connectorTitle,
   now,
 }: {
   variant: "sidebar" | "mobile" | "inline";
+  /** The connector the page documents, named in the inline copy so a Jira
+   * page does not tell its reader to connect Google Workspace. Absent on
+   * general pages, which say "a service". */
+  connectorTitle?: string;
   /** The clock, injectable for tests. Defaults to the browser's now at mount. */
   now?: Date;
 }) {
@@ -60,8 +65,8 @@ export function DocsCta({
           Try this on your own account
         </p>
         <p className="mt-2 text-sm text-muted-foreground">
-          Connect Google Workspace once and your assistant can run every tool
-          on this page against your real files. Free to start, no card.
+          Connect {connectorTitle ?? "a service"} once and your assistant can run
+          every tool on this page against your real data. Free to start, no card.
         </p>
         <a
           className="mt-4 inline-flex items-center rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-opacity hover:opacity-90"

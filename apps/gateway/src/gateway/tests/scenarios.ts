@@ -96,6 +96,7 @@ export const SCENARIOS: Scenario[] = [
       "F7", // a fabricated API key is refused with a usable challenge
       "R2", // a non-admin can neither see nor call the runner's tools
       "G1", // a read against something that does not exist names the cause
+      "G2", // a missing or unknown argument is refused by the gateway, by name
     ],
   },
   {
@@ -114,7 +115,7 @@ export const SCENARIOS: Scenario[] = [
       "D7", //  add a tab, and it answers with a real sheet id
       "D1", //  append a row, read it back, clear it
       "E3", //  values beginning = and + are stored as text
-      "E4", //  a leading zero and a leading plus survive the round trip
+      "E4", //  the default mode types 007 as 7 and keeps a plus; RAW keeps both
       "D2", //  update a cell and read the change back
       "SH2", // a batch applies both requests and replies in order
       "SH3", // format a table: header frozen, values untouched

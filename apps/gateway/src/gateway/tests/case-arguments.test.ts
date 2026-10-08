@@ -122,6 +122,12 @@ describe.runIf(!!LIVE_REGISTRY_DATABASE_URL)(`case arguments against the served 
      * a way to hide a mistyped tool name. */
     const KNOWN_REGISTRY_DRIFT = new Set<string>([]);
 
+    /* ARGUMENTS A CASE PASSES WRONG ON PURPOSE, to prove the gateway refuses
+     * them (G2). Named by file, tool and argument, and the mirror of the set
+     * above: an entry here must NOT be declared by the registry, or it has
+     * stopped being a deliberate mistake and become a hidden one. */
+    const DELIBERATELY_WRONG = new Set<string>(["g2-argument-refusal.ts:atlassian-mcp__jira_get_issue:issue_id"]);
+
     const problems: string[] = [];
     const unregistered = new Set<string>();
     for (const call of readCaseCalls(CASES_DIR)) {
@@ -137,6 +143,7 @@ describe.runIf(!!LIVE_REGISTRY_DATABASE_URL)(`case arguments against the served 
       for (const arg of call.args) {
         if (declared.has(arg)) continue;
         if (KNOWN_REGISTRY_DRIFT.has(`${call.tool}:${arg}`)) continue;
+        if (DELIBERATELY_WRONG.has(`${call.file}:${call.tool}:${arg}`)) continue;
         problems.push(`${call.file}: ${call.tool} has no argument ${arg}`);
       }
     }
@@ -146,6 +153,16 @@ describe.runIf(!!LIVE_REGISTRY_DATABASE_URL)(`case arguments against the served 
     for (const entry of KNOWN_REGISTRY_DRIFT) {
       const [tool] = entry.split(":");
       expect(schemas.has(tool), `${tool} is allowlisted but is not in the registry at all`).toBe(true);
+    }
+
+    for (const entry of DELIBERATELY_WRONG) {
+      const [, tool, arg] = entry.split(":");
+      const declared = schemas.get(tool);
+      expect(declared, `${tool} is named as deliberately wrong but is not in the registry at all`).toBeDefined();
+      expect(
+        Object.keys(declared?.properties ?? {}).includes(arg),
+        `${tool} now declares ${arg}, so the deliberate mistake in ${entry.split(":")[0]} is no longer one`
+      ).toBe(false);
     }
 
     if (unregistered.size > 0) {

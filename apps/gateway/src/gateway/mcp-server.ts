@@ -26,7 +26,8 @@ import { createUserSkill, deleteUserSkill, forkSkill, updateUserSkill, type Writ
 import { eq, and } from "drizzle-orm";
 import type { Database } from "@datatorag-mcp/db";
 import { isAdmin } from "./admin";
-import { mcpServers, pluginConnections } from "@datatorag-mcp/db";
+import { mcpServers, pluginConnections, tools } from "@datatorag-mcp/db";
+import { argumentRefusalText, validateArguments } from "./argument-validation";
 import type { ConnectionPool } from "./pool";
 import { NAMESPACE_SEPARATOR } from "./plugin-manager";
 import { PLUGIN_SERVICE_MAP, resolveServiceToken } from "./service-token";
@@ -962,6 +963,48 @@ export function createMcpServer(
     }
 
     const serverUrl = buildPluginServerUrl(mcpServer);
+
+    // SCRUM-392: a call missing a required argument, or carrying one the
+    // tool does not take, is refused HERE, by name, before a token is
+    // resolved or a plugin reached. The schema is the registry's own, the
+    // same one the listing serves, so the gateway and the plugin cannot
+    // disagree about it. `account` is the one argument the listing injects
+    // that no plugin schema declares. A tool with no registry row is not
+    // refused: that is today's behaviour, kept on purpose and tracked
+    // separately. Values are not checked; that stays with the plugin.
+    const [toolRow] = await db
+      .select({ schema: tools.inputSchemaJson })
+      .from(tools)
+      .where(and(eq(tools.namespacedName, name), eq(tools.enabled, true)))
+      .limit(1);
+    if (toolRow && toolRow.schema && typeof toolRow.schema === "object") {
+      const validation = validateArguments(toolRow.schema, args, ["account"]);
+      if (!validation.ok) {
+        const required = (toolRow.schema as { required?: unknown }).required;
+        const text = argumentRefusalText(
+          toolName,
+          validation,
+          Array.isArray(required) ? required.filter((r): r is string => typeof r === "string") : []
+        );
+        // A user error like any other, metered like any other: the caller
+        // sent a call the tool cannot take.
+        void trackToolCall(db, {
+          userId,
+          clientId,
+          clientName: clientName(),
+          testRunId,
+          toolName: name,
+          connectorType: PLUGIN_SERVICE_MAP[mcpServer.slug],
+          accountEmail: typeof args.account === "string" ? args.account : undefined,
+          ...runFields,
+          latencyMs: 0,
+          responseSizeBytes: null,
+          errorMessage: text,
+          outcome: { thrown: false, isError: true, errorMessage: text, source: surface, toolName: name },
+        });
+        return { content: [{ type: "text" as const, text }], isError: true };
+      }
+    }
 
     // Look up per-user token: first check service connections, then legacy plugin connections
     let userToken: string | null = null;
