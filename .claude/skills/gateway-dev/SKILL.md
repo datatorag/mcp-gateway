@@ -99,9 +99,9 @@ A **testcontainers-based real-Postgres helper exists** (`apps/gateway/src/test-u
 ## Ship ritual
 
 1. Branch off `main`.
-2. Tests + typecheck + build all pass (`pnpm vitest run` in `apps/gateway`, `pnpm exec tsc --noEmit`, `pnpm build`).
+2. Tests + typecheck + build all pass (`pnpm vitest run` in `apps/gateway`, `pnpm exec tsc --noEmit`, `pnpm build`). `scripts/gate.sh` runs the first two for whatever the diff touches, and CI runs the same script on the pull request; it does not run the build, so the build is still yours to run.
 3. Content-coverage check: run the `content-marketer` agent if the change touches anything user-facing (new route, new capability, changed billing behavior) that should be reflected in docs/changelog/blog.
 4. Run the `security-reviewer` agent (`.claude/agents/security-reviewer.md`) on `origin/main...HEAD` — this repo is public, this gate is mandatory, not optional. Only proceed on `VERDICT: PASS`.
 5. `gh auth status` — confirm the org account, not a personal one, before pushing.
-6. Push.
+6. Push, and open a pull request. CI runs two checks on it: `gate` and `leak-scan`. The leak scan there is a second net, not the first: by the time it runs the branch is already public, so step 4 and a local scan before the push are what prevent a leak.
 7. If prod-bound, use the `deploy` skill — don't hand-roll SSH/rebuild steps here.

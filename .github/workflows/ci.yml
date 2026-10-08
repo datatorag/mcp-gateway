@@ -1,0 +1,77 @@
+# The pull-request gate (SCRUM-394).
+#
+# Two jobs, and the difference between them is the point:
+#   gate       typecheck and tests for what changed. NO secret.
+#   leak-scan  the outgoing range against the rule list. ONE secret: the list.
+#
+# The trigger is pull_request, never pull_request_target. A pull request from a
+# fork therefore runs with a read-only token and no secrets, so its code can
+# read nothing. The leak scan then has no list and FAILS, on purpose: an
+# unscanned change must not read as a clean one.
+#
+# What that does not cover: a pull request from a branch IN this repository
+# runs its own copy of the scanner with the list, so anyone who can push here
+# can read the list. That is accepted; push access is the boundary.
+#
+# Every value that comes from the event reaches a script through `env`, never
+# through `${{ }}` inside a `run` line, so a branch name cannot become a command.
+#
+# Actions are GitHub's own, pinned to a commit. A tag can be moved.
+name: ci
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: true
+
+jobs:
+  gate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
+      HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 20
+      - name: pnpm, the version the repo pins
+        run: corepack enable && corepack prepare pnpm@9.15.0 --activate
+      - name: Install with a frozen lockfile
+        run: pnpm install --frozen-lockfile
+      - name: Gate
+        run: scripts/gate.sh "$BASE_SHA"
+
+  leak-scan:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
+      HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      # The list is given to the two steps that read it and to nothing else.
+      - name: Every rule still matches its own sample
+        env:
+          LEAK_SCAN_PATTERNS: ${{ secrets.LEAK_SCAN_PATTERNS }}
+        run: python3 scripts/leak-scan.py --self-test
+      - name: Scan every commit in the range, and its message
+        env:
+          LEAK_SCAN_PATTERNS: ${{ secrets.LEAK_SCAN_PATTERNS }}
+        run: python3 scripts/leak-scan.py --range "$BASE_SHA...$HEAD_SHA"

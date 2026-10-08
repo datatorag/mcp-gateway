@@ -4,7 +4,7 @@
  * THIS TEST EXISTS BECAUSE A COMMENT CLAIMED IT ALREADY DID. The scanner's
  * docblock said the corpus was "checked by an AST walk", which was true of
  * a one-off measurement and false as a standing guarantee: nothing was
- * committed, and this repository has no CI, so nothing re-ran it. A claim
+ * committed, and this repository had no CI then, so nothing re-ran it. A claim
  * that something is checked has to be a check.
  *
  * It matters more than tidiness. The scanner is a regex-and-offsets reader

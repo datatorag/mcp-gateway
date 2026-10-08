@@ -14,10 +14,10 @@
  * list) before touching this record. Editing "write" to "read" here to make a
  * failing test pass removes a real user's approval prompt.
  *
- * (Said "to get CI green" until it was noticed there is no CI in this
- * repository — nothing runs on push, PR or merge. Which makes the rule more
- * important, not less: the only thing standing behind this record is whoever
- * is reading it.)
+ * (The pull-request gate runs the suites that pin this record against the
+ * classifier. The half that asks the live registry reports skipped there,
+ * because CI has no registry to ask. For that half the only thing standing
+ * behind this record is still whoever is reading it.)
  *
  * Ordered by name so additions land as additions, not as churn. */
 export const REGISTRY_CLASSIFICATION: ReadonlyArray<readonly [string, "read" | "write"]> = [

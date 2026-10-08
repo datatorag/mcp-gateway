@@ -29,8 +29,9 @@ import { getDb } from "@/lib/db";
  * container and not on a laptop. Set PLUGIN_MCP_URLS to run it, e.g.
  * `PLUGIN_MCP_URLS='gws-mcp=http://localhost:40000/mcp'`. Skipped otherwise.
  *
- * Skipped is not passed. A check that has never run is not evidence, and this
- * repository has no CI, so nothing runs it unless a person does. Until that
+ * Skipped is not passed. A check that has never run is not evidence, and CI
+ * has no plugin to ask, so it reports skipped there too: nothing runs it
+ * unless a person does. Until that
  * changes, treat this as a tool to reach for during a plugin rollout rather
  * than as a net that catches anything on its own.
  */
