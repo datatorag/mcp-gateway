@@ -7,7 +7,8 @@
 #   DEPLOY_HOST=ubuntu@<host> DEPLOY_KEY=<path-to-pem> scripts/deploy-gateway.sh <full-sha>
 #
 # Optional: DEPLOY_HEALTH_URL (default https://datatorag.com/health),
-#           DEPLOY_KEEP_ROLLBACKS (default 5).
+#           DEPLOY_KEEP_ROLLBACKS (default 5),
+#           DEPLOY_CACHE_MAX (default 10GB): the build cache kept after a deploy.
 #
 # Rules this encodes (see .claude/skills/deploy/SKILL.md):
 # - The rollback tag names the sha that is RUNNING (the host's .deployed-sha),
@@ -19,6 +20,8 @@
 # - Every rollback image is a full gateway image. Only the newest
 #   DEPLOY_KEEP_ROLLBACKS tags survive a deploy; the host disk filled once with
 #   dozens of them.
+# - The build cache is cut back to DEPLOY_CACHE_MAX after a healthy deploy. It
+#   grows by gigabytes a build and nothing else removes it.
 set -euo pipefail
 
 WANT="${1:-}"
@@ -27,6 +30,8 @@ WANT="${1:-}"
 [ -n "${DEPLOY_KEY:-}" ] || { echo "DEPLOY_KEY is not set"; exit 2; }
 HEALTH_URL="${DEPLOY_HEALTH_URL:-https://datatorag.com/health}"
 KEEP="${DEPLOY_KEEP_ROLLBACKS:-5}"
+CACHE_MAX="${DEPLOY_CACHE_MAX:-10GB}"
+[[ "$CACHE_MAX" =~ ^[0-9]+(KB|MB|GB|TB)$ ]] || { echo "DEPLOY_CACHE_MAX must look like 10GB"; exit 2; }
 SSH="ssh -i $DEPLOY_KEY -o StrictHostKeyChecking=accept-new -o ConnectTimeout=20 $DEPLOY_HOST"
 
 echo "##### want sha: $WANT"
@@ -76,6 +81,16 @@ for _ in 1 2 3 4 5 6 7 8 9 10; do
   sleep 6
 done
 case "$h" in
-  *'"status":"ok"'*) $SSH "cd ~/datatorag-mcp && echo $WANT > .deployed-sha" && echo "recorded deployed sha on the host";;
+  *'"status":"ok"'*)
+    $SSH "cd ~/datatorag-mcp && echo $WANT > .deployed-sha" || { echo "health ok but the deployed sha was NOT recorded on the host"; exit 1; }
+    echo "recorded deployed sha on the host";;
   *) echo "health never ok; deployed sha NOT recorded"; exit 1;;
 esac
+
+echo "##### bound the build cache"
+# Only after a healthy deploy, and only build cache: `builder prune` never
+# removes an image, so the running image and the rollback tags are untouched.
+# `-a` lets it reach the bound; without it cache that is still referenced stays.
+# Bounded rather than emptied, so the next build still starts warm. A failure
+# here is reported and ignored; the deploy has already succeeded.
+$SSH "set -o pipefail; docker builder prune -af --max-used-space $CACHE_MAX 2>&1 | tail -1" || echo "  build cache prune failed (not fatal)"

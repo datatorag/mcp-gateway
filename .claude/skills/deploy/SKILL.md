@@ -28,6 +28,9 @@ What it guarantees, and the manual path must match:
   checkout is verified to be the requested sha before the build.
 - Only the newest five rollback tags are kept (`DEPLOY_KEEP_ROLLBACKS`); each
   is a full image and the host disk filled once with dozens of them.
+- The build cache is cut back to `DEPLOY_CACHE_MAX` (default 10GB) after a
+  healthy deploy, with `docker builder prune`, which never removes an image.
+  It grows by gigabytes a build; left alone it reached tens of gigabytes.
 - A failed build, or a container that was not recreated, stops before the
   deployed sha is recorded. The old container keeps serving and `/health`
   stays ok, so health alone never proves the new sha is live: check the
