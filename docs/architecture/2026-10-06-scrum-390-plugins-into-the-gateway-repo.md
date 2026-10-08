@@ -1,6 +1,6 @@
 # SCRUM-390: the plugins move into the gateway repo
 
-Status: SPEC, revision 3 (2026-10-07). No code has moved, nothing is deployed, the deploy script
+Status: SPEC, revision 4 (2026-10-08): the review's rulings are applied. No code has moved, nothing is deployed, the deploy script
 is untouched. Written against `main` at `c82f58c`, `gws-mcp` main at `27ea0fc`, `atlassian-mcp`
 main at `b8b82a0`.
 
@@ -29,6 +29,22 @@ command and the gate script.
 The build-and-deploy pipeline this spec relies on is specified separately, in
 `2026-10-07-scrum-394-ci-gates-and-github-deploys.md` (SCRUM-394).
 
+**Direction, ruled: a connector is a service plugin of the gateway, not a standalone MCP
+server.** The repository is public for openness, not as a supported way to host a connector on
+its own. Four consequences are in this work, and one is not:
+
+| Ruled | Where it lands |
+|---|---|
+| The folder is `plugins/` | Section 3 |
+| Copy that describes running a plugin as a standalone server is swept | The wiring PR (step 7): READMEs and docs only, no code |
+| The `.mcpb` desktop bundle is retired | Step 12, the first real plugin release |
+| The `gws` CLI fallback is dropped; what its oracle test checks is kept as recorded fixtures | Step 12 |
+| Registry rows generated from the tool list | **Not in this work.** Its own ticket |
+
+The two code removals wait for step 12 on purpose. They change plugin code and may change the
+served tool list, and steps 8 to 11 prove the new images by showing they serve exactly what
+runs today. Removing code first would take that proof away.
+
 ## 1. What this spec refuses
 
 1. **Plugins are not baked into the gateway image.** One image is one rollback id for three
@@ -41,7 +57,8 @@ The build-and-deploy pipeline this spec relies on is specified separately, in
    resolvable in this repo (rehearsed). A path-rewriting import would not.
 4. **Location and content never change in the same commit.** The two import commits carry
    trees byte-equal to the plugin repos' tips. Wiring is a second PR.
-5. **No general `plugin-sdk`.** Section 3 says what falls out and what does not.
+5. **No general `plugin-sdk` in this work.** The contract between the gateway and a plugin was
+   never written down; `packages/plugin-contract` is where it will be, after the move.
 6. **No toolchain unification during the move.** The plugins keep NodeNext, `.js` import
    suffixes, `server/` as output and their own TypeScript majors (7 and 5).
 7. **The registry write stays a human's.** One command generates the file. Nothing here runs
@@ -101,8 +118,8 @@ Three things today's layout hides:
 | tsconfig | Each plugin keeps its own. Neither extends `tsconfig.base.json` | The base sets bundler resolution; the plugins run under plain `node` |
 | Lint | Nothing to share | No package in any of the three repos has a lint script or config |
 | Image | One `plugins/Dockerfile`, taking the plugin as a build argument | Rehearsed as one file for both. Section 4 |
-| Gateway image | Its `Dockerfile` never copies a plugin directory | `gate.sh` fails if it ever does |
-| `.mcpb` desktop extension | Still packed from `plugins/gws-mcp` by its own script | No GitHub releases exist on the plugin repo, so no download URL moves |
+| Gateway image | Its `Dockerfile` copies each plugin's `README.md` and nothing else from `plugins/` | The tool pages read the README at build time (ruled). `gate.sh` fails if it copies anything more |
+| `.mcpb` desktop bundle | Imported as it is, then retired at step 12 | Ruled. No GitHub release of it exists, so no download link breaks |
 
 **Build and test.** `pnpm -r build` and `pnpm -r test` work once the glob is added (rehearsed).
 `turbo run build --filter='...[<base>]'` selects exactly the changed package and its dependents
@@ -120,7 +137,8 @@ Three things today's layout hides:
   and an override did not move it. `atlassian-mcp`'s drift was not measured.
 - **A fresh checkout's `pnpm -r test` is red.** The `gws-mcp` oracle test fails, by design
   never skips, when the pinned CLI binary is absent, and the binary is a gitignored download.
-  The plugin's `test` task must depend on `download-binaries`. With it the suite passes.
+  Until step 12 drops the CLI, the plugin's `test` task depends on `download-binaries`. After
+  it, the oracle's expected requests are fixtures in the repo and nothing is downloaded.
 
 **What the gateway and the plugins share.**
 
@@ -184,7 +202,7 @@ gateway's environment list and, at the end, the volume line.
 | Environment | `PORT`, and the commit from the image. No secret | Same |
 | Health check | `GET /health` on its own port, same form as the gateway's | Same |
 | Hardening | Read-only root filesystem with a tmpfs `/tmp`, all capabilities dropped, no new privileges, non-root | Same |
-| Memory | Limit 256 MB, swap limit equal (no swap) | Same |
+| Memory | Limit 512 MB to start, swap limit equal (no swap); set properly after measurement under real calls | Same |
 | Restart | `unless-stopped` | Same |
 
 The ports keep the numbers the registry rows hold today. The gateway has **no** `depends_on`
@@ -201,12 +219,13 @@ joining it should be a deliberate act.
 | Container | Limit | Basis |
 |---|---|---|
 | Gateway | 3072 MB | Read from the compose file. Today this limit also covers both plugin processes |
-| `gws-mcp` | 256 MB | Proposed. Idle is measured at 28 MiB on a laptop. The peak is an **estimate**: this plugin holds one file of up to 25 MB in memory during a crossing, with encoding overhead, so on the order of 100 to 150 MB |
-| `atlassian-mcp` | 256 MB | Proposed. Idle measured at 23 MiB. Same estimate: it receives the same file |
-| Total of limits | 3584 MB | Arithmetic. Whether the host has that much headroom is in the report, not here |
+| `gws-mcp` | 512 MB to start | A deliberately loose starting value, not a finding. Idle is measured at 28 MiB on a laptop. The peak is an **estimate**: this plugin holds one file of up to 25 MB in memory during a crossing, with encoding overhead, so on the order of 100 to 150 MB |
+| `atlassian-mcp` | 512 MB to start | Same. Idle measured at 23 MiB; it receives the same file |
+| Total of limits | 4096 MB to start | Arithmetic. Whether the host has that much headroom is in the report, not here |
 
-Step 9 of the migration measures the real figures on the host before any traffic depends on
-them.
+Ruled: the limits are set from measurement **under real tool calls**, not idle. The cutover's
+test run (steps 10 and 11) exercises every tool, the largest file crossing included; the peak
+it records sets each limit, with stated headroom, as a follow-up deploy of that one service.
 
 ### How the gateway finds a plugin
 
@@ -242,9 +261,15 @@ running process says, not what a directory says.
 | A call cut off mid-flight | The same raw error | **No retry.** The plugin may have acted. The worded error says the call may or may not have completed |
 | A file crossing | Fails on the leg it was in, and says which | Unchanged |
 | Gateway boot with a plugin down | A missing directory is skipped | The gateway starts; calls to that plugin fail as above until it is back |
-| A plugin that keeps crashing | The gateway respawns three times and logs | Docker restarts it. Nobody is told: an alert on a restart loop is not specified here and is a gap |
+| A plugin that keeps crashing | The gateway respawns three times and logs | Docker restarts it, and the gateway raises an alert (below) |
 
 The wording of those two error sentences goes through the repo's outbound copy rules.
+
+**The restart-loop alert** (ruled; proposed design). The gateway cannot see Docker, so the
+plugin tells it: `/health` also returns the time the process started. The gateway checks each
+plugin once a minute on its existing scheduler and posts to the existing alerts channel when a
+plugin has been unreachable for three checks running, or its start time has changed three
+times in ten minutes. One alert per episode, and one when it recovers.
 
 ### What a plugin release becomes
 
@@ -257,6 +282,13 @@ The gateway is not restarted and no session is dropped.
 Because an image is immutable, "the process is serving what was built" stops being something
 to check with a second tool listing: the host script confirms the container was recreated
 from the requested digest, and that is the same statement.
+
+What the image cannot say is whether the **registry** agrees with it. So a plugin release ends
+with the ground-truth check, run from inside the gateway container where the database and the
+plugin addresses both are: the registry must list exactly the tools the plugin now serves. A
+difference fails the release job and rolls nothing back, because the repair is a registry
+write and that is a person's. The check compares names; a changed description or schema is
+what `registry:diff` is for.
 
 **The record.** A deploy row names `surface` (`gateway`, `plugin:gws-mcp`,
 `plugin:atlassian-mcp`, `registry`), the monorepo `sha` and the image digest.
@@ -290,8 +322,8 @@ list, not the source array: a plugin can withhold a tool it defines), and saves 
 pnpm registry:diff <slug> --from <sha> --to <sha>     # writes forward.sql and rollback.sql
 ```
 
-It compares the two shas' `tools.json` (fetched from CI, or produced by running the two
-images locally) and emits the same guarded statements used today, headed NOT RUN. It never
+It compares the two shas' `tools.json`, fetched from CI and from nowhere else, and emits the
+same guarded statements used today, headed NOT RUN. It never
 opens a database connection. `--from` is the sha of the image that is running.
 
 The generator has one hard part and it gets a self-test: the guard must reproduce Postgres's
@@ -302,9 +334,9 @@ Fixtures are public tool schemas with their known md5s.
 
 | Place | Assumption | After |
 |---|---|---|
-| `registry-ground-truth.test.ts` | Slug to URL from `PLUGIN_MCP_URLS`; no repo assumption | The variable is now set in the gateway container, so the check finally has an address to ask in production. It still runs only when someone runs it, and its blind spot stays: names only |
+| `registry-ground-truth.test.ts` | Slug to URL from `PLUGIN_MCP_URLS`; no repo assumption | The variable is now set in the gateway container, and the check runs at the end of every plugin release (section 4). Its blind spot stays: names only |
 | `tests/plugin-sha.ts` | A plugin directory is a git checkout | Asks the plugin (section 4) |
-| `/tools/[slug]` page | README from the plugin's directory on the gateway's disk, else GitHub's README for the repo in the registry row | The local read finds nothing once plugins are containers, so every tool page falls back to the **archived** repo's README, frozen. Decision 1 |
+| `/tools/[slug]` page | README from the plugin's directory on the gateway's disk, else GitHub's README for the repo in the registry row | Ruled: one README per plugin, copied into the gateway image at build and read from there. The GitHub fallback is removed, so a page never shows an archived repo's text. A README edit is a gateway change |
 | `mcp_servers` repo columns | One repo per plugin; non-null means "runs locally" | Left as ruled. The URL override makes the "runs locally" reading irrelevant for named slugs |
 | Skills (`deploy`, `ops-debugging`, `gws-mcp-dev`, `codebase-map`) | Separate repos, checkout in the volume | Rewritten in the PRs that change each fact (freshness rule) |
 | Ops scripts kept outside this repo | They reach a plugin on `localhost` from inside the gateway container, and assume a checkout to inspect | Swept at the cutover; listed in the report, not here |
@@ -319,7 +351,8 @@ mean. This spec owns the path table.
 
 | Changed path | Surface | Runs | Image built on merge |
 |---|---|---|---|
-| `plugins/<slug>/**` | `plugin:<slug>` | That plugin's build and tests (binary download first for `gws-mcp`) | That plugin's |
+| `plugins/<slug>/**` | `plugin:<slug>` | That plugin's build and tests | That plugin's |
+| `plugins/<slug>/README.md` | `gateway` as well | Gateway tests | The gateway's too |
 | `apps/gateway/**` (content included), `packages/**`, `docker/**` | `gateway` | Gateway tests, typecheck, production build | The gateway's |
 | `pnpm-lock.yaml`, root `package.json`, `pnpm-workspace.yaml`, `turbo.json`, `tsconfig.base.json`, `plugins/Dockerfile` | every surface | Everything | All |
 | `docs/**`, `.claude/**`, `scripts/**` | none | The hook scripts' own tests when `scripts/hooks/**` changes | None |
@@ -336,9 +369,10 @@ Order: the pipeline first, then the source moves, then the plugins become contai
 
 | # | Step | Verification | Rollback |
 |---|---|---|---|
-| 1 | **CI gate and repository settings**: `gate.sh` (gateway rows), the workflow, `main` protected, squash and rebase off | As SCRUM-394 section 8, steps 1 and 2: the check is seen red before it is trusted green; a squash is not offered | Revert |
-| 2 | **The gateway through the pipeline**: GitHub-built image, approved deploy, rollback drill | As SCRUM-394 section 8, steps 3 to 6 | The existing deploy script |
-| 3 | **Gateway prep PR**, deployed through the pipeline: the `PLUGIN_MCP_URLS` override and `startAll` skip, the plugin commit read over HTTP, the two worded errors and the single retry. Inert until the variable is set | Its tests, with a known-bad case each (an entry without `=`; a retry attempted after bytes were sent must fail the test). After the deploy a test run is unchanged and still records both plugin shas from git | The pipeline's rollback |
+| 1 | **CI gate and repository settings**: `gate.sh` (gateway rows), the leak scan, the workflow, `main` protected, squash and rebase off | As SCRUM-394 section 8, steps 1 and 2: each check is seen red before it is trusted green; a squash is not offered | Revert |
+| 2 | **The pipeline, proven on a canary, then the gateway through it** | As SCRUM-394 section 8, steps 3 to 7 | The existing deploy script |
+| 3a | **Gateway prep, the inert half**, deployed through the pipeline: the `PLUGIN_MCP_URLS` override and `startAll` skip, and the plugin commit read over HTTP. Nothing changes until the variable is set | Its tests, with a known-bad case (an entry without `=`). After the deploy a test run is unchanged and still records both plugin shas from git | The pipeline's rollback |
+| 3b | **Gateway prep, the active half**, its own PR and deploy: the single retry, the two worded errors, the restart-loop alert. This one changes behaviour for today's spawned plugins too | Its tests, with a known-bad case (a retry attempted after bytes were sent must fail the test). A plugin child killed by hand on a local gateway produces the retry, then the worded error | The pipeline's rollback |
 
 **Phase 1: the source moves. Nothing deploys.**
 
@@ -347,17 +381,17 @@ Order: the pipeline first, then the source moves, then the plugins become contai
 | 4 | **Freeze the plugin repos.** Record both `main` tips. Lock `main` on each | A push to `main` is refused | Remove the rule |
 | 5 | **Import PR**, two commits and nothing else (commands below), merged as a merge commit | `git rev-parse HEAD:plugins/<slug>` equals `<tip>^{tree}` in the plugin repo, for both. The old shas resolve. Commit count is the three counts plus two. Leak scan and security gate over the whole range. `git status` clean | Do not merge; after merge, revert the two commits. `plugins/` is inert: not in the workspace, not in any image |
 | 6 | **Port what is kept**: `git format-patch` in the old repo, `git am --directory=plugins/<slug>` here | The ported branch's `plugins/<slug>` tree equals the source branch's tree | Delete the branch |
-| 7 | **Wiring PR**: workspace glob, package names, `files`, lockfiles, the pins, `turbo.json`, plugin rows in `gate.sh`, the skills, each plugin's `CLAUDE.md` | Frozen install is clean. Test totals per plugin equal the pre-move totals at the same source. Gateway suite, typecheck and build unchanged. The production package list of each plugin equals the one its old lockfile gives | Revert the PR |
+| 7 | **Wiring PR**: workspace glob, package names, `files`, lockfiles, the pins, `turbo.json`, plugin rows in `gate.sh`, the skills, each plugin's `CLAUDE.md`, and the sweep of standalone-server copy | Frozen install is clean. Test totals per plugin equal the pre-move totals at the same source. Gateway suite, typecheck and build unchanged. The production package list of each plugin equals the one its old lockfile gives | Revert the PR |
 
 **Phase 2: the plugins become containers.**
 
 | # | Step | Verification | Rollback |
 |---|---|---|---|
-| 8 | **Image PR**: `plugins/Dockerfile`, `/health` reporting the commit, the CI build with `tools.json`, `registry:diff`, the two compose services. The gateway is not pointed at them | Both images build in CI. Each `tools.json` equals, tool for tool (name, description, schema, read-only hint), what the plugin repo's own build serves at the frozen tip | Revert the PR |
-| 9 | **Side by side on the host.** Pull both images and start both containers. No traffic reaches them | Both healthy. From inside the network each container's tool list equals the **running** in-gateway plugin's, tool for tool. The private route refuses a tokenless call. The ports do not answer from outside the host. Memory read over a day, and the figures replace the estimates in section 4 | `compose rm -sf` the two services |
-| 10 | **Cut over `atlassian-mcp`, its own go.** Baseline test run. Add its entry to `PLUGIN_MCP_URLS`; restart the gateway once | Post run diffs to zero regressions. The recorded plugin sha is now the monorepo sha, from the plugin. The call log shows the container's address. No child process for that slug. One live read. Then the **restart drill**: recreate the plugin container with a session open. The session survives, a call during the gap gets the retry or the worded error, and time to healthy is recorded | Remove the entry, restart the gateway. It spawns from the checkout, which is still in the volume |
+| 8 | **Image PR**: `plugins/Dockerfile`, `/health` reporting the commit and start time, the CI build with `tools.json`, `registry:diff`, the two compose services, the READMEs copied into the gateway image. The gateway is not pointed at the plugin containers | Both images build in CI. Each `tools.json` equals, tool for tool (name, description, schema, read-only hint), what the plugin repo's own build serves at the frozen tip | Revert the PR |
+| 9 | **Side by side on the host.** Pull both images and start both containers. No traffic reaches them | Both healthy. From inside the network each container's tool list equals the **running** in-gateway plugin's, tool for tool. The private route refuses a tokenless call. The ports do not answer from outside the host. Idle memory read over a day | `compose rm -sf` the two services |
+| 10 | **Cut over `atlassian-mcp`, its own go.** Baseline test run. Add its entry to `PLUGIN_MCP_URLS`; restart the gateway once | Post run diffs to zero regressions. The recorded plugin sha is now the monorepo sha, from the plugin. The call log shows the container's address. No child process for that slug. One live read. Then the **restart drill**: recreate the plugin container with a session open. The session survives, a call during the gap gets the retry or the worded error, and time to healthy is recorded. The container's peak memory over the test run is recorded, and its limit is set from it afterwards | Remove the entry, restart the gateway. It spawns from the checkout, which is still in the volume |
 | 11 | **Cut over `gws-mcp`, its own go.** Same | Same, plus one Gmail read, and one email filed on a Jira issue end to end, since both legs of a crossing are now separate containers | Same |
-| 12 | **First real plugin release through the pipeline**, its own go | Approved; the plugin container is recreated from the requested digest; the gateway's start time is unchanged; `registry:diff` produced the change file from CI's two `tools.json`. Then a rollback dispatch back and forward | The rollback dispatch |
+| 12 | **First real plugin release through the pipeline, its own go: the service-plugin cleanup of `gws-mcp`.** The `.mcpb` bundle, the stdio entry point, the CLI fallback and its download go; the oracle's expected requests become fixtures | Approved; the plugin container is recreated from the requested digest; the gateway's start time is unchanged. `registry:diff` between the two `tools.json` says exactly which tools changed, and if any did, the change file exists before the release and is run by a person after it. The ground-truth check passes. Then a rollback dispatch back and forward | The rollback dispatch |
 | 13 | **Close out.** Remove the volume from the compose file. Old repos: a final README commit naming the new home, open issue transferred, then **archived**. Deploy records. The pins come out later as their own change | The archived repos refuse a push. A fresh clone builds and tests both plugins. The gateway restarts cleanly with no volume | Unarchive; the volume's data is kept for a stated period before deletion |
 
 **Does each step prove one new thing?** Steps 1 to 9 do. Steps 10 and 11 do not: at a cutover
@@ -420,8 +454,8 @@ and spawned by the gateway as now.
 | The container behaves unlike the laptop: architecture, the read-only filesystem under a real tool call, memory under a file crossing | Unknown: idle only was rehearsed | Step 9 runs both containers on the host with no traffic; the test run at steps 10 and 11 exercises every tool; the limits are revised from measurement |
 | A plugin call fails during a release | Certain, for a few seconds | The retry and the worded error (step 3); the restart drill measures the gap |
 | A retry repeats a write | Would be a defect | Retry only when nothing was sent; a test with a known-bad case pins it |
-| The tool pages show frozen READMEs | Certain after step 13 unless decided | Decision 1 |
-| A plugin crash-loops unnoticed | Possible | Not held down. The gateway's respawn log is replaced by Docker's restart, which tells nobody. Decision 2 |
+| Step 12 removes a tool without anyone noticing | Possible: one tool exists only for the standalone login | `registry:diff` names every tool that differs before the release; the ground-truth check fails after it if the registry was not brought along |
+| A plugin crash-loops unnoticed | Possible | The restart-loop alert (step 3b) |
 | The freeze window stretches | Likely if steps 8 and 9 surprise | The emergency path; phase 0 is done before the freeze so nothing in the window is being built for the first time except the image PR |
 | A cached turbo build leaves `server/` stale | Certain without the `outputs` line | Section 3; the image build runs in a clean container with no turbo cache |
 | Someone commits to an old repo after the import | Likely over weeks | Branch rule at step 4, archive at step 13 |
@@ -431,20 +465,13 @@ and spawned by the gateway as now.
 Not addressed, on purpose: the names-only blind spot of the in-repo ground-truth test; removing
 the dead install path from `plugin-manager`.
 
-## 10. Decisions
+## 10. Rulings, and what is still open
 
-Taken: plugins as their own containers (option C); the import, port and wiring as specified;
-the dependency pins for the first images; branch protection as a precondition; the registry
-repo columns left alone; the branch rulings in section 7.
+Ruled: plugins as their own containers; connectors are service plugins, with the four
+consequences listed at the top; the import, port and wiring as specified; the dependency pins
+for the first images; one README per plugin read at build time; a restart-loop alert; memory
+limits set from measurement under real tool calls; `registry:diff` reading CI's `tools.json`
+only; the ground-truth check at the end of every plugin release; the gateway prep split in two;
+the branch rulings in section 7.
 
-Still open:
-
-1. **Tool-page READMEs.** With no plugin directory on the gateway's disk, every tool page
-   falls back to the archived repo's README. Options: teach the fallback this repo and a
-   subdirectory (a small gateway change, recommended, in step 8); copy the two READMEs into
-   the gateway image (then a README edit is a gateway deploy); or accept frozen pages.
-2. **An alert when a plugin container restarts repeatedly.** Recommended, small, and not
-   designed here.
-3. **The plugin memory limits** (256 MB each) are confirmed or changed after step 9's
-   measurement.
-4. The go on the plan, and a separate go for each of steps 2, 10, 11 and 12.
+Open: a separate go for each of steps 2, 10, 11 and 12.
