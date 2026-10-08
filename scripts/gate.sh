@@ -4,6 +4,8 @@
 #
 #   scripts/gate.sh [<base>]      # default base: origin/main
 #   scripts/gate.sh --self-test   # prove the path table still classifies
+#   scripts/gate.sh --surfaces <base>   # only print the surfaces the range
+#                                       # selects; the image build reads this
 #
 # What it does:
 #   1. Ancestry: <base> must be an ancestor of HEAD. A branch that has fallen
@@ -32,11 +34,13 @@ PLACEHOLDER_DATABASE_URL="unset://database.invalid/unset"
 # One line per changed path on stdin; one surface per line on stdout.
 #   gateway  typecheck and tests of apps/gateway
 #   scripts  the self-tests of the scripts in scripts/
+#   canary   the test of the do-nothing container in docker/canary
 #   none     nothing this gate has tests for: documentation, agent guidance,
 #            and tools/, which has no suite of its own
 #   all      unknown, or a file every surface depends on
 classify_path() {
   case "$1" in
+    docker/canary/*) echo canary ;; # before docker/*, which is the gateway's
     apps/gateway/*|packages/*|docker/*) echo gateway ;;
     scripts/*) echo scripts ;;
     .github/*) echo all ;;
@@ -48,19 +52,21 @@ classify_path() {
 }
 
 surfaces_for() {
-  local path surface want_gateway=0 want_scripts=0
+  local path surface want_gateway=0 want_scripts=0 want_canary=0
   while IFS= read -r path; do
     [ -n "$path" ] || continue
     surface=$(classify_path "$path")
     case "$surface" in
       gateway) want_gateway=1 ;;
       scripts) want_scripts=1 ;;
-      all) want_gateway=1; want_scripts=1 ;;
+      canary) want_canary=1 ;;
+      all) want_gateway=1; want_scripts=1; want_canary=1 ;;
       none) ;;
     esac
   done
   [ "$want_gateway" = 1 ] && echo gateway
   [ "$want_scripts" = 1 ] && echo scripts
+  [ "$want_canary" = 1 ] && echo canary
   return 0
 }
 
@@ -80,16 +86,18 @@ self_test() {
   expect "a shared package" "gateway" "packages/db/src/index.ts"
   expect "the compose file" "gateway" "docker/docker-compose.prod.yml"
   expect "a script" "scripts" "scripts/gate.sh"
+  expect "the canary is its own surface, not the gateway's" "canary" "docker/canary/server.mjs"
+  expect "the canary beside the compose file selects both" "gateway canary" "docker/canary/Dockerfile" "docker/docker-compose.prod.yml"
   expect "documentation only" "" "docs/architecture/x.md" ".claude/skills/deploy/SKILL.md" "README.md"
   expect "the example env file is read by a gateway test" "gateway" ".env.example"
   expect "a file moved out of the gateway still names where it was" "gateway" "apps/gateway/src/guard.test.ts" "docs/guard.test.ts"
   expect "documentation beside code still selects the code" "gateway" "docs/x.md" "apps/gateway/server.ts"
-  expect "the lockfile selects everything" "gateway scripts" "pnpm-lock.yaml"
-  expect "a workflow selects everything" "gateway scripts" ".github/workflows/ci.yml"
+  expect "the lockfile selects everything" "gateway scripts canary" "pnpm-lock.yaml"
+  expect "a workflow selects everything" "gateway scripts canary" ".github/workflows/ci.yml"
   # The known-bad cases: a path nobody listed must never come out as nothing.
-  expect "an unknown top-level directory selects everything" "gateway scripts" "plugins/new-thing/src/index.ts"
-  expect "an unknown root file selects everything" "gateway scripts" "Makefile"
-  expect "a path that only looks like docs selects everything" "gateway scripts" "docs-private/x.md"
+  expect "an unknown top-level directory selects everything" "gateway scripts canary" "plugins/new-thing/src/index.ts"
+  expect "an unknown root file selects everything" "gateway scripts canary" "Makefile"
+  expect "a path that only looks like docs selects everything" "gateway scripts canary" "docs-private/x.md"
   if [ "$failed" = 1 ]; then
     exit 2
   fi
@@ -113,6 +121,7 @@ run_gateway() {
 run_scripts() {
   echo "##### scripts: self-tests"
   bash scripts/gate.sh --self-test
+  bash scripts/build-image.sh --self-test
   python3 -m unittest scripts/test_leak_scan.py
   local t
   for t in scripts/hooks/test_*.py; do
@@ -120,12 +129,27 @@ run_scripts() {
   done
 }
 
+run_canary() {
+  echo "##### canary: test"
+  node --test docker/canary/server.test.mjs
+}
+
 main() {
   if [ "${1:-}" = "--self-test" ]; then
     self_test
     return
   fi
-  local base="${1:-origin/main}"
+  if [ "${1:-}" = "--surfaces" ]; then
+    [ -n "${2:-}" ] || { echo "gate: --surfaces needs a base commit." >&2; exit 2; }
+    cd "$(git rev-parse --show-toplevel)"
+    git rev-parse --verify --quiet "$2^{commit}" >/dev/null \
+      || { echo "gate: base '$2' is not a commit here. Fetch it first." >&2; exit 2; }
+    git diff --name-only --no-renames "$2...HEAD" | surfaces_for
+    return
+  fi
+  # In full: a tag or a branch named origin/main would be found first under
+  # the short name.
+  local base="${1:-refs/remotes/origin/main}"
   cd "$(git rev-parse --show-toplevel)"
 
   echo "##### ancestry: $base must be an ancestor of HEAD"
@@ -154,6 +178,7 @@ main() {
     case "$s" in
       gateway) run_gateway ;;
       scripts) run_scripts ;;
+      canary) run_canary ;;
     esac
   done
   echo "gate: ok for: $(echo $surfaces). Not covered: the security review, the leak scan, the production build, and any suite that reported skipped."
