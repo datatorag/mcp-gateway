@@ -7,7 +7,8 @@
  * The entire unit suite passed. They would have passed for anyone, because
  * frontmatter is parsed when Next collects page data and NOWHERE ELSE — so the
  * production build was the only check in the repo that covered this class, and
- * on a repo with no CI that check runs only when a person types it. A
+ * the pull-request gate does not run the production build, so that check
+ * runs only when a person types it. A
  * content-only change is exactly the kind where skipping the build feels safe.
  *
  * So the class moves into the suite, where it costs milliseconds and runs

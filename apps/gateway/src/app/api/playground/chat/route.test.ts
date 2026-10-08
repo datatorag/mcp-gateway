@@ -233,8 +233,8 @@ beforeEach(() => {
 describe("resuming a conversation someone else owns", () => {
   // The by-check half of ownership, on the WRITE path. Without this the only
   // thing stopping a foreign thread being seeded into a model call and
-  // appended to is a line with no test behind it, in a repo with no CI —
-  // deleting that line left the whole suite green.
+  // appended to is a line with no test behind it: deleting that line left
+  // the whole suite green.
   it("404s, and never reaches the model or the run claim", async () => {
     userOwnsThread.mockResolvedValue(false);
     const response = await POST(

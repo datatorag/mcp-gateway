@@ -29,9 +29,10 @@ import { REGISTRY_CLASSIFICATION } from "./registry-snapshot";
  * before touching the snapshot. Editing "write" to "read" here to make a
  * failing test pass removes a real user's approval prompt.
  *
- * Note there is no CI in this repository: nothing runs this on push, PR or
- * merge. It fails only in front of whoever ran it, which is the person who
- * then has to decide honestly rather than conveniently.
+ * The pull-request gate runs this file, but the half that asks the live
+ * registry reports skipped there. That half fails only in front of whoever
+ * ran it with the registry named, which is the person who then has to decide
+ * honestly rather than conveniently.
  */
 
 
