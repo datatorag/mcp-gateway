@@ -1,7 +1,9 @@
 # SCRUM-394: CI gates, and deploys that GitHub builds and a person approves
 
-Status: SPEC, revision 2 (2026-10-08): the review's rulings are applied. No setting or host
-change has been made. The pull-request gate of section 3 is being built first, as its own PR.
+Status: SPEC, revision 2 (2026-10-08): the review's rulings are applied. No host
+change has been made. Built so far: the pull-request gate and the repository settings of
+section 3, and the image build of section 4 (`build.yml`, no deploy). Everything from "The
+deploy" onward is still proposed.
 
 Two things are specified. First, a workflow that runs the gate on every pull request, with
 `main` protected. Second, a pipeline in which GitHub builds an image for a commit, a named

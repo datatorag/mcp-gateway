@@ -1,0 +1,174 @@
+# Images, one per surface and commit (SCRUM-394).
+#
+# This workflow BUILDS. It deploys nothing, holds no deploy credential and
+# uses no environment. A merge to main publishes an image for each surface the
+# merge touched; nothing runs that image until a separate, approved deploy.
+#
+#   push to main       publish the surfaces the push touched (the path table in
+#                      scripts/gate.sh decides which)
+#   workflow_dispatch  publish one surface for one commit that is on main. This
+#                      is how a commit older than this workflow gets an image
+#   pull_request       only when the build itself changed: build every surface
+#                      and publish NOTHING, so a broken build is seen before
+#                      the merge and not after it
+#
+# An image is tagged with the full commit sha and nothing else. Before a
+# build the registry is asked whether the tag exists; if it does, nothing is
+# built or pushed. Runs for the same surface and commit go one at a time, so
+# that check and the push cannot interleave. Deploys go by digest.
+#
+# The script that builds comes from the branch this workflow runs on; the
+# source is the tree of the commit being built, exported by git. So an old commit is built by
+# today's rules, and a commit cannot bring its own.
+#
+# What this does not protect against: anyone who can push a branch here can
+# edit this file on that branch and publish an image under any tag. That is
+# accepted for the same reason as in ci.yml, push access is the boundary, and
+# it is why a tag alone must never be what a deploy trusts: a deploy takes its
+# digest from the run on main that published it.
+#
+# Every value that comes from the event reaches a script through `env`, never
+# through `${{ }}` inside a `run` line.
+#
+# Actions are GitHub's own, pinned to a commit. Docker is the runner's own.
+name: build
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    paths:
+      - .github/workflows/build.yml
+      - scripts/build-image.sh
+      - apps/gateway/Dockerfile
+      - docker/canary/**
+      - .dockerignore
+  workflow_dispatch:
+    inputs:
+      surface:
+        description: The surface to build an image for
+        required: true
+        type: choice
+        options: [canary, gateway]
+      sha:
+        description: Full commit sha on main. Empty means the tip of main
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  # A newer push to a pull request replaces the older run. Runs on main are
+  # never cancelled while they run. A run that fails leaves no image for its
+  # commit; a dispatch fills the gap.
+  group: build-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: true
+
+jobs:
+  plan:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      surfaces: ${{ steps.plan.outputs.surfaces }}
+      sha: ${{ steps.plan.outputs.sha }}
+      publish: ${{ steps.plan.outputs.publish }}
+    env:
+      EVENT: ${{ github.event_name }}
+      REF: ${{ github.ref }}
+      PUSHED_SHA: ${{ github.sha }}
+      BEFORE_SHA: ${{ github.event.before }}
+      PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+      INPUT_SURFACE: ${{ inputs.surface }}
+      INPUT_SHA: ${{ inputs.sha }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: The script still refuses what it documents
+        run: scripts/build-image.sh --self-test
+      - name: Which surfaces, which commit, and whether to publish
+        id: plan
+        run: |
+          set -euo pipefail
+          case "$EVENT" in
+            pull_request)
+              sha="$PR_HEAD_SHA"; publish=false; surfaces="canary gateway" ;;
+            push)
+              sha="$PUSHED_SHA"; publish=true
+              # Two steps on purpose: a failure of the path table must stop the
+              # run, and must not read as "this push touched no surface".
+              selected=$(scripts/gate.sh --surfaces "$BEFORE_SHA")
+              surfaces=""
+              for s in $selected; do
+                case "$s" in canary|gateway) surfaces="$surfaces $s" ;; esac
+              done ;;
+            workflow_dispatch)
+              [ "$REF" = "refs/heads/main" ] \
+                || { echo "A dispatched build runs from main, so the rules it applies are main's."; exit 1; }
+              sha="${INPUT_SHA:-$PUSHED_SHA}"; publish=true
+              case "$INPUT_SURFACE" in
+                canary|gateway) surfaces="$INPUT_SURFACE" ;;
+                *) echo "Not a surface."; exit 1 ;;
+              esac
+              [[ "$sha" =~ ^[0-9a-f]{40}$ ]] \
+                || { echo "The commit must be a full 40-character sha."; exit 1; }
+              git merge-base --is-ancestor "$sha" refs/remotes/origin/main \
+                || { echo "That commit is not on main."; exit 1; } ;;
+            *) echo "Unexpected event."; exit 1 ;;
+          esac
+          json="["
+          for s in $surfaces; do json="$json\"$s\","; done
+          json="${json%,}]"
+          {
+            echo "sha=$sha"
+            echo "publish=$publish"
+            echo "surfaces=$json"
+          } >>"$GITHUB_OUTPUT"
+          echo "commit $sha, publish $publish, surfaces: ${surfaces:-none}" | tee -a "$GITHUB_STEP_SUMMARY"
+
+  image:
+    needs: plan
+    if: needs.plan.outputs.surfaces != '[]'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      packages: write
+    concurrency:
+      group: image-${{ matrix.surface }}-${{ needs.plan.outputs.sha }}
+      cancel-in-progress: false
+    strategy:
+      fail-fast: false
+      matrix:
+        surface: ${{ fromJSON(needs.plan.outputs.surfaces) }}
+    env:
+      SURFACE: ${{ matrix.surface }}
+      BUILD_SHA: ${{ needs.plan.outputs.sha }}
+      PUBLISH: ${{ needs.plan.outputs.publish }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Sign in to the registry
+        if: needs.plan.outputs.publish == 'true'
+        env:
+          REGISTRY_TOKEN: ${{ github.token }}
+          REGISTRY_USER: ${{ github.actor }}
+        run: echo "$REGISTRY_TOKEN" | docker login ghcr.io --username "$REGISTRY_USER" --password-stdin
+      - name: Build, check, and publish when this is main
+        env:
+          NEXT_PUBLIC_POSTHOG_KEY: ${{ vars.NEXT_PUBLIC_POSTHOG_KEY }}
+          NEXT_PUBLIC_GOOGLE_ADS_CONVERSION_LABEL: ${{ vars.NEXT_PUBLIC_GOOGLE_ADS_CONVERSION_LABEL }}
+          NEXT_PUBLIC_GOOGLE_ADS_SIGNUP_CONVERSION_LABEL: ${{ vars.NEXT_PUBLIC_GOOGLE_ADS_SIGNUP_CONVERSION_LABEL }}
+        run: |
+          set -euo pipefail
+          if [ "$PUBLISH" = true ]; then
+            scripts/build-image.sh "$SURFACE" "$BUILD_SHA" --push
+          else
+            scripts/build-image.sh "$SURFACE" "$BUILD_SHA"
+          fi
