@@ -21,7 +21,7 @@ pipeline deploy replaced the host-built container with about five seconds of
 outage seen from outside, and the plugin volume, the plugins and the
 environment came through unchanged. The scripted path below is the fallback.
 
-Still by hand, before a gateway deploy that needs them: rendering `.env`
+Still by hand, before a gateway deploy that needs them: rendering the env file
 (step 2b) and migrations. And a go, in words, from a person, every time.
 
 ```bash
@@ -66,9 +66,10 @@ For the gateway, also:
 
 - A pipeline deploy restarts the gateway once, like any deploy. Sessions are
   dropped and clients re-initialize.
-- It does not render `.env` and does not run a migration. Step 2b below and
-  the Migrations section still apply, before the deploy, by hand. The host
-  script reads the env file where the scripted path keeps it.
+- It does not render the env file and does not run a migration. Step 2b
+  below and the Migrations section still apply, before the deploy, by hand.
+  The host script reads `/opt/datatorag-deploy/env/gateway.env`, the same
+  file the scripted path reads.
 - The commit the host checks is the one the image was built with, read inside
   the container once `/health` answers ok. The gateway gets two minutes to
   do so; counting the last wait and the last ask, the script gives up after
@@ -76,8 +77,12 @@ For the gateway, also:
   alone are over four minutes; with the limits on the pull (ten minutes) and
   on each start (three minutes), one request can hold the host's lock for
   longer than the workflow job's fifteen minutes. The job then ends without
-  an answer while the host script carries on: read `host-deploy status`, or
-  the host's log, before asking again.
+  an answer while the host script carries on to the end: once a deploy or a
+  rollback holds the lock, a cancelled job or a dropped connection does not
+  stop it before the put-back or the record. Read `host-deploy status`, or
+  the host's log, before asking again. (A host script older than this rule
+  could be stopped at that point and leave a failed start in place; the
+  checksum in every answer says which script the host has.)
 - The host script judges a deploy against what is RUNNING, not against its
   record. When the running container is not the image it last deployed (its
   first deploy on a host, or any time after the scripted path was used), the
@@ -145,7 +150,7 @@ What it guarantees, and the manual path must match:
   container's created time and the served build.
 - `.deployed-sha` is written only after `/health` answers ok.
 
-It does not render `.env` (step 2b) and does not touch plugins (step 5).
+It does not render the env file (step 2b) and does not touch plugins (step 5).
 
 ## Steps
 
@@ -160,11 +165,26 @@ It does not render `.env` (step 2b) and does not touch plugins (step 5).
    ssh -i <key> ubuntu@<ip> "cd ~/datatorag-mcp && git pull origin main"
    ```
 
-2b. **Render `.env` from SSM (secrets source of truth)**
+2b. **Render the gateway's env file from SSM (secrets source of truth)**
    ```bash
    ssh -i <key> ubuntu@<ip> \
-     "cd ~/datatorag-mcp && AWS_PROFILE=ssm-read bash scripts/render-env.sh /datatorag-mcp/prd .env"
+     "AWS_PROFILE=ssm-read /opt/datatorag-deploy/bin/render-env /datatorag-mcp/prd /opt/datatorag-deploy/env/gateway.env"
    ```
+   - The file is `/opt/datatorag-deploy/env/gateway.env`, beside the pipeline's
+     compose files and outside the checkout. Both deploy paths read that one
+     file: the host script names it, and `scripts/deploy-gateway.sh` passes it
+     to compose (`DEPLOY_ENV_FILE` overrides it). It is no longer
+     `~/datatorag-mcp/.env`.
+   - `/opt/datatorag-deploy/bin/render-env` is a copy of `scripts/render-env.sh`
+     that a person installs on the host, like the host script. It needs no
+     checkout. The `env/` folder and the file in it, and nothing else under
+     `/opt/datatorag-deploy`, belong to the account that holds the read-only
+     SSM profile, mode 0700 and 0600. Everything else there stays root's.
+   - There is one env file. A copy left in the old checkout is a second set
+     of the same secrets that nothing updates: remove it once the move is
+     done.
+   - Rendering changes the file, not the running gateway: the new values take
+     effect at the next start (a deploy, or a restart).
    - Secrets live in SSM Parameter Store under `/datatorag-mcp/prd/*` (us-west-2). Hand-editing `.env` on the server is retired — edit the parameter (`aws ssm put-parameter ... --overwrite` with the datatorag profile) and re-render.
    - The server reads via the `ssm-read` AWS profile (read-only IAM user `datatorag-mcp-server`).
    - The server runs AWS CLI v2 (installed via the official installer — the apt `awscli` package no longer exists on Ubuntu 24.04).
@@ -184,10 +204,10 @@ It does not render `.env` (step 2b) and does not touch plugins (step 5).
    ```bash
    # rollback tag from the RUNNING sha, before anything is rebuilt
    ssh -i <key> ubuntu@<ip> 'cd ~/datatorag-mcp && OLD=$(cut -c1-7 .deployed-sha) && IMG=$(docker ps --filter name=gateway --format "{{.Image}}" | head -1) && docker tag "$IMG" "docker-gateway:rollback-$OLD" && echo "rollback-$OLD"'
-   ssh -i <key> ubuntu@<ip> "cd ~/datatorag-mcp/docker && docker compose --env-file ../.env -f docker-compose.prod.yml up -d --build gateway"
+   ssh -i <key> ubuntu@<ip> "cd ~/datatorag-mcp/docker && docker compose --env-file /opt/datatorag-deploy/env/gateway.env -f docker-compose.prod.yml up -d --build gateway"
    ```
-   - The `.env` file lives at `~/datatorag-mcp/.env` on the server (NOT in `docker/`)
-   - Must pass `--env-file ../.env` to docker compose
+   - The env file lives at `/opt/datatorag-deploy/env/gateway.env` on the server (step 2b)
+   - Must pass `--env-file /opt/datatorag-deploy/env/gateway.env` to docker compose
    - This rebuilds only the gateway container. The compose file defines no
      database service: production data is in Neon. The old host database's
      volume (`docker_postgres-data`) was left on the host as an undo and is
@@ -217,7 +237,7 @@ It does not render `.env` (step 2b) and does not touch plugins (step 5).
      'cd /root/.datatorag/plugins/<slug> && git pull origin main && NODE_ENV=development pnpm install && npx tsc'
 
    # Restart gateway so plugin process picks up new code
-   cd ~/datatorag-mcp/docker && docker compose -f docker-compose.prod.yml --env-file ../.env restart gateway
+   cd ~/datatorag-mcp/docker && docker compose -f docker-compose.prod.yml --env-file /opt/datatorag-deploy/env/gateway.env restart gateway
 
    ```
 
@@ -254,7 +274,7 @@ ssh -i <key> ubuntu@<ip> "docker logs <gateway-container> --since 30m 2>&1"
 
 # Via compose
 ssh -i <key> ubuntu@<ip> \
-  "cd ~/datatorag-mcp/docker && docker compose -f docker-compose.prod.yml --env-file ../.env logs --tail 100 gateway"
+  "cd ~/datatorag-mcp/docker && docker compose -f docker-compose.prod.yml --env-file /opt/datatorag-deploy/env/gateway.env logs --tail 100 gateway"
 
 # Database queries: production data lives in Neon, queried through the Neon
 # MCP (see the db-query skill). Direct clients, over ssh included, are blocked
@@ -279,7 +299,7 @@ the environment already set, and verified through the Neon MCP by reading
 
 ## Troubleshooting
 
-- **A compose command warns about an unset variable**: `--env-file ../.env` was not passed.
+- **A compose command warns about an unset variable**: `--env-file /opt/datatorag-deploy/env/gateway.env` was not passed.
 - **Plugin build fails**: Check the `build_error` column in the `mcp_servers` table (`GET /api/servers` used to expose this as `buildError`, but the endpoint now requires auth). Common issues: missing system deps in Dockerfile, missing binaries.
 - **Gateway won't start**: Check container logs for errors.
 - **GWS MCP tools load but all API calls fail**: Users must separately connect their Google Workspace account via the DataToRAG web UI. The gateway stores per-user Google OAuth tokens in the `service_connections` table and forwards them to the GWS plugin via `X-User-Token` header. If no row exists for the user, or the token is expired and refresh fails, all tool calls return generic "Error occurred during tool execution" with no detail. Check the `service_connections` table for `token_expires_at` and `updated_at` to diagnose.

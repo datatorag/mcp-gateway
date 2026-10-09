@@ -47,6 +47,11 @@
 #     unreachable. A request that is refused or fails removes only an image
 #     that same request brought in, never one that was there.
 #
+# A deploy or a rollback that has started finishes even if whoever asked for
+# it goes away: a hangup or a closed connection does not stop it before the
+# put-back or before the record. Its outcome is then in the host's log and in
+# `status`, not in an answer nobody is reading.
+#
 # What it guarantees for `rollback`: it starts the image recorded as previous,
 # only if that is the commit named, and only while the surface is still on
 # the image this script deployed last. Nothing is pulled and nothing is asked
@@ -65,8 +70,11 @@
 #     the hour is over. A rollback asks GitHub nothing and still works.
 #   - It does not render an env file, run a migration or touch a database.
 #     The gateway's compose file reads an env file that is already on the
-#     host and is kept current by a person; this script only checks it is
-#     there. A commit that needs a migration needs it run first, by hand.
+#     host, under this script's folder, and is kept current by a person;
+#     this script only checks it is there. That file is INPUT to this script,
+#     written by the operator account, not something this script vouches for:
+#     whoever can write it decides the gateway's environment. A commit that
+#     needs a migration needs it run first, by hand.
 #   - It does not install or update the compose files it uses. A person does.
 #     `status` prints each one's checksum so the deploy workflow can compare
 #     it with the copy on main before it asks for anything.
@@ -119,8 +127,10 @@ surface_spec() {
     canary) echo "$ROOT/compose/canary.yml dtr-canary canary CANARY_IMAGE - down" ;;
     # The gateway keeps the compose project it has always had, so its
     # container, its plugin volume and its network are the same ones. Its env
-    # file stays where the scripted deploy path left it.
-    gateway) echo "$ROOT/compose/gateway.yml docker gateway GATEWAY_IMAGE /home/ubuntu/datatorag-mcp/.env keep" ;;
+    # file lives beside the compose files, outside any checkout: a person
+    # renders it there (scripts/render-env.sh), and the scripted deploy path
+    # reads the same file.
+    gateway) echo "$ROOT/compose/gateway.yml docker gateway GATEWAY_IMAGE $ROOT/env/gateway.env keep" ;;
     *) return 1 ;;
   esac
 }
@@ -230,7 +240,23 @@ ASK_LIMIT=10
 
 # ---- decisions -------------------------------------------------------------
 
-say() { echo "host-deploy: $1"; }
+# An answer line. Nobody may be listening any more (see stay_to_the_end), and
+# that must not end the work, so a failed write is not an error.
+#
+# It is written by a separate program, not by the shell's own echo, on
+# purpose. When the shell's echo fails to write, some versions of bash keep
+# the unwritten line in a buffer and let it out later into the next `$( )`,
+# so the value a command substitution returns would start with an old answer
+# line: the recorded digest, for one. Seen with bash 3.2 in this script's own
+# self-test. A separate program has no buffer to leave behind.
+say() { /bin/echo "host-deploy: $1" || true; }
+# Once a deploy or a rollback has the lock, it finishes whatever happens to
+# the connection that asked for it. If the caller goes away (a cancelled or
+# timed-out workflow job, a dropped ssh session), the hangup and the closed
+# pipe must not stop the script between a failed start and the put-back, or
+# between a good start and the record. The host's log still gets every
+# outcome, and `status` shows the record afterwards.
+stay_to_the_end() { trap '' HUP PIPE; }
 refuse() { say "REFUSED. $1"; record "refused: $1"; exit 3; }
 fail() { say "FAILED. $1"; record "failed: $1"; exit 1; }
 
@@ -531,6 +557,7 @@ handle_request() {
     return
   fi
   take_lock || refuse "Another deploy is running on this host."
+  stay_to_the_end
   case "$REQ_ACTION" in
     deploy) do_deploy "$REQ_SURFACE" "$REQ_SHA" "$REQ_DIGEST" ;;
     rollback) do_rollback "$REQ_SURFACE" "$REQ_SHA" ;;
@@ -738,6 +765,50 @@ self_test() {
   echo "not json" >"$STATE_DIR/canary.json"
   expect "an unreadable record stops everything" 1 "cannot be read" "deploy canary $(sha_n 8) $(dig_n 8)"
   rm "$STATE_DIR/canary.json"
+
+  # The caller may go away mid-request: the pipe the answer goes down is then
+  # broken. An answer line that cannot be written is not an error, and once
+  # the lock is held a hangup or a broken pipe is ignored, so the work is
+  # finished and recorded. Here the reader of the pipe takes the first line
+  # and leaves, as a caller that was there at the start would, and the
+  # stand-in lock waits a moment so that it has left.
+  # (The real script runs with errexit, where a say that returned failure
+  # would end it. Here its return value is tested directly.)
+  ( trap '' PIPE; { sleep 0.3; say "nobody is listening" && : >"$T/said"; } | true ) 2>/dev/null || true
+  is "a line that cannot be written is not a failure" "$(ls "$T" | grep -c '^said$')" "1"
+  : >"$T/running"; rm -f "$T/sick"
+  ( take_lock() { sleep 0.3; }
+    { handle_request "deploy canary $(sha_n 8) $(dig_n 8)"; trap -p HUP PIPE >"$T/traps"; } | head -1 >/dev/null ) 2>/dev/null || true
+  is "a deploy whose caller is gone still finishes" "$(running)" "$(dig_n 8)"
+  is "and is recorded" "$(cur)" "$(sha_n 8)"
+  # What the shell lists as ignored can only be compared when this shell was
+  # started with both signals at their defaults. A runner may start its steps
+  # with one already ignored, and then a shell either lists it from the start
+  # or never lists it, depending on the version. The cases above and below,
+  # which test what happens, run either way.
+  local plain=1
+  # A child that survives signalling itself inherited that signal ignored.
+  if sh -c 'kill -PIPE $$; exit 0' 2>/dev/null || sh -c 'kill -HUP $$; exit 0' 2>/dev/null; then plain=0; fi
+  if [ "$plain" = 1 ]; then
+    is "a hangup and a broken pipe are ignored once the lock is held" "$(grep -c "^trap -- '' SIG" "$T/traps")" "2"
+  fi
+  ( trap -p HUP PIPE >"$T/traps-at-start" ) || true
+  ( handle_request "status" >/dev/null; trap -p HUP PIPE >"$T/traps" ) || true
+  if [ "$plain" = 1 ]; then
+    is "a status request does not change how signals are handled" "$(cat "$T/traps")" "$(cat "$T/traps-at-start")"
+  fi
+  # The case the rule exists for: the new image fails its check AFTER the
+  # caller has gone. The line that says so cannot be written, and the put-back
+  # comes after that line.
+  on_main 20; publish 20
+  dig_n 20 >"$T/sick"
+  ( take_lock() { sleep 0.3; }
+    handle_request "deploy canary $(sha_n 20) $(dig_n 20)" | head -1 >/dev/null ) 2>/dev/null || true
+  rm "$T/sick"
+  is "the failed image was started, so there was something to put back" "$(grep -c "@$(dig_n 20)\$" "$T/pulls")" "1"
+  is "a failed start whose caller is gone is still put back" "$(running)" "$(dig_n 8)"
+  is "and the record still names what is running" "$(cur)" "$(sha_n 8)"
+  rm "$STATE_DIR/canary.json"; : >"$T/running"
 
   # A surface a person has not installed is refused before anything runs.
   touch "$T/not-installed"
