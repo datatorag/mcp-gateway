@@ -172,7 +172,6 @@ use rather than by a row count.
 |---|---|---|
 | GWS tool calls fail with generic "Error occurred during tool execution" | User's `service_connections` row missing, or token expired and refresh failed | → deploy skill Troubleshooting ("GWS MCP tools load but all API calls fail"); run the check via the db-query skill's service-connection recipe |
 | Plugin fails to start, `ENOENT` for a binary | Binary-download step missing from the image or build chain | → deploy skill Troubleshooting ("GWS binary not found") + the gws-mcp-dev skill's build-chain gotcha |
-| `db-init` container exits with a Postgres auth error | `--env-file ../.env` not passed to prod compose (`POSTGRES_PASSWORD` resolves empty; dev compose hardcodes a local password, so this is prod-only) | → deploy skill Troubleshooting ("db-init fails") |
 | MCP tool calls fail right after a gateway restart/deploy | Sessions are in-memory only; restart drops all live MCP sessions | Expected — instruct the client to re-initialize; user re-auths on next use, no data lost |
 | Gateway container up but requests fail / healthcheck red | Boot-time `getEnv()` Zod validation can exit the process before the listener opens (commonly a malformed `DATABASE_URL`), or Postgres wasn't ready when a decoupled `gateway` service started | Check container logs first (see deploy skill); look for a Zod validation dump near the top of the log, not just the latest lines |
 | `GET /api/servers` returns `{"error":"Unauthorized"}` | Public plugin-management endpoints were removed (commit `7fb0356`) | Don't use it for status checks — query `mcp_servers`/`tools` directly via the db-query skill instead |
@@ -186,8 +185,7 @@ use rather than by a row count.
   service is `running (healthy)`, `running (unhealthy)`, or restarting in a
   loop — check this before assuming "won't start" means the same thing as
   "started but every DB-touching route fails" (these have different fixes;
-  see deploy skill's `a4e56b3` note that prod `gateway` has no `depends_on`
-  on postgres/db-init).
+  the prod compose file defines no database service, the database is Neon).
 - **Tool-count parity**: compare the plugin's live `tools/list` response
   (the Streamable HTTP connect in the registration-verification leg above) against
   the `tools` table row count for that `mcp_server_id` — use the "Tool

@@ -1,35 +1,23 @@
+# The gateway in production. One file, two ways to start it:
+#
+#   Pipeline path   scripts/host-deploy.sh, from a copy of this file that a
+#                   person installed on the host. It sets GATEWAY_IMAGE to a
+#                   registry reference by digest and starts with --no-build
+#                   and --pull never, so the `build` block is not used and its
+#                   context does not need to exist there.
+#   Scripted path   scripts/deploy-gateway.sh, from a checkout, with --build.
+#                   GATEWAY_IMAGE is not set, so the image built is named
+#                   docker-gateway, the name it has always had.
+#
+# Both use the compose project `docker`, so the container, the plugin volume
+# and the network are the same whichever path started the gateway last.
+#
+# A value added to `environment` here reaches production only when the copy on
+# the host is replaced. The deploy workflow compares that copy's checksum with
+# this file on main and stops a deploy when they differ.
 services:
-  postgres:
-    image: postgres:16
-    environment:
-      POSTGRES_DB: datatoragmcp
-      POSTGRES_USER: datatoragmcp
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-    volumes:
-      - postgres-data:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U datatoragmcp"]
-      interval: 5s
-      timeout: 3s
-      retries: 10
-    networks:
-      - dtrmcp
-    restart: unless-stopped
-
-  db-init:
-    build:
-      context: ..
-      dockerfile: packages/db/Dockerfile
-    environment:
-      DATABASE_URL: postgresql://datatoragmcp:${POSTGRES_PASSWORD}@postgres:5432/datatoragmcp
-    depends_on:
-      postgres:
-        condition: service_healthy
-    networks:
-      - dtrmcp
-    restart: "no"
-
   gateway:
+    image: ${GATEWAY_IMAGE:-docker-gateway}
     build:
       context: ..
       dockerfile: apps/gateway/Dockerfile
@@ -116,5 +104,4 @@ networks:
     driver: bridge
 
 volumes:
-  postgres-data:
   plugins-data:

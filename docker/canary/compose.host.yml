@@ -1,0 +1,30 @@
+# The canary on the production host (SCRUM-394).
+#
+# Installed on the host by a person, beside scripts/host-deploy.sh, and started
+# only by that script, which sets CANARY_IMAGE to a registry reference by
+# digest. Nothing here builds.
+#
+# It is its own compose project. The gateway's project is a different one, so
+# neither sees the other's containers, and this file must never be run with
+# --remove-orphans from a directory that holds another project.
+#
+# It publishes no port. It joins the network the gateway is on, which already
+# exists and is not created or removed from here, so the pipeline is proven on
+# the same network a plugin container will later use.
+name: dtr-canary
+
+services:
+  canary:
+    image: ${CANARY_IMAGE:?set by host-deploy, never by hand}
+    restart: unless-stopped
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    mem_limit: 64m
+    pids_limit: 64
+    networks: [dtrmcp]
+
+networks:
+  dtrmcp:
+    external: true
+    name: datatorag-mcp-network
