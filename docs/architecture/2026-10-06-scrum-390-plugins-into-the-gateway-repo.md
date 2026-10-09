@@ -607,6 +607,17 @@ It compares the two shas' tool files, fetched from CI and from nowhere else, and
 guarded statements used today, headed NOT RUN. It never opens a database connection. `--from`
 is the sha of the gateway that is running.
 
+As built at step 8: the tool file holds, per tool, the name, description, input schema and
+read-only hint, sorted by name. It sits in the same build record as the image's digest, and
+the command takes it only from a record that a deploy would believe: a build run on a commit
+that is on main, from this repository, naming the digest the registry still holds for that
+commit. Records that pass must agree, or nothing is generated. The statements sit in a
+dollar-quoted block whose tag is a name, and a tool whose text contains that tag is refused,
+so nothing a plugin serves can end the block. A statement is also guarded by the old
+read-only hint, and each file asserts the plugin's row count afterwards. Both commits must
+have been built after tool files were kept, so the first change it can generate is between
+two images from step 8 onward.
+
 The generator has one hard part and it gets a self-test: the guard must reproduce Postgres's
 `jsonb::text` rendering exactly, or every guard misses and the file safely does nothing.
 Fixtures are public tool schemas with their known md5s.
@@ -682,7 +693,7 @@ the move.
 | 4 | **Done (2026-10-09).** **Freeze the plugin repos.** Record both `main` tips. Lock `main` on each. Tips: `gws-mcp` `64a9b9d`, `atlassian-mcp` `c3fd27d` | A push to `main` is refused | Remove the rule |
 | 5 | **Done (2026-10-09).** **Import PR**, two commits and nothing else (commands below), merged as a merge commit | `git rev-parse HEAD:plugins/<slug>` equals `<tip>^{tree}` in the plugin repo, for both. The old shas resolve. Commit count is the three counts plus two. Leak scan and security gate over the whole range. `git status` clean | Do not merge; after merge, revert the two commits. `plugins/` is inert: not in the workspace, not in any image |
 | 6 | **Done (2026-10-09): nothing was kept to port** (the branch table below). **Port what is kept**: `git format-patch` in the old repo, `git am --directory=plugins/<slug>` here | The ported branch's `plugins/<slug>` tree equals the source branch's tree | Delete the branch |
-| 7 | **Wiring PR**: workspace glob, package names, `files`, lockfiles, the pins, `turbo.json`, plugin rows in `gate.sh`, the skills, each plugin's `CLAUDE.md`, and the sweep of standalone-server copy. The image does not carry the plugins yet | Frozen install is clean. Test totals per plugin equal the pre-move totals at the same source. Gateway suite, typecheck and build unchanged. The production package list of each plugin equals the one its old lockfile gives. The gateway image builds, and is deployed as an ordinary gateway deploy only when something else needs one | Revert the PR |
+| 7 | **Done (2026-10-09).** **Wiring PR**: workspace glob, package names, `files`, lockfiles, the pins, `turbo.json`, plugin rows in `gate.sh`, the skills, each plugin's `CLAUDE.md`, and the sweep of standalone-server copy. The image does not carry the plugins yet | Frozen install is clean. Test totals per plugin equal the pre-move totals at the same source. Gateway suite, typecheck and build unchanged. The production package list of each plugin equals the one its old lockfile gives. The gateway image builds, and is deployed as an ordinary gateway deploy only when something else needs one | Revert the PR |
 
 **Phase 2: the plugins are loaded from the image.**
 

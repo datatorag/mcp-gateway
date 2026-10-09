@@ -34,9 +34,7 @@ COPY packages/db/package.json packages/db/
 COPY packages/auth/package.json packages/auth/
 COPY apps/gateway/package.json apps/gateway/
 # The plugins are workspace members, so the frozen install needs their
-# manifests to match the lockfile. Only the manifests: the image does not
-# carry the plugins' code yet, and the gateway still loads them from the
-# plugins volume.
+# manifests to match the lockfile.
 COPY plugins/gws-mcp/package.json plugins/gws-mcp/
 COPY plugins/atlassian-mcp/package.json plugins/atlassian-mcp/
 
@@ -49,6 +47,7 @@ COPY packages/types/ packages/types/
 COPY packages/db/ packages/db/
 COPY packages/auth/ packages/auth/
 COPY apps/gateway/ apps/gateway/
+COPY plugins/ plugins/
 
 # The config schema requires a DATABASE_URL to load. The build never connects.
 ENV DATABASE_URL=postgresql://placeholder:placeholder@placeholder:5432/placeholder
@@ -65,6 +64,10 @@ ENV NEXT_PUBLIC_GOOGLE_ADS_SIGNUP_CONVERSION_LABEL=$NEXT_PUBLIC_GOOGLE_ADS_SIGNU
 # The build cache is for the next build on the same machine. It is not part of
 # what runs.
 RUN pnpm run build --filter=@datatorag-mcp/gateway && rm -rf apps/gateway/.next/cache
+# Each plugin is compiled here (tsc into server/), from the same commit as
+# the gateway. Nothing is compiled in the running container.
+RUN pnpm --filter @datatorag-mcp/gws-mcp run build \
+ && pnpm --filter @datatorag-mcp/atlassian-mcp run build
 
 
 FROM base AS runtime
@@ -83,6 +86,24 @@ COPY --from=build /app/apps/gateway/dist apps/gateway/dist
 COPY apps/gateway/next.config.ts apps/gateway/
 COPY apps/gateway/public apps/gateway/public
 COPY apps/gateway/content apps/gateway/content
+
+# The plugins, at /app/plugins/<slug>: the compiled server, and from the tree
+# the manifest the manager reads for the entry point (already copied above),
+# the plugin manifest and the README. No source, no git metadata, no dev
+# dependencies; the production install above already covers their packages.
+#
+# NOT at the path the plugins volume is mounted on: a mounted volume hides
+# whatever the image has there. And this image does not say to load from
+# here: DATATORAG_PLUGINS_DIR is deliberately not set, so the gateway still
+# starts the copies in the volume. Setting it is its own change.
+COPY --from=build /app/plugins/gws-mcp/server plugins/gws-mcp/server
+COPY --from=build /app/plugins/atlassian-mcp/server plugins/atlassian-mcp/server
+COPY plugins/gws-mcp/datatorag.json plugins/gws-mcp/README.md plugins/gws-mcp/
+COPY plugins/atlassian-mcp/datatorag.json plugins/atlassian-mcp/README.md plugins/atlassian-mcp/
+# A client secret file is written beside the compiled code only by the desktop
+# bundle's own build script, and git ignores it. It must never be in an image.
+RUN if find /app/plugins -name oauth.json -not -path '*/node_modules/*' | grep -q .; then \
+      echo "oauth.json found under /app/plugins" >&2; exit 1; fi
 
 # The same build-time values, present at run time as they were before: server
 # code reads them from the environment too.

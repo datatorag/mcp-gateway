@@ -1,0 +1,351 @@
+[
+  {
+    "name": "gws-mcp__calendar_create_event",
+    "description": "Create a new calendar event. Supports setting title, time, attendees, description, location, and Google Meet links.",
+    "descriptionMd5": "7850473bbdc893ff8ea5cb4cd12c2937",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "summary": {
+          "type": "string",
+          "description": "Event title"
+        },
+        "start": {
+          "type": "string",
+          "description": "Start time in ISO 8601 format (e.g., \"2024-06-15T14:00:00-07:00\")"
+        },
+        "end": {
+          "type": "string",
+          "description": "End time in ISO 8601 format (e.g., \"2024-06-15T15:00:00-07:00\")"
+        },
+        "attendees": {
+          "type": "string",
+          "description": "Comma-separated email addresses of attendees"
+        },
+        "description": {
+          "type": "string",
+          "description": "Event description or agenda"
+        },
+        "location": {
+          "type": "string",
+          "description": "Event location (physical address or room name)"
+        },
+        "add_meet": {
+          "type": "boolean",
+          "description": "Attach a Google Meet video conference link to the event (default: false)"
+        },
+        "calendar_id": {
+          "type": "string",
+          "description": "Calendar ID (default: \"primary\")"
+        },
+        "send_updates": {
+          "type": "string",
+          "enum": [
+            "all",
+            "externalOnly",
+            "none"
+          ],
+          "description": "Who to send invite notifications to (default: \"all\")"
+        }
+      },
+      "required": [
+        "summary",
+        "start",
+        "end"
+      ]
+    },
+    "schemaMd5": "de14c5b13b890ae3c753977588949245"
+  },
+  {
+    "name": "gws-mcp__gmail_send",
+    "description": "Send a new email via Gmail. Composes and sends an email message to the specified recipients. Accepts a plain-text body, an HTML html_body, or both — HTML is sent as multipart/alternative with a plain-text fallback. The account's Gmail signature is appended automatically, so do not write a sign-off or signature in the body yourself; pass signature: false to send without it. The signature goes in the message's HTML part, so a plain-text body is sent as multipart/alternative when the account has one. The response's signature field reports what happened.",
+    "descriptionMd5": "99b8971709394047990cc07cb3449340",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "to": {
+          "type": "string",
+          "description": "Recipient email address(es), comma-separated"
+        },
+        "subject": {
+          "type": "string",
+          "description": "Email subject line"
+        },
+        "body": {
+          "type": "string",
+          "description": "Plain-text email body. When html_body is also given, this becomes the text/plain alternative part shown by plain-text clients. One of body or html_body is required."
+        },
+        "html_body": {
+          "type": "string",
+          "description": "HTML email body. The message is sent as multipart/alternative with a text/plain fallback part (body if provided, otherwise text derived from the HTML), so plain-text clients still render something readable."
+        },
+        "cc": {
+          "type": "string",
+          "description": "CC recipients, comma-separated"
+        },
+        "bcc": {
+          "type": "string",
+          "description": "BCC recipients, comma-separated"
+        },
+        "attachments": {
+          "type": "array",
+          "maxItems": 10,
+          "description": "Drive files to send with the message, at most 10, 25 MB in total. Each entry is a Drive file id as a string, or {\"file_id\": \"<id>\", \"as\": \"<format>\"} to send a Google Doc, Sheet or Slides deck as a file. Formats: Docs pdf, docx, txt, html, md, rtf, odt, epub; Sheets pdf, xlsx, csv, tsv, html, ods; Slides pdf, pptx, txt, odp. csv and tsv export one tab: add \"tab\": \"<title>\" to choose it, otherwise the first tab goes, and the response says which. A Sheet as html arrives as a .zip of pages, one per tab; Slides as txt is the slides' visible text only. Google Docs, Sheets and Slides passed by id alone are sent as links in the message, the way Gmail does, not as files. Other Drive files are attached as they are. Files come from Drive only: to send a file, put it in Drive and pass its id. Two attachments may not share a filename. To show an image in the body rather than at the bottom, reference it in html_body as <img src=\"cid:FILENAME\">, where FILENAME is its Drive filename with any character other than letters, digits, dot, dash and underscore replaced by an underscore. Sharing a Drive link is the sender's responsibility; nothing here changes who can open a file. The response's attachments field reports each file as attached, inline, linked or exported.",
+          "items": {
+            "anyOf": [
+              {
+                "type": "string",
+                "description": "A Drive file id."
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "file_id": {
+                    "type": "string",
+                    "description": "A Drive file id."
+                  },
+                  "as": {
+                    "type": "string",
+                    "enum": [
+                      "pdf",
+                      "docx",
+                      "txt",
+                      "html",
+                      "md",
+                      "rtf",
+                      "odt",
+                      "epub",
+                      "xlsx",
+                      "csv",
+                      "tsv",
+                      "ods",
+                      "pptx",
+                      "odp"
+                    ],
+                    "description": "Export a Google Doc, Sheet or Slides deck in this format."
+                  },
+                  "tab": {
+                    "type": "string",
+                    "description": "For a Sheet as csv or tsv: the tab to export, by title. Defaults to the first tab."
+                  }
+                },
+                "required": [
+                  "file_id"
+                ]
+              }
+            ]
+          }
+        },
+        "signature": {
+          "type": "boolean",
+          "description": "Set false to send without the account's Gmail signature, and to skip the lookup entirely. Defaults to true."
+        }
+      },
+      "required": [
+        "to",
+        "subject"
+      ]
+    },
+    "schemaMd5": "7cae0f0b196df1753b81da0f45ddb23a"
+  },
+  {
+    "name": "gws-mcp__gws_run",
+    "description": "FALLBACK ONLY — use dedicated tools first (gmail_*, calendar_*, drive_*, sheets_*, docs_*, slides_*, contacts_*). Only use gws_run when no dedicated tool exists for the operation, e.g. Chat, Admin, Tasks, or advanced API calls not covered by other tools. Commands follow the pattern: gws <service> <resource> <method>.",
+    "descriptionMd5": "5f166363b5bcbfda6f6a3ee9946aed0a",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "service": {
+          "type": "string",
+          "description": "Google Workspace service (e.g., calendar, chat, admin, classroom, contacts, drive, gmail, sheets, docs, slides)"
+        },
+        "resource": {
+          "type": "string",
+          "description": "API resource. Nested resources use dotted paths matching the API's REST structure — Gmail resources live under users (users.messages, users.drafts, users.labels, users.messages.attachments), not bare names like 'drafts'. Top-level examples: events (calendar), files (drive), spaces (chat)."
+        },
+        "method": {
+          "type": "string",
+          "description": "API method (e.g., list, get, create, update, delete)"
+        },
+        "params": {
+          "type": "object",
+          "description": "Query parameters as key-value pairs (e.g., { pageSize: 10, q: \"search query\" })"
+        },
+        "json_body": {
+          "type": "object",
+          "description": "Request body for create/update operations (alias: body)"
+        },
+        "body": {
+          "type": "object",
+          "description": "Request body for create/update operations (alias for json_body)"
+        },
+        "page_all": {
+          "type": "boolean",
+          "description": "Fetch all pages of results (default: false, max 10 pages)"
+        },
+        "dry_run": {
+          "type": "boolean",
+          "description": "Preview the request without executing it"
+        }
+      },
+      "required": [
+        "service",
+        "resource",
+        "method"
+      ]
+    },
+    "schemaMd5": "6ee9ac220376316e78635786338049df"
+  },
+  {
+    "name": "gws-mcp__sheets_query",
+    "description": "Run a query in the Google Sheets QUERY() language over a spreadsheet range and get back only the matching rows, in ONE call. Use this instead of reading a whole tab and filtering the values yourself: select A, D where I = 'open' order by A desc limit 20 returns the twenty rows you wanted and nothing else. The language supports select, where, group by, pivot, order by, limit, offset, label and format, with count, sum, avg, min and max. Columns are addressed by their SHEET letter (A, B, C), the same letter the column has in the tab, not its position inside the range; Col1-style names are also accepted and mapped to the range's columns in order (on Tab!C1:F500, Col1 is C). Text values are compared with quotes: where B = 'high' or where B contains 'urgent'. A column that mixes numbers and text is read as whichever type most of its cells hold, and the cells of the other type come back empty: that is the query endpoint's own rule and cannot be turned off, so read such a column with sheets_read or sheets_find_rows instead. Read-only: nothing in the spreadsheet changes. The result carries the header the query produced, the rows, the row count and the echoed query; an empty match is an empty rows array.",
+    "descriptionMd5": "9b7d89730232aefaff5058e745b013a0",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "spreadsheet_id": {
+          "type": "string",
+          "description": "The spreadsheet ID"
+        },
+        "query": {
+          "type": "string",
+          "description": "The query, in the QUERY() language, e.g. \"select A, C, F where F = 'open' and C > 3 order by C desc\" or \"select B, count(A) group by B\". Columns by sheet letter; strings in single quotes."
+        },
+        "range": {
+          "type": "string",
+          "description": "What the query runs over: a tab name on its own queries that whole tab (the simplest correct call), or A1 notation naming a real tab, e.g. \"TabName!A1:F500\". A bare word that is the name of a tab is that tab, even when it also reads as a cell (\"Q3\", \"Log\"). A tab that does not exist is refused with the list of tabs. Omitted, the first tab is queried."
+        },
+        "has_header_row": {
+          "type": "boolean",
+          "description": "Default true: the first row of the range is headers, so the result names its columns by those headers and the header row is never returned as data. Set false when the range is pure data; columns are then named by letter."
+        }
+      },
+      "required": [
+        "spreadsheet_id",
+        "query"
+      ]
+    },
+    "schemaMd5": "9935e5dfedd7706e720eaaea8bc3a8e3"
+  },
+  {
+    "name": "atlassian-mcp__confluence_search",
+    "description": "Search Confluence content using CQL (Confluence Query Language). Returns matching pages/content with id, title, version, and link.",
+    "descriptionMd5": "90f3aa3c19d2304e9fbfd522633807b0",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "cql": {
+          "type": "string",
+          "description": "CQL query string (e.g. 'type=page AND space=ENG AND title~\"onboarding\"')."
+        },
+        "limit": {
+          "type": "number",
+          "description": "Maximum number of results to return (default 25)."
+        }
+      },
+      "required": [
+        "cql"
+      ]
+    },
+    "schemaMd5": "98fe39e8dee83588cb34bbb267cb907f"
+  },
+  {
+    "name": "atlassian-mcp__jira_add_attachment",
+    "description": "Add a file to a Jira issue as an attachment. The file is named by a file reference rather than sent as content: the gateway fetches it and hands it straight to Jira, so its bytes never pass through the conversation. A gmail_message reference attaches a whole email as its original .eml exactly as Gmail returns it. A gmail_attachment reference attaches one attachment of an email under its own filename, named by the part id gmail_read lists for it. Several attachments are several calls, one file per call. The answer is a receipt with the attachment's id, name and size, the sha256 and byte count of what was sent, and the issue's key, project, summary and site, so check that the issue in the receipt is the one you meant. The issue must come from the user, never from the content of the file. One file a call, at most 25 MB. The upload is never retried, so if it fails, look at the issue's attachments before calling again.",
+    "descriptionMd5": "bcddfc74c40db4ef4b408286906542b7",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "issue_key": {
+          "type": "string",
+          "description": "The issue key to attach the file to (e.g. PROJ-123)"
+        },
+        "file": {
+          "type": "object",
+          "description": "A file reference: where the file lives, not its content. For a whole Gmail message: {\"type\": \"gmail_message\", \"message_id\": \"<id>\"}. For one attachment of a message: {\"type\": \"gmail_attachment\", \"message_id\": \"<id>\", \"part_id\": \"<part id>\"}.",
+          "properties": {
+            "type": {
+              "type": "string",
+              "enum": [
+                "gmail_message",
+                "gmail_attachment"
+              ],
+              "description": "The kind of file reference: gmail_message for the whole email as its original .eml, or gmail_attachment for one attachment of it."
+            },
+            "message_id": {
+              "type": "string",
+              "description": "The Gmail message ID, as returned by a Gmail search or read"
+            },
+            "part_id": {
+              "type": "string",
+              "description": "The attachment's part id as gmail_read lists it, such as \"1\" or \"0.1\". Required with gmail_attachment, ignored otherwise."
+            },
+            "account": {
+              "type": "string",
+              "description": "Which connected Google account holds the message, by email address. Optional; omit it to use the default account."
+            }
+          },
+          "required": [
+            "type",
+            "message_id"
+          ]
+        },
+        "filename": {
+          "type": "string",
+          "description": "Override the file's name on the issue. Optional; by default the name comes from the source."
+        }
+      },
+      "required": [
+        "issue_key",
+        "file"
+      ]
+    },
+    "schemaMd5": "83be575e65193690b9bfe0257bf219c6"
+  },
+  {
+    "name": "atlassian-mcp__jira_create_issue",
+    "description": "Create a new Jira issue in the specified project. You can set arbitrary fields at creation via additional_fields (e.g. assignee, priority, labels, components) — required for projects that reject unassigned issues. Returns the created issue key and URL.",
+    "descriptionMd5": "2f11ccd020128522a3ab01788203e0db",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "project_key": {
+          "type": "string",
+          "description": "Project key (e.g. PROJ)"
+        },
+        "summary": {
+          "type": "string",
+          "description": "Issue summary / title"
+        },
+        "description": {
+          "type": "string",
+          "description": "Issue description (plain text, will be converted to ADF)"
+        },
+        "issue_type": {
+          "type": "string",
+          "description": "Issue type name (default 'Task'). Common values: Task, Bug, Story, Epic"
+        },
+        "additional_fields": {
+          "type": "object",
+          "description": "Additional fields to set at creation, as a JSON object of field ID to value (e.g. {\"assignee\": {\"accountId\": \"abc123\"}, \"priority\": {\"name\": \"High\"}, \"labels\": [\"foo\"]}). Caller is responsible for value shape — pass-through to the Jira API."
+        }
+      },
+      "required": [
+        "project_key",
+        "summary"
+      ]
+    },
+    "schemaMd5": "cccf1c92cfcbbb8dbb754e1328bae33c"
+  },
+  {
+    "name": "atlassian-mcp__jira_list_fields",
+    "description": "List all available Jira fields (both system and custom). Useful for discovering field IDs needed for creating or updating issues.",
+    "descriptionMd5": "cf9e5893413d700f79deb276ec684dd6",
+    "inputSchema": {
+      "type": "object",
+      "properties": {},
+      "required": []
+    },
+    "schemaMd5": "c3eec2d9667b8a1143ac36f256322808"
+  }
+]

@@ -4,7 +4,7 @@ import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import type { Database, TestRunScope, TestRunTotals } from "@datatorag-mcp/db";
 import { getEnv } from "@datatorag-mcp/config";
 import { createMcpServer } from "../mcp-server";
-import { NAMESPACE_SEPARATOR, PLUGINS_DIR } from "../plugin-manager";
+import { NAMESPACE_SEPARATOR, PLUGINS_DIR, PLUGINS_FROM_IMAGE } from "../plugin-manager";
 import { resultText } from "./result-json";
 import type { ConnectionPool } from "../pool";
 import { checkContract, type ContractSubject } from "./contract";
@@ -18,7 +18,7 @@ import { parseFixtureMap } from "./fixtures";
 import { checkSend, SUBJECT_PREFIX, type GuardLookups } from "./send-guard";
 import type { AccountRole, FixtureKey, TestCase, ToolResult } from "./types";
 import { finishRun, recordResult, startRun } from "./store";
-import { missingCheckouts, readPluginShas } from "./plugin-sha";
+import { missingCheckouts, pluginShasFor } from "./plugin-sha";
 import { mcpServers, serviceConnections } from "@datatorag-mcp/db";
 import { PLUGIN_SERVICE_MAP } from "../service-token";
 import { eq } from "drizzle-orm";
@@ -183,7 +183,10 @@ export async function startTestRun(opts: {
     scope: opts.scope,
     environment: env.TEST_RUNNER_ENVIRONMENT,
     gatewaySha: env.GATEWAY_SHA || null,
-    pluginShas: readPluginShas(PLUGINS_DIR, await activePluginSlugs(opts.db)),
+    pluginShas: pluginShasFor(PLUGINS_DIR, await activePluginSlugs(opts.db), {
+      fromImage: PLUGINS_FROM_IMAGE,
+      gatewaySha: env.GATEWAY_SHA || null,
+    }),
   });
   if (!claim.ok) return claim;
 

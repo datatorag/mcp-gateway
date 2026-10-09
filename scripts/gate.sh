@@ -148,6 +148,8 @@ run_scripts() {
   bash scripts/host-deploy.sh --self-test
   bash scripts/published-digest.sh --self-test
   python3 -m unittest scripts/test_leak_scan.py
+  node scripts/registry-diff.mjs --self-test
+  node --test scripts/registry-diff.test.mjs
   local t
   for t in scripts/hooks/test_*.py; do
     python3 -m unittest "$t"

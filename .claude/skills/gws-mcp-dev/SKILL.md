@@ -28,7 +28,9 @@ and `PORT` and nothing else (see `codebase-map`).
 | Source | `plugins/<slug>/src`, compiled by `tsc` to `plugins/<slug>/server` (gitignored) |
 | Build and test | `pnpm --filter @datatorag-mcp/<slug> run build` and `... run test` from the repo root. One root lockfile; a plugin has none of its own |
 | Gate | `scripts/gate.sh`: a path under `plugins/<slug>/` runs that plugin's build and tests and the gateway's |
-| What production runs | **Still the checkout of the old repository in the plugins volume,** until the cutover (the spec's step 10). A change under `plugins/` is in no image and serves nothing yet |
+| Image | The gateway's `Dockerfile` compiles both plugins and ships them at `/app/plugins/<slug>`. There is no plugin image |
+| What production runs | **Still the checkout of the old repository in the plugins volume,** until the cutover (the spec's step 10): the image carries the plugins but does not set `DATATORAG_PLUGINS_DIR`, so the gateway does not load them. A change under `plugins/` is in the image and serves nothing yet |
+| Tool files | When CI builds the gateway image it starts each plugin from it and keeps `tools-<slug>.json` (what the plugin SERVED: name, description, schema, read-only hint) beside the image's digest record. `scripts/image-plugin-tools.sh <image> <dir>` does the same locally |
 
 Until the cutover a plugin change cannot ship the ordinary way: the old
 repositories are locked and the copies here are not serving. The emergency
@@ -104,9 +106,15 @@ gateway deploy carries it. What goes with it:
 1. **A surgical registry change**, by exactly the rows the PR changed: an
    existing tool that changed gets one `UPDATE` of its row, a new tool one
    `INSERT`, a removed tool one `DELETE`. Never a full re-discovery; the
-   table does not resync itself (SCRUM-138). The order against the deploy
-   is in the spec's section 5. Prove it from `tools/list` through the
-   gateway, not from the plugin's source.
+   table does not resync itself (SCRUM-138). Generate the file, never write
+   it by hand: `pnpm registry:diff <slug> --from <running gateway sha> --to
+   <new gateway sha>` writes `forward.sql` and `rollback.sql` from the two
+   commits' tool files in CI. Every statement is guarded by the md5 of the
+   row as the running commit served it, both files are headed NOT RUN, and
+   the command opens no database connection: a person runs the file. Both
+   commits must have been built on main after tool files were kept. The
+   order against the deploy is in the spec's section 5. Prove the result
+   from `tools/list` through the gateway, not from the plugin's source.
 2. **Gateway docs + changelog + tool-count check**: if the change is
    user-visible, add a changelog entry, update the relevant
    `apps/gateway/content/docs/*.md` page, and recheck tool-count claims in
