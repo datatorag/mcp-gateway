@@ -116,7 +116,7 @@ recorded in that step's report and not here).
 | Registry | GitHub's container registry, under this repository. **Public** (ruled): the image holds what this public repo holds plus public build values, and the host then needs no registry credential |
 | Name and tag | One package per surface. Tag is the full commit sha. No `latest` |
 | Built when | On a push to `main` that touches the surface's paths (the path table `gate.sh` uses), or by dispatch for any commit that is an ancestor of `main` |
-| Built from | `apps/gateway/Dockerfile`, unchanged. `GATEWAY_SHA` is the commit. The `NEXT_PUBLIC_*` build arguments come from repository variables, not secrets: they are compiled into the browser bundle and are public by nature |
+| Built from | `apps/gateway/Dockerfile` (single-stage for the first pipeline deploy; multi-stage on a pinned base since, see section 8). `GATEWAY_SHA` is the commit. The `NEXT_PUBLIC_*` build arguments come from repository variables, not secrets: they are compiled into the browser bundle and are public by nature |
 | Labels | The OCI revision label carries the commit sha |
 | Job permissions | `contents: read`, `packages: write`. No environment, no deploy secret |
 
@@ -292,7 +292,11 @@ What was built for step 7, and where it departs from the row as first written:
   script waits for `/health` to answer ok and reads the commit the image was built with,
   inside the container.
 - **Not here:** a slimmer, multi-stage gateway image. That is its own change, after the
-  first pipeline deploy, so that deploy changes one thing.
+  first pipeline deploy, so that deploy changes one thing. (Done since: the Dockerfile now
+  builds in one stage and ships another, on a base named by digest. What ships has the
+  production dependencies and the build's output, in the same layout as before, and no
+  source, dev dependencies or build cache. Its deploy is the gateway's second pipeline
+  deploy.)
 
 What step 7 measured, on 2026-10-09:
 
