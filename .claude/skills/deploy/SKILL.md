@@ -11,18 +11,21 @@ user_invocable: true
 - AWS CLI configured with a profile that has Lightsail access
 - The production instance runs Docker Compose on AWS Lightsail
 
-## Pipeline path (the canary only, so far)
+## Pipeline path (the canary, and the gateway once its files are on the host)
 
 GitHub builds the image and the host runs it by digest; nothing is built on
-the host and no checkout is needed there. Today this covers one surface, the
-`canary` (a container that only answers `/health`). **The gateway is not on
-this path yet**: it still deploys with the scripted path below.
+the host. Two surfaces: the `canary` (a container that only answers
+`/health`), proven end to end, and the `gateway`. **The gateway is on this
+path only once a person has installed the current host script and the
+gateway's compose file on the host, and its first pipeline deploy has had its
+own go.** Until then it deploys with the scripted path below, which stays as
+the fallback afterwards.
 
 ```bash
 # a deploy: the commit must be on main and have an image built there
-gh workflow run release.yml --ref main -f surface=canary -f sha=<full-sha>
+gh workflow run release.yml --ref main -f surface=<canary|gateway> -f sha=<full-sha>
 # a rollback: the commit being returned to, which must be the previous image
-gh workflow run release.yml --ref main -f surface=canary -f sha=<full-sha> -f rollback=true
+gh workflow run release.yml --ref main -f surface=<canary|gateway> -f sha=<full-sha> -f rollback=true
 ```
 
 - The run stops at the `production` environment until its reviewer approves.
@@ -42,11 +45,60 @@ gh workflow run release.yml --ref main -f surface=canary -f sha=<full-sha> -f ro
   updated by a deploy. Every answer starts with its checksum; the run warns
   when that is not the checksum of the copy on `main`. Changing the script on
   the host is a host change with its own go.
+- The compose file each surface runs under is also installed by a person:
+  `docker/canary/compose.host.yml` and, for the gateway,
+  `docker/docker-compose.prod.yml`. The run asks the host for its status first
+  and **stops a deploy when the installed copy's checksum is not the file on
+  `main`**. So a change to the gateway's compose file (a new value in
+  `environment`, most often) needs the copy on the host replaced, a host
+  change with its own go, before the next deploy. A rollback is not held to
+  this. The check is the workflow's, a guard against a forgotten install; it
+  does not bind someone who holds the deploy key and talks to the host
+  directly. What binds them is the host script.
 - With GitHub unavailable, an operator on the host runs
-  `sudo host-deploy previous canary`, or `sudo host-deploy status` to read
+  `sudo host-deploy previous <surface>`, or `sudo host-deploy status` to read
   what is recorded.
 
-## Scripted path (the gateway, until it joins the pipeline)
+For the gateway, also:
+
+- A pipeline deploy restarts the gateway once, like any deploy. Sessions are
+  dropped and clients re-initialize.
+- It does not render `.env` and does not run a migration. Step 2b below and
+  the Migrations section still apply, before the deploy, by hand. The host
+  script reads the env file where the scripted path keeps it.
+- The commit the host checks is the one the image was built with, read inside
+  the container once `/health` answers ok. The gateway gets two minutes
+  (plus one last ask of at most ten seconds); a put-back gets the same.
+- The host script judges a deploy against what is RUNNING, not against its
+  record. When the running container is not the image it last deployed (its
+  first deploy on a host, or any time after the scripted path was used), the
+  new commit must be newer than the commit that container reports, and a
+  start that fails is put back to that container's image. If that container
+  cannot say which commit it is (it is unhealthy, or was built without one),
+  the pipeline refuses and the scripted path is the way in.
+- `rollback` is one step back, to the image the last pipeline deploy itself
+  replaced, and only while the gateway is still on the image that deploy
+  started. A pipeline deploy over an image the scripted path started (the
+  first one always is) records NO previous: the answer says `previous=none`
+  and there is no pipeline rollback until the next deploy. Once the scripted
+  path has started something else, a rollback is refused too. In both cases
+  the way back is the scripted path. `status` shows the record, which names
+  the last image the PIPELINE deployed; read `docker ps` for what is running.
+- Never run the two paths at the same time. The scripted path does not take
+  the host script's lock. And after a pipeline deploy, the scripted path's
+  next `rollback-<sha>` tag is named from `.deployed-sha`, which the pipeline
+  does not write, so that one tag carries the wrong commit in its name: read
+  the image's revision label, not the tag.
+- `docker stop` does not hold the gateway down against the pipeline: a
+  request for the recorded image starts a stopped container again. To keep
+  it down in an incident, remove the container (every request is then
+  refused) or remove the deploy key's line on the host.
+- The pipeline replaces the gateway's container; it never creates or removes
+  it. With no gateway container on the host at all, or when the host cannot
+  be asked what is running, every request is refused and nothing changes.
+  The recorded image, stopped, is the one thing it will start again as is.
+
+## Scripted path (the gateway: today's path, and the fallback after)
 
 `scripts/deploy-gateway.sh <full-sha>` runs steps 2 to 4 below in one go, with
 the host and key taken from the environment so no live value lives in the
