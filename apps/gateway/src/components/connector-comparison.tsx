@@ -1,5 +1,5 @@
 import { CircleCheckIcon, CircleMinusIcon } from "lucide-react";
-import { CALENDAR_VERIFIED_ON, GMAIL_VERIFIED_ON, VERIFIED_ON } from "@/lib/connector-verification";
+import { VERIFIED_ON } from "@/lib/connector-verification";
 
 /**
  * The full capability comparison against Claude's built-in Google connectors.
@@ -44,10 +44,16 @@ import { CALENDAR_VERIFIED_ON, GMAIL_VERIFIED_ON, VERIFIED_ON } from "@/lib/conn
  * 5. NAME SERVICES, NEVER COUNTS. Every hard-coded tool count we have shipped
  *    went stale without anyone touching it.
  *
- * 6. THERE ARE THREE BUILT-IN CONNECTORS: Drive, Gmail and Calendar. Sheets,
- *    Docs and Slides have no connector of their own and come through Drive.
- *    The groups below are named by service because that is how a reader thinks
- *    about them, and the notes carry the correction.
+ * 6. THERE ARE THREE BUILT-IN GOOGLE CONNECTORS: Drive, Gmail and Calendar.
+ *    Sheets, Docs and Slides have no connector of their own and come through
+ *    Drive. The groups below are named by service because that is how a reader
+ *    thinks about them, and the notes carry the correction.
+ *
+ *    "Built-in" is the whole of what Claude offers, not only its Google
+ *    connectors. It also has an Atlassian connector, and until 9 October 2026
+ *    the Jira and Confluence rows said No for it, while a row on the same
+ *    page named that connector. A column header is a claim about everything
+ *    under it: before a row outside Google says No, look for a connector.
  *
  * 7. OUR OWN COLUMN NEEDS THE SAME EVIDENCE AS THEIRS, AND A TICK MEANS LIVE.
  *    Not "exists in the repo" — a tool that has been pushed but not rolled out
@@ -84,7 +90,7 @@ type Group = {
   note?: string | string[];
 };
 
-const GROUPS: Group[] = [
+export const GROUPS: Group[] = [
   {
     service: "Google Sheets",
     rows: [
@@ -94,8 +100,10 @@ const GROUPS: Group[] = [
       { capability: "Append a row", builtIn: false, ours: true, emphasis: true },
       { capability: "Add, rename or delete a tab", builtIn: false, ours: true },
       { capability: "Clear a range", builtIn: false, ours: true },
+      { capability: "Query a sheet with a filter", builtIn: false, ours: true },
+      { capability: "Format cells and tables", builtIn: false, ours: true },
     ],
-    note: "Spreadsheets have no connector of their own. They come through Drive, and the Drive connector ships no update tool of any kind, for any file type.",
+    note: "Spreadsheets have no connector of their own. They come through Drive, and the Drive connector ships no tool that changes a file's content, for any file type. It can rename a file or move it.",
   },
   {
     service: "Google Docs",
@@ -103,7 +111,9 @@ const GROUPS: Group[] = [
       { capability: "Read a doc", builtIn: true, ours: true },
       { capability: "Create a new doc", builtIn: true, ours: true },
       { capability: "Edit an existing doc", builtIn: false, ours: true, emphasis: true },
-      { capability: "Delete a doc", builtIn: false, ours: true },
+      // Conceded on 9 October 2026: the Drive connector moves a file to the
+      // trash. Ours deletes. Either way the doc is gone from where it was.
+      { capability: "Delete or trash a doc", builtIn: true, ours: true },
     ],
     note: "Asked to fix a typo, the built-in connector reads the document, tells you what is wrong, and creates a new file with the correction. The original is untouched.",
   },
@@ -114,7 +124,7 @@ const GROUPS: Group[] = [
       { capability: "Put content in it", builtIn: false, ours: true, emphasis: true },
       { capability: "Read an existing deck", builtIn: true, ours: true },
     ],
-    note: "This one surprised us. The built-in connector does make a real Google Slides deck. It just arrives with one blank slide, an empty title and an empty subtitle, because creating a file with content is refused. You get the container and you fill it in yourself.",
+    note: "This one surprised us. The built-in connector does make a real Google Slides deck. It just arrives with one blank slide, an empty title and an empty subtitle, because a Google-native deck with content is refused. You get the container and you fill it in yourself. The connector will convert a .pptx you upload, if you have the file.",
   },
   {
     service: "Gmail",
@@ -134,10 +144,13 @@ const GROUPS: Group[] = [
         ours: false,
         emphasis: true,
       },
-      { capability: "Delete a draft", builtIn: false, ours: true },
+      // Conceded on 9 October 2026. The note used to say nothing in the
+      // built-in surface deletes a draft it wrote; it has a tool that does.
+      { capability: "Delete a draft", builtIn: true, ours: true },
+      { capability: "Trash a message or thread", builtIn: true, ours: false, emphasis: true },
       { capability: "Save an attachment to Drive", builtIn: false, ours: true },
     ],
-    note: "The built-in connector sends, replies and forwards. It gained those verbs in August 2026, and this table claimed otherwise until 18 September 2026: if you read the older version of this row anywhere, including here, it was wrong. What is left is narrower and still holds. Nothing in the built-in surface deletes a draft it wrote. It labels a whole thread in one call, where we work a message at a time, so a long thread means one call per message. And it gained full label management earlier in 2026, so it can label, star, mark read and archive.",
+    note: "The built-in connector sends, replies and forwards. It gained those verbs in August 2026, and this table claimed otherwise until 18 September 2026: if you read the older version of this row anywhere, including here, it was wrong. It also deletes a draft, which this table denied until 9 October 2026. It labels a whole thread in one call, where we work a message at a time, so a long thread means one call per message. It moves a message or a whole thread to the trash, and we have no tool for that. And it gained full label management earlier in 2026, so it can label, star, mark read and archive. What is left on our side is one thing: saving an attachment straight to Drive.",
   },
   {
     service: "Google Calendar",
@@ -172,19 +185,33 @@ const GROUPS: Group[] = [
       { capability: "File metadata", builtIn: true, ours: false, emphasis: true },
       { capability: "Sharing permissions", builtIn: true, ours: false, emphasis: true },
       { capability: "Recently-opened files", builtIn: true, ours: false, emphasis: true },
-      { capability: "Copy a file", builtIn: true, ours: false, emphasis: true },
-      { capability: "Create a folder", builtIn: false, ours: true },
+      { capability: "Move a file to another folder", builtIn: true, ours: false, emphasis: true },
+      // A tie since 9 October 2026: we copy files now.
+      { capability: "Copy a file", builtIn: true, ours: true },
+      { capability: "Rename a file", builtIn: true, ours: true },
+      // Conceded on 9 October 2026. Its create tool takes the folder type,
+      // and our own Drive comparison post has said so since August.
+      { capability: "Create a folder", builtIn: true, ours: true },
     ],
-    note: "The built-in Drive connector is more capable than ours, and it is not close. Five things it does that we do not. Our advantage was never Drive breadth. It is that we can change the files Drive gives you access to.",
+    note: "The built-in Drive connector is more capable than ours, and it is not close. It downloads a file, reads its metadata and who it is shared with, lists what you opened recently and moves a file between folders. We do none of those. Our advantage was never Drive breadth. It is that we can change the files Drive gives you access to.",
   },
   {
     service: "Beyond Google",
     rows: [
       { capability: "Google Contacts", builtIn: false, ours: true },
       { capability: "Google Tasks", builtIn: false, ours: true },
-      { capability: "Jira, read, create, comment, transition", builtIn: false, ours: true },
-      { capability: "Confluence, read, create, edit pages", builtIn: false, ours: true },
+      // Both conceded on 9 October 2026. Claude has an Atlassian connector,
+      // and it does every verb these two rows name. See rule 6.
+      { capability: "Jira, read, create, comment, transition", builtIn: true, ours: true },
+      { capability: "Confluence, read, create, edit pages", builtIn: true, ours: true },
+      {
+        capability: "Jira, attach an email or one of its attachments to an issue",
+        builtIn: false,
+        ours: true,
+        emphasis: true,
+      },
     ],
+    note: "Claude has an Atlassian connector of its own, and for reading, creating, commenting and moving an issue through its workflow it does what ours does. This table said otherwise until 9 October 2026. Where it stops is files: it has no tool that takes one, so an email, or a PDF inside it, cannot be put on an issue. Contacts and Tasks have no built-in connector at all.",
   },
   {
     service: "The one that changes how you work",
@@ -233,9 +260,13 @@ export function ConnectorComparison() {
         </p>
         <p className="mx-auto mt-3 max-w-xl text-sm text-muted-foreground">
           Everything below was checked by hand against both products on{" "}
-          {VERIFIED_ON}. Calendar section re-verified {CALENDAR_VERIFIED_ON}.
-          Gmail section re-verified {GMAIL_VERIFIED_ON}, and three rows changed
-          in the built-in connector&rsquo;s favour.
+          {VERIFIED_ON}. That check moved several rows toward the built-in
+          connectors: deleting a draft, trashing a doc, creating a folder,
+          and Jira and Confluence, where this table had left out
+          Claude&rsquo;s Atlassian connector. One moved toward us: we copy
+          Drive files now. The rows on querying and formatting sheets,
+          trashing mail, renaming and moving files, and Jira attachments are
+          new.
         </p>
       </div>
 
@@ -296,7 +327,7 @@ export function ConnectorComparison() {
                 </th>
               </tr>
               {/* The column labels REPEATED under every service heading.
-                  The table is 58 rows across nine services, so the real
+                  The table is long, across eight groups, so the real
                   header at the top is off screen for almost all of it, and a
                   reader partway down has two unlabelled columns of ticks and
                   has to remember which side is ours. Worse on mobile, where

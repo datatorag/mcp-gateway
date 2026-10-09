@@ -2,15 +2,15 @@
 title: "Claude Can Read Your Google Docs. It Can't Edit Them."
 excerpt: "Claude's native Google Drive connector reads your files and creates new ones, but it can't change what's already there. DataToRAG lets Claude write Docs, update Sheets, and edit Slides in place."
 date: "2026-04-21"
-updated: "2026-08-11"
-updatedNote: "Second correction, in the same direction as the first. July 30 fixed an excerpt that called the native connector 'effectively read-only'. Re-enumerating it on August 11 shows two more places this post understated it: creating files needs no code execution, it is a first-class Drive tool that makes Docs, Sheets, presentations and folders, so the folders row that said No for them was wrong, and the table never mentioned copying files or reading sharing permissions, which they do and we do not. The thesis is unchanged and was re-checked: nothing in the native surface edits a file that already exists."
+updated: "2026-10-09"
+updatedNote: "Third correction, October 9. Two things changed in the comparison. We copy files now, so 'Copy an existing file' reads Yes for both. And the native connector can rename a file, move it to another folder or put it in the trash, so 'everything it writes is a new file' was too broad and is narrowed to what still holds: it cannot change what is inside a file you already have. Earlier: a second correction, in the same direction as the first. July 30 fixed an excerpt that called the native connector 'effectively read-only'. Re-enumerating it on August 11 shows two more places this post understated it: creating files needs no code execution, it is a first-class Drive tool that makes Docs, Sheets, presentations and folders, so the folders row that said No for them was wrong, and the table never mentioned copying files or reading sharing permissions, which they do and we do not. The thesis is unchanged and was re-checked: nothing in the native surface edits a file that already exists."
 author: "Manuel Yang"
 category: "Comparison"
 coverImage: "/blog/drive-comparison.png"
 tags: ["google-drive", "google-docs", "sheets", "slides", "claude", "comparison", "google-workspace"]
 ---
 
-**Short answer:** no, Claude's native Drive connector cannot edit an existing Google Doc. As of August 11, 2026 it reads, searches, copies and creates files, including new Docs and Sheets with content in them, but nothing in its tool surface changes a document that already exists. DataToRAG edits Docs, Sheets and Slides in place.
+**Short answer:** no, Claude's native Drive connector cannot edit an existing Google Doc. As of October 9, 2026 it reads, searches, copies and creates files, including new Docs and Sheets with content in them, and it can rename, move or trash a file, but nothing in its tool surface changes what is inside a document that already exists. DataToRAG edits Docs, Sheets and Slides in place.
 
 Ask Claude to read your quarterly report in Google Docs. It reads it. Ask Claude to fix the typo in paragraph three. It can hand you the corrected text, or even put that text in a brand new document. What it cannot do is fix the typo in the document you asked about.
 
@@ -18,7 +18,7 @@ That's the shape of the native Google Drive connector in Claude. Read any Google
 
 The [specifics](https://support.claude.com/en/articles/10166901-use-google-workspace-connectors): Claude reads Google Docs directly, exports Sheets to CSV so it can parse the cells, and exports Slides as plain text so it can extract the content. Creating is a first-class part of that surface, and this post used to undersell it. The connector makes new Docs, Sheets, presentations and folders on its own, and text you give it converts into a real Google Doc, so "it can only hand you text" is not the limit.
 
-The limit is narrower and it does not move: everything it writes is a NEW file. Comments on existing documents, edits to a sentence, appending a row to a sheet, fixing a typo on slide 4. None of that happens from the connector, because no tool in it opens a file you already have and changes it. A created presentation is the sharpest version of this, since it arrives with one empty slide and nothing in the native surface can put a word onto it.
+The limit is narrower and it does not move: any content it writes goes into a NEW file. It can rename a file you already have, move it to another folder or put it in the trash, and that is as far as it reaches into one. Comments on existing documents, edits to a sentence, appending a row to a sheet, fixing a typo on slide 4. None of that happens from the connector, because no tool in it opens a file you already have and changes what is in it. A created presentation is the sharpest version of this, since it arrives with one empty slide and nothing in the native surface can put a word onto it.
 
 DataToRAG's connector reads the same surfaces and writes back to every one of them.
 
@@ -33,7 +33,9 @@ DataToRAG's connector reads the same surfaces and writes back to every one of th
 | Create a new Doc or Sheet, with content | Yes | Yes |
 | Create a new Slides deck | Yes, but it arrives empty | Yes, with content |
 | Create folders in Drive | Yes | Yes |
-| Copy an existing file | Yes | No |
+| Copy an existing file | Yes | Yes |
+| Rename a file | Yes | Yes |
+| Move a file to another folder | Yes | No |
 | Read a file's sharing permissions | Yes | No |
 | Add comments to files | No | No |
 | Real-time sync of Docs in Claude Projects | Yes | No |
@@ -64,7 +66,7 @@ The difference isn't "more tools." It's that a workflow that starts with reading
 
 ## What Claude's Drive connector is good at
 
-Reading, searching and starting things. If all you want is "summarize this 40-page contract," "find the doc where we agreed on the new pricing," or "draft this up as a new doc in my Drive," the native connector handles it cleanly, cites sources, and syncs Docs added to a Project in real time. It also copies files and can tell you who a file is shared with, neither of which we do. The limitation only hurts when the thing you want to change already exists.
+Reading, searching and starting things. If all you want is "summarize this 40-page contract," "find the doc where we agreed on the new pricing," or "draft this up as a new doc in my Drive," the native connector handles it cleanly, cites sources, and syncs Docs added to a Project in real time. It also moves files between folders and can tell you who a file is shared with, neither of which we do. The limitation only hurts when the thing you want to change already exists.
 
 Enterprise users also get Drive Cataloging, which indexes content with RAG for fuzzy search across a large corpus. DataToRAG doesn't do that. If your workflow is "search across 50,000 documents," Claude Enterprise is the right tool.
 

@@ -63,7 +63,7 @@ export const SITE_FAQ_PAGES: SiteFaqPage[] = [
         faqs: [
           {
             q: "What is DataToRAG?",
-            a: "One hosted MCP server that connects Claude and other AI clients to your Google Workspace and Atlassian tools, with the write actions the native connectors stopped short of when we last checked their tool lists on August 7, 2026. You connect your accounts once, paste one URL into your client, and your AI can read and change things in Gmail, Drive, Docs, Sheets, Slides, Calendar, Contacts, Tasks, Jira and Confluence, with your approval on every write. [Getting started](/docs/getting-started) has the two minute version.",
+            a: "One hosted MCP server that connects Claude and other AI clients to your Google Workspace and Atlassian tools, with the write actions the native connectors stopped short of when we last checked their tool lists on October 9, 2026. You connect your accounts once, paste one URL into your client, and your AI can read and change things in Gmail, Drive, Docs, Sheets, Slides, Calendar, Contacts, Tasks, Jira and Confluence, with your approval on every write. [Getting started](/docs/getting-started) has the two minute version.",
           },
           {
             q: "How do I set it up?",
@@ -94,7 +94,7 @@ export const SITE_FAQ_PAGES: SiteFaqPage[] = [
             // blog post had been rewritten to say so. The Gmail post IS linked,
             // and it is the strongest link in the set: it is the one that
             // carries the correction, title and all.
-            a: "For reading, you often don't, and mail is nearly settled: the native Gmail connector sends, replies and forwards, which it gained in August 2026 and we re-checked on September 18, 2026. What is left in mail is small and worth naming rather than inflating, since the table on our home page still concedes it in our favour: it cannot delete a draft it wrote, and it cannot file an attachment into Drive. Where the native surface still stops, as of our August 7, 2026 check of its tool lists, is everything around the document: it can create a Slides deck, but the deck arrives empty and nothing native can put a slide or a word into it, and it cannot edit a file you already have. It also works one Google account at a time, where connecting a work and a personal account here is one endpoint and one prompt. Native Calendar is genuinely strong, with full create, update and delete, and if calendars on one account are your whole job the native connector is the answer. We publish claim by claim comparisons and re-test them when the connectors change, including when the change goes against us: [we said Claude could not send email, and it can](/blog/claude-gmail-connector-vs-datatorag-send-reply), plus [Drive and Docs](/blog/claude-google-drive-vs-datatorag-editing), [Calendar](/blog/claude-google-calendar-vs-datatorag-multi-account), and [the full map of your options](/blog/claude-google-workspace-mcp-alternatives).",
+            a: "For reading, you often don't, and mail is nearly settled: the native Gmail connector sends, replies and forwards, which it gained in August 2026 and we re-checked on October 9, 2026. What is left in mail is small and worth naming rather than inflating: it cannot file an attachment into Drive. Where the native surface still stops, as of that same check of its tool lists, is everything around the document: it can create a Slides deck, but the deck arrives empty and nothing native can put a slide or a word into it, and it cannot change what is inside a file you already have. It also works one Google account at a time, where connecting a work and a personal account here is one endpoint and one prompt. Native Calendar is genuinely strong, with full create, update and delete, and if calendars on one account are your whole job the native connector is the answer. We publish claim by claim comparisons and re-test them when the connectors change, including when the change goes against us: [we said Claude could not send email, and it can](/blog/claude-gmail-connector-vs-datatorag-send-reply), plus [Drive and Docs](/blog/claude-google-drive-vs-datatorag-editing), [Calendar](/blog/claude-google-calendar-vs-datatorag-multi-account), and [the full map of your options](/blog/claude-google-workspace-mcp-alternatives).",
           },
           {
             q: "Can it work across multiple accounts?",
@@ -152,12 +152,15 @@ export const SITE_FAQ_PAGES: SiteFaqPage[] = [
             q: "Can my AI assistant actually edit my files, or only read them?",
             // NOT the email example, deliberately. Claude's native Gmail
             // connector gained send, reply and forward in August 2026, which
-            // our own three-way comparison enumerated on 24 August 2026. The
-            // table above this block still carries the older reading and that
-            // is a claims question for a person, not something an FAQ answer
-            // should quietly restate in the surface built to be quoted away
-            // from the page. The four edits named here held on both dates.
-            a: `Edit them. Where the built-in connectors stop is one verb past creating a document: through DataToRAG your assistant changes cells in a spreadsheet you already have, writes content into an existing doc, puts slides into a deck that arrived empty, and files and updates Jira issues, with your approval on every one. Those gaps come from enumerating each connector's tool surface on ${VERIFIED_ON}, and the [three way comparison](/blog/hosted-google-workspace-mcp) re-enumerated all three surfaces on 24 August 2026.`,
+            // our own three-way comparison enumerated on 24 August 2026.
+            //
+            // NOT "files and updates Jira issues" either, which this answer
+            // said until 9 October 2026. Claude has an Atlassian connector
+            // that creates and edits issues, so that was not a place the
+            // built-in connectors stop. What it has no tool for is a file,
+            // which is the fourth item now. Every item here must be a row
+            // the comparison table on the home page marks No for built-in.
+            a: `Edit them. Where the built-in connectors stop is one verb past creating a document: through DataToRAG your assistant changes cells in a spreadsheet you already have, writes content into an existing doc, puts slides into a deck that arrived empty, and attaches an email or a file inside it to a Jira issue, with your approval on every one. Those gaps come from enumerating each connector's tool surface on ${VERIFIED_ON}, and the [three way comparison](/blog/hosted-google-workspace-mcp) re-enumerated all three surfaces on 24 August 2026.`,
           },
           {
             q: "Which AI clients can connect to it?",
