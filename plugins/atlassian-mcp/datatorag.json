@@ -1,0 +1,23 @@
+{
+  "name": "Atlassian",
+  "description": "Jira and Confluence — issues, pages, comments, and search",
+  "oauth": {
+    "provider": "atlassian",
+    "authorizeUrl": "https://auth.atlassian.com/authorize",
+    "tokenUrl": "https://auth.atlassian.com/oauth/token",
+    "clientIdEnv": "$ATLASSIAN_CLIENT_ID",
+    "clientSecretEnv": "$ATLASSIAN_CLIENT_SECRET",
+    "scopes": [
+      "read:jira-work",
+      "write:jira-work",
+      "read:jira-user",
+      "read:confluence-content.all",
+      "write:confluence-content",
+      "read:confluence-space.summary",
+      "offline_access"
+    ],
+    "access_type": "offline",
+    "prompt": "consent",
+    "audience": "api.atlassian.com"
+  }
+}
