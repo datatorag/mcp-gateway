@@ -53,17 +53,22 @@ function Transcript({
   const scrollRef = useRef<HTMLDivElement>(null);
 
   // Frames are sized to each script's measured peak, but keep the newest
-  // beat in view if content ever runs a few pixels over.
+  // beat in view if content ever runs a few pixels over. That is done here,
+  // in script, which is why the box below can be `overflow-y-hidden`.
   useLayoutEffect(() => {
     const el = scrollRef.current;
     if (el) el.scrollTop = el.scrollHeight;
   }, [messages]);
 
   return (
-    <div
-      className="h-full overflow-y-auto overscroll-contain p-4"
-      ref={scrollRef}
-    >
+    // THE WHEEL BELONGS TO THE PAGE (SCRUM-399). This box used to be
+    // `overflow-y-auto overscroll-contain`, and a scroll container that
+    // contains its overscroll swallows the wheel even when it has nothing to
+    // scroll, which is the normal case here: the frame is sized to the
+    // content. With the pointer over any window the page stopped scrolling.
+    // A replay is not something a reader scrolls, so the box takes no wheel
+    // at all: hidden overflow still lets the effect above move it.
+    <div className="h-full overflow-y-hidden p-4" ref={scrollRef}>
       {messages.map((message, index) => (
         <MessageRow
           awaitingConfirm={awaitingApproval}

@@ -18,18 +18,29 @@ import { FREE_MONTHLY_AGENT_RUNS } from "@/gateway/billing/plans";
 
 export const DEMO_HEADING = "Watch the agent do the work.";
 
-/** Two lines, above the disclosure.
+/** One line under the heading, and only one (SCRUM-400). It answers the
+ * objection that the funnel actually dies on, which is the config file, not
+ * the product.
  *
- * Line one answers the objection that the funnel actually dies on, which is
- * the config file, not the product. Line two says out loud that the
- * bring-your-own-client path is not being retired, because a page that hides
- * it reads as a downgrade to the people most likely to pay for it. "Same tools
- * either way" is the load-bearing half, and it is true: both surfaces resolve
- * the same per-user tool set. */
+ * It was two lines, with the disclosure as a third paragraph below them:
+ * three centred grey paragraphs at one weight, each leaving a word or two
+ * alone on its last line. The second line now closes the section (see
+ * {@link DEMO_CTA_ALTERNATIVE}) and the disclosure is a caption on each
+ * window. Still an array, because callers and tests index it. */
 export const DEMO_STANDFIRST = [
   "No install, no config file, nothing to paste. Connect your Google account and ask.",
-  "Prefer to work in Claude or ChatGPT? Take the config and go. Same tools either way.",
 ];
+
+/** Says out loud that the bring-your-own-client path is not being retired,
+ * because a page that hides it reads as a downgrade to the people most likely
+ * to pay for it. "Same tools either way" is the load-bearing half, and it is
+ * true: both surfaces resolve the same per-user tool set.
+ *
+ * Rendered with the closing call to action, where the reader is choosing how
+ * to start, rather than under the heading, where it competed with the line
+ * above for the same glance. */
+export const DEMO_CTA_ALTERNATIVE =
+  "Prefer to work in Claude or ChatGPT? Take the config and go. Same tools either way.";
 
 /** The closing call to action.
  *
