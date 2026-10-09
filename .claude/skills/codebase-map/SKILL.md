@@ -233,7 +233,7 @@ edit means the design-time check was skipped.
 | Constant-time compare, API-key hashing | `packages/auth/src/index.ts` |
 | Plugin manifest type, status enums | `packages/types/src/index.ts` |
 | Dev / prod compose topology | `docker/docker-compose.dev.yml`, `docker/docker-compose.prod.yml` |
-| SSM → `.env` render script | `scripts/render-env.sh` |
+| SSM → env file render script. On a laptop it writes the dev `.env` in the checkout; on the production host a person installs a copy and it writes the gateway's env file at `/opt/datatorag-deploy/env/gateway.env`, outside any checkout, where both deploy paths read it | `scripts/render-env.sh` |
 | Pre-merge gate (path table → surfaces → typecheck and tests) | `scripts/gate.sh` |
 | Leak scanner (range, every commit and message; prints rule and place, never the match) | `scripts/leak-scan.py`, `scripts/test_leak_scan.py` |
 | Pull-request workflow (`gate` and `leak-scan` jobs) | `.github/workflows/ci.yml` |

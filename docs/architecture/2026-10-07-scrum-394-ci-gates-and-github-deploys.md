@@ -226,7 +226,7 @@ table row becomes the third.
 | The rollout runbook kept outside this repo | Loses its build and tagging steps; keeps the baseline and post test runs, the drift check and the smoke, which the pipeline does not do |
 | The deploy record | Written from the GitHub deployment: surface, sha, digest, approver, time, previous digest |
 | `GATEWAY_SHA` | Still a build argument, now set by the workflow from the commit it checked out |
-| Plugin rollouts | Unchanged by this spec. They join the pipeline as surfaces when they become images (SCRUM-390) |
+| Plugin rollouts | Unchanged by this spec. Ruled 2026-10-09 (SCRUM-390, revision 6): the plugins stay inside the gateway container and are built into its image, so a plugin change becomes a gateway deploy and this pipeline gains no surface for them |
 
 ## 8. Part 5: the smallest step that proves the pipeline
 
@@ -267,9 +267,11 @@ What was built for step 7, and where it departs from the row as first written:
   copy's checksum is not the file on `main`: a value added to the file reaches production
   only when the copy is replaced, and a deploy that skipped that would start the gateway
   without it and without saying so.
-- **The env file stays where it is** for now: the host script points compose at the file the
-  scripted path already keeps, and only checks it is there. Rendering it from the parameter
-  store is still a person's step. Moving it out of the checkout is a later change.
+- **The env file stayed where it was** for the first deploy: the host script pointed compose
+  at the file the scripted path already kept, and only checked it was there. Since then it
+  has its own place beside the pipeline's compose files, outside the checkout, and both
+  deploy paths read it there. Rendering it from the parameter store is still a person's
+  step, with a copy of the render script that needs no checkout.
 - **What is running is asked of the host, not of the record.** The scripted path stays as
   the fallback, so the record of what the pipeline last deployed can be older than what is
   running. Whenever the running container is not on the recorded image (always, before the
@@ -314,9 +316,11 @@ Still unproven on the gateway, and accepted: a rollback through the pipeline (no
 until the second deploy) and a put-back after a failed start. Both were exercised on the
 canary and on a scratch project with real Docker.
 
-Left as it was, on purpose: the host still has its checkout and can still build. A deploy no
-longer needs either. The env file lives in the checkout and the scripted fallback uses it,
-so moving that file and removing the checkout is a later decision, not part of this one.
+Left as it was, on purpose: the host still has its checkout and can still build. A pipeline
+deploy needs neither, and since the env file moved out of the checkout nothing a pipeline
+deploy reads is in it. What still needs the checkout is the scripted fallback, which builds
+from it. Removing the checkout therefore means deciding what the fallback becomes; that is a
+separate decision.
 
 ## 9. Order, and how this meets SCRUM-390
 
@@ -325,7 +329,8 @@ so moving that file and removing the checkout is a later decision, not part of t
 3. Step 3: the build workflow. No deploy.
 4. Addendum A ruled, then steps 4 to 7, each host step agreed one at a time.
 5. SCRUM-390's import, which needs the merge-style setting already in place.
-6. SCRUM-390's plugin images, which reuse this pipeline with two more surfaces.
+6. SCRUM-390's plugins, built into the gateway image (ruled 2026-10-09). They reuse this
+   pipeline as part of the `gateway` surface; no surface is added.
 
 ## 10. Risks
 
