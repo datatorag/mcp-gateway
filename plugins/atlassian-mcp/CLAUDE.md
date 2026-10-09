@@ -39,11 +39,20 @@ tools via MCP over HTTP.
 - Tool schemas carry verbose parameter-documenting descriptions and
   `annotations: { destructiveHint, readOnlyHint }` on every tool
 
-## Cross-repo guidance
+## Where this lives
 
-DataToRAG development runs from the datatorag-mcp session; the canonical
-skills and workflow guidance (including the design-time "Quality pass"
-checklist) live in that repo's `.claude/skills/` —
-<https://github.com/datatorag/mcp-gateway>, start with `codebase-map`.
-Keep only repo-specific facts in this file; don't duplicate cross-repo
-guidance here, it drifts.
+This plugin is a workspace package (`@datatorag-mcp/atlassian-mcp`) of the
+datatorag-mcp repository, at `plugins/atlassian-mcp`. It was imported from its own
+repository with its history; that repository is frozen. Run its scripts
+from the repository root: `pnpm --filter @datatorag-mcp/atlassian-mcp run build`
+and `... run test`. There is one lockfile, at the root.
+
+It is a service plugin of the gateway, not a standalone server: the gateway
+starts it, sets `PORT`, and sends one user's access token per session in
+`X-User-Token`. Its environment holds `PATH`, `NODE_ENV` and `PORT` and
+nothing else.
+
+The skills and workflow guidance are in the root `.claude/skills/`: start
+with `codebase-map`, then `gws-mcp-dev` for plugin work. Keep only facts
+about this plugin in this file.
+

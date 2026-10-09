@@ -23,8 +23,8 @@ task:
   track/digest event pipeline
 - `ops-debugging` — production gateway diagnosis (plugin re-discovery,
   OAuth token failures, container issues)
-- `gws-mcp-dev` — work in the gws-mcp plugin repo (~/git/gws-mcp): Google
-  Workspace tool changes and the ship tail back into the gateway
+- `gws-mcp-dev`: work on the connector plugins under `plugins/` (gws-mcp,
+  atlassian-mcp): tool changes and the ship tail back into the gateway
 
 Follow the matched skill's recipe — file paths, wiring steps, patterns.
 The recipes exist so you don't rediscover the wiring; deviate only when

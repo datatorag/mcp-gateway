@@ -1,59 +1,73 @@
 ---
 name: gws-mcp-dev
-description: Use when developing the gws-mcp plugin repo (~/git/gws-mcp) — adding or changing Google Workspace tools. Tool-definition patterns, client/auth model, manifest, build chain, and the ship tail back into the gateway (plugin update, docs, changelog).
+description: Use when developing a connector plugin under plugins/ (gws-mcp, atlassian-mcp): adding or changing tools. Where the plugins live now, tool-definition patterns, the client and auth model, build and test, the freeze window, and the ship tail back into the gateway.
 ---
 
-# gws-mcp Development
+# Plugin development (gws-mcp, atlassian-mcp)
 
-`gws-mcp` (DataToRag/gws-mcp, public, local clone `~/git/gws-mcp`) is the
-Google Workspace MCP plugin the gateway installs — a separate repo, separate
-release cycle from `datatorag-mcp`. It wraps the `gws` CLI binary
-(googleworkspace/cli, Rust) rather than calling Google APIs directly.
+The two connector plugins live in this repository, at `plugins/gws-mcp` and
+`plugins/atlassian-mcp`, as workspace packages `@datatorag-mcp/gws-mcp` and
+`@datatorag-mcp/atlassian-mcp`. They were imported from their own
+repositories with their history (SCRUM-390). Those repositories are frozen:
+`main` is locked on both, and nothing new goes there.
 
-The sibling plugin `atlassian-mcp` (DataToRag/atlassian-mcp, public, local
-clone `~/git/atlassian-mcp`) follows the same repo anatomy (src/tools/ per
-service + shared response.ts, datatorag.json manifest, tsc → server/, no
-test framework) and the same ship tail below — these recipes apply there
-too, minus everything gws-binary-specific: it calls the Atlassian REST API
-directly via `src/atlassian-client.ts`, with the per-user token injected
-per call by the gateway. Plugin MCP ports on prod are assigned 40000+ by
-the plugin-manager (gws-mcp is 40000; check `mcp_servers.container_port`
-for the rest). Per-repo CLAUDE.md files in both plugin repos carry only
-repo-specific facts and point back here for everything else.
+Each plugin's `CLAUDE.md` (`plugins/<slug>/CLAUDE.md`) holds the facts about
+that plugin and is the first thing to read. This skill holds what is common
+to both and what crosses into the gateway.
 
-## Repo anatomy
+**A connector is a service plugin of the gateway, not a standalone MCP
+server.** The gateway starts it as a child process, gives it a port, and
+hands it one user's access token per call in the `X-User-Token` header. A
+plugin holds no app credentials and its environment is `PATH`, `NODE_ENV`
+and `PORT` and nothing else (see `codebase-map`).
 
-- `src/tools/*.ts` — one file per service: `gmail.ts`, `calendar.ts`,
-  `contacts.ts`, `docs.ts`, `drive.ts`, `sheets.ts`, `slides.ts`, `tasks.ts`,
-  `auth.ts`, plus `generic.ts` (the `gws_run` fallback) and `response.ts`
-  (shared response helpers). `src/tools/index.ts` aggregates every module's
-  tool array into `allTools` and builds the `toolHandlers` dispatch map.
-- `src/gws-client.ts` — the `GwsClient` wrapper. `src/create-server.ts` /
-  `src/extension.ts` (stdio, Claude Desktop `.mcpb`) / `src/index.ts`
-  (HTTP; defaults to port 39147 standalone — under the gateway the
-  plugin-manager overrides it via `PORT` env to 40000+) are the two
-  entry points.
-- `datatorag.json` — the plugin manifest the gateway reads: `name`,
-  `description`, and an `oauth` block (`scopes`, `authorizeUrl`/`tokenUrl`,
-  `clientIdEnv`/`clientSecretEnv` — env var *names*, no secret values).
-- Build: `package.json`'s `build` script, `scripts/download-binaries.sh`.
-- Tests: vitest (`npm test`), added 2026-07-31 — unit tests live next to the
-  module (`src/tools/*.test.ts`, excluded from the tsc build via tsconfig
-  `exclude`) and use a fake `{ api }` client, so handlers are testable
-  without network. Live smoke tests against real Google APIs remain the
-  verification for actual API behavior, documented in the merge commit
-  message. Note: this repo uses npm (package-lock.json), not pnpm.
+## Where things are, and the window we are in
 
-**The `gws` binary model, in two sentences**: `GwsClient.exec()` shells out
-to a prebuilt `gws` binary (one per platform, in `bin/`) via
-`child_process.execFile`, passing `--params <json>` / `--json <body>` and
-parsing stdout as JSON; app-level OAuth client id/secret come from
-`oauth.json` or `GWS_OAUTH_CLIENT_ID`/`_SECRET` env, while the per-user
-access token is injected per call via `GwsClient.withToken()` (the
-"unified OAuth" model — the gateway holds each user's Google token and
-hands it to `GwsClient` per request, no per-user `gws auth login`).
-`spawnAuthForUrl()` is only for the desktop/extension path: it spawns
-`gws auth login` in the background and scrapes the OAuth URL off stderr.
+| Thing | Now |
+|---|---|
+| Source | `plugins/<slug>/src`, compiled by `tsc` to `plugins/<slug>/server` (gitignored) |
+| Build and test | `pnpm --filter @datatorag-mcp/<slug> run build` and `... run test` from the repo root. One root lockfile; a plugin has none of its own |
+| Gate | `scripts/gate.sh`: a path under `plugins/<slug>/` runs that plugin's build and tests and the gateway's |
+| What production runs | **Still the checkout of the old repository in the plugins volume,** until the cutover (the spec's step 10). A change under `plugins/` is in no image and serves nothing yet |
+
+Until the cutover a plugin change cannot ship the ordinary way: the old
+repositories are locked and the copies here are not serving. The emergency
+path is the old one, and it needs a go: unlock the old repository, commit
+there, roll out as before (`ops-debugging`), and port the commit here with
+`git format-patch` and `git am --directory=plugins/<slug>`.
+
+The plan, its steps and what each one proves:
+`docs/architecture/2026-10-06-scrum-390-plugins-into-the-gateway-repo.md`.
+
+**Reading a file's history.** `git log -- plugins/gws-mcp/src/tools/gmail.ts`
+shows only the import commit. The real history is
+`git log --full-history -- src/tools/gmail.ts plugins/gws-mcp/src/tools/gmail.ts`.
+
+## Anatomy (both plugins)
+
+- `src/tools/*.ts`: one file per service, tool schemas plus a
+  `handle<Service>()` dispatch. `src/tools/index.ts` aggregates them.
+- `src/index.ts`: the HTTP entry point the gateway starts. It also serves
+  the private file routes beside `/mcp` (`/internal/file-bytes` on
+  `gws-mcp`, `/internal/consume` on `atlassian-mcp`).
+- `datatorag.json`: the manifest (`name`, `description`, an `oauth` block of
+  scopes and env var *names*, never values).
+- Tests: vitest, beside the module, driven through a fake client. They
+  cannot show a missing or reshaped upstream response; a live call is still
+  the proof for anything that touches a provider's API.
+
+**`gws-mcp` specifics.** Every hosted call is a `fetch` built from the
+generated method table in `src/google-api/`; no process is started and the
+`gws` CLI is not loaded. The CLI remains only for the desktop bundle's
+login and the no-token fallback, both of which go away at the spec's step
+11. `src/google-api/oracle.test.ts` holds the request builder equal to the
+pinned CLI's `--dry-run`, and it fails, never skips, without the binary: so
+the `test` script first runs `scripts/download-binaries.sh --host`, which
+fetches the one binary for this machine and checks it against a pinned
+sha256. A new CLI version needs new checksums in that script.
+
+**`atlassian-mcp` specifics.** Calls the Atlassian REST API directly through
+`src/atlassian-client.ts`.
 
 ## Adding or changing a tool
 
@@ -66,8 +80,7 @@ hands it to `GwsClient` per request, no per-user `gws auth login`).
    repeating it (see `emailFields` in `gmail.ts`).
 2. **Implement the handler** in the same file's `handle<Service>()`
    switch. Use `client.api(service, resource, method, { params, jsonBody,
-   pageAll, dryRun })` for direct REST calls or `client.helper(service,
-   command, flags)` for `gws` CLI shorthand subcommands. Return via the
+   pageAll, dryRun })`. Return via the
    shared helpers in `response.ts`: `jsonResponse(data)` (truncates at
    900KB, MCP caps near 1MB), `textResponse(text)`, `deleteResponse(name)`,
    `deleteDriveFile(client, fileId)` (Sheets/Docs/Slides deletes are Drive
@@ -75,74 +88,48 @@ hands it to `GwsClient` per request, no per-user `gws auth login`).
 3. **Register** — adding to a service file's exported tool array and
    `handle<Service>()` switch is enough; `src/tools/index.ts` picks it up
    automatically via `register()`, no separate wiring step.
-4. **Build + verify locally**: `npm run build` (`download-binaries.sh`
-   then `tsc`), confirm it's clean, run `npm test` (vitest; unit-test the
+4. **Build + verify locally**: `pnpm --filter @datatorag-mcp/<slug> run
+   build`, confirm it's clean, run `... run test` (vitest; unit-test the
    handler with a fake client), then run a live smoke test against the
    real API for the tool you touched (read-only calls first) — unit tests
    cover wiring and error shaping, only a live call verifies actual API
    behavior. Note what you tested in the eventual commit/PR body.
-5. **PR to main** — see Conventions below for message shape.
+5. **PR to this repository's main**, through the gate like any other change.
 
 ## Ship tail
 
-After the PR merges into `~/git/gws-mcp` main, this is separate from and
-in addition to landing the merge itself:
+A plugin change is a gateway change: one PR here, and after the cutover one
+gateway deploy carries it. What goes with it:
 
-1. **Prod plugin update + a surgical registry change**: pull/rebuild the
-   plugin in its running container and restart the gateway so the child
-   process picks up the code (the `ops-debugging` skill's "Plugin update +
-   registry change" recipe). Then change the `tools` table by exactly the
-   rows this PR changed: an existing tool that changed gets one `UPDATE` of
-   its row (served count flat), a new tool gets one `INSERT` alongside the
-   classification commit in step 3 (count moves by one, smoke suite told in
-   advance), a removed tool one `DELETE`. Never a full re-discovery; the
-   table does not resync itself (SCRUM-138) and a wholesale rewrite once
-   left seven tools live and invisible. Prove it from `tools/list` through
-   the gateway, not from the plugin's source.
-2. **Gateway docs + changelog + tool-count check** — if the change is
-   user-visible (new tool, changed behavior), add a changelog entry and
-   update the relevant `apps/gateway/content/docs/*.md` page, and recheck
-   any tool-count claims in copy (e.g. "50 tools total") since they drift
-   per tool added/removed. See the `site-content` skill's publish
-   checklist; use the `content-marketer` agent to draft the changelog/docs
-   prose.
-3. **Playground write-gate classification** — a NEW tool fails closed in the
-   playground (always prompts for approval) until it is classified in the
-   gateway repo: add it to the snapshot in
+1. **A surgical registry change**, by exactly the rows the PR changed: an
+   existing tool that changed gets one `UPDATE` of its row, a new tool one
+   `INSERT`, a removed tool one `DELETE`. Never a full re-discovery; the
+   table does not resync itself (SCRUM-138). The order against the deploy
+   is in the spec's section 5. Prove it from `tools/list` through the
+   gateway, not from the plugin's source.
+2. **Gateway docs + changelog + tool-count check**: if the change is
+   user-visible, add a changelog entry, update the relevant
+   `apps/gateway/content/docs/*.md` page, and recheck tool-count claims in
+   copy. See `site-content`; the `content-marketer` agent drafts the prose.
+3. **Playground write-gate classification**: a NEW tool fails closed in the
+   playground until it is classified: add it to the snapshot in
    `apps/gateway/src/gateway/playground/tool-classification.test.ts` and,
    if it is a read, to `KNOWN_READ_TOOLS` in
-   `apps/gateway/src/gateway/playground/tools.ts` (same commit; tests
-   enforce the two lists agree and, where `LIVE_REGISTRY_DATABASE_URL` is
-   set, that the snapshot matches the live registry).
-4. **Session re-auth note**: gateway MCP sessions are in-memory only — the
-   restart in step 1 drops all live sessions for this connector. This is
-   expected, not a regression; users just re-auth on their next tool call
-   (see `ops-debugging`).
+   `apps/gateway/src/gateway/playground/tools.ts`, in the same commit.
+4. **Sessions**: a gateway deploy restarts the gateway, which drops every
+   live MCP session. Expected; clients re-initialize on their next call.
 
 ## Conventions
 
-- Commits: `feat: <summary> (#N)` on merge, occasional bare imperative
-  subject for small fixes. Body explains *why*, not just what — e.g. `PR
-  #8`'s body documents the regression it fixes, not just the new params.
-  Larger cleanup PRs (e.g. `PR #9`) use a structured Features/Cleanup body
-  and end with a `Verified: ...` line naming exactly what was smoke-tested.
-  `Fixes #N`/`Closes #N` trailers link issues.
-  `Co-authored-by: Claude <model> <noreply@anthropic.com>` trailer on
-  nearly every commit.
 - Schema descriptions are verbose and parameter-documenting, not just a
-  noun phrase — `gmail_read` is the model: its `text_only` param spells
-  out exactly what the compact view contains (flattened headers, decoded
-  text/plain body with HTML fallback, attachment metadata) and when to
-  prefer it ("Recommended for triage — avoids base64 attachment data
-  overflowing the response").
+  noun phrase. `gmail_read` is the model: its `text_only` param spells out
+  exactly what the compact view contains and when to prefer it.
+- Every tool declares its annotations; in `gws-mcp` through the presets in
+  `src/tools/annotations.ts`, never hand-written booleans.
+- A commit body explains why, and names what was smoke-tested live.
 
 ## Gotchas
 
-- **`download-binaries.sh` must run before `tsc`.** The plugin manager's
-  install step is just `npm run build`; if the binary-download step were
-  ever dropped from that script, a fresh install ENOENTs on the first gws
-  call (this exact bug was fixed in `c85505f`, "Include binary download in
-  build step" — keep the two steps chained in `build`, don't split them).
 - **Dotted API paths in `gws_run`.** Resources nest under a parent —
   `users.messages`, `users.drafts`, `users.messages.attachments` — not
   bare names like `drafts`. Get this wrong and the CLI's API-discovery

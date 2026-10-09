@@ -161,10 +161,30 @@ about what is deployed: a plugin-only commit still produces a new gateway image.
   then identical, 91 of 91): `pnpm.overrides` for three of them, and `zod` declared as a direct
   pinned dependency of the plugin, because it arrives only as an auto-installed peer of the MCP
   SDK and an override did not move it. `atlassian-mcp`'s drift was not measured.
+
+  **What step 7 found and did instead (ruled 2026-10-09).** By the time of the move the
+  gateway's own lockfile had moved on, and both drifts were measured against it. Under one
+  lockfile a plugin takes the versions the gateway already resolves for the packages they
+  share, and for `atlassian-mcp` that was *backward* for five of them. An override applies to
+  the whole workspace, so pinning a plugin to its old versions would have moved the gateway
+  backward instead. The rule adopted: **no production package moves backward anywhere.** (One
+  development tool does: the plugins' test runner now uses the `vite` the gateway already
+  resolves, 8.0.9, where their own lockfiles had 8.2.x. It is in no image.) Each of the five is
+  overridden to the higher of the two versions, which moves the gateway forward on them:
+  `hono` 4.12.8 to 4.12.10, `@hono/node-server` 1.19.11 to 1.19.12, `express-rate-limit` 8.3.1
+  to 8.3.2, `path-to-regexp` 8.3.0 to 8.4.2, `zod-to-json-schema` 3.25.1 to 3.25.2. Those ship
+  with the first gateway deploy after the wiring PR and are proven by that deploy's test run.
+  `zod` is pinned at 4.3.6 as a direct dependency of each plugin, as rehearsed. What still
+  differs from each plugin's old lockfile, all forward: `ajv` 8.18.0 to 8.20.0 in both, and in
+  `gws-mcp` `jose` 6.2.1 to 6.2.2 plus the five above. So the production package list of a
+  plugin is **not** identical to its old one, by ruling; it is identical in package names and
+  count (91 each), and differs in those versions only.
 - **A fresh checkout's `pnpm -r test` is red.** The `gws-mcp` oracle test fails, by design
   never skips, when the pinned CLI binary is absent, and the binary is a gitignored download.
   Until step 11 drops the CLI, the plugin's `test` task depends on `download-binaries`. After
-  it, the oracle's expected requests are fixtures in the repo and nothing is downloaded.
+  it, the oracle's expected requests are fixtures in the repo and nothing is downloaded. As
+  built at step 7: the `test` script fetches only the one binary for the machine it runs on,
+  and every archive is checked against a pinned sha256 before it is unpacked.
 
 **What the gateway and the plugins share.**
 
@@ -649,7 +669,7 @@ shared-network section in section 4 cites revision 5's numbers and says so.
 |---|---|---|---|
 | 1 | **CI gate and repository settings.** Done (SCRUM-394) | | |
 | 2 | **The pipeline, proven on a canary, then the gateway through it.** Done (SCRUM-394) | | |
-| 3 | **The plugins' environment and the restart limit, one PR and one gateway deploy, its own go.** `spawnPlugin` passes the short list of section 4 and nothing else. The `$NAME` form is removed. The restart limit is made real and `/health` reports each plugin `up` or `down`. No plugin gets an OAuth client credential, before or after | Its tests, with three known-bad cases: a marker in the parent must not reach the child; a row value starting with `$`, and a row with a reserved key, are refused; a plugin that exits at once is restarted three times and then reported `down`. Before the deploy: no production row uses the `$` form. After it: each plugin child's environment holds only the expected **names** (names only, in the private report); `/health` is 200 and reports both plugins `up`. The test run diffs to zero regressions against a baseline taken just before. One live read per plugin | The pipeline's rollback |
+| 3 | **Done (2026-10-09).** **The plugins' environment and the restart limit, one PR and one gateway deploy, its own go.** `spawnPlugin` passes the short list of section 4 and nothing else. The `$NAME` form is removed. The restart limit is made real and `/health` reports each plugin `up` or `down`. No plugin gets an OAuth client credential, before or after | Its tests, with three known-bad cases: a marker in the parent must not reach the child; a row value starting with `$`, and a row with a reserved key, are refused; a plugin that exits at once is restarted three times and then reported `down`. Before the deploy: no production row uses the `$` form. After it: each plugin child's environment holds only the expected **names** (names only, in the private report); `/health` is 200 and reports both plugins `up`. The test run diffs to zero regressions against a baseline taken just before. One live read per plugin | The pipeline's rollback |
 
 Step 3 comes before the import on purpose. It changes how today's plugins are started and
 nothing about where they come from, so if a tool breaks, the cause is the environment and not
@@ -659,9 +679,9 @@ the move.
 
 | # | Step | Verification | Rollback |
 |---|---|---|---|
-| 4 | **Freeze the plugin repos.** Record both `main` tips. Lock `main` on each | A push to `main` is refused | Remove the rule |
-| 5 | **Import PR**, two commits and nothing else (commands below), merged as a merge commit | `git rev-parse HEAD:plugins/<slug>` equals `<tip>^{tree}` in the plugin repo, for both. The old shas resolve. Commit count is the three counts plus two. Leak scan and security gate over the whole range. `git status` clean | Do not merge; after merge, revert the two commits. `plugins/` is inert: not in the workspace, not in any image |
-| 6 | **Port what is kept**: `git format-patch` in the old repo, `git am --directory=plugins/<slug>` here | The ported branch's `plugins/<slug>` tree equals the source branch's tree | Delete the branch |
+| 4 | **Done (2026-10-09).** **Freeze the plugin repos.** Record both `main` tips. Lock `main` on each. Tips: `gws-mcp` `64a9b9d`, `atlassian-mcp` `c3fd27d` | A push to `main` is refused | Remove the rule |
+| 5 | **Done (2026-10-09).** **Import PR**, two commits and nothing else (commands below), merged as a merge commit | `git rev-parse HEAD:plugins/<slug>` equals `<tip>^{tree}` in the plugin repo, for both. The old shas resolve. Commit count is the three counts plus two. Leak scan and security gate over the whole range. `git status` clean | Do not merge; after merge, revert the two commits. `plugins/` is inert: not in the workspace, not in any image |
+| 6 | **Done (2026-10-09): nothing was kept to port** (the branch table below). **Port what is kept**: `git format-patch` in the old repo, `git am --directory=plugins/<slug>` here | The ported branch's `plugins/<slug>` tree equals the source branch's tree | Delete the branch |
 | 7 | **Wiring PR**: workspace glob, package names, `files`, lockfiles, the pins, `turbo.json`, plugin rows in `gate.sh`, the skills, each plugin's `CLAUDE.md`, and the sweep of standalone-server copy. The image does not carry the plugins yet | Frozen install is clean. Test totals per plugin equal the pre-move totals at the same source. Gateway suite, typecheck and build unchanged. The production package list of each plugin equals the one its old lockfile gives. The gateway image builds, and is deployed as an ordinary gateway deploy only when something else needs one | Revert the PR |
 
 **Phase 2: the plugins are loaded from the image.**
@@ -710,12 +730,12 @@ plugins/gws-mcp/src/tools/gmail.ts`, or `git log <old-tip> -- src/tools/gmail.ts
 the plugin skill.
 
 **Branches on the old repos** not merged into `main` as of 2026-10-06, from `git ls-remote`.
-Not re-read for this revision; step 4 reads them again.
+Re-read at step 4 on 2026-10-09: the same four branches were the only ones ahead of `main`, on both repos.
 
 | Repo | Branch | Ruling |
 |---|---|---|
-| `gws-mcp` | `scrum-392-sheets-coercion-sentence` | Keep. Ships before step 4, or ported in step 6 (rehearsed: resulting tree equal to the source) |
-| `gws-mcp` | `feature/chore/gws-cli-0.22.5` | Keep; ported in step 6. Its unpushed local commits are pushed first, or they are not in the port |
+| `gws-mcp` | `scrum-392-sheets-coercion-sentence` | Shipped before step 4; it is in the frozen tip |
+| `gws-mcp` | `feature/chore/gws-cli-0.22.5` | **Dropped at step 6 (ruled 2026-10-09).** Its local commits were pushed to the branch first. It does not apply to the frozen tip without a choice in the CLI download script, its own notes hold it, and step 11 deletes the CLI path it bumps. Readable in the archive |
 | `gws-mcp` | `scrum-278-gmail-signature` | Drop. Readable in the archive |
 | `atlassian-mcp` | `feature/fix/jira-search-response-shape` | Drop. Its fix is already on `main` |
 

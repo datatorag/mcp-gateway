@@ -123,6 +123,18 @@ function toolTuples(): string[] {
 
 describe("oracle: the new client builds the request the pinned CLI builds", () => {
   it("for every method in the table, with and without a body", async () => {
+    // The CLI fetches each service's Discovery document on first use and
+    // caches it. Eight calls at once on a cold cache (every CI run) race on
+    // that file, and one of them reads it half written. So each service is
+    // asked for once, one at a time, before the parallel pass; the result of
+    // these calls is not used, the pass below checks every method again.
+    const seen = new Set<string>();
+    for (const { service, key, entry } of ALL) {
+      if (seen.has(service)) continue;
+      seen.add(service);
+      await cliDryRun(service, key, sampleParams(entry), entry.hasBody ? {} : undefined, false);
+    }
+
     const mismatches: string[] = [];
     let checked = 0;
     const queue = [...ALL];

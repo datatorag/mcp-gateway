@@ -41,7 +41,7 @@ re-reading the source:
 - `site-content` — blog/changelog/docs systems and page conventions.
 - `services-integrations` — Brevo/Slack/Stripe/PostHog/event-pipeline patterns.
 - `ops-debugging` — prod runbook (placeholder form; live values in memory).
-- `gws-mcp-dev` — developing the gws-mcp plugin repo + its ship tail.
+- `gws-mcp-dev`: developing the connector plugins under `plugins/` (gws-mcp, atlassian-mcp) + their ship tail.
 - `product-capture` — Remotion project at `tools/capture` for product screenshots/recordings; imports real gateway components so captures can't drift.
 - `parent-updates` — keeping the `datatorag-hq` parent session current. It cannot see this session, so an update not sent did not happen.
 - `outbound-copy` — anything a person outside the company reads: transactional/lifecycle email, in-product strings, form and error copy. Load it (and `manuel-voice`) before drafting a line.

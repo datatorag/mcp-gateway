@@ -2,7 +2,7 @@
 
 A [Model Context Protocol](https://modelcontextprotocol.io/) server for Jira and Confluence Cloud — search, issues, pages, comments, and attachments.
 
-This server powers the Atlassian connector of [DataToRAG](https://datatorag.com), a hosted MCP gateway with per-user OAuth and Google Workspace tools alongside these — add `https://datatorag.com/mcp` to your MCP client and connect your Atlassian account from the [dashboard](https://datatorag.com/dashboard). Or run it yourself, standalone.
+This server powers the Atlassian connector of [DataToRAG](https://datatorag.com), a hosted MCP gateway with per-user OAuth and Google Workspace tools alongside these: add `https://datatorag.com/mcp` to your MCP client and connect your Atlassian account from the [dashboard](https://datatorag.com/dashboard).
 
 ## Tools
 
@@ -31,33 +31,21 @@ This server powers the Atlassian connector of [DataToRAG](https://datatorag.com)
 
 Each MCP session authenticates with a standard Atlassian OAuth 2.0 (3LO) access token passed in the `X-User-Token` HTTP header when the session is initialized. The server resolves the token's Atlassian cloud ID automatically (via `oauth/token/accessible-resources`) and targets that tenant for all Jira and Confluence calls.
 
-There are no app credentials in this server — obtaining and refreshing user tokens is the caller's job. Under the DataToRAG gateway, that's handled by the gateway's per-user OAuth flow; standalone, you need to supply a valid access token yourself.
+There are no app credentials in this server: obtaining and refreshing user tokens is the caller's job. The DataToRAG gateway does that in its per-user OAuth flow and hands this server only the token.
 
 Scopes required (see `datatorag.json`): `read:jira-work`, `write:jira-work`, `read:jira-user`, `read:confluence-content.all`, `write:confluence-content`, `read:confluence-space.summary`, `offline_access`.
 
-## Running standalone
+## Running it
+
+This is a service plugin of the DataToRAG gateway, not a server to run on its own. The gateway starts it as a child process, sets `PORT`, and sends each user's Atlassian access token in the `X-User-Token` header when it opens a session. For development, from the repository root:
 
 ```bash
 pnpm install
-pnpm run build
-PORT=40001 pnpm run start
+pnpm --filter @datatorag-mcp/atlassian-mcp run build
+pnpm --filter @datatorag-mcp/atlassian-mcp run test
 ```
 
-The server exposes `/mcp` (Streamable HTTP) and `/health` on the configured port. Initialize an MCP session with an `X-User-Token` header carrying the user's Atlassian access token:
-
-```json
-{
-  "mcpServers": {
-    "atlassian": {
-      "type": "streamable-http",
-      "url": "http://localhost:40001/mcp",
-      "headers": {
-        "X-User-Token": "<atlassian-oauth-access-token>"
-      }
-    }
-  }
-}
-```
+The process exposes `/mcp` (Streamable HTTP), `/health` and the private route below on its port.
 
 ## The private file route
 

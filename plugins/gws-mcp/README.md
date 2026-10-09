@@ -2,7 +2,7 @@
 
 A [Model Context Protocol](https://modelcontextprotocol.io/) server that gives Claude access to Google Workspace — Gmail, Calendar, Drive, Contacts, Sheets, Docs, Slides, Tasks, and 100+ APIs via the [gws CLI](https://github.com/googleworkspace/cli).
 
-This server powers the Google Workspace connector of [DataToRAG](https://datatorag.com), a hosted MCP gateway with per-user OAuth, multi-account support, and Atlassian tools alongside these — add `https://datatorag.com/mcp` to your MCP client and skip the setup below. Or run this server yourself, standalone or as a Claude Desktop extension.
+This server powers the Google Workspace connector of [DataToRAG](https://datatorag.com), a hosted MCP gateway with per-user OAuth, multi-account support, and Atlassian tools alongside these: add `https://datatorag.com/mcp` to your MCP client and skip the setup below. The Claude Desktop extension described below is the older way to run it and is being retired.
 
 ## Tools
 
@@ -164,64 +164,23 @@ When the extension loads for the first time, a browser window opens automaticall
 
 > **Note:** If your app is in testing mode (unverified), you'll see a "Google hasn't verified this app" warning. Click **Advanced** → **Go to \<app name\> (unsafe)** to proceed. This is safe for personal use.
 
-## Setup (HTTP Server — Claude Code / standalone)
+## Running under the gateway
 
-### 1. Complete steps 1–5 above
-
-### 2. Install and build
+This is a service plugin of the DataToRAG gateway, not a server to run on its own. The gateway starts `server/index.js` as a child process, sets `PORT`, and sends each user's Google access token in the `X-User-Token` header; every call then goes to the Google REST API directly, and the `gws` CLI is never run. For development, from the repository root:
 
 ```bash
 pnpm install
-pnpm run download-binaries   # the gws CLI: a self-hosted install logs in through it
-pnpm run build
-```
-
-`build` compiles TypeScript only. The `gws` binaries are opt-in: a deployment
-that receives a per-user token from a gateway (the `X-User-Token` header) calls
-the Google APIs directly and never runs the CLI, so it does not need them.
-
-### 3. Authenticate
-
-With the env vars from step 5 set, run:
-
-```bash
-./bin/gws-aarch64-apple-darwin/gws auth login -s drive,gmail,sheets,calendar,docs,slides,people,tasks
-```
-
-### 4. Start the server
-
-```bash
-node server/index.js
-```
-
-The MCP server starts on `http://localhost:39147/mcp` (override with `PORT` env var).
-
-### 5. Connect Claude Code
-
-```bash
-claude mcp add google-workspace --transport http http://localhost:39147/mcp
-```
-
-Or add to Claude Desktop MCP config:
-
-```json
-{
-  "mcpServers": {
-    "google-workspace": {
-      "type": "streamable-http",
-      "url": "http://localhost:39147/mcp"
-    }
-  }
-}
+pnpm --filter @datatorag-mcp/gws-mcp run build
+pnpm --filter @datatorag-mcp/gws-mcp run test   # fetches the one pinned gws binary the oracle test needs
 ```
 
 ## Environment Variables
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `PORT` | `39147` | HTTP server port |
-| `GWS_OAUTH_CLIENT_ID` | — | OAuth client ID |
-| `GWS_OAUTH_CLIENT_SECRET` | — | OAuth client secret |
+| `PORT` | `39147` | HTTP server port (the gateway sets this) |
+| `GWS_OAUTH_CLIENT_ID` | none | OAuth client ID. Extension only; the gateway gives a plugin no client credentials |
+| `GWS_OAUTH_CLIENT_SECRET` | none | OAuth client secret. Extension only |
 
 ## Architecture
 
@@ -274,7 +233,7 @@ The token travels in the `Authorization` header only: never in a URL, a log line
 
 To refresh the method table after Google changes an API: `node scripts/generate-method-table.mjs`, then `pnpm test` (the oracle needs `pnpm run download-binaries`).
 
-The extension (`extension.ts`) runs via stdio for Claude Desktop `.mcpb` bundles. The HTTP server (`index.ts`) runs as a standalone process for Claude Code or other MCP clients. Both share the same `createMcpServer()` factory.
+The extension (`extension.ts`) runs via stdio for Claude Desktop `.mcpb` bundles. The HTTP server (`index.ts`) is what the gateway starts. Both share the same `createMcpServer()` factory.
 
 ### Key implementation details
 

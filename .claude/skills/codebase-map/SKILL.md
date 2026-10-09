@@ -9,7 +9,7 @@ Architecture reference for the datatorag-mcp monorepo. Read this instead of re-e
 
 ## Monorepo layout
 
-pnpm workspace (`pnpm-workspace.yaml`: `apps/*` + `packages/*`), turbo topological builds (`turbo.json`: `build` depends on `^build`). All packages are private ESM built with tsup.
+pnpm workspace (`pnpm-workspace.yaml`: `apps/*` + `packages/*` + `plugins/*`), turbo topological builds (`turbo.json`: `build` depends on `^build`). All packages are private ESM built with tsup.
 
 | Package | Role | Internal deps |
 |---|---|---|
@@ -18,6 +18,7 @@ pnpm workspace (`pnpm-workspace.yaml`: `apps/*` + `packages/*`), turbo topologic
 | `packages/config` | Single zod env schema; `getEnv()` memoized, `process.exit(1)` on invalid. `DATABASE_URL` is the only var without a default | none |
 | `packages/auth` | `hashApiKey`, `safeStringEqual` (constant-time SHA-256 compare), `ApiKeyValidator` (LRU-cached). Consumed only by the OAuth routes | db |
 | `packages/types` | zod status enums + `McpGatewayManifest` (the `datatorag.json` plugin manifest shape) | none |
+| `plugins/gws-mcp`, `plugins/atlassian-mcp` | The two connector plugins, imported with their history (SCRUM-390). Workspace packages built by `tsc` into `server/`; neither imports the gateway nor is imported by it. **Production does not run these copies yet**: until the cutover the gateway still starts the checkouts in the plugins volume. See `gws-mcp-dev` | none |
 
 (`packages/docker-manager` used to exist as dead code from the abandoned container-per-plugin design — it was deleted; see decisions.)
 
