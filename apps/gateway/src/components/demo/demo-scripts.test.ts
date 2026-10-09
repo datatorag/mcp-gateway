@@ -18,7 +18,8 @@ function gws(pin: ToolPin): ToolPin {
 }
 
 /** The real tools' input schemas, pinned by hand from the connector sources
- * (gws-mcp src/tools/{drive,sheets,slides,gmail}.ts). If one of these fails,
+ * (gws-mcp src/tools/{drive,sheets,slides,gmail}.ts, atlassian-mcp
+ * src/tools/jira.ts). If one of these fails,
  * the TOOL changed — update the script (and this pin) to match the tool, never
  * the other way around. */
 const REAL_TOOL_SCHEMAS: Record<string, ToolPin> = {
@@ -52,7 +53,34 @@ const REAL_TOOL_SCHEMAS: Record<string, ToolPin> = {
     allowed: ["to", "subject", "body", "cc", "bcc"],
     write: true,
   }),
+  // The gateway injects `account` here as it does for every service-backed
+  // tool, so the same helper applies to the Atlassian connector.
+  "atlassian-mcp__jira_add_attachment": gws({
+    required: ["issue_key", "file"],
+    allowed: ["issue_key", "file", "filename"],
+    write: true,
+  }),
 };
+
+/** The file reference inside jira_add_attachment, by type: the keys each
+ * kind requires and may carry. A reference names where a file lives; there is
+ * deliberately no key that could hold content, and no `attachment_id`, which
+ * Gmail issues anew on every read. */
+const FILE_REFERENCES: Record<string, { required: string[]; allowed: string[] }> = {
+  gmail_message: {
+    required: ["type", "message_id"],
+    allowed: ["type", "message_id", "account"],
+  },
+  gmail_attachment: {
+    required: ["type", "message_id", "part_id"],
+    allowed: ["type", "message_id", "part_id", "account"],
+  },
+};
+
+/** Scripts that make more than one write, and how many. Every other script
+ * is held to one gate, which is what keeps a second approval from appearing
+ * by accident; a script that really does write twice says so here. */
+const WRITES_PER_SCRIPT: Record<string, number> = { jira: 2 };
 
 function toolBeats(steps: DemoStep[]) {
   return steps.filter(
@@ -110,7 +138,7 @@ describe("demo scripts stay true to the real tools", () => {
     }
   });
 
-  it("every write is gated, every read is not, at most one gate per script", () => {
+  it("every write is gated, every read is not, one gate per write and no more", () => {
     for (const script of DEMO_SCRIPTS) {
       for (const beat of toolBeats(script.steps)) {
         const gated = beat.kind === "approval";
@@ -122,7 +150,52 @@ describe("demo scripts stay true to the real tools", () => {
         ).toBe(REAL_TOOL_SCHEMAS[beat.toolName].write);
       }
       const approvals = script.steps.filter((s) => s.kind === "approval");
-      expect(approvals.length, script.id).toBeLessThanOrEqual(1);
+      expect(approvals.length, script.id).toBeLessThanOrEqual(
+        WRITES_PER_SCRIPT[script.id] ?? 1
+      );
+    }
+  });
+
+  it("jira: two files are two gated calls, each naming the file by reference", () => {
+    const script = DEMO_SCRIPTS.find((s) => s.id === "jira");
+    expect(script).toBeDefined();
+    const beats = toolBeats(script!.steps);
+    expect(beats.map((b) => b.kind)).toEqual(["approval", "approval"]);
+    expect(beats.map((b) => b.toolName)).toEqual([
+      "atlassian-mcp__jira_add_attachment",
+      "atlassian-mcp__jira_add_attachment",
+    ]);
+    const files = beats.map((b) => b.input.file as Record<string, unknown>);
+    expect(files.map((f) => f.type)).toEqual(["gmail_message", "gmail_attachment"]);
+    for (const file of files) {
+      const shape = FILE_REFERENCES[String(file.type)];
+      for (const req of shape.required) expect(Object.keys(file)).toContain(req);
+      for (const key of Object.keys(file)) expect(shape.allowed).toContain(key);
+    }
+    // One email, both times, and the same issue in both calls and both receipts.
+    expect(files[0].message_id).toBe(files[1].message_id);
+    for (const beat of beats) {
+      expect(beat.input.issue_key).toBe("PROJ-123");
+      const receipt = JSON.parse(
+        (beat.output as { content: { text: string }[] }).content[0].text
+      );
+      expect(receipt.issue.key).toBe("PROJ-123");
+      // A receipt says what was sent and that Jira stored the same number of bytes.
+      expect(receipt.sent.bytes).toBe(receipt.attachment.size);
+      expect(receipt.sent.sha256).toMatch(/^[0-9a-f]{64}$/);
+      expect(receipt.source.type).toBe((beat.input.file as { type: string }).type);
+    }
+  });
+
+  it("a second gate has its own denied line, because the first write happened", () => {
+    for (const script of DEMO_SCRIPTS) {
+      const approvals = script.steps.filter((s) => s.kind === "approval");
+      approvals.forEach((beat, i) => {
+        if (beat.kind !== "approval") return;
+        // The script's line says nothing was done. That is only true at the
+        // first gate, so a later gate must say what did happen.
+        expect(Boolean(beat.deniedText), `${script.id} gate ${i + 1}`).toBe(i > 0);
+      });
     }
   });
 

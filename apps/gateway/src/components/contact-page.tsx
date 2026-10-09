@@ -99,7 +99,7 @@ export function ContactPage({ utm }: { utm: Utm }) {
             replacing a talking-head explainer. The windows show the product
             doing the work; the video described it.
 
-            STILL NO COMPOSER LINK inside the windows: four routes out of the
+            STILL NO COMPOSER LINK inside the windows: a route in every row out of the
             page, one per row, is what would actually compete with the form
             this page exists to collect.
 

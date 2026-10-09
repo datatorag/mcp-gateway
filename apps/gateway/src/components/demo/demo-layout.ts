@@ -25,9 +25,10 @@ export interface DemoWindowLayout {
   service: string;
   /** Fixed height of the playback frame (transcript area, header excluded). */
   frame: string;
-  /** Delay before this window's first live run. Staggered so the four
-   * approval gates land at different moments instead of in lockstep; each
-   * window shows its completed end state until its turn. */
+  /** Delay before this window's first live run. Staggered so the approval
+   * gates land at different moments instead of in lockstep; each window shows
+   * its completed end state until its turn. A window shown on its own (a blog
+   * post) overrides this to zero: there is nothing to stagger against. */
   startDelayMs: number;
 }
 
@@ -50,10 +51,16 @@ export const DEMO_WINDOWS: Record<string, DemoWindowLayout> = {
     frame: "h-[380px] sm:h-[292px] lg:h-[308px]",
     startDelayMs: 10_000,
   },
+  jira: {
+    id: "jira",
+    service: "Gmail to Jira",
+    frame: "h-[446px] sm:h-[334px] lg:h-[334px]",
+    startDelayMs: 15_000,
+  },
   accounts: {
     id: "accounts",
     service: "Gmail · two accounts",
     frame: "h-[328px] sm:h-[248px] lg:h-[248px]",
-    startDelayMs: 15_000,
+    startDelayMs: 20_000,
   },
 };

@@ -1,7 +1,7 @@
 /**
  * The demo section's frame copy: heading, standfirst, closing call to action.
  *
- * THE FRAME, NEVER THE ROWS. The four demo rows are claim-checked against a
+ * THE FRAME, NEVER THE ROWS. The demo rows are claim-checked against a
  * first-hand tool-surface audit, their problem/solution pairs are deliberately
  * unparallel, and each names the specific connector that has the limit rather
  * than "Claude" in general. Rewriting one is a different job needing that
