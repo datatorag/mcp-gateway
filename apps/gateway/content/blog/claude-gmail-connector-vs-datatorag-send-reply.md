@@ -1,9 +1,9 @@
 ---
 title: "We Said Claude Couldn't Send Email. It Can Now."
-excerpt: "This post used to argue that Claude's native Gmail connector drafts but never sends. As of August 24, 2026 that is wrong: it sends, replies, and forwards. Here is the corrected comparison, and the one Gmail gap that is still real."
+excerpt: "This post used to argue that Claude's native Gmail connector drafts but never sends. As of August 24, 2026 that is wrong: it sends, replies, and forwards. Here is the corrected comparison, and the two rows that are still ours."
 date: "2026-04-21"
 updated: "2026-10-09"
-updatedNote: "Fourth correction, October 9, in the same direction as the others: the native connector does delete a draft. It has a delete_draft tool, so the 'Delete a draft' row now reads Yes for both and the paragraph that said it had no way to remove one is rewritten. The trash row said Partial for us and now says No: we have no tool that trashes a message. Still standing from the MAJOR CORRECTION of August 24: the central claim of this post is no longer true. Claude's native Gmail connector now exposes send_message (including sending an existing draft), reply with reply-all, and forward. The original title was 'Claude Can Draft Your Email. It Can't Send It.' We have rewritten the post rather than retitling around the edges, because the gap it was built on has closed. Earlier corrections on August 7 and August 11 covered labelling and thread-level filing."
+updatedNote: "Fourth correction, October 9, in the same direction as the others: the native connector does delete a draft. It has a delete_draft tool, so the 'Delete a draft' row now reads Yes for both and the paragraph that said it had no way to remove one is rewritten. The trash row said Partial for us and now says No: we have no tool that trashes a message. The Docs line under 'what is left' said the native connector only reads; it also creates a new doc, and what it cannot do is edit one. Still standing from the MAJOR CORRECTION of August 24: the central claim of this post is no longer true. Claude's native Gmail connector now exposes send_message (including sending an existing draft), reply with reply-all, and forward. The original title was 'Claude Can Draft Your Email. It Can't Send It.' We have rewritten the post rather than retitling around the edges, because the gap it was built on has closed. Earlier corrections on August 7 and August 11 covered labelling and thread-level filing."
 author: "Manuel Yang"
 category: "Comparison"
 coverImage: "/blog/gmail-comparison.png"
@@ -56,9 +56,9 @@ frequently cited limitation of the native connector.
 | Multi-account (work + personal Gmail) | No | Yes |
 
 Both columns are what each connector exposes as tools, enumerated on August 24, 2026. Rows
-move. The date is there so you can tell how stale this table is when you find it, and this
-particular table has now moved twice in a month. The "Delete a draft" row was re-checked on
-October 9, 2026 and moved again: it said No for the native connector until then.
+move. The date is there so you can tell how stale this table is when you find it. It moved
+again on October 9, 2026: the "Delete a draft" row said No for the native connector until
+then.
 
 ## What is left, stated without inflation
 
@@ -85,11 +85,12 @@ first-party, and it now finishes the job.
 ## Where the gap is still wide
 
 Gmail is no longer where we win, and it would be dishonest to keep implying it is. The gap has
-moved to the services the native connectors do not cover at all:
+moved to the services where the native connectors stop short:
 
 - **Sheets.** No native cell-level editing. Ours reads, updates, appends, and manages tabs.
 - **Slides.** Native Drive creates an empty deck. Nothing native writes content onto slides.
-- **Docs.** Native reads. Ours creates, writes, and batch-updates.
+- **Docs.** Native reads a doc and creates a new one, and cannot edit either. Ours creates,
+  writes, and batch-updates.
 - **Contacts and Tasks.** No native connector at all.
 
 If your workflow ends in a spreadsheet or a deck, that is the comparison worth reading, not

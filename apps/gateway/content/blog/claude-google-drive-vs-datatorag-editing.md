@@ -1,6 +1,6 @@
 ---
 title: "Claude Can Read Your Google Docs. It Can't Edit Them."
-excerpt: "Claude's native Google Drive connector reads your files and creates new ones, but it can't change what's already there. DataToRAG lets Claude write Docs, update Sheets, and edit Slides in place."
+excerpt: "Claude's native Google Drive connector reads your files and creates new ones, but it can't change what is inside a file you already have. DataToRAG lets Claude write Docs, update Sheets, and edit Slides in place."
 date: "2026-04-21"
 updated: "2026-10-09"
 updatedNote: "Third correction, October 9. Two things changed in the comparison. We copy files now, so 'Copy an existing file' reads Yes for both. And the native connector can rename a file, move it to another folder or put it in the trash, so 'everything it writes is a new file' was too broad and is narrowed to what still holds: it cannot change what is inside a file you already have. Earlier: a second correction, in the same direction as the first. July 30 fixed an excerpt that called the native connector 'effectively read-only'. Re-enumerating it on August 11 shows two more places this post understated it: creating files needs no code execution, it is a first-class Drive tool that makes Docs, Sheets, presentations and folders, so the folders row that said No for them was wrong, and the table never mentioned copying files or reading sharing permissions, which they do and we do not. The thesis is unchanged and was re-checked: nothing in the native surface edits a file that already exists."

@@ -51,14 +51,14 @@ const HOME_TITLE =
    `lib/tool-count-claims.test.ts` fails if a bare count comes back here.
 
    It is also the one piece of copy with a hard length budget: search results
-   truncate around 160 characters, and this is 149. An earlier version listed
+   truncate around 160 characters, and this is 157. An earlier version listed
    services to avoid naming a number, which was the right instinct in the wrong
    string — the list ran to 226 and cut off "every write asks you first", the
    differentiator the rest of the sentence exists to set up. Keep additions
    inside the budget, and check what falls off the end rather than what reads
    well in the file. */
 const HOME_DESCRIPTION =
-  "Claude's Drive connector reads your files but can't change them. DataToRAG appends rows, sends email and updates tickets. Every write asks you first.";
+  "Claude's Drive connector reads your files but can't edit what's in them. DataToRAG appends rows, sends email and updates tickets. Every write asks you first.";
 
 /* Canonical is self-referencing and absolute, on the non-www origin: Search
    Console was reporting the four origin variants (http/https x www/non-www)
