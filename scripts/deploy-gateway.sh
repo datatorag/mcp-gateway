@@ -6,7 +6,10 @@
 # Usage:
 #   DEPLOY_HOST=ubuntu@<host> DEPLOY_KEY=<path-to-pem> scripts/deploy-gateway.sh <full-sha>
 #
-# Optional: DEPLOY_HEALTH_URL (default https://datatorag.com/health),
+# Optional: DEPLOY_ENV_FILE: the gateway's env file on the host (default
+#             /opt/datatorag-deploy/env/gateway.env, the file the pipeline
+#             path reads too; it is no longer inside the checkout),
+#           DEPLOY_HEALTH_URL (default https://datatorag.com/health),
 #           DEPLOY_KEEP_ROLLBACKS (default 5),
 #           DEPLOY_CACHE_MAX (default 10GB): the build cache kept after a deploy.
 #
@@ -30,6 +33,8 @@ WANT="${1:-}"
 [ -n "${DEPLOY_KEY:-}" ] || { echo "DEPLOY_KEY is not set"; exit 2; }
 HEALTH_URL="${DEPLOY_HEALTH_URL:-https://datatorag.com/health}"
 KEEP="${DEPLOY_KEEP_ROLLBACKS:-5}"
+ENV_FILE="${DEPLOY_ENV_FILE:-/opt/datatorag-deploy/env/gateway.env}"
+[[ "$ENV_FILE" =~ ^/[A-Za-z0-9._/-]+$ ]] || { echo "DEPLOY_ENV_FILE must be an absolute path of plain characters"; exit 2; }
 CACHE_MAX="${DEPLOY_CACHE_MAX:-10GB}"
 [[ "$CACHE_MAX" =~ ^[0-9]+(KB|MB|GB|TB)$ ]] || { echo "DEPLOY_CACHE_MAX must look like 10GB"; exit 2; }
 SSH="ssh -i $DEPLOY_KEY -o StrictHostKeyChecking=accept-new -o ConnectTimeout=20 $DEPLOY_HOST"
@@ -40,6 +45,10 @@ $SSH 'cd ~/datatorag-mcp && git rev-parse HEAD && docker ps --filter name=gatewa
 
 OLD=$($SSH 'cd ~/datatorag-mcp && (cut -c1-7 .deployed-sha 2>/dev/null) || true')
 [ -n "$OLD" ] || OLD=$($SSH 'cd ~/datatorag-mcp && git rev-parse --short HEAD')
+echo "##### the env file is there"
+# Before anything on the host is changed: no tag, no pull.
+$SSH "test -r $ENV_FILE" || { echo "NO READABLE ENV FILE at $ENV_FILE on the host (or the host could not be asked); stopping before anything is changed. Render it first (deploy skill, step 2b)."; exit 1; }
+
 echo "##### rollback tag: rollback-$OLD (from the running sha)"
 $SSH "IMG=\$(docker ps --filter name=gateway --format '{{.Image}}' | head -1); docker tag \"\$IMG\" \"docker-gateway:rollback-$OLD\""
 
@@ -66,7 +75,7 @@ BEFORE_CREATED=$($SSH 'docker ps --filter name=gateway --format "{{.CreatedAt}}"
 # how the rollback tag got named after the wrong commit twice (SCRUM-230).
 # It travels as a build argument because the container has never known which
 # commit it is, and a test run records it (SCRUM-303).
-$SSH "cd ~/datatorag-mcp/docker && GATEWAY_SHA=$WANT docker compose --env-file ../.env -f docker-compose.prod.yml up -d --build gateway > /tmp/deploy-build.log 2>&1; rc=\$?; tail -15 /tmp/deploy-build.log; exit \$rc" \
+$SSH "cd ~/datatorag-mcp/docker && GATEWAY_SHA=$WANT docker compose --env-file $ENV_FILE -f docker-compose.prod.yml up -d --build gateway > /tmp/deploy-build.log 2>&1; rc=\$?; tail -15 /tmp/deploy-build.log; exit \$rc" \
   || { echo "BUILD/UP FAILED; the old container keeps serving; deployed sha NOT recorded. Full log on the host: /tmp/deploy-build.log"; exit 1; }
 AFTER_CREATED=$($SSH 'docker ps --filter name=gateway --format "{{.CreatedAt}}" | head -1')
 $SSH 'docker ps --filter name=gateway --format "{{.Names}} {{.Image}} {{.Status}} created={{.CreatedAt}}"'

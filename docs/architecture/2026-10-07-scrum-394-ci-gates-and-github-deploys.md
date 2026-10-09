@@ -267,9 +267,11 @@ What was built for step 7, and where it departs from the row as first written:
   copy's checksum is not the file on `main`: a value added to the file reaches production
   only when the copy is replaced, and a deploy that skipped that would start the gateway
   without it and without saying so.
-- **The env file stays where it is** for now: the host script points compose at the file the
-  scripted path already keeps, and only checks it is there. Rendering it from the parameter
-  store is still a person's step. Moving it out of the checkout is a later change.
+- **The env file stayed where it was** for the first deploy: the host script pointed compose
+  at the file the scripted path already kept, and only checked it was there. Since then it
+  has its own place beside the pipeline's compose files, outside the checkout, and both
+  deploy paths read it there. Rendering it from the parameter store is still a person's
+  step, with a copy of the render script that needs no checkout.
 - **What is running is asked of the host, not of the record.** The scripted path stays as
   the fallback, so the record of what the pipeline last deployed can be older than what is
   running. Whenever the running container is not on the recorded image (always, before the
@@ -314,9 +316,11 @@ Still unproven on the gateway, and accepted: a rollback through the pipeline (no
 until the second deploy) and a put-back after a failed start. Both were exercised on the
 canary and on a scratch project with real Docker.
 
-Left as it was, on purpose: the host still has its checkout and can still build. A deploy no
-longer needs either. The env file lives in the checkout and the scripted fallback uses it,
-so moving that file and removing the checkout is a later decision, not part of this one.
+Left as it was, on purpose: the host still has its checkout and can still build. A pipeline
+deploy needs neither, and since the env file moved out of the checkout nothing a pipeline
+deploy reads is in it. What still needs the checkout is the scripted fallback, which builds
+from it. Removing the checkout therefore means deciding what the fallback becomes; that is a
+separate decision.
 
 ## 9. Order, and how this meets SCRUM-390
 
