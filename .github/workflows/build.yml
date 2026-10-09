@@ -202,9 +202,11 @@ jobs:
             echo "This run built no image, so there is nothing to ask."
             exit 0
           fi
-          # A commit from before the image carried plugins has none to ask.
-          if ! docker run --rm --entrypoint sh "$ref" -c 'ls /app/plugins/*/server/index.js >/dev/null 2>&1'; then
-            echo "This image carries no plugins, so it has no tool files." | tee -a "$GITHUB_STEP_SUMMARY"
+          # A commit from before the plugins were in this repository has none
+          # to ask. Decided from the commit and not from the image, so a
+          # failure to start the image is never read as "no plugins".
+          if ! git cat-file -e "$BUILD_SHA:plugins" 2>/dev/null; then
+            echo "This commit has no plugins, so its image has no tool files." | tee -a "$GITHUB_STEP_SUMMARY"
             echo "kept=none" >>"$GITHUB_OUTPUT"
             exit 0
           fi

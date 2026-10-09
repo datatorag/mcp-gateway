@@ -102,6 +102,7 @@ test("a malformed tool file is refused", () => {
   assert.throws(() => diffTools(file(tool("a'; DROP")), file(tool("a"))), /not a plain name/);
   assert.throws(() => diffTools(file(tool("a", { description: null })), file(tool("a"))), /no description/);
   assert.throws(() => changeFiles("Bad Slug", A, B, diffTools(file(tool("a")), file(tool("b")))), /not a plugin slug/);
+  assert.throws(() => changeFiles("some-plugin", `${A}\nDROP TABLE tools;`, B, diffTools(file(tool("a")), file(tool("b")))), /full 40-character sha/);
 });
 
 test("nothing a tool file holds can end a SQL string early", () => {
@@ -207,7 +208,7 @@ test("a tool file is taken from a build record on main, and from no other", () =
 
 test("two believed records that disagree are refused; a record with no tool file says why", () => {
   assert.throws(() => chooseToolFile([good(), good({ toolText: forged })], LINE, "p", A), /different tool files/);
-  // The same file with its keys in another order is not a disagreement.
+  // Two records holding the same text agree.
   assert.deepEqual(chooseToolFile([good(), good({ event: "workflow_dispatch" })], LINE, "p", A), file(tool("a")));
   assert.throws(() => chooseToolFile([good({ toolText: null })], LINE, "p", A), /built before tool files were kept/);
 });

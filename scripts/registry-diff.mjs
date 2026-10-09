@@ -206,6 +206,8 @@ function wrap(header, blocks, slug, names, expectedCount) {
 /** forward.sql and rollback.sql for a diff, or null when nothing changes. */
 export function changeFiles(slug, fromSha, toSha, diff) {
   if (!SLUG.test(slug)) throw new Error("not a plugin slug");
+  // Both go into the file's header lines.
+  for (const sha of [fromSha, toSha]) if (!/^[0-9a-f]{40}$/.test(sha)) throw new Error("a commit must be a full 40-character sha");
   const { changed, added, removed, fromCount, toCount } = diff;
   if (changed.length + added.length + removed.length === 0) return null;
   const names = [...changed.map((c) => c.name), ...added.map((t) => t.name), ...removed.map((t) => t.name)].sort();
