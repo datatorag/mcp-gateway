@@ -1,11 +1,12 @@
 # SCRUM-390: the plugins move into the gateway repo
 
-Status: SPEC, revision 6 (2026-10-09). **Ruled on 2026-10-09: the plugins stay inside the
+Status: SPEC, revision 7 (2026-10-09): revision 6 with its six open questions ruled (section
+10 is closed) and step 3 specified in full. **Ruled on 2026-10-09: the plugins stay inside the
 gateway container.** They are built from this repository into the gateway image: one image,
 one deploy, one rollback id. Each plugin process is started with only its own environment
 variables, never the gateway's keys. This reverses the half of revision 3 that made each
 plugin its own container; the pipeline half (SCRUM-394) stands and is built. Nothing in this
-revision has been built: no plugin code has moved and no plugin deploy has changed. Gateway
+spec has been built: no plugin code has moved and no plugin deploy has changed. Gateway
 facts were re-read at `main` `5856c3c`; plugin facts at `gws-mcp` main `27ea0fc` and
 `atlassian-mcp` main `b8b82a0`.
 
@@ -266,24 +267,47 @@ started with only its own variables, never the gateway's keys.
 | `PATH` | To find `node` |
 | `NODE_ENV` | The plugins and their dependencies read it |
 | `PORT` | From the registry row, as today |
-| That plugin's rows in `mcp_server_env_vars` | The existing per-plugin mechanism |
+| That plugin's rows in `mcp_server_env_vars`, as literal values | The existing per-plugin mechanism, without its `$NAME` form (below) |
 | Nothing else | The database URL, the OAuth client secrets, the provider keys and the session material stay in the gateway |
 
-Three things this has to get right:
+Six things this has to get right:
 
-- **The `$NAME` form is now the only door.** A row whose value starts with `$` copies a named
+- **The `$NAME` form is removed. Ruled.** A row whose value starts with `$` copies a named
   variable out of the gateway's environment. That was harmless when the child had everything
-  anyway. After this change it is the one way a gateway key can still reach a plugin, by a
-  database row. Which rows exist in production is read before step 3 and reported privately.
-  Proposed: the `$` form resolves only names on a short allow-list in code, kept beside
-  `PLUGIN_SERVICE_MAP`, empty until a plugin needs one. A row naming anything else is refused
-  with a log line and the plugin starts without it.
-- **`gws-mcp` reads three names besides `PORT`,** all in its CLI client: two for an OAuth client
-  and one for a config directory, used only when it starts the CLI, to which it also hands its
-  whole environment. The
-  gateway's own environment uses different names for its Google client, so unless a registry
-  row maps them, the plugin does not get those today either and nothing changes for it. Step 3
-  verifies that instead of assuming it. Step 11 removes the CLI path.
+  anyway. After scoping it would be the one way a gateway key could still reach a plugin, by a
+  database row. It is deleted, with no allow-list in its place: a row's value is passed as it
+  is written, and a value that starts with `$` is refused with a log line and left out, so an
+  old row cannot turn into a literal by accident. Step 3's precondition is that no row uses
+  the form; that is checked against production before the deploy and reported privately.
+- **No plugin is given an OAuth client id or secret, by a row or by a prefix in the gateway's
+  environment.** Neither needs one. The gateway holds the client credentials for each
+  provider, does the code exchange (`auth.ts`) and every refresh (`service-token.ts`) itself, and hands a
+  plugin only the access token of the user whose call it is serving, in a header on that one
+  call. That is how it works today and step 3 does not change it; it is written down here
+  because scoping the environment is the moment someone would otherwise go looking for where
+  the credentials went. If a future plugin does need a secret of its own, it gets a row with a
+  literal value, which is a deliberate act with a name on it, and never a share of the
+  gateway's.
+- **`gws-mcp` reads three names besides `PORT`,** all in its CLI client: two for an OAuth
+  client and one for a config directory. They are used only when it starts the `gws` CLI, to
+  which it also hands its whole environment. The hosted path never starts the CLI: a call
+  arrives with a user's token and goes to the provider's API directly. The gateway's own
+  environment uses different names for its Google client, so the plugin does not get those
+  two today either, and nothing changes for it. Without a config directory named, it derives
+  one under its user's home and does not create it unless the CLI runs. There is a fourth
+  source for the client pair: a file named `oauth.json` beside the compiled code, which only
+  the desktop bundle's build script writes and which git ignores. It must not be in the
+  image, and step 8 checks that it is not. Step 3's test run verifies the rest instead of
+  assuming it. Step 11 removes the CLI path and the bundle with it.
+- **A row cannot set the names the manager sets, or the ones that change how the child
+  runs.** Row keys are unconstrained today, and a row can even replace `PORT`. With step 3 a
+  row whose key is `PORT`, `PATH`, `NODE_ENV`, `NODE_OPTIONS` or starts with `LD_` is refused
+  the same way as a `$` value. This is tidiness, not a boundary: whoever can write that table
+  can already change what the gateway does.
+- **The dead install path still hands a build the gateway's whole environment.** Nothing calls
+  it (section 2), and after the cutover nothing could use it. "Never the gateway's keys"
+  depends on it staying uncalled until it is removed, which is listed in section 9 as not
+  addressed here.
 - **A known-bad case pins it.** The test sets a marker variable in the parent and fails if the
   child can see it, so restoring the spread turns the test red.
 
@@ -295,7 +319,7 @@ Linux a process can read the environment of another process of the same user fro
 can read whatever files that user can. The gateway runs as root in its container, and so do
 its children today.
 
-**Recommended with it: start each plugin as a non-root user.** The manager passes a user and
+**Ruled in: each plugin runs as a non-root user.** The manager passes a user and
 group id when it starts the child (the Node image ships an unprivileged `node` user). A
 non-root process cannot read a root process's environment or memory, and cannot write the
 gateway's files as long as those stay owned by root. Both plugins have already run as uid 1000
@@ -310,8 +334,8 @@ gateway's files as long as those stay owned by root. Both plugins have already r
 - **Unknown:** whether either plugin writes anywhere at run time other than a temp directory.
   A test run that exercises every tool would show it.
 
-It is one option on the spawn call, but it is a second behaviour change, so it is listed in
-section 10 for a ruling instead of assumed.
+It is one option on the spawn call, but it is a second behaviour change, so it is step 10b: a
+deploy of its own after the cutover, with its own go.
 
 **What neither does.** A plugin child still shares the gateway's network. It can reach the
 gateway on loopback and any address the gateway can. That is today's state, it is our own
@@ -484,16 +508,31 @@ Unchanged from today, and said here so nobody reads more into the move than it g
 | A plugin that keeps crashing | Restarted without end and without a pause: the three-in-sixty-seconds limit in the code is never reached (section 2). Log lines and nothing else |
 | Gateway boot with a plugin directory missing | Skipped with a warning; the gateway serves everything else |
 
+**The restart limit is made real, and a plugin that hits it shows on `/health`. Ruled.**
 Revision 5 ruled a restart-loop alert, designed for containers the gateway could not see. Here
-the gateway can see, because the manager is the code that restarts a plugin. Proposed, as one
-small change: keep the crash count across restarts so the limit the code already intends is
-real (the code's condition allows three restarts and stops at the fourth crash in the window;
-the change says which is meant), and send one message to the existing alerts channel when the manager stops restarting a
-plugin. That is a behaviour change too: today a crashing plugin is retried forever, and after
-it a plugin that keeps crashing inside a minute stays down until the gateway restarts.
-Whether it stays in this work is in section 10. The retry and the worded
-errors of revision 5 are dropped: they covered the seconds a plugin container was being
-replaced on its own, which no longer happens.
+the gateway can see, because the manager is the code that restarts a plugin. With step 3:
+
+- **The limit.** The crash count is kept across restarts, which means fixing both things that
+  lose it today: the entry that holds the count is deleted before the restart, and the new
+  crash time is added to a copy. The rule is the one the code's condition already states:
+  three restarts inside sixty seconds, and the fourth crash in that window is not restarted.
+  The log line that says "three times" is corrected to match.
+- **The behaviour change.** Today a crashing plugin is retried forever. After this, one that
+  keeps crashing inside a minute stays down until the gateway restarts. Its tools stay listed
+  and its calls fail with the raw error, as in the table above.
+- **Where it shows.** `/health` gains one field: each active plugin's slug with `up` or
+  `down`, where `down` means the manager has stopped restarting it. No new alert path: the
+  existing daily check that reads `/health` reads this field too.
+- **The status code does not change.** `/health` answers 200 with `status: ok` whether or not
+  a plugin is down. The container's health check and the deploy's health wait both read only
+  whether the answer is ok. If a down plugin turned that red, a plugin that cannot start would
+  make the gateway itself look dead, and the deploy would put the old image back for a fault
+  that a put-back may not cure. A person reading the field decides.
+- **A known-bad case pins the limit:** a plugin made to exit at once is restarted exactly
+  three times and then reported `down`; with the count lost again, the test does not end.
+
+The retry and the worded errors of revision 5 are dropped: they covered the seconds a plugin
+container was being replaced on its own, which no longer happens.
 
 ### What a plugin change becomes
 
@@ -507,8 +546,8 @@ touched `plugins/` owes the ground-truth check afterwards, from inside the gatew
 where the database and the plugin ports both are: the registry must list exactly the tools each
 plugin now serves. A difference is repaired by a registry write, which is a person's, and rolls
 nothing back. The check compares names; a changed description or schema is what `registry:diff`
-is for. The release job cannot run this check today (it sends the host one request line and
-reads the answer), so where it runs is in section 10.
+is for. The release job cannot run this check (it sends the host one request line and
+reads the answer). Ruled: it runs in the existing post-deploy routine, not in new pipeline code.
 
 **The record.** A deploy row names the surface `gateway`, the sha and the image digest, as
 SCRUM-394 already has it. There is no `plugin:<slug>` surface. A registry change keeps its own
@@ -562,7 +601,7 @@ gateway ship separately. In one image they arrive together.
 | A removed tool | The DELETE, then the deploy | Nothing: the tool stops being listed while it still works |
 | A changed description or schema | The deploy, then the UPDATE | The old text for the new behaviour, for as long as the gap lasts. Same as today |
 
-Two cautions. This is proposed, not exercised. And the gateway has a classification test for a
+Two cautions. The order is ruled as proposed and is first proven at step 11; nothing has exercised it yet. And the gateway has a classification test for a
 new tool that is gated on a live registry and is red until the row exists; with the INSERT now
 after the deploy, what that test should expect in between is settled in the wiring PR (step
 7), not discovered at the first new tool.
@@ -610,7 +649,7 @@ shared-network section in section 4 cites revision 5's numbers and says so.
 |---|---|---|---|
 | 1 | **CI gate and repository settings.** Done (SCRUM-394) | | |
 | 2 | **The pipeline, proven on a canary, then the gateway through it.** Done (SCRUM-394) | | |
-| 3 | **The plugins' environment, its own PR and gateway deploy, its own go.** `spawnPlugin` passes the short list of section 4. With it, if ruled: the `$` allow-list, and the restart limit with its alert | Its tests, with the known-bad case (a marker in the parent must not reach the child). Before the deploy: the production env rows are read. After it: each plugin child's environment holds only the expected **names** (names only, in the private report). The test run diffs to zero regressions against a baseline taken just before. One live read per plugin | The pipeline's rollback |
+| 3 | **The plugins' environment and the restart limit, one PR and one gateway deploy, its own go.** `spawnPlugin` passes the short list of section 4 and nothing else. The `$NAME` form is removed. The restart limit is made real and `/health` reports each plugin `up` or `down`. No plugin gets an OAuth client credential, before or after | Its tests, with three known-bad cases: a marker in the parent must not reach the child; a row value starting with `$`, and a row with a reserved key, are refused; a plugin that exits at once is restarted three times and then reported `down`. Before the deploy: no production row uses the `$` form. After it: each plugin child's environment holds only the expected **names** (names only, in the private report); `/health` is 200 and reports both plugins `up`. The test run diffs to zero regressions against a baseline taken just before. One live read per plugin | The pipeline's rollback |
 
 Step 3 comes before the import on purpose. It changes how today's plugins are started and
 nothing about where they come from, so if a tool breaks, the cause is the environment and not
@@ -629,13 +668,14 @@ the move.
 
 | # | Step | Verification | Rollback |
 |---|---|---|---|
-| 8 | **Image PR, inert.** The `Dockerfile` builds both plugins into `/app/plugins`. CI keeps each plugin's tool file. `registry:diff`. The manager learns `DATATORAG_PLUGINS_DIR` and the commit rule, but the image does **not** set the value, so the gateway still loads from the volume. Deployed through the pipeline | Each tool file equals, tool for tool (name, description, schema, read-only hint), what the plugin repo's own build serves at the frozen tip. Image size and build time recorded against the image before. After the deploy a test run is unchanged and still records both plugin shas from the checkouts | The pipeline's rollback |
+| 8 | **Image PR, inert.** The `Dockerfile` builds both plugins into `/app/plugins`. CI keeps each plugin's tool file. `registry:diff`. The manager learns `DATATORAG_PLUGINS_DIR` and the commit rule, but the image does **not** set the value, so the gateway still loads from the volume. Deployed through the pipeline | Each tool file equals, tool for tool (name, description, schema, read-only hint), what the plugin repo's own build serves at the frozen tip. The image holds no `oauth.json` under either plugin. Image size and build time recorded against the image before. After the deploy a test run is unchanged and still records both plugin shas from the checkouts | The pipeline's rollback |
 | 9 | **Side by side in the running container, its own go.** A host step. Each plugin's copy in the image is started by hand on a spare port, with the scoped environment and no traffic, compared, and stopped | Its tool list equals the **running** plugin's, tool for tool. Its private file route refuses a tokenless call. The spare port does not answer from outside the host (it does answer on the shared network, like the plugins' own ports) | Stop the process. Nothing else was touched |
-| 10 | **Cutover, its own go.** One PR sets `DATATORAG_PLUGINS_DIR` in the `Dockerfile`; that commit is deployed. Both plugins move in this one deploy | Baseline test run before, post run after, zero regressions. Each recorded plugin sha is now the gateway's commit. Each plugin child's working directory is under `/app/plugins`. One Gmail read, one Jira read, and one email filed on a Jira issue end to end. Then the **rollback drill**, if agreed: the pipeline's rollback to the image before, the plugins load from the volume again and the same three calls work, then forward again | The pipeline's rollback. The checkouts are still in the volume |
-| 11 | **First plugin change through the pipeline, its own go: the service-plugin cleanup of `gws-mcp`.** The `.mcpb` bundle, the stdio entry point, the CLI fallback and its download go; the oracle's expected requests become fixtures | `registry:diff` between the two tool files says exactly which tools changed, and if any did, the change file exists before the deploy and is run by a person in the order section 5 gives. The ground-truth check passes | The pipeline's rollback, and the change file's rollback if one ran |
+| 10 | **Cutover, its own go.** One PR sets `DATATORAG_PLUGINS_DIR` in the `Dockerfile`; that commit is deployed. Both plugins move in this one deploy | Baseline test run before, post run after, zero regressions. Each recorded plugin sha is now the gateway's commit. Each plugin child's working directory is under `/app/plugins`. One Gmail read, one Jira read, and one email filed on a Jira issue end to end. Then the **rollback drill** (ruled in, run in a window named when the go is given): the pipeline's rollback to the image before, the plugins load from the volume again and the same three calls work, then forward again | The pipeline's rollback. The checkouts are still in the volume |
+| 10b | **Each plugin as its own non-root user, its own PR, deploy and go.** After the cutover, because until then the plugins load from under root's home | Its test, with a known-bad case (a child started as root fails it). After the deploy: each plugin process runs as its own user and neither is root; a full test run diffs to zero regressions, which is also what shows whether a plugin writes somewhere it now cannot; `/health` reports both `up` | The pipeline's rollback |
+| 11 | **First plugin change through the pipeline, its own go: the service-plugin cleanup of `gws-mcp`.** The `.mcpb` bundle, the stdio entry point, the CLI fallback and its download go; the oracle's expected requests become fixtures | `registry:diff` between the two tool files says exactly which tools changed, and if any did, the change file exists before the deploy and is run by a person in the order section 5 gives, which this step is the first proof of. The ground-truth check passes | The pipeline's rollback, and the change file's rollback if one ran |
 | 12 | **Close out.** Remove the volume from the compose file, which also means replacing the copy on the host (a host step). Old repos: a final README commit naming the new home, open issue transferred, then **archived**. The pins come out later as their own change | Not before the image the pipeline would roll back to also loads from the image; otherwise a rollback lands on a gateway with no plugins. The archived repos refuse a push. A fresh clone builds and tests both plugins. The gateway restarts cleanly with no volume | Unarchive; the volume's data is kept for a stated period before deletion |
 
-**Does each step prove one new thing?** Steps 3 to 9 do. Step 10 does not: at the cutover a
+**Does each step prove one new thing?** Steps 4 to 9 and 10b do. Step 3 carries two changes to how a plugin is started (its environment and the restart limit) in one deploy, by ruling; they are told apart by their separate known-bad tests, and a plugin that never crashes never meets the second. Step 10 does not: at the cutover a
 plugin changes both where it is loaded from (the volume to the image) and what it was built
 from (the plugin repo to this one), and both plugins change at once. The two are separated by
 evidence instead: step 7 holds the dependency list fixed, step 8 holds the served tools equal to
@@ -644,8 +684,8 @@ moves. What is lost against revision 5 is cutting one plugin over before the oth
 cannot do that without a per-plugin switch, and a switch is machinery the ruling set aside.
 
 **What the drill costs.** Every row above that deploys is a gateway restart, a few seconds in
-which calls fail and after which every MCP session starts again. Step 10 is one restart, or
-three with the drill. The drill would also be the first time the gateway's pipeline rollback is
+which calls fail and after which every MCP session starts again. Step 10 is three restarts,
+with the drill. The drill would also be the first time the gateway's pipeline rollback is
 exercised at all, which is its own reason to do it.
 
 **The freeze window.** From step 4 to step 10, a plugin change cannot ship the ordinary way:
@@ -699,7 +739,7 @@ and spawned by the gateway as now.
 |---|---|---|
 | The plugins in the image differ from what runs because dependencies re-resolved | Seen in rehearsal (four packages) | The pins; steps 7, 8 and 9 compare before any call moves |
 | A plugin needs something from the environment that the short list leaves out | Possible; one plugin reads three more names on a path meant to go | Step 3 is alone, before the move, with a full test run and the pipeline's rollback |
-| A plugin writes somewhere a non-root user cannot | Unknown: idle only was rehearsed | The non-root user is a separate ruling and a deploy of its own after the cutover, with a full test run, so it can come out alone |
+| A plugin writes somewhere a non-root user cannot | Unknown: idle only was rehearsed | Step 10b is a deploy of its own after the cutover, with a full test run, so it can come out alone |
 | Scoping the environment is read as isolation | Likely, from the name | Section 4 says where it stops. A taken-over plugin in the gateway's container is contained by the user it runs as, not by its environment |
 | A bad plugin change takes the gateway down with it | Possible, and new in kind: today a broken plugin build leaves the gateway image alone | The gateway starts without a plugin that will not start; the health wait and put-back in the host script; the pipeline's rollback |
 | Every plugin change drops every session | Certain | Same as today. Accepted by the ruling |
@@ -707,7 +747,8 @@ and spawned by the gateway as now.
 | A rollback lands on an image that expects the volume after the volume is gone | Would be an outage of every plugin | Step 12's condition: not before the image the pipeline would roll back to loads from the image |
 | The new order of a tool change leaves a tool listed but not served | Possible if a removal is deployed before its DELETE | Section 5's order; `registry:diff` names every tool that differs before the deploy; the ground-truth check after it |
 | Step 11 removes a tool without anyone noticing | Possible: one tool exists only for the standalone login | Same two checks |
-| A plugin crash-loops unnoticed | Possible, and true today: it is restarted without end | The restart limit and its alert, if ruled in |
+| A plugin crash-loops unnoticed | Possible, and true today: it is restarted without end | Step 3: the limit, and `down` on `/health`. Seen when the daily check next runs, not at once; that delay is accepted with the ruling against a new alert path |
+| A plugin that is down goes unseen because `/health` still says ok | Possible: anything that reads only the status code sees nothing | On purpose (section 4). The check that matters reads the field |
 | The freeze window stretches | Likely if steps 8 and 9 surprise | The emergency path; phase 0 is done before the freeze |
 | A cached turbo build leaves `server/` stale | Certain without the `outputs` line | Section 3; the image build runs from a clean tree with no turbo cache |
 | Someone commits to an old repo after the import | Likely over weeks | Branch rule at step 4, archive at step 12 |
@@ -717,11 +758,11 @@ Not addressed, on purpose: the names-only blind spot of the in-repo ground-truth
 the dead install and uninstall paths from `plugin-manager`; a plugin's reach over the gateway's
 network (the section on the shared network is the record).
 
-## 10. Rulings, and what is still open
+## 10. Rulings, and the goes still needed
 
 Ruled: **the plugins stay inside the gateway container, built into its image, with one rollback
 id (2026-10-09, reversing the container half of 2026-10-07)**; each plugin process is started
-with only its own environment; the shared-network question is ruled A (2026-10-09); SCRUM-393
+with only its own environment, and gets no OAuth client credential; the shared-network question is ruled A (2026-10-09); SCRUM-393
 stays absorbed; connectors are service plugins, with the four consequences listed at the top;
 the import, port and wiring as specified; the dependency pins for the first image that carries
 the plugins; one README per plugin read at build time; `registry:diff` reading CI's tool files
@@ -730,24 +771,28 @@ only; the branch rulings in section 7.
 Carried by the ruling and no longer in this work: per-plugin images and compose services, the
 URL override, the retry and worded errors, per-plugin memory limits, separate cutovers.
 
-Open, each with the recommendation made above:
+**Ruled on 2026-10-09, closing the six questions revision 6 left open:**
 
-1. **A non-root user for each plugin process** (section 4). Recommended in, as its own deploy
-   after the cutover. It is what makes "never the gateway's keys" hold, for the gateway's
-   environment and memory, against a plugin that has been taken over and not only against an
-   accident. It changes nothing about what a plugin can reach on the network or read from
-   world-readable files in the image.
-2. **The `$NAME` rows** (section 4). Recommended: an allow-list in code, empty to start, after
-   the production rows have been read.
-3. **The restart limit and its alert** (section 4). An alert was ruled in revision 5 in a form
-   built for containers. The limit it would hang on does not work today. Recommended: make
-   the limit real and alert when it is reached, with step 3.
-4. **Where the ground-truth check runs after a deploy that touched `plugins/`** (section 4).
-   Recommended: the existing post-deploy routine, not new pipeline code.
-5. **The rollback drill at step 10.** Recommended: do it. Two more restarts, and the first
-   proof of the gateway's rollback.
-6. **The order of a tool change** (section 5), which the ruling changes without having asked
-   to.
+1. **A non-root user for each plugin process: in,** as its own deploy after the cutover (step
+   10b), one user per plugin. It is what makes "never the gateway's keys" hold, for the
+   gateway's environment and memory, against a plugin that has been taken over and not only
+   against an accident. It changes nothing about what a plugin can reach on the network or
+   read from world-readable files in the image.
+2. **The `$NAME` rows: the feature is deleted,** with no allow-list (section 4, step 3).
+3. **The restart limit: made real,** and a plugin that hits it shows as `down` on `/health`.
+   No new alert path (section 4, step 3).
+4. **The ground-truth check after a deploy that touched `plugins/`:** the existing post-deploy
+   routine.
+5. **The rollback drill at the cutover: yes,** in a window named when the go is given.
+6. **The order of a tool change: as proposed** in section 5, proven at step 11.
 
-And a separate go for each of steps 3, 9, 10 and 11, for the host half of step 12, and for the
-non-root deploy if it is ruled in.
+Accepted with no action: both plugins cut over in one deploy; and a plugin process, which is
+our own code, can reach the gateway over loopback and send the edge's header (the
+shared-network section).
+
+Answered in this revision, because step 3 needed it: where a plugin gets an OAuth client id and
+secret once its environment is scoped. It gets none, and never did (section 4).
+
+Nothing in this spec is open for a ruling. What remains is permission to act.
+
+A separate go for each of steps 3, 9, 10, 10b and 11, and for the host half of step 12.
