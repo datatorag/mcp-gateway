@@ -50,6 +50,12 @@ on:
       - apps/gateway/Dockerfile
       - docker/canary/**
       - .dockerignore
+      # The plugins ship inside the gateway's image, and the lockfile and
+      # workspace decide what its install resolves.
+      - plugins/**
+      - pnpm-lock.yaml
+      - pnpm-workspace.yaml
+      - package.json
   workflow_dispatch:
     inputs:
       surface:

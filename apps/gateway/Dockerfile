@@ -33,6 +33,12 @@ COPY packages/types/package.json packages/types/
 COPY packages/db/package.json packages/db/
 COPY packages/auth/package.json packages/auth/
 COPY apps/gateway/package.json apps/gateway/
+# The plugins are workspace members, so the frozen install needs their
+# manifests to match the lockfile. Only the manifests: the image does not
+# carry the plugins' code yet, and the gateway still loads them from the
+# plugins volume.
+COPY plugins/gws-mcp/package.json plugins/gws-mcp/
+COPY plugins/atlassian-mcp/package.json plugins/atlassian-mcp/
 
 
 FROM base AS build

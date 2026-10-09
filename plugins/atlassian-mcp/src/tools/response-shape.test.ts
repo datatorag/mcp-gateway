@@ -189,7 +189,7 @@ describe("jira_search rows are resolvable on their own", () => {
     expect(out.isLast).toBe(false);
   });
 
-  /** l-066: a guard that only ever sees good input can start passing by
+  /** A guard that only ever sees good input can start passing by
    * failing to look. Feed rowsMissingIdentity the REAL broken payload and
    * confirm it still calls it broken. If this ever goes green-by-silence,
    * the assertions above are decorative. */
@@ -309,7 +309,7 @@ describe("confluence_search rows carry a resolvable link", () => {
     expect(out[0].link).toBe("https://example.atlassian.net/wiki/spaces/DOCS/pages/9/T");
   });
 
-  /** l-066 self-check: a result with neither url nor content webui still
+  /** Self-check: a result with neither url nor content webui still
    * yields null. This is the exact symptom that shipped, and asserting it
    * here means the two tests above cannot pass by accident on any input. */
   it("still yields null when the response carries no link at all", async () => {

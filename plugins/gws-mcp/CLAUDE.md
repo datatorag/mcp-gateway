@@ -9,7 +9,7 @@ Google Workspace MCP extension for Claude. Calls the Google REST APIs directly (
 - `pnpm run build` — compile TypeScript (src/ → server/)
 - `pnpm run dev` — watch mode
 - `pnpm run build:extension` — compile + pack into `google-workspace-mcp.mcpb`
-- `pnpm run download-binaries` — fetch gws binaries into bin/ (opt-in: needed for self-hosted login, the no-token fallback, and the oracle test; `build` no longer runs it)
+- `pnpm run download-binaries`: fetch every gws binary into bin/, each checked against a pinned sha256 (needed for the desktop bundle and the no-token fallback; `build` does not run it). `pnpm test` fetches only this machine's binary, for the oracle test
 - `node scripts/generate-method-table.mjs` — regenerate `src/google-api/method-table.ts` from Google's Discovery documents
 
 ## Architecture
@@ -17,7 +17,7 @@ Google Workspace MCP extension for Claude. Calls the Google REST APIs directly (
 Two entry points sharing `createMcpServer()` from `create-server.ts`:
 
 - `extension.ts` — stdio transport for `.mcpb` (Claude Desktop). Auto-triggers browser OAuth login on first run.
-- `index.ts` — HTTP transport on port 39147 for Claude Code / standalone use.
+- `index.ts`: HTTP transport; what the gateway starts, on the port it sets.
 
 `gws-client.ts` is the client every tool calls. With a bearer token (every hosted call) `api()` is a `fetch` built from the generated method table in `src/google-api/`; it never spawns a process and never loads the CLI. With no token it falls back to `cli-transport.ts`, which wraps the `gws` binary (Rust, in `bin/`) and also owns the login flow. `src/google-api/oracle.test.ts` holds the request builder equal to the pinned CLI's `--dry-run` for every method; it fails, not skips, when the binary is missing. The token goes in the `Authorization` header only. OAuth client ID and secret are read from `GWS_OAUTH_CLIENT_ID` / `GWS_OAUTH_CLIENT_SECRET` env vars and passed to the binary on the fallback path.
 
@@ -62,14 +62,22 @@ document", not "Write document content"; "Run any Google Workspace API call
 - Binaries for macOS (arm64, x64) and Windows (x64) are bundled in `bin/`
 - Pack with `mcpb pack . google-workspace-mcp.mcpb`
 
-## Cross-repo guidance
+## Where this lives
 
-DataToRAG development runs from the datatorag-mcp session; the canonical
-skills and workflow guidance (including the design-time "Quality pass"
-checklist) live in that repo's `.claude/skills/` —
-<https://github.com/datatorag/mcp-gateway>, start with `codebase-map`.
-Keep only repo-specific facts in this file; don't duplicate cross-repo
-guidance here, it drifts.
+This plugin is a workspace package (`@datatorag-mcp/gws-mcp`) of the
+datatorag-mcp repository, at `plugins/gws-mcp`. It was imported from its own
+repository with its history; that repository is frozen. Run its scripts
+from the repository root: `pnpm --filter @datatorag-mcp/gws-mcp run build`
+and `... run test`. There is one lockfile, at the root.
+
+It is a service plugin of the gateway, not a standalone server: the gateway
+starts it, sets `PORT`, and sends one user's access token per session in
+`X-User-Token`. Its environment holds `PATH`, `NODE_ENV` and `PORT` and
+nothing else.
+
+The skills and workflow guidance are in the root `.claude/skills/`: start
+with `codebase-map`, then `gws-mcp-dev` for plugin work. Keep only facts
+about this plugin in this file.
 
 ## Auth flow
 
