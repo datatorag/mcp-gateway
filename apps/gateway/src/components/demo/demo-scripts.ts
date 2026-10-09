@@ -2,7 +2,7 @@
  *
  * Every tool name, argument shape and result payload here mirrors what the
  * real tools accept and return (gws-mcp `drive.ts`/`sheets.ts`/`slides.ts`/
- * `gmail.ts`), including the `<slug>__<tool>` namespacing the gateway serves,
+ * `gmail.ts`, atlassian-mcp `jira.ts`), including the `<slug>__<tool>` namespacing the gateway serves,
  * the optional `account` argument the gateway injects into every
  * service-backed tool's schema, and the `{ content: [{ type: "text", text }] }`
  * result envelope — so the presentation layer renders them exactly as it
@@ -46,6 +46,11 @@ export interface DemoApprovalBeat extends Omit<DemoToolBeat, "kind"> {
   kind: "approval";
   /** Auto-approve after this long if the viewer doesn't decide. */
   approvalDwellMs: number;
+  /** What the assistant says if THIS gate is denied, when the script's own
+   * denied line would be false here. A script with two writes needs it on the
+   * second: by then the first has happened, and "nothing was done" is no
+   * longer true. Absent, the script's line is used. */
+  deniedText?: string;
 }
 
 export type DemoStep =
@@ -303,5 +308,94 @@ const accounts: DemoScript = {
   ],
 };
 
+// Shaped like a Gmail message id, with "demo" embedded. Invented.
+const QUOTE_MESSAGE = "198demo5e2b9c4d";
+
+/** The issue half of a jira_add_attachment receipt. The same issue both
+ * times, which is the point of a receipt: it says where the file went. */
+const JIRA_ISSUE = {
+  issue: {
+    key: "PROJ-123",
+    summary: "Renew the Northwind contract",
+    project: { key: "PROJ", name: "Project" },
+  },
+  site: { name: "example", url: "https://example.atlassian.net" },
+};
+
+/** One request, two files, TWO GATES. Every other script has at most one
+ * approval because it makes at most one write; this one makes two, and the
+ * real agent asks before each. Showing the second call running ungated would
+ * be the demo making a promise the product does not: that approving one
+ * upload approves the next.
+ *
+ * The file argument is a REFERENCE, never content: the message id, and for
+ * the attachment the part id `gmail_read` lists. That is why the arguments
+ * are small enough for a narrow cell, and it is also the thing being shown.
+ * The `.eml` is named the way the connector names it (subject, date, message
+ * id); the attachment keeps the sender's own file name. */
+const jira: DemoScript = {
+  id: "jira",
+  deniedText: "Cancelled. Nothing was attached.",
+  steps: [
+    {
+      kind: "user",
+      text: "File this email and its PDF on PROJ-123.",
+    },
+    {
+      kind: "approval",
+      toolName: "atlassian-mcp__jira_add_attachment",
+      input: {
+        issue_key: "PROJ-123",
+        file: { type: "gmail_message", message_id: QUOTE_MESSAGE },
+      },
+      output: envelope({
+        attachment: {
+          id: "10412",
+          filename: `Northwind quote 2026-10-06 ${QUOTE_MESSAGE}.eml`,
+          size: 254871,
+          mime_type: "message/rfc822",
+          created: "2026-10-06T10:02:11.214-0700",
+        },
+        sent: {
+          bytes: 254871,
+          sha256: "5b1e7d0c9a4f3e2867d1c0b9a8f7e6d5c4b3a291807f6e5d4c3b2a1908f7e6d5",
+        },
+        ...JIRA_ISSUE,
+        source: { type: "gmail_message" },
+      }),
+      approvalDwellMs: 3000,
+    },
+    {
+      kind: "approval",
+      toolName: "atlassian-mcp__jira_add_attachment",
+      input: {
+        issue_key: "PROJ-123",
+        file: { type: "gmail_attachment", message_id: QUOTE_MESSAGE, part_id: "1" },
+      },
+      output: envelope({
+        attachment: {
+          id: "10413",
+          filename: "quote.pdf",
+          size: 184320,
+          mime_type: "application/pdf",
+          created: "2026-10-06T10:02:19.870-0700",
+        },
+        sent: {
+          bytes: 184320,
+          sha256: "c7a40e9b1d6f2385a0c4e7b9d1f3a5c7e9b0d2f4a6c8e0b1d3f5a7c9e1b3d5f7",
+        },
+        ...JIRA_ISSUE,
+        source: { type: "gmail_attachment" },
+      }),
+      approvalDwellMs: 3000,
+      deniedText: "Stopped there. The email is on PROJ-123, the PDF is not.",
+    },
+    {
+      kind: "assistant",
+      text: "Both on PROJ-123: the email as .eml and quote.pdf.",
+    },
+  ],
+};
+
 /** The demo grid renders all of these at once: breadth is shown, not claimed. */
-export const DEMO_SCRIPTS: DemoScript[] = [sheets, slides, gmail, accounts];
+export const DEMO_SCRIPTS: DemoScript[] = [sheets, slides, gmail, jira, accounts];
