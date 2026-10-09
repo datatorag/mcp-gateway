@@ -66,6 +66,57 @@ describe("script player state machine", () => {
     ).toBe(script.deniedText);
   });
 
+  it("a script with two writes holds at each gate, and each denial says what is true", () => {
+    const jira = DEMO_SCRIPTS.find((s) => s.id === "jira")!;
+    const run = (state: PlayerState): PlayerState => {
+      for (let i = 0; i < 1000; i++) {
+        const pending = advance(jira, state);
+        if (!pending) return state;
+        state = pending.next;
+      }
+      throw new Error("player did not settle in 1000 transitions");
+    };
+    const lastText = (state: PlayerState) => {
+      const texts = buildMessages(jira, state)
+        .flatMap((m) => m.parts)
+        .filter((p): p is { type: "text"; text: string } => p.type === "text");
+      return texts.at(-1)?.text;
+    };
+    const states = (state: PlayerState) =>
+      buildMessages(jira, state)
+        .flatMap((m) => m.parts)
+        .flatMap((p) => ("state" in p ? [p.state] : []));
+
+    const firstGate = run(initialState());
+    expect(firstGate.phase).toBe("awaiting-approval");
+    expect(states(firstGate)).toEqual(["approval-requested"]);
+
+    // Denied at the first gate: nothing was attached, and the script says so.
+    const deniedFirst = run(decide(firstGate, false));
+    expect(deniedFirst.phase).toBe("done");
+    expect(states(deniedFirst)).toEqual(["output-denied"]);
+    expect(lastText(deniedFirst)).toBe(jira.deniedText);
+
+    // Approved: the second write does NOT run on the first approval.
+    const secondGate = run(decide(firstGate, true));
+    expect(secondGate.phase).toBe("awaiting-approval");
+    expect(secondGate.cursor).toBeGreaterThan(firstGate.cursor);
+    expect(states(secondGate)).toEqual(["output-available", "approval-requested"]);
+
+    // Denied at the second gate: the first file is on the issue, and the line
+    // shown is the beat's own rather than the script's "nothing was attached".
+    const deniedSecond = run(decide(secondGate, false));
+    expect(deniedSecond.phase).toBe("done");
+    expect(states(deniedSecond)).toEqual(["output-available", "output-denied"]);
+    expect(lastText(deniedSecond)).not.toBe(jira.deniedText);
+    expect(lastText(deniedSecond)).toContain("the PDF is not");
+
+    const finished = run(decide(secondGate, true));
+    expect(finished.phase).toBe("done");
+    expect(states(finished)).toEqual(["output-available", "output-available"]);
+    expect(lastText(finished)).toContain("Both on PROJ-123");
+  });
+
   it("decide is a no-op unless an approval is pending", () => {
     const fresh = initialState();
     expect(decide(fresh, true)).toBe(fresh);

@@ -244,8 +244,12 @@ export function buildMessages(
     } else if (state.approval === "denied") {
       pushAssistantPart(toolPart(step, i, "denied"));
       // Only gated scripts reach this branch, and only those carry a denied
-      // line — see DemoScript.deniedText.
-      pushAssistantPart({ type: "text", text: script.deniedText ?? "" });
+      // line (see DemoScript.deniedText). A beat's own line wins: on a second
+      // gate the script's "nothing happened" would be false.
+      pushAssistantPart({
+        type: "text",
+        text: step.deniedText ?? script.deniedText ?? "",
+      });
     } else if (state.approval === "pending") {
       pushAssistantPart(toolPart(step, i, "approval-pending"));
     } else {
