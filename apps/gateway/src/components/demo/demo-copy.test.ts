@@ -3,13 +3,20 @@ import { FREE_MONTHLY_AGENT_RUNS } from "@/gateway/billing/plans";
 import { DEMO_DISCLOSURE } from "./demo-bento";
 import {
   DEMO_CTA_ACTION,
+  DEMO_CTA_ALTERNATIVE,
   DEMO_CTA_SUPPORT,
   DEMO_HEADING,
   DEMO_STANDFIRST,
   expectedRunWord,
 } from "./demo-copy";
 
-const ALL = [DEMO_HEADING, ...DEMO_STANDFIRST, DEMO_CTA_ACTION, DEMO_CTA_SUPPORT];
+const ALL = [
+  DEMO_HEADING,
+  ...DEMO_STANDFIRST,
+  DEMO_CTA_ACTION,
+  DEMO_CTA_SUPPORT,
+  DEMO_CTA_ALTERNATIVE,
+];
 
 describe("demo section copy", () => {
   it("promises the allowance the code actually grants", () => {
@@ -40,6 +47,15 @@ describe("demo section copy", () => {
       // hyphen does not satisfy.
       expect(DEMO_CTA_SUPPORT).not.toMatch(new RegExp(`\\b${w}\\b(?!-)`));
     }
+  });
+
+  it("has one line under the heading, and still says the other route exists", () => {
+    // Three stacked paragraphs under the heading was the defect (SCRUM-400).
+    // One stays there; the sentence about working in your own client moved
+    // to the close, and it must not quietly disappear on the way.
+    expect(DEMO_STANDFIRST).toHaveLength(1);
+    expect(DEMO_CTA_ALTERNATIVE).toContain("Claude or ChatGPT");
+    expect(DEMO_CTA_ALTERNATIVE).toContain("Same tools either way.");
   });
 
   it("does not offer bring-your-own-key", () => {

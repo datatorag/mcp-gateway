@@ -35,8 +35,13 @@ if (typeof Element !== "undefined" && !("getAnimations" in Element.prototype)) {
 }
 
 const { DemoBento, DEMO_DISCLOSURE } = await import("./demo-bento");
-const { DEMO_CTA_ACTION, DEMO_CTA_SUPPORT, DEMO_HEADING, DEMO_STANDFIRST } =
-  await import("./demo-copy");
+const {
+  DEMO_CTA_ACTION,
+  DEMO_CTA_ALTERNATIVE,
+  DEMO_CTA_SUPPORT,
+  DEMO_HEADING,
+  DEMO_STANDFIRST,
+} = await import("./demo-copy");
 
 let container: HTMLDivElement;
 let root: Root;
@@ -142,6 +147,45 @@ describe("the demo disclosure reaches the DOM", () => {
     expect(text).toContain(
       "DataToRAG puts the email and its PDF on the issue, once you approve."
     );
+  });
+
+  it("captions every window with the disclosure, and keeps it out of the header", () => {
+    // The disclosure used to be one paragraph under the heading. It is now a
+    // caption under each window (SCRUM-400), so the count is the guard: a row
+    // that lost its caption would still leave the sentence on the page four
+    // times, and a "contains" check would pass.
+    render(<DemoBento heading={DEMO_HEADING} standfirst={DEMO_STANDFIRST} />);
+    const windows = container.querySelectorAll(".uppercase");
+    const captions = [...container.querySelectorAll("[data-demo-disclosure]")];
+    expect(windows.length).toBe(5);
+    expect(captions).toHaveLength(windows.length);
+    for (const caption of captions) {
+      expect(caption.textContent).toBe(DEMO_DISCLOSURE);
+      // Each caption sits in the same column as a window, directly after it.
+      expect(caption.previousElementSibling?.querySelector(".uppercase")).not.toBeNull();
+    }
+    const header = container.querySelector("h2")!.parentElement!;
+    expect(header.textContent).not.toContain(DEMO_DISCLOSURE);
+    // One line under the heading, not three.
+    expect(header.querySelectorAll("p")).toHaveLength(DEMO_STANDFIRST.length);
+    expect(DEMO_STANDFIRST).toHaveLength(1);
+  });
+
+  it("says the other route exists beside the CTA, and only when there is a CTA", () => {
+    const withCta = render(
+      <DemoBento ctaHref="/dashboard" heading={DEMO_HEADING} standfirst={DEMO_STANDFIRST} />
+    );
+    expect(withCta).toContain(DEMO_CTA_ALTERNATIVE);
+    expect(withCta.indexOf(DEMO_CTA_ACTION)).toBeLessThan(
+      withCta.indexOf(DEMO_CTA_ALTERNATIVE)
+    );
+    act(() => root.unmount());
+    container.remove();
+    container = document.createElement("div");
+    document.body.appendChild(container);
+    root = createRoot(container);
+    const without = render(<DemoBento heading={DEMO_HEADING} standfirst={DEMO_STANDFIRST} />);
+    expect(without).not.toContain(DEMO_CTA_ALTERNATIVE);
   });
 
   it("renders even when a caller passes an empty standfirst", () => {

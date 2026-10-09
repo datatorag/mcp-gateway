@@ -2,7 +2,8 @@
  * the real playground presentation components, each paired with the gap it
  * closes. Entirely client-side — no MCP calls, no API routes, no LLM.
  *
- * The heading is the caller's, the DISCLOSURE IS NOT. The windows replay
+ * The heading is the caller's, the DISCLOSURE IS NOT (it is a caption under
+ * every window, rendered here). The windows replay
  * scripts against sample data, so any surface showing them without saying so
  * is presenting a recording as a live session. It used to live in the home
  * page's subhead with a comment in demo-section warning that it had to travel
@@ -28,15 +29,25 @@
 import Link from "next/link";
 import { CircleCheckIcon, CircleMinusIcon } from "lucide-react";
 import { DemoWindow } from "./demo-section";
-import { DEMO_CTA_ACTION, DEMO_CTA_SUPPORT } from "./demo-copy";
+import {
+  DEMO_CTA_ACTION,
+  DEMO_CTA_ALTERNATIVE,
+  DEMO_CTA_SUPPORT,
+} from "./demo-copy";
 
 /** ONE WORD CHANGED FROM THE ORIGINAL, AND ONLY ONE: "playground UI" became
  * "Agent UI", because the surface it named was renamed. Everything else is
  * untouched on purpose. The sentence is what stops a scripted replay reading
  * as a live session, and it lives here rather than in a caller's subhead
  * because a comment asking callers to carry it was, once, the only thing
- * standing between us and shipping without it. Do not move it, do not shorten
- * it, and do not let a rename become a rewrite. */
+ * standing between us and shipping without it. Do not shorten it, and do not
+ * let a rename become a rewrite.
+ *
+ * WHERE IT RENDERS changed once, on request (Manuel, 2026-10-09, SCRUM-400):
+ * from a paragraph under the heading to a caption under each window, which is
+ * where a blog post's embedded window already carried it. The words did not
+ * change and neither did the rule: this component renders it, for every
+ * window, with no prop that turns it off. */
 export const DEMO_DISCLOSURE =
   "A scripted replay with sample data. This is the real Agent UI, approval gate included.";
 
@@ -149,13 +160,13 @@ export function DemoBento({
   ctaHref,
 }: {
   heading: string;
-  /** Optional lines between the heading and the disclosure.
+  /** Optional lines under the heading.
    *
-   * ABOVE THE DISCLOSURE, NEVER INSTEAD OF IT. The disclosure is rendered
-   * unconditionally below whatever goes here, so adding section copy can never
-   * displace it — which is the failure this component was restructured to make
-   * impossible. Optional because the lead page wants the windows without the
-   * home page's pitch. */
+   * NEVER INSTEAD OF THE DISCLOSURE. The disclosure is rendered
+   * unconditionally under every window whatever goes here, so adding section
+   * copy can never displace it, which is the failure this component was
+   * restructured to make impossible. Optional because a caller may want the
+   * windows without the pitch. */
   standfirst?: string[];
   /** Composer-shaped link target. Omit both and the windows render with no
    * composer at all — the lead page does exactly that, because a second route
@@ -168,20 +179,19 @@ export function DemoBento({
   return (
     <>
       <div className="animate-fade-in-up text-center">
-        <h2 className="font-display text-2xl font-bold text-foreground sm:text-3xl">
+        <h2 className="text-balance font-display text-2xl font-bold text-foreground sm:text-3xl">
           {heading}
         </h2>
         {standfirst?.map((line) => (
+          // `text-balance` evens the lines out, so a narrow column cannot
+          // leave "and ask." alone on the second one.
           <p
-            className="mx-auto mt-3 max-w-xl text-base text-muted-foreground"
+            className="mx-auto mt-3 max-w-xl text-balance text-base text-muted-foreground sm:text-lg"
             key={line}
           >
             {line}
           </p>
         ))}
-        <p className="mx-auto mt-3 max-w-md text-sm text-muted-foreground">
-          {DEMO_DISCLOSURE}
-        </p>
       </div>
 
       <div
@@ -239,6 +249,13 @@ export function DemoBento({
                   promptHref={promptHref}
                   promptLabel={promptLabel}
                 />
+                {/* Unconditional, one per window. See DEMO_DISCLOSURE. */}
+                <p
+                  className="mt-2.5 text-balance text-center text-xs text-muted-foreground"
+                  data-demo-disclosure=""
+                >
+                  {DEMO_DISCLOSURE}
+                </p>
               </div>
             </div>
           );
@@ -260,6 +277,9 @@ export function DemoBento({
             {DEMO_CTA_ACTION}
           </Link>
           <p className="mt-2 text-sm text-muted-foreground">{DEMO_CTA_SUPPORT}</p>
+          <p className="mx-auto mt-4 max-w-md text-balance text-sm text-muted-foreground">
+            {DEMO_CTA_ALTERNATIVE}
+          </p>
         </div>
       )}
     </>
