@@ -1,4 +1,4 @@
-/** The scripted-demo section: four windows replaying authored sessions through
+/** The scripted-demo section: five windows replaying authored sessions through
  * the real playground presentation components, each paired with the gap it
  * closes. Entirely client-side — no MCP calls, no API routes, no LLM.
  *
@@ -10,14 +10,17 @@
  * thing standing between us and shipping without it. Rendering it here makes
  * that structural instead of remembered.
  *
- * FOUR FULL-WIDTH ROWS THAT ALTERNATE SIDES (Manuel, 2026-08-07), replacing a
+ * FULL-WIDTH ROWS THAT ALTERNATE SIDES (Manuel, 2026-08-07; four then, five
+ * since the Jira row), replacing a
  * bento of two wide rows over a 2-up bottom row. The two demos in that bottom
  * row rendered at half width, which is where the tool cards got cramped, so
  * ending it is the point rather than a side effect.
  *
- * Order is sheets, slides, gmail, accounts, and the last one is deliberate:
- * two accounts in one turn is the only claim here that rests on no subtlety at
- * all, which makes it the right closer. The problem/solution pairs are
+ * Order is sheets, slides, gmail, jira, accounts, and the last one is
+ * deliberate: two accounts in one turn is the only claim here that rests on no
+ * subtlety at all, which makes it the right closer. The Jira row sits beside
+ * Gmail because it is the same kind of beat, a write you approve, and it
+ * starts from an email. The problem/solution pairs are
  * deliberately unparallel — only sourced limitations are named, and each names
  * the connector that has the limit rather than "Claude" in general.
  */
@@ -39,7 +42,8 @@ export const DEMO_DISCLOSURE =
 
 /**
  * One list, in render order, because the order IS the argument: the two edits
- * to a file you already have come first, then sending, then the two accounts.
+ * to a file you already have come first, then sending, then moving a file
+ * between two services, then the two accounts.
  *
  * It used to be two arrays with two different cell shapes. Merging them is
  * what the alternating layout requires, and it also removes a trap: the split
@@ -48,13 +52,13 @@ export const DEMO_DISCLOSURE =
  */
 /**
  * How much weight a tile carries, which is the thing that keeps this a BENTO
- * rather than a zigzag of four identical bands (Manuel, 2026-08-07: "make sure
+ * rather than a zigzag of identical bands (Manuel, 2026-08-07: "make sure
  * we're following a bento style layout").
  *
  * A bento's defining property is varied cell emphasis, and the previous shape
  * got that from two different cell sizes. Alternation needs one list in render
- * order, so the variation moves here instead: same tile width for all four, but
- * the two edit-an-existing-file beats are set larger and roomier than the two
+ * order, so the variation moves here instead: same tile width for every row, but
+ * the two edit-an-existing-file beats are set larger and roomier than the rows
  * that follow them. Emphasis is stored per cell rather than derived from
  * position, because it belongs to the claim: sheets is the lead beat wherever
  * it sits in the list.
@@ -92,6 +96,18 @@ const CELLS: {
     weight: "supporting",
     problem: "Claude writes the email and stops at the draft.",
     solution: "DataToRAG sends it from your account, once you approve.",
+  },
+  {
+    // The connector is named as its vendor names it. It covers Jira and
+    // Confluence, and the limit is in its Jira half: no tool takes a file.
+    // Read from the connector's own tool list on 2026-10-09. A claim about
+    // someone else's product goes stale on their schedule, so re-read the
+    // list before this line is reused anywhere.
+    id: "jira",
+    weight: "supporting",
+    problem: "Claude's Atlassian connector cannot attach a file to a Jira issue.",
+    solution:
+      "DataToRAG puts the email and its PDF on the issue, once you approve.",
   },
   {
     id: "accounts",

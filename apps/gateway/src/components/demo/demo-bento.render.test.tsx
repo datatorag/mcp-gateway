@@ -119,6 +119,31 @@ describe("the demo disclosure reaches the DOM", () => {
     }
   });
 
+  it("renders one row per script, each with a window, in the order the scripts are listed", async () => {
+    // A script with no row never reaches the page, and a row with no window
+    // layout renders its claim beside nothing. Both are silent: the grid just
+    // comes out one short.
+    const { DEMO_SCRIPTS } = await import("./demo-scripts");
+    const { DEMO_WINDOWS } = await import("./demo-layout");
+    render(<DemoBento heading={DEMO_HEADING} />);
+    const headers = [...container.querySelectorAll(".uppercase")].map(
+      (el) => el.textContent
+    );
+    expect(headers).toEqual(DEMO_SCRIPTS.map((s) => DEMO_WINDOWS[s.id].service));
+    expect(headers).toHaveLength(5);
+    expect(headers).toContain("Gmail to Jira");
+  });
+
+  it("names the connector that has the limit on the Jira row", () => {
+    const text = render(<DemoBento heading={DEMO_HEADING} />);
+    expect(text).toContain(
+      "Claude's Atlassian connector cannot attach a file to a Jira issue."
+    );
+    expect(text).toContain(
+      "DataToRAG puts the email and its PDF on the issue, once you approve."
+    );
+  });
+
   it("renders even when a caller passes an empty standfirst", () => {
     const text = render(<DemoBento heading={DEMO_HEADING} standfirst={[]} />);
     expect(text).toContain(DEMO_DISCLOSURE);
