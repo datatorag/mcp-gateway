@@ -1,6 +1,6 @@
 ---
 name: deploy
-description: Use when deploying the DataToRAG MCP gateway to production. Handles SSH into the server, git pull, Docker rebuild, health check, and optional plugin reinstall.
+description: Use when deploying the DataToRAG MCP gateway to production. The normal path is the pipeline (GitHub builds the image, an approved workflow run asks the host to start it by digest). Also covers the scripted fallback (SSH, git pull, Docker rebuild), health checks, env rendering, migrations and plugin reinstall.
 user_invocable: true
 ---
 
@@ -11,15 +11,18 @@ user_invocable: true
 - AWS CLI configured with a profile that has Lightsail access
 - The production instance runs Docker Compose on AWS Lightsail
 
-## Pipeline path (the canary, and the gateway once its files are on the host)
+## Pipeline path (the normal path: the gateway and the canary)
 
 GitHub builds the image and the host runs it by digest; nothing is built on
-the host. Two surfaces: the `canary` (a container that only answers
-`/health`), proven end to end, and the `gateway`. **The gateway is on this
-path only once a person has installed the current host script and the
-gateway's compose file on the host, and its first pipeline deploy has had its
-own go.** Until then it deploys with the scripted path below, which stays as
-the fallback afterwards.
+the host. Two surfaces: the `gateway`, and the `canary` (a container that only
+answers `/health`, for proving a pipeline change without touching the
+gateway). **The gateway deploys this way since 2026-10-09.** Its first
+pipeline deploy replaced the host-built container with about five seconds of
+outage seen from outside, and the plugin volume, the plugins and the
+environment came through unchanged. The scripted path below is the fallback.
+
+Still by hand, before a gateway deploy that needs them: rendering `.env`
+(step 2b) and migrations. And a go, in words, from a person, every time.
 
 ```bash
 # a deploy: the commit must be on main and have an image built there
@@ -67,8 +70,14 @@ For the gateway, also:
   the Migrations section still apply, before the deploy, by hand. The host
   script reads the env file where the scripted path keeps it.
 - The commit the host checks is the one the image was built with, read inside
-  the container once `/health` answers ok. The gateway gets two minutes
-  (plus one last ask of at most ten seconds); a put-back gets the same.
+  the container once `/health` answers ok. The gateway gets two minutes to
+  do so; counting the last wait and the last ask, the script gives up after
+  at most about 132 seconds. A put-back gets the same again. Those two waits
+  alone are over four minutes; with the limits on the pull (ten minutes) and
+  on each start (three minutes), one request can hold the host's lock for
+  longer than the workflow job's fifteen minutes. The job then ends without
+  an answer while the host script carries on: read `host-deploy status`, or
+  the host's log, before asking again.
 - The host script judges a deploy against what is RUNNING, not against its
   record. When the running container is not the image it last deployed (its
   first deploy on a host, or any time after the scripted path was used), the
@@ -98,7 +107,19 @@ For the gateway, also:
   be asked what is running, every request is refused and nothing changes.
   The recorded image, stopped, is the one thing it will start again as is.
 
-## Scripted path (the gateway: today's path, and the fallback after)
+Known limits of the host script, none of them a way to start the wrong
+image:
+
+- Its waits on docker use `timeout` with no kill fallback. A docker client
+  that ignored the stop signal would hold the lock until a person ended it.
+- The canary may be absent. With its container gone, the pipeline will not
+  start the recorded commit again (it is "not newer" than itself); it will
+  deploy a newer one. If the recorded commit is the tip of `main`, a person
+  starts the canary on the host.
+- The pipeline does not write `.deployed-sha`. After a pipeline deploy that
+  file names the last commit the SCRIPTED path deployed.
+
+## Scripted path (the gateway's fallback)
 
 `scripts/deploy-gateway.sh <full-sha>` runs steps 2 to 4 below in one go, with
 the host and key taken from the environment so no live value lives in the

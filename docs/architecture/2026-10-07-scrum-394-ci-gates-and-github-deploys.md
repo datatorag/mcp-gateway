@@ -1,11 +1,11 @@
 # SCRUM-394: CI gates, and deploys that GitHub builds and a person approves
 
-Status: SPEC, revision 4 (2026-10-08): Addendum A is ruled (the restricted SSH key). Built
-and proven: the pull-request gate and the repository settings of section 3, the image build
-of section 4 (`build.yml`), and section 8 steps 4 to 6, the canary deployed, rolled back and
-deployed again through `release.yml` and the host script. Built and not yet run against the
-host: the gateway as a second surface of the same workflow and script (step 7; "The gateway's
-first pipeline deploy" below says how it differs from what step 7 first proposed).
+Status: BUILT, revision 5 (2026-10-09): every step of section 8 has been done. The
+pull-request gate and the repository settings of section 3, the image build of section 4
+(`build.yml`), the canary deployed, rolled back and deployed again through `release.yml`
+and the host script (steps 4 to 6), and the gateway's first pipeline deploy (step 7; "The
+gateway's first pipeline deploy" below says how it differs from what step 7 first proposed,
+and what it measured). What the spec proposed and was not built is said where it comes up.
 
 Two things are specified. First, a workflow that runs the gate on every pull request, with
 `main` protected. Second, a pipeline in which GitHub builds an image for a commit, a named
@@ -293,6 +293,26 @@ What was built for step 7, and where it departs from the row as first written:
   inside the container.
 - **Not here:** a slimmer, multi-stage gateway image. That is its own change, after the
   first pipeline deploy, so that deploy changes one thing.
+
+What step 7 measured, on 2026-10-09:
+
+| Measured | Result |
+|---|---|
+| Restarts | One. The image was pulled while the old container kept serving (65 s for a 4 GB image), then the container was replaced |
+| Outage seen from outside | About 5 seconds, probed twice a second |
+| Outside checks before and after (17: health, pages, OAuth metadata, `/mcp` refusals, redirects) | Identical, line for line |
+| Tool calls through a real client, before and after | Answered; the client reconnected by itself |
+| Plugin volume, plugin files, plugin processes | The same volume and mount, the same file count, both plugins running |
+| Environment in the container | The same key names and the same values, compared by hash |
+| Put-back | Not needed, so not exercised on the gateway |
+
+Still unproven on the gateway, and accepted: a rollback through the pipeline (none exists
+until the second deploy) and a put-back after a failed start. Both were exercised on the
+canary and on a scratch project with real Docker.
+
+Left as it was, on purpose: the host still has its checkout and can still build. A deploy no
+longer needs either. The env file lives in the checkout and the scripted fallback uses it,
+so moving that file and removing the checkout is a later decision, not part of this one.
 
 ## 9. Order, and how this meets SCRUM-390
 
