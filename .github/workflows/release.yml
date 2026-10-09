@@ -1,0 +1,184 @@
+# A deploy: one surface, one commit, approved, then asked of the host
+# (SCRUM-394).
+#
+# This workflow builds nothing. It is started by hand, for a named surface and
+# a full commit sha, and it does two things:
+#
+#   request  No secret, no environment. Checks the run is from main and the
+#            commit is on main, then finds the digest of the image that main's
+#            build published for it (scripts/published-digest.sh). A rollback
+#            needs no digest: the host starts the image it recorded as
+#            previous, and only if that is the commit named here.
+#   deploy   Waits on the `production` environment, which is limited to main
+#            and needs its reviewer's approval. Then it sends the host ONE
+#            line over SSH and prints the answer. It checks out no code.
+#
+# What the key can do is decided on the host, not here: the key is forced to
+# one command (scripts/host-deploy.sh, installed there by a person), which
+# validates the line itself and refuses everything that is not a request. This
+# workflow could send anything; the host accepts only that.
+#
+# The three secrets (the key, the host's address, the host's public key) are
+# secrets of the `production` ENVIRONMENT, not of the repository. A run that
+# is not from main cannot reach that environment, so a branch that edits this
+# file gets none of them.
+#
+# The approval is a record, not a control: it shows that the reviewer's
+# account approved, not that a person did. The control is that a person says
+# go, in words, before a production change. See the spec, section 6.
+#
+# Every value that comes from the event reaches a script through `env`, never
+# through `${{ }}` inside a `run` line.
+#
+# Actions are GitHub's own, pinned to a commit.
+name: release
+run-name: ${{ inputs.rollback && 'rollback' || 'deploy' }} ${{ inputs.surface }} ${{ inputs.sha }}
+
+on:
+  workflow_dispatch:
+    inputs:
+      surface:
+        description: The surface to deploy
+        required: true
+        type: choice
+        options: [canary]
+      sha:
+        description: Full commit sha on main. For a rollback, the commit being returned to
+        required: true
+        type: string
+      rollback:
+        description: Return to the previous image. Nothing is built or pulled
+        required: false
+        type: boolean
+        default: false
+
+permissions: {}
+
+jobs:
+  request:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      actions: read # the build runs' records
+    outputs:
+      line: ${{ steps.request.outputs.line }}
+      script: ${{ steps.request.outputs.script }}
+    env:
+      REF: ${{ github.ref }}
+      INPUT_SURFACE: ${{ inputs.surface }}
+      INPUT_SHA: ${{ inputs.sha }}
+      INPUT_ROLLBACK: ${{ inputs.rollback }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: The lookup still refuses what it documents
+        run: scripts/published-digest.sh --self-test
+      - name: What will be asked of the host
+        id: request
+        run: |
+          set -euo pipefail
+          [ "$REF" = "refs/heads/main" ] \
+            || { echo "A deploy runs from main, so the rules it applies are main's."; exit 1; }
+          case "$INPUT_SURFACE" in
+            canary) ;;
+            *) echo "Not a surface that deploys."; exit 1 ;;
+          esac
+          [[ "$INPUT_SHA" =~ ^[0-9a-f]{40}$ ]] \
+            || { echo "The commit must be a full 40-character sha."; exit 1; }
+          git merge-base --is-ancestor "$INPUT_SHA" refs/remotes/origin/main 2>/dev/null \
+            || { echo "That commit is not on main."; exit 1; }
+          if [ "$INPUT_ROLLBACK" = true ]; then
+            line="rollback $INPUT_SURFACE $INPUT_SHA"
+          else
+            digest=$(scripts/published-digest.sh "$INPUT_SURFACE" "$INPUT_SHA")
+            line="deploy $INPUT_SURFACE $INPUT_SHA $digest"
+          fi
+          script=$(sha256sum scripts/host-deploy.sh | cut -d' ' -f1)
+          {
+            echo "line=$line"
+            echo "script=$script"
+          } >>"$GITHUB_OUTPUT"
+          {
+            echo "Request for the host, once approved: \`$line\`"
+            echo
+            echo "The host script on main has checksum \`$script\`."
+          } | tee -a "$GITHUB_STEP_SUMMARY"
+
+  deploy:
+    needs: request
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    environment: production
+    permissions: {}
+    concurrency:
+      # One request at the host at a time, whatever the surface. The host
+      # holds its own lock as well.
+      group: release-production
+      cancel-in-progress: false
+    env:
+      LINE: ${{ needs.request.outputs.line }}
+      SCRIPT_ON_MAIN: ${{ needs.request.outputs.script }}
+    steps:
+      - name: Ask the host
+        env:
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          # Checked again here, in the job that holds the key.
+          [[ "$LINE" =~ ^(deploy\ canary\ [0-9a-f]{40}\ sha256:[0-9a-f]{64}|rollback\ canary\ [0-9a-f]{40})$ ]] \
+            || { echo "Not a request."; exit 1; }
+          for name in DEPLOY_SSH_KEY DEPLOY_HOST DEPLOY_KNOWN_HOSTS; do
+            [ -n "${!name}" ] \
+              || { echo "The production environment has no $name. The host has not been given a key yet."; exit 1; }
+          done
+          [[ "$DEPLOY_HOST" =~ ^[A-Za-z0-9][A-Za-z0-9.:-]*$ ]] \
+            || { echo "DEPLOY_HOST is not a host name or an address."; exit 1; }
+          umask 077
+          dir=$(mktemp -d)
+          trap 'rm -rf "$dir"' EXIT
+          printf '%s\n' "$DEPLOY_SSH_KEY" >"$dir/key"
+          printf '%s\n' "$DEPLOY_KNOWN_HOSTS" >"$dir/known_hosts"
+          # The host's key is pinned: an unknown or changed key ends the run.
+          # No agent, no forwarding, no terminal, no config file.
+          #
+          # This log is public. ssh's own messages can name the host's address
+          # or its key, which masking does not cover, so they are never
+          # printed. Of what the host sends back, only the host script's own
+          # lines are shown.
+          started=$SECONDS
+          rc=0
+          ssh -F /dev/null -i "$dir/key" \
+            -o IdentitiesOnly=yes -o IdentityAgent=none -o BatchMode=yes \
+            -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$dir/known_hosts" \
+            -o GlobalKnownHostsFile=/dev/null -o UpdateHostKeys=no -o LogLevel=ERROR \
+            -o ForwardAgent=no -o RequestTTY=no \
+            -o ConnectTimeout=20 -o ServerAliveInterval=15 -o ServerAliveCountMax=4 \
+            -l deploy -- "$DEPLOY_HOST" "$LINE" >"$dir/out" 2>"$dir/err" || rc=$?
+          out=$(grep '^host-deploy: ' "$dir/out" || true)
+          if [ -z "$out" ]; then
+            out="(No answer from the host script. ssh ended with exit $rc; its own messages are not shown in a public log.)"
+            # No answer is never a success, whatever ssh's exit code says.
+            if [ "$rc" = 0 ]; then rc=1; fi
+          fi
+          printf '%s\n' "$out"
+          {
+            echo "Asked: \`$LINE\`"
+            echo
+            echo "The host answered in $((SECONDS - started))s, exit $rc:"
+            echo
+            echo '```'
+            printf '%s\n' "$out"
+            echo '```'
+          } >>"$GITHUB_STEP_SUMMARY"
+          running=$(printf '%s\n' "$out" | sed -n 's/^host-deploy: script \([0-9a-f]\{64\}\)$/\1/p' | head -1)
+          if [ -n "$running" ] && [ "$running" != "$SCRIPT_ON_MAIN" ]; then
+            echo "::warning::The script on the host is not the one on main. It is installed by a person and may be older on purpose; check that it is."
+            echo "The script on the host (\`$running\`) is not the one on main (\`$SCRIPT_ON_MAIN\`)." >>"$GITHUB_STEP_SUMMARY"
+          fi
+          exit "$rc"

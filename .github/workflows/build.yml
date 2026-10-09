@@ -17,9 +17,16 @@
 # built or pushed. Runs for the same surface and commit go one at a time, so
 # that check and the push cannot interleave. Deploys go by digest.
 #
+# A run that publishes an image keeps the digest as an artifact named
+# image-<surface>-<sha>. That artifact is the record a deploy trusts
+# (release.yml): it reads the digest from a run of THIS file at a commit that
+# is on main, never from the tag. A run that found the tag already there keeps
+# nothing, because it did not publish that image.
+#
 # The script that builds comes from the branch this workflow runs on; the
-# source is the tree of the commit being built, exported by git. So an old commit is built by
-# today's rules, and a commit cannot bring its own.
+# source is the tree of the commit being built, exported by git. So an old
+# commit is built by the rules of the branch that builds it, and cannot bring
+# its own.
 #
 # What this does not protect against: anyone who can push a branch here can
 # edit this file on that branch and publish an image under any tag. That is
@@ -161,6 +168,7 @@ jobs:
           REGISTRY_USER: ${{ github.actor }}
         run: echo "$REGISTRY_TOKEN" | docker login ghcr.io --username "$REGISTRY_USER" --password-stdin
       - name: Build, check, and publish when this is main
+        id: build
         env:
           NEXT_PUBLIC_POSTHOG_KEY: ${{ vars.NEXT_PUBLIC_POSTHOG_KEY }}
           NEXT_PUBLIC_GOOGLE_ADS_CONVERSION_LABEL: ${{ vars.NEXT_PUBLIC_GOOGLE_ADS_CONVERSION_LABEL }}
@@ -172,3 +180,19 @@ jobs:
           else
             scripts/build-image.sh "$SURFACE" "$BUILD_SHA"
           fi
+      - name: Write down what this run published
+        if: steps.build.outputs.digest != ''
+        env:
+          DIGEST: ${{ steps.build.outputs.digest }}
+        run: |
+          set -euo pipefail
+          mkdir "$RUNNER_TEMP/published"
+          printf '%s %s %s\n' "$SURFACE" "$BUILD_SHA" "$DIGEST" >"$RUNNER_TEMP/published/image.txt"
+      - name: Keep it as this run's record
+        if: steps.build.outputs.digest != ''
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: image-${{ matrix.surface }}-${{ needs.plan.outputs.sha }}
+          path: ${{ runner.temp }}/published/image.txt
+          if-no-files-found: error
+          retention-days: 90

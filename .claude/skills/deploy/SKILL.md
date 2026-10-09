@@ -11,7 +11,42 @@ user_invocable: true
 - AWS CLI configured with a profile that has Lightsail access
 - The production instance runs Docker Compose on AWS Lightsail
 
-## Scripted path (preferred)
+## Pipeline path (the canary only, so far)
+
+GitHub builds the image and the host runs it by digest; nothing is built on
+the host and no checkout is needed there. Today this covers one surface, the
+`canary` (a container that only answers `/health`). **The gateway is not on
+this path yet**: it still deploys with the scripted path below.
+
+```bash
+# a deploy: the commit must be on main and have an image built there
+gh workflow run release.yml --ref main -f surface=canary -f sha=<full-sha>
+# a rollback: the commit being returned to, which must be the previous image
+gh workflow run release.yml --ref main -f surface=canary -f sha=<full-sha> -f rollback=true
+```
+
+- The run stops at the `production` environment until its reviewer approves.
+  The approval is a record. The go is still a person saying so, in words.
+- Read the answer in the run's summary: the lines starting `host-deploy:`.
+  `OK` names the sha, the digest and the previous sha. `REFUSED` changed
+  nothing. `FAILED` means the host put the old image back; the line says if it
+  could not.
+- The digest comes from the record the build run on `main` kept
+  (`scripts/published-digest.sh`), never from the registry tag. No record
+  means no deploy: the commit was not built on `main`, or the record is older
+  than 90 days.
+- The host refuses a commit that is not on `main` or not newer than the one
+  running. Going back is `rollback`, one step, to the image recorded as
+  previous.
+- `scripts/host-deploy.sh` is installed on the host by a person and is never
+  updated by a deploy. Every answer starts with its checksum; the run warns
+  when that is not the checksum of the copy on `main`. Changing the script on
+  the host is a host change with its own go.
+- With GitHub unavailable, an operator on the host runs
+  `sudo host-deploy previous canary`, or `sudo host-deploy status` to read
+  what is recorded.
+
+## Scripted path (the gateway, until it joins the pipeline)
 
 `scripts/deploy-gateway.sh <full-sha>` runs steps 2 to 4 below in one go, with
 the host and key taken from the environment so no live value lives in the

@@ -238,7 +238,10 @@ edit means the design-time check was skipped.
 | Leak scanner (range, every commit and message; prints rule and place, never the match) | `scripts/leak-scan.py`, `scripts/test_leak_scan.py` |
 | Pull-request workflow (`gate` and `leak-scan` jobs) | `.github/workflows/ci.yml` |
 | Image build (one image per surface and commit, tagged by full sha, published from `main` only; deploys nothing) | `.github/workflows/build.yml`, `scripts/build-image.sh` |
-| Canary: a container that only answers `/health` with its commit and start time, for proving a deploy without touching the gateway | `docker/canary/` |
+| Canary: a container that only answers `/health` with its commit and start time, for proving a deploy without touching the gateway | `docker/canary/` (`compose.host.yml` is how the host runs it) |
+| Deploy workflow (dispatch for a surface and sha, waits on the `production` environment, sends the host one request line over SSH; canary only so far) | `.github/workflows/release.yml` |
+| Which digest a deploy uses: the record a build run on `main` kept of what it pushed, never the tag | `scripts/published-digest.sh` |
+| The host's side of a deploy: validates the request, pulls by digest, checks the commit is on `main` and newer, puts the old image back on failure, keeps current and previous per surface. Installed on the host by a person, never by a deploy | `scripts/host-deploy.sh` |
 | Env var names + SSM flow docs | `.env.example` |
 | Meta-tool migration decision doc | `docs/architecture/2026-04-22-meta-tool-migration.md` |
 | Architecture decision records (ADRs) | `docs/architecture/decisions/` (TEMPLATE.md there) |
@@ -247,7 +250,7 @@ edit means the design-time check was skipped.
 
 - Tests: `pnpm vitest run` (in `apps/gateway`) · Typecheck: `pnpm exec tsc --noEmit` · Build: `pnpm build`
 - The pre-merge gate: `scripts/gate.sh [base]` (ancestry, then typecheck and tests for the surfaces the changed paths select; a docs-only change runs nothing). `.github/workflows/ci.yml` runs it on every pull request, beside a `leak-scan` job (`scripts/leak-scan.py`, rule list supplied as a secret, never in the repo). Neither runs the production build, the security reviewer, or any suite gated on a live registry or a running plugin.
-- `main` is protected: every change is a pull request, both checks must pass on an up-to-date branch, merge commits only, and the rule binds admins. A merge to `main` then builds an image per touched surface (`.github/workflows/build.yml`); building is not deploying.
+- `main` is protected: every change is a pull request, both checks must pass on an up-to-date branch, merge commits only, and the rule binds admins. A merge to `main` then builds an image per touched surface (`.github/workflows/build.yml`); building is not deploying. A deploy is `.github/workflows/release.yml`, dispatched by hand and approved; it covers the canary only, and the gateway still deploys with `scripts/deploy-gateway.sh` (see the `deploy` skill).
 - Dev: `pnpm dev:gateway`; or in `apps/gateway`: `pnpm dev`. There is no local postgres — `DATABASE_URL` points at a Neon branch, and nothing migrates on boot.
 - Migrations: `pnpm --filter @datatorag-mcp/db db:generate` / `db:migrate` (`db:push` is dev-only)
 - Deploys and DB queries: use the `deploy` and `db-query` skills — infra specifics live there and in private memory.

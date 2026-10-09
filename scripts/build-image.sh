@@ -14,8 +14,8 @@
 #     directory. The working directory is never the build context, so nothing
 #     modified, untracked or ignored in it can reach an image.
 #   - The export is then compared with the commit, file by file, by content
-#     hash: every file the commit holds must be there, byte for byte, and
-#     nothing else. So local git state that reshapes an export (replace refs,
+#     hash: every file the commit holds must be there, byte for byte, with the
+#     executable bit the commit records, and nothing else. So local git state that reshapes an export (replace refs,
 #     attributes, line-ending or filter config) stops the build instead of
 #     changing the image. A commit that itself marks files export-ignore is
 #     stopped the same way.
@@ -32,6 +32,12 @@
 #     without them would deploy with its analytics silently off.
 #   - The built image's revision label equals <sha>, checked on the image and
 #     not assumed from the command line.
+#
+#   - With --push, and only when THIS run pushed the image: the digest is
+#     written to the step's outputs. The workflow keeps it as the run's record
+#     of what it published, and a deploy reads that record. A run that found
+#     the tag already there records nothing: it did not publish that image
+#     and cannot say who did.
 #
 # The tag check and the push are two steps, not one. The workflow runs one
 # build at a time per surface and commit; this script alone does not.
@@ -120,6 +126,8 @@ for base, dirs, files in os.walk(rootb):
             data = open(full, "rb").read() if mode != b"120000" else None
         if data is None or blob_hash(data) != blob:
             sys.exit("build-image: an exported file differs from the commit; not built.")
+        if mode != b"120000" and bool(os.stat(full).st_mode & 0o100) != (mode == b"100755"):
+            sys.exit("build-image: an exported file's executable bit differs from the commit; not built.")
 if have != set(want):
     sys.exit("build-image: the export is missing a file the commit holds; not built.")
 PY
@@ -195,6 +203,8 @@ self_test() {
   refuse "a retargeted link is caught" verify_export "$tmp/repo" "$at" "$out"
   fresh; rm "$out/link"; printf 'one\n' >"$out/link"
   refuse "a link turned into a file is caught" verify_export "$tmp/repo" "$at" "$out"
+  fresh; chmod +x "$out/a.txt"
+  refuse "a file made executable is caught" verify_export "$tmp/repo" "$at" "$out"
   # Local state that reshapes an export must stop the build, not shape it.
   echo "a.txt export-ignore" >"$tmp/repo/.git/info/attributes"
   fresh
@@ -337,6 +347,7 @@ main() {
     [[ "$digest" =~ ^sha256:[0-9a-f]{64}$ ]] \
       || { echo "build-image: FAILED. The registry did not return a digest for the pushed image." >&2; exit 1; }
     note "$surface: published $image@$digest for $sha. Built in ${took}s, $((size / 1000000)) MB. Revision label verified."
+    if [ -n "${GITHUB_OUTPUT:-}" ]; then echo "digest=$digest" >>"$GITHUB_OUTPUT"; fi
   else
     local unset_note=""
     if [ "$surface" = gateway ] && [ -n "$(missing_public_values)" ]; then
