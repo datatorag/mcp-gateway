@@ -10,8 +10,16 @@
 #            needs no digest: the host starts the image it recorded as
 #            previous, and only if that is the commit named here.
 #   deploy   Waits on the `production` environment, which is limited to main
-#            and needs its reviewer's approval. Then it sends the host ONE
-#            line over SSH and prints the answer. It checks out no code.
+#            and needs its reviewer's approval. Then it asks the host for its
+#            status, and stops a deploy if the compose file a person installed
+#            there for this surface is not the one on main. Then it sends the
+#            host ONE request line over SSH and prints the answer. It checks
+#            out no code.
+#
+# The gateway is a surface here like the canary, with two differences that are
+# the host script's and the compose file's, not this workflow's: it restarts
+# the thing users reach, and it reads an env file a person keeps on the host.
+# A commit that needs a migration needs it run before the deploy, by hand.
 #
 # What the key can do is decided on the host, not here: the key is forced to
 # one command (scripts/host-deploy.sh, installed there by a person), which
@@ -41,7 +49,7 @@ on:
         description: The surface to deploy
         required: true
         type: choice
-        options: [canary]
+        options: [canary, gateway]
       sha:
         description: Full commit sha on main. For a rollback, the commit being returned to
         required: true
@@ -64,6 +72,7 @@ jobs:
     outputs:
       line: ${{ steps.request.outputs.line }}
       script: ${{ steps.request.outputs.script }}
+      compose: ${{ steps.request.outputs.compose }}
     env:
       REF: ${{ github.ref }}
       INPUT_SURFACE: ${{ inputs.surface }}
@@ -83,8 +92,10 @@ jobs:
           set -euo pipefail
           [ "$REF" = "refs/heads/main" ] \
             || { echo "A deploy runs from main, so the rules it applies are main's."; exit 1; }
+          # The file a person installs on the host for each surface.
           case "$INPUT_SURFACE" in
-            canary) ;;
+            canary) compose_file=docker/canary/compose.host.yml ;;
+            gateway) compose_file=docker/docker-compose.prod.yml ;;
             *) echo "Not a surface that deploys."; exit 1 ;;
           esac
           [[ "$INPUT_SHA" =~ ^[0-9a-f]{40}$ ]] \
@@ -98,14 +109,17 @@ jobs:
             line="deploy $INPUT_SURFACE $INPUT_SHA $digest"
           fi
           script=$(sha256sum scripts/host-deploy.sh | cut -d' ' -f1)
+          compose=$(sha256sum "$compose_file" | cut -d' ' -f1)
           {
             echo "line=$line"
             echo "script=$script"
+            echo "compose=$compose"
           } >>"$GITHUB_OUTPUT"
           {
             echo "Request for the host, once approved: \`$line\`"
             echo
             echo "The host script on main has checksum \`$script\`."
+            echo "The compose file for $INPUT_SURFACE on main (\`$compose_file\`) has checksum \`$compose\`."
           } | tee -a "$GITHUB_STEP_SUMMARY"
 
   deploy:
@@ -122,6 +136,7 @@ jobs:
     env:
       LINE: ${{ needs.request.outputs.line }}
       SCRIPT_ON_MAIN: ${{ needs.request.outputs.script }}
+      COMPOSE_ON_MAIN: ${{ needs.request.outputs.compose }}
     steps:
       - name: Ask the host
         env:
@@ -131,8 +146,11 @@ jobs:
         run: |
           set -euo pipefail
           # Checked again here, in the job that holds the key.
-          [[ "$LINE" =~ ^(deploy\ canary\ [0-9a-f]{40}\ sha256:[0-9a-f]{64}|rollback\ canary\ [0-9a-f]{40})$ ]] \
+          [[ "$LINE" =~ ^(deploy\ (canary|gateway)\ [0-9a-f]{40}\ sha256:[0-9a-f]{64}|rollback\ (canary|gateway)\ [0-9a-f]{40})$ ]] \
             || { echo "Not a request."; exit 1; }
+          [[ "$SCRIPT_ON_MAIN" =~ ^[0-9a-f]{64}$ ]] && [[ "$COMPOSE_ON_MAIN" =~ ^[0-9a-f]{64}$ ]] \
+            || { echo "The request job did not pass on the checksums."; exit 1; }
+          read -r action surface _ <<<"$LINE"
           for name in DEPLOY_SSH_KEY DEPLOY_HOST DEPLOY_KNOWN_HOSTS; do
             [ -n "${!name}" ] \
               || { echo "The production environment has no $name. The host has not been given a key yet."; exit 1; }
@@ -151,23 +169,58 @@ jobs:
           # or its key, which masking does not cover, so they are never
           # printed. Of what the host sends back, only the host script's own
           # lines are shown.
-          started=$SECONDS
-          rc=0
-          ssh -F /dev/null -i "$dir/key" \
-            -o IdentitiesOnly=yes -o IdentityAgent=none -o BatchMode=yes \
-            -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$dir/known_hosts" \
-            -o GlobalKnownHostsFile=/dev/null -o UpdateHostKeys=no -o LogLevel=ERROR \
-            -o ForwardAgent=no -o RequestTTY=no \
-            -o ConnectTimeout=20 -o ServerAliveInterval=15 -o ServerAliveCountMax=4 \
-            -l deploy -- "$DEPLOY_HOST" "$LINE" >"$dir/out" 2>"$dir/err" || rc=$?
-          out=$(grep '^host-deploy: ' "$dir/out" || true)
-          if [ -z "$out" ]; then
-            out="(No answer from the host script. ssh ended with exit $rc; its own messages are not shown in a public log.)"
-            # No answer is never a success, whatever ssh's exit code says.
-            if [ "$rc" = 0 ]; then rc=1; fi
-          fi
+          ask() { # <line>: sets out (the host script's lines only) and rc
+            rc=0
+            ssh -F /dev/null -i "$dir/key" \
+              -o IdentitiesOnly=yes -o IdentityAgent=none -o BatchMode=yes \
+              -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$dir/known_hosts" \
+              -o GlobalKnownHostsFile=/dev/null -o UpdateHostKeys=no -o LogLevel=ERROR \
+              -o ForwardAgent=no -o RequestTTY=no \
+              -o ConnectTimeout=20 -o ServerAliveInterval=15 -o ServerAliveCountMax=4 \
+              -l deploy -- "$DEPLOY_HOST" "$1" >"$dir/out" 2>"$dir/err" || rc=$?
+            out=$(grep '^host-deploy: ' "$dir/out" || true)
+            if [ -z "$out" ]; then
+              out="(No answer from the host script. ssh ended with exit $rc; its own messages are not shown in a public log.)"
+              # No answer is never a success, whatever ssh's exit code says.
+              if [ "$rc" = 0 ]; then rc=1; fi
+            fi
+          }
+          # First what is there, which changes nothing on the host.
+          ask status
           printf '%s\n' "$out"
           {
+            echo "Status before, exit $rc:"
+            echo
+            echo '```'
+            printf '%s\n' "$out"
+            echo '```'
+          } >>"$GITHUB_STEP_SUMMARY"
+          [ "$rc" = 0 ] || { echo "The host did not answer a status request. Nothing was asked of it."; exit "$rc"; }
+          running=$(printf '%s\n' "$out" | awk '$1 == "host-deploy:" && $2 == "script" && NF == 3 { print $3; exit }')
+          if [ "$running" != "$SCRIPT_ON_MAIN" ]; then
+            echo "::warning::The script on the host is not the one on main. It is installed by a person and may be older on purpose; check that it is."
+            echo "The script on the host (\`${running:-unreadable}\`) is not the one on main (\`$SCRIPT_ON_MAIN\`)." >>"$GITHUB_STEP_SUMMARY"
+          fi
+          # A deploy starts a NEW image under the compose file on the host. If
+          # that file is not main's, a value the new image needs may be missing
+          # from it, and the gateway would start without saying so. A rollback
+          # is not held to this: the way back must not wait on an install.
+          installed=$(printf '%s\n' "$out" | awk -v s="$surface" '$1 == "host-deploy:" && $2 == "compose" && $3 == s && NF == 4 { print $4; exit }')
+          if [ "$installed" != "$COMPOSE_ON_MAIN" ]; then
+            msg="The compose file on the host for $surface (\`${installed:-none, or a host script too old to say}\`) is not the one on main (\`$COMPOSE_ON_MAIN\`)."
+            echo "$msg" >>"$GITHUB_STEP_SUMMARY"
+            if [ "$action" = deploy ]; then
+              echo "$msg A person installs it on the host; then run this again. Nothing was asked of the host."
+              exit 1
+            fi
+            echo "::warning::$msg"
+          fi
+
+          started=$SECONDS
+          ask "$LINE"
+          printf '%s\n' "$out"
+          {
+            echo
             echo "Asked: \`$LINE\`"
             echo
             echo "The host answered in $((SECONDS - started))s, exit $rc:"
@@ -176,9 +229,4 @@ jobs:
             printf '%s\n' "$out"
             echo '```'
           } >>"$GITHUB_STEP_SUMMARY"
-          running=$(printf '%s\n' "$out" | sed -n 's/^host-deploy: script \([0-9a-f]\{64\}\)$/\1/p' | head -1)
-          if [ -n "$running" ] && [ "$running" != "$SCRIPT_ON_MAIN" ]; then
-            echo "::warning::The script on the host is not the one on main. It is installed by a person and may be older on purpose; check that it is."
-            echo "The script on the host (\`$running\`) is not the one on main (\`$SCRIPT_ON_MAIN\`)." >>"$GITHUB_STEP_SUMMARY"
-          fi
           exit "$rc"

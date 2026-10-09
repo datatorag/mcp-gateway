@@ -1,11 +1,11 @@
 # SCRUM-394: CI gates, and deploys that GitHub builds and a person approves
 
-Status: SPEC, revision 3 (2026-10-08): Addendum A is ruled (the restricted SSH key). No host
-change has been made. Built so far: the pull-request gate and the repository settings of
-section 3, the image build of section 4 (`build.yml`), and, for the canary only, the deploy
-workflow (`release.yml`), the host script and the canary's compose file. None of the last
-three has run against a host: section 8 steps 4 to 7 are still ahead, and the gateway's part
-of "The deploy" is still proposed.
+Status: SPEC, revision 4 (2026-10-08): Addendum A is ruled (the restricted SSH key). Built
+and proven: the pull-request gate and the repository settings of section 3, the image build
+of section 4 (`build.yml`), and section 8 steps 4 to 6, the canary deployed, rolled back and
+deployed again through `release.yml` and the host script. Built and not yet run against the
+host: the gateway as a second surface of the same workflow and script (step 7; "The gateway's
+first pipeline deploy" below says how it differs from what step 7 first proposed).
 
 Two things are specified. First, a workflow that runs the gate on every pull request, with
 `main` protected. Second, a pipeline in which GitHub builds an image for a commit, a named
@@ -130,7 +130,7 @@ recorded in that step's report and not here).
 | 1 | The job declares `environment: production`. GitHub holds it until a reviewer approves | Not approved |
 | 2 | Resolve the image for `surface` and `sha` to its digest, from the record the build run on `main` kept of what it pushed. The registry tag is only cross-checked against it, never trusted | No such record, or the tag no longer holds that digest |
 | 3 | Hand the host the request, one line over SSH: surface, sha, digest (section 5) | The host refuses the request |
-| 4 | On the host: lock, check the commit is on `main` and newer than the one running, pull by digest, check the image's revision label, point the compose file's image variable at it, `compose up -d --no-build <surface>`. For the gateway, when it joins: re-render `.env` from the parameter store first | Pull fails: nothing changed |
+| 4 | On the host: lock, check the commit is on `main` and newer than the one running, pull by digest, check the image's revision label, point the compose file's image variable at it, `compose up -d --no-build <surface>`. For the gateway this was to re-render `.env` from the parameter store first; as built, a person still does that (section 8, "The gateway's first pipeline deploy") | Pull fails: nothing changed |
 | 5 | On the host: the container is running the requested digest and the surface reports the requested commit | Either fails: the host starts the image that was running again |
 | 6 | The job reports surface, sha, digest, previous sha and the time taken | |
 
@@ -243,12 +243,56 @@ credential rotation without restarting anything a user touches.
 | 4 | Host prepared by a person, one step at a time, each agreed first: the host script, compose reading image variables, the canary service, and the request path Addendum A's ruling picks | A malformed sha is refused; a surface outside the list is refused; nothing can obtain a shell | Remove what was added; restore the compose file |
 | 5 | **First approved deploy: the canary** | Time from approval to healthy. The running container's image is the requested digest. The gateway's start time is unchanged | The host script's `--previous` |
 | 6 | **Rollback of the canary through the pipeline**, then forward again | Time for each. Nothing built, nothing pulled on the way back. The gateway's start time is unchanged | The fallback script |
-| 7 | **The gateway's first pipeline deploy, its own go:** the GitHub-built image of the sha already running | One restart. A test run before and after diffs to zero. The only intended difference is who built the image | The rollback flag, back to the host-built image |
+| 7 | **The gateway's first pipeline deploy, its own go:** the GitHub-built image of a commit on `main` that differs from the one running by as little as possible | One restart. A test run before and after diffs to zero. The intended difference is who built the image | The scripted path, back to the host-built image |
 
 Steps 5 and 6 cost no user anything. Step 7 is one gateway restart, in a window named in
 advance. What stays unproven after step 7, and is accepted: a rollback of the gateway itself
 through the pipeline. The mechanism is the same one the canary exercised; the first real
 gateway rollback will be its first use on that surface.
+
+### The gateway's first pipeline deploy
+
+What was built for step 7, and where it departs from the row as first written:
+
+- **Not the sha already running.** A deploy takes its digest from the record a build on
+  `main` kept (section 4). The commit that was running when the pipeline arrived was built
+  before records existed, so it has none and cannot be deployed this way. The first gateway
+  deploy is therefore a newer commit on `main`, chosen so that the gateway's own code differs
+  as little as possible from what is running. No path accepts an image without a record.
+- **One compose file, two ways to start it.** `docker/docker-compose.prod.yml` now names its
+  image with a variable. The host script sets it to a digest and starts with `--no-build`;
+  the scripted path leaves it unset and builds, as before. Both use the same compose project,
+  so the container, the plugin volume and the network are the same ones either way. A person
+  installs a copy of the file on the host, and the deploy workflow stops a deploy when that
+  copy's checksum is not the file on `main`: a value added to the file reaches production
+  only when the copy is replaced, and a deploy that skipped that would start the gateway
+  without it and without saying so.
+- **The env file stays where it is** for now: the host script points compose at the file the
+  scripted path already keeps, and only checks it is there. Rendering it from the parameter
+  store is still a person's step. Moving it out of the checkout is a later change.
+- **What is running is asked of the host, not of the record.** The scripted path stays as
+  the fallback, so the record of what the pipeline last deployed can be older than what is
+  running. Whenever the running container is not on the recorded image (always, before the
+  first pipeline deploy), the host script reads that container's image and the commit it
+  reports. The new commit must be newer than that one, and if the new image does not come
+  up, that image is started again by its id. A container that cannot say which commit it is
+  gets a refusal, not a guess, and so does any request when the host cannot be asked what
+  is running. The script never takes the gateway's project down and never starts a gateway
+  where there is no container: it only replaces one.
+- **A rollback is one step back, or it is refused.** It returns only to the image the last
+  pipeline deploy itself replaced, and only while the gateway is still on the image that
+  deploy started. A deploy over an image something else started records no previous at all:
+  not that image, which the pipeline cannot name by digest, and not the older one its record
+  still held, which may be many commits behind. So after the first pipeline deploy, and
+  after any pipeline deploy that follows a use of the scripted path, `rollback` is refused
+  until the next deploy.
+  The way back from the first one is the scripted path, which still works: started from the
+  checkout without a build, the same compose file runs the last host-built image again.
+- **How the gateway says which commit it is.** Its `/health` does not name one. The host
+  script waits for `/health` to answer ok and reads the commit the image was built with,
+  inside the container.
+- **Not here:** a slimmer, multi-stage gateway image. That is its own change, after the
+  first pipeline deploy, so that deploy changes one thing.
 
 ## 9. Order, and how this meets SCRUM-390
 
