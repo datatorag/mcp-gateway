@@ -1,7 +1,10 @@
 # SCRUM-390: the plugins move into the gateway repo
 
-Status: SPEC, revision 4 (2026-10-08): the review's rulings are applied. No code has moved, nothing is deployed, the deploy script
-is untouched. Written against `main` at `c82f58c`, `gws-mcp` main at `27ea0fc`, `atlassian-mcp`
+Status: SPEC, revision 5 (2026-10-09): revision 4 plus one new section that asks for a ruling, "The shared network: what a
+plugin container can reach" in section 4. Nothing else in the spec changed. No plugin code has moved and no plugin is deployed.
+Since revision 4 the deploy pipeline this spec builds on has shipped (SCRUM-394): the gateway now deploys by digest through
+`release.yml` and the host script, and a canary container sits on the shared network. Revision 4 said the deploy script
+is untouched; that is no longer true of the gateway's, and still true of anything about plugins. Written against `main` at `c82f58c`, `gws-mcp` main at `27ea0fc`, `atlassian-mcp`
 main at `b8b82a0`.
 
 Two things are decided and not reopened here. `gws-mcp` and `atlassian-mcp` become pnpm
@@ -213,6 +216,110 @@ Anything on that network can reach a plugin's port. Today that is the gateway an
 plugins. A plugin call is useless without a user's token, and the private file routes refuse a
 tokenless request (rehearsed: 401), but the network is the boundary and a future service
 joining it should be a deliberate act.
+
+### The shared network: what a plugin container can reach
+
+**This section asks for a ruling before step 9.** The paragraph above was written when nothing
+but the gateway was on the network. Two things have changed: a canary container is on it now,
+and this spec is about to add two containers that run third-party-facing code with user tokens
+passing through them. A plugin is the least trusted code we run. This is what joining the
+network gives it, what it needs, and what is proposed.
+
+**What a container on `datatorag-mcp-network` can reach today.** Read from the compose files
+and the code, not probed from a live container (the probe is step 9's job, listed below).
+
+| It can reach | How | Why that matters |
+|---|---|---|
+| The gateway's port 80, directly | By service name on the network. The gateway listens on every interface of its container | The request does not pass the edge. See "the header" below |
+| Every other container on the network, on any port it listens on | The network is one flat bridge; nothing on it filters between members | After step 9 that is the other plugin's `/mcp` and its private file routes |
+| The internet | A bridge network has outbound access by default | A plugin needs this: its whole job is calling its provider's API |
+| The host's own addresses on that bridge | The bridge's gateway address is the host | Anything the host listens on at every address may be reachable from a container. A firewall written for traffic arriving from outside does not by itself cover traffic arriving from a bridge. Which ports actually answer is unverified; step 9's probe reads it |
+| The cloud provider's instance metadata address | It is link-local and routed from containers unless something blocks it | Whether anything of value is served there depends on the instance; to be read at step 9, not assumed |
+
+**What it cannot get.** A session on the database: the database is not on the host and a
+container with outbound access can reach its endpoint, but the connection string is in the
+gateway's environment, not on the network. Another user's provider token: the gateway resolves
+a token per call and sends it in a header on that one call's requests, so a plugin holds only
+the tokens of calls it is serving. The gateway's own process environment and the plugin volume
+of another container: those are not network resources.
+
+That last point is true only AFTER the move. Today a plugin is a child process inside the
+gateway's container: it is started with the gateway's whole environment and can reach the
+gateway on loopback. So the baseline this section compares with is weaker than the table
+suggests, and moving the plugins into their own containers removes exposure. This section is
+about what is left once they have moved.
+
+**The header.** The gateway decides a client's address from a header the edge sets. Two
+functions do it. The one in front of the OAuth endpoints (`oauth/rate-limit.ts`) falls back to
+the connection's peer when the header is absent. The lead form's (`api/leads/route.ts`) never
+looks at the peer: after the edge's header it takes a forwarded-for header, then another
+header, then a fixed placeholder. Trusting the edge's header is sound for traffic from outside:
+the host's firewall admits port 80 only from the edge, and the edge overwrites the header. It
+is not sound for a request that starts on the shared network. Such a request never passes the
+edge, so it can carry any value in that header, and the gateway believes it. With it, a
+container on the network can:
+
+- get around the per-address limit on the OAuth endpoints by naming a new address per request,
+  or spend a real address's allowance by naming that address;
+- file lead-form entries under any address it likes, past whatever is keyed on the address;
+- reach every public route of the gateway without passing the edge, so without whatever the
+  edge filters or limits (the edge's configuration is not in this repository).
+
+It cannot skip authentication with this: a bearer or a session is still checked. What it
+defeats is the address-based limits, and those are what stand in front of the unauthenticated
+OAuth endpoints. Today the only other container on the network is the canary, which sends
+nothing. After step 9 it is each plugin.
+
+**What a plugin container needs.**
+
+| Direction | Needed | Not needed |
+|---|---|---|
+| In | Requests from the gateway to its one port | Requests from the other plugin, the canary, or anything else |
+| Out | Its provider's API over HTTPS, and DNS | The gateway, the other plugin, the host's own ports, the metadata address |
+
+Nothing a plugin does starts a request to the gateway, as far as the gateway's side shows: it
+has no route meant for a plugin, and it is the gateway that calls the plugin, in both the tool
+path and the file crossing. The plugins' own sources are not in this repository until step 5;
+the claim is to be confirmed against them then.
+
+**Options.**
+
+| | What it is | Cost | What it leaves |
+|---|---|---|---|
+| A | Leave the one network as it is and accept it | None | Everything in the first table |
+| B | **The gateway believes the header only from a peer that is the edge.** The header counts when the connection's peer is in the edge's published address ranges; from any other peer (a neighbour on a container network, the host itself, loopback) it is ignored and the peer is the client. One shared function in place of the two that decide this today | A gateway change with tests, larger than it looks in one place: the lead form runs where the connection's peer is not available, so the server has to hand the peer to it in a value the server itself sets, or that limit moves to where the peer is. **It can cause an outage if a fact is wrong**, so the fact is checked on the host first, for both address families: that for traffic through the published port the gateway sees the edge's address as its peer and not the bridge's. If it sees the bridge's, every real client lands in one bucket and the OAuth endpoints refuse almost everyone. The edge's ranges change now and then, so the list needs an owner | A plugin can still reach the gateway's routes and the other plugin's port, but as itself: one address, limited like any client |
+| C | **One network per plugin.** Each plugin gets its own network; the gateway joins all of them; a plugin joins only its own. The canary moves to its own network too | Compose only. The gateway reaches each plugin by the same service name as before | A plugin can no longer reach the other plugin or the canary. It can still reach the gateway, which is on its network by design |
+| D | Host firewall rules for container traffic: drop from the plugin networks to the host's own ports and to the metadata address | Host rules, kept by a person, in the chain the container runtime reserves for them. One more thing installed on the host and one more thing to drift | Closes the last two rows of the first table. Does not replace B or C |
+| E | An outbound allow-list per plugin (only its provider's hosts) | A forward proxy or per-container rules by address; provider address ranges move | The strongest answer to "a compromised plugin sends tokens somewhere else", and the most machinery |
+
+**Recommendation: B and C before step 9, D at step 9, E not now.**
+
+- **B** is the one that fixes something already true today, and it is cheap. It should ship on
+  its own, through the gateway's normal deploy, before any plugin container exists. Until it
+  does, the canary is the only neighbour and it is inert, so there is no urgency beyond that.
+- **C** costs a few lines of compose and takes away plugin-to-plugin reach, which nothing
+  needs. A plugin could still come back at the gateway through the host's published port, which
+  is why C goes with B and not instead of it. It changes section 4's compose table (the "Network" row) and nothing else in this
+  spec: discovery by service name, the ports and the health checks are the same.
+- **D** belongs with step 9, when the plugin containers first start on the host with no
+  traffic. That step should also do the probe this section did not: from inside a plugin
+  container, list what answers (the gateway, the other plugin, the host's ports, the metadata
+  address). The result goes in the private report for that step, never into this file: what
+  answers on a host is evidence, and this repository holds the rule.
+- **E** is the right shape eventually and the wrong size now. With B, C and D in place, what a
+  compromised plugin can still do is use the tokens of the calls it is serving against its own
+  provider, and send them out. An allow-list stops the second half only. It is worth its own
+  ticket once the containers have run for a while and their real outbound hosts are known.
+
+**Not proposed: making the gateway unreachable from the plugins' networks.** Nothing on those
+networks needs to reach the gateway, but the gateway must reach the plugins, and on a bridge
+network reach goes both ways. Putting a proxy between them to make it one-way is more
+machinery than B, which makes the gateway safe to be reached.
+
+**What the ruling changes in this spec.** If B and C are ruled: section 4's compose table and
+the paragraph above this section are rewritten to match, a step is added before step 9 for B
+(its own deploy, its own rollback id), and step 9 gains the probe and D. If A is ruled, this
+section stays as the record of what was accepted.
 
 **Memory on the host.**
 
@@ -474,4 +581,7 @@ limits set from measurement under real tool calls; `registry:diff` reading CI's 
 only; the ground-truth check at the end of every plugin release; the gateway prep split in two;
 the branch rulings in section 7.
 
-Open: a separate go for each of steps 2, 10, 11 and 12.
+Open: a separate go for each of steps 2, 10, 11 and 12. And one ruling, asked in revision 5:
+which of the options in "The shared network: what a plugin container can reach" (section 4)
+apply before the plugin containers start. The recommendation there is B and C before step 9,
+D at step 9.
