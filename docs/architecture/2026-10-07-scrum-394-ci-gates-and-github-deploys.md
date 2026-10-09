@@ -226,7 +226,7 @@ table row becomes the third.
 | The rollout runbook kept outside this repo | Loses its build and tagging steps; keeps the baseline and post test runs, the drift check and the smoke, which the pipeline does not do |
 | The deploy record | Written from the GitHub deployment: surface, sha, digest, approver, time, previous digest |
 | `GATEWAY_SHA` | Still a build argument, now set by the workflow from the commit it checked out |
-| Plugin rollouts | Unchanged by this spec. They join the pipeline as surfaces when they become images (SCRUM-390) |
+| Plugin rollouts | Unchanged by this spec. Ruled 2026-10-09 (SCRUM-390, revision 6): the plugins stay inside the gateway container and are built into its image, so a plugin change becomes a gateway deploy and this pipeline gains no surface for them |
 
 ## 8. Part 5: the smallest step that proves the pipeline
 
@@ -329,7 +329,8 @@ separate decision.
 3. Step 3: the build workflow. No deploy.
 4. Addendum A ruled, then steps 4 to 7, each host step agreed one at a time.
 5. SCRUM-390's import, which needs the merge-style setting already in place.
-6. SCRUM-390's plugin images, which reuse this pipeline with two more surfaces.
+6. SCRUM-390's plugins, built into the gateway image (ruled 2026-10-09). They reuse this
+   pipeline as part of the `gateway` surface; no surface is added.
 
 ## 10. Risks
 
