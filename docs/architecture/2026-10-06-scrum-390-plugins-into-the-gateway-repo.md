@@ -1,36 +1,54 @@
 # SCRUM-390: the plugins move into the gateway repo
 
-Status: SPEC, revision 5 (2026-10-09): revision 4 plus one new section that asks for a ruling, "The shared network: what a
-plugin container can reach" in section 4. Nothing else in the spec changed. No plugin code has moved and no plugin is deployed.
-Since revision 4 the deploy pipeline this spec builds on has shipped (SCRUM-394): the gateway now deploys by digest through
-`release.yml` and the host script, and a canary container sits on the shared network. Revision 4 said the deploy script
-is untouched; that is no longer true of the gateway's, and still true of anything about plugins. Written against `main` at `c82f58c`, `gws-mcp` main at `27ea0fc`, `atlassian-mcp`
-main at `b8b82a0`.
+Status: SPEC, revision 6 (2026-10-09). **Ruled on 2026-10-09: the plugins stay inside the
+gateway container.** They are built from this repository into the gateway image: one image,
+one deploy, one rollback id. Each plugin process is started with only its own environment
+variables, never the gateway's keys. This reverses the half of revision 3 that made each
+plugin its own container; the pipeline half (SCRUM-394) stands and is built. Nothing in this
+revision has been built: no plugin code has moved and no plugin deploy has changed. Gateway
+facts were re-read at `main` `5856c3c`; plugin facts at `gws-mcp` main `27ea0fc` and
+`atlassian-mcp` main `b8b82a0`.
 
 Two things are decided and not reopened here. `gws-mcp` and `atlassian-mcp` become pnpm
 workspace packages at `plugins/gws-mcp` and `plugins/atlassian-mcp`, history kept. And each
-plugin runs as **its own container from its own image**, built by GitHub and rolled back by
-image, which is what makes it a deploy unit with its own rollback id.
+plugin **runs as a child process of the gateway, from a directory inside the gateway image**,
+so a plugin change is a gateway deploy and is rolled back by rolling the gateway back.
 
-**What revision 3 changed.** Revisions 1 and 2 kept the plugins inside the gateway container
-and designed a release mechanism for a folder in a volume: immutable directories, a symlink,
-a one-off build container, a release script. That whole mechanism is gone. It existed only
-because the plugins ran inside the gateway's process tree, and a design that moves them out
-needs none of it. What it cost to drop: a rehearsed release-directory layout, never built and
-never on the host. What carries over unchanged: the import, the port, the wiring, the registry
-command and the gate script.
+**What revision 6 changed.** Revisions 3 to 5 moved each plugin into its own container with
+its own image and rollback id. The ruling's reasoning: nobody reaches a plugin except through
+the gateway, so scale was never the reason. The two real gains of separate containers were a
+crashing plugin restarting alone and a plugin not seeing the gateway's keys. At two plugins of
+our own code those do not pay for two more deploy units, per-plugin networks, a header-trust
+change and host firewall rules. The second gain is kept another way, by scoping each plugin's
+environment in code (section 4). The first is not kept beyond what exists today.
+
+What goes with the container design: the plugin image and `plugins/Dockerfile`, the two
+compose services, `PLUGIN_MCP_URLS` as a runtime override, the commit and start time on a
+plugin's `/health`, the retry and the two worded errors for a plugin that is restarting, the
+per-plugin memory limits, and the two per-plugin cutovers. What it cost to drop: a design
+rehearsed on a laptop and never on the host. What carries over unchanged: the import, the
+port, the wiring, the registry command and the gate script. The container design is kept as a
+record in section 4, with what was measured, for the day a plugin is moved out. The layout in
+section 3 keeps that day open: a plugin is one directory with its own package.
+
+**Earlier revisions, in one line each.** Revisions 1 and 2 kept the plugins in the gateway
+container and designed a release mechanism for a folder in a volume (release directories, a
+symlink, a build container, a release script). Revision 3 dropped that for a container per
+plugin. Revision 5 asked what such a container could reach on the shared network. Revision 6
+keeps the plugins inside and needs neither mechanism: the folder is part of the image.
 
 **How to read the claims.**
 
 - *Read*: taken from the code or config at the shas above.
 - *Rehearsed*: run on a laptop in throwaway clones and throwaway containers, all deleted. That
   proves commands, package layout and container behaviour at idle. It is not the host, not its
-  architecture, and not real traffic.
-- *Proposed*: design nothing has exercised. Every host-side step is in this class. No pass of
-  this spec connected to the host.
+  architecture, and not real traffic. Every rehearsal cited here was done for an earlier
+  revision; none was repeated for this one, and each says what it covered.
+- *Proposed*: design nothing has exercised. Everything new in revision 6 is in this class, and
+  so is every host-side step. No pass of this spec connected to the host.
 
 The build-and-deploy pipeline this spec relies on is specified separately, in
-`2026-10-07-scrum-394-ci-gates-and-github-deploys.md` (SCRUM-394).
+`2026-10-07-scrum-394-ci-gates-and-github-deploys.md` (SCRUM-394), and is built.
 
 **Direction, ruled: a connector is a service plugin of the gateway, not a standalone MCP
 server.** The repository is public for openness, not as a supported way to host a connector on
@@ -40,22 +58,21 @@ its own. Four consequences are in this work, and one is not:
 |---|---|
 | The folder is `plugins/` | Section 3 |
 | Copy that describes running a plugin as a standalone server is swept | The wiring PR (step 7): READMEs and docs only, no code |
-| The `.mcpb` desktop bundle is retired | Step 12, the first real plugin release |
-| The `gws` CLI fallback is dropped; what its oracle test checks is kept as recorded fixtures | Step 12 |
+| The `.mcpb` desktop bundle is retired | Step 11, the first plugin change after the cutover |
+| The `gws` CLI fallback is dropped; what its oracle test checks is kept as recorded fixtures | Step 11 |
 | Registry rows generated from the tool list | **Not in this work.** Its own ticket |
 
-The two code removals wait for step 12 on purpose. They change plugin code and may change the
-served tool list, and steps 8 to 11 prove the new images by showing they serve exactly what
-runs today. Removing code first would take that proof away.
+The two code removals wait for step 11 on purpose. They change plugin code and may change the
+served tool list, and steps 8 to 10 prove the plugins in the image by showing they serve
+exactly what runs today. Removing code first would take that proof away.
 
 ## 1. What this spec refuses
 
-1. **Plugins are not baked into the gateway image.** One image is one rollback id for three
-   surfaces.
+1. **A plugin is not given the gateway's environment.** Today a plugin child inherits all of
+   it. After step 3 it is started with a short list of names and nothing else (section 4).
 2. **The import PR is never squash-merged or rebase-merged.** A squash flattens the history
    the move exists to keep; a rebase rewrites every imported sha, including the ones old
-   rollback ids name. Turning both off on the repository is a precondition (SCRUM-394), not a
-   habit.
+   rollback ids name. Both are off on the repository since SCRUM-394.
 3. **No history rewrite on the way in.** Plain `git subtree add` keeps every plugin sha
    resolvable in this repo (rehearsed). A path-rewriting import would not.
 4. **Location and content never change in the same commit.** The two import commits carry
@@ -67,18 +84,18 @@ runs today. Removing code first would take that proof away.
 7. **The registry write stays a human's.** One command generates the file. Nothing here runs
    SQL against production.
 8. **The security gate and the leak scan are never path-filtered.**
-9. **The gateway never gets the Docker socket.** It cannot read another container's labels or
-   files, and it must not be able to. A plugin states its own commit over HTTP (section 4).
-10. **The container address is not switched by editing a database row.** The code already has
-    a branch for it, and using it would cost a production write per cutover and break the tool
-    pages (section 4).
-11. **A plugin container gets no secret.** Today a plugin child inherits the gateway's whole
-    environment. A container gets a port number and nothing else.
-12. **This does not claim the rollout of a new tool gets shorter.** It is still plugin, then
-    registry row, then gateway. What collapses is three branches, three gates and three
-    ancestry checks into one.
+9. **Where a plugin is loaded from is not switched by a database row or a file on the host.**
+   It is a value set in the image, so rolling the image back rolls that back too, and nothing
+   else has to be remembered (section 4).
+10. **No second deploy unit.** A plugin has no image, no compose service and no rollback id of
+    its own. This is the ruling, written as a refusal so a later convenience does not undo it.
+11. **Nothing compiles in the running container any more.** After the cutover a plugin is
+    never pulled, installed or built inside production.
+12. **This does not claim a plugin change gets cheaper to release.** It gets more expensive in
+    one way: every plugin change is a gateway deploy, and a gateway deploy drops every MCP
+    session. That is also true today, where a plugin release ends with a gateway restart.
 13. **The old repos are not deleted,** and not archived until both plugins are serving from
-    images built here.
+    the gateway image.
 
 ## 2. Today, from the code
 
@@ -87,15 +104,19 @@ runs today. Removing code first would take that proof away.
 | Workspace is `apps/*` and `packages/*`; turbo `build` outputs are `dist/**` and `.next/**` | `pnpm-workspace.yaml`, `turbo.json` |
 | The gateway imports nothing from a plugin and no plugin imports from the gateway | `apps/gateway/package.json`; grep for the two slugs |
 | A plugin on the host is a git checkout in a volume, compiled in place inside the gateway container and started as a child process of the gateway | `plugin-manager.ts`, `deploy` skill |
+| The plugins directory is fixed in code as `.datatorag/plugins` under the home directory, and the production compose file mounts a named volume there | `PLUGINS_DIR` in `plugin-manager.ts`; `docker-compose.prod.yml` |
+| A plugin child is started with **the gateway's whole environment**, plus `PORT`, plus that plugin's rows in the `mcp_server_env_vars` table. A row whose value starts with `$` copies the named variable from the gateway's environment | `spawnPlugin` in `plugin-manager.ts` |
+| A plugin child that exits unexpectedly is started again at once. The code means to stop after three crashes in sixty seconds, but the count is never kept between restarts, so the limit cannot be reached: a plugin that keeps crashing is restarted without end and without a pause, and the only trace is log lines. Read, not run; no test covers it | `spawnPlugin`, the exit handler |
 | A plugin release therefore restarts the gateway, which drops every MCP session and everything held in process memory | `ops-debugging` skill |
-| Every plugin address is built in one function, called from three places. It returns `localhost` and the registry's port when the row has a repo URL, and a container hostname when it does not | `buildPluginServerUrl` in `user-tools.ts`; grep for its callers |
+| Every plugin address is built in one function, called from three places. It returns `localhost` and the registry's port when the row has a repo URL | `buildPluginServerUrl` in `user-tools.ts`; grep for its callers |
 | `startAll()` skips, with a warning, any active plugin whose directory is missing | `plugin-manager.ts` |
-| Both plugins listen on all interfaces, answer `GET /health` with `{"status":"ok"}`, and read only `PORT` from the environment on the hosted path | each plugin's `src/index.ts`; grep for `process.env` |
+| Both plugins listen on all interfaces and answer `GET /health` with `{"status":"ok"}`. `atlassian-mcp` reads only `PORT` from the environment. `gws-mcp` reads `PORT`, and its CLI client reads three more names and hands its whole environment to the CLI it starts | each plugin's `src/index.ts`; grep for `process.env` |
 | A plugin call that throws is logged with its URL, recorded as thrown, and returned to the caller with the raw error text | `mcp-server.ts`, the CallTool catch |
-| A test run records each plugin's sha by reading `<slug>/.git/HEAD` | `tests/plugin-sha.ts` |
+| A test run records each plugin's sha by reading `<slug>/.git/HEAD` under the plugins directory | `tests/plugin-sha.ts`, `tests/execute.ts` |
 | `PLUGIN_MCP_URLS` (`slug=url,...`) is read by one test, `registry-ground-truth.test.ts`, and by nothing in the running gateway | grep |
 | That test compares tool **names only**, and reports skipped when the variable is unset | the test file |
-| No repository of the three has a CI workflow | no `.github/` directory in any of them |
+| The gateway image keeps `git`, `curl`, `unzip` and `pnpm` at run time, because plugins are updated in place in the running container | `apps/gateway/Dockerfile`, its own comment |
+| This repository has a required pull-request gate and builds its images in GitHub (SCRUM-394). The two plugin repos have no CI workflow | `.github/workflows/`; no `.github/` directory in either plugin repo |
 
 Three things today's layout hides:
 
@@ -114,33 +135,34 @@ Three things today's layout hides:
 |---|---|---|
 | Directory | `plugins/gws-mcp`, `plugins/atlassian-mcp` | The directory name stays the slug, which is in `mcp_servers.slug`, every namespaced tool name and `PLUGIN_SERVICE_MAP` |
 | `package.json` name | `@datatorag-mcp/gws-mcp`, `@datatorag-mcp/atlassian-mcp` | Workspace scope. Nothing resolves a plugin by package name at runtime |
-| `package.json` `files` | `["server", "datatorag.json", "README.md", "LICENSE"]` | `server/` is gitignored; without `files` the image's packaging step would leave it out (rehearsed with it) |
+| `package.json` `files` | `["server", "datatorag.json", "README.md", "LICENSE"]` | `server/` is gitignored. Not needed by the in-image layout below; kept because it is what a plugin image would package (rehearsed with it), and it costs one line |
 | Lockfiles | Both per-plugin lockfiles (each plugin tracks an npm one and a pnpm one) are deleted; the root `pnpm-lock.yaml` gains two importers | One lockfile |
 | Workspace | add `"plugins/*"` to `pnpm-workspace.yaml` | |
 | `turbo.json` | add `server/**` to `build.outputs` | A cache hit restores only declared outputs, so without this a cached plugin build leaves `server/` stale or absent and exits 0 |
 | tsconfig | Each plugin keeps its own. Neither extends `tsconfig.base.json` | The base sets bundler resolution; the plugins run under plain `node` |
 | Lint | Nothing to share | No package in any of the three repos has a lint script or config |
-| Image | One `plugins/Dockerfile`, taking the plugin as a build argument | Rehearsed as one file for both. Section 4 |
-| Gateway image | Its `Dockerfile` copies each plugin's `README.md` and nothing else from `plugins/` | The tool pages read the README at build time (ruled). `gate.sh` fails if it copies anything more |
-| `.mcpb` desktop bundle | Imported as it is, then retired at step 12 | Ruled. No GitHub release of it exists, so no download link breaks |
+| Image | **None of its own.** The gateway's `Dockerfile` builds both plugins and ships them at `/app/plugins/<slug>` | The ruling. Section 4 |
+| Tool page README | Read from `plugins/<slug>/README.md` in the same tree the gateway is built from | Ruled earlier: one README per plugin, read at build time. It needs no copy step now, because the plugin is in the build |
+| `.mcpb` desktop bundle | Imported as it is, then retired at step 11 | Ruled. No GitHub release of it exists, so no download link breaks |
 
 **Build and test.** `pnpm -r build` and `pnpm -r test` work once the glob is added (rehearsed).
 `turbo run build --filter='...[<base>]'` selects exactly the changed package and its dependents
 (rehearsed: a plugin-only commit selects that plugin alone; a `packages/types` commit selects
-`types` and the gateway).
+`types` and the gateway). That selection is about what is compiled and tested. It says nothing
+about what is deployed: a plugin-only commit still produces a new gateway image.
 
 **Two things the rehearsals found that a reading would not:**
 
 - **The move is not a no-op for dependencies.** Re-resolving under the root lockfile moved
   four transitive production packages of `gws-mcp` forward (`ajv`, `jose`, `zod`,
-  `eventsource-parser`). They are pinned for the first images built here and unpinned later as
-  a change of its own. The pin that works (rehearsed, production package list then identical,
-  91 of 91): `pnpm.overrides` for three of them, and `zod` declared as a direct pinned
-  dependency of the plugin, because it arrives only as an auto-installed peer of the MCP SDK
-  and an override did not move it. `atlassian-mcp`'s drift was not measured.
+  `eventsource-parser`). They are pinned for the first image that carries the plugins and
+  unpinned later as a change of its own. The pin that works (rehearsed, production package list
+  then identical, 91 of 91): `pnpm.overrides` for three of them, and `zod` declared as a direct
+  pinned dependency of the plugin, because it arrives only as an auto-installed peer of the MCP
+  SDK and an override did not move it. `atlassian-mcp`'s drift was not measured.
 - **A fresh checkout's `pnpm -r test` is red.** The `gws-mcp` oracle test fails, by design
   never skips, when the pinned CLI binary is absent, and the binary is a gitignored download.
-  Until step 12 drops the CLI, the plugin's `test` task depends on `download-binaries`. After
+  Until step 11 drops the CLI, the plugin's `test` task depends on `download-binaries`. After
   it, the oracle's expected requests are fixtures in the repo and nothing is downloaded.
 
 **What the gateway and the plugins share.**
@@ -148,37 +170,35 @@ Three things today's layout hides:
 | Shared by copy today | After the move |
 |---|---|
 | The file-crossing wire contract: two private route paths, the token header, the arguments header, the `{error, code}` answer, the byte cap. Three copies | **`packages/plugin-contract`**: constants and types only, built to `dist/` like its siblings. The one package that falls out. A follow-up PR, because it changes plugin code |
-| Tool names: plugin tool arrays against the gateway's classification, snapshot and runner cases | No package. CI saves each image's `tools/list` (section 5), and a gateway test compares against that file |
+| Tool names: plugin tool arrays against the gateway's classification, snapshot and runner cases | No package. CI saves each plugin's `tools/list` (section 5), and a gateway test compares against that file |
 | Google scope list, in the gateway and twice in `gws-mcp` | A test across the tree, not a package |
 | Response helpers, annotation presets | Left alone. Each plugin has its own and they are not copies |
 
-## 4. Deploy: each plugin is a container
+## 4. Deploy: the plugins ship inside the gateway image
 
-### The options
+### The options, and the ruling
 
-| | A. Folder in the gateway's volume (revisions 1 and 2) | B. Inside the gateway image | **C. Own container, own image** |
+| | A. Folder in the gateway's volume (revisions 1 and 2) | **B. Inside the gateway image (ruled, revision 6)** | C. Own container, own image (revisions 3 to 5) |
 |---|---|---|---|
 | Rollback id | Per surface | One for everything | Per surface: an image digest |
-| Plugin release restarts the gateway | Yes | Yes, and rebuilds it | **No** |
-| Built where | On the host, in a one-off container | On the host | By GitHub; nothing compiles on the host |
-| New machinery | Release directories, a symlink, a release script, a build container | None | Two compose services and one `Dockerfile` |
-| Plugin sees the gateway's secrets | Yes, inherited | Yes | No |
+| A plugin change restarts the gateway | Yes | Yes | No |
+| Built where | On the host, in a one-off container | By GitHub, as part of the gateway image | By GitHub, one image per plugin |
+| New machinery | Release directories, a symlink, a release script, a build container | A few lines in one `Dockerfile` and one value the gateway reads | Two compose services, one `Dockerfile`, a network decision |
+| Plugin sees the gateway's secrets | Yes, inherited | **No, by a rule in code** (below, with its limit) | No, by the container boundary |
 | Memory accounting | Inside the gateway's limit | Inside the gateway's limit | Its own limit |
+| A crashing plugin | Restarted by the gateway, today without a limit (section 2) | Same, with the limit made real (below) | Restarted alone by Docker |
 
-A and B share one assumption: the plugin is a child of the gateway process. C drops it.
+**SCRUM-393 stays absorbed, by the ruling.** It asked for restarting one plugin without
+restarting the gateway. Its reason was plugin releases. Under B there is no plugin release
+apart from a gateway deploy, so there is no plugin restart to do alone. What this does **not**
+deliver, said plainly: the capability itself. A plugin-only change still restarts the gateway
+and drops every session, and a plugin that cannot stay up is never restarted by anything but
+the gateway that started it.
 
-**This absorbs SCRUM-393** (restart one plugin without restarting the gateway). Under C that is
-`compose up -d <slug>`, with no gateway code involved. Rehearsed: one plugin container
-restarted and answering again in about six seconds while the other was untouched. What is
-*not* absorbed: a gateway deploy still drops every session, exactly as today.
-
-### The image (rehearsed on a laptop)
-
-One multi-stage `plugins/Dockerfile`. The build stage installs that plugin's dependencies from
-the root lockfile, compiles, and runs `pnpm deploy --prod` to produce the compiled output, the
-manifest and a production-only `node_modules`. The final stage is `node:20-slim` with that
-directory, a non-root user and `CMD ["node", "server/index.js"]`. The commit is a build
-argument, kept in the image's revision label and in an environment variable the plugin reports.
+**The record of option C**, for the day a plugin is moved out. One multi-stage
+`plugins/Dockerfile` taking the plugin as a build argument: install from the root lockfile,
+compile, `pnpm deploy --prod`, a final stage on the slim Node image as a non-root user.
+Rehearsed on a laptop, at idle only:
 
 | Measured | `gws-mcp` | `atlassian-mcp` |
 |---|---|---|
@@ -188,42 +208,165 @@ argument, kept in the image's revision label and in an environment variable the 
 | Memory at idle, as the container runtime counts it | 28 MiB | 23 MiB |
 
 Both ran with a 256 MB limit, a read-only root filesystem, every capability dropped, and as
-uid 1000. That is idle behaviour only: no tool call with a real token ran, so a write to disk
-or a memory peak under load was not exercised.
+uid 1000; one plugin container restarted and answered again in about six seconds while the
+other was untouched. No tool call with a real token ran. Two things from that rehearsal carry
+into B: both plugins build and serve from the root lockfile, and both start as a non-root user.
 
-### Compose (proposed)
+### The image (proposed)
 
-Two services are added to `docker-compose.prod.yml`. Nothing else in it changes except the
-gateway's environment list and, at the end, the volume line.
+The gateway's `Dockerfile` keeps its three stages and gains the plugins in each:
 
-| | `gws-mcp` | `atlassian-mcp` |
+| Stage | Today | Added |
 |---|---|---|
-| Image | `${GWS_MCP_IMAGE}`, a digest reference written by the host script | `${ATLASSIAN_MCP_IMAGE}` |
-| Network | The existing `dtrmcp` network (`datatorag-mcp-network`), nothing else | Same |
-| Port | 40000 inside the network, `expose` only | 40001, `expose` only |
-| Published on the host | Nothing. Only the gateway publishes a port | Nothing |
-| Environment | `PORT`, and the commit from the image. No secret | Same |
-| Health check | `GET /health` on its own port, same form as the gateway's | Same |
-| Hardening | Read-only root filesystem with a tmpfs `/tmp`, all capabilities dropped, no new privileges, non-root | Same |
-| Memory | Limit 512 MB to start, swap limit equal (no swap); set properly after measurement under real calls | Same |
-| Restart | `unless-stopped` | Same |
+| `base` | The workspace's manifests | Each plugin's `package.json`, so the frozen install sees every importer in the lockfile |
+| `build` | Installs everything, builds the packages and the gateway | Copies `plugins/`, builds each plugin (`tsc` into `server/`) |
+| `runtime` | Production dependencies, the build's output | The production install now covers the plugins too. From the build stage: each plugin's `server/`. From the tree: its `package.json`, `datatorag.json` and `README.md` |
 
-The ports keep the numbers the registry rows hold today. The gateway has **no** `depends_on`
-toward the plugins: it must come up and serve the site, sign-in and its own tools whether or
-not a plugin is healthy, which is the same decoupling it already has from the database.
+The result is `/app/plugins/<slug>` holding what a checkout in the volume holds today, minus
+the source, the git metadata and the dev dependencies: the manager reads `package.json` to find
+the entry point and runs `node server/index.js` from that directory, exactly as now.
 
-Anything on that network can reach a plugin's port. Today that is the gateway and the two
-plugins. A plugin call is useless without a user's token, and the private file routes refuse a
-tokenless request (rehearsed: 401), but the network is the boundary and a future service
-joining it should be a deliberate act.
+**Not at the path the volume is mounted on.** The volume sits on the home directory's plugins
+folder, and a mounted volume hides whatever the image has at that path. So the image's plugins
+live at `/app/plugins`, beside the gateway, and the volume keeps its place until close-out.
+
+Unmeasured, and step 8 records them: how much the image grows (the plugins' production
+dependencies), how much longer it takes to build, and whether the frozen production install
+resolves the plugins the way the rehearsed plugin image did. That rehearsal used `pnpm deploy`
+into a separate directory; this layout installs them in place in the workspace, which nothing
+has run.
+
+**The commit.** A plugin in the image has no commit of its own. It was built from the tree of
+the gateway's commit, and the image already carries that as `GATEWAY_SHA`.
+
+### Where the gateway loads a plugin from (proposed)
+
+One value, `DATATORAG_PLUGINS_DIR`. The manager uses it when set and falls back to today's
+directory under the home folder when it is not, which is what a laptop and every older image
+do. **It is set in the `Dockerfile`, not in the compose file and not in the parameter store.**
+That is the point of refusal 9:
+
+- The cutover is one image. The image that sets the value loads from `/app/plugins`; the image
+  before it does not have the value and loads from the volume, where the checkouts still are.
+- So the pipeline's rollback is the whole undo. No compose edit, no host file, no database row
+  and no second step that someone has to remember under pressure.
+- The copy of the compose file on the host does not change at the cutover, so the release
+  workflow's checksum stop has nothing to object to.
+
+`startAll()` is otherwise unchanged: it still reads the active rows, still starts each plugin
+on the port its row holds, and still skips a slug whose directory is missing.
+
+### A plugin's environment (proposed, and where it stops)
+
+Today `spawnPlugin` hands the child the gateway's whole environment. The ruling: a plugin is
+started with only its own variables, never the gateway's keys.
+
+| The child gets | Why |
+|---|---|
+| `PATH` | To find `node` |
+| `NODE_ENV` | The plugins and their dependencies read it |
+| `PORT` | From the registry row, as today |
+| That plugin's rows in `mcp_server_env_vars` | The existing per-plugin mechanism |
+| Nothing else | The database URL, the OAuth client secrets, the provider keys and the session material stay in the gateway |
+
+Three things this has to get right:
+
+- **The `$NAME` form is now the only door.** A row whose value starts with `$` copies a named
+  variable out of the gateway's environment. That was harmless when the child had everything
+  anyway. After this change it is the one way a gateway key can still reach a plugin, by a
+  database row. Which rows exist in production is read before step 3 and reported privately.
+  Proposed: the `$` form resolves only names on a short allow-list in code, kept beside
+  `PLUGIN_SERVICE_MAP`, empty until a plugin needs one. A row naming anything else is refused
+  with a log line and the plugin starts without it.
+- **`gws-mcp` reads three names besides `PORT`,** all in its CLI client: two for an OAuth client
+  and one for a config directory, used only when it starts the CLI, to which it also hands its
+  whole environment. The
+  gateway's own environment uses different names for its Google client, so unless a registry
+  row maps them, the plugin does not get those today either and nothing changes for it. Step 3
+  verifies that instead of assuming it. Step 11 removes the CLI path.
+- **A known-bad case pins it.** The test sets a marker variable in the parent and fails if the
+  child can see it, so restoring the spread turns the test red.
+
+**Where this stops.** Scoping the environment protects against the ordinary ways a key leaks:
+a plugin or one of its dependencies logging or sending its environment, an error report that
+includes it, a child the plugin starts inheriting it. It does **not** stop a plugin that has
+been taken over, if that plugin runs as the same user as the gateway in the same container: on
+Linux a process can read the environment of another process of the same user from `/proc`, and
+can read whatever files that user can. The gateway runs as root in its container, and so do
+its children today.
+
+**Recommended with it: start each plugin as a non-root user.** The manager passes a user and
+group id when it starts the child (the Node image ships an unprivileged `node` user). A
+non-root process cannot read a root process's environment or memory, and cannot write the
+gateway's files as long as those stay owned by root. Both plugins have already run as uid 1000
+(the option C rehearsal, idle only). Three things about it:
+
+- **It cannot ship with step 3.** Until the cutover the plugins load from a folder under
+  root's home, which a non-root user normally cannot enter. So it is a deploy of its own after
+  step 10, when the plugins are under `/app/plugins`.
+- **One user per plugin, not one for both.** Two processes of the same user can read each
+  other's environment the same way. With a user each, "only its own variables" also holds
+  between the plugins.
+- **Unknown:** whether either plugin writes anywhere at run time other than a temp directory.
+  A test run that exercises every tool would show it.
+
+It is one option on the spawn call, but it is a second behaviour change, so it is listed in
+section 10 for a ruling instead of assumed.
+
+**What neither does.** A plugin child still shares the gateway's network. It can reach the
+gateway on loopback and any address the gateway can. That is today's state, it is our own
+code, and it is what option C would have changed. The next section is the record of that.
+
+### Compose
+
+Back to what is on the host today. No service is added.
+
+| Service | File | Image | Network | Published | Volume |
+|---|---|---|---|---|---|
+| `gateway` | `docker/docker-compose.prod.yml` | `${GATEWAY_IMAGE}`, by digest, set by the host script | `datatorag-mcp-network` | Port 80 | `plugins-data` on the home directory's plugins folder, until close-out |
+| `canary` | `docker/canary/compose.host.yml` | `${CANARY_IMAGE}`, by digest | The same network, as an external one | Nothing | None |
+
+The gateway's compose file changes once in this work, at close-out, when the volume line comes
+out (step 12). Its memory limit is unchanged at 3072 MB and keeps covering both plugin
+processes, as it does today.
 
 ### The shared network: what a plugin container can reach
 
-**This section asks for a ruling before step 9.** The paragraph above was written when nothing
-but the gateway was on the network. Two things have changed: a canary container is on it now,
-and this spec is about to add two containers that run third-party-facing code with user tokens
-passing through them. A plugin is the least trusted code we run. This is what joining the
-network gives it, what it needs, and what is proposed.
+**Ruled A, 2026-10-09: accepted as it is.** The reason given: with the plugins staying
+inside the gateway container, the only other container on the shared network is the canary,
+which sends nothing. Options B to E stay below as the record for the day a plugin is moved
+out. None of them is scheduled.
+
+**How to read the rest of this section.** It is revision 5's text, written when two plugin
+containers were about to join the network, and it is unchanged except for this opening and the
+closing paragraph. It describes a design that is not being built. Its "step 5" and "step 9" are
+revision 5's steps (the import, and the plugin containers' first start on the host), and "the
+move" in it means that move into containers.
+
+**What A leaves in place**, so the acceptance covers it knowingly:
+
+- The canary can reach the gateway's port without passing the edge, and could send the header
+  described below. It is our own image, read-only, with every capability dropped, and it sends
+  nothing.
+- **A plugin process inside the gateway's container can do the same over loopback.** That is
+  not about the shared network and is not changed by this work: it was true before the question
+  was asked and stays true. It is our own code, and it does not get past authentication. The
+  ruling's reason is about containers, so this is said here and not left to be found. Option B
+  is the fix for both, if it is ever wanted.
+- **The canary can reach the plugins' ports too.** Both plugins listen on every interface of
+  the gateway's container, so their ports answer on the shared network, today and after this
+  work. A call there is useless without a user's token, and the private file routes refuse a
+  tokenless request (rehearsed: 401). Binding the plugins to loopback would close it; that is a
+  plugin change and is not proposed here.
+- Nothing here was probed from a live container. The rows about the host's own ports and the
+  metadata address are still unverified.
+
+**The question as it was asked.** Revision 4 said the network is the boundary and that a
+service joining it should be a deliberate act. That was written when nothing but the gateway
+was on it. Two things had changed: a canary container is on it, and the spec was about to add
+two containers that run third-party-facing code with user tokens passing through them. A plugin
+is the least trusted code we run. This is what joining the network gives it, what it needs, and
+what was proposed.
 
 **What a container on `datatorag-mcp-network` can reach today.** Read from the compose files
 and the code, not probed from a live container (the probe is step 9's job, listed below).
@@ -316,102 +459,73 @@ networks needs to reach the gateway, but the gateway must reach the plugins, and
 network reach goes both ways. Putting a proxy between them to make it one-way is more
 machinery than B, which makes the gateway safe to be reached.
 
-**What the ruling changes in this spec.** If B and C are ruled: section 4's compose table and
-the paragraph above this section are rewritten to match, a step is added before step 9 for B
-(its own deploy, its own rollback id), and step 9 gains the probe and D. If A is ruled, this
-section stays as the record of what was accepted.
-
-**Memory on the host.**
-
-| Container | Limit | Basis |
-|---|---|---|
-| Gateway | 3072 MB | Read from the compose file. Today this limit also covers both plugin processes |
-| `gws-mcp` | 512 MB to start | A deliberately loose starting value, not a finding. Idle is measured at 28 MiB on a laptop. The peak is an **estimate**: this plugin holds one file of up to 25 MB in memory during a crossing, with encoding overhead, so on the order of 100 to 150 MB |
-| `atlassian-mcp` | 512 MB to start | Same. Idle measured at 23 MiB; it receives the same file |
-| Total of limits | 4096 MB to start | Arithmetic. Whether the host has that much headroom is in the report, not here |
-
-Ruled: the limits are set from measurement **under real tool calls**, not idle. The cutover's
-test run (steps 10 and 11) exercises every tool, the largest file crossing included; the peak
-it records sets each limit, with stated headroom, as a follow-up deploy of that one service.
-
-### How the gateway finds a plugin
-
-`buildPluginServerUrl` learns one thing: if `PLUGIN_MCP_URLS` names the slug, that URL wins.
-`startAll()` skips any slug it names. The variable has the format the ground-truth test already
-parses, and it is set literally in the compose file (`gws-mcp=http://gws-mcp:40000/mcp,...`):
-it is an address, not a secret, so it does not go through the parameter store, but it must be
-in the gateway service's explicit environment list or it never reaches the process.
-
-Two corrections to how this was first framed:
-
-- **The running gateway does not read `PLUGIN_MCP_URLS` today.** One test does. The override
-  is new code, small, in the one function every caller already uses.
-- **The existing container branch is not used.** `buildPluginServerUrl` already returns a
-  container hostname when a row's repo URL is null. Flipping it means a production write per
-  cutover and per rollback, and it nulls the column the tool pages read for their source link
-  and README. An environment entry is reversible by a restart and touches no data.
+**What the ruling changed in this spec.** A was ruled, so this section stays as the record of
+what was accepted. No step was added for B, C or D, and the compose table is back to the
+gateway and the canary.
 
 ### How a test run learns a plugin's commit
 
-Not from an image label and not from a file in the image: the gateway cannot see either
-without the Docker socket (refusal 9). `GET /health` on the plugin returns its commit, from the
-build argument, alongside `status`. `plugin-sha.ts` asks over HTTP when the slug has a URL and
-keeps the git reader for a local checkout. This is also the better source: it is what the
-running process says, not what a directory says.
+Today `plugin-sha.ts` reads `<slug>/.git/HEAD` under the plugins directory. A plugin in the
+image has no git metadata. Proposed: when the plugins directory is the image's, the recorded
+sha for every plugin is the gateway's own commit, `GATEWAY_SHA`, which is true by construction.
+The git reader stays for a local checkout and for an older image running from the volume. A
+run then shows the cutover as each plugin's sha changing from its old repo's sha to the
+gateway's.
 
-### When a plugin container is down or restarting
+### When a plugin process is down
 
-| Situation | Today (read, and rehearsed for the error text) | Proposed |
-|---|---|---|
-| `tools/list` | Served from the registry | Unchanged: the tools stay listed |
-| A call while the port is closed or the name is gone | Throws `fetch failed` (cause `ECONNREFUSED` or `ENOTFOUND`); the caller gets that raw text | Both causes mean nothing was sent. Wait about two seconds and try once more; this is safe for a write too. If it still fails, answer in words that the connector is restarting, as an error result |
-| A call cut off mid-flight | The same raw error | **No retry.** The plugin may have acted. The worded error says the call may or may not have completed |
-| A file crossing | Fails on the leg it was in, and says which | Unchanged |
-| Gateway boot with a plugin down | A missing directory is skipped | The gateway starts; calls to that plugin fail as above until it is back |
-| A plugin that keeps crashing | The gateway respawns three times and logs | Docker restarts it, and the gateway raises an alert (below) |
+Unchanged from today, and said here so nobody reads more into the move than it gives.
 
-The wording of those two error sentences goes through the repo's outbound copy rules.
+| Situation | Behaviour (read) |
+|---|---|
+| `tools/list` | Served from the registry; the tools stay listed |
+| A call while the plugin's port is closed | Throws `fetch failed`; the caller gets that raw text |
+| A plugin exits unexpectedly | The gateway starts it again at once |
+| A plugin that keeps crashing | Restarted without end and without a pause: the three-in-sixty-seconds limit in the code is never reached (section 2). Log lines and nothing else |
+| Gateway boot with a plugin directory missing | Skipped with a warning; the gateway serves everything else |
 
-**The restart-loop alert** (ruled; proposed design). The gateway cannot see Docker, so the
-plugin tells it: `/health` also returns the time the process started. The gateway checks each
-plugin once a minute on its existing scheduler and posts to the existing alerts channel when a
-plugin has been unreachable for three checks running, or its start time has changed three
-times in ten minutes. One alert per episode, and one when it recovers.
+Revision 5 ruled a restart-loop alert, designed for containers the gateway could not see. Here
+the gateway can see, because the manager is the code that restarts a plugin. Proposed, as one
+small change: keep the crash count across restarts so the limit the code already intends is
+real (the code's condition allows three restarts and stops at the fourth crash in the window;
+the change says which is meant), and send one message to the existing alerts channel when the manager stops restarting a
+plugin. That is a behaviour change too: today a crashing plugin is retried forever, and after
+it a plugin that keeps crashing inside a minute stays down until the gateway restarts.
+Whether it stays in this work is in section 10. The retry and the worded
+errors of revision 5 are dropped: they covered the seconds a plugin container was being
+replaced on its own, which no longer happens.
 
-### What a plugin release becomes
+### What a plugin change becomes
 
-The plugin is one more surface in the SCRUM-394 pipeline. A merge that touches
-`plugins/<slug>/**` or the lockfile builds its image, tagged by commit. A dispatch names the
-surface and the sha, the production environment holds it for approval, and the host pulls by
-digest and runs `compose up -d <slug>`. Rollback is the same dispatch with the rollback flag.
-The gateway is not restarted and no session is dropped.
+A gateway change. A merge that touches `plugins/<slug>/**` builds the gateway image for that
+commit. A dispatch of `release.yml` names the surface `gateway` and the sha, the production
+environment holds it for approval, and the host starts that image by digest. Rollback is the
+same dispatch with the rollback flag, and it takes the plugins back with it.
 
-Because an image is immutable, "the process is serving what was built" stops being something
-to check with a second tool listing: the host script confirms the container was recreated
-from the requested digest, and that is the same statement.
+What the image cannot say is whether the **registry** agrees with it. So a deploy whose range
+touched `plugins/` owes the ground-truth check afterwards, from inside the gateway container
+where the database and the plugin ports both are: the registry must list exactly the tools each
+plugin now serves. A difference is repaired by a registry write, which is a person's, and rolls
+nothing back. The check compares names; a changed description or schema is what `registry:diff`
+is for. The release job cannot run this check today (it sends the host one request line and
+reads the answer), so where it runs is in section 10.
 
-What the image cannot say is whether the **registry** agrees with it. So a plugin release ends
-with the ground-truth check, run from inside the gateway container where the database and the
-plugin addresses both are: the registry must list exactly the tools the plugin now serves. A
-difference fails the release job and rolls nothing back, because the repair is a registry
-write and that is a person's. The check compares names; a changed description or schema is
-what `registry:diff` is for.
-
-**The record.** A deploy row names `surface` (`gateway`, `plugin:gws-mcp`,
-`plugin:atlassian-mcp`, `registry`), the monorepo `sha` and the image digest.
+**The record.** A deploy row names the surface `gateway`, the sha and the image digest, as
+SCRUM-394 already has it. There is no `plugin:<slug>` surface. A registry change keeps its own
+row.
 
 ### What goes away
 
 | Gone | Why it existed |
 |---|---|
 | The checkout in the volume, compiling inside the production container, and the "was it actually rebuilt" check | The plugin was built where it ran |
-| Restarting the gateway to release a plugin | The plugin was the gateway's child |
-| Revision 2's release directories, symlink, `release-plugin.sh` and one-off build container | To give a folder a rollback id |
-| The `plugins-data` volume | Removed from the compose file at close-out, after both cutovers have held |
-| Plugin memory counted against the gateway's limit | Same process tree |
+| A plugin release as its own procedure: pull, install, compile, restart | Same |
+| The `plugins-data` volume | Removed from the compose file at close-out |
+| `git`, `curl`, `unzip` and `pnpm` in the running image | They are there for in-place plugin updates. Removing them is a later change of its own, after close-out |
+| Revision 2's release directories and revision 3's plugin images, compose services and URL override | Each gave a plugin its own rollback id, which the ruling does not want |
 
-`plugin-manager`'s spawn path stays for local development, where a plugin is still a checkout
-on a laptop.
+`plugin-manager`'s spawn path is the production path again, and the local one: on a laptop a
+plugin is still a checkout the gateway starts.
 
 ## 5. Registry
 
@@ -421,65 +535,86 @@ change file: one guarded statement per row (the guard is the md5 of the descript
 `updated_at = now()`, and a rollback file. It is generated from two builds of the plugin repo
 by a script kept in none of the repos.
 
-**After.** When CI builds a plugin image it boots it, asks it for `tools/list` (the served
-list, not the source array: a plugin can withhold a tool it defines), and saves the answer as
-`tools.json` beside the image, with its digest in a label. Then one command in this repo:
+**After.** When CI builds the gateway image it starts each plugin from that image, asks it for
+`tools/list` (the served list, not the source array: a plugin can withhold a tool it defines),
+and keeps the answers as `tools-<slug>.json` beside the image's digest record. Then one command
+in this repo:
 
 ```
 pnpm registry:diff <slug> --from <sha> --to <sha>     # writes forward.sql and rollback.sql
 ```
 
-It compares the two shas' `tools.json`, fetched from CI and from nowhere else, and emits the
-same guarded statements used today, headed NOT RUN. It never
-opens a database connection. `--from` is the sha of the image that is running.
+It compares the two shas' tool files, fetched from CI and from nowhere else, and emits the same
+guarded statements used today, headed NOT RUN. It never opens a database connection. `--from`
+is the sha of the gateway that is running.
 
 The generator has one hard part and it gets a self-test: the guard must reproduce Postgres's
 `jsonb::text` rendering exactly, or every guard misses and the file safely does nothing.
 Fixtures are public tool schemas with their known md5s.
 
+**The order of a tool change, which this ruling changes.** Today a new tool goes plugin, then
+the registry row, then the gateway that classifies it: three steps, because the plugin and the
+gateway ship separately. In one image they arrive together.
+
+| Change | Proposed order | What a user sees in between |
+|---|---|---|
+| A new tool | The deploy, then the INSERT | Nothing: a tool without a row is not listed |
+| A removed tool | The DELETE, then the deploy | Nothing: the tool stops being listed while it still works |
+| A changed description or schema | The deploy, then the UPDATE | The old text for the new behaviour, for as long as the gap lasts. Same as today |
+
+Two cautions. This is proposed, not exercised. And the gateway has a classification test for a
+new tool that is gated on a live registry and is red until the row exists; with the INSERT now
+after the deploy, what that test should expect in between is settled in the wiring PR (step
+7), not discovered at the first new tool.
+
 **The drift gate and where a tool comes from.**
 
 | Place | Assumption | After |
 |---|---|---|
-| `registry-ground-truth.test.ts` | Slug to URL from `PLUGIN_MCP_URLS`; no repo assumption | The variable is now set in the gateway container, and the check runs at the end of every plugin release (section 4). Its blind spot stays: names only |
-| `tests/plugin-sha.ts` | A plugin directory is a git checkout | Asks the plugin (section 4) |
-| `/tools/[slug]` page | README from the plugin's directory on the gateway's disk, else GitHub's README for the repo in the registry row | Ruled: one README per plugin, copied into the gateway image at build and read from there. The GitHub fallback is removed, so a page never shows an archived repo's text. A README edit is a gateway change |
-| `mcp_servers` repo columns | One repo per plugin; non-null means "runs locally" | Left as ruled. The URL override makes the "runs locally" reading irrelevant for named slugs |
-| Skills (`deploy`, `ops-debugging`, `gws-mcp-dev`, `codebase-map`) | Separate repos, checkout in the volume | Rewritten in the PRs that change each fact (freshness rule) |
-| Ops scripts kept outside this repo | They reach a plugin on `localhost` from inside the gateway container, and assume a checkout to inspect | Swept at the cutover; listed in the report, not here |
-
-A new tool is still: plugin release, then the INSERT, then the gateway that classifies it.
+| `registry-ground-truth.test.ts` | Slug to URL from `PLUGIN_MCP_URLS`; no repo assumption | Unchanged. The variable stays a test input, set by whoever runs the check to the plugins' loopback addresses. Its blind spot stays: names only |
+| `tests/plugin-sha.ts` | A plugin directory is a git checkout | The gateway's commit when the directory is the image's (section 4) |
+| `/tools/[slug]` page | README from the plugin's directory on the gateway's disk, else GitHub's README for the repo in the registry row | Ruled: one README per plugin, from the tree the image is built from. The GitHub fallback is removed, so a page never shows an archived repo's text |
+| `mcp_servers` repo columns | One repo per plugin; non-null means "runs locally" | Left as they are. "Runs locally" is true again, and the tool pages keep their source link |
+| Skills (`deploy`, `ops-debugging`, `gws-mcp-dev`, `codebase-map`) | Separate repos, checkout in the volume, a plugin update procedure | Rewritten in the PRs that change each fact (freshness rule) |
+| Ops scripts kept outside this repo | They assume a checkout in the volume to inspect | Swept at the cutover; listed in the report, not here |
 
 ## 6. Gates
 
-One range, one script: `scripts/gate.sh [base]`. SCRUM-394 specifies the workflow that runs it
-on every pull request, the protection on `main`, and what a green check does and does not
-mean. This spec owns the path table.
+One range, one script: `scripts/gate.sh [base]`. SCRUM-394 built the workflow that runs it on
+every pull request, the protection on `main`, and what a green check does and does not mean.
+This spec owns the plugin rows of the path table.
 
 | Changed path | Surface | Runs | Image built on merge |
 |---|---|---|---|
-| `plugins/<slug>/**` | `plugin:<slug>` | That plugin's build and tests | That plugin's |
-| `plugins/<slug>/README.md` | `gateway` as well | Gateway tests | The gateway's too |
-| `apps/gateway/**` (content included), `packages/**`, `docker/**` | `gateway` | Gateway tests, typecheck, production build | The gateway's |
-| `pnpm-lock.yaml`, root `package.json`, `pnpm-workspace.yaml`, `turbo.json`, `tsconfig.base.json`, `plugins/Dockerfile` | every surface | Everything | All |
-| `docs/**`, `.claude/**`, `scripts/**` | none | The hook scripts' own tests when `scripts/hooks/**` changes | None |
+| `plugins/<slug>/**` | `gateway` | That plugin's build and tests, and the gateway's | The gateway's |
+| `apps/gateway/**` (content included), `packages/**`, `docker/**` | `gateway` | Gateway tests, typecheck | The gateway's |
+| `pnpm-lock.yaml`, root `package.json`, `pnpm-workspace.yaml`, `turbo.json`, `tsconfig.base.json` | every surface | Everything | All |
+| `docs/**`, `.claude/**` | none | Nothing | None |
+
+`plugins/**` also joins the list of paths that make a pull request build the image without
+publishing it, so a plugin change that breaks the image is seen before the merge.
 
 Always, on the whole range and never filtered: the ancestry check, the security reviewer, the
 leak scan. A path filter decides what is built and tested. It never describes what a deploy
-does: a gateway deploy still restarts the gateway, whatever the diff was.
+does: a gateway deploy restarts the gateway, whatever the diff was.
 
 ## 7. Migration
 
-Order: the pipeline first, then the source moves, then the plugins become containers.
+Order: the pipeline first (done), then the plugins' environment, then the source moves, then
+the plugins are loaded from the image. The step numbers below are revision 6's. The
+shared-network section in section 4 cites revision 5's numbers and says so.
 
-**Phase 0: before the import (SCRUM-394, plus one gateway PR).**
+**Phase 0: before the import.**
 
 | # | Step | Verification | Rollback |
 |---|---|---|---|
-| 1 | **CI gate and repository settings**: `gate.sh` (gateway rows), the leak scan, the workflow, `main` protected, squash and rebase off | As SCRUM-394 section 8, steps 1 and 2: each check is seen red before it is trusted green; a squash is not offered | Revert |
-| 2 | **The pipeline, proven on a canary, then the gateway through it** | As SCRUM-394 section 8, steps 3 to 7 | The existing deploy script |
-| 3a | **Gateway prep, the inert half**, deployed through the pipeline: the `PLUGIN_MCP_URLS` override and `startAll` skip, and the plugin commit read over HTTP. Nothing changes until the variable is set | Its tests, with a known-bad case (an entry without `=`). After the deploy a test run is unchanged and still records both plugin shas from git | The pipeline's rollback |
-| 3b | **Gateway prep, the active half**, its own PR and deploy: the single retry, the two worded errors, the restart-loop alert. This one changes behaviour for today's spawned plugins too | Its tests, with a known-bad case (a retry attempted after bytes were sent must fail the test). A plugin child killed by hand on a local gateway produces the retry, then the worded error | The pipeline's rollback |
+| 1 | **CI gate and repository settings.** Done (SCRUM-394) | | |
+| 2 | **The pipeline, proven on a canary, then the gateway through it.** Done (SCRUM-394) | | |
+| 3 | **The plugins' environment, its own PR and gateway deploy, its own go.** `spawnPlugin` passes the short list of section 4. With it, if ruled: the `$` allow-list, and the restart limit with its alert | Its tests, with the known-bad case (a marker in the parent must not reach the child). Before the deploy: the production env rows are read. After it: each plugin child's environment holds only the expected **names** (names only, in the private report). The test run diffs to zero regressions against a baseline taken just before. One live read per plugin | The pipeline's rollback |
+
+Step 3 comes before the import on purpose. It changes how today's plugins are started and
+nothing about where they come from, so if a tool breaks, the cause is the environment and not
+the move.
 
 **Phase 1: the source moves. Nothing deploys.**
 
@@ -488,31 +623,36 @@ Order: the pipeline first, then the source moves, then the plugins become contai
 | 4 | **Freeze the plugin repos.** Record both `main` tips. Lock `main` on each | A push to `main` is refused | Remove the rule |
 | 5 | **Import PR**, two commits and nothing else (commands below), merged as a merge commit | `git rev-parse HEAD:plugins/<slug>` equals `<tip>^{tree}` in the plugin repo, for both. The old shas resolve. Commit count is the three counts plus two. Leak scan and security gate over the whole range. `git status` clean | Do not merge; after merge, revert the two commits. `plugins/` is inert: not in the workspace, not in any image |
 | 6 | **Port what is kept**: `git format-patch` in the old repo, `git am --directory=plugins/<slug>` here | The ported branch's `plugins/<slug>` tree equals the source branch's tree | Delete the branch |
-| 7 | **Wiring PR**: workspace glob, package names, `files`, lockfiles, the pins, `turbo.json`, plugin rows in `gate.sh`, the skills, each plugin's `CLAUDE.md`, and the sweep of standalone-server copy | Frozen install is clean. Test totals per plugin equal the pre-move totals at the same source. Gateway suite, typecheck and build unchanged. The production package list of each plugin equals the one its old lockfile gives | Revert the PR |
+| 7 | **Wiring PR**: workspace glob, package names, `files`, lockfiles, the pins, `turbo.json`, plugin rows in `gate.sh`, the skills, each plugin's `CLAUDE.md`, and the sweep of standalone-server copy. The image does not carry the plugins yet | Frozen install is clean. Test totals per plugin equal the pre-move totals at the same source. Gateway suite, typecheck and build unchanged. The production package list of each plugin equals the one its old lockfile gives. The gateway image builds, and is deployed as an ordinary gateway deploy only when something else needs one | Revert the PR |
 
-**Phase 2: the plugins become containers.**
+**Phase 2: the plugins are loaded from the image.**
 
 | # | Step | Verification | Rollback |
 |---|---|---|---|
-| 8 | **Image PR**: `plugins/Dockerfile`, `/health` reporting the commit and start time, the CI build with `tools.json`, `registry:diff`, the two compose services, the READMEs copied into the gateway image. The gateway is not pointed at the plugin containers | Both images build in CI. Each `tools.json` equals, tool for tool (name, description, schema, read-only hint), what the plugin repo's own build serves at the frozen tip | Revert the PR |
-| 9 | **Side by side on the host.** Pull both images and start both containers. No traffic reaches them | Both healthy. From inside the network each container's tool list equals the **running** in-gateway plugin's, tool for tool. The private route refuses a tokenless call. The ports do not answer from outside the host. Idle memory read over a day | `compose rm -sf` the two services |
-| 10 | **Cut over `atlassian-mcp`, its own go.** Baseline test run. Add its entry to `PLUGIN_MCP_URLS`; restart the gateway once | Post run diffs to zero regressions. The recorded plugin sha is now the monorepo sha, from the plugin. The call log shows the container's address. No child process for that slug. One live read. Then the **restart drill**: recreate the plugin container with a session open. The session survives, a call during the gap gets the retry or the worded error, and time to healthy is recorded. The container's peak memory over the test run is recorded, and its limit is set from it afterwards | Remove the entry, restart the gateway. It spawns from the checkout, which is still in the volume |
-| 11 | **Cut over `gws-mcp`, its own go.** Same | Same, plus one Gmail read, and one email filed on a Jira issue end to end, since both legs of a crossing are now separate containers | Same |
-| 12 | **First real plugin release through the pipeline, its own go: the service-plugin cleanup of `gws-mcp`.** The `.mcpb` bundle, the stdio entry point, the CLI fallback and its download go; the oracle's expected requests become fixtures | Approved; the plugin container is recreated from the requested digest; the gateway's start time is unchanged. `registry:diff` between the two `tools.json` says exactly which tools changed, and if any did, the change file exists before the release and is run by a person after it. The ground-truth check passes. Then a rollback dispatch back and forward | The rollback dispatch |
-| 13 | **Close out.** Remove the volume from the compose file. Old repos: a final README commit naming the new home, open issue transferred, then **archived**. Deploy records. The pins come out later as their own change | The archived repos refuse a push. A fresh clone builds and tests both plugins. The gateway restarts cleanly with no volume | Unarchive; the volume's data is kept for a stated period before deletion |
+| 8 | **Image PR, inert.** The `Dockerfile` builds both plugins into `/app/plugins`. CI keeps each plugin's tool file. `registry:diff`. The manager learns `DATATORAG_PLUGINS_DIR` and the commit rule, but the image does **not** set the value, so the gateway still loads from the volume. Deployed through the pipeline | Each tool file equals, tool for tool (name, description, schema, read-only hint), what the plugin repo's own build serves at the frozen tip. Image size and build time recorded against the image before. After the deploy a test run is unchanged and still records both plugin shas from the checkouts | The pipeline's rollback |
+| 9 | **Side by side in the running container, its own go.** A host step. Each plugin's copy in the image is started by hand on a spare port, with the scoped environment and no traffic, compared, and stopped | Its tool list equals the **running** plugin's, tool for tool. Its private file route refuses a tokenless call. The spare port does not answer from outside the host (it does answer on the shared network, like the plugins' own ports) | Stop the process. Nothing else was touched |
+| 10 | **Cutover, its own go.** One PR sets `DATATORAG_PLUGINS_DIR` in the `Dockerfile`; that commit is deployed. Both plugins move in this one deploy | Baseline test run before, post run after, zero regressions. Each recorded plugin sha is now the gateway's commit. Each plugin child's working directory is under `/app/plugins`. One Gmail read, one Jira read, and one email filed on a Jira issue end to end. Then the **rollback drill**, if agreed: the pipeline's rollback to the image before, the plugins load from the volume again and the same three calls work, then forward again | The pipeline's rollback. The checkouts are still in the volume |
+| 11 | **First plugin change through the pipeline, its own go: the service-plugin cleanup of `gws-mcp`.** The `.mcpb` bundle, the stdio entry point, the CLI fallback and its download go; the oracle's expected requests become fixtures | `registry:diff` between the two tool files says exactly which tools changed, and if any did, the change file exists before the deploy and is run by a person in the order section 5 gives. The ground-truth check passes | The pipeline's rollback, and the change file's rollback if one ran |
+| 12 | **Close out.** Remove the volume from the compose file, which also means replacing the copy on the host (a host step). Old repos: a final README commit naming the new home, open issue transferred, then **archived**. The pins come out later as their own change | Not before the image the pipeline would roll back to also loads from the image; otherwise a rollback lands on a gateway with no plugins. The archived repos refuse a push. A fresh clone builds and tests both plugins. The gateway restarts cleanly with no volume | Unarchive; the volume's data is kept for a stated period before deletion |
 
-**Does each step prove one new thing?** Steps 1 to 9 do. Steps 10 and 11 do not: at a cutover
-a plugin changes both where it runs (child process to container) and what it was built from
-(the plugin repo to this one). Building containers from the old repos first would split that
-and was ruled out, so the two are separated by evidence instead: step 7 holds the dependency
-list fixed, step 8 holds the served tools equal to the old build's, and step 9 holds them equal
-to what is running, all before a single call moves.
+**Does each step prove one new thing?** Steps 3 to 9 do. Step 10 does not: at the cutover a
+plugin changes both where it is loaded from (the volume to the image) and what it was built
+from (the plugin repo to this one), and both plugins change at once. The two are separated by
+evidence instead: step 7 holds the dependency list fixed, step 8 holds the served tools equal to
+the old build's, and step 9 holds them equal to what is running, all before a single call
+moves. What is lost against revision 5 is cutting one plugin over before the other. One image
+cannot do that without a per-plugin switch, and a switch is machinery the ruling set aside.
 
-**The freeze window.** From step 4 to the cutover of each plugin, a plugin change cannot ship
-the ordinary way: the old repo is locked and the new images are not serving. That window should
-be days. The emergency path is the old one: unlock, commit there, roll out as today, and port
-the commit. A plugin change already in flight (`gws-mcp` has one today) ships before step 4 or
-is ported in step 6 and waits.
+**What the drill costs.** Every row above that deploys is a gateway restart, a few seconds in
+which calls fail and after which every MCP session starts again. Step 10 is one restart, or
+three with the drill. The drill would also be the first time the gateway's pipeline rollback is
+exercised at all, which is its own reason to do it.
+
+**The freeze window.** From step 4 to step 10, a plugin change cannot ship the ordinary way:
+the old repo is locked and the image's plugins are not serving. That window should be days. The
+emergency path is the old one: unlock, commit there, roll out as today, and port the commit. A
+plugin change already in flight (`gws-mcp` has one today) ships before step 4 or is ported in
+step 6 and waits.
 
 ```bash
 # Step 5. Run from a branch off main; <tip> is the frozen main sha of each plugin repo.
@@ -520,8 +660,8 @@ git subtree add --prefix=plugins/gws-mcp       https://github.com/datatorag/gws-
 git subtree add --prefix=plugins/atlassian-mcp https://github.com/datatorag/atlassian-mcp.git <tip>
 ```
 
-No `--squash`. Rehearsed at today's tips: both directories byte-equal to their sources, every
-original sha present, `git blame` attributes lines to the original commits.
+No `--squash`. Rehearsed at the tips named at the top: both directories byte-equal to their
+sources, every original sha present, `git blame` attributes lines to the original commits.
 
 **What history looks like afterwards** (rehearsed, and the cost of refusal 3): `git log --
 plugins/gws-mcp/src/tools/gmail.ts` shows only the import commit, and `--follow` shows nothing.
@@ -529,7 +669,8 @@ The file's real history needs `git log --full-history -- src/tools/gmail.ts
 plugins/gws-mcp/src/tools/gmail.ts`, or `git log <old-tip> -- src/tools/gmail.ts`. This goes in
 the plugin skill.
 
-**Branches on the old repos** not merged into `main` as of 2026-10-06, from `git ls-remote`:
+**Branches on the old repos** not merged into `main` as of 2026-10-06, from `git ls-remote`.
+Not re-read for this revision; step 4 reads them again.
 
 | Repo | Branch | Ruling |
 |---|---|---|
@@ -544,44 +685,69 @@ Local-only branches and a stash exist on the development machine; an import cann
 a link from `~/.datatorag/plugins/<slug>` to `plugins/<slug>` in one checkout, built in place
 and spawned by the gateway as now.
 
-## 8. If the pending branches land first
+## 8. Other work this touches
 
-| Branch | Touches | Effect on this spec |
-|---|---|---|
-| `chore-deploy-prune-build-cache` | `deploy-gateway.sh`, `deploy` skill | None here. SCRUM-394 retires host builds, which makes the chore moot once it lands |
-| `chore-remove-compose-postgres` | Prod compose loses the database services | The compose edits in section 4 and in SCRUM-394 rebase onto it. It keeps the volume line that step 13 removes |
-| SCRUM-384 spec branch | One architecture document | The prose form of the contract `packages/plugin-contract` encodes |
-| Notion connector (SCRUM-366), a design and a plan on its branch | No code yet | Born at `plugins/notion-mcp` as a third container. Its plan's step creating a plugin repo becomes a directory, a compose service and a row in the path table |
+| Work | Effect on this spec |
+|---|---|
+| The gateway's deploy pipeline (SCRUM-394) | Built. This spec adds no surface to it |
+| SCRUM-384, the file crossing | The prose form of the contract `packages/plugin-contract` encodes |
+| Notion connector (SCRUM-366), a design and a plan on its branch | Born at `plugins/notion-mcp`: a directory, a registry row and its lines in the gateway's `Dockerfile`. Its plan's step creating a plugin repo becomes a directory |
 
 ## 9. Risks
 
 | Risk | Likelihood | What holds it down |
 |---|---|---|
-| The first images differ from what runs because dependencies re-resolved | Seen in rehearsal (four packages) | The pins; steps 7, 8 and 9 compare before any call moves |
-| The container behaves unlike the laptop: architecture, the read-only filesystem under a real tool call, memory under a file crossing | Unknown: idle only was rehearsed | Step 9 runs both containers on the host with no traffic; the test run at steps 10 and 11 exercises every tool; the limits are revised from measurement |
-| A plugin call fails during a release | Certain, for a few seconds | The retry and the worded error (step 3); the restart drill measures the gap |
-| A retry repeats a write | Would be a defect | Retry only when nothing was sent; a test with a known-bad case pins it |
-| Step 12 removes a tool without anyone noticing | Possible: one tool exists only for the standalone login | `registry:diff` names every tool that differs before the release; the ground-truth check fails after it if the registry was not brought along |
-| A plugin crash-loops unnoticed | Possible | The restart-loop alert (step 3b) |
-| The freeze window stretches | Likely if steps 8 and 9 surprise | The emergency path; phase 0 is done before the freeze so nothing in the window is being built for the first time except the image PR |
-| A cached turbo build leaves `server/` stale | Certain without the `outputs` line | Section 3; the image build runs in a clean container with no turbo cache |
-| Someone commits to an old repo after the import | Likely over weeks | Branch rule at step 4, archive at step 13 |
+| The plugins in the image differ from what runs because dependencies re-resolved | Seen in rehearsal (four packages) | The pins; steps 7, 8 and 9 compare before any call moves |
+| A plugin needs something from the environment that the short list leaves out | Possible; one plugin reads three more names on a path meant to go | Step 3 is alone, before the move, with a full test run and the pipeline's rollback |
+| A plugin writes somewhere a non-root user cannot | Unknown: idle only was rehearsed | The non-root user is a separate ruling and a deploy of its own after the cutover, with a full test run, so it can come out alone |
+| Scoping the environment is read as isolation | Likely, from the name | Section 4 says where it stops. A taken-over plugin in the gateway's container is contained by the user it runs as, not by its environment |
+| A bad plugin change takes the gateway down with it | Possible, and new in kind: today a broken plugin build leaves the gateway image alone | The gateway starts without a plugin that will not start; the health wait and put-back in the host script; the pipeline's rollback |
+| Every plugin change drops every session | Certain | Same as today. Accepted by the ruling |
+| The image grows or builds slowly enough to matter | Unknown | Measured at step 8, before anything depends on it |
+| A rollback lands on an image that expects the volume after the volume is gone | Would be an outage of every plugin | Step 12's condition: not before the image the pipeline would roll back to loads from the image |
+| The new order of a tool change leaves a tool listed but not served | Possible if a removal is deployed before its DELETE | Section 5's order; `registry:diff` names every tool that differs before the deploy; the ground-truth check after it |
+| Step 11 removes a tool without anyone noticing | Possible: one tool exists only for the standalone login | Same two checks |
+| A plugin crash-loops unnoticed | Possible, and true today: it is restarted without end | The restart limit and its alert, if ruled in |
+| The freeze window stretches | Likely if steps 8 and 9 surprise | The emergency path; phase 0 is done before the freeze |
+| A cached turbo build leaves `server/` stale | Certain without the `outputs` line | Section 3; the image build runs from a clean tree with no turbo cache |
+| Someone commits to an old repo after the import | Likely over weeks | Branch rule at step 4, archive at step 12 |
 | A leak sits in imported history or commit messages | The repos are already public, so the import publishes nothing new | The scan still runs over the range. A finding is an existing exposure to rotate and report |
-| The root lockfile couples surfaces: any dependency bump rebuilds every image | Certain, and accepted | Conservative on purpose; an unchanged plugin's rebuilt image has the same `tools.json`, and nobody has to deploy it |
 
 Not addressed, on purpose: the names-only blind spot of the in-repo ground-truth test; removing
-the dead install path from `plugin-manager`.
+the dead install and uninstall paths from `plugin-manager`; a plugin's reach over the gateway's
+network (the section on the shared network is the record).
 
 ## 10. Rulings, and what is still open
 
-Ruled: plugins as their own containers; connectors are service plugins, with the four
-consequences listed at the top; the import, port and wiring as specified; the dependency pins
-for the first images; one README per plugin read at build time; a restart-loop alert; memory
-limits set from measurement under real tool calls; `registry:diff` reading CI's `tools.json`
-only; the ground-truth check at the end of every plugin release; the gateway prep split in two;
-the branch rulings in section 7.
+Ruled: **the plugins stay inside the gateway container, built into its image, with one rollback
+id (2026-10-09, reversing the container half of 2026-10-07)**; each plugin process is started
+with only its own environment; the shared-network question is ruled A (2026-10-09); SCRUM-393
+stays absorbed; connectors are service plugins, with the four consequences listed at the top;
+the import, port and wiring as specified; the dependency pins for the first image that carries
+the plugins; one README per plugin read at build time; `registry:diff` reading CI's tool files
+only; the branch rulings in section 7.
 
-Open: a separate go for each of steps 2, 10, 11 and 12. And one ruling, asked in revision 5:
-which of the options in "The shared network: what a plugin container can reach" (section 4)
-apply before the plugin containers start. The recommendation there is B and C before step 9,
-D at step 9.
+Carried by the ruling and no longer in this work: per-plugin images and compose services, the
+URL override, the retry and worded errors, per-plugin memory limits, separate cutovers.
+
+Open, each with the recommendation made above:
+
+1. **A non-root user for each plugin process** (section 4). Recommended in, as its own deploy
+   after the cutover. It is what makes "never the gateway's keys" hold, for the gateway's
+   environment and memory, against a plugin that has been taken over and not only against an
+   accident. It changes nothing about what a plugin can reach on the network or read from
+   world-readable files in the image.
+2. **The `$NAME` rows** (section 4). Recommended: an allow-list in code, empty to start, after
+   the production rows have been read.
+3. **The restart limit and its alert** (section 4). An alert was ruled in revision 5 in a form
+   built for containers. The limit it would hang on does not work today. Recommended: make
+   the limit real and alert when it is reached, with step 3.
+4. **Where the ground-truth check runs after a deploy that touched `plugins/`** (section 4).
+   Recommended: the existing post-deploy routine, not new pipeline code.
+5. **The rollback drill at step 10.** Recommended: do it. Two more restarts, and the first
+   proof of the gateway's rollback.
+6. **The order of a tool change** (section 5), which the ruling changes without having asked
+   to.
+
+And a separate go for each of steps 3, 9, 10 and 11, for the host half of step 12, and for the
+non-root deploy if it is ruled in.
