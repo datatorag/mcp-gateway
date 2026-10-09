@@ -219,7 +219,7 @@ async function main() {
   // SCRUM-228: carries the analytics state with its reason, so a box that
   // went quiet is a readable "off", never an absence somebody has to notice.
   app.get("/health", (_req, res) => {
-    res.json(healthBody());
+    res.json(healthBody(pluginManager.pluginStatus()));
   });
 
   /**

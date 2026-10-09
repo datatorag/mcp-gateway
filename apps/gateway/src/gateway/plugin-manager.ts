@@ -25,6 +25,72 @@ export const NAMESPACE_SEPARATOR = "__";
 const MAX_RESPAWNS = 3;
 const RESPAWN_WINDOW_MS = 60_000;
 
+/** What a plugin child takes from the gateway's own environment. Everything
+ * else the gateway holds (the database URL, OAuth client secrets, provider
+ * keys, session material) stays in the gateway. */
+const INHERITED_ENV_KEYS = ["PATH", "NODE_ENV"] as const;
+
+/** A row key must be a plain variable name. The child's environment is
+ * written as `key=value` pairs, so a key carrying its own `=` would set a
+ * different name than the one checked below. */
+const ENV_KEY_PATTERN = /^[A-Za-z_][A-Za-z0-9_]*$/;
+
+/** Row keys a plugin's env rows may not set: the names the manager sets
+ * itself, and the ones that change how the child process runs. */
+function isReservedEnvKey(key: string): boolean {
+  return (
+    key === "PORT" ||
+    key === "PATH" ||
+    key === "NODE_ENV" ||
+    key === "NODE_OPTIONS" ||
+    key.startsWith("LD_")
+  );
+}
+
+/**
+ * The whole environment of a plugin child (SCRUM-390): `PATH` and `NODE_ENV`
+ * from the gateway, `PORT` from the registry row, and that plugin's own env
+ * rows as literal values. Nothing else is passed, so a plugin (or a
+ * dependency of one) that logs or sends its environment has none of the
+ * gateway's keys to leak.
+ *
+ * A row value starting with `$` used to copy a named variable out of the
+ * gateway's environment. That form is gone: such a row is refused and left
+ * out, never passed as a literal. A row with a reserved key is refused the
+ * same way, and so is a key that is not a plain variable name. `refused`
+ * carries one line per refused row. It names a well-formed key, prints
+ * nothing of a malformed one, and never prints a value.
+ */
+export function buildPluginEnv(
+  parentEnv: Record<string, string | undefined>,
+  port: number,
+  rows: { key: string; value: string }[]
+): { env: Record<string, string>; refused: string[] } {
+  const env: Record<string, string> = {};
+  const refused: string[] = [];
+  for (const key of INHERITED_ENV_KEYS) {
+    const value = parentEnv[key];
+    if (value !== undefined) env[key] = value;
+  }
+  env.PORT = String(port);
+  for (const row of rows) {
+    if (!ENV_KEY_PATTERN.test(row.key)) {
+      // Nothing of such a key is printed: a key that is not a name is most
+      // likely a value in the wrong column.
+      refused.push(`a row whose key is not a variable name (${row.key.length} characters)`);
+    } else if (isReservedEnvKey(row.key)) {
+      refused.push(`${row.key}: reserved key`);
+    } else if (row.value.startsWith("$")) {
+      refused.push(`${row.key}: value starts with "$"`);
+    } else {
+      env[row.key] = row.value;
+    }
+  }
+  return { env, refused };
+}
+
+export type PluginStatus = "up" | "down";
+
 interface RunningPlugin {
   process: ChildProcess;
   port: number;
@@ -32,11 +98,14 @@ interface RunningPlugin {
   serverId: string;
   pluginDir: string;
   entrypoint?: string;
-  crashTimes: number[];
 }
 
 export class PluginManager {
   private processes = new Map<string, RunningPlugin>();
+  // Kept per slug across restarts. Holding it on the process entry lost it:
+  // the entry is deleted when the child exits, before the restart reads it.
+  private restartTimes = new Map<string, number[]>();
+  private statuses = new Map<string, PluginStatus>();
   private db: Database;
   private pool: ConnectionPool;
 
@@ -95,7 +164,22 @@ export class PluginManager {
     return { id: server.id, slug };
   }
 
+  /**
+   * Each active plugin the manager was asked to start, `up` or `down`.
+   * `down` means the manager is not going to start it again until the
+   * gateway restarts: it hit the restart limit, it exited cleanly, or it
+   * could not be started at all. `up` means started and not given up on; it
+   * does not say the plugin is answering. Read by `/health`.
+   */
+  pluginStatus(): Record<string, PluginStatus> {
+    return Object.fromEntries(
+      [...this.statuses].sort(([a], [b]) => a.localeCompare(b))
+    );
+  }
+
   async uninstall(slug: string): Promise<void> {
+    this.statuses.delete(slug);
+    this.restartTimes.delete(slug);
     // Kill process if running
     const running = this.processes.get(slug);
     if (running) {
@@ -142,6 +226,7 @@ export class PluginManager {
           console.warn(
             `[plugin-manager] plugin dir missing for ${server.slug}, skipping`
           );
+          this.statuses.set(server.slug, "down");
           return;
         }
 
@@ -160,6 +245,7 @@ export class PluginManager {
             `[plugin-manager] failed to start ${server.slug}:`,
             err
           );
+          this.statuses.set(server.slug, "down");
         }
       })
     );
@@ -312,11 +398,15 @@ export class PluginManager {
       .from(mcpServerEnvVars)
       .where(eq(mcpServerEnvVars.mcpServerId, serverId));
 
-    const resolvedEnv: Record<string, string> = { PORT: String(port) };
-    for (const row of envRows) {
-      resolvedEnv[row.key] = row.value.startsWith("$")
-        ? process.env[row.value.slice(1)] ?? ""
-        : row.value;
+    const { env: childEnv, refused } = buildPluginEnv(
+      process.env,
+      port,
+      envRows
+    );
+    for (const line of refused) {
+      console.error(
+        `[plugin-manager] ${slug}: env row refused and left out (${line})`
+      );
     }
 
     // Determine entrypoint (caller provides it during install; startAll reads from package.json)
@@ -335,7 +425,9 @@ export class PluginManager {
 
     const child = spawn("node", [resolvedEntrypoint], {
       cwd: pluginDir,
-      env: { ...process.env, ...resolvedEnv },
+      // Next types NODE_ENV as always present; this one is exactly what
+      // buildPluginEnv returned.
+      env: childEnv as NodeJS.ProcessEnv,
       stdio: ["ignore", "pipe", "pipe"],
     });
 
@@ -346,34 +438,43 @@ export class PluginManager {
       console.error(`[${slug}] ${data.toString().trimEnd()}`);
     });
 
-    const existing = this.processes.get(slug);
-    const crashTimes = existing?.crashTimes ?? [];
-
     child.on("exit", (code, signal) => {
       console.log(`[plugin-manager] ${slug} exited with code ${code} signal ${signal}`);
+      // Only the child the manager currently holds for this slug is acted
+      // on. One it already let go of (stopped, uninstalled) is not restarted
+      // and cannot change the status of a replacement.
+      if (this.processes.get(slug)?.process !== child) return;
       this.processes.delete(slug);
 
       // Auto-respawn if crash was unexpected (non-zero exit, not SIGTERM)
       if (code !== 0 && signal !== "SIGTERM") {
         const now = Date.now();
-        const recentCrashes = crashTimes.filter(
+        const recentRestarts = (this.restartTimes.get(slug) ?? []).filter(
           (t) => now - t < RESPAWN_WINDOW_MS
         );
-        recentCrashes.push(now);
 
-        if (recentCrashes.length <= MAX_RESPAWNS) {
+        if (recentRestarts.length < MAX_RESPAWNS) {
+          recentRestarts.push(now);
+          this.restartTimes.set(slug, recentRestarts);
           console.log(
-            `[plugin-manager] respawning ${slug} (attempt ${recentCrashes.length}/${MAX_RESPAWNS})`
+            `[plugin-manager] respawning ${slug} (attempt ${recentRestarts.length}/${MAX_RESPAWNS})`
           );
           this.spawnPlugin(serverId, slug, pluginDir, port, entrypoint).catch(
-            (err) =>
-              console.error(`[plugin-manager] respawn failed for ${slug}:`, err)
+            (err) => {
+              console.error(`[plugin-manager] respawn failed for ${slug}:`, err);
+              this.statuses.set(slug, "down");
+            }
           );
         } else {
+          this.restartTimes.set(slug, recentRestarts);
+          this.statuses.set(slug, "down");
           console.error(
-            `[plugin-manager] ${slug} crashed ${MAX_RESPAWNS} times in ${RESPAWN_WINDOW_MS / 1000}s, not restarting`
+            `[plugin-manager] ${slug} crashed again after ${MAX_RESPAWNS} restarts in ${RESPAWN_WINDOW_MS / 1000}s, not restarting`
           );
         }
+      } else {
+        // A clean exit is not restarted either, so it is not up.
+        this.statuses.set(slug, "down");
       }
     });
 
@@ -384,8 +485,8 @@ export class PluginManager {
       serverId,
       pluginDir,
       entrypoint,
-      crashTimes,
     });
+    this.statuses.set(slug, "up");
   }
 
   private async waitForHealth(port: number): Promise<void> {

@@ -13,11 +13,18 @@ const { healthBody } = await import("./health");
 describe("healthBody", () => {
   it("keeps status ok and adds analytics on/off with the reason", () => {
     state.mockReturnValueOnce({ analytics: "on", analytics_reason: "production" });
-    expect(healthBody()).toEqual({ status: "ok", analytics: "on", analytics_reason: "production" });
+    expect(healthBody({})).toEqual({ status: "ok", analytics: "on", analytics_reason: "production", plugins: {} });
     state.mockReturnValueOnce({ analytics: "off", analytics_reason: "outside production (NODE_ENV=development); set POSTHOG_ALLOW_NONPRODUCTION=1 to send" });
-    const off = healthBody();
+    const off = healthBody({});
     expect(off.status).toBe("ok");
     expect(off.analytics).toBe("off");
     expect(off.analytics_reason).toContain("POSTHOG_ALLOW_NONPRODUCTION");
+  });
+
+  it("reports each plugin up or down and stays ok with one down (SCRUM-390)", () => {
+    state.mockReturnValueOnce({ analytics: "on", analytics_reason: "production" });
+    const body = healthBody({ "a-plugin": "up", "b-plugin": "down" });
+    expect(body.plugins).toEqual({ "a-plugin": "up", "b-plugin": "down" });
+    expect(body.status).toBe("ok");
   });
 });
