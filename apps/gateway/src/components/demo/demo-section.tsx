@@ -20,8 +20,11 @@ export function DemoWindow({
   id,
   promptHref,
   promptLabel,
+  startDelayMs,
 }: {
   id: string;
+  /** Overrides the grid's stagger for a window shown alone. */
+  startDelayMs?: number;
   /** Where the composer-shaped link sends the viewer (playground/sign-in).
    * Omit both and the window renders without a composer — see below. */
   promptHref?: string;
@@ -37,7 +40,10 @@ export function DemoWindow({
         {layout.service}
       </div>
       <div className={layout.frame}>
-        <ScriptedTranscript id={id} startDelayMs={layout.startDelayMs} />
+        <ScriptedTranscript
+          id={id}
+          startDelayMs={startDelayMs ?? layout.startDelayMs}
+        />
       </div>
       {/* Composer-shaped, but a LINK, not an input: it cannot swallow typing,
           the label says where it goes, and clicking lands in the real

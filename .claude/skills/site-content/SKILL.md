@@ -59,6 +59,21 @@ then `` `${Math.max(1, Math.ceil(words / 230))} min read` ``. There's also a `po
 Map for O(1) `getPostBySlug` lookup, and `getRelatedPosts(slug, limit=3)` which ranks by
 tag overlap then recency — both built from the same cache.
 
+**A post can carry a scripted demo (SCRUM-398).** Put `<!-- demo:<id> -->` on its own
+line in the post's markdown, where `<id>` is a script id from
+`src/components/demo/demo-scripts.ts` (`jira`, `sheets`, ...). `marked` passes the comment
+through, the blog page splits the post's HTML on it (`splitDemoMarkers` in
+`src/lib/demo-embed.ts`) and renders `DemoEmbed` (`src/components/demo/demo-embed.tsx`)
+at that spot: the same client-side window the home page grid shows, with the scripted
+replay disclosure as its caption, which the component renders itself so a post cannot
+leave it off. A post with no marker is one segment and renders exactly as before. A
+marker naming an id that is not a script renders nothing, and `demo-embed.test.ts` reads
+every post's markers and fails on it. Adding a demo to a post is a content change only;
+adding a new script is a script in `demo-scripts.ts`, a window in `demo-layout.ts` (with
+measured frame heights) and, for the home page, a row in `demo-bento.tsx`, whose
+problem line is a claim about someone else's product and needs a dated first-hand check
+of that product's tool list before it ships.
+
 ### Changelog — `apps/gateway/src/lib/changelog.ts`
 
 Slug = filename. Terser than blog — no `excerpt`/`author`/`category`/`coverImage` at all:

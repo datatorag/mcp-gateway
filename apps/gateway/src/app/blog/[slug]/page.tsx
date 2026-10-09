@@ -11,6 +11,8 @@ import { ZoomableImage } from "@/components/zoomable-image";
 import { formatContentDate } from "@/lib/utils";
 import { SOCIAL_OPEN_GRAPH, SOCIAL_TWITTER } from "@/lib/social-card";
 import { postCardImage } from "@/lib/post-card-image";
+import { splitDemoMarkers } from "@/lib/demo-embed";
+import { DemoEmbed, EMBEDDABLE_DEMO_IDS } from "@/components/demo/demo-embed";
 
 interface Props {
   params: Promise<{ slug: string }>;
@@ -246,10 +248,21 @@ export default async function BlogArticlePage({ params }: Props) {
             </div>
           )}
 
-          <div
-            className="prose mt-10"
-            dangerouslySetInnerHTML={{ __html: post.html }}
-          />
+          {/* A post may carry `<!-- demo:<id> -->` on its own line; the page
+              puts that scripted demo there (lib/demo-embed.ts). A post with
+              no marker is one segment and renders as the single prose block
+              it always was. */}
+          {splitDemoMarkers(post.html, EMBEDDABLE_DEMO_IDS).map((segment, i) =>
+            segment.kind === "demo" ? (
+              <DemoEmbed id={segment.id} key={`demo-${i}`} />
+            ) : (
+              <div
+                className={i === 0 ? "prose mt-10" : "prose"}
+                dangerouslySetInnerHTML={{ __html: segment.html }}
+                key={`html-${i}`}
+              />
+            )
+          )}
 
           {post.tags.length > 0 && (
             <div className="mt-10 flex flex-wrap gap-2">
