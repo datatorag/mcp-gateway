@@ -28,7 +28,7 @@ vi.mock("node:os", async (orig) => ({
 vi.mock("@/lib/slack", () => ({ sendSlack: vi.fn() }));
 
 const { mcpServers, mcpServerEnvVars } = await import("@datatorag-mcp/db");
-const { PluginManager, PLUGINS_DIR, buildPluginEnv } = await import(
+const { PluginManager, PLUGINS_DIR, buildPluginEnv, pluginsDirFrom } = await import(
   "./plugin-manager"
 );
 
@@ -275,3 +275,21 @@ describe("the restart limit", () => {
     expect(manager.pluginStatus()).toEqual({ "absent-plugin": "down" });
   });
 });
+
+describe("where plugins are loaded from", () => {
+  it("is the folder under the home directory when nothing says otherwise", () => {
+    expect(pluginsDirFrom({}, "/home/someone")).toEqual({
+      dir: "/home/someone/.datatorag/plugins",
+      fromImage: false,
+    });
+    expect(pluginsDirFrom({ DATATORAG_PLUGINS_DIR: "  " }, "/home/someone").fromImage).toBe(false);
+  });
+
+  it("is the image's own folder when the image names one", () => {
+    expect(pluginsDirFrom({ DATATORAG_PLUGINS_DIR: "/app/plugins" }, "/home/someone")).toEqual({
+      dir: "/app/plugins",
+      fromImage: true,
+    });
+  });
+});
+

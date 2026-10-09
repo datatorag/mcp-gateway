@@ -186,19 +186,55 @@ jobs:
           else
             scripts/build-image.sh "$SURFACE" "$BUILD_SHA"
           fi
+      # The gateway image carries the plugins. Each is started from the image
+      # just built, with the environment the gateway's manager gives it, and
+      # asked for the tools it serves. On a pull request this is the check that
+      # the image's plugins start at all; on main the answers are kept beside
+      # the digest record below, which is where `pnpm registry:diff` reads
+      # them. Skipped when this run built nothing (the tag already existed).
+      - name: Ask each plugin in the image for the tools it serves
+        id: tools
+        if: matrix.surface == 'gateway'
+        run: |
+          set -euo pipefail
+          ref="ghcr.io/datatorag/mcp-gateway/gateway:$BUILD_SHA"
+          if ! docker image inspect "$ref" >/dev/null 2>&1; then
+            echo "This run built no image, so there is nothing to ask."
+            exit 0
+          fi
+          # A commit from before the plugins were in this repository has none
+          # to ask. Decided from the commit and not from the image, so a
+          # failure to start the image is never read as "no plugins".
+          if ! git cat-file -e "$BUILD_SHA:plugins" 2>/dev/null; then
+            echo "This commit has no plugins, so its image has no tool files." | tee -a "$GITHUB_STEP_SUMMARY"
+            echo "kept=none" >>"$GITHUB_OUTPUT"
+            exit 0
+          fi
+          scripts/image-plugin-tools.sh "$ref" "$RUNNER_TEMP/plugin-tools" | tee -a "$GITHUB_STEP_SUMMARY"
+          echo "kept=true" >>"$GITHUB_OUTPUT"
       - name: Write down what this run published
         if: steps.build.outputs.digest != ''
         env:
           DIGEST: ${{ steps.build.outputs.digest }}
+          TOOLS_KEPT: ${{ steps.tools.outputs.kept }}
         run: |
           set -euo pipefail
           mkdir "$RUNNER_TEMP/published"
           printf '%s %s %s\n' "$SURFACE" "$BUILD_SHA" "$DIGEST" >"$RUNNER_TEMP/published/image.txt"
+          if [ "$SURFACE" = gateway ]; then
+            # A published gateway image without its tool files would leave the
+            # next registry change with nothing to be generated from.
+            case "$TOOLS_KEPT" in
+              true) cp "$RUNNER_TEMP"/plugin-tools/tools-*.json "$RUNNER_TEMP/published/" ;;
+              none) ;; # an image from before the plugins were in it
+              *) echo "The gateway image was published but its plugins' tool files were not made."; exit 1 ;;
+            esac
+          fi
       - name: Keep it as this run's record
         if: steps.build.outputs.digest != ''
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: image-${{ matrix.surface }}-${{ needs.plan.outputs.sha }}
-          path: ${{ runner.temp }}/published/image.txt
+          path: ${{ runner.temp }}/published/
           if-no-files-found: error
           retention-days: 90

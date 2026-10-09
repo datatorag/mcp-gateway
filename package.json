@@ -9,7 +9,8 @@
     "test": "turbo run test",
     "db:push": "turbo run db:push",
     "db:migrate": "turbo run db:migrate",
-    "db:seed": "turbo run db:seed"
+    "db:seed": "turbo run db:seed",
+    "registry:diff": "node scripts/registry-diff.mjs"
   },
   "devDependencies": {
     "turbo": "^2.4.0",

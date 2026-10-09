@@ -78,6 +78,31 @@ export function missingCheckouts(pluginsDir: string, slugs: readonly string[]): 
   return slugs.filter((slug) => !existsSync(join(pluginsDir, slug)));
 }
 
+/**
+ * `{slug: sha|null}` for the plugins named, by where they were loaded from
+ * (SCRUM-390).
+ *
+ * A plugin in the image has no git metadata and no commit of its own: it was
+ * built from the tree of the gateway's commit, so that commit is its sha, by
+ * construction. A plugin in a checkout (a laptop, or an image that still
+ * loads from the plugins volume) is read from its git metadata as before.
+ *
+ * The same honesty rule holds in both: a plugin with no directory gets null,
+ * and so does every plugin when the image does not know its own commit. A
+ * guess would answer "what changed between these two runs" wrongly.
+ */
+export function pluginShasFor(
+  pluginsDir: string,
+  slugs: readonly string[],
+  image: { fromImage: boolean; gatewaySha: string | null }
+): Record<string, string | null> {
+  if (!image.fromImage) return readPluginShas(pluginsDir, slugs);
+  const sha = image.gatewaySha && looksLikeSha(image.gatewaySha) ? image.gatewaySha : null;
+  const out: Record<string, string | null> = {};
+  for (const slug of slugs) out[slug] = existsSync(join(pluginsDir, slug)) ? sha : null;
+  return out;
+}
+
 /** `{slug: sha|null}` for the plugins named, read from `<pluginsDir>/<slug>`. */
 export function readPluginShas(
   pluginsDir: string,

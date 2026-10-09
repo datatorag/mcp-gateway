@@ -8,7 +8,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { missingCheckouts, readGitSha, readPluginShas } from "./plugin-sha";
+import { missingCheckouts, pluginShasFor, readGitSha, readPluginShas } from "./plugin-sha";
 
 const SHA = "0123456789abcdef0123456789abcdef01234567";
 const OTHER = "fedcba9876543210fedcba9876543210fedcba98";
@@ -115,3 +115,39 @@ describe("missingCheckouts", () => {
     expect(missingCheckouts(dir, ["a"])).toEqual([]);
   });
 });
+
+/* SCRUM-390. A plugin shipped in the image has no git metadata; its commit is
+ * the gateway's. The known-bad forms: reading git anyway (every sha null), and
+ * handing the gateway's sha to a plugin that is not there at all. */
+describe("pluginShasFor", () => {
+  it("gives every plugin in the image the gateway's commit", () => {
+    const dir = repo({ "a-plugin/server/index.js": "", "b-plugin/server/index.js": "" });
+    expect(
+      pluginShasFor(dir, ["a-plugin", "b-plugin"], { fromImage: true, gatewaySha: SHA })
+    ).toEqual({ "a-plugin": SHA, "b-plugin": SHA });
+  });
+
+  it("still gives null to a plugin with no directory, image or not", () => {
+    const dir = repo({ "a-plugin/server/index.js": "" });
+    expect(
+      pluginShasFor(dir, ["a-plugin", "absent"], { fromImage: true, gatewaySha: SHA })
+    ).toEqual({ "a-plugin": SHA, absent: null });
+  });
+
+  it("gives null, never a guess, when the image does not know its own commit", () => {
+    const dir = repo({ "a-plugin/server/index.js": "" });
+    for (const gatewaySha of [null, "", "not-a-sha"]) {
+      expect(pluginShasFor(dir, ["a-plugin"], { fromImage: true, gatewaySha })).toEqual({
+        "a-plugin": null,
+      });
+    }
+  });
+
+  it("reads the checkout's own git metadata when the plugins are not the image's", () => {
+    const dir = repo({ "a-plugin/.git/HEAD": OTHER + "\n" });
+    expect(
+      pluginShasFor(dir, ["a-plugin"], { fromImage: false, gatewaySha: SHA })
+    ).toEqual({ "a-plugin": OTHER });
+  });
+});
+
