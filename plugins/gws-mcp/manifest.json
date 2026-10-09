@@ -1,0 +1,18 @@
+{
+  "manifest_version": "0.3",
+  "name": "google-workspace",
+  "version": "1.0.0",
+  "description": "Google Workspace — Gmail, Drive, Sheets, Docs, Slides and 100+ APIs via the gws CLI",
+  "author": {
+    "name": "myang"
+  },
+  "server": {
+    "type": "node",
+    "entry_point": "server/extension.js",
+    "mcp_config": {
+      "command": "node",
+      "args": ["${__dirname}/server/extension.js"]
+    }
+  },
+  "tools_generated": true
+}

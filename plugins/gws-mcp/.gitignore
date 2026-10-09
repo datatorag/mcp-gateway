@@ -1,0 +1,7 @@
+node_modules/
+server/
+bin/
+google-cloud-sdk/
+*.mcpb
+oauth.json
+.env
