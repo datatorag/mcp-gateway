@@ -781,9 +781,22 @@ self_test() {
     { handle_request "deploy canary $(sha_n 8) $(dig_n 8)"; trap -p HUP PIPE >"$T/traps"; } | head -1 >/dev/null ) 2>/dev/null || true
   is "a deploy whose caller is gone still finishes" "$(running)" "$(dig_n 8)"
   is "and is recorded" "$(cur)" "$(sha_n 8)"
-  is "a hangup and a broken pipe are ignored once the lock is held" "$(grep -c "^trap -- '' SIG" "$T/traps")" "2"
+  # What the shell lists as ignored can only be compared when this shell was
+  # started with both signals at their defaults. A runner may start its steps
+  # with one already ignored, and then a shell either lists it from the start
+  # or never lists it, depending on the version. The cases above and below,
+  # which test what happens, run either way.
+  local plain=1
+  # A child that survives signalling itself inherited that signal ignored.
+  if sh -c 'kill -PIPE $$; exit 0' 2>/dev/null || sh -c 'kill -HUP $$; exit 0' 2>/dev/null; then plain=0; fi
+  if [ "$plain" = 1 ]; then
+    is "a hangup and a broken pipe are ignored once the lock is held" "$(grep -c "^trap -- '' SIG" "$T/traps")" "2"
+  fi
+  ( trap -p HUP PIPE >"$T/traps-at-start" ) || true
   ( handle_request "status" >/dev/null; trap -p HUP PIPE >"$T/traps" ) || true
-  is "a status request does not change how signals are handled" "$(grep -c . "$T/traps")" "0"
+  if [ "$plain" = 1 ]; then
+    is "a status request does not change how signals are handled" "$(cat "$T/traps")" "$(cat "$T/traps-at-start")"
+  fi
   # The case the rule exists for: the new image fails its check AFTER the
   # caller has gone. The line that says so cannot be written, and the put-back
   # comes after that line.
