@@ -21,9 +21,10 @@
  * deliberate: two accounts in one turn is the only claim here that rests on no
  * subtlety at all, which makes it the right closer. The Jira row sits beside
  * Gmail because it is the same kind of beat, a write you approve, and it
- * starts from an email. The problem/solution pairs are
- * deliberately unparallel — only sourced limitations are named, and each names
- * the connector that has the limit rather than "Claude" in general.
+ * starts from an email. The problem/solution pairs are deliberately
+ * unparallel: only sourced limitations are named, each names the connector
+ * that has the limit rather than "Claude" in general, and a row with no such
+ * limit to name (Gmail) names none.
  */
 
 import Link from "next/link";
@@ -80,7 +81,7 @@ export const DEMO_DISCLOSURE =
  */
 type Weight = "lead" | "supporting";
 
-const CELLS: {
+export const CELLS: {
   id: string;
   weight: Weight;
   problem: string;
@@ -103,10 +104,17 @@ const CELLS: {
       "DataToRAG writes into the deck you already have, after asking you first.",
   },
   {
+    // NOT A COMPARISON, on purpose. This line used to say Claude writes the
+    // email and stops at the draft. The built-in Gmail connector has sent,
+    // replied and forwarded since August 2026, and the comparison table
+    // further down this same page concedes all three, so the row contradicted
+    // the page it sits on. It now says what the reader wants and what we do,
+    // and nothing about anyone else. Before a problem line names a limit in
+    // someone else's product, find the row in that table that agrees with it.
     id: "gmail",
     weight: "supporting",
-    problem: "Claude writes the email and stops at the draft.",
-    solution: "DataToRAG sends it from your account, once you approve.",
+    problem: "You wanted the email sent, not a draft left for you to finish.",
+    solution: "DataToRAG sends it from the account you name, once you approve.",
   },
   {
     // The connector is named as its vendor names it. It covers Jira and

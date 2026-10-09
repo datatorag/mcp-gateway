@@ -2,20 +2,19 @@
 title: "Every Way to Connect Claude to Your Google Workspace, Compared (2026)"
 excerpt: "Native connectors, Zapier MCP, Composio, Pipedream, a self-hosted open-source server, or DataToRAG. What each one really does with your Google data, and how to pick the right one."
 date: "2026-06-29"
-updated: "2026-08-24"
-updatedNote: "August 24: a bigger correction than the last one. Anthropic's Gmail connector now SENDS, replies with reply-all, and forwards, so the native-connector section, the cross-link, and the summary table are all rewritten. The only Gmail verb still missing natively is deleting a draft. We also tightened our own data-retention sentence: Workspace content is a pass-through, but a blanket 'we don't store your data' was too broad, and the privacy policy is now linked instead. August 7: the connector gained labelling, marking read, and archiving."
+updated: "2026-10-09"
+updatedNote: "October 9: two corrections, both in the native connectors' favour. Anthropic's Gmail connector does delete a draft, so the sentence calling that the one Gmail verb still missing is gone from the FAQ, the native-connector section and the summary table. And Claude has an Atlassian connector of its own, which the summary table's Atlassian column had as No. August 24: a bigger correction than the last one. Anthropic's Gmail connector now SENDS, replies with reply-all, and forwards, so the native-connector section, the cross-link, and the summary table are all rewritten. The only Gmail verb still missing natively is deleting a draft. We also tightened our own data-retention sentence: Workspace content is a pass-through, but a blanket 'we don't store your data' was too broad, and the privacy policy is now linked instead. August 7: the connector gained labelling, marking read, and archiving."
 author: "Manuel Yang"
 category: "Comparison"
 tags: ["google-workspace", "claude", "mcp", "comparison", "alternatives"]
 faqs:
   - q: Can Claude's native Gmail connector send email?
     a: >-
-      Yes. As of our August 24, 2026 check of the native connectors' tool lists,
+      Yes. As of our October 9, 2026 check of the native connectors' tool lists,
       Claude's Gmail connector sends a new message, sends an existing draft,
       replies with reply-all, and forwards, alongside labelling, starring,
-      marking read, archiving and trashing. The one Gmail verb still missing is
-      deleting a draft it created. That surface moves, so the date is part of
-      the answer.
+      marking read, archiving, trashing and deleting a draft. That surface
+      moves, so the date is part of the answer.
   - q: What can Claude's native Google connectors not do?
     a: >-
       As of our August 24, 2026 check, Claude's native Gmail, Calendar and Drive
@@ -76,7 +75,7 @@ Start here, because it's free and you might not need anything else. Claude conne
 
 Calendar is the strong one, and it isn't close. Nine tools covering create, update, delete, search and RSVP, and that count includes a `suggest_time` helper we don't ship. If calendars are the whole job and one account covers it, native is the answer and you can stop here. Drive can read your files and save things back, including files Claude generates. Gmail reads and searches your inbox, writes drafts, files threads, and **now sends**: it labels, stars, marks read, archives, trashes, and as of our August 24 check it also sends a new message, sends an existing draft, replies with reply-all, and forwards.
 
-Then it stops, and it stops later than it used to. **Until recently the native Gmail connector could not send, and this post said so. That is no longer true and we have rewritten the Gmail post accordingly.** The one Gmail verb still missing is deleting a draft it created. Where it genuinely stops now is everything past mail, calendar and files. Slides gets as far as an empty deck: Drive will create you a real presentation at a real URL, and it arrives with one slide, a blank title, and a blank subtitle, because nothing in the native surface writes content onto slides. Sheets has no cell-level editing. No Contacts, no Tasks. And you connect one Google account at a time, so if you live in a work inbox and a personal one, you're disconnecting and reconnecting to switch.
+Then it stops, and it stops later than it used to. **Until recently the native Gmail connector could not send, and this post said so. That is no longer true and we have rewritten the Gmail post accordingly.** It deletes a draft too, which this post listed as the one Gmail verb still missing until October 9, 2026. Where it genuinely stops now is everything past mail, calendar and files. Slides gets as far as an empty deck: Drive will create you a real presentation at a real URL, and it arrives with one slide, a blank title, and a blank subtitle, because nothing in the native surface writes content onto slides. Sheets has no cell-level editing. No Contacts, no Tasks. And you connect one Google account at a time, so if you live in a work inbox and a personal one, you're disconnecting and reconnecting to switch.
 
 We wrote up the Gmail correction in [We said Claude couldn't send email, it can now](/blog/claude-gmail-connector-vs-datatorag-send-reply), the Drive editing gap in [Claude can read your docs, it can't edit them](/blog/claude-google-drive-vs-datatorag-editing), and the single-account limit [here](/blog/claude-google-calendar-vs-datatorag-multi-account).
 
@@ -122,7 +121,7 @@ Your Workspace content is a pass-through. We don't retain the documents, message
 
 | Option | Google write depth | Multi-account in one prompt | Atlassian | Hosting / open source | Setup effort |
 |---|---|---|---|---|---|
-| Claude native | Calendar full CRUD plus `suggest_time`; Gmail now sends, replies and forwards (no draft delete); Drive files, plus a Slides deck that arrives empty; no Sheets cell editing, Contacts, or Tasks | No, one account | No | Anthropic-hosted, closed | None |
+| Claude native | Calendar full CRUD plus `suggest_time`; Gmail now sends, replies and forwards; Drive files, plus a Slides deck that arrives empty; no Sheets cell editing, Contacts, or Tasks | No, one account | Yes, through Claude's separate Atlassian connector | Anthropic-hosted, closed | None |
 | Zapier MCP | Coarse writes for Gmail/Docs/Sheets/Drive/Calendar; no Slides/Contacts/Tasks on MCP | Not documented | Separate Zapier apps | Cloud-only, closed | Low |
 | Composio | Deep Gmail; Docs/Sheets/Tasks; no standalone Slides/Contacts | Per user, in your app | Via toolkit | Cloud core; self-host enterprise-only | Developer (SDK) |
 | Pipedream | Gmail/Sheets/Drive/Calendar writes; thinner, custom-API fallback | Per user, in your app | Via app | Cloud-only platform | Developer (SDK) |

@@ -2,8 +2,8 @@
 title: "We Said Claude Couldn't Send Email. It Can Now."
 excerpt: "This post used to argue that Claude's native Gmail connector drafts but never sends. As of August 24, 2026 that is wrong: it sends, replies, and forwards. Here is the corrected comparison, and the one Gmail gap that is still real."
 date: "2026-04-21"
-updated: "2026-08-24"
-updatedNote: "MAJOR CORRECTION, August 24: the central claim of this post is no longer true. Claude's native Gmail connector now exposes send_message (including sending an existing draft), reply with reply-all, and forward. The original title was 'Claude Can Draft Your Email. It Can't Send It.' We have rewritten the post rather than retitling around the edges, because the gap it was built on has closed. Earlier corrections on August 7 and August 11 covered labelling and thread-level filing."
+updated: "2026-10-09"
+updatedNote: "Fourth correction, October 9, in the same direction as the others: the native connector does delete a draft. It has a delete_draft tool, so the 'Delete a draft' row now reads Yes for both and the paragraph that said it had no way to remove one is rewritten. The trash row said Partial for us and now says No: we have no tool that trashes a message. Still standing from the MAJOR CORRECTION of August 24: the central claim of this post is no longer true. Claude's native Gmail connector now exposes send_message (including sending an existing draft), reply with reply-all, and forward. The original title was 'Claude Can Draft Your Email. It Can't Send It.' We have rewritten the post rather than retitling around the edges, because the gap it was built on has closed. Earlier corrections on August 7 and August 11 covered labelling and thread-level filing."
 author: "Manuel Yang"
 category: "Comparison"
 coverImage: "/blog/gmail-comparison.png"
@@ -47,25 +47,27 @@ frequently cited limitation of the native connector.
 | **Send an existing draft** | **Yes**, via `send_message` with a draft id | Yes, `gmail_send_draft` |
 | **Reply within a thread** | **Yes**, including reply-all | Yes |
 | **Forward a message** | **Yes** | Yes |
-| Delete a draft | No | Yes |
+| Delete a draft | Yes | Yes |
 | Mark messages read or unread | Yes | Yes |
 | Label or archive individual messages | Yes | Yes |
 | Label or archive a whole thread in one call | Yes | No |
-| Trash, untrash, mark spam | Yes | Partial |
+| Trash, untrash, mark spam | Yes | No |
 | Save attachment to Drive server-side | No | Yes |
 | Multi-account (work + personal Gmail) | No | Yes |
 
 Both columns are what each connector exposes as tools, enumerated on August 24, 2026. Rows
 move. The date is there so you can tell how stale this table is when you find it, and this
-particular table has now moved twice in a month.
+particular table has now moved twice in a month. The "Delete a draft" row was re-checked on
+October 9, 2026 and moved again: it said No for the native connector until then.
 
 ## What is left, stated without inflation
 
-Three rows. That is the honest count.
+Two rows. That is the honest count, and it was three until October 9, 2026.
 
-**Deleting a draft.** The native connector still has no way to remove a draft it created. If
-your workflow generates drafts speculatively, it accumulates them and you clean up by hand.
-This is a small gap and we are not going to pretend otherwise.
+**Deleting a draft, which used to be on this list.** This section said the native connector
+had no way to remove a draft it created. It does: it has a `delete_draft` tool, found when we
+re-enumerated it on October 9, 2026. Both connectors delete drafts, and this is no longer a
+gap in either direction.
 
 **Attachments.** Ours saves an attachment straight to Drive server-side, so the binary never
 enters the conversation. The native connector hands attachments back through the context
@@ -76,7 +78,7 @@ Google account. If you live in a work inbox and a personal one, you disconnect a
 move between them. Ours holds several at once and routes per call, so "check both inboxes and
 reply from the right one" is a single prompt.
 
-That is the current Gmail story. One meaningful differentiator, two small ones. If Gmail alone
+That is the current Gmail story. One meaningful differentiator, one small one. If Gmail alone
 is your use case and one account covers it, **use the native connector.** It is free, it is
 first-party, and it now finishes the job.
 

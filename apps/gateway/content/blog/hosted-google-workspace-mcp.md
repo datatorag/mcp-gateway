@@ -2,6 +2,8 @@
 title: "Hosted Google Workspace MCP: DataToRAG vs Google's Official Servers vs Claude's Native Connectors"
 excerpt: "Google shipped eight official Workspace MCP servers. Claude has three native connectors. We host one endpoint. Every tool on all three, enumerated on August 24, 2026, including the surprise: Google's own Gmail MCP cannot send email."
 date: "2026-08-24"
+updated: "2026-10-09"
+updatedNote: "October 9: the three-way table said No for Jira and Confluence under Claude native, and the closing list called Jira alongside Workspace the one nobody else covers. Claude has an Atlassian connector of its own, separate from its Google ones, so both are corrected. What holds is narrower: here Jira, Confluence and Google Workspace sit behind one endpoint. Everything else in the post is as enumerated on August 24, 2026."
 author: "Manuel Yang"
 category: "Comparison"
 tags: ["google-workspace", "mcp", "hosted-mcp", "claude", "comparison", "gmail", "sheets"]
@@ -111,7 +113,7 @@ free and we would be wasting your time.
 | Tasks | none | **none** | **6 tools** |
 | Google Chat | none | **yes** | no |
 | Multi-account in one prompt | no | not the model | **yes** |
-| Jira + Confluence | no | no | **yes, same endpoint** |
+| Jira + Confluence | yes, through a separate Atlassian connector | no | **yes, same endpoint** |
 | Self-host the gateway | no | not applicable | **yes, MIT** |
 
 Enumerated August 24, 2026. Counts are a poor way to judge a connector and a good way to spot a
@@ -167,8 +169,9 @@ the specifics, and I would rather point you at them than assert a blanket negati
   you.
 - **You want your agent writing into Sheets, Docs and Slides today, without a Cloud project** →
   a hosted gateway.
-- **More than one Google account, or Jira alongside Workspace** → that is the one nobody else
-  covers.
+- **More than one Google account in one prompt** → that is the one nobody else covers. Jira
+  alongside Workspace you can also get from Claude, through its separate Atlassian connector;
+  here it is the same endpoint.
 
 [Connect a Google account at datatorag.com](https://datatorag.com/dashboard). It takes about as
 long as reading this section.

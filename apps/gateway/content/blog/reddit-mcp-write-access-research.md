@@ -2,8 +2,8 @@
 title: "The Same Three Complaints Keep Showing Up in MCP Threads on Reddit"
 excerpt: "Before we built anything for write access, we read the threads. People complain about three things: connectors that won't change existing files, OAuth that eats DIY servers, and write access that sounds reckless. Here's each one, sourced, with what we did about it."
 date: "2026-07-30"
-updated: "2026-08-07"
-updatedNote: "Anthropic's Gmail connector has since gained labelling, marking read, and archiving, so Problem 1 is rewritten around what the connector's tool list actually shows. The scope-based reasoning is gone from the post, and the method note now says why."
+updated: "2026-10-09"
+updatedNote: "October 9: Problem 1 said the Gmail connector's draft never sends, never replies in-thread and cannot be deleted. All three are out of date. The connector has sent, replied and forwarded since August 2026, and it deletes drafts. That sentence is rewritten; the Slides and Drive half of the paragraph still holds. Earlier, August 7: Anthropic's Gmail connector has since gained labelling, marking read, and archiving, so Problem 1 is rewritten around what the connector's tool list actually shows. The scope-based reasoning is gone from the post, and the method note now says why."
 author: "Manuel Yang"
 category: "Research"
 coverImage: "/blog/reddit-mcp-write-access-cover.png"
@@ -26,7 +26,7 @@ Here's the line that started this whole project for us, from an r/ClaudeAI threa
 
 The second half of that quote is out of date, and it's worth saying so plainly: Claude's native Calendar connector now creates, updates, and deletes events. We wrote up [the Calendar comparison](/blog/claude-google-calendar-vs-datatorag-multi-account) ourselves and called it feature parity, because it is. If someone quotes that thread at you as proof Claude can't touch your calendar, they're wrong.
 
-Gmail and Drive are a different story, and the precise line matters: both connectors can create new things. The Gmail connector drafts emails into your Drafts folder, and the Drive connector can create new files, including a real Slides presentation at a real URL. Where they stop is one verb past that. The Gmail draft never sends and never replies in-thread, because the connector that wrote it has no send tool, no reply tool, and no delete either, so it can't take back the draft it just left you. The Slides deck arrives with one blank slide and no way to put anything on it. Drive won't edit the file you already have.
+Gmail and Drive are a different story, and the precise line matters: both connectors can create new things. The Gmail connector drafts emails into your Drafts folder, and the Drive connector can create new files, including a real Slides presentation at a real URL. Where Drive stops is one verb past that. Gmail no longer stops there: when this post was written the connector that wrote a draft had no send tool, no reply tool and no way to delete the draft, and it has since gained all three, so that half of the complaint is closed. The Slides deck still arrives with one blank slide and no way to put anything on it. Drive still won't change what is inside the file you already have.
 
 Gmail labels now, and that's worth flagging because this post said otherwise in July. Anthropic added the labelling tools since, which also means marking read and archiving. [The Gmail comparison](/blog/claude-gmail-connector-vs-datatorag-send-reply) carries the current table and the date we last enumerated the surface.
 
