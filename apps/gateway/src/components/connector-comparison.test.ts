@@ -8,8 +8,8 @@ import { siteFaqPages } from "@/lib/site-faq";
 
 /**
  * The comparison table makes claims about someone else's product, and three
- * other surfaces repeat them: the demo rows above it, the FAQ under it, and
- * two blog posts. Whether a cell is TRUE cannot be tested here; that takes a
+ * other surfaces repeat them: the demo rows above it, the FAQ under it, the
+ * home page's description, and several blog posts. Whether a cell is TRUE cannot be tested here; that takes a
  * person reading both tool lists on a stated date. What can be tested is that
  * the surfaces do not contradict each other, which is how the last wrong
  * claim was found: a demo row said the built-in connector could not send,
@@ -55,6 +55,7 @@ describe("the comparison table as checked on its date", () => {
     ["Trash a message or thread", true, false],
     ["Rename a file", true, true],
     ["Move a file to another folder", true, false],
+    ["Share a file with someone", true, false],
     ["Jira, attach an email or one of its attachments to an issue", false, true],
   ] as const)("%s", (capability, builtIn, ours) => {
     expect(row(capability)).toMatchObject({ builtIn, ours });
@@ -97,6 +98,19 @@ describe("the comparison table as checked on its date", () => {
 });
 
 describe("the surfaces that repeat the table agree with it", () => {
+  it("the home page description does not say the Drive connector cannot change a file", () => {
+    // It renames, moves and trashes files. What it cannot do is edit what is
+    // inside one, and the description is the sentence search results quote.
+    const page = readFileSync(join(__dirname, "../app/page.tsx"), "utf8");
+    const description = page.match(/const HOME_DESCRIPTION =\s*\n?\s*"([^"]+)"/)?.[1];
+    expect(description, "HOME_DESCRIPTION not found").toBeDefined();
+    expect(row("Rename a file").builtIn).toBe(true);
+    expect(description).not.toMatch(/can't change them|cannot change them|read-only/i);
+    expect(description).toMatch(/can't edit what's in them/);
+    // Search results cut around here.
+    expect(description!.length).toBeLessThanOrEqual(160);
+  });
+
   const problemLines = CELLS.map((cell) => cell.problem);
 
   it("finds the demo rows it is about to judge", () => {

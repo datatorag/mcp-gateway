@@ -25,8 +25,8 @@ import { VERIFIED_ON } from "@/lib/connector-verification";
  *    rather than an asset.
  *
  * 3. CONCEDE GENEROUSLY, AND DO NOT TRIM THE CONCESSIONS. The Drive group is
- *    the most credible thing on the page precisely because we lose it five
- *    rows to one. A reader who sees that believes the Sheets rows. A table
+ *    the most credible thing on the page precisely because we lose it and
+ *    win no row of it. A reader who sees that believes the Sheets rows. A table
  *    that wins everything reads as an ad and gets discounted whole.
  *
  * 4. CALENDAR IS NOT A TIE. IT IS FOUR CONCESSIONS. This section called it
@@ -69,7 +69,7 @@ import { VERIFIED_ON } from "@/lib/connector-verification";
  *    every row Yes and the table meaningless.
  */
 
-// Both dates live in `lib/connector-verification.ts` now, because the home
+// The date lives in `lib/connector-verification.ts`, because the home
 // page's FAQ makes the same claim in prose and must carry the same date. See
 // rule 2 there and here: rendered, not just recorded.
 
@@ -184,6 +184,9 @@ export const GROUPS: Group[] = [
       { capability: "Download file content", builtIn: true, ours: false, emphasis: true },
       { capability: "File metadata", builtIn: true, ours: false, emphasis: true },
       { capability: "Sharing permissions", builtIn: true, ours: false, emphasis: true },
+      // Reading who a file is shared with is the row above. This is the
+      // write: it grants someone access. We have no tool for either.
+      { capability: "Share a file with someone", builtIn: true, ours: false, emphasis: true },
       { capability: "Recently-opened files", builtIn: true, ours: false, emphasis: true },
       { capability: "Move a file to another folder", builtIn: true, ours: false, emphasis: true },
       // A tie since 9 October 2026: we copy files now.
@@ -193,7 +196,7 @@ export const GROUPS: Group[] = [
       // and our own Drive comparison post has said so since August.
       { capability: "Create a folder", builtIn: true, ours: true },
     ],
-    note: "The built-in Drive connector is more capable than ours, and it is not close. It downloads a file, reads its metadata and who it is shared with, lists what you opened recently and moves a file between folders. We do none of those. Our advantage was never Drive breadth. It is that we can change the files Drive gives you access to.",
+    note: "The built-in Drive connector is more capable than ours, and it is not close. It downloads a file, reads its metadata and who it is shared with, shares it with someone new, lists what you opened recently and moves a file between folders. We do none of those. Our advantage was never Drive breadth. It is that we can change the files Drive gives you access to.",
   },
   {
     service: "Beyond Google",
@@ -265,8 +268,8 @@ export function ConnectorComparison() {
           and Jira and Confluence, where this table had left out
           Claude&rsquo;s Atlassian connector. One moved toward us: we copy
           Drive files now. The rows on querying and formatting sheets,
-          trashing mail, renaming and moving files, and Jira attachments are
-          new.
+          trashing mail, sharing, renaming and moving files, and Jira
+          attachments are new.
         </p>
       </div>
 
