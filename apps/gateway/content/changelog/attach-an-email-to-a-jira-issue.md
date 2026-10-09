@@ -11,4 +11,4 @@ The file is the message exactly as Gmail returns it in raw form, unchanged by us
 
 The answer is a receipt: the attachment's name and size, the SHA-256 and byte count of what was sent, and the issue's key, project and summary, so you can see what went where. One file per call, up to 25 MB.
 
-This is the first of a general way to move files between connected services; see [Moving files between services](/docs/file-references).
+This is the first of a general way to move files between connected services; see [Moving files between services](/docs/file-references). The story behind it, and where the file is while it moves: [Claude can file an email on a Jira issue now](/blog/email-to-jira-file-references).
