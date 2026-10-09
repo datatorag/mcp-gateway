@@ -2,7 +2,7 @@
 # The pre-merge gate: what a pull request must pass, and what a person runs
 # before a push. One script, so the two cannot drift apart.
 #
-#   scripts/gate.sh [<base>]      # default base: origin/main
+#   scripts/gate.sh [<base>]      # default base: refs/remotes/origin/main
 #   scripts/gate.sh --self-test   # prove the path table still classifies
 #   scripts/gate.sh --surfaces <base>   # only print the surfaces the range
 #                                       # selects; the image build reads this
@@ -122,6 +122,8 @@ run_scripts() {
   echo "##### scripts: self-tests"
   bash scripts/gate.sh --self-test
   bash scripts/build-image.sh --self-test
+  bash scripts/host-deploy.sh --self-test
+  bash scripts/published-digest.sh --self-test
   python3 -m unittest scripts/test_leak_scan.py
   local t
   for t in scripts/hooks/test_*.py; do

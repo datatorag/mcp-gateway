@@ -1,9 +1,11 @@
 # SCRUM-394: CI gates, and deploys that GitHub builds and a person approves
 
-Status: SPEC, revision 2 (2026-10-08): the review's rulings are applied. No host
+Status: SPEC, revision 3 (2026-10-08): Addendum A is ruled (the restricted SSH key). No host
 change has been made. Built so far: the pull-request gate and the repository settings of
-section 3, and the image build of section 4 (`build.yml`, no deploy). Everything from "The
-deploy" onward is still proposed.
+section 3, the image build of section 4 (`build.yml`), and, for the canary only, the deploy
+workflow (`release.yml`), the host script and the canary's compose file. None of the last
+three has run against a host: section 8 steps 4 to 7 are still ahead, and the gateway's part
+of "The deploy" is still proposed.
 
 Two things are specified. First, a workflow that runs the gate on every pull request, with
 `main` protected. Second, a pipeline in which GitHub builds an image for a commit, a named
@@ -126,23 +128,35 @@ recorded in that step's report and not here).
 | Step | What | Stops if |
 |---|---|---|
 | 1 | The job declares `environment: production`. GitHub holds it until a reviewer approves | Not approved |
-| 2 | Resolve the image for `surface` and `sha` to its digest | No image for that sha |
-| 3 | Hand the host the request: surface, sha, digest (section 5 and Addendum A decide how) | The host refuses the request |
-| 4 | On the host: lock, record the current image as *previous*, re-render `.env` from the parameter store, pull by digest, point the compose file's image variable at it, `compose up -d --no-build <surface>` | Pull fails: nothing changed |
-| 5 | On the host: the container was recreated and is running the requested digest; health answers | Either fails: the host puts *previous* back |
-| 6 | The job reports surface, sha, digest, previous digest and the time each step took | |
+| 2 | Resolve the image for `surface` and `sha` to its digest, from the record the build run on `main` kept of what it pushed. The registry tag is only cross-checked against it, never trusted | No such record, or the tag no longer holds that digest |
+| 3 | Hand the host the request, one line over SSH: surface, sha, digest (section 5) | The host refuses the request |
+| 4 | On the host: lock, check the commit is on `main` and newer than the one running, pull by digest, check the image's revision label, point the compose file's image variable at it, `compose up -d --no-build <surface>`. For the gateway, when it joins: re-render `.env` from the parameter store first | Pull fails: nothing changed |
+| 5 | On the host: the container is running the requested digest and the surface reports the requested commit | Either fails: the host starts the image that was running again |
+| 6 | The job reports surface, sha, digest, previous sha and the time taken | |
 
-The environment is limited to the `main` branch.
+The environment is limited to the `main` branch. Step 2 runs in a job of its own, before the
+approval and without any secret, so the reviewer sees the exact request line they approve.
+
+**Where the digest comes from.** Anyone who can push a branch can publish an image under any
+tag, so a tag is not evidence. A build run that pushes an image keeps the digest as an
+artifact of that run, and a run that finds the tag already present keeps nothing. The deploy
+accepts the artifact only from a run of `build.yml`, started by a push or a dispatch, at a
+commit that is on `main` (`scripts/published-digest.sh`). The limit: artifacts last 90 days,
+so an image older than that cannot be deployed by the pipeline and the surface needs a newer
+build. The two images published before this record existed have none.
 
 **Compose.** The gateway service's `build:` block becomes `image: ${GATEWAY_IMAGE}`. The dev
 compose file keeps building locally.
 
-**The host script** (`scripts/host-deploy.sh` in this repo, proposed). It is installed on the
-host by a person and is **not** updated by the pipeline: a deploy that could replace the thing
-that validates deploys would make the validation decorative. It accepts a surface from a fixed
+**The host script** (`scripts/host-deploy.sh` in this repo; built for the canary, not yet
+installed anywhere). It is installed on the host by a person, at a fixed path outside any
+checkout, and is **not** updated by the pipeline: a deploy that could replace the thing that
+validates deploys would make the validation decorative. It accepts a surface from a fixed
 list, a 40-character sha and a sha256 digest, pulls only from this repository's registry
 namespace, and keeps the newest five images per surface so a rollback works with the registry
-unreachable.
+unreachable. The host has no checkout to consult, so it asks GitHub's public API whether the
+commit is on `main` and newer than the one running; no answer is a refusal. It cannot tell
+who published an image: that is step 2's job, and the script's header says so.
 
 **Rollback** is the same dispatch with the `rollback` flag and the sha being returned to. The
 host restores the image it recorded as *previous* and refuses if that is not the sha named.
@@ -165,12 +179,13 @@ approved, when, and the outcome.
 
 A is refused (refusal 1). B was the first recommendation. The review asked for a third shape to
 be compared before anything is built, one where the host asks instead of being told. That
-comparison and its recommendation are **Addendum A**; section 8 step 4 waits for a ruling on it.
+comparison is **Addendum A**. **Ruled: B**, for the reason recorded at the end of the addendum.
 
-If B is chosen, it is narrowed like this: a dedicated user that owns nothing; an
+B is narrowed like this: a dedicated user that owns nothing; an
 `authorized_keys` entry with a forced command and the `restrict` option; Docker reached only
 through the host script by a sudo rule naming it; the host's key pinned by the caller; the host
-address, private key and pinned host key as environment secrets, never in this repository; and
+address, private key and pinned host key as secrets of the `production` environment (never of
+the repository, so a run that is not from `main` gets none of them), never in this repository; and
 the credential's record of truth in the parameter store with the other production secrets,
 with GitHub holding a copy.
 
@@ -251,7 +266,8 @@ gateway rollback will be its first use on that surface.
 | The approval is treated as a control | Refusal 3; the table in section 6 |
 | A finding in CI prints the sensitive text into a public log | Refusal 10, pinned by the scanner's own test: a finding's output is checked for the matched text |
 | A pull request from this repo edits the workflow to print the secret | Not held down by design: anyone who can push a branch here is trusted with it. The list is rotated if it is ever exposed |
-| A stolen deploy credential redeploys an old, weaker image | Without the `rollback` flag the host refuses any sha that is not newer than the current one; with it, only the recorded previous image |
+| A stolen deploy credential redeploys an old, weaker image | Without the `rollback` flag the host refuses any sha that is not on `main` and newer than the current one, asked of GitHub's public API from the host; with it, only the recorded previous image |
+| A tag in the registry is overwritten by someone with push access | The deploy never reads its digest from a tag; it reads the build run's own record and stops if the tag disagrees with it |
 | An image built by GitHub behaves unlike the one built on the host | Step 7 deploys the same sha and diffs a test run before anything new ships |
 | The host script drifts from the copy in the repo | The script reports its own checksum with every deploy |
 | A dependency of a workflow is compromised | GitHub-owned actions only, pinned by sha; the build job has no deploy secret; the deploy job runs no third-party code |
@@ -263,12 +279,11 @@ gateway rollback will be its first use on that surface.
 Ruled: no separate identity for automated sessions for now, self-review prevention off
 (section 6); images public; the leak scan a required check with its list as a secret; one
 approver; the first deploy on a surface with no traffic; the gateway's window named when the
-pipeline is ready for it.
+pipeline is ready for it; Addendum A, the restricted SSH key.
 
 Open:
 
-1. **Addendum A**: how a deploy request reaches the host.
-2. **The production build in the pull-request gate**, once its run time is measured.
+1. **The production build in the pull-request gate**, once its run time is measured.
 
 ## Addendum A: the host asks, or the host is told
 
@@ -300,3 +315,17 @@ latency and a status the job can read, and the second of those is useful in its 
 The two unknowns are answered by a read-only spike before section 8 step 4, with no host
 contact: publish a request from a scratch workflow, read it back without a token, and confirm
 an unapproved one is distinguishable. If either fails, B stands as specified.
+
+**The spike, and the ruling.** The spike ran with no host contact. A request record can be read
+without a token, but only at the unauthenticated limit of 60 reads an hour for one address,
+and a read that returns "not modified" still counts: a one-minute timer uses the whole limit
+and leaves nothing for a retry. An approved request can be told from a waiting one, but not
+from the list of deployments, which anyone with push access can write to through the API; the
+host would have to read the run and its approvals instead, which costs more reads. So C works,
+with a slower timer and a more careful reader than the table above assumed.
+
+**Ruled: B.** The risk the ruling weighs is an outsider on a public repository, and B gives an
+outsider nothing: the key is a secret of an environment that only a run from `main` can reach,
+and what the key can do is one validated request. The row "what an automated session can reach
+today" stays true for B and is accepted, as section 6 already accepts it for the approval. The
+requirements that came with the ruling are in section 5 and in "Where the digest comes from".
