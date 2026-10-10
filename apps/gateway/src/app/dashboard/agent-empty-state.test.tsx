@@ -566,6 +566,18 @@ describe("server-supplied connection state and the signup landing (SCRUM-206)", 
     expect(connectionsFetches()).toBe(0);
   });
 
+  it("says what using the product agrees to, on the first screen after sign-in (SCRUM-408)", async () => {
+    // Calls to action start Google sign-in directly, so the login page that
+    // used to carry this sentence is no longer on the way in.
+    mountWith(neverResolves, [], null, { initialConnections: UNCONNECTED });
+    const consent = container.querySelector("[data-sign-in-consent]");
+    expect(consent?.textContent).toBe(
+      "By using DataToRAG you agree to our Terms of Service and Privacy Policy."
+    );
+    expect(consent?.querySelector('a[href="/terms"]')).not.toBeNull();
+    expect(consent?.querySelector('a[href="/privacy"]')).not.toBeNull();
+  });
+
   it("renders the connected shape on the FIRST paint, with no card and no check", async () => {
     mountWith(neverResolves, [], null, { initialConnections: CONNECTED });
     expect(text()).toContain("Ask something about your connected accounts");

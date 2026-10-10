@@ -23,6 +23,8 @@ import { JsonLd } from "@/components/json-ld";
 import { faqPageNode } from "@/lib/site-schema";
 import { siteFaqGroups, siteFaqs } from "@/lib/site-faq";
 import { SOCIAL_OPEN_GRAPH, SOCIAL_TWITTER } from "@/lib/social-card";
+import { signInHref } from "@/lib/sign-in";
+import { SignInConsent } from "@/components/sign-in-consent";
 
 /** Read once at module scope: the answers are static, the page is not. */
 const homeFaqs = siteFaqs("/");
@@ -99,7 +101,7 @@ export default async function HomePage() {
     getSessionUserId(),
   ]);
   const signedIn = userId !== null;
-  const playgroundHref = signedIn ? "/dashboard" : "/auth/login";
+  const playgroundHref = signedIn ? "/dashboard" : signInHref();
   // Authored order, first three. Adding a skill file does not silently change
   // the home page beyond that, and /skills stays the complete list.
   const featuredSkills = (await getAllSkills()).slice(0, 3);
@@ -210,12 +212,12 @@ export default async function HomePage() {
                 className="animate-fade-in-up mt-8 flex flex-wrap items-center justify-center gap-3 lg:justify-start"
                 style={{ animationDelay: "0.18s" }}
               >
-                <Link
-                  href="/auth/login"
+                <a
+                  href={signInHref()}
                   className="rounded-full bg-white px-7 py-3 text-sm font-medium text-[#1a3a8f] transition-all hover:bg-white/90"
                 >
                   Get Started
-                </Link>
+                </a>
                 <Link
                   href="/contact"
                   className="rounded-full border border-white/30 px-7 py-3 text-sm font-medium text-white transition-all hover:border-white/50 hover:bg-white/10"
@@ -246,6 +248,11 @@ export default async function HomePage() {
                 </Link>{" "}
                 · Open source, self-host it if you prefer
               </p>
+              {/* What signing in agrees to, beside the button that now
+                  starts it (SCRUM-408). */}
+              <SignInConsent
+                className="animate-fade-in-up mt-2 text-white/50 lg:text-left"
+              />
 
               {/* Accuracy constraint: rows must stay create-vs-change (the
                   built-in Drive connector can create new files) — never a
@@ -1022,12 +1029,12 @@ export default async function HomePage() {
               className="animate-fade-in-up mt-8 flex flex-wrap justify-center gap-3"
               style={{ animationDelay: "0.16s" }}
             >
-              <Link
-                href="/auth/login"
+              <a
+                href={signInHref()}
                 className="rounded-[var(--radius)] bg-primary px-6 py-3 text-sm font-medium text-primary-foreground transition-all hover:bg-primary/90"
               >
                 Start Free
-              </Link>
+              </a>
               <Link
                 href="/contact"
                 className="rounded-[var(--radius)] border border-white/20 px-6 py-3 text-sm font-medium text-white transition-all hover:border-white/40 hover:bg-white/5"

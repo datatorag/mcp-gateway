@@ -13,6 +13,7 @@ import { SOCIAL_OPEN_GRAPH, SOCIAL_TWITTER } from "@/lib/social-card";
 import { postCardImage } from "@/lib/post-card-image";
 import { splitDemoMarkers } from "@/lib/demo-embed";
 import { DemoEmbed, EMBEDDABLE_DEMO_IDS } from "@/components/demo/demo-embed";
+import { signInHref } from "@/lib/sign-in";
 
 interface Props {
   params: Promise<{ slug: string }>;
@@ -291,12 +292,12 @@ export default async function BlogArticlePage({ params }: Props) {
               talk to us about your setup.
             </p>
             <div className="mt-6 flex flex-wrap justify-center gap-3">
-              <Link
-                href="/auth/login"
+              <a
+                href={signInHref()}
                 className="rounded-[var(--radius)] bg-primary px-6 py-3 text-sm font-medium text-primary-foreground transition-all hover:bg-primary/90"
               >
                 Start free
-              </Link>
+              </a>
               <Link
                 href="/contact"
                 className="rounded-[var(--radius)] border border-border px-6 py-3 text-sm font-medium text-foreground transition-colors hover:border-primary/40 hover:bg-secondary/50"

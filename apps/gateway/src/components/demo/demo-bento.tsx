@@ -35,6 +35,7 @@ import {
   DEMO_CTA_ALTERNATIVE,
   DEMO_CTA_SUPPORT,
 } from "./demo-copy";
+import { CtaLink } from "@/components/cta-link";
 
 /** ONE WORD CHANGED FROM THE ORIGINAL, AND ONLY ONE: "playground UI" became
  * "Agent UI", because the surface it named was renamed. Everything else is
@@ -278,12 +279,12 @@ export function DemoBento({
           no href and gets nothing. */}
       {ctaHref && (
         <div className="mt-8 text-center">
-          <Link
+          <CtaLink
             href={ctaHref}
             className="font-display text-base font-bold text-foreground underline underline-offset-4 transition-colors hover:text-primary"
           >
             {DEMO_CTA_ACTION}
-          </Link>
+          </CtaLink>
           <p className="mt-2 text-sm text-muted-foreground">{DEMO_CTA_SUPPORT}</p>
           <p className="mx-auto mt-4 max-w-md text-balance text-sm text-muted-foreground">
             {DEMO_CTA_ALTERNATIVE}

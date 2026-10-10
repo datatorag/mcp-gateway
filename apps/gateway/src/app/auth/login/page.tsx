@@ -1,23 +1,32 @@
 import Image from "next/image";
 import { CasaBadge } from "@/components/casa-badge";
 import { resolveNextPath } from "@/gateway/post-login-destination";
+import { signInHref } from "@/lib/sign-in";
+import { SignInConsent } from "@/components/sign-in-consent";
 
-/** The middle link of the `next` chain (SCRUM-71): proxy.ts puts the
- * requested route on this page's URL, and this href is the only thing that
- * carries it onward to /auth/google — a static href here is where the value
- * used to silently die. Validated before embedding so junk never propagates,
- * and validated again at the redirect itself. */
+const SIGN_IN_FAILED = "That sign-in did not finish. Nothing was changed. Try again.";
+
+/** Where sign-in comes BACK to (SCRUM-408). Calls to action start Google
+ * sign-in themselves, so nobody is sent here to begin. This page is what a
+ * visitor sees when a sign-in did not finish, or when a session lapsed under
+ * a dashboard page and the middleware bounced them: it says so and offers
+ * the same button.
+ *
+ * It is still the middle link of the `next` chain for those bounces
+ * (SCRUM-71): proxy.ts puts the requested route on this page's URL, and this
+ * href carries it onward to /auth/google. Validated before embedding so junk
+ * never propagates, and validated again at the redirect itself. */
 export default async function LoginPage({
   searchParams,
 }: {
-  searchParams: Promise<{ next?: string }>;
+  searchParams: Promise<{ next?: string; error?: string }>;
 }) {
-  const { next } = await searchParams;
+  const { next, error } = await searchParams;
   const validNext = resolveNextPath(next);
-  const googleHref =
-    validNext !== null
-      ? `/auth/google?next=${encodeURIComponent(validNext)}`
-      : "/auth/google";
+  const googleHref = signInHref(validNext);
+  // Any error code gets the same sentence. The code is ours and says nothing
+  // a visitor can act on beyond "try again"; it is never echoed to the page.
+  const failed = typeof error === "string" && error !== "";
   return (
     <div className="flex min-h-screen items-center justify-center bg-background px-4">
       <div className="animate-fade-in-up w-full max-w-sm">
@@ -38,8 +47,18 @@ export default async function LoginPage({
             </p>
           </div>
 
+          {failed && (
+            <p
+              className="mt-6 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-center text-xs text-red-700"
+              role="alert"
+            >
+              {SIGN_IN_FAILED}
+            </p>
+          )}
+
           <div className="mt-8">
             <a
+              data-cta="login_page"
               href={googleHref}
               className="flex w-full items-center justify-center gap-3 rounded-[var(--radius)] border border-border bg-background px-4 py-3 text-sm font-medium text-foreground transition-all hover:bg-secondary"
             >
@@ -71,9 +90,7 @@ export default async function LoginPage({
           </div>
         </div>
 
-        <p className="mt-6 text-center text-xs text-muted-foreground">
-          By signing in, you agree to our Terms of Service.
-        </p>
+        <SignInConsent className="mt-6 text-center" verb="signing in" />
       </div>
     </div>
   );

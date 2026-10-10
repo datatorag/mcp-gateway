@@ -113,6 +113,13 @@ export function createAuthRouter(
         path: "/",
         maxAge: OAUTH_STATE_TTL_MS,
       });
+    } else {
+      // No return path asked for, so none may be left over. A sign-in begun
+      // from a button that names one and then abandoned leaves its cookie
+      // behind; with every button on the site starting sign-in (SCRUM-408),
+      // the next plain "get started" would land on the earlier button's
+      // destination.
+      res.clearCookie(NEXT_COOKIE, { path: "/" });
     }
 
     // CSRF (SCRUM-124): bind the round trip to the browser that began it, the
@@ -172,8 +179,15 @@ export function createAuthRouter(
       return;
     }
 
+    // A sign-in that did not finish comes back to the login page, which says
+    // so and offers the button again (SCRUM-408). These three used to answer
+    // with a bare line of text and nowhere to go, which mattered less when
+    // every sign-in began on the login page and matters now that a button
+    // anywhere on the site starts one: closing Google's screen is the most
+    // ordinary way for this to happen. The code names the leg for our logs
+    // and is never shown.
     if (!googleCode) {
-      res.status(400).send("Missing code from Google");
+      res.redirect("/auth/login?error=cancelled");
       return;
     }
 
@@ -193,7 +207,8 @@ export function createAuthRouter(
     );
 
     if (!tokenResponse.ok) {
-      res.status(500).send("Failed to exchange Google auth code");
+      console.error("[auth] sign-in code exchange failed:", tokenResponse.status);
+      res.redirect("/auth/login?error=exchange_failed");
       return;
     }
 
@@ -207,7 +222,8 @@ export function createAuthRouter(
     );
 
     if (!userInfoResponse.ok) {
-      res.status(500).send("Failed to fetch Google user info");
+      console.error("[auth] sign-in profile read failed:", userInfoResponse.status);
+      res.redirect("/auth/login?error=profile_failed");
       return;
     }
 

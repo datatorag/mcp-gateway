@@ -17,6 +17,7 @@ import { JsonLd } from "@/components/json-ld";
 import { faqPageNode } from "@/lib/site-schema";
 import { siteFaqGroups, siteFaqs } from "@/lib/site-faq";
 import { SOCIAL_OPEN_GRAPH, SOCIAL_TWITTER } from "@/lib/social-card";
+import { SignInConsent } from "@/components/sign-in-consent";
 
 /** Answers live in lib/site-faq.ts keyed by route, with the free allowance
  * imported from the same constants this page renders and the gateway enforces,
@@ -104,6 +105,8 @@ export default async function PricingPage({
           {/* The tier cards live in components/plan-cards.tsx (SCRUM-352), shared
               with the dashboard's Billing page so the two cannot drift. */}
           <PlanCards promo={promo} className="mt-14 grid gap-6 lg:grid-cols-3" />
+          {/* The plan buttons start sign-in themselves (SCRUM-408). */}
+          <SignInConsent className="mt-6 text-center" />
 
           <div className="mx-auto mt-14 max-w-3xl rounded-2xl border border-border bg-secondary/30 p-8 text-center">
             <h2 className="font-display text-xl font-semibold text-foreground">

@@ -32,7 +32,7 @@ describe("the catalogue's run and deep-link helpers (SCRUM-223)", () => {
   it("builds the deep link and the sign-in link from the slug alone", () => {
     expect(skillDeepLink("morning-brief")).toBe("/dashboard/agent?skill=morning-brief");
     expect(signInAndRunHref("morning-brief")).toBe(
-      "/auth/login?next=%2Fdashboard%2Fagent%3Fskill%3Dmorning-brief"
+      "/auth/google?next=%2Fdashboard%2Fagent%3Fskill%3Dmorning-brief"
     );
   });
 
