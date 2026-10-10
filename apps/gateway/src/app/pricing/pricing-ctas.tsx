@@ -10,6 +10,7 @@ import {
   type CheckoutInterval,
 } from "./checkout-client";
 import { signInHref } from "@/lib/sign-in";
+import { PRICE_LABEL } from "./price-label";
 import { signInDestination } from "@/components/attribution-links";
 
 /**
@@ -39,14 +40,6 @@ export function FreeCta({ className }: { className: string }) {
   );
 }
 
-/* Dollar amounts are display copy for the live Stripe prices the checkout
- * route resolves from env. Verified against the live price objects
- * (unit_amount 2000 monthly / 20000 yearly, USD) on 2026-08-14; the copy
- * test pins these strings so they cannot drift apart silently. */
-export const PRICE_LABEL: Record<CheckoutInterval, { amount: string; per: string }> = {
-  monthly: { amount: "$20", per: "/ month" },
-  yearly: { amount: "$200", per: "/ year" },
-};
 
 export function ProCheckout({ className, promo = null }: { className: string; promo?: string | null }) {
   const [interval, setInterval] = useState<CheckoutInterval>("monthly");

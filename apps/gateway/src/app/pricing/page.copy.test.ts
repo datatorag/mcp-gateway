@@ -65,8 +65,12 @@ describe("pricing page copy", () => {
     // objects (unit_amount 2000 / 20000, USD) on 2026-08-14. If the Stripe
     // prices ever change, this test is the reminder that the copy is a COPY
     // of that truth and must be re-verified against it, not just re-worded.
-    expect(ctas).toContain('"$20"');
-    expect(ctas).toContain('"$200"');
+    // The amounts live in a plain module both the server-rendered cards and
+    // the client checkout import (SCRUM-406), and nowhere else.
+    const prices = readFileSync(join(__dirname, "price-label.ts"), "utf8");
+    expect(prices).toContain('"$20"');
+    expect(prices).toContain('"$200"');
+    expect(ctas).not.toMatch(/"\$20"|"\$200"/);
     expect(page).toContain("$20 a month or $200 a year");
   });
 
