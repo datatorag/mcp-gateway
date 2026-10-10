@@ -6,6 +6,7 @@ import { PostHogProvider as PHProvider } from "posthog-js/react";
 import { useCurrentUser } from "@/lib/use-current-user";
 import { AttributionLinks } from "@/components/attribution-links";
 import { posthogPolicy } from "@/lib/analytics-guard";
+import { EXCEPTION_CAPTURE, beforeSendAnalytics } from "@/lib/analytics-exceptions";
 
 // Init at module scope so posthog is ready before any component effect runs.
 // posthog.capture() and .identify() calls will no longer race with init.
@@ -55,6 +56,18 @@ if (typeof window !== "undefined") {
       capture_performance: { web_vitals: true },
       autocapture: true,
       person_profiles: "identified_only",
+      // SCRUM-407. Both were off, which is why the error tracker was empty
+      // while session recordings showed real crashes. Neither is in the
+      // dated defaults bundle; without these lines the SDK waits for a
+      // project setting. See lib/analytics-exceptions.ts for why console
+      // errors are deliberately not captured, and for what before_send does.
+      capture_exceptions: EXCEPTION_CAPTURE,
+      // A click that changes nothing. The SDK reports these for ANY
+      // element, with its text, not only for controls: before_send strips
+      // that text unless a control was clicked. Do not turn this on
+      // anywhere without that filter.
+      capture_dead_clicks: true,
+      before_send: beforeSendAnalytics,
     });
   }
 }
