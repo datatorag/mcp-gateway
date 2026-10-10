@@ -172,7 +172,6 @@ use rather than by a row count.
 | Symptom | Cause | Fix |
 |---|---|---|
 | GWS tool calls fail with generic "Error occurred during tool execution" | User's `service_connections` row missing, or token expired and refresh failed | → deploy skill Troubleshooting ("GWS MCP tools load but all API calls fail"); run the check via the db-query skill's service-connection recipe |
-| Plugin fails to start, `ENOENT` for a binary | Binary-download step missing from the image or build chain | → deploy skill Troubleshooting ("GWS binary not found") + the gws-mcp-dev skill's build-chain gotcha |
 | MCP tool calls fail right after a gateway restart/deploy | Sessions are in-memory only; restart drops all live MCP sessions | Expected — instruct the client to re-initialize; user re-auths on next use, no data lost |
 | Gateway container up but requests fail / healthcheck red | Boot-time `getEnv()` Zod validation can exit the process before the listener opens (commonly a malformed `DATABASE_URL`), or Postgres wasn't ready when a decoupled `gateway` service started | Check container logs first (see deploy skill); look for a Zod validation dump near the top of the log, not just the latest lines |
 | A plugin is `down` in `/health` right after a deploy, with `no non-root account` in the logs | The image has a plugin directory with no `plugin-<slug>` account, or the account maps to root. The manager does not start it as the gateway's user | Add the account in the `Dockerfile` (the build's own check should have failed first) and deploy; the pipeline's rollback meanwhile |

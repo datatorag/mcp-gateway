@@ -3,27 +3,15 @@ import { readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-/* A token-bearing client must never start a process, and must never load the
- * module that can (SCRUM-289). Both are made to throw, so reaching either is
- * a failure rather than something to notice in a log. */
+/* The client must never start a process (SCRUM-289). Every way of starting
+ * one is made to throw, so reaching it is a failure rather than something to
+ * notice in a log. */
 vi.mock("node:child_process", () => {
   const boom = () => {
-    throw new Error("a token-bearing client spawned a process");
+    throw new Error("the client spawned a process");
   };
   return { execFile: boom, spawn: boom, exec: boom, fork: boom, default: { execFile: boom, spawn: boom } };
 });
-const cliLoaded = vi.fn();
-vi.mock("../cli-transport.js", () => {
-  cliLoaded();
-  return {
-    CliTransport: class {
-      api = vi.fn(async () => ({ success: true, data: { via: "cli" } }));
-      gmailAttachmentToDrive = vi.fn(async () => ({ success: true, data: { via: "cli" } }));
-      authStatus = vi.fn(async () => ({ success: true, data: { via: "cli" } }));
-    },
-  };
-});
-
 const { GwsClient, TransientGwsError } = await import("../gws-client.js");
 const { sendAuthorized } = await import("./direct-transport.js");
 
@@ -42,11 +30,10 @@ const json = (body: unknown, status = 200) => new Response(JSON.stringify(body),
 
 afterEach(() => {
   vi.restoreAllMocks();
-  cliLoaded.mockClear();
 });
 
 describe("a token-bearing client talks to Google directly", () => {
-  it("never spawns and never loads the CLI transport, across a read, a write and a copy to Drive", async () => {
+  it("never spawns, across a read, a write and a copy to Drive", async () => {
     const requests = withFetch((url) =>
       url.includes("/attachments/") ? json({ size: 3, data: "SGk_" }) : json({ id: "x" })
     );
@@ -55,7 +42,6 @@ describe("a token-bearing client talks to Google directly", () => {
     await client.api("gmail", "users.messages", "send", { params: { userId: "me" }, jsonBody: { raw: "SGk" } });
     await client.gmailAttachmentToDrive({ messageId: "m1", attachmentId: "a1", name: "f.txt" });
     expect(requests.length).toBe(4);
-    expect(cliLoaded).not.toHaveBeenCalled();
   });
 
   it("puts the token in the Authorization header and nowhere in the URL or body", async () => {
@@ -73,10 +59,18 @@ describe("a token-bearing client talks to Google directly", () => {
     expect(JSON.parse(String(init.body))).toEqual({ summary: "x" });
   });
 
-  it("with no token, hands the call to the CLI fallback and makes no request", async () => {
+  // There is no stored login to fall back to. The known-bad forms are a
+  // client that sends the request anyway, with no Authorization header, and
+  // one that starts a process to find a login.
+  it("with no token, refuses the call, makes no request and starts nothing", async () => {
     const requests = withFetch(() => json({}));
-    const out = await new GwsClient().api("gmail", "users.labels", "list", { params: { userId: "me" } });
-    expect(out.data).toEqual({ via: "cli" });
+    const client = new GwsClient();
+    await expect(client.api("gmail", "users.labels", "list", { params: { userId: "me" } })).rejects.toThrow(
+      /needs an access token/
+    );
+    await expect(
+      client.gmailAttachmentToDrive({ messageId: "m1", attachmentId: "a1", name: "f.txt" })
+    ).rejects.toThrow(/needs an access token/);
     expect(requests).toHaveLength(0);
   });
 });
@@ -396,6 +390,15 @@ describe("the token is put on the wire in one place (SCRUM-289)", () => {
       files.flatMap((f) => (code(f).match(re) ?? []).map(() => path.relative(srcRoot, f)));
     expect(hits(/Bearer \$\{/g)).toEqual([path.join("google-api", "direct-transport.ts")]);
     expect(hits(/(?<![.\w])fetch\(/g)).toEqual([path.join("google-api", "direct-transport.ts")]);
+  });
+
+  // SCRUM-390: the gws CLI is gone, and with it every reason to start a
+  // process. A source file that imports the module that can is the way one
+  // comes back.
+  it("no source file can start a process", () => {
+    const files = sources(srcRoot);
+    const hits = files.filter((f) => /child_process/.test(code(f))).map((f) => path.relative(srcRoot, f));
+    expect(hits).toEqual([]);
   });
 
   it("the default destination is the API rule: docs.google.com is refused unless asked for by name", async () => {

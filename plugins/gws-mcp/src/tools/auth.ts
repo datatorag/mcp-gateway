@@ -1,4 +1,3 @@
-import { DEFAULT_SERVICES } from "../gws-client.js";
 import { CREATE, ToolDef } from "./annotations.js";
 import type { GwsClient } from "../gws-client.js";
 import { textResponse } from "./response.js";
@@ -29,32 +28,26 @@ export const authTools: ToolDef[] = [
   },
 ];
 
+/**
+ * This tool once drove the gws CLI's own login for a desktop install. That
+ * install is gone (SCRUM-390): the gateway connects each account and sends
+ * its token with every call, so there is nothing here to log in to and no
+ * stored login to report on. The tool is still served, unchanged, until its
+ * registry row is removed in a change of its own; until then it answers with
+ * what is true instead of starting a process.
+ */
 export async function handleAuth(
-  client: GwsClient,
+  _client: GwsClient,
   _toolName: string,
   args: Record<string, unknown>
 ) {
   const action = (args.action as string) || "status";
-
   if (action === "login") {
-    const services = (args.services as string) || DEFAULT_SERVICES;
-    const authUrl = await client.spawnAuthForUrl(services);
-
-    if (authUrl) {
-      return textResponse(
-        `Open this URL in your browser to authenticate:\n\n  ${authUrl}\n\nAfter authenticating, try your request again.`
-      );
-    }
     return textResponse(
-      "Authentication login triggered. If a browser window didn't open, check the server logs."
+      "This server cannot start a login. Google accounts are connected, and reconnected with new permissions, on the gateway's connections page; after that, try the request again."
     );
   }
-
-  // Default: status
-  const result = await client.authStatus();
   return textResponse(
-    result.success
-      ? `Authenticated.\n${JSON.stringify(result.data, null, 2)}`
-      : "Not authenticated. Use action 'login' to authenticate (extension/stdio mode) or reconnect via MCP OAuth (HTTP mode)."
+    "Authentication is handled by the gateway: each call runs as the Google account connected there, and this server holds no login of its own. If a call fails for a missing permission, reconnect the account on the gateway's connections page."
   );
 }

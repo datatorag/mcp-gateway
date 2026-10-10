@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
 import path from "node:path";
-import { DEFAULT_SERVICES, scopesForServices } from "./gws-client.js";
 import { allTools } from "./tools/index.js";
 
 /**
@@ -28,12 +27,6 @@ const WITHHELD_SCOPE = "https://www.googleapis.com/auth/gmail.settings.basic";
 const WITHHELD_TOOLS = ["gmail_create_filter", "gmail_delete_filter"];
 
 describe("withheld until gmail.settings.basic is approved", () => {
-  it("does not request the scope at consent time", () => {
-    // The scope actually sent to Google. This is the one that triggers the
-    // unverified-app screen, so it matters more than the manifest.
-    expect(scopesForServices(DEFAULT_SERVICES)).not.toContain(WITHHELD_SCOPE);
-  });
-
   it("does not declare the scope in the plugin manifest", () => {
     const manifest = JSON.parse(
       readFileSync(path.join(process.cwd(), "datatorag.json"), "utf-8")

@@ -1,5 +1,7 @@
 # SCRUM-170: vendored gws CLI 0.13.2 → 0.17.0 verification report
 
+> History. The vendored gws CLI this report verifies was removed from this plugin (SCRUM-390). Kept as the record.
+
 Branch: `feature/chore/gws-cli-0.17.0`, off `main` at b222097. One change:
 the version pin in `scripts/download-binaries.sh`. No `src/` file is touched.
 

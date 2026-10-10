@@ -132,8 +132,7 @@ run_gateway() {
   (cd apps/gateway && DATABASE_URL="${DATABASE_URL:-$PLACEHOLDER_DATABASE_URL}" pnpm exec vitest run)
 }
 
-# A plugin's own build and tests. gws-mcp's test task first fetches the one
-# pinned CLI binary its oracle test compares against, checked by checksum.
+# A plugin's own build and tests. Neither downloads anything.
 run_plugin() {
   echo "##### $1: build"
   pnpm --filter "@datatorag-mcp/$1" run build
