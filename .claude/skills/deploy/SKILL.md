@@ -226,20 +226,12 @@ It does not render the env file (step 2b) and does not touch plugins (step 5).
    ```
    Wait for `{"status":"ok"}` before proceeding.
 
-5. **Reinstall plugins if needed**
-   The public POST/DELETE endpoints on `/api/servers` have been removed. To update a plugin:
-   ```bash
-   # SSH into server, then exec into the gateway container
-   CONTAINER=$(docker ps --filter 'name=gateway' -q)
-
-   # Pull latest code and rebuild inside the container
-   docker exec $CONTAINER bash -c \
-     'cd /root/.datatorag/plugins/<slug> && git pull origin main && NODE_ENV=development pnpm install && npx tsc'
-
-   # Restart gateway so plugin process picks up new code
-   cd ~/datatorag-mcp/docker && docker compose -f docker-compose.prod.yml --env-file /opt/datatorag-deploy/env/gateway.env restart gateway
-
-   ```
+5. **Plugins need no step of their own**
+   The plugins are part of the gateway image (`/app/plugins/<slug>`, built
+   from the same commit) and the image says to load them from there. A plugin
+   change is deployed by deploying the gateway. Nothing is pulled, installed
+   or compiled in the running container, and the old `git pull` in the plugins
+   volume changes nothing that runs.
 
    **Then change the `tools` table by exactly what the plugin change changed,
    never by re-discovery.** The registry does not resync itself on a plugin
