@@ -1,5 +1,7 @@
 # SCRUM-167 — the Tasks container gap and the CLI identity hole
 
+> History. The gws CLI path and `scripts/gws-guard.sh` described here were removed from this plugin (SCRUM-390). Kept as the record of why.
+
 Branch: `feature/scrum-167-tasks-and-cli-guard`, from `main` at `f8e8e48`.
 
 Accounts are written as `<shell-account>` and `<mcp-account>` throughout. They

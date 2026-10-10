@@ -12,10 +12,8 @@
   "scripts": {
     "build": "tsc",
     "dev": "tsc --watch",
-    "download-binaries": "bash scripts/download-binaries.sh",
-    "build:extension": "bash scripts/build-extension.sh",
     "start": "node server/index.js",
-    "test": "bash scripts/download-binaries.sh --host && tsc -p tsconfig.test.json && vitest run"
+    "test": "tsc -p tsconfig.test.json && vitest run"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.29.0",

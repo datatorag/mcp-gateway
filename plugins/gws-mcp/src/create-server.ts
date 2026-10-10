@@ -23,7 +23,7 @@ export function createMcpServer(client?: GwsClient): Server {
   server.setRequestHandler(CallToolRequestSchema, async (request, extra) => {
     const { name, arguments: args = {} } = request.params;
 
-    // Use the MCP bearer token for gws CLI calls when available
+    // Use the MCP bearer token for this call when the transport carries one
     const client = extra.authInfo?.token
       ? activeClient.withToken(extra.authInfo.token)
       : activeClient;

@@ -113,6 +113,59 @@ export function buildPluginEnv(
   return { env, refused };
 }
 
+export type PluginUser = { uid: number; gid: number };
+
+/** The account a plugin child runs as, by name: one per plugin, so neither
+ * can read the other's process either. */
+export function pluginUserName(slug: string): string {
+  return `plugin-${slug}`;
+}
+
+/**
+ * The user and group id of a plugin's own account, read from the text of a
+ * passwd file (SCRUM-390). Null when there is no such account, when its line
+ * cannot be read, or when it is root: an account named for a plugin that
+ * maps to uid or gid 0 is a mistake in the image, and starting the plugin
+ * with it would be starting it as root under another name.
+ */
+export function pluginUserFrom(passwd: string, slug: string): PluginUser | null {
+  const name = pluginUserName(slug);
+  for (const line of passwd.split("\n")) {
+    const fields = line.split(":");
+    if (fields[0] !== name) continue;
+    if (!/^\d+$/.test(fields[2] ?? "") || !/^\d+$/.test(fields[3] ?? "")) return null;
+    const uid = Number(fields[2]);
+    const gid = Number(fields[3]);
+    if (uid === 0 || gid === 0) return null;
+    return { uid, gid };
+  }
+  return null;
+}
+
+/**
+ * Who a plugin child runs as. `undefined` means as the gateway itself, which
+ * is a laptop and any plugin that is not the image's. `null` means it should
+ * have had its own account and has none, and then it is not started.
+ */
+export type PluginUserLookup = (slug: string) => PluginUser | null | undefined;
+
+/**
+ * When the plugins are the image's, each runs as its own non-root account,
+ * which the image creates (SCRUM-390). A process of another user cannot read
+ * the gateway's environment or memory, so the keys the gateway holds stay out
+ * of reach of a plugin that has been taken over, and not only of one that
+ * logs its environment by accident. There is no fallback to the gateway's
+ * own user: a plugin with no account is left down.
+ */
+const imagePluginUser: PluginUserLookup = (slug) => {
+  if (!PLUGINS_FROM_IMAGE) return undefined;
+  try {
+    return pluginUserFrom(readFileSync("/etc/passwd", "utf-8"), slug);
+  } catch {
+    return null;
+  }
+};
+
 export type PluginStatus = "up" | "down";
 
 interface RunningPlugin {
@@ -132,10 +185,16 @@ export class PluginManager {
   private statuses = new Map<string, PluginStatus>();
   private db: Database;
   private pool: ConnectionPool;
+  private userFor: PluginUserLookup;
 
-  constructor(db: Database, pool: ConnectionPool) {
+  constructor(
+    db: Database,
+    pool: ConnectionPool,
+    opts: { userFor?: PluginUserLookup } = {}
+  ) {
     this.db = db;
     this.pool = pool;
+    this.userFor = opts.userFor ?? imagePluginUser;
     mkdirSync(PLUGINS_DIR, { recursive: true });
   }
 
@@ -447,8 +506,18 @@ export class PluginManager {
       }
     }
 
+    const user = this.userFor(slug);
+    if (user === null) {
+      throw new Error(
+        `no non-root account "${pluginUserName(slug)}" for this plugin, so it is not started`
+      );
+    }
+
     const child = spawn("node", [resolvedEntrypoint], {
       cwd: pluginDir,
+      // Its own account when there is one. The operating system drops the
+      // gateway's other groups along with the user.
+      ...(user ? { uid: user.uid, gid: user.gid } : {}),
       // Next types NODE_ENV as always present; this one is exactly what
       // buildPluginEnv returned.
       env: childEnv as NodeJS.ProcessEnv,
