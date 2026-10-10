@@ -2,7 +2,6 @@ import { spawn, execFileSync, type ChildProcess } from "node:child_process";
 import { existsSync, readFileSync, mkdirSync, rmSync } from "node:fs";
 import { createServer } from "node:net";
 import { join } from "node:path";
-import { homedir } from "node:os";
 import { eq } from "drizzle-orm";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
@@ -15,32 +14,10 @@ import {
 import type { McpGatewayManifest } from "@datatorag-mcp/types";
 import type { ConnectionPool } from "./pool";
 import { sendSlack } from "@/lib/slack";
+import { PLUGINS_DIR, PLUGINS_FROM_IMAGE } from "./plugins-dir";
 
-/**
- * Where plugins are loaded from (SCRUM-390). `DATATORAG_PLUGINS_DIR` when it
- * is set, which only an image that carries the plugins does, in its
- * Dockerfile. Otherwise the folder under the home directory, which is what a
- * laptop and every image without the value use, and where production's
- * plugins volume is mounted.
- *
- * Read from the process environment and not from the config schema on
- * purpose: the value is a fact about the image, never a deploy setting. It
- * is not in the compose file, the parameter store or the database, so an
- * image rollback is the whole undo.
- */
-export function pluginsDirFrom(
-  env: Record<string, string | undefined>,
-  home: string
-): { dir: string; fromImage: boolean } {
-  const set = env.DATATORAG_PLUGINS_DIR?.trim();
-  if (set) return { dir: set, fromImage: true };
-  return { dir: join(home, ".datatorag", "plugins"), fromImage: false };
-}
+export { pluginsDirFrom, PLUGINS_DIR, PLUGINS_FROM_IMAGE } from "./plugins-dir";
 
-const resolvedPluginsDir = pluginsDirFrom(process.env, homedir());
-export const PLUGINS_DIR = resolvedPluginsDir.dir;
-/** True when the plugins are the image's own, built from the gateway's commit. */
-export const PLUGINS_FROM_IMAGE = resolvedPluginsDir.fromImage;
 const BASE_PORT = 40000;
 const SLUG_PATTERN = /^[a-z0-9][a-z0-9-]*$/;
 
