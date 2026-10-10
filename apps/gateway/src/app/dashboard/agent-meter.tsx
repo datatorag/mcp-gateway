@@ -75,7 +75,9 @@ export function AgentMeter({
           <span>No connectors connected</span>
         )}
         {connectors.map((c) => (
-          <span key={c.key} title={c.emails}>
+          // The tooltip lists the connected addresses: account data in an
+          // attribute, which recordings copy as it is (SCRUM-414).
+          <span className="ph-no-capture" key={c.key} title={c.emails}>
             {c.label}
           </span>
         ))}

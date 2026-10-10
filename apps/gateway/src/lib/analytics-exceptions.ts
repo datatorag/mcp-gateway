@@ -1,7 +1,9 @@
+import { beforeSendInteraction } from "./analytics-masking";
+
 /**
  * What the browser reports to error tracking, and in what shape (SCRUM-407).
  *
- * No imports, so the server's request-error hook and the browser's analytics
+ * No imports but the masking rule, so the server's request-error hook and the browser's analytics
  * provider share one definition of "an error message we are willing to send".
  *
  * WHY THIS EXISTS. For as long as the product has run, a crash in the
@@ -92,59 +94,9 @@ export function beforeSendException<T extends CapturedEvent | null>(event: T): T
   };
 }
 
-/* -------------------------------------------------------------------------- */
-/* Dead clicks                                                                 */
-/* -------------------------------------------------------------------------- */
-
-/** The events the SDK sends for a click or swipe that changed nothing. */
-const DEAD_INTERACTIONS = new Set(["$dead_click", "$dead_swipe"]);
-
-/** Elements whose text is a label we wrote: the same set click autocapture
- * has always reported. Content placed inside one of these still needs
- * `ph-no-capture`, as it does for a live click. */
-const CONTROL_TAGS = new Set(["button", "label", "summary", "input", "select", "textarea", "option"]);
-
-/** The tag of the element that was clicked, from whichever form the SDK
- * used: the chain string leads with it, the array's first entry holds it. */
-function deadClickTag(properties: Record<string, unknown>): string | null {
-  const elements = properties.$elements;
-  if (Array.isArray(elements)) {
-    const tag = (elements[0] as { tag_name?: unknown } | undefined)?.tag_name;
-    if (typeof tag === "string") return tag.toLowerCase();
-  }
-  const chain = properties.$elements_chain;
-  if (typeof chain === "string") {
-    const tag = chain.match(/^[a-z][a-z0-9-]*/i)?.[0];
-    if (tag) return tag.toLowerCase();
-  }
-  return null;
-}
-
-/**
- * A dead click, with whatever was on screen taken out of it.
- *
- * THE SDK'S DEAD-CLICK CAPTURE IS WIDER THAN ITS CLICK CAPTURE. A live click
- * is only reported for a control (a link, a button, a field). A dead click
- * is reported for ANY element: someone idly clicking a paragraph. And the
- * event carries that element's text, plus the attributes of it and of every
- * ancestor. In this product a paragraph on screen can be a line of
- * somebody's email. So unless the thing clicked is a control, the event
- * keeps WHERE it happened (the page, which the SDK adds itself) and WHAT
- * KIND of element it was, and nothing that was written on it: the text, the
- * element list and the chain string are all removed.
- *
- * Fail closed: an event whose target cannot be worked out is treated as
- * content, not as a control.
- */
-export function beforeSendDeadClick<T extends CapturedEvent | null>(event: T): T {
-  if (!event || !event.event || !DEAD_INTERACTIONS.has(event.event) || !event.properties) return event;
-  const tag = deadClickTag(event.properties);
-  if (tag !== null && CONTROL_TAGS.has(tag)) return event;
-  const { $el_text: _text, $elements: _elements, $elements_chain: _chain, ...rest } = event.properties;
-  return { ...event, properties: { ...rest, dead_click_tag: tag ?? "unknown" } };
-}
-
-/** The one hook the provider installs: every event passes through both. */
+/** The one hook the provider installs: every event passes through both
+ * filters. What a click event may carry is decided in analytics-masking.ts
+ * (SCRUM-414), for live clicks, rage clicks and dead clicks alike. */
 export function beforeSendAnalytics<T extends CapturedEvent | null>(event: T): T | null {
-  return beforeSendException(beforeSendDeadClick(event));
+  return beforeSendException(beforeSendInteraction(event));
 }
