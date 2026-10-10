@@ -23,6 +23,7 @@ import { isValidElement } from "react";
 import { ServiceIcon, serviceFromToolName } from "@/components/service-icon";
 import { CodeBlock } from "./code-block";
 import { formatToolOutput } from "./format-tool-output";
+import { UNMASK } from "@/lib/analytics-masking";
 
 export type ToolProps = ComponentProps<typeof Collapsible>;
 
@@ -113,6 +114,9 @@ export const ToolHeader = ({
         "flex w-full items-center justify-between gap-4 p-3",
         className
       )}
+      // SCRUM-414: the tool's name and status are ours to show. The summary
+      // of its arguments inside carries ph-no-capture, which outranks this.
+      {...UNMASK}
       {...props}
     >
       {/* `span`s, not `div`s: Base UI's CollapsibleTrigger renders a real

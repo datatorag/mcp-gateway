@@ -55,7 +55,9 @@ export default function RootLayout({
           `globals.css` already makes exactly this distinction on `html`, with
           a comment explaining it, and the same reasoning was never carried
           the one file across to `body`. */}
-      <body className="min-h-full flex flex-col font-sans overflow-x-clip">
+      {/* SCRUM-414: the public site holds no account data, so analytics may
+          read its text. The dashboard re-hides everything under its own root. */}
+      <body className="min-h-full flex flex-col font-sans overflow-x-clip" data-ph-unmask="">
         {/* Must stay before {children}: effects flush in tree order, so the
             gtag stub exists before page effects (e.g. the dashboard's signup
             conversion) run. */}

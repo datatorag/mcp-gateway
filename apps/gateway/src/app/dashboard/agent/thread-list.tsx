@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { PlusIcon, Trash2Icon } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
+import { UNMASK } from "@/lib/analytics-masking";
 
 /**
  * The conversations rail: start a new chat, return to an old one, delete one.
@@ -102,7 +103,7 @@ export function ThreadList({
   return (
     <div className="flex h-full min-h-0 w-60 shrink-0 flex-col border-r border-border">
       <div className="shrink-0 p-3">
-        <Button className="w-full justify-start gap-2" onClick={onNew} size="sm" variant="outline">
+        <Button className="w-full justify-start gap-2" onClick={onNew} size="sm" variant="outline" {...UNMASK}>
           <PlusIcon className="size-4" aria-hidden="true" />
           New chat
         </Button>
@@ -140,7 +141,9 @@ export function ThreadList({
                   </button>
                   <button
                     aria-label={`Delete ${thread.title}`}
-                    className="shrink-0 rounded-md p-1.5 text-muted-foreground opacity-0 transition-opacity hover:bg-background hover:text-foreground focus-visible:opacity-100 group-hover:opacity-100 disabled:opacity-50"
+                    // ph-no-capture: the conversation's title is in this
+                    // button's label and tooltip (SCRUM-414).
+                    className="ph-no-capture shrink-0 rounded-md p-1.5 text-muted-foreground opacity-0 transition-opacity hover:bg-background hover:text-foreground focus-visible:opacity-100 group-hover:opacity-100 disabled:opacity-50"
                     disabled={busy === thread.id}
                     onClick={() => void remove(thread.id)}
                     title={`Delete ${thread.title}`}
