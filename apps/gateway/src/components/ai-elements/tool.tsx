@@ -79,7 +79,12 @@ const statusIcons: Record<ToolPart["state"], ReactNode> = {
 export const getStatusBadge = (status: ToolPart["state"], label?: string) => (
   <Badge className="gap-1.5 rounded-full text-xs" variant="secondary">
     {label ? <XCircleIcon className="size-4 text-orange-600" /> : statusIcons[status]}
-    {label ?? statusLabels[status]}
+    {/* In an element of its own, never a bare text node beside the icon. The
+        icon is replaced on every state change, and React places the new one
+        in front of the label. A browser that has translated the page has
+        taken a bare text node out of the document, so that placement threw
+        and took the page with it. An element stays where React left it. */}
+    <span>{label ?? statusLabels[status]}</span>
   </Badge>
 );
 

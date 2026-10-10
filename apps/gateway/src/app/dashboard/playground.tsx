@@ -85,6 +85,11 @@ import { cn } from "@/lib/utils";
  * string in front of the user. */
 const CAP_EXCEEDED = "cap_exceeded";
 
+/** Shown in the error bubble when the request limiter, not the run
+ * allowance, refused a turn. Nothing was spent and nothing is used up. */
+export const RATE_LIMITED =
+  "That was a lot of requests in a short time. Wait a moment, then send it again.";
+
 /** The connectable services, in the shape the connect control takes. Derived
  * from the one SERVICES list rather than restated, so a new connector appears
  * in the thread without anyone remembering to add it here. */
@@ -276,6 +281,12 @@ interface PlaygroundProps {
   welcome?: boolean;
   /** SCRUM-223: a skill waiting on a connect. Null when there is none. */
   pendingSkill?: PendingSkill | null;
+  /** The stored thread this conversation lives in, the moment a response
+   * names it. A NEW conversation has no id until then, and the surface
+   * hosting the chat needs one to reopen the conversation if the chat itself
+   * stops rendering. Reported, never fed back in as `threadId`: that prop
+   * keys the component, and changing it mid-stream would remount the turn. */
+  onThreadKnown?: (threadId: string) => void;
 }
 
 /** Feedback is reported against the prompt that produced the answer, which is
@@ -310,6 +321,7 @@ export const Playground = forwardRef<PlaygroundHandle, PlaygroundProps>(
       onConversationChanged,
       welcome = false,
       pendingSkill = null,
+      onThreadKnown,
     },
     ref
   ) {
@@ -345,6 +357,12 @@ export const Playground = forwardRef<PlaygroundHandle, PlaygroundProps>(
     /** The run the current turn is (SCRUM-258), read off the response
      * header, so Stop can name it. Null until a turn's response arrives. */
     const [serverRunId, setServerRunId] = useState<string | null>(null);
+    // Read through a ref so the transport below, which is built once per
+    // thread, always calls the caller's latest callback.
+    const onThreadKnownRef = useRef(onThreadKnown);
+    useEffect(() => {
+      onThreadKnownRef.current = onThreadKnown;
+    }, [onThreadKnown]);
 
     /** The user's own files when the read found any, the generic examples
      * otherwise. Derived once so the copy and the list cannot disagree about
@@ -415,9 +433,18 @@ export const Playground = forwardRef<PlaygroundHandle, PlaygroundProps>(
             }
             if (res.status === 429) {
               const data = (await res.json().catch(() => null)) as {
+                error?: string;
                 cap?: number;
               } | null;
-              setCapState({ cap: typeof data?.cap === "number" ? data.cap : 0 });
+              // TWO DIFFERENT REFUSALS SHARE THIS STATUS. The run allowance
+              // names itself and carries its cap; that one raises the cap
+              // panel. The per-user request limiter in front of every
+              // dashboard route answers 429 too, with no cap, and reading it
+              // as the allowance told a user who had clicked too fast that
+              // they had used all 0 of their runs, with the composer gone.
+              // It is a wait, so it says so and leaves the composer alone.
+              if (data?.error !== "cap_exceeded") throw new Error(RATE_LIMITED);
+              setCapState({ cap: typeof data.cap === "number" ? data.cap : 0 });
               throw new Error(CAP_EXCEEDED);
             }
             // 400 / 500 (and anything else non-2xx) land in the chat error
@@ -453,7 +480,10 @@ export const Playground = forwardRef<PlaygroundHandle, PlaygroundProps>(
             // Headers are available the moment the response starts, so the
             // thread is known before the connect control could ever stream in.
             const turnThread = res.headers.get(THREAD_ID_HEADER);
-            if (turnThread) setServerThreadId(turnThread);
+            if (turnThread) {
+              setServerThreadId(turnThread);
+              onThreadKnownRef.current?.(turnThread);
+            }
             setServerRunId(res.headers.get(RUN_ID_HEADER));
             return res;
           },

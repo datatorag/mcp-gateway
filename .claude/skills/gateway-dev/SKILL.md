@@ -89,6 +89,8 @@ The dominant pattern across the gateway/lib/app-route suites is **hand-rolled mo
 
 A **testcontainers-based real-Postgres helper exists** (`apps/gateway/src/test-utils/db.ts`, `@testcontainers/postgresql` + `drizzle-orm/postgres-js/migrator`, spins up `postgres:16-alpine` and runs the real migrations folder) but nothing currently imports it — it's available scaffolding for a true integration test, not a pattern you'll find already in use. Reach for the mock style above unless you specifically need to exercise real SQL (e.g. a migration or a query with joins/aggregates you don't trust a stub to represent).
 
+**A translated page is a test environment (SCRUM-405).** A browser's page translation takes each text node out of the document and puts a `<font>` element in its place, while React keeps the node it made. A component that renders a bare text node beside an element that is swapped, added or removed (`{icon}{label}` where the icon changes with state) then throws inside the commit, and without a boundary that replaces the page. Two rules follow. In anything that re-renders, text that sits beside a conditional or swapped element goes in its own element (`<span>{label}</span>`). And a client surface with state gets a test that plays its states with `translatePage(container)` from `apps/gateway/src/test-utils/translate-page.ts` called before each step (`playground-translated-page.test.tsx` is the model). The helper cannot see text React only updates in place: that goes stale on screen instead of throwing. Boundaries are the backstop, not the fix: `dashboard/error.tsx` for the dashboard tree, `ChatErrorBoundary` for the chat, each reporting what it caught.
+
 ## Commands
 
 - Tests: `pnpm vitest run` (in `apps/gateway`)
