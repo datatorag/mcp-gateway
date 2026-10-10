@@ -17,7 +17,7 @@
  * approval, the approved run's result and a denial are all states of one
  * `tool-<name>` part, which is what the agent runtime emits natively. */
 
-import { memo, useState } from "react";
+import { memo, useEffect, useState } from "react";
 import type { DynamicToolUIPart, ToolUIPart, UIMessage } from "ai";
 import { renderAgentPart, type AgentDataParts } from "./agent-parts";
 import { internalToolIcon, toolDisplayName } from "./agent-tool-copy";
@@ -207,6 +207,32 @@ export function summarizeArgs(input: unknown): string {
   return s.length > 160 ? `${s.slice(0, 159)}…` : s;
 }
 
+/** One line saying what a tool was called with, for a closed card
+ * (SCRUM-409): `range: A1:D20, values: [3 items]`. Top-level arguments only,
+ * each value cut short, the whole line capped. Nothing is shown for a call
+ * with no arguments. The full arguments are one click away on the card; this
+ * is so a row of cards reads as a list of what happened, where a row of bare
+ * tool names reads as noise. */
+export function toolCallSummary(input: unknown): string | undefined {
+  if (input === null || typeof input !== "object" || Array.isArray(input)) return undefined;
+  const short = (value: unknown): string => {
+    if (typeof value === "string") {
+      const flat = value.replace(/\s+/g, " ").trim();
+      return flat.length > 40 ? `${flat.slice(0, 39)}…` : flat;
+    }
+    if (typeof value === "number" || typeof value === "boolean") return String(value);
+    if (value === null || value === undefined) return "none";
+    if (Array.isArray(value)) return `[${value.length} ${value.length === 1 ? "item" : "items"}]`;
+    return "{…}";
+  };
+  const parts = Object.entries(input as Record<string, unknown>).map(
+    ([name, value]) => `${name}: ${short(value)}`
+  );
+  if (parts.length === 0) return undefined;
+  const line = parts.join(", ");
+  return line.length > 120 ? `${line.slice(0, 119)}…` : line;
+}
+
 export function messageText(message: PlaygroundMessage): string {
   return message.parts
     .filter((part) => part.type === "text")
@@ -250,8 +276,13 @@ export function ToolCard({
   part,
   defaultOpen = false,
   settled = false,
+  summarize = false,
 }: {
   part: AnyToolPart;
+  /** Show what the call was made with on the closed card (SCRUM-409). On in
+   * the chat. Off by default, so the landing demo and the docs captures,
+   * whose frames are measured, render exactly what they did. */
+  summarize?: boolean;
   /** The stream that produced this message has closed (SCRUM-234). A tool
    * part still in flight then is a call whose result never came, and the
    * card says Interrupted rather than Running. The part's own state is not
@@ -276,6 +307,7 @@ export function ToolCard({
     <InternalIcon className="size-4 text-muted-foreground" />
   ) : undefined;
   const badgeLabel = settled && IN_FLIGHT_STATES.has(part.state) ? "Interrupted" : undefined;
+  const summary = summarize ? toolCallSummary(part.input) : undefined;
   return (
     <Tool className="mb-0 text-xs" defaultOpen={defaultOpen}>
       {/* `title` overrides the header's own name derivation, which would
@@ -286,6 +318,7 @@ export function ToolCard({
           badgeLabel={badgeLabel}
           icon={icon}
           state={part.state}
+          summary={summary}
           title={display}
           toolName={name}
           type="dynamic-tool"
@@ -295,6 +328,7 @@ export function ToolCard({
           badgeLabel={badgeLabel}
           icon={icon}
           state={part.state}
+          summary={summary}
           title={display}
           type={part.type}
         />
@@ -448,6 +482,8 @@ interface MessageRowProps {
    * captures actually want: expanding every card buries the one call the
    * page is about under the setup calls around it. */
   expandTools?: boolean | readonly string[];
+  /** Closed tool cards say what they were called with (SCRUM-409). */
+  summarizeTools?: boolean;
   onDecide: ConfirmCardProps["onDecide"];
   onRegenerate: () => void;
   feedback: Record<string, FeedbackState>;
@@ -472,6 +508,7 @@ export const MessageRow = memo(function MessageRow({
   awaitingConfirm,
   textSize = "xs",
   expandTools = false,
+  summarizeTools = false,
   onDecide,
   onRegenerate,
   feedback,
@@ -547,6 +584,7 @@ export const MessageRow = memo(function MessageRow({
                   defaultOpen={shouldExpandTool(expandTools, part)}
                   part={part}
                   settled={settled}
+                  summarize={summarizeTools}
                 />
                 {/* The confirm card is bound to the SAME part: an approval
                     request is a state of the tool call, not a message of its
@@ -695,10 +733,40 @@ export function ReasoningRow({
   );
 }
 
+/** How long a step runs before the line starts counting (SCRUM-409). Under
+ * this, a number would only flicker. */
+export const PROGRESS_ELAPSED_AFTER_SECONDS = 5;
+
+/** Whole seconds since `key` last changed, ticking once a second. */
+function useElapsedSeconds(key: string): number {
+  const [elapsed, setElapsed] = useState(0);
+  useEffect(() => {
+    setElapsed(0);
+    const started = Date.now();
+    const timer = setInterval(() => {
+      setElapsed(Math.floor((Date.now() - started) / 1000));
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [key]);
+  return elapsed;
+}
+
 /** The one line under the last message while a turn runs. Same turning clock
  * as the tool card's Running badge (SCRUM-262), so the two read as one
- * vocabulary. */
+ * vocabulary.
+ *
+ * WHAT is happening is still the stream's own state and nothing else
+ * (SCRUM-237): no guess, and null the moment the stream closes. HOW LONG is
+ * measured here (SCRUM-409), because a long write or a long think left the
+ * same word on screen for most of a minute with nothing moving but the clock
+ * hands, which reads as stuck. Past a few seconds the line counts, from the
+ * moment the current step and activity began. It is a measurement of this
+ * browser's wait, never an estimate of what is left.
+ *
+ * The count is hidden from assistive technology: the line is a live region,
+ * and announcing every second would bury the one change that matters. */
 export function ProgressRow({ progress }: { progress: RunProgress }) {
+  const elapsed = useElapsedSeconds(`${progress.step}:${progress.label}`);
   return (
     <div
       aria-live="polite"
@@ -709,6 +777,58 @@ export function ProgressRow({ progress }: { progress: RunProgress }) {
       {progress.step > 1 && <span>Step {progress.step}</span>}
       {progress.step > 1 && <span aria-hidden>&middot;</span>}
       <span>{progress.label}</span>
+      {elapsed >= PROGRESS_ELAPSED_AFTER_SECONDS && (
+        <span aria-hidden className="tabular-nums" data-testid="run-progress-elapsed">
+          {elapsed}s
+        </span>
+      )}
+    </div>
+  );
+}
+
+/* -------------------------------------------------------------------------- */
+/* An interrupted step (SCRUM-409)                                             */
+/* -------------------------------------------------------------------------- */
+
+export const INTERRUPTED_TITLE = "A step was interrupted before its result came back.";
+export const INTERRUPTED_BODY =
+  "The run stopped there. If that step was a write, check whether it already happened before you try again.";
+export const INTERRUPTED_RETRY = "Try again";
+
+/** Whether a settled message is left holding a call whose result never came,
+ * with nothing else in the thread already explaining why. A cap, a stop or a
+ * failure after the viewer left puts its own card in the message
+ * (`data-run-stopped`), and that card says more than this notice can. */
+export function hasUnexplainedInterruption(message: PlaygroundMessage | undefined): boolean {
+  if (!message || message.role !== "assistant") return false;
+  if (message.parts.some((part) => part.type === "data-run-stopped")) return false;
+  return message.parts.some((part) => isToolPart(part) && TOOL_IN_FLIGHT.has(part.state));
+}
+
+/** What "Interrupted" means, and the way on.
+ *
+ * The badge alone was a word with no explanation and nothing to press. The
+ * card says what is known: the result never reached this page, so the run
+ * ended at that step. It does NOT say the step did not happen, because a
+ * call that was sent may have run; for a write that is the one thing worth
+ * checking, so the sentence says so before the button. */
+export function InterruptedNotice({
+  disabled,
+  onRetry,
+}: {
+  disabled: boolean;
+  onRetry: () => void;
+}) {
+  return (
+    <div
+      className="mt-3 rounded-xl border border-border bg-muted/40 p-3 text-xs text-foreground"
+      data-testid="run-interrupted"
+    >
+      <p className="font-medium">{INTERRUPTED_TITLE}</p>
+      <p className="mt-1 text-muted-foreground">{INTERRUPTED_BODY}</p>
+      <Button className="mt-2" disabled={disabled} onClick={onRetry} size="xs" variant="outline">
+        {INTERRUPTED_RETRY}
+      </Button>
     </div>
   );
 }
@@ -732,6 +852,8 @@ export interface MessageListProps {
    * captures actually want: expanding every card buries the one call the
    * page is about under the setup calls around it. */
   expandTools?: boolean | readonly string[];
+  /** Closed tool cards say what they were called with (SCRUM-409). */
+  summarizeTools?: boolean;
   onDecide: ConfirmCardProps["onDecide"];
   onRegenerate: () => void;
   feedback: Record<string, FeedbackState>;
@@ -749,6 +871,7 @@ export function MessageList({
   awaitingConfirm,
   textSize = "xs",
   expandTools = false,
+  summarizeTools = false,
   onDecide,
   onRegenerate,
   feedback,
@@ -779,6 +902,7 @@ export function MessageList({
             busy={busy}
             comments={comments}
             expandTools={expandTools}
+            summarizeTools={summarizeTools}
             settled={complete}
             feedback={feedback}
             isLast={isLast}
@@ -798,6 +922,16 @@ export function MessageList({
         const progress = progressFor(busy, messages[messages.length - 1]);
         return progress ? <ProgressRow progress={progress} /> : null;
       })()}
+      {/* Only for the LAST message, only once its stream has closed, and not
+          while a decision is pending: an approval is a pause with its own
+          card, not an interruption. Earlier messages keep the badge alone,
+          since there is nothing to retry in the middle of a thread. */}
+      {!busy &&
+        lastMessageComplete &&
+        !awaitingConfirm &&
+        hasUnexplainedInterruption(messages[messages.length - 1]) && (
+          <InterruptedNotice disabled={busy} onRetry={onRegenerate} />
+        )}
     </>
   );
 }

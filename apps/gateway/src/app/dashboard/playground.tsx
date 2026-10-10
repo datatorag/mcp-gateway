@@ -1063,6 +1063,8 @@ export const Playground = forwardRef<PlaygroundHandle, PlaygroundProps>(
                 onRate={handleRate}
                 onRegenerate={handleRegenerate}
                 onSendComment={handleSendComment}
+                // Closed cards say what they were called with (SCRUM-409).
+                summarizeTools
                 textSize={style.body}
               />
 

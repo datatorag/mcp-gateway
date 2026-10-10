@@ -41,6 +41,10 @@ export type ToolHeaderProps = {
    * Used by the gateway's own internal tools, whose cards carry a
    * per-action glyph instead of the generic wrench. */
   icon?: ReactNode;
+  /** A short line saying what the call was made with, shown on the closed
+   * card (SCRUM-409). The card stays one row: the line truncates and never
+   * wraps. Absent, the header is exactly what it was. */
+  summary?: string;
   className?: string;
 } & (
   | { type: ToolUIPart["type"]; state: ToolUIPart["state"]; toolName?: never }
@@ -96,6 +100,7 @@ export const ToolHeader = ({
   state,
   toolName,
   badgeLabel,
+  summary,
   ...props
 }: ToolHeaderProps & { badgeLabel?: string }) => {
   const derivedName =
@@ -127,6 +132,26 @@ export const ToolHeader = ({
         <span className="font-medium text-sm">{title ?? derivedName}</span>
         {getStatusBadge(state, badgeLabel)}
       </span>
+      {/* What the call was made with, so a closed card says more than a
+          name. Its own flex item that shrinks and truncates, so it can never
+          push the card to a second row, and hidden where there is no room
+          for it. An element whether or not there is text, see the badge.
+
+          `ph-no-capture` IS LOAD-BEARING. This span sits inside the card's
+          button, and click autocapture reads the text of every span nested
+          in a clicked button. Without the class, opening a card would send
+          argument values (a recipient, a subject, a search) to analytics
+          with the click. The class empties this span's text for a click
+          elsewhere on the button, drops the event for a click on the span
+          itself, and blocks the element in session recordings. */}
+      {summary ? (
+        <span
+          className="ph-no-capture hidden min-w-0 max-w-[45%] shrink truncate text-left font-mono text-[11px] text-muted-foreground sm:block"
+          data-testid="tool-summary"
+        >
+          {summary}
+        </span>
+      ) : null}
       {/* Base UI's Collapsible.Root emits `data-open`/`data-closed` — there is
           no `data-state` attribute anywhere in @base-ui/react, so the upstream
           Radix-flavoured `group-data-[state=open]` never matched. */}
@@ -153,6 +178,11 @@ export const ToolContent = ({ className, ...props }: ToolContentProps) => (
   />
 );
 
+/** The height an opened card's parameters or result may take before it
+ * scrolls inside the card. About a dozen lines: enough to read a small
+ * answer whole, and a long one without losing the conversation around it. */
+export const OPENED_BLOCK = "max-h-72 overflow-y-auto";
+
 export type ToolInputProps = ComponentProps<"div"> & {
   input: ToolPart["input"];
 };
@@ -162,7 +192,9 @@ export const ToolInput = ({ className, input, ...props }: ToolInputProps) => (
     <h4 className="font-medium text-muted-foreground text-xs uppercase tracking-wide">
       Parameters
     </h4>
-    <div className="rounded-md bg-muted/50">
+    {/* An opened card must not become the page (SCRUM-409): a result can be
+        thousands of lines. Both blocks scroll inside the card instead. */}
+    <div className={cn("rounded-md bg-muted/50", OPENED_BLOCK)}>
       <CodeBlock code={JSON.stringify(input, null, 2)} language="json" />
     </div>
   </div>
@@ -200,6 +232,7 @@ export const ToolOutput = ({
       <div
         className={cn(
           "overflow-x-auto rounded-md text-xs [&_table]:w-full",
+          OPENED_BLOCK,
           errorText
             ? "bg-destructive/10 text-destructive"
             : "bg-muted/50 text-foreground"
