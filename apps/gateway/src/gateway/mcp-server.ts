@@ -49,6 +49,7 @@ import {
   rewriteScopeError,
   MISSING_SCOPE_ERROR_MARKER,
 } from "./scope-grant";
+import { grantLine, type ConnectedAccountLine } from "./account-grant-line";
 import { crossFile, fileCrossingFor } from "./file-crossing";
 
 const ACCOUNT_PARAM_SCHEMA = {
@@ -552,7 +553,7 @@ export const BUILT_IN_TOOLS: {
     definition: {
       name: "list_connected_accounts",
       description:
-        "List the user's connected accounts grouped by service. Use this to discover which accounts are available before passing the 'account' parameter to other tools.",
+        "List the user's connected accounts grouped by service. Use this to discover which accounts are available before passing the 'account' parameter to other tools. Each Google Workspace account also says which services it granted (granted_services) and which it did not (missing_services). A call that fails for a missing permission is explained here, and the account is reconnected at /dashboard/connections.",
       inputSchema: {
         type: "object" as const,
         properties: {},
@@ -572,10 +573,7 @@ export const BUILT_IN_TOOLS: {
         };
       }
 
-      const grouped: Record<
-        string,
-        { email: string; label: string | null; is_default: boolean; connected_at: string }[]
-      > = {};
+      const grouped: Record<string, ConnectedAccountLine[]> = {};
       for (const row of rows) {
         const key = row.connectorType;
         if (!grouped[key]) grouped[key] = [];
@@ -584,6 +582,8 @@ export const BUILT_IN_TOOLS: {
           label: row.label,
           is_default: row.isDefault,
           connected_at: row.connectedAt.toISOString().split("T")[0],
+          // What the account granted, by service name (SCRUM-412).
+          ...grantLine(row.connectorType, row.scopes),
         });
       }
 

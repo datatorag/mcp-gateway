@@ -204,6 +204,61 @@ describe("built-in tools", () => {
     );
   });
 
+  it("list_connected_accounts says what each Google account granted, and keeps its shape (SCRUM-412)", async () => {
+    const G = "https://www.googleapis.com/auth/";
+    listConnectedAccounts.mockResolvedValue([
+      {
+        connectorType: "google-workspace",
+        accountEmail: "full@example.com",
+        label: null,
+        isDefault: true,
+        connectedAt: new Date("2026-10-01T12:00:00Z"),
+        scopes: `openid email ${G}gmail.modify ${G}drive ${G}calendar ${G}documents ${G}spreadsheets ${G}presentations ${G}contacts ${G}tasks`,
+      },
+      {
+        connectorType: "google-workspace",
+        accountEmail: "short@example.com",
+        label: "work",
+        isDefault: false,
+        connectedAt: new Date("2026-10-02T12:00:00Z"),
+        scopes: `openid email ${G}gmail.modify`,
+      },
+      {
+        connectorType: "atlassian",
+        accountEmail: "full@example.com",
+        label: null,
+        isDefault: true,
+        connectedAt: new Date("2026-10-03T12:00:00Z"),
+        scopes: "read:jira-work",
+      },
+    ]);
+    const client = await connectedClient();
+    const result = await client.callTool({ name: "list_connected_accounts", arguments: {} });
+    const text = (result.content as Array<{ text: string }>)[0]!.text;
+    const grouped = JSON.parse(text) as Record<string, Array<Record<string, unknown>>>;
+
+    // The shape every caller already reads: connector to accounts, with the
+    // four fields each account always had.
+    expect(Object.keys(grouped).sort()).toEqual(["atlassian", "google-workspace"]);
+    expect(grouped["google-workspace"]![0]).toMatchObject({
+      email: "full@example.com",
+      label: null,
+      is_default: true,
+      connected_at: "2026-10-01",
+    });
+
+    const [full, short] = grouped["google-workspace"]!;
+    expect(full!.missing_services).toEqual([]);
+    expect(full!.reconnect).toBeUndefined();
+    expect(short!.granted_services).toEqual(["Gmail"]);
+    expect(short!.missing_services).toContain("Sheets");
+    expect(String(short!.reconnect)).toContain("/dashboard/connections/google-workspace");
+    // Atlassian has no per-service consent, so it says nothing about one.
+    expect(grouped.atlassian![0]).not.toHaveProperty("granted_services");
+    // Names only.
+    expect(text).not.toContain("googleapis.com");
+  });
+
   it("plugin-tool calls do NOT carry builtin — the boundary pinned from the other side", async () => {
     // The mirror of the emit-but-unmetered assertions above, per the
     // pin-boundaries-in-both-directions rule: if every call became

@@ -90,13 +90,23 @@ function apiErrorText(status: number, bodyText: string): string {
   return `API error: ${JSON.stringify({ error: { code: status, message, ...(reason ? { reason } : {}) } })}`;
 }
 
+/** What a caller reads when Google answers 401. */
+export const AUTH_REQUIRED =
+  "Google Workspace authentication required. Call list_connected_accounts to see which accounts are " +
+  "connected and what each one granted, then reconnect the account on the connections page " +
+  "(/dashboard/connections) and try again.";
+
 const TRANSIENT_STATUS = new Set([502, 503, 504]);
 
 function throwApiError(status: number, bodyText: string): never {
   if (status === 401) {
-    // The CLI transport's wording for the same condition, kept because the
-    // tool it names is how a self-hosted user recovers.
-    throw new Error("Google Workspace authentication required. Use the gws_auth_setup tool to authenticate.");
+    // Google refused the token the gateway sent. Nothing on this server can
+    // repair that: the account is reconnected on the gateway. So the error
+    // names the two things that can help, the gateway tool that says which
+    // accounts are connected and what each granted, and the page that
+    // reconnects one. It used to name `gws_auth_setup`, a tool that could
+    // only answer that it could not log in (removed, SCRUM-412).
+    throw new Error(AUTH_REQUIRED);
   }
   const text = apiErrorText(status, bodyText);
   if (TRANSIENT_STATUS.has(status) || isTransient(text)) throw new TransientGwsError(text);

@@ -2,7 +2,7 @@
 
 ## Project
 
-Google Workspace service plugin of the DataToRAG gateway. Calls the Google REST APIs directly, with the user's token the gateway sends, to expose 68 tools (Gmail, Calendar, Drive, Contacts, Sheets, Docs, Slides, Tasks, generic API access) via MCP. It starts no process and holds no login of its own.
+Google Workspace service plugin of the DataToRAG gateway. Calls the Google REST APIs directly, with the user's token the gateway sends, to expose 67 tools (Gmail, Calendar, Drive, Contacts, Sheets, Docs, Slides, Tasks, generic API access) via MCP. It starts no process and holds no login of its own.
 
 ## Commands
 
@@ -18,7 +18,7 @@ One entry point: `index.ts`, the HTTP transport the gateway starts on the port i
 
 `src/google-api/oracle.test.ts` holds the request builder equal to what the gws CLI reported it would send, from a recording (`oracle.fixtures.json`). A method added to the table has no recorded request and fails there by name; the test's header says what to do.
 
-`gws_auth_setup` is still served, with its old definition, and answers that the gateway handles authentication. Removing it is a change to the served tool list and to the registry, so it is a change of its own.
+There is no authentication tool. The gateway connects each account and sends its token with every call; when Google refuses a token, the error names the gateway's `list_connected_accounts` tool and the connections page (`AUTH_REQUIRED` in `src/google-api/direct-transport.ts`). `gws_auth_setup` was removed (SCRUM-412), and a test fails if a tool with "auth" in its name is served again.
 
 ## Key conventions
 

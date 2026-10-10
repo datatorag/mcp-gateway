@@ -98,10 +98,6 @@ export const REGISTRY_CLASSIFICATION: ReadonlyArray<readonly [string, "read" | "
   ["gws-mcp__gmail_update_draft", "write"],
   // Renames a label / changes visibility only — destroys no data, still not a read.
   ["gws-mcp__gmail_update_label", "write"],
-  // Not a read: its "login" action starts an OAuth flow and writes
-  // credentials. It reported status only in an earlier form, and this entry
-  // said so until the plugin's own annotation was corrected.
-  ["gws-mcp__gws_auth_setup", "write"],
   // The arbitrary-operation runner. Its name says nothing about what it will
   // do, which is exactly why it is a write: an unnamed operation cannot be
   // assumed to be a safe one.
