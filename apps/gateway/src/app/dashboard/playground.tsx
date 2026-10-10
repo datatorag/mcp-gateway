@@ -80,7 +80,6 @@ import {
 } from "./playground-presentation";
 import { cn } from "@/lib/utils";
 import { SignInConsent } from "@/components/sign-in-consent";
-import { UNMASK } from "@/lib/analytics-masking";
 
 /** Thrown by the transport for a 429, and never shown: the cap panel replaces
  * the composer instead, so rendering this sentinel would put an internal
@@ -896,7 +895,7 @@ export const Playground = forwardRef<PlaygroundHandle, PlaygroundProps>(
                       idiom the empty thread IS the heading, and it goes away
                       the moment there is a conversation to read instead. */}
                   {isPage && (
-                    <h1 className="font-display text-xl font-bold text-foreground sm:text-2xl" {...UNMASK}>
+                    <h1 className="font-display text-xl font-bold text-foreground sm:text-2xl">
                       {PAGE_GREETING}
                     </h1>
                   )}
@@ -982,7 +981,6 @@ export const Playground = forwardRef<PlaygroundHandle, PlaygroundProps>(
                             isPage ? "text-sm" : "text-xs"
                           )}
                           data-testid="empty-step-connect"
-                          {...UNMASK}
                         >
                           {UNCONNECTED_STEP_CONNECT}
                         </p>
@@ -998,7 +996,6 @@ export const Playground = forwardRef<PlaygroundHandle, PlaygroundProps>(
                             isPage ? "text-sm" : "text-xs"
                           )}
                           data-testid="empty-step-ask"
-                          {...UNMASK}
                         >
                           {UNCONNECTED_PROMPTS_CAPTION}
                         </p>

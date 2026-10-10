@@ -11,7 +11,6 @@ import { GrantPanel } from "./connections/grant-panel";
 import { grantState } from "./connections/grant-state";
 import type { ScopeStatus } from "./connections/types";
 import { ConnectHelper } from "./connect-helper";
-import { UNMASK } from "@/lib/analytics-masking";
 
 /** The connector whose consent screen has boxes to tick. */
 const GOOGLE = "google-workspace";
@@ -208,7 +207,7 @@ export function ConnectPart({
       <p className="text-xs text-foreground">
         Connect an account and I can work with your own files.
       </p>
-      <div className="mt-2 flex flex-wrap gap-2" {...UNMASK}>
+      <div className="mt-2 flex flex-wrap gap-2">
         {services.map((service) => {
           // The same official marks the connector cards carry (SCRUM-97):
           // resolved HERE by service id because the data-connect part

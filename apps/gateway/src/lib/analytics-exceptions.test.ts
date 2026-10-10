@@ -3,6 +3,7 @@ import { join } from "node:path";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   beforeSendAnalytics,
+  beforeSendDeadClick,
   beforeSendException,
   EXCEPTION_CAPTURE,
   MAX_EXCEPTION_MESSAGE,
@@ -73,19 +74,65 @@ describe("what the browser reports as an exception (SCRUM-407)", () => {
   });
 });
 
-describe("click events through the installed hook", () => {
-  // The rule itself is tested in analytics-masking.test.ts (SCRUM-414). Here:
-  // the hook the provider installs applies it, to dead clicks too.
-  it("strips the text of a dead click on content", () => {
-    const sent = beforeSendAnalytics({
-      event: "$dead_click",
-      properties: { $el_text: "From: someone@example.com", $elements: [{ tag_name: "p", $el_text: "From: someone@example.com" }] },
-    });
-    expect(JSON.stringify(sent)).not.toContain("someone@example.com");
+describe("a dead click, as it is sent (SCRUM-407)", () => {
+  const EMAIL_LINE = "From: someone@example.com Subject: the offer letter";
+  const onParagraph = (event = "$dead_click") => ({
+    event,
+    properties: {
+      $current_url: "https://datatorag.com/dashboard/agent",
+      $el_text: EMAIL_LINE,
+      $elements: [
+        { tag_name: "p", $el_text: EMAIL_LINE, classes: ["text-sm"], attr__class: "text-sm" },
+        { tag_name: "div", attr__title: "Re: the offer letter" },
+      ],
+      $elements_chain: `p.text-sm:attr__class="text-sm"nth-child="1"text="${EMAIL_LINE}";div:attr__title="Re: the offer letter"`,
+      $dead_click_scroll_delay_ms: 2500,
+    },
   });
 
-  it("leaves a click on chrome marked as shown alone", () => {
-    const click = { event: "$autocapture", properties: { $el_text: "New chat", $elements: [{ tag_name: "button", $el_text: "New chat", "attr__data-ph-unmask": "" }] } };
+  it("on anything that is not a control, keeps where and what kind, and nothing written on it", () => {
+    const sent = beforeSendDeadClick(onParagraph())!;
+    expect(sent.properties).toEqual({
+      $current_url: "https://datatorag.com/dashboard/agent",
+      $dead_click_scroll_delay_ms: 2500,
+      dead_click_tag: "p",
+    });
+    const wire = JSON.stringify(sent);
+    expect(wire).not.toContain("someone@example.com");
+    expect(wire).not.toContain("offer letter");
+  });
+
+  it("does the same for a dead swipe, and through the hook the provider installs", () => {
+    expect(JSON.stringify(beforeSendDeadClick(onParagraph("$dead_swipe")))).not.toContain("offer letter");
+    expect(JSON.stringify(beforeSendAnalytics(onParagraph()))).not.toContain("offer letter");
+  });
+
+  it("reads the target from the chain string when there is no element list", () => {
+    const event = onParagraph();
+    delete (event.properties as Record<string, unknown>).$elements;
+    const sent = beforeSendDeadClick(event)!;
+    expect((sent.properties as Record<string, unknown>).dead_click_tag).toBe("p");
+    expect(sent.properties).not.toHaveProperty("$elements_chain");
+  });
+
+  it("fails closed when the target cannot be worked out", () => {
+    const sent = beforeSendDeadClick({ event: "$dead_click", properties: { $el_text: EMAIL_LINE, $elements_chain: 42 } })!;
+    expect(sent.properties).toEqual({ dead_click_tag: "unknown" });
+  });
+
+  it("leaves a dead click on a control as the SDK built it, like a live click", () => {
+    for (const tag of ["button", "label", "summary", "BUTTON"]) {
+      const event = {
+        event: "$dead_click",
+        properties: { $el_text: "New chat", $elements: [{ tag_name: tag, $el_text: "New chat" }] },
+      };
+      expect(beforeSendDeadClick(event), tag).toBe(event);
+    }
+  });
+
+  it("leaves a LIVE click and every other event alone", () => {
+    const click = { event: "$autocapture", properties: { $el_text: "Send", $elements: [{ tag_name: "p" }] } };
+    expect(beforeSendDeadClick(click)).toBe(click);
     expect(beforeSendAnalytics(click)).toBe(click);
     expect(beforeSendAnalytics(null)).toBeNull();
   });

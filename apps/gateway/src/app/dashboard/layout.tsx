@@ -23,7 +23,6 @@ import { useCurrentUser, type CurrentUser } from "@/lib/use-current-user";
 import { useDismissable } from "@/lib/use-dismissable";
 import { PromoBanner } from "@/components/promo-banner";
 import { cn } from "@/lib/utils";
-import { MASK, MASK_ATTR, UNMASK, UNMASK_ATTR } from "@/lib/analytics-masking";
 
 const navItems: Array<{ href: string; label: string; icon: LucideIcon }> = [
   // "Connections", because that is what the page IS (SCRUM-118): the
@@ -93,17 +92,12 @@ function UserMenu({ user, compact }: { user: CurrentUser; compact?: boolean }) {
     .join("");
 
   return (
-    // The user's own name, address and picture: hidden even inside the rail.
-    <div ref={ref} className="relative" {...MASK}>
+    <div ref={ref} className="relative">
       <button
         onClick={() => setOpen(!open)}
         aria-label={compact ? (user.name ?? user.email) : undefined}
         title={compact ? (user.name ?? user.email) : undefined}
         className={cn(
-          // The name or address is in this button's attributes and its
-          // picture's address in its image: left out of recordings and
-          // click events entirely (SCRUM-414).
-          "ph-no-capture",
           "flex items-center gap-2 rounded-lg text-sm text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground",
           compact ? "p-1.5" : "px-2 py-1.5"
         )}
@@ -215,21 +209,6 @@ export default function DashboardLayout({
   // bug: open the route directly and it looks already fixed.
   useFitBelowTopChrome(shell, true);
 
-  // SCRUM-414. Dialogs, menus and tooltips render into <body>, outside the
-  // shell's hidden root, and the public site marks <body> as shown. While a
-  // dashboard page is on screen the body is hidden too, so anything that
-  // portals out of the shell is hidden by default like everything else.
-  useEffect(() => {
-    const body = document.body;
-    const wasShown = body.hasAttribute(UNMASK_ATTR);
-    body.removeAttribute(UNMASK_ATTR);
-    body.setAttribute(MASK_ATTR, "");
-    return () => {
-      body.removeAttribute(MASK_ATTR);
-      if (wasShown) body.setAttribute(UNMASK_ATTR, "");
-    };
-  }, []);
-
   return (
     <>
       {/* SCRUM-231: shown to a signed-in user without a subscription, hidden
@@ -237,10 +216,6 @@ export default function DashboardLayout({
       <PromoBanner variant="dashboard" plan={user?.plan ?? null} />
     <div
       ref={shell}
-      // SCRUM-414: everything in the dashboard is hidden from analytics
-      // unless it is marked as chrome. A new page shows as masked text in a
-      // recording until someone marks its labels, never the other way round.
-      {...MASK}
       // ONE SHELL FOR EVERY DASHBOARD ROUTE. The shell is always exactly the
       // space left below whatever chrome sits above the app, and the DOCUMENT
       // never scrolls here — the content area does. Only that inner scroll
@@ -266,7 +241,7 @@ export default function DashboardLayout({
       className="flex h-dvh flex-col overflow-hidden md:flex-row"
     >
       {/* Mobile header */}
-      <div className="flex h-14 items-center justify-between border-b border-border px-4 md:hidden" {...UNMASK}>
+      <div className="flex h-14 items-center justify-between border-b border-border px-4 md:hidden">
         <Link href="/" className="flex items-center gap-3">
           <Image
             src="/datatorag-logo-256.png"
@@ -313,7 +288,7 @@ export default function DashboardLayout({
 
       {/* Mobile nav dropdown */}
       {menuOpen && (
-        <nav className="border-b border-border bg-background px-4 py-3 md:hidden" {...UNMASK}>
+        <nav className="border-b border-border bg-background px-4 py-3 md:hidden">
           <div className="space-y-1">
             {items.map((item) => (
               <Link
@@ -375,7 +350,6 @@ export default function DashboardLayout({
           `title` tooltip only exists while collapsed (it needs no portal —
           the browser draws it outside the clip). */}
       <aside
-        {...UNMASK}
         className={cn(
           "hidden shrink-0 flex-col overflow-visible border-r border-border md:flex md:h-full",
           railExpanded ? "w-52" : "w-14"
