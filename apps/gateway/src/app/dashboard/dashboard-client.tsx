@@ -44,6 +44,7 @@ import {
 import { AGENT_PROMPTS } from "./agent-prompts";
 import { useSignupConversion } from "./use-signup-conversion";
 import { useConnections } from "./use-connections";
+import { ConnectHelper } from "./connect-helper";
 
 
 export function DashboardClient() {
@@ -400,6 +401,13 @@ export function DashboardClient() {
                     </Button>
                   )}
                 </CardFooter>
+                {/* SCRUM-410: under the Google card's connect button, on
+                    every device, until the user hides it. */}
+                {service.id === "google-workspace" && (
+                  <CardContent className="pt-0">
+                    <ConnectHelper />
+                  </CardContent>
+                )}
               </Card>
             );
           })

@@ -21,6 +21,10 @@ export const GET = withRoute(async (userId) => {
       // admin surface re-reads the column server-side, so a client that lies
       // to itself about this gains nothing.
       role: users.role,
+      // SCRUM-410: whether this user dismissed the note under the Google
+      // connect button. Sent as a boolean; the time itself is nobody's
+      // business on the client.
+      connectHelperDismissedAt: users.connectHelperDismissedAt,
     })
     .from(users)
     .where(eq(users.id, userId))
@@ -30,5 +34,8 @@ export const GET = withRoute(async (userId) => {
     return NextResponse.json({ error: "User not found" }, { status: 404 });
   }
 
-  return NextResponse.json({ user });
+  const { connectHelperDismissedAt, ...rest } = user;
+  return NextResponse.json({
+    user: { ...rest, connectHelperDismissed: connectHelperDismissedAt != null },
+  });
 });

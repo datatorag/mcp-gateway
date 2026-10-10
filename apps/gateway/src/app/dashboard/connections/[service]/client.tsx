@@ -8,6 +8,7 @@ import { BetterDefaultSuggestion, SetDefaultControl } from "../default-control";
 import { ServiceIcon, serviceFromToolName } from "@/components/service-icon";
 import { CasaBadge } from "@/components/casa-badge";
 import { formatConnectedDate } from "@/lib/utils";
+import { ConnectHelper } from "../../connect-helper";
 
 interface Tool {
   name: string;
@@ -185,6 +186,7 @@ export function ConnectionDetailClient({
         >
           Connect
         </a>
+        {service === "google-workspace" && <ConnectHelper className="mx-auto mt-3 max-w-sm" />}
         {/* Shown before the consent-screen step Connect leads to. */}
         <CasaBadge className="mt-5 justify-center" />
       </div>

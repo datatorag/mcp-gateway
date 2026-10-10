@@ -205,7 +205,13 @@ const PAGE_GREETING =
 const UNCONNECTED_GREETING = "Welcome to DataToRAG.";
 const UNCONNECTED_INSTRUCTION = "Connect your accounts to get started.";
 const UNCONNECTED_LEAD = `${UNCONNECTED_GREETING} ${UNCONNECTED_INSTRUCTION}`;
-const UNCONNECTED_PROMPTS_CAPTION = "Once you connect, you can ask things like:";
+/** The unconnected screen as two numbered steps (SCRUM-410). The control
+ * already led and the prompts were already locked, but nothing SAID the
+ * first thing to do was connect: people typed "log in to gmail" into the
+ * composer, or went looking through other pages for where to start. A
+ * number says there is an order, and which one is first. */
+const UNCONNECTED_STEP_CONNECT = "1. Connect an account";
+const UNCONNECTED_PROMPTS_CAPTION = "2. Once you connect, ask for something like:";
 /** Matches the dashboard prompt cards' disabled tooltip, word for word. */
 const LOCKED_PROMPT_TITLE = "Connect an account to run this";
 /** The genuinely-unknown state, which after SCRUM-206 is only ever a
@@ -968,6 +974,17 @@ export const Playground = forwardRef<PlaygroundHandle, PlaygroundProps>(
                           {CHECKING_ACCOUNTS}
                         </p>
                       )}
+                      {locked && (
+                        <p
+                          className={cn(
+                            "font-medium text-foreground",
+                            isPage ? "text-sm" : "text-xs"
+                          )}
+                          data-testid="empty-step-connect"
+                        >
+                          {UNCONNECTED_STEP_CONNECT}
+                        </p>
+                      )}
                       <ConnectPart
                         services={CONNECTABLE_SERVICES}
                         source="empty_state"
@@ -975,9 +992,10 @@ export const Playground = forwardRef<PlaygroundHandle, PlaygroundProps>(
                       {locked && (
                         <p
                           className={cn(
-                            "text-muted-foreground",
+                            "font-medium text-foreground",
                             isPage ? "text-sm" : "text-xs"
                           )}
+                          data-testid="empty-step-ask"
                         >
                           {UNCONNECTED_PROMPTS_CAPTION}
                         </p>

@@ -11,6 +11,8 @@ export interface CurrentUser {
   plan?: string;
   /** "admin" or "user" (SCRUM-302). Presentation only; see /api/me. */
   role?: string;
+  /** The note under the Google connect button was dismissed (SCRUM-410). */
+  connectHelperDismissed?: boolean;
 }
 
 let cached: CurrentUser | null | undefined;
@@ -39,6 +41,19 @@ async function load(): Promise<CurrentUser | null> {
       inflight = null;
     });
   return inflight;
+}
+
+/** Change the cached user in place and tell every subscriber, for a write
+ * this browser just made and already knows the result of. Does nothing
+ * before the user has loaded. */
+export function patchCurrentUser(patch: Partial<CurrentUser>): void {
+  if (cached) notify({ ...cached, ...patch });
+}
+
+/** Tests only: forget the cached user. */
+export function resetCurrentUserForTests(): void {
+  cached = undefined;
+  inflight = null;
 }
 
 /**
