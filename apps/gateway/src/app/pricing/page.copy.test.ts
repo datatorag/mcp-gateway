@@ -57,7 +57,7 @@ describe("pricing page copy", () => {
     // The numbers the page shows must be the numbers enforcement reads.
     expect(page).toContain("FREE_MONTHLY_CAP");
     expect(page).toContain("PRO_MONTHLY_INCLUDED");
-    expect(page).not.toMatch(/["`']2,000|["`']250/);
+    expect(page).not.toMatch(/["`'](2|10),000|["`']250/);
   });
 
   it("pins the dollar amounts the checkout charges", () => {
@@ -106,7 +106,7 @@ describe("pricing page copy", () => {
     // page today; when plans.ts moves, this fails and the copy (and any image
     // or email quoting it) gets re-read rather than silently re-rendered.
     expect(freeAllowanceBullet()).toBe("250 tool calls and 25 agent runs a month, then a hard stop, never a surprise bill");
-    expect(proAllowanceBullet()).toBe("2,000 tool calls and 100 agent runs a month included");
+    expect(proAllowanceBullet()).toBe("10,000 tool calls and 100 agent runs a month included");
     expect(PRO_RUNS_BULLET).toBe("Skill and agent runs come out of that, no separate bill for the model");
   });
 
