@@ -73,6 +73,13 @@ export const users = pgTable("users", {
   noActivationFollowupSentAt: timestamp("no_activation_followup_sent_at", {
     withTimezone: true,
   }),
+  // SCRUM-410. When this user dismissed the one-line note under the Google
+  // connect button (what the button opens, which boxes to tick). NULL means
+  // show it. Kept on the server so a dismissal follows the account across
+  // browsers, and CLEARED by the connect callback when Google comes back
+  // having granted nothing: the user it was written for has just shown it is
+  // needed again. A preference, never read by anything that decides access.
+  connectHelperDismissedAt: timestamp("connect_helper_dismissed_at", { withTimezone: true }),
   // First-touch acquisition snapshot, captured from the browser at signup.
   // Server-side events cannot be attributed without a session id, and a
   // session id only joins for as long as the analytics session row is

@@ -37,7 +37,25 @@ export const INTERSTITIAL_SELECT_ALL = "Select all";
 export const INTERSTITIAL_CTA = "Continue to Google";
 export const INTERSTITIAL_CANCEL = "Back to the dashboard";
 
+/** The same page after Google came back having granted nothing (SCRUM-410).
+ * It says what happened, names what to tick, and its one button tries
+ * again. It replaced landing back on the dashboard under a banner, where the
+ * instruction was a sentence and the retry was a small link. */
+export const REFUSED_TITLE = "Google connected nothing";
+export const REFUSED_EXPLANATION =
+  "The checkboxes on Google's screen were left unticked, so no access was " +
+  "granted. Nothing was connected and nothing was changed.";
+export const REFUSED_INSTRUCTION =
+  'Try again, and this time tick "Select all" on Google\'s screen before you continue there.';
+export const REFUSED_SERVICES_LEAD = "Select all covers these, and each has its own box:";
+export const REFUSED_CTA = "Try again";
+
 export const ALL_INTERSTITIAL_COPY = [
+  REFUSED_TITLE,
+  REFUSED_EXPLANATION,
+  REFUSED_INSTRUCTION,
+  REFUSED_SERVICES_LEAD,
+  REFUSED_CTA,
   INTERSTITIAL_TITLE,
   INTERSTITIAL_EXPLANATION,
   INTERSTITIAL_INSTRUCTION,
@@ -49,19 +67,47 @@ export const ALL_INTERSTITIAL_COPY = [
 
 /** The proceed URL: same route, `proceed=1`, the validated-downstream `next`
  * carried through encoded. Built here so route and page cannot drift. */
-export function googleConnectProceedUrl(next: string | null): string {
-  return next
-    ? `/auth/google/connect?proceed=1&next=${encodeURIComponent(next)}`
-    : "/auth/google/connect?proceed=1";
+export function googleConnectProceedUrl(next: string | null, retry = false): string {
+  const base = retry ? "/auth/google/connect?proceed=1&retry=1" : "/auth/google/connect?proceed=1";
+  return next ? `${base}&next=${encodeURIComponent(next)}` : base;
 }
+
+/** Where a refused connect is sent: this page, in its refused form, with the
+ * return path carried through. */
+export function googleConnectRefusedUrl(next: string | null): string {
+  return next
+    ? `/auth/google/connect?refused=1&next=${encodeURIComponent(next)}`
+    : "/auth/google/connect?refused=1";
+}
+
+const escapeHtml = (text: string): string =>
+  text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 
 /** The full page. Takes the raw `next` value and builds the proceed URL
  * itself, so the encoding is structural rather than a contract a future
  * caller could miss: the only user-influenced fragment in the HTML is
  * encodeURIComponent output, which cannot break out of a double-quoted
  * attribute. */
-export function renderConnectInterstitial(next: string | null): string {
-  const proceedUrl = googleConnectProceedUrl(next);
+export function renderConnectInterstitial(
+  next: string | null,
+  refused?: {
+    /** The service names to tick, from the one list the product asks for. */
+    services: string[];
+    /** Where "back" goes: the page the connect started from, carrying the
+     * refusal so that page can still say what happened. Composed by the
+     * caller from a validated path; escaped here regardless. */
+    cancelHref: string;
+  }
+): string {
+  const proceedUrl = googleConnectProceedUrl(next, Boolean(refused));
+  const title = refused ? REFUSED_TITLE : INTERSTITIAL_TITLE;
+  const explanation = refused ? REFUSED_EXPLANATION : INTERSTITIAL_EXPLANATION;
+  const instruction = refused ? REFUSED_INSTRUCTION : INTERSTITIAL_INSTRUCTION;
+  const cta = refused ? REFUSED_CTA : INTERSTITIAL_CTA;
+  const cancelHref = refused ? escapeHtml(refused.cancelHref) : "/dashboard";
+  const services = refused
+    ? `<p class="services"><span>${REFUSED_SERVICES_LEAD}</span> ${refused.services.map(escapeHtml).join(", ")}.</p>`
+    : "";
   return `<!doctype html>
 <html lang="en">
 <head>
@@ -131,13 +177,15 @@ export function renderConnectInterstitial(next: string | null): string {
     color: var(--muted); text-decoration: none;
   }
   .cancel:hover, .cta:hover { opacity: 0.9; }
+  .services { font-size: 13px; }
+  .services span { color: var(--fg); }
 </style>
 </head>
 <body>
 <main>
   <div class="card">
-    <h1>${INTERSTITIAL_TITLE}</h1>
-    <p>${INTERSTITIAL_EXPLANATION}</p>
+    <h1>${title}</h1>
+    <p>${explanation}</p>
     <div class="consent" aria-hidden="true">
       <div class="consent-title">On Google's screen you will see permission checkboxes:</div>
       <div class="row select-all"><span class="box"></span>${INTERSTITIAL_SELECT_ALL}<span class="callout">${INTERSTITIAL_ANNOTATION}</span></div>
@@ -146,9 +194,10 @@ export function renderConnectInterstitial(next: string | null): string {
       <div class="row dim"><span class="box"></span>See and edit calendar events</div>
       <div class="row dim"><span class="box"></span>&hellip; and the rest of the list</div>
     </div>
-    <p class="instruction">${INTERSTITIAL_INSTRUCTION}</p>
-    <a class="cta" href="${proceedUrl}">${INTERSTITIAL_CTA}</a>
-    <a class="cancel" href="/dashboard">${INTERSTITIAL_CANCEL}</a>
+    ${services}
+    <p class="instruction">${instruction}</p>
+    <a class="cta" href="${proceedUrl}">${cta}</a>
+    <a class="cancel" href="${cancelHref}">${INTERSTITIAL_CANCEL}</a>
   </div>
 </main>
 </body>

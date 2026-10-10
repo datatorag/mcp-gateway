@@ -28,8 +28,8 @@ import {
   CONNECT_ERROR_NO_SERVICES,
   postConnectDestination,
 } from "./post-connect-destination";
-import { renderConnectInterstitial } from "./connect-interstitial";
-import { GWS_SCOPE_LIST, grantedServiceCount, scopeDelta } from "./scope-grant";
+import { googleConnectRefusedUrl, renderConnectInterstitial } from "./connect-interstitial";
+import { GWS_SCOPE_LIST, grantedServiceCount, scopeDelta, serviceGrantStates } from "./scope-grant";
 import { getEnv } from "@datatorag-mcp/config";
 
 /** Where the requested route (`?next=` on the login URL) survives the trip
@@ -45,6 +45,34 @@ const NEXT_COOKIE = "dtr_next";
  * Its own cookie per flow, so concurrent connects cannot consume each
  * other's binding. */
 const GWS_CONNECT_NONCE_COOKIE = "gws_connect_nonce";
+
+/** Which Google account a refused connect was attempted with (SCRUM-410), so
+ * the retry can go straight to Google's consent screen for that account and
+ * skip the account chooser, which read to users as being made to sign in all
+ * over again. An email address, so it lives in an httpOnly cookie and never
+ * in a URL. Short-lived, used by the retry link alone, and cleared by every
+ * connect that starts, whether or not it used it. It is a hint to Google and
+ * nothing else: no decision here ever reads it. */
+const GWS_CONNECT_HINT_COOKIE = "gws_connect_hint";
+
+/** The email in an id_token's payload, unverified. Good enough for a hint
+ * that only preselects an account on Google's own screen; never for
+ * identity, which this file takes from the session and from userinfo. */
+export function emailFromIdToken(idToken: unknown): string | null {
+  if (typeof idToken !== "string") return null;
+  const payload = idToken.split(".")[1];
+  if (!payload) return null;
+  try {
+    const claims = JSON.parse(Buffer.from(payload, "base64url").toString("utf8")) as { email?: unknown };
+    return isPlausibleEmail(claims.email) ? claims.email : null;
+  } catch {
+    return null;
+  }
+}
+
+function isPlausibleEmail(value: unknown): value is string {
+  return typeof value === "string" && value.length <= 254 && /^[^\s@<>"']+@[^\s@<>"']+\.[^\s@<>"']+$/.test(value);
+}
 
 /** The dashboard LOGIN flow's one-shot CSRF nonce (SCRUM-124). Login was the
  * one OAuth-initiating flow here that bound nothing: it built the Google URL
@@ -347,6 +375,10 @@ export function createAuthRouter(
         .where(eq(oauthAccessTokens.token, sessionToken));
     }
     res.clearCookie("dtrmcp_session", { path: "/" });
+    // The account a refused connect was tried with belongs to the person
+    // who is signing out; the next person at this browser must not find it
+    // preselected on Google's screen.
+    res.clearCookie(GWS_CONNECT_HINT_COOKIE, { path: "/" });
     res.redirect("/");
   });
 
@@ -368,12 +400,39 @@ export function createAuthRouter(
     // nothing one-shot (nonce, attribution, next) is stashed for a page view.
     if (req.query.proceed !== "1") {
       const next = typeof req.query.next === "string" ? req.query.next : null;
+      // SCRUM-410: the same page in its refused form, where a connect that
+      // came back from Google with nothing granted is sent. It names what to
+      // tick and its button tries again. "Back" returns to wherever the
+      // connect started, still carrying the refusal, so that page can say
+      // what happened too. `next` is validated before it is used for either.
+      if (req.query.refused === "1") {
+        const validNext = resolveNextPath(next);
+        res
+          .status(200)
+          .type("html")
+          .send(
+            renderConnectInterstitial(validNext, {
+              services: serviceGrantStates(PROVIDERS.GOOGLE_WORKSPACE, "").map((s) => s.displayName),
+              cancelHref: postConnectDestination({
+                requestedPath: validNext,
+                error: CONNECT_ERROR_NO_SERVICES,
+              }),
+            })
+          );
+        return;
+      }
       res.status(200).type("html").send(renderConnectInterstitial(next));
       return;
     }
 
     stashAttribution(req, res, cookiesAreSecure);
     stashConnectNext(req, res);
+
+    // The account hint from a refused attempt is used by the retry link
+    // alone, and is gone after ANY connect starts: an ordinary Connect click
+    // minutes later must offer the account chooser as it always did.
+    const hint = req.query.retry === "1" ? req.cookies?.[GWS_CONNECT_HINT_COOKIE] : undefined;
+    res.clearCookie(GWS_CONNECT_HINT_COOKIE, { path: "/" });
 
     // CSRF (SCRUM-86): bind the round trip to the browser that began it, the
     // same way every other OAuth-initiating flow here already does (Atlassian
@@ -402,7 +461,14 @@ export function createAuthRouter(
     googleAuthUrl.searchParams.set("response_type", "code");
     googleAuthUrl.searchParams.set("scope", GWS_SCOPES);
     googleAuthUrl.searchParams.set("access_type", "offline");
-    googleAuthUrl.searchParams.set("prompt", "consent select_account");
+    if (isPlausibleEmail(hint)) {
+      // Straight to the consent screen for the account just tried. The
+      // screen still offers "use another account".
+      googleAuthUrl.searchParams.set("prompt", "consent");
+      googleAuthUrl.searchParams.set("login_hint", hint);
+    } else {
+      googleAuthUrl.searchParams.set("prompt", "consent select_account");
+    }
     googleAuthUrl.searchParams.set("state", nonce);
 
     res.redirect(googleAuthUrl.toString());
@@ -508,6 +574,7 @@ export function createAuthRouter(
       refresh_token?: string;
       expires_in?: number;
       scope?: string;
+      id_token?: string;
     };
 
     const expiresAt = tokens.expires_in
@@ -540,12 +607,37 @@ export function createAuthRouter(
         PROVIDERS.GOOGLE_WORKSPACE,
         attribution
       );
-      res.redirect(
-        postConnectDestination({
-          requestedPath,
-          error: CONNECT_ERROR_NO_SERVICES,
-        })
-      );
+      // SCRUM-410. Three things for the person this just happened to.
+      //
+      // The note under the connect button comes back, whatever they did
+      // with it before: it says to tick every box, and they did not.
+      // Best-effort, because a preference must never fail a connect flow.
+      try {
+        await db
+          .update(users)
+          .set({ connectHelperDismissedAt: null })
+          .where(eq(users.id, session.userId));
+      } catch (err) {
+        console.error("[auth] could not restore the connect note:", err instanceof Error ? err.message : err);
+      }
+      // The account they tried is remembered for the retry, so Google goes
+      // straight to its consent screen. From the id_token already in hand:
+      // still no userinfo call for a connection we refuse.
+      const tried = emailFromIdToken(tokens.id_token);
+      if (tried) {
+        res.cookie(GWS_CONNECT_HINT_COOKIE, tried, {
+          httpOnly: true,
+          secure: cookiesAreSecure,
+          sameSite: "lax",
+          path: "/",
+          maxAge: OAUTH_STATE_TTL_MS,
+        });
+      }
+      // And they land on the page that names what to tick, with Try again,
+      // carrying the place they started from. That page's "back" link is the
+      // destination this used to redirect to, so nothing about where a
+      // refusal can end up has been lost.
+      res.redirect(googleConnectRefusedUrl(resolveNextPath(requestedPath)));
       return;
     }
 

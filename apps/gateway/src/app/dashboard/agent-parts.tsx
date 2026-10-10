@@ -10,6 +10,10 @@ import { getService } from "./connections/services";
 import { GrantPanel } from "./connections/grant-panel";
 import { grantState } from "./connections/grant-state";
 import type { ScopeStatus } from "./connections/types";
+import { ConnectHelper } from "./connect-helper";
+
+/** The connector whose consent screen has boxes to tick. */
+const GOOGLE = "google-workspace";
 
 /** Where the connect flow should RETURN to — the thread the user is looking
  * at (SCRUM-78). A context rather than a prop because ConnectPart renders
@@ -193,6 +197,7 @@ export function ConnectPart({
           // No rawScopes: compact renders no disclosure, and scope strings
           // have no business travelling to the agent surface at all.
         />
+        {shortService.id === GOOGLE && <ConnectHelper className="mt-2" />}
       </div>
     );
   }
@@ -264,6 +269,9 @@ export function ConnectPart({
           );
         })}
       </div>
+      {/* What the Google button opens and the one thing to do there
+          (SCRUM-410). Only where a Google button is on offer. */}
+      {services.some((service) => service.id === GOOGLE) && <ConnectHelper className="mt-2" />}
     </div>
   );
 }

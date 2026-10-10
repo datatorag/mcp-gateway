@@ -566,6 +566,26 @@ describe("server-supplied connection state and the signup landing (SCRUM-206)", 
     expect(connectionsFetches()).toBe(0);
   });
 
+  it("numbers the two steps, connect first (SCRUM-410)", async () => {
+    mountWith(neverResolves, [], null, { initialConnections: UNCONNECTED });
+    const step = (id: string) => container.querySelector(`[data-testid="${id}"]`);
+    expect(step("empty-step-connect")?.textContent).toBe("1. Connect an account");
+    expect(step("empty-step-ask")?.textContent).toBe("2. Once you connect, ask for something like:");
+    // In that order on the page, with the connect control between them.
+    const connect = Array.from(container.querySelectorAll("a")).find((a) =>
+      (a.textContent ?? "").includes("Connect Google Workspace")
+    )!;
+    const FOLLOWING = Node.DOCUMENT_POSITION_FOLLOWING;
+    expect(step("empty-step-connect")!.compareDocumentPosition(connect) & FOLLOWING).toBeTruthy();
+    expect(connect.compareDocumentPosition(step("empty-step-ask")!) & FOLLOWING).toBeTruthy();
+  });
+
+  it("does not number steps for a user who is already connected", async () => {
+    mountWith(neverResolves, [], null, { initialConnections: CONNECTED });
+    expect(container.querySelector('[data-testid="empty-step-connect"]')).toBeNull();
+    expect(container.querySelector('[data-testid="empty-step-ask"]')).toBeNull();
+  });
+
   it("says what using the product agrees to, on the first screen after sign-in (SCRUM-408)", async () => {
     // Calls to action start Google sign-in directly, so the login page that
     // used to carry this sentence is no longer on the way in.
