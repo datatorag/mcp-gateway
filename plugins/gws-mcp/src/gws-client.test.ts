@@ -16,9 +16,9 @@ const ok = (body: unknown) => new Response(JSON.stringify(body), { status: 200 }
 afterEach(() => vi.restoreAllMocks());
 
 /* SCRUM-178, carried across SCRUM-289. The old transport once refused every
- * array on a wrong belief about the binary; the pinned binary sends a
- * repeated key, and so must this client. The oracle test holds the two equal
- * for every method; these pin the wire form a reader can see. */
+ * array on a wrong belief about the gws CLI; that CLI sent a repeated key,
+ * and so must this client. The oracle test holds the two equal for every
+ * method, from a recording; these pin the wire form a reader can see. */
 describe("repeated query parameters go out as repeated keys (SCRUM-178)", () => {
   it.each([
     ["sheets", "spreadsheets", "get", { spreadsheetId: "s", ranges: ["A!A1:B2", "A!A9:B10"] }, "ranges"],
@@ -114,8 +114,8 @@ describe("transient upstream failures are marked retryable", () => {
 });
 
 /* SCRUM-261: the one plain authenticated GET, pinned to Google. The token
- * goes only where the CLI would have taken it; a caller cannot point it
- * elsewhere, and there is no anonymous fallback. */
+ * goes only to Google; a caller cannot point it elsewhere, and there is no
+ * anonymous fallback. */
 describe("fetchText carries the token only to Google (SCRUM-261)", () => {
   const seen: Array<{ url: string; auth: string | undefined }> = [];
   const realFetch = globalThis.fetch;
@@ -191,8 +191,7 @@ describe("fetchText goes through the guarded send (SCRUM-289)", () => {
   });
 });
 
-/* The media primitives SCRUM-279 builds on. Both need a token: the CLI
- * fallback has no streaming path, and saying so beats spawning a process. */
+/* The media primitives SCRUM-279 builds on. Both need a token, and say so. */
 describe("upload and download on the client (SCRUM-289)", () => {
   async function* bytes(text: string) {
     yield new TextEncoder().encode(text);

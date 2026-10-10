@@ -1,8 +1,8 @@
 # Google Workspace MCP Server
 
-A [Model Context Protocol](https://modelcontextprotocol.io/) server that gives Claude access to Google Workspace — Gmail, Calendar, Drive, Contacts, Sheets, Docs, Slides, Tasks, and 100+ APIs via the [gws CLI](https://github.com/googleworkspace/cli).
+A [Model Context Protocol](https://modelcontextprotocol.io/) server that gives Claude access to Google Workspace: Gmail, Calendar, Drive, Contacts, Sheets, Docs, Slides, Tasks, and the other Google Workspace APIs through one generic tool.
 
-This server powers the Google Workspace connector of [DataToRAG](https://datatorag.com), a hosted MCP gateway with per-user OAuth, multi-account support, and Atlassian tools alongside these: add `https://datatorag.com/mcp` to your MCP client and skip the setup below. The Claude Desktop extension described below is the older way to run it and is being retired.
+This server powers the Google Workspace connector of [DataToRAG](https://datatorag.com), a hosted MCP gateway with per-user OAuth, multi-account support, and Atlassian tools alongside these: add `https://datatorag.com/mcp` to your MCP client. There is nothing to install or set up here. An earlier Claude Desktop extension built from this code has been retired.
 
 ## Tools
 
@@ -100,70 +100,6 @@ All modes include the `inlineObjects` metadata map (contentUri, size, margins, c
 
 **gws_run** — Fallback tool for any Google Workspace API not covered by the dedicated tools. Accepts service, resource, method, params, and JSON body. Use only when no dedicated tool exists.
 
-## Setup (Extension — Claude Desktop)
-
-### 1. Create a Google Cloud project
-
-Go to [Google Cloud Console](https://console.cloud.google.com/) and create a new project (or use an existing one).
-
-### 2. Enable Google Workspace APIs
-
-Enable each API you plan to use in your project. Click the links below and hit **Enable** on each page:
-
-- [Gmail API](https://console.cloud.google.com/apis/library/gmail.googleapis.com)
-- [Google Calendar API](https://console.cloud.google.com/apis/library/calendar-json.googleapis.com)
-- [Google Drive API](https://console.cloud.google.com/apis/library/drive.googleapis.com)
-- [Google Docs API](https://console.cloud.google.com/apis/library/docs.googleapis.com)
-- [Google Sheets API](https://console.cloud.google.com/apis/library/sheets.googleapis.com)
-- [Google Slides API](https://console.cloud.google.com/apis/library/slides.googleapis.com)
-- [People API](https://console.cloud.google.com/apis/library/people.googleapis.com) (for contacts)
-- [Tasks API](https://console.cloud.google.com/apis/library/tasks.googleapis.com)
-
-### 3. Configure OAuth consent screen
-
-Go to [OAuth consent screen](https://console.cloud.google.com/apis/credentials/consent):
-
-1. Select **External** user type
-2. Fill in the app name (e.g. "Google Workspace CLI") and your email
-3. Save and continue through all screens
-4. Under **Test users**, click **Add users** and add your Google account email
-
-### 4. Create OAuth credentials
-
-Go to [Credentials](https://console.cloud.google.com/apis/credentials):
-
-1. Click **Create Credentials** → **OAuth client ID**
-2. Application type: **Desktop app**
-3. Click **Create**
-4. Copy the **Client ID** and **Client Secret**
-
-### 5. Configure OAuth credentials
-
-```bash
-cp .env.example .env
-```
-
-Open `.env` and fill in your Client ID and Client Secret from the previous step.
-
-### 6. Build the extension
-
-```bash
-pnpm install
-pnpm run download-binaries   # the gws CLI: a self-hosted install logs in through it
-pnpm run build
-pnpm run build:extension
-```
-
-This produces `google-workspace-mcp.mcpb`.
-
-### 7. Install in Claude Desktop
-
-Open Claude Desktop → Settings → Extensions → Install from file → select `google-workspace-mcp.mcpb`.
-
-When the extension loads for the first time, a browser window opens automatically for Google OAuth login. Sign in and authorize the app. After that, all tools are ready to use.
-
-> **Note:** If your app is in testing mode (unverified), you'll see a "Google hasn't verified this app" warning. Click **Advanced** → **Go to \<app name\> (unsafe)** to proceed. This is safe for personal use.
-
 ## Running under the gateway
 
 This is a service plugin of the DataToRAG gateway, not a server to run on its own. The gateway starts `server/index.js` as a child process, sets `PORT`, and sends each user's Google access token in the `X-User-Token` header; every call then goes to the Google REST API directly, and the `gws` CLI is never run. For development, from the repository root:
@@ -171,7 +107,7 @@ This is a service plugin of the DataToRAG gateway, not a server to run on its ow
 ```bash
 pnpm install
 pnpm --filter @datatorag-mcp/gws-mcp run build
-pnpm --filter @datatorag-mcp/gws-mcp run test   # fetches the one pinned gws binary the oracle test needs
+pnpm --filter @datatorag-mcp/gws-mcp run test
 ```
 
 ## Environment Variables
@@ -179,28 +115,26 @@ pnpm --filter @datatorag-mcp/gws-mcp run test   # fetches the one pinned gws bin
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `PORT` | `39147` | HTTP server port (the gateway sets this) |
-| `GWS_OAUTH_CLIENT_ID` | none | OAuth client ID. Extension only; the gateway gives a plugin no client credentials |
-| `GWS_OAUTH_CLIENT_SECRET` | none | OAuth client secret. Extension only |
+
+The plugin reads no OAuth client credentials and no other setting. The gateway gives it none.
 
 ## Architecture
 
 ```
 src/
 ├── create-server.ts      # Shared MCP server factory (accepts optional per-session client)
-├── extension.ts          # Stdio entry point (.mcpb extension, auto-auth on startup)
 ├── index.ts              # HTTP entry point (StreamableHTTP, /health + /mcp endpoints, the private file-bytes route)
 ├── internal/
 │   ├── file-bytes.ts     # Private route for the gateway: the bytes of a file reference, by a registry of types
 │   └── file-bytes/       # One resolver per reference type (gmail-message.ts, gmail-attachment.ts) and what they share
-├── gws-client.ts         # The client every tool calls; picks the transport by whether it holds a token
-├── cli-transport.ts      # Fallback: the gws CLI, for self-hosted calls with no token, and the login flow
-├── scopes.ts             # DEFAULT_SERVICES and the per-service OAuth scopes
+├── gws-client.ts         # The client every tool calls; it needs the user's token and says so without one
 ├── google-api/
 │   ├── method-table.ts   # GENERATED from Google's Discovery documents (scripts/generate-method-table.mjs)
 │   ├── request.ts        # (service, resource, method, params) -> verb, URL, query, body
 │   ├── direct-transport.ts # fetch against the REST endpoints, error and paging shapes
 │   ├── direct-upload.ts  # Media upload (multipart, or resumable in bounded chunks), streaming attachment decode
-│   └── oracle.test.ts    # Holds the request builder equal to the pinned CLI's --dry-run for every method
+│   ├── oracle.fixtures.json # What the gws CLI reported it would send, recorded for every method
+│   └── oracle.test.ts    # Holds the request builder equal to that recording, method for method
 ├── mime/
 │   └── build.ts          # A message with attachments as a byte stream (mixed, related, base64 as it passes)
 ├── attachments/
@@ -208,7 +142,7 @@ src/
 │   └── fetch.ts          # Byte sources (Drive media, Drive export, one Sheet tab, Gmail attachment) and the running 25 MB budget
 └── tools/
     ├── response.ts       # Response helpers (JSON formatting, 900KB truncation)
-    ├── auth.ts           # OAuth login (browser-based, no gcloud needed)
+    ├── auth.ts           # gws_auth_setup: answers that the gateway handles authentication
     ├── gmail.ts          # Gmail tools (drafts, mark read, attachments to Drive, compose with attachments)
     ├── gmail-signature.ts # Signature lookup, HTML insertion, already-present check
     ├── gmail-draft-send.ts # Signs a draft's stored MIME (parse, insert, re-encode)
@@ -223,24 +157,22 @@ src/
     └── index.ts          # Tool registry (flat Map<name, handler>)
 ```
 
-Every tool calls `client.api(service, resource, method, { params, jsonBody })`. How that call travels depends on one fact. **With a bearer token** (every gateway-hosted call, via `X-User-Token`), it is a `fetch` to the Google REST endpoint, built from a method table generated from Google's Discovery documents; no process is spawned and the CLI is never loaded. **Without one** (a self-hosted install), it falls back to the [`gws` CLI](https://github.com/googleworkspace/cli), which holds the credentials from its own `auth login`. The fallback lives in one module and goes away when a native OAuth flow replaces the CLI login.
+Every tool calls `client.api(service, resource, method, { params, jsonBody })`. The call is a `fetch` to the Google REST endpoint, built from a method table generated from Google's Discovery documents, with the bearer token the gateway sent in `X-User-Token` for the user the call is for. No process is started. A call with no token is refused before any request; there is no stored login to fall back to.
 
-The token travels in the `Authorization` header only: never in a URL, a log line or an error. Requests go only to `*.googleapis.com`, redirects are refused, and a resumable upload's session URL is checked against the same rule before anything is sent to it.
+The token travels in the `Authorization` header only: never in a URL, a log line or an error. Requests go only to `*.googleapis.com`, and for the one Sheets query endpoint to `docs.google.com` by exact host; redirects are refused, and a resumable upload's session URL is checked against the same rule before anything is sent to it.
 
 **Rate-limit refusals are retried, for reads.** When Google answers a GET with `429`, or with `403` and a rate reason (`rateLimitExceeded`, `userRateLimitExceeded`), the direct transport sends it again: up to three requests per call, exponential backoff with full jitter, at most 8 seconds of added wait, and Google's `Retry-After` honoured (a longer one stops the retry). A refusal that outlasts the attempts surfaces as the same error, with its transient hint. Writes and uploads are never retried, and neither are gateway failures (502, 503, 504) or daily limits. The rule and its reasons are in `src/google-api/rate-limit-retry.ts`.
 
 **A private route hands a file's bytes to the gateway.** `POST /internal/file-bytes` on the HTTP server is not an MCP tool and no model can call it. A gateway that moves a file from one connector to another calls it, with the same `X-User-Token` header `/mcp` receives, so the bytes travel between services instead of through the conversation. It takes a file reference and a byte cap, and answers with the file's bytes and a suggested name in `X-File-Name`. Two reference types are supported. `gmail_message` (`message_id`) is a Gmail message, returned as its original (`message/rfc822`, an `.eml` file) exactly as Gmail holds it. `gmail_attachment` (`message_id`, `part_id`) is one attachment of a message, returned under the sender's file name and type. An attachment is named by its part id, which `gmail_read` lists and which stays the same on every read, because Gmail issues a new attachment id each time the message is read. The size is checked before the file is read and again as it is decoded, nothing is written to disk, and nothing about the file is logged. Failures are JSON with a `code`. The route is `src/internal/file-bytes.ts`; each reference type is one file under `src/internal/file-bytes/`, and adding a type is a file there and a line in the route's registry.
 
-To refresh the method table after Google changes an API: `node scripts/generate-method-table.mjs`, then `pnpm test` (the oracle needs `pnpm run download-binaries`).
+To refresh the method table after Google changes an API: `node scripts/generate-method-table.mjs`, then `pnpm test`. The oracle test fails by name for a method the recording does not cover; its header says what to do then.
 
-The extension (`extension.ts`) runs via stdio for Claude Desktop `.mcpb` bundles. The HTTP server (`index.ts`) is what the gateway starts. Both share the same `createMcpServer()` factory.
+The HTTP server (`index.ts`) is the only entry point, and it is what the gateway starts.
 
 ### Key implementation details
 
 - **Shared Drive support**: All Drive API calls include `supportsAllDrives: true` (and `includeItemsFromAllDrives: true` for list operations) so files on team Drives are accessible
-- **Sandbox compatibility** (CLI fallback): Sets `cwd: os.tmpdir()` and `GOOGLE_WORKSPACE_CLI_CONFIG_DIR` for Claude Desktop's read-only filesystem
-- **OAuth credentials**: Reads from env vars, falls back to bundled `oauth.json` (injected at build time by `scripts/build-extension.sh`)
-- **Auto-auth**: Extension checks auth status and scope coverage on startup, opens browser for OAuth login if needed (non-blocking — MCP server starts immediately)
+- **No process is started and nothing is written to disk**: every call is a `fetch`; the plugin runs as an unprivileged user with no home directory
 - **X-User-Token support**: HTTP server accepts `X-User-Token` header to create per-session clients with pre-obtained access tokens; those clients call Google directly
 - **Response truncation**: All responses capped at 900KB to stay within context limits
 - **Context optimization**: docs_get, slides_get, and sheets_read aggressively strip metadata to minimize context usage. docs_get text mode reduces ~50KB API responses to ~2-3KB. slides_get strips masters/layouts/geometry/styling. sheets_read uses the values-only API endpoint.

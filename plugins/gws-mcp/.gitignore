@@ -1,7 +1,8 @@
 node_modules/
 server/
+# Left over from the retired desktop bundle. A stale bundle or its client
+# file in an old checkout holds an OAuth client secret: keep them ignored.
 bin/
-google-cloud-sdk/
 *.mcpb
 oauth.json
 .env

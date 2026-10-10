@@ -59,15 +59,18 @@ shows only the import commit. The real history is
   cannot show a missing or reshaped upstream response; a live call is still
   the proof for anything that touches a provider's API.
 
-**`gws-mcp` specifics.** Every hosted call is a `fetch` built from the
-generated method table in `src/google-api/`; no process is started and the
-`gws` CLI is not loaded. The CLI remains only for the desktop bundle's
-login and the no-token fallback, both of which go away at the spec's step
-11. `src/google-api/oracle.test.ts` holds the request builder equal to the
-pinned CLI's `--dry-run`, and it fails, never skips, without the binary: so
-the `test` script first runs `scripts/download-binaries.sh --host`, which
-fetches the one binary for this machine and checks it against a pinned
-sha256. A new CLI version needs new checksums in that script.
+**`gws-mcp` specifics.** Every call is a `fetch` built from the generated
+method table in `src/google-api/`, with the user's token the gateway sends.
+No process is started; the `gws` CLI, the desktop bundle and the stdio
+entry point are gone (step 11 of the spec), and a test fails if a source
+file imports `node:child_process`. A call with no token is refused.
+`src/google-api/oracle.test.ts` holds the request builder equal to what the
+CLI reported it would send, from a recording in `oracle.fixtures.json`, so
+the tests download nothing. A method added to the method table has no
+recorded request and fails there by name: the expected request is then
+written from the API's Discovery document and reviewed as an expectation a
+person wrote. `gws_auth_setup` is still served and answers that the gateway
+handles authentication; removing it is a registry change of its own.
 
 **`atlassian-mcp` specifics.** Calls the Atlassian REST API directly through
 `src/atlassian-client.ts`.
@@ -141,18 +144,18 @@ gateway deploy carries it. What goes with it:
 
 - **Dotted API paths in `gws_run`.** Resources nest under a parent —
   `users.messages`, `users.drafts`, `users.messages.attachments` — not
-  bare names like `drafts`. Get this wrong and the CLI's API-discovery
-  step fails (exit code 4).
-- **Repeated query params are arrays, never comma-joined strings.** The
-  pinned `gws` CLI (0.17.0) sends an array of scalars in `--params` as a
-  repeated query key (`ranges=A&ranges=B`), which is what `ranges`,
+  bare names like `drafts`. Get this wrong and the call is refused as an
+  unknown method before any request.
+- **Repeated query params are arrays, never comma-joined strings.** An
+  array of scalars goes out as a repeated query key
+  (`ranges=A&ranges=B`), which is what `ranges`,
   `metadataHeaders`, `labelIds` and every other `repeated` parameter want.
   A comma-joined string (`metadataHeaders: "From,Subject"`) is one opaque
   value that matches nothing and errors nowhere (shipped once, fixed in
   `ab0ffef`). An array of objects or arrays is refused before the call by
-  `assertCarriableParams` in `gws-client.ts`, because the binary
-  stringifies the element and Google blames the caller's input. Until
-  SCRUM-178 the client refused EVERY array on a belief about the binary
-  that was never measured; `src/gws-cli-transport.test.ts` now runs the
-  real binary with `--dry-run` and pins what it sends, so a claim about
-  the transport is checked against the transport, not remembered.
+  `assertCarriableParams` in `gws-client.ts`, because the element would
+  go out as one stringified value and Google blames the caller's input.
+  Until SCRUM-178 the client refused EVERY array on a belief about the
+  transport that was never measured; the recorded requests in
+  `oracle.fixtures.json` pin what is sent, so a claim about the transport
+  is checked against a recording, not remembered.
