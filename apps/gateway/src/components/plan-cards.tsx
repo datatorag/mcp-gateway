@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { PRO_RUNS_BULLET, freeAllowanceBullet, proAllowanceBullet } from "@/app/pricing/allowances";
-import { FreeCta, PRICE_LABEL, ProCheckout } from "@/app/pricing/pricing-ctas";
+import { FreeCta, ProCheckout } from "@/app/pricing/pricing-ctas";
+import { PRICE_LABEL } from "@/app/pricing/price-label";
 import { PortalAction } from "@/components/portal-action";
 import { CANCEL_SENTENCE, NOT_BILLED_THROUGH_STRIPE } from "@/app/dashboard/billing/billing-copy";
 
