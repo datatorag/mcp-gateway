@@ -371,8 +371,9 @@ Back to what is on the host today. No service is added.
 | `canary` | `docker/canary/compose.host.yml` | `${CANARY_IMAGE}`, by digest | The same network, as an external one | Nothing | None |
 
 The gateway's compose file changes once in this work, at close-out, when the volume line comes
-out (step 12). Its memory limit is unchanged at 3072 MB and keeps covering both plugin
-processes, as it does today.
+out (step 12). This work does not change its memory limit, which keeps covering both plugin
+processes, as it does today. (The limit itself was raised from 3072 MB to 6144 MB by a separate
+change, SCRUM-411.)
 
 ### The shared network: what a plugin container can reach
 
