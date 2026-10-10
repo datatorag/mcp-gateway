@@ -1,11 +1,10 @@
 import { notFound } from "next/navigation";
 import { eq } from "drizzle-orm";
-import { join } from "node:path";
-import { homedir } from "node:os";
-import { readFile } from "node:fs/promises";
 import { marked } from "marked";
 import { db } from "@/lib/db";
 import { mcpServers, tools } from "@datatorag-mcp/db";
+import { PLUGINS_DIR } from "@/gateway/plugins-dir";
+import { readPluginReadme } from "@/gateway/plugin-readme";
 import { Navbar } from "@/components/navbar";
 import { SERVER_LOGOS } from "@/components/server-logos";
 import Link from "next/link";
@@ -14,40 +13,9 @@ interface Props {
   params: Promise<{ slug: string }>;
 }
 
-async function getReadmeHtml(
-  slug: string,
-  githubRepoOwner: string | null,
-  githubRepoName: string | null
-): Promise<string | null> {
-  // Try reading from local plugin directory first
-  try {
-    const pluginDir = join(homedir(), ".datatorag", "plugins", slug);
-    const content = await readFile(join(pluginDir, "README.md"), "utf-8");
-    return marked.parse(content) as string;
-  } catch {
-    // Not available locally
-  }
-
-  // Fall back to GitHub API
-  if (githubRepoOwner && githubRepoName) {
-    try {
-      const res = await fetch(
-        `https://api.github.com/repos/${githubRepoOwner}/${githubRepoName}/readme`,
-        {
-          headers: { Accept: "application/vnd.github.raw+json" },
-          next: { revalidate: 3600 },
-        }
-      );
-      if (res.ok) {
-        const content = await res.text();
-        return marked.parse(content) as string;
-      }
-    } catch {
-      // GitHub API unavailable
-    }
-  }
-
-  return null;
+async function getReadmeHtml(slug: string): Promise<string | null> {
+  const content = await readPluginReadme(PLUGINS_DIR, slug);
+  return content === null ? null : (marked.parse(content) as string);
 }
 
 async function getServer(slug: string) {
@@ -61,7 +29,7 @@ async function getServer(slug: string) {
 
   const [serverTools, readmeHtml] = await Promise.all([
     db.select().from(tools).where(eq(tools.mcpServerId, server.id)),
-    getReadmeHtml(slug, server.githubRepoOwner, server.githubRepoName),
+    getReadmeHtml(slug),
   ]);
 
   return { server, tools: serverTools, readmeHtml };

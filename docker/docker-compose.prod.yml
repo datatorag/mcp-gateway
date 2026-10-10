@@ -9,8 +9,11 @@
 #                   GATEWAY_IMAGE is not set, so the image built is named
 #                   docker-gateway, the name it has always had.
 #
-# Both use the compose project `docker`, so the container, the plugin volume
-# and the network are the same whichever path started the gateway last.
+# Both use the compose project `docker`, so the container and the network are
+# the same whichever path started the gateway last.
+#
+# No volume is mounted. The plugins are part of the image (/app/plugins), and
+# the gateway keeps nothing on the container's disk between starts.
 #
 # A value added to `environment` here reaches production only when the copy on
 # the host is replaced. The deploy workflow compares that copy's checksum with
@@ -83,8 +86,6 @@ services:
       timeout: 5s
       retries: 3
       start_period: 15s
-    volumes:
-      - plugins-data:/root/.datatorag/plugins
     # Equal to the memory limit below, so the container gets no swap at all.
     # Left unset, Docker allows swap equal to the memory limit again. The host
     # has no swap today; this keeps content held in memory off the disk even
@@ -102,6 +103,3 @@ networks:
   dtrmcp:
     name: datatorag-mcp-network
     driver: bridge
-
-volumes:
-  plugins-data:

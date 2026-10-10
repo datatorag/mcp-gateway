@@ -9,8 +9,8 @@
 #            output. No source, no dev dependencies, no build cache.
 #
 # The layout of the runtime stage is the one the single-stage image had
-# (/app/apps/gateway, the workspace packages beside it), so the compose file,
-# the plugin volume's mount and every documented `docker exec` are unchanged.
+# (/app/apps/gateway, the workspace packages beside it), so the compose file
+# and every documented `docker exec` are unchanged.
 #
 # The base is named by digest, so one commit always builds on one base and a
 # moved tag cannot change what ships. The tag before the @ is for the reader;
@@ -91,9 +91,6 @@ COPY apps/gateway/content apps/gateway/content
 # the manifest the manager reads for the entry point (already copied above),
 # the plugin manifest and the README. No source, no git metadata, no dev
 # dependencies; the production install above already covers their packages.
-#
-# NOT at the path the plugins volume is mounted on: a mounted volume hides
-# whatever the image has there.
 COPY --from=build /app/plugins/gws-mcp/server plugins/gws-mcp/server
 COPY --from=build /app/plugins/atlassian-mcp/server plugins/atlassian-mcp/server
 COPY plugins/gws-mcp/datatorag.json plugins/gws-mcp/README.md plugins/gws-mcp/
@@ -120,11 +117,11 @@ RUN for dir in /app/plugins/*/; do \
     done; \
     if find /app/plugins -not -user root | grep -q .; then \
       echo "a file under /app/plugins is not root's" >&2; exit 1; fi
-# The cutover (SCRUM-390): the gateway starts the plugins above, and no
-# longer the copies in the plugins volume. This line is the whole switch. It
-# is here and nowhere else (not the compose file, not the parameter store,
-# not a row), so an image from before this line loads from the volume again
-# and rolling the image back is the whole undo.
+# The gateway starts the plugins above (SCRUM-390). This line says where they
+# are, and it is here and nowhere else (not the compose file, not the
+# parameter store, not a row). The plugins volume that images before this
+# line loaded from is no longer mounted, so such an image starts no plugin:
+# never roll back to one.
 ENV DATATORAG_PLUGINS_DIR=/app/plugins
 
 # The same build-time values, present at run time as they were before: server

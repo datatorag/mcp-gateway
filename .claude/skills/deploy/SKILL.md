@@ -18,8 +18,8 @@ the host. Two surfaces: the `gateway`, and the `canary` (a container that only
 answers `/health`, for proving a pipeline change without touching the
 gateway). **The gateway deploys this way since 2026-10-09.** Its first
 pipeline deploy replaced the host-built container with about five seconds of
-outage seen from outside, and the plugin volume, the plugins and the
-environment came through unchanged. The scripted path below is the fallback.
+outage seen from outside, and the plugins and the environment came through
+unchanged. The gateway mounts no volume since the SCRUM-390 close-out. The scripted path below is the fallback.
 
 Still by hand, before a gateway deploy that needs them: rendering the env file
 (step 2b) and migrations. And a go, in words, from a person, every time.
@@ -230,8 +230,9 @@ It does not render the env file (step 2b) and does not touch plugins (step 5).
    The plugins are part of the gateway image (`/app/plugins/<slug>`, built
    from the same commit) and the image says to load them from there. A plugin
    change is deployed by deploying the gateway. Nothing is pulled, installed
-   or compiled in the running container, and the old `git pull` in the plugins
-   volume changes nothing that runs.
+   or compiled in the running container. There is no plugins volume any more,
+   so an image from before the plugins moved into the image starts none:
+   check that a rollback target is newer than that before using it.
 
    **Then change the `tools` table by exactly what the plugin change changed,
    never by re-discovery.** The registry does not resync itself on a plugin
