@@ -29,14 +29,14 @@ and `PORT` and nothing else (see `codebase-map`).
 | Build and test | `pnpm --filter @datatorag-mcp/<slug> run build` and `... run test` from the repo root. One root lockfile; a plugin has none of its own |
 | Gate | `scripts/gate.sh`: a path under `plugins/<slug>/` runs that plugin's build and tests and the gateway's |
 | Image | The gateway's `Dockerfile` compiles both plugins and ships them at `/app/plugins/<slug>`. There is no plugin image |
-| What production runs | **Still the checkout of the old repository in the plugins volume,** until the cutover (the spec's step 10): the image carries the plugins but does not set `DATATORAG_PLUGINS_DIR`, so the gateway does not load them. A change under `plugins/` is in the image and serves nothing yet |
+| What production runs | **The copies in the image**, since the cutover (the spec's step 10): the `Dockerfile` sets `DATATORAG_PLUGINS_DIR=/app/plugins` and the manager starts each plugin from there. A change under `plugins/` ships with the gateway image through the pipeline, and a rollback of the image is the rollback of the plugins. The checkouts of the old repositories are still in the plugins volume until the close-out; nothing starts them, and an image from before the cutover would |
 | Tool files | When CI builds the gateway image it starts each plugin from it and keeps `tools-<slug>.json` (what the plugin SERVED: name, description, schema, read-only hint) beside the image's digest record. `scripts/image-plugin-tools.sh <image> <dir>` does the same locally |
 
-Until the cutover a plugin change cannot ship the ordinary way: the old
-repositories are locked and the copies here are not serving. The emergency
-path is the old one, and it needs a go: unlock the old repository, commit
-there, roll out as before (`ops-debugging`), and port the commit here with
-`git format-patch` and `git am --directory=plugins/<slug>`.
+A plugin change ships like any gateway change: a pull request, the gate, the
+image, the pipeline. Nothing is pulled or compiled in the running container
+any more. If the change alters a tool's description, schema or read-only
+hint, the registry row changes too, by a file `pnpm registry:diff` writes
+from the two commits' tool files and a person runs (`ops-debugging`).
 
 The plan, its steps and what each one proves:
 `docs/architecture/2026-10-06-scrum-390-plugins-into-the-gateway-repo.md`.

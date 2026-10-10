@@ -93,9 +93,7 @@ COPY apps/gateway/content apps/gateway/content
 # dependencies; the production install above already covers their packages.
 #
 # NOT at the path the plugins volume is mounted on: a mounted volume hides
-# whatever the image has there. And this image does not say to load from
-# here: DATATORAG_PLUGINS_DIR is deliberately not set, so the gateway still
-# starts the copies in the volume. Setting it is its own change.
+# whatever the image has there.
 COPY --from=build /app/plugins/gws-mcp/server plugins/gws-mcp/server
 COPY --from=build /app/plugins/atlassian-mcp/server plugins/atlassian-mcp/server
 COPY plugins/gws-mcp/datatorag.json plugins/gws-mcp/README.md plugins/gws-mcp/
@@ -104,6 +102,12 @@ COPY plugins/atlassian-mcp/datatorag.json plugins/atlassian-mcp/README.md plugin
 # bundle's own build script, and git ignores it. It must never be in an image.
 RUN if find /app/plugins -name oauth.json -not -path '*/node_modules/*' | grep -q .; then \
       echo "oauth.json found under /app/plugins" >&2; exit 1; fi
+# The cutover (SCRUM-390): the gateway starts the plugins above, and no
+# longer the copies in the plugins volume. This line is the whole switch. It
+# is here and nowhere else (not the compose file, not the parameter store,
+# not a row), so an image from before this line loads from the volume again
+# and rolling the image back is the whole undo.
+ENV DATATORAG_PLUGINS_DIR=/app/plugins
 
 # The same build-time values, present at run time as they were before: server
 # code reads them from the environment too.

@@ -63,9 +63,10 @@ After the row change, verify against the served surface, not the plugin's
 source: `tools/list` through the gateway with a real bearer must show the
 new description or the new name.
 
-1. **Pull + build the plugin inside its running container** (see deploy skill
-   step 5 for the `git pull && pnpm install && npx tsc` exec).
-2. **Restart the gateway** so the plugin child process picks up the new build.
+1. **Merge the plugin change** under `plugins/<slug>/`. The image carries the
+   plugins, so there is nothing to pull or build in the running container.
+2. **Deploy the gateway** through the pipeline: the new image is the new
+   plugin, and the restart is what starts it.
 3. **Apply the row change** from a session that can reach the production
    database (the `db-query` skill), one statement, read back with
    `RETURNING`. For an `INSERT`, `read_only_hint` is not optional: the
