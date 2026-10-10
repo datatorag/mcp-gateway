@@ -51,8 +51,13 @@ describe("tool annotations", () => {
     expect([...shapes].filter((s) => !allowed.has(s))).toEqual([]);
   });
 
-  it("gws_auth_setup is not read-only: login triggers OAuth and writes credentials", () => {
-    const tool = allTools.find((t) => t.name === "gws_auth_setup");
-    expect(tool?.annotations?.readOnlyHint).toBe(false);
+  it("serves no authentication tool: the gateway connects accounts, this server holds no login", () => {
+    // `gws_auth_setup` drove a desktop login that no longer exists, then
+    // answered only that the gateway handles authentication. It is removed
+    // (SCRUM-412). A tool by that name coming back would offer a login this
+    // server cannot perform.
+    expect(allTools.filter((t) => /auth/i.test(t.name)).map((t) => t.name)).toEqual([]);
+    expect(allTools).toHaveLength(67);
+    expect(new Set(allTools.map((t) => t.name)).size).toBe(67);
   });
 });

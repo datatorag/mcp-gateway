@@ -1,6 +1,5 @@
 import type { GwsClient } from "../gws-client.js";
 import type { ToolDef } from "./annotations.js";
-import { authTools, handleAuth } from "./auth.js";
 import { genericTools, handleGeneric } from "./generic.js";
 import { gmailTools, handleGmail } from "./gmail.js";
 import { driveTools, handleDrive } from "./drive.js";
@@ -23,7 +22,6 @@ export type ToolHandler = (
 // One entry per module: the tool list and the dispatch map both derive from
 // it, so a new module is a one-line addition rather than a two-list edit.
 const modules: [ToolDef[], ToolHandler][] = [
-  [authTools, handleAuth],
   [gmailTools, handleGmail],
   [calendarTools, handleCalendar],
   [contactsTools, handleContacts],

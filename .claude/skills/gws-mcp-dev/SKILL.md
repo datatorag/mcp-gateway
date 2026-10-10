@@ -69,8 +69,9 @@ CLI reported it would send, from a recording in `oracle.fixtures.json`, so
 the tests download nothing. A method added to the method table has no
 recorded request and fails there by name: the expected request is then
 written from the API's Discovery document and reviewed as an expectation a
-person wrote. `gws_auth_setup` is still served and answers that the gateway
-handles authentication; removing it is a registry change of its own.
+person wrote. There is no authentication tool: `gws_auth_setup` was removed
+(SCRUM-412), and a 401 from Google names the gateway's
+`list_connected_accounts` tool and the connections page instead.
 
 **`atlassian-mcp` specifics.** Calls the Atlassian REST API directly through
 `src/atlassian-client.ts`.

@@ -17,9 +17,8 @@ This server powers the Google Workspace connector of [DataToRAG](https://datator
 | **Slides** | 4 | get, create, batch update, delete |
 | **Tasks** | 7 | list task lists, create task list, list tasks, create, update, complete, delete |
 | **Generic** | 1 | `gws_run` — fallback for any GWS API not covered above |
-| **Auth** | 1 | OAuth login and status |
 
-**68 tools total.** All tools support shared (team) Drives.
+**67 tools total.** All tools support shared (team) Drives.
 
 ### Key tool details
 
@@ -142,7 +141,6 @@ src/
 │   └── fetch.ts          # Byte sources (Drive media, Drive export, one Sheet tab, Gmail attachment) and the running 25 MB budget
 └── tools/
     ├── response.ts       # Response helpers (JSON formatting, 900KB truncation)
-    ├── auth.ts           # gws_auth_setup: answers that the gateway handles authentication
     ├── gmail.ts          # Gmail tools (drafts, mark read, attachments to Drive, compose with attachments)
     ├── gmail-signature.ts # Signature lookup, HTML insertion, already-present check
     ├── gmail-draft-send.ts # Signs a draft's stored MIME (parse, insert, re-encode)

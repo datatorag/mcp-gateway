@@ -118,11 +118,21 @@ describe("errors keep the text class tools and callers already read", () => {
     }
   });
 
-  it("a 401 reads as authentication required, the wording the CLI transport used", async () => {
+  it("a 401 reads as authentication required, and names what can repair it", async () => {
     withFetch(() => json({ error: { code: 401, message: "Invalid Credentials" } }, 401));
-    await expect(new GwsClient({ accessToken: TOKEN }).api("tasks", "tasklists", "list")).rejects.toThrow(
-      /Google Workspace authentication required/
-    );
+    const err = (await new GwsClient({ accessToken: TOKEN })
+      .api("tasks", "tasklists", "list")
+      .catch((e: Error) => e)) as Error;
+    // The opening words are matched by callers and by people; they stay.
+    expect(err.message).toMatch(/^Google Workspace authentication required\./);
+    // The gateway tool that says what is connected, and the page that
+    // reconnects it.
+    expect(err.message).toContain("list_connected_accounts");
+    expect(err.message).toContain("/dashboard/connections");
+    // Never a tool this server no longer serves.
+    expect(err.message).not.toContain("gws_auth_setup");
+    // A 401 is the caller's to fix, not something to retry.
+    expect(err).not.toBeInstanceOf(TransientGwsError);
   });
 
   it("an unknown method is refused before any request, in the discovery-error class", async () => {
