@@ -7,6 +7,7 @@
  * needs, so they live here and `lib/skills.ts` re-exports them for server
  * callers. One definition either way.
  */
+import { signInHref } from "./sign-in";
 
 /** The deep link: the agent, with this skill named by slug. Resolved
  * server-side by identifier, never by content (the SCRUM-118 rule). */
@@ -14,11 +15,11 @@ export function skillDeepLink(slug: string): string {
   return `/dashboard/agent?skill=${encodeURIComponent(slug)}`;
 }
 
-/** The sign-in link that lands on the deep link after login. The middleware
- * builds the same thing for a signed-out hit on the deep link itself; this is
- * for a caller that wants the login page as the first hop. */
+/** The sign-in link that lands on the deep link after sign-in (SCRUM-408):
+ * straight to Google, with the deep link as the return path. A plain anchor
+ * only, see `lib/sign-in.ts`. */
 export function signInAndRunHref(slug: string): string {
-  return `/auth/login?next=${encodeURIComponent(skillDeepLink(slug))}`;
+  return signInHref(skillDeepLink(slug));
 }
 
 /** Connector display name to the service id the connect flow and the

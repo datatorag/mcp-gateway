@@ -9,6 +9,7 @@
  */
 
 import { isStripeHostedUrl } from "@/lib/stripe-hosted-url";
+import { signInHref } from "@/lib/sign-in";
 
 export type CheckoutInterval = "monthly" | "yearly";
 
@@ -37,13 +38,14 @@ export async function startProCheckout(
     return { kind: "error", message: TRY_AGAIN };
   }
 
-  // Not signed in: through login and back to this page. `next` is validated
+  // Not signed in: through sign-in and back to this page (SCRUM-408: straight
+  // to Google, the caller attaches attribution before it navigates). `next` is validated
   // server-side by postLoginDestination(); a NEW user returns here carrying
   // ?signup=1, which is why the pricing page mounts useSignupConversion.
   if (res.status === 401) {
     return {
       kind: "redirect",
-      url: `/auth/login?next=${encodeURIComponent("/pricing")}`,
+      url: signInHref("/pricing"),
     };
   }
 

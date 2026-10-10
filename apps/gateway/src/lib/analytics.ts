@@ -57,6 +57,13 @@ export const EVENTS = {
   MCP_TOOLS_LISTED: "mcp_tools_listed",
   DOCS_VIEWED: "docs_viewed",
   DOCS_CTA_CLICKED: "docs_cta_clicked",
+  /** SCRUM-408: a click that starts Google sign-in, from any call to action
+   * on the site. It replaced the pageview of the login page as the first
+   * step of the sign-in funnel when that page stopped being on the way; the
+   * last step is still the server's `user_signed_up` / `user_logged_in`.
+   * `page` is the path the click was on, `cta` the button's own name when it
+   * has one, `has_next` whether it returns somewhere specific. */
+  SIGNIN_STARTED: "signin_started",
   /** A pricing-page CTA click. `cta` says which ("free" | "pro"), and for
    * "pro" the `interval` property carries the selected billing interval. A
    * click is the start of the funnel, not a subscription: the authoritative

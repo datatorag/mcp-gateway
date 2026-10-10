@@ -10,6 +10,7 @@ import dynamic from "next/dynamic";
 import Link from "next/link";
 import { ArrowUpIcon } from "lucide-react";
 import { DEMO_WINDOWS } from "./demo-layout";
+import { CtaLink } from "@/components/cta-link";
 
 const ScriptedTranscript = dynamic(() => import("./scripted-demo"), {
   ssr: false,
@@ -56,7 +57,7 @@ export function DemoWindow({
           refuse. */}
       {promptHref && promptLabel && (
         <div className="border-t border-border p-3">
-          <Link
+          <CtaLink
             className="flex items-center justify-between gap-2 rounded-xl border border-border bg-background px-3 py-2 transition-colors hover:border-foreground/30 hover:bg-secondary/50"
             href={promptHref}
           >
@@ -69,7 +70,7 @@ export function DemoWindow({
             >
               <ArrowUpIcon className="size-3.5" />
             </span>
-          </Link>
+          </CtaLink>
         </div>
       )}
     </div>

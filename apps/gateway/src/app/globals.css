@@ -385,6 +385,15 @@ body > iframe {
   --warning: #FBBF24;
 }
 
+/* A sign-in link that has been clicked and is on its way to Google
+   (SCRUM-408). The redirect takes a moment, and a button that looks
+   unchanged gets clicked again; the click listener in attribution-links.tsx
+   sets the mark and refuses the second click, this makes it visible. */
+a[data-signing-in] {
+  opacity: 0.7;
+  cursor: progress;
+}
+
 @layer base {
   * {
     @apply border-border outline-ring/50;

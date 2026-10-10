@@ -39,7 +39,7 @@ const render = (props: Parameters<typeof DocsCta>[0]) => {
     root.render(<DocsCta {...props} />);
   });
 };
-const button = () => container.querySelector('a[href="/auth/login"]') as HTMLAnchorElement;
+const button = () => container.querySelector('a[href="/auth/google"]') as HTMLAnchorElement;
 const click = () => act(() => button().dispatchEvent(new MouseEvent("click", { bubbles: true })));
 
 /* SCRUM-287: on docs the campaign copy lives inside the sidebar button. */
@@ -50,7 +50,7 @@ describe("DocsCta sidebar", () => {
     expect(button().textContent).toContain(HEADLINE);
     // The promo line is a second, smaller line, not part of the first.
     expect(button().querySelector("span")?.textContent).toBe(HEADLINE);
-    expect(button().getAttribute("href")).toBe("/auth/login");
+    expect(button().getAttribute("href")).toBe("/auth/google");
   });
 
   it("after the end date under the injected clock, is the plain button with no promo words", () => {
@@ -107,5 +107,10 @@ describe("DocsCta, the surfaces SCRUM-287 leaves alone", () => {
     expect(container.textContent).not.toContain(HEADLINE);
     click();
     expect(capture).toHaveBeenCalledWith("docs_cta_clicked", { cta: "inline_end", page: "/docs/gmail" });
+    // SCRUM-408: the button starts sign-in itself, so it says what that
+    // agrees to.
+    expect(container.querySelector("[data-sign-in-consent]")?.textContent).toContain(
+      "Terms of Service and Privacy Policy"
+    );
   });
 });
