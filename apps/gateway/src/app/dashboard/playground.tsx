@@ -79,6 +79,7 @@ import {
   type PlaygroundMessage,
 } from "./playground-presentation";
 import { cn } from "@/lib/utils";
+import { SignInConsent } from "@/components/sign-in-consent";
 
 /** Thrown by the transport for a 429, and never shown: the cap panel replaces
  * the composer instead, so rendering this sentinel would put an internal
@@ -1035,6 +1036,11 @@ export const Playground = forwardRef<PlaygroundHandle, PlaygroundProps>(
                           ))}
                         </Suggestions>
                       )}
+                  {/* The first screen after sign-in (SCRUM-408). Calls to
+                      action start Google sign-in directly, so the agreement
+                      that used to sit on the login page is said here, where
+                      a new account lands. */}
+                  {isPage && <SignInConsent verb="using DataToRAG" />}
                 </div>
               )}
 

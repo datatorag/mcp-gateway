@@ -39,7 +39,7 @@ describe("DocsLayout", () => {
     expect(container.firstElementChild?.className).toContain("min-h-screen");
 
     // The campaign is still on the page, inside the sidebar button.
-    const cta = container.querySelector('aside a[href="/auth/login"]');
+    const cta = container.querySelector('aside a[href="/auth/google"]');
     expect(cta?.textContent).toContain(promoCopy().headline);
 
     act(() => root.unmount());

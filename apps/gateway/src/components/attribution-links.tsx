@@ -6,6 +6,8 @@ import {
   ATTRIBUTION_PARAMS,
   type AttributionField,
 } from "@/lib/attribution";
+import { EVENTS } from "@/lib/analytics";
+import { SIGN_IN_PATH } from "@/lib/sign-in";
 
 /**
  * Server-rendered redirect routes whose completion is reported by a
@@ -70,24 +72,70 @@ function snapshot(): Record<string, string> {
   return params;
 }
 
-function decorate(anchor: HTMLAnchorElement): void {
+/** The same-origin auth-flow URL this href points at, with the attribution
+ * snapshot attached; null for anything else. */
+function attributed(href: string): URL | null {
   let url: URL;
   try {
-    url = new URL(anchor.href, window.location.origin);
+    url = new URL(href, window.location.origin);
   } catch {
-    return;
+    return null;
   }
-  if (url.origin !== window.location.origin) return;
-  if (!ATTRIBUTED_PATHS.has(url.pathname)) return;
-
+  if (url.origin !== window.location.origin) return null;
+  if (!ATTRIBUTED_PATHS.has(url.pathname)) return null;
   for (const [name, value] of Object.entries(snapshot())) {
     url.searchParams.set(name, value);
   }
-  anchor.href = url.toString();
+  return url;
+}
+
+/** Marks a sign-in link that has been clicked and is on its way to Google.
+ * `globals.css` dims it; the listener below refuses a second click on it. */
+const SIGNING_IN = "signingIn";
+
+function reportSignInStarted(url: URL, cta: string | null): void {
+  try {
+    // Where it was clicked and which button, never where it returns to: a
+    // return path can carry a campaign slug, and that already travels on the
+    // events that own it.
+    posthog.capture(EVENTS.SIGNIN_STARTED, {
+      page: window.location.pathname,
+      cta,
+      has_next: url.searchParams.has("next"),
+    });
+  } catch {
+    // Best-effort, like the snapshot.
+  }
 }
 
 /**
- * Appends the attribution snapshot to outbound links into the auth flows.
+ * Start sign-in from code instead of from a link: a button that only finds
+ * out the visitor is signed out after asking the server (the Pro checkout).
+ * Attaches the same snapshot a clicked link gets and reports the same event,
+ * then returns the URL to navigate to. Any other URL comes back unchanged.
+ */
+export function signInDestination(href: string, cta: string | null = null): string {
+  const url = attributed(href);
+  if (!url || url.pathname !== SIGN_IN_PATH) return href;
+  reportSignInStarted(url, cta);
+  return url.toString();
+}
+
+/**
+ * Appends the attribution snapshot to outbound links into the auth flows,
+ * and owns the sign-in click (SCRUM-408).
+ *
+ * Calls to action start Google sign-in directly now, so this listener is the
+ * one place every sign-in begins. Three things happen here because here is
+ * the only place they can happen for every button at once:
+ *
+ *  - the attribution snapshot goes on the link, as before;
+ *  - `signin_started` is captured, which is what the sign-in funnel starts
+ *    from now that the login page is not on the way;
+ *  - the link is marked busy and a second click on it is refused. The
+ *    redirect to Google takes a moment during which the button used to look
+ *    as if nothing had happened, and people clicked it again and again.
+ *
  * Rendered once inside the analytics provider; mutating `href` from a
  * capture-phase listener runs before the browser reads it for navigation.
  */
@@ -97,10 +145,45 @@ export function AttributionLinks() {
       const target = event.target;
       if (!(target instanceof Element)) return;
       const anchor = target.closest("a");
-      if (anchor) decorate(anchor);
+      if (!anchor) return;
+      const url = attributed(anchor.href);
+      if (!url) return;
+      anchor.href = url.toString();
+      if (url.pathname !== SIGN_IN_PATH) return;
+
+      if (anchor.dataset[SIGNING_IN] !== undefined) {
+        event.preventDefault();
+        return;
+      }
+      reportSignInStarted(url, anchor.dataset.cta ?? null);
+      // Only a plain click leaves this page. A new tab or window keeps the
+      // page, and a button stuck busy on a page that is still here is dead.
+      const leavesThisPage =
+        event.button === 0 &&
+        !event.metaKey &&
+        !event.ctrlKey &&
+        !event.shiftKey &&
+        !event.altKey &&
+        (anchor.target === "" || anchor.target === "_self");
+      if (leavesThisPage) {
+        anchor.dataset[SIGNING_IN] = "";
+        anchor.setAttribute("aria-busy", "true");
+      }
+    }
+    // Coming back with the browser's Back button can restore this page as it
+    // was left, busy mark included.
+    function onPageShow() {
+      for (const anchor of document.querySelectorAll<HTMLAnchorElement>("a[data-signing-in]")) {
+        delete anchor.dataset[SIGNING_IN];
+        anchor.removeAttribute("aria-busy");
+      }
     }
     document.addEventListener("click", onClick, true);
-    return () => document.removeEventListener("click", onClick, true);
+    window.addEventListener("pageshow", onPageShow);
+    return () => {
+      document.removeEventListener("click", onClick, true);
+      window.removeEventListener("pageshow", onPageShow);
+    };
   }, []);
 
   return null;

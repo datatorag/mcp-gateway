@@ -6,6 +6,7 @@ import { JsonLd } from "@/components/json-ld";
 import { faqPageNode } from "@/lib/site-schema";
 import { siteFaqGroups, siteFaqs } from "@/lib/site-faq";
 import { SOCIAL_OPEN_GRAPH, SOCIAL_TWITTER } from "@/lib/social-card";
+import { signInHref } from "@/lib/sign-in";
 
 /** Answers live in lib/site-faq.ts keyed by route, under the same guard as
  * every other FAQ surface. They restate THIS page's claims and carry this
@@ -111,12 +112,12 @@ export default function HostedGoogleWorkspaceMcpPage() {
           </p>
 
           <div className="mt-8 flex flex-wrap items-center gap-3">
-            <Link
-              href="/auth/login"
+            <a
+              href={signInHref()}
               className="rounded-full bg-primary px-7 py-3 text-sm font-medium text-primary-foreground transition-all hover:opacity-90"
             >
               Connect a Google account
-            </Link>
+            </a>
             <Link
               href="/docs/getting-started"
               className="rounded-full border border-border px-7 py-3 text-sm font-medium text-foreground transition-all hover:bg-muted"

@@ -3,6 +3,7 @@ import { Navbar } from "@/components/navbar";
 import { ContactForm, type Utm } from "@/components/contact-form";
 import { DemoBento } from "@/components/demo/demo-bento";
 import { DEMO_STANDFIRST } from "@/components/demo/demo-copy";
+import { signInHref } from "@/lib/sign-in";
 
 // Rendered by both /contact (canonical) and /demo (kept for ad destinations
 // and historical analytics continuity) — one source of truth for the form.
@@ -73,8 +74,8 @@ export function ContactPage({ utm }: { utm: Utm }) {
               <p className="text-sm text-muted-foreground">
                 Not ready to talk? Start using DataToRAG now, no call required.
               </p>
-              <Link
-                href="/auth/login"
+              <a
+                href={signInHref()}
                 className="mt-3 inline-flex items-center gap-1.5 rounded-[var(--radius)] border border-border px-6 py-2.5 text-sm font-medium text-foreground transition-colors hover:border-primary/40 hover:bg-secondary/50"
               >
                 Start free
@@ -90,7 +91,7 @@ export function ContactPage({ utm }: { utm: Utm }) {
                 >
                   <path d="M6 4l4 4-4 4" />
                 </svg>
-              </Link>
+              </a>
             </div>
           </div>
         </div>
@@ -118,7 +119,7 @@ export function ContactPage({ utm }: { utm: Utm }) {
         <section className="border-t border-border bg-secondary/30">
           <div className="mx-auto max-w-6xl px-6 py-16">
             <DemoBento
-              ctaHref="/auth/login"
+              ctaHref={signInHref()}
               heading="Watch Claude work inside Google Workspace"
               standfirst={DEMO_STANDFIRST}
             />

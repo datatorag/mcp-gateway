@@ -249,3 +249,68 @@ describe("the gate: GET /auth/google/callback", () => {
     expect(res.headers.get("set-cookie") ?? "").toContain("dtr_next=;");
   });
 });
+
+/* SCRUM-408: buttons across the site start sign-in now, so a sign-in that
+ * does not finish has to come back somewhere with a way to try again. */
+describe("a sign-in that does not finish comes back to the login page", () => {
+  it("closing Google's screen (no code) returns to the login page, exchange unreached", async () => {
+    const res = await rawGet(
+      "/auth/google/callback?error=access_denied&state=n1",
+      "login_state_nonce=n1"
+    );
+    expect(res.status).toBe(302);
+    expect(res.headers.get("location")).toBe("/auth/login?error=cancelled");
+    expect(exchangeAttempted()).toBe(false);
+    expect(res.headers.get("set-cookie") ?? "").not.toContain("dtrmcp_session=");
+  });
+
+  it("a refused code exchange returns to the login page with no session", async () => {
+    outbound.mockImplementation(async () => new Response("{}", { status: 400 }));
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    const res = await rawGet(
+      "/auth/google/callback?code=stale-code&state=n1",
+      "login_state_nonce=n1"
+    );
+    expect(res.status).toBe(302);
+    expect(res.headers.get("location")).toBe("/auth/login?error=exchange_failed");
+    expect(res.headers.get("set-cookie") ?? "").not.toContain("dtrmcp_session=");
+  });
+
+  it("a failed profile read returns to the login page with no session", async () => {
+    outbound.mockImplementation(async (url: string | URL) =>
+      String(url).startsWith("https://oauth2.googleapis.com/token")
+        ? new Response(JSON.stringify({ access_token: "at" }), { status: 200 })
+        : new Response("{}", { status: 503 })
+    );
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    const res = await rawGet(
+      "/auth/google/callback?code=real-code&state=n1",
+      "login_state_nonce=n1"
+    );
+    expect(res.headers.get("location")).toBe("/auth/login?error=profile_failed");
+    expect(res.headers.get("set-cookie") ?? "").not.toContain("dtrmcp_session=");
+  });
+
+  it("a missing code with a BAD state is still the state rejection, not a cancel", async () => {
+    const res = await rawGet("/auth/google/callback?error=access_denied&state=n2", "login_state_nonce=n1");
+    expect(res.headers.get("location")).toBe("/auth/login?error=invalid_state");
+  });
+
+  it("a sign-in begun with no return path clears one left over from an abandoned attempt", async () => {
+    // First a button that names a destination, abandoned at Google.
+    const first = await rawGet("/auth/google?next=%2Fdashboard%2Fagent%3Fskill%3Dmorning-brief");
+    expect(first.headers.get("set-cookie") ?? "").toMatch(/dtr_next=%2Fdashboard%2Fagent/);
+
+    // Then a plain "get started", in the same browser.
+    const second = await rawGet(
+      "/auth/google",
+      "dtr_next=%2Fdashboard%2Fagent%3Fskill%3Dmorning-brief"
+    );
+    const cleared = (second.headers.get("set-cookie") ?? "")
+      .split(/,(?=\s*\w+=)/)
+      .find((c) => c.trim().startsWith("dtr_next="));
+    expect(cleared, "no Set-Cookie for dtr_next").toBeDefined();
+    expect(cleared).toMatch(/dtr_next=;/);
+    expect(cleared).toMatch(/Expires=Thu, 01 Jan 1970/);
+  });
+});

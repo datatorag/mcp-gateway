@@ -160,7 +160,13 @@ describe("the stash: GET /auth/google", () => {
       encodeURIComponent("/\\evil.com"),
     ]) {
       const res = await rawGet(`/auth/google?next=${evil}`);
-      expect(res.headers.get("set-cookie") ?? "").not.toContain("dtr_next");
+      // Nothing is stashed. The only thing said about the cookie is the
+      // clear (SCRUM-408): a rejected value is treated as no value, and no
+      // value means none may be left over from an earlier attempt.
+      const setCookie = res.headers.get("set-cookie") ?? "";
+      expect(setCookie).not.toMatch(/dtr_next=[^;]/);
+      expect(setCookie).not.toContain("evil");
+      expect(setCookie).toMatch(/dtr_next=;/);
     }
   });
 });

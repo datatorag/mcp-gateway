@@ -9,10 +9,12 @@ import {
   startProCheckout,
   type CheckoutInterval,
 } from "./checkout-client";
+import { signInHref } from "@/lib/sign-in";
+import { signInDestination } from "@/components/attribution-links";
 
 /**
  * Mounted once by the pricing page. The Pro CTA sends signed-out visitors
- * through /auth/login?next=/pricing, and a NEW user comes back here carrying
+ * through sign-in with next=/pricing, and a NEW user comes back here carrying
  * ?signup=1, the sole gate on the Google Ads signup conversion. The hook
  * reads the PARAM, not the page, so mounting it here is all the wiring the
  * conversion needs; without a reader on this page the param would arrive and
@@ -26,7 +28,7 @@ export function PricingConversionListener() {
 export function FreeCta({ className }: { className: string }) {
   return (
     <a
-      href="/auth/login"
+      href={signInHref()}
       className={className}
       onClick={() =>
         posthog.capture(EVENTS.PRICING_CTA_CLICKED, { cta: "free" })
@@ -59,7 +61,9 @@ export function ProCheckout({ className, promo = null }: { className: string; pr
     posthog.capture(EVENTS.PRICING_CTA_CLICKED, { cta: "pro", interval });
     const outcome = await startProCheckout(interval, fetch, promo ?? undefined);
     if (outcome.kind === "redirect") {
-      window.location.assign(outcome.url);
+      // A signed-out visitor is sent to sign-in; that leg carries the same
+      // attribution a clicked sign-in link would. Any other URL is unchanged.
+      window.location.assign(signInDestination(outcome.url, "pricing_pro"));
       return; // keep the button disabled while the browser navigates
     }
     setError(outcome.message);

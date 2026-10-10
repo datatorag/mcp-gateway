@@ -5,6 +5,8 @@ import { usePathname } from "next/navigation";
 import posthog from "posthog-js";
 import { EVENTS } from "@/lib/analytics";
 import { promoActive, promoCopy } from "@/lib/promo";
+import { signInHref } from "@/lib/sign-in";
+import { SignInConsent } from "@/components/sign-in-consent";
 
 // Sign-in / get-started CTA rendered on every /docs/* page (SCRUM-24): docs
 // are a paid-traffic surface, so a reader must be able to sign up without
@@ -70,7 +72,7 @@ export function DocsCta({
         </p>
         <a
           className="mt-4 inline-flex items-center rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-opacity hover:opacity-90"
-          href="/auth/login"
+          href={signInHref()}
           onClick={() =>
             posthog.capture(EVENTS.DOCS_CTA_CLICKED, {
               cta: "inline_end",
@@ -80,6 +82,7 @@ export function DocsCta({
         >
           Get started free
         </a>
+        <SignInConsent className="mt-3" />
       </div>
     );
   }
@@ -87,7 +90,7 @@ export function DocsCta({
   if (mobile) {
     return (
       <a
-        href="/auth/login"
+        href={signInHref()}
         onClick={() =>
           posthog.capture(EVENTS.DOCS_CTA_CLICKED, {
             cta: "sign_in",
@@ -103,7 +106,7 @@ export function DocsCta({
 
   return (
     <a
-      href="/auth/login"
+      href={signInHref()}
       onClick={() =>
         // `cta` keeps its historical value so the series before and after
         // SCRUM-287 stays comparable; `promo` says which button was clicked.

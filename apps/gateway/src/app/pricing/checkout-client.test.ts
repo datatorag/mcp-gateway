@@ -30,14 +30,14 @@ describe("startProCheckout", () => {
     });
   });
 
-  it("sends a signed-out visitor through login with next back to /pricing", async () => {
+  it("sends a signed-out visitor straight to sign-in with next back to /pricing", async () => {
     const outcome = await startProCheckout(
       "monthly",
       vi.fn().mockResolvedValue(response(401, { error: "Unauthorized" }))
     );
     expect(outcome).toEqual({
       kind: "redirect",
-      url: "/auth/login?next=%2Fpricing",
+      url: "/auth/google?next=%2Fpricing",
     });
   });
 

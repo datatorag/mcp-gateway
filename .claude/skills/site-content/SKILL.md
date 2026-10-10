@@ -126,7 +126,7 @@ Two docs-specific mechanisms added by SCRUM-24:
   `wizard_${client}` (dashboard, historical values preserved) vs `docs_${client}`.
 - **Docs CTA**: `docs/cta.tsx` renders a sign-in/get-started CTA in the docs layout
   (mobile header + desktop sidebar, every `/docs/*` page), firing `docs_cta_clicked`
-  (PostHog) with the page path. It links to `/auth/login`; the gtag signup conversion
+  (PostHog) with the page path. It starts Google sign-in itself (`signInHref()`, a plain anchor; see the sign-in rule under Page conventions); the gtag signup conversion
   needs no wiring here because the dashboard fires it on `?signup=1`. The layout
   deliberately does NOT read the session (`cookies()` would force every docs page
   dynamic) — the CTA always renders its signed-out state.
@@ -385,6 +385,8 @@ be measured.
   screenshot cropped that way shows an arbitrary band. To give a post its own preview,
   draw a 1200x630 image and name it in `ogImage`. The picture is the `social-card` still in
   `tools/capture`; chat apps cache a card by URL, so a redrawn card gets a new filename.
+
+- **A call to action starts sign-in itself (SCRUM-408).** There is no login page on the way in. A "Get started" button is a PLAIN ANCHOR to `signInHref(next?)` from `src/lib/sign-in.ts` (the Express route `/auth/google`), never a `next/link`: a prefetch would start a sign-in on render. When the destination depends on who is looking, use `CtaLink` (`src/components/cta-link.tsx`), which picks the element. The one click listener in `src/components/attribution-links.tsx` does the rest for every such link: attaches the attribution snapshot, captures `signin_started` (the funnel's first step, with `page` and the anchor's `data-cta`), and marks the link busy so a second click is refused. A button that only learns the visitor is signed out from the server navigates through `signInDestination(url, cta)` from the same file. Beside a sign-in button, or on the first screen after it, render `SignInConsent` (terms and privacy). `/auth/login` is only where a sign-in that did not finish, or a lapsed session, comes back to; `src/lib/sign-in.test.ts` fails a new literal link to it.
 
 ## Adding a route
 
