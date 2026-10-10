@@ -1,6 +1,6 @@
 ---
 title: "The agent no longer crashes on a page your browser has translated"
-date: "2026-10-09"
+date: "2026-10-10"
 tags: ["agent", "dashboard"]
 ---
 

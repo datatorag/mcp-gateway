@@ -84,8 +84,8 @@ export function missingCheckouts(pluginsDir: string, slugs: readonly string[]): 
  *
  * A plugin in the image has no git metadata and no commit of its own: it was
  * built from the tree of the gateway's commit, so that commit is its sha, by
- * construction. A plugin in a checkout (a laptop, or an image that still
- * loads from the plugins volume) is read from its git metadata as before.
+ * construction. A plugin in a checkout (a laptop) is read from its git
+ * metadata as before.
  *
  * The same honesty rule holds in both: a plugin with no directory gets null,
  * and so does every plugin when the image does not know its own commit. A
