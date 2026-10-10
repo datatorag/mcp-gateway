@@ -9,6 +9,7 @@ import { useSignupConversion } from "../use-signup-conversion";
 import { useConnections } from "../use-connections";
 import type { ConnectionsView } from "@/gateway/connections-view";
 import { ThreadList } from "./thread-list";
+import { ChatErrorBoundary } from "../chat-error-boundary";
 import type { PlaygroundMessage } from "../playground-presentation";
 import { getConnectableService } from "../connections/service-registry";
 import {
@@ -201,7 +202,18 @@ export function AgentClient({
   const [listToken, setListToken] = useState(0);
   const refreshList = useCallback(() => setListToken((n) => n + 1), []);
 
+  /** The stored thread behind the conversation on screen, as last named by
+   * the server. A resumed conversation knows it from the start; a new one
+   * learns it from its first response. Held in a REF because it must never
+   * re-render or re-key the chat: its one reader is the error boundary's
+   * reload, which needs to know what to reopen after the chat is gone. */
+  const liveThreadId = useRef<string | null>(null);
+  const noteThread = useCallback((id: string) => {
+    liveThreadId.current = id;
+  }, []);
+
   const startNewChat = useCallback(() => {
+    liveThreadId.current = null;
     setThread((prev) => ({ id: null, history: [], epoch: prev.epoch + 1 }));
   }, []);
 
@@ -213,6 +225,7 @@ export function AgentClient({
       // would imply the conversation exists and is simply blank.
       if (!res.ok) return;
       const data = (await res.json()) as { messages?: PlaygroundMessage[] };
+      liveThreadId.current = id;
       setThread((prev) => ({
         id,
         history: Array.isArray(data.messages) ? data.messages : [],
@@ -323,6 +336,22 @@ export function AgentClient({
             min-h-0`) rather than `h-full`, so the error notice above can take
             its row without pushing the composer below the fold. */}
         <div className="min-h-0 flex-1">
+          {/* The chat's own edge (SCRUM-405). A throw while drawing the
+              thread stays in this box; the rail, the notice above and the
+              rest of the dashboard stay on screen. KEYED LIKE THE CHAT, so
+              the reload below, which reopens the stored conversation and
+              bumps the epoch, clears the boundary and draws the thread on
+              fresh nodes. A conversation with no stored thread yet has
+              nothing to reopen and is offered a new chat alone. */}
+          <ChatErrorBoundary
+            key={`${thread.id ?? "new"}:${thread.epoch}`}
+            onNewChat={startNewChat}
+            onReload={() => {
+              const id = liveThreadId.current;
+              if (id) void openThread(id);
+              else startNewChat();
+            }}
+          >
           <Playground
             accounts={accounts}
             connectionsLoaded={connectionsLoaded}
@@ -341,7 +370,9 @@ export function AgentClient({
             // unconnected user is the same however they arrived.
             welcome={landedFrom === "signup"}
             pendingSkill={pendingSkill}
+            onThreadKnown={noteThread}
           />
+          </ChatErrorBoundary>
         </div>
       </div>
     </div>
