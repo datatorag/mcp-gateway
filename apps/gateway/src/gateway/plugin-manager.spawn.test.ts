@@ -6,6 +6,7 @@ import {
   readFileSync,
   existsSync,
   rmSync,
+  chmodSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -28,14 +29,14 @@ vi.mock("node:os", async (orig) => ({
 vi.mock("@/lib/slack", () => ({ sendSlack: vi.fn() }));
 
 const { mcpServers, mcpServerEnvVars } = await import("@datatorag-mcp/db");
-const { PluginManager, PLUGINS_DIR, buildPluginEnv, pluginsDirFrom } = await import(
-  "./plugin-manager"
-);
+const { PluginManager, PLUGINS_DIR, buildPluginEnv, pluginsDirFrom, pluginUserFrom } =
+  await import("./plugin-manager");
+type PluginUserLookup = import("./plugin-manager").PluginUserLookup;
 
 type Row = { key: string; value: string };
 type Server = { id: string; slug: string; containerPort: number };
 
-function makeManager(servers: Server[], rows: Row[] = []) {
+function makeManager(servers: Server[], rows: Row[] = [], userFor?: PluginUserLookup) {
   const db = {
     select: () => ({
       from: (table: unknown) => ({
@@ -44,7 +45,7 @@ function makeManager(servers: Server[], rows: Row[] = []) {
       }),
     }),
   };
-  return new PluginManager(db as never, {} as never);
+  return new PluginManager(db as never, {} as never, userFor ? { userFor } : {});
 }
 
 function writePlugin(slug: string, source: string): string {
@@ -293,3 +294,92 @@ describe("where plugins are loaded from", () => {
   });
 });
 
+describe("the account a plugin child runs as", () => {
+  const passwd = [
+    "root:x:0:0:root:/root:/bin/bash",
+    "node:x:1000:1000::/home/node:/bin/bash",
+    "plugin-gws-mcp:x:901:901::/nonexistent:/usr/sbin/nologin",
+    "plugin-atlassian-mcp:x:902:902::/nonexistent:/usr/sbin/nologin",
+    "plugin-as-root:x:0:0::/nonexistent:/usr/sbin/nologin",
+    "plugin-root-group:x:903:0::/nonexistent:/usr/sbin/nologin",
+    "plugin-broken:x:abc:904::/nonexistent:/usr/sbin/nologin",
+  ].join("\n");
+
+  it("is the plugin's own, one for each", () => {
+    expect(pluginUserFrom(passwd, "gws-mcp")).toEqual({ uid: 901, gid: 901 });
+    expect(pluginUserFrom(passwd, "atlassian-mcp")).toEqual({ uid: 902, gid: 902 });
+  });
+
+  it("is never root, whatever the account is called", () => {
+    expect(pluginUserFrom(passwd, "as-root")).toBeNull();
+    expect(pluginUserFrom(passwd, "root-group")).toBeNull();
+  });
+
+  it("is nobody when there is no such account or its line cannot be read", () => {
+    expect(pluginUserFrom(passwd, "unknown-plugin")).toBeNull();
+    expect(pluginUserFrom(passwd, "broken")).toBeNull();
+    // A slug is matched whole against the account name, never as a prefix.
+    expect(pluginUserFrom(passwd, "gws")).toBeNull();
+  });
+
+  // Writes who it runs as beside itself, then stays up until stopped.
+  const dumpUser = `
+    require("node:fs").writeFileSync("user.json", JSON.stringify({ uid: process.getuid(), gid: process.getgid(), groups: process.getgroups() }));
+    setInterval(() => {}, 1000);
+  `;
+
+  it("leaves a plugin down when it should have an account and has none, and does not start it as the gateway", async () => {
+    const dir = writePlugin("no-account-plugin", dumpUser);
+    manager = makeManager(
+      [{ id: "s1", slug: "no-account-plugin", containerPort: 40128 }],
+      [],
+      () => null
+    );
+    await manager.startAll();
+    expect(manager.pluginStatus()).toEqual({ "no-account-plugin": "down" });
+    await new Promise((r) => setTimeout(r, 300));
+    expect(existsSync(join(dir, "user.json"))).toBe(false);
+  });
+
+  // The switch is real only in a real start. A test process that is not root
+  // cannot become another user, so asking for one is refused by the
+  // operating system: the plugin is down and never ran as us. The known-bad
+  // form is a manager that drops the account: the child then starts as the
+  // test's own user, writes its file, and this goes red. As root (some
+  // containers) the child does start, and must be the account asked for.
+  it("asks the operating system for that account when it starts the child", async () => {
+    const other = { uid: 65534, gid: 65534 };
+    const dir = writePlugin("other-user-plugin", dumpUser);
+    chmodSync(dir, 0o777);
+    manager = makeManager(
+      [{ id: "s1", slug: "other-user-plugin", containerPort: 40129 }],
+      [],
+      () => other
+    );
+    await manager.startAll();
+
+    if (process.getuid?.() === 0) {
+      await until(() => existsSync(join(dir, "user.json")));
+      const ran = JSON.parse(readFileSync(join(dir, "user.json"), "utf-8"));
+      expect(ran.uid).toBe(other.uid);
+      expect(ran.gid).toBe(other.gid);
+      expect(ran.groups).not.toContain(0);
+    } else {
+      expect(manager.pluginStatus()).toEqual({ "other-user-plugin": "down" });
+      await new Promise((r) => setTimeout(r, 300));
+      expect(existsSync(join(dir, "user.json"))).toBe(false);
+    }
+  });
+
+  it("starts a plugin as the gateway's own user when it is not the image's", async () => {
+    const dir = writePlugin("same-user-plugin", dumpUser);
+    manager = makeManager(
+      [{ id: "s1", slug: "same-user-plugin", containerPort: 40130 }],
+      [],
+      () => undefined
+    );
+    await manager.startAll();
+    await until(() => existsSync(join(dir, "user.json")));
+    expect(JSON.parse(readFileSync(join(dir, "user.json"), "utf-8")).uid).toBe(process.getuid?.());
+  });
+});

@@ -102,6 +102,24 @@ COPY plugins/atlassian-mcp/datatorag.json plugins/atlassian-mcp/README.md plugin
 # bundle's own build script, and git ignores it. It must never be in an image.
 RUN if find /app/plugins -name oauth.json -not -path '*/node_modules/*' | grep -q .; then \
       echo "oauth.json found under /app/plugins" >&2; exit 1; fi
+# One non-root account per plugin, named plugin-<slug> (SCRUM-390). The
+# manager starts each plugin as its own account, so a plugin cannot read the
+# gateway's environment or memory, or the other plugin's. No home, no shell,
+# no password. The plugin files stay root's: a plugin can read and run its
+# code and cannot change it. A plugin directory with no account, or an account
+# that is root, fails the build here; in a running gateway it would be a
+# plugin that is never started.
+RUN groupadd --system --gid 901 plugin-gws-mcp \
+ && useradd --system --uid 901 --gid 901 --no-create-home --home-dir /nonexistent --shell /usr/sbin/nologin plugin-gws-mcp \
+ && groupadd --system --gid 902 plugin-atlassian-mcp \
+ && useradd --system --uid 902 --gid 902 --no-create-home --home-dir /nonexistent --shell /usr/sbin/nologin plugin-atlassian-mcp
+RUN for dir in /app/plugins/*/; do \
+      name="plugin-$(basename "$dir")"; \
+      uid="$(id -u "$name" 2>/dev/null)" || { echo "no account $name for $dir" >&2; exit 1; }; \
+      [ "$uid" != 0 ] && [ "$(id -g "$name")" != 0 ] || { echo "$name is root" >&2; exit 1; }; \
+    done; \
+    if find /app/plugins -not -user root | grep -q .; then \
+      echo "a file under /app/plugins is not root's" >&2; exit 1; fi
 # The cutover (SCRUM-390): the gateway starts the plugins above, and no
 # longer the copies in the plugins volume. This line is the whole switch. It
 # is here and nowhere else (not the compose file, not the parameter store,
