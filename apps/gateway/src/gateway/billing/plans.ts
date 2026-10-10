@@ -7,7 +7,13 @@ import type { Plan } from "@datatorag-mcp/db";
  * enforced now, which is what makes keeping it correct matter. */
 export const FREE_MONTHLY_CAP = 250;
 
-export const PRO_MONTHLY_INCLUDED = 2000;
+/** Pro tool calls included per period (SCRUM-404: 2,000 until 2026-10-10).
+ *
+ * Pro has no hard stop, so this number is what the plan cards and the
+ * Billing page say is included, and where the usage meter puts its line;
+ * it refuses nothing. Every surface reads it from here: change it here and
+ * nowhere else. */
+export const PRO_MONTHLY_INCLUDED = 10_000;
 
 /** Free agent runs per period.
  *
