@@ -17,7 +17,7 @@ export default function PrivacyPage() {
         <h1 className="font-display text-3xl font-bold tracking-tight sm:text-4xl">
           Privacy Policy
         </h1>
-        <p className="mt-2 text-sm text-gray-500">Last updated: August 21, 2026</p>
+        <p className="mt-2 text-sm text-gray-500">Last updated: October 11, 2026</p>
 
         <section className="mt-10 space-y-6 text-[15px] leading-relaxed">
           <h2 className="text-xl font-semibold">1. Information We Collect</h2>
@@ -88,7 +88,10 @@ export default function PrivacyPage() {
             <strong>Providers we use to run DataToRAG.</strong> These process data without a
             connection step on your part: <strong>Anthropic</strong>, which receives your
             conversation content in order to generate the agent&apos;s replies;{" "}
-            <strong>PostHog</strong>, for product analytics tied to your account;{" "}
+            <strong>PostHog</strong>, for product analytics tied to your account, including
+            recordings of your dashboard sessions; a recording can show the conversation content
+            we already store for you, and never shows what you type into a field or your invoice
+            download links;{" "}
             <strong>Stripe</strong>, for payments; and our hosting and database providers. We do
             not sell, rent or share your personal information with third parties for marketing
             purposes.

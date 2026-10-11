@@ -44,7 +44,6 @@ import { Input } from "@/components/ui/input";
 // module is dependency-free (a console.error and two exports), so pulling it
 // into the client bundle costs nothing and drags in no server-only API.
 import { GENERIC_ERROR_MESSAGE as SERVER_GENERIC_ERROR } from "@/lib/errors";
-import { UNMASK } from "@/lib/analytics-masking";
 
 /* -------------------------------------------------------------------------- */
 /* Wire types                                                                  */
@@ -376,8 +375,7 @@ export function ConfirmCard({
           {summarizeArgs(input)}
         </span>
       </p>
-      {/* The decision buttons are ours to show; the arguments above are not. */}
-      <div className="mt-3 flex gap-2" {...UNMASK}>
+      <div className="mt-3 flex gap-2">
         <Button
           disabled={disabled}
           onClick={() => onDecide(approvalId, true)}
@@ -567,10 +565,7 @@ export const MessageRow = memo(function MessageRow({
               <MessageResponse
                 allowedImagePrefixes={[]}
                 allowedLinkPrefixes={["https://"]}
-                // SCRUM-414: a message is the user's words or an answer about
-                // their data, links to their files included. Left out of
-                // recordings and click events whole, attributes and all.
-                className={`ph-no-capture ${bodyClass}`}
+                className={bodyClass}
                 key={key}
               >
                 {part.text}
