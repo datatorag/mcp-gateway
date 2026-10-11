@@ -132,9 +132,8 @@ function InvoiceRow({ invoice }: { invoice: InvoiceSummary }) {
           </span>
         )}
         {invoice.pdfUrl && (
-          // ph-no-capture: a Stripe invoice link is a signed URL that opens
-          // without signing in, so it stays out of analytics. Recordings and
-          // click events copy link addresses as they are.
+          // ph-no-capture: a Stripe invoice link opens without signing in,
+          // and recordings copy link addresses as they are (SCRUM-414).
           <a href={invoice.pdfUrl} target="_blank" rel="noopener noreferrer" className="ph-no-capture text-primary hover:underline">
             PDF
           </a>
