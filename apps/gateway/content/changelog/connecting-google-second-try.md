@@ -1,6 +1,6 @@
 ---
 title: "Connecting Google: a clearer first step, and a second try that does not start over"
-date: "2026-10-10"
+date: "2026-10-11"
 tags: ["dashboard", "google-workspace"]
 connector: "google-workspace"
 ---

@@ -1,6 +1,6 @@
 ---
 title: "The Billing page loads for Pro accounts again"
-date: "2026-10-10"
+date: "2026-10-11"
 tags: ["dashboard", "billing"]
 ---
 

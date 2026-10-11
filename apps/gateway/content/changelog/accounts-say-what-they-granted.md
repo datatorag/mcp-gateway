@@ -1,6 +1,6 @@
 ---
 title: "Your accounts now say what they granted, and gws_auth_setup is gone"
-date: "2026-10-10"
+date: "2026-10-11"
 tags: ["gateway", "google-workspace"]
 connector: "google-workspace"
 ---

@@ -1,6 +1,6 @@
 ---
 title: "Pro now includes 10,000 tool calls a month"
-date: "2026-10-10"
+date: "2026-10-11"
 tags: ["pricing", "billing"]
 ---
 
