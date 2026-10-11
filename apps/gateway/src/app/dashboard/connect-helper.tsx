@@ -3,6 +3,7 @@
 import { XIcon } from "lucide-react";
 import { patchCurrentUser, useCurrentUser } from "@/lib/use-current-user";
 import { cn } from "@/lib/utils";
+import { UNMASK } from "@/lib/analytics-masking";
 
 /** The words under a Google connect button. One sentence each: what the
  * button opens, the one thing to do there, and the way out. */
@@ -40,6 +41,7 @@ export function ConnectHelper({ className }: { className?: string }) {
     <p
       className={cn("flex items-start gap-2 text-left text-xs text-muted-foreground", className)}
       data-connect-helper=""
+      {...UNMASK}
     >
       <span className="min-w-0 flex-1">{CONNECT_HELPER_TEXT}</span>
       <button
