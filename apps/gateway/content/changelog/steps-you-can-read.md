@@ -1,6 +1,6 @@
 ---
 title: "Agent steps you can read at a glance, and waits that show they are moving"
-date: "2026-10-10"
+date: "2026-10-11"
 tags: ["agent", "dashboard"]
 ---
 

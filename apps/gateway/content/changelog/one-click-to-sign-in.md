@@ -1,6 +1,6 @@
 ---
 title: "One click to sign in"
-date: "2026-10-10"
+date: "2026-10-11"
 tags: ["dashboard", "site"]
 ---
 
