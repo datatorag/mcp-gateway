@@ -8,6 +8,7 @@ import {
   DEMO_HEADING,
   DEMO_STANDFIRST,
   expectedRunWord,
+  NUMBER_WORDS,
 } from "./demo-copy";
 
 const ALL = [
@@ -39,9 +40,13 @@ describe("demo section copy", () => {
     // pass if the sentence were rewritten around a different number while
     // happening to retain the mapped one. Assert the sentence does not name a
     // DIFFERENT allowance at the same time.
-    const others = Object.entries({ ten: 10, twenty: 20, fifty: 50 })
-      .filter(([, n]) => n !== FREE_MONTHLY_AGENT_RUNS)
-      .map(([w]) => w);
+    // Every OTHER mapped spelling, the previous allowance among them: the
+    // sentence that kept the old word beside the new one is the likeliest
+    // way for this to go wrong.
+    const others = Object.entries(NUMBER_WORDS)
+      .filter(([n]) => Number(n) !== FREE_MONTHLY_AGENT_RUNS)
+      .map(([, w]) => w);
+    expect(others).toContain("twenty-five");
     for (const w of others) {
       // "twenty-five" contains "twenty", so match on a word boundary that a
       // hyphen does not satisfy.

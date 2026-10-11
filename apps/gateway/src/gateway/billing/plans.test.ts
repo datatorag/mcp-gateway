@@ -38,18 +38,21 @@ describe("planLimits", () => {
       agentRuns: FREE_MONTHLY_AGENT_RUNS,
     });
   });
-  it("the agent-run allowance is PER PLAN: free 25, pro 100, everything else free (SCRUM-84)", () => {
+  it("the agent-run allowance is PER PLAN: free 40, pro 400, everything else free (SCRUM-84, numbers SCRUM-415)", () => {
     // This REVERSES the earlier "no per-plan agent allowance" pin, on the
     // terms that pin set for itself: it existed to make a per-plan allowance
     // a decision rather than a drift, and the blocker it named — "no measured
     // ceiling behind it" — is gone. The per-run token distribution was
     // measured (SCRUM-55) and RUN_TOKEN_CEILING now bounds the tail, so
     // allowance x ceiling bounds each subscriber's worst-case model cost.
-    // Before this, Pro shipped capped at the SAME 25 runs as Free — a paying
+    // Before SCRUM-84, Pro shipped capped at the SAME runs as Free: a paying
     // subscriber getting exactly what the free tier gets, which is a broken
     // promise rather than generosity.
+    // LITERALS on purpose (SCRUM-415 set them): a change to either number
+    // is a change someone reads here, not a silent re-render.
+    expect(FREE_MONTHLY_AGENT_RUNS).toBe(40);
     expect(planLimits("free").agentRuns).toBe(FREE_MONTHLY_AGENT_RUNS);
-    expect(planLimits("pro").agentRuns).toBe(100);
+    expect(planLimits("pro").agentRuns).toBe(400);
     // Least privilege everywhere else: nothing that is not "pro" may claim
     // like Pro, unknown values included.
     expect(planLimits("payg").agentRuns).toBe(FREE_MONTHLY_AGENT_RUNS);

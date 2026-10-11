@@ -105,8 +105,8 @@ describe("pricing page copy", () => {
     // The test above would pass for ANY numbers. These are the words on the
     // page today; when plans.ts moves, this fails and the copy (and any image
     // or email quoting it) gets re-read rather than silently re-rendered.
-    expect(freeAllowanceBullet()).toBe("250 tool calls and 25 agent runs a month, then a hard stop, never a surprise bill");
-    expect(proAllowanceBullet()).toBe("10,000 tool calls and 100 agent runs a month included");
+    expect(freeAllowanceBullet()).toBe("250 tool calls and 40 agent runs a month, then a hard stop, never a surprise bill");
+    expect(proAllowanceBullet()).toBe("10,000 tool calls and 400 agent runs a month included");
     expect(PRO_RUNS_BULLET).toBe("Skill and agent runs come out of that, no separate bill for the model");
   });
 
