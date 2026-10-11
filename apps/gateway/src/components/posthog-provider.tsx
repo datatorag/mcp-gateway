@@ -7,7 +7,6 @@ import { useCurrentUser } from "@/lib/use-current-user";
 import { AttributionLinks } from "@/components/attribution-links";
 import { posthogPolicy } from "@/lib/analytics-guard";
 import { EXCEPTION_CAPTURE, beforeSendAnalytics } from "@/lib/analytics-exceptions";
-import { RECORDING_MASKING } from "@/lib/analytics-masking";
 
 // Init at module scope so posthog is ready before any component effect runs.
 // posthog.capture() and .identify() calls will no longer race with init.
@@ -69,9 +68,6 @@ if (typeof window !== "undefined") {
       // anywhere without that filter.
       capture_dead_clicks: true,
       before_send: beforeSendAnalytics,
-      // SCRUM-414: recordings hide every input and every piece of text that
-      // is not inside chrome marked as shown. See lib/analytics-masking.ts.
-      session_recording: RECORDING_MASKING,
     });
   }
 }
