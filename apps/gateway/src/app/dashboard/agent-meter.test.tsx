@@ -12,7 +12,7 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
-import { planLimits } from "@/gateway/billing/plans";
+import { FREE_MONTHLY_AGENT_RUNS, planLimits } from "@/gateway/billing/plans";
 import { AgentMeter, runsLabel, type AgentQuota } from "./agent-meter";
 import type { ConnectedAccount } from "./connections/types";
 
@@ -65,13 +65,13 @@ describe("runsLabel", () => {
     );
   });
 
-  it("a PRO quota built from planLimits says 100 — the meter half of the SCRUM-84 pin", () => {
-    // LITERAL on purpose: if pro's allowance drifts back to 25 in planLimits,
+  it("a PRO quota built from planLimits says 400: the meter half of the SCRUM-84 pin", () => {
+    // LITERAL on purpose: if pro's allowance drifts back to the free one in planLimits,
     // this line reddens alongside the plan-table and claim pins. The meter is
     // a persistent on-screen claim; it must go red with the others.
     const cap = planLimits("pro").agentRuns;
     expect(runsLabel({ used: 0, cap, remaining: cap })).toBe(
-      "100 of 100 runs left"
+      "400 of 400 runs left"
     );
   });
 
@@ -82,7 +82,7 @@ describe("runsLabel", () => {
       expect(label).not.toContain(banned);
     }
     // And no free-cap fallback smuggled into the copy.
-    expect(label).not.toContain("25");
+    expect(label).not.toContain(String(FREE_MONTHLY_AGENT_RUNS));
   });
 });
 

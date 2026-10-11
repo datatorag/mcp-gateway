@@ -38,15 +38,15 @@ describe("agentRunCap — the one shared cap decider", () => {
     );
   });
 
-  it("pro resolves to the ruled 100 — the meter's pin, alongside the claim's and the plan table's", async () => {
+  it("pro resolves to the ruled 400: the meter's pin, alongside the claim's and the plan table's", async () => {
     // LITERAL, deliberately: this test is the meter-side half of the SCRUM-84
-    // regression pin. Setting pro's allowance back to 25 in planLimits must
+    // regression pin. Setting pro's allowance back to the free one in planLimits must
     // redden this suite too, because the meter is a PERSISTENT on-screen
     // claim and a silent drift here is a broken promise the customer stares
     // at, not a one-off wrong answer.
     const cap = await agentRunCap(stubDb([{ plan: "pro" }]), "user-1");
     expect(cap).toBe(planLimits("pro").agentRuns);
-    expect(cap).toBe(100);
+    expect(cap).toBe(400);
   });
 
   it("unknown plans and missing rows fall to the free allowance", async () => {

@@ -15,13 +15,13 @@ export const FREE_MONTHLY_CAP = 250;
  * nowhere else. */
 export const PRO_MONTHLY_INCLUDED = 10_000;
 
-/** Free agent runs per period.
+/** Free agent runs per period (SCRUM-415: 25 until 2026-10-11).
  *
  * A SEPARATE ALLOWANCE FROM THE CALL CAP, and not double-charging: a run is
  * bounded because it spends our model budget, while calls are bounded because
  * volume is what the paid tier sells. One run normally makes several tool
  * calls, so the run cap is expected to bind first. */
-export const FREE_MONTHLY_AGENT_RUNS = 25;
+export const FREE_MONTHLY_AGENT_RUNS = 40;
 
 /** Hard ceiling on tokens a single agent run may consume, ALL PLANS.
  *
@@ -101,20 +101,20 @@ export function planLimits(plan: Plan): PlanLimits {
         agentRuns: FREE_MONTHLY_AGENT_RUNS,
       };
     case "pro":
-      // 100 agent runs BY DECISION (SCRUM-84, ruled 2026-08-14), replacing
-      // the earlier plan-independent cap whose stated precondition — "until a
-      // token ceiling is measured" — is now met. Grounded in the measured
-      // cost per run over the trailing month: at this allowance, expected
-      // model spend stays a small fraction of the subscription price, with
-      // RUN_TOKEN_CEILING bounding the tail. The number lives HERE, in
-      // the plan table, not as a second free-floating constant: a parallel
-      // const next to the free one is the exact shape that let Pro ship
-      // capped at the free allowance without anyone noticing.
+      // 400 agent runs BY DECISION (SCRUM-415: 100 until 2026-10-11; per HQ
+      // decision, see SCRUM-415). A per-plan allowance at all dates from
+      // SCRUM-84 (ruled 2026-08-14), which replaced the earlier
+      // plan-independent cap once a token ceiling was measured;
+      // RUN_TOKEN_CEILING still bounds each run and did not move. The number
+      // lives HERE, in the plan table, not as a second free-floating
+      // constant: a parallel const next to the free one is the exact shape
+      // that let Pro ship capped at the free allowance without anyone
+      // noticing.
       return {
         monthlyIncluded: PRO_MONTHLY_INCLUDED,
         hardCap: false,
         multiAccount: true,
-        agentRuns: 100,
+        agentRuns: 400,
       };
     case "payg":
       // Stage 2 territory; until it exists, least privilege: the free

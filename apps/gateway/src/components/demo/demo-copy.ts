@@ -54,7 +54,7 @@ export const DEMO_CTA_ALTERNATIVE =
  * promises a third ships before the exit does. */
 export const DEMO_CTA_ACTION = "Try it on your own files.";
 export const DEMO_CTA_SUPPORT =
-  "Free, and the first twenty-five runs a month are on us.";
+  "Free, and the first forty runs a month are on us.";
 
 /** The spelled-out number in {@link DEMO_CTA_SUPPORT}, mapped so a test can
  * compare prose against the enforced cap.
@@ -70,6 +70,7 @@ export const NUMBER_WORDS: Record<number, string> = {
   10: "ten",
   20: "twenty",
   25: "twenty-five",
+  40: "forty",
   50: "fifty",
   100: "one hundred",
 };
