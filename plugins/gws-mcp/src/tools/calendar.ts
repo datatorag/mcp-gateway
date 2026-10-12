@@ -165,6 +165,11 @@ export const calendarTools: ToolDef[] = [
           type: "string",
           description: "Free-text search query to filter events",
         },
+        page_token: {
+          type: "string",
+          description:
+            "The nextPageToken from an earlier call with the same calendar, time range and query, to read the page of events after it.",
+        },
         full: {
           type: "boolean",
           description:
@@ -387,6 +392,9 @@ export async function handleCalendar(
         orderBy: "startTime",
       };
       if (args.query) params.q = args.query;
+      // The compact view has always handed back a nextPageToken; this is the
+      // argument that takes it (SCRUM-419).
+      if (args.page_token) params.pageToken = args.page_token;
 
       const result = await client.api("calendar", "events", "list", {
         params,

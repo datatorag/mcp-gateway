@@ -183,6 +183,11 @@ const READ_METHODS = new Set([
   "getprofile",
 ]);
 
+/** Tools that move a message in or out of Trash. Not sends, and guarded
+ * anyway: they change a real mailbox, and the raw call that does the same
+ * thing is already held to mail this run sent. */
+const MAILBOX_MOVING_TOOLS = new Set(["gmail_trash", "gmail_untrash"]);
+
 function toolSuffix(tool: string): string {
   const i = tool.indexOf("__");
   return i === -1 ? tool : tool.slice(i + 2);
@@ -296,6 +301,10 @@ export async function checkSend(
     /** Message ids the trash helper has JUST stamp-verified. See the trash
      * branch below: the guard will not permit a trash for anything else. */
     trashable?: ReadonlySet<string>;
+    /** This run's stamp. The dedicated trash tools are allowed only on a
+     * message whose stored subject carries it, read at the moment of the
+     * call. Absent means no message qualifies. */
+    runStamp?: string;
   }
 ): Promise<SendCheck> {
   const name = toolSuffix(tool);
@@ -307,9 +316,45 @@ export async function checkSend(
     name === "gmail_reply" ||
     name === "gmail_send_draft" ||
     name === "gws_run" ||
+    MAILBOX_MOVING_TOOLS.has(name) ||
     CALENDAR_NOTIFYING_TOOLS.has(name);
 
   if (!needsGuard) return { ok: true };
+
+  /* THE DEDICATED TRASH TOOLS GET THE RULE THE RAW CALL ALREADY HAD
+   * (SCRUM-419). `gws_run` may trash only an id the helper has just
+   * stamp-verified. When `gmail_trash` and `gmail_untrash` became tools of
+   * their own, nothing here knew their names, so a case could have moved
+   * any message in a real mailbox by calling the tool instead of the raw
+   * method. The check is the helper's own, made by the guard: the stored
+   * subject, read now, carries the smoke prefix AND this run's stamp. The
+   * standing fixture message carries the prefix and no run's stamp, so it
+   * can be neither trashed nor restored from here. */
+  if (MAILBOX_MOVING_TOOLS.has(name)) {
+    const id = String(args.message_id ?? "");
+    // The id checked is the id sent, character for character. A padded id
+    // would be looked up trimmed here and sent untrimmed to the tool.
+    if (id.trim() === "" || id !== id.trim()) {
+      return { ok: false, reason: `send refused: ${name} names no message, or one with space around its id` };
+    }
+    if (opts.trashable?.has(id)) return { ok: true };
+    const stamp = opts.runStamp ?? "";
+    if (stamp === "") {
+      return { ok: false, reason: `send refused: ${name} needs this run's stamp to check the message against, and none was given` };
+    }
+    const stored = await opts.lookups.readMessage(id);
+    if (!stored) {
+      return { ok: false, reason: `send refused: the message ${name} names could not be read first` };
+    }
+    const subject = typeof stored.subject === "string" ? stored.subject : "";
+    if (!subject.includes(SUBJECT_PREFIX) || !subject.includes(stamp)) {
+      return {
+        ok: false,
+        reason: `send refused: ${name} may only move a message this run sent, and that subject does not carry this run's stamp and ${SUBJECT_PREFIX}`,
+      };
+    }
+    return { ok: true };
+  }
 
   if (name === "gws_run") {
     // Normalised before the lookup. An exact-string lookup against a value a

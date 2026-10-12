@@ -831,6 +831,7 @@ export function makeContextParts(opts: {
       // will act in rather than a different one.
       lookups: lookupsFor(role),
       trashable,
+      runStamp,
     });
     if (!verdict.ok) throw new Error(verdict.reason);
     return client.callTool(tool, sent);

@@ -20,11 +20,11 @@ import {
  * and does not change. The attachmentId used for the bytes is the one this
  * resolver's own read returned a moment earlier. */
 
-const PART_ID = /^\d+(\.\d+)*$/;
+export const PART_ID = /^\d+(\.\d+)*$/;
 
 /** A type/subtype pair and nothing else: the value comes from the sender's
  * message and goes into a response header. */
-const MIME_TYPE = /^[\w.+-]+\/[\w.+-]+$/;
+export const MIME_TYPE = /^[\w.+-]+\/[\w.+-]+$/;
 
 const PART_FIELDS = "partId,filename,mimeType,body(attachmentId,size)";
 
@@ -70,7 +70,7 @@ const MAX_EXTENSION = 16;
 /** The sender chooses these and Gmail is not known to bound them, so they
  * are bounded here before any work is done on them. */
 const MAX_FILENAME_INPUT = 1000;
-const MAX_MIME_TYPE = 255;
+export const MAX_MIME_TYPE = 255;
 
 /** Characters that reorder the text around them when shown. In a file name
  * they make one extension read as another, and they are never part of one. */
@@ -93,7 +93,7 @@ export function attachmentName(filename: string | undefined, partId: string, mim
   return fitName(clean.slice(0, clean.length - extension.length), extension);
 }
 
-interface Part {
+export interface Part {
   partId?: string;
   filename?: string;
   mimeType?: string;
@@ -104,7 +104,7 @@ interface Part {
 /** The part at `partId`, wherever it nests: the first in the message's own
  * order, which is the order gmail_read lists attachments in. A loop and not
  * recursion, and one push per child, so no message is too deep or too wide. */
-function findPart(root: Part | undefined, partId: string): Part | undefined {
+export function findPart(root: Part | undefined, partId: string): Part | undefined {
   const open: unknown[] = [root];
   while (open.length > 0) {
     const part = open.pop() as Part | null | undefined;

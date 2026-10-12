@@ -2,7 +2,7 @@
 
 ## Project
 
-Google Workspace service plugin of the DataToRAG gateway. Calls the Google REST APIs directly, with the user's token the gateway sends, to expose 68 tools (Gmail, Calendar, Drive, Contacts, Sheets, Docs, Slides, Tasks, generic API access) via MCP. It starts no process and holds no login of its own.
+Google Workspace service plugin of the DataToRAG gateway. Calls the Google REST APIs directly, with the user's token the gateway sends, to expose 77 tools (Gmail, Calendar, Drive, Contacts, Sheets, Docs, Slides, Tasks, generic API access) via MCP. It starts no process and holds no login of its own.
 
 ## Commands
 

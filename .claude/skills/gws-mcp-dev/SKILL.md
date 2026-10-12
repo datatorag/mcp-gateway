@@ -143,6 +143,23 @@ gateway deploy carries it. What goes with it:
 - Every tool declares its annotations; in `gws-mcp` through the presets in
   `src/tools/annotations.ts`, never hand-written booleans.
 - A commit body explains why, and names what was smoke-tested live.
+- **A description describes; it does not instruct** (SCRUM-419). What the
+  tool does, what it takes, what it returns. No "always", "never", "must",
+  "use this instead of", no capitals for emphasis: those address the
+  reader's model rather than describe the tool, and a directory reviewer
+  reads them as a tool steering its caller. In `gws-mcp`,
+  `src/tools/described-not-instructed.test.ts` holds the rule for the tools
+  listed in it by name. A new tool goes on that list; an older description
+  is brought under the rule by adding its name and rewording it.
+- **Bytes do not travel through a tool response.** `gmail_get_attachment`
+  returns a text attachment as text, up to a stated size, and for anything
+  else a description with the size and the save-to-Drive route. A new tool
+  that reads a file follows it: text when it is text, never base64.
+- **A tool that moves mail gets a rule in the runner's guard, in the same
+  change.** `apps/gateway/src/gateway/tests/send-guard.ts` knows tools by
+  name. `gmail_trash` and `gmail_untrash` would have been callable on any
+  message from a test case until they were added to it; they are now held
+  to mail the run itself sent.
 
 ## Gotchas
 
