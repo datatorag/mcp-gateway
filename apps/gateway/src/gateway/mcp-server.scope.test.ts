@@ -318,6 +318,7 @@ describe("gws_run service and method reach the tracker (SCRUM-227)", () => {
     const [, props] = trackToolCall.mock.calls.at(-1)!;
     expect(props.service).toBe("calendar");
     expect(props.method).toBe("list");
+    expect(props.resource).toBe("events");
     expect(JSON.stringify(props)).not.toContain("calendarId");
   });
 
@@ -329,5 +330,6 @@ describe("gws_run service and method reach the tracker (SCRUM-227)", () => {
     const [, props] = trackToolCall.mock.calls.at(-1)!;
     expect(props.service).toBeNull();
     expect(props.method).toBeNull();
+    expect(props.resource).toBeNull();
   });
 });

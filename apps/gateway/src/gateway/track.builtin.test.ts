@@ -162,14 +162,16 @@ describe("gws_run tool_call carries service and method (SCRUM-227)", () => {
       ...pluginProps(),
       toolName: "gws-mcp__gws_run",
       service: "calendar",
+      resource: "calendarList",
       method: "list",
       outcome: { ...pluginProps().outcome, toolName: "gws-mcp__gws_run" },
     });
     const [event] = toolCallCaptures();
     expect(event.properties.service).toBe("calendar");
     expect(event.properties.method).toBe("list");
+    expect(event.properties.resource).toBe("calendarList");
     expect(insertValues).toHaveBeenCalledTimes(1);
-    expect(insertValues.mock.calls[0][0]).toMatchObject({ service: "calendar", method: "list" });
+    expect(insertValues.mock.calls[0][0]).toMatchObject({ service: "calendar", resource: "calendarList", method: "list" });
     // Never an argument or a body: the property set is exactly the two names.
     expect(Object.keys(event.properties)).not.toEqual(expect.arrayContaining(["arguments", "body", "params"]));
   });
@@ -179,6 +181,7 @@ describe("gws_run tool_call carries service and method (SCRUM-227)", () => {
     const [event] = toolCallCaptures();
     expect(event.properties.service).toBeNull();
     expect(event.properties.method).toBeNull();
-    expect(insertValues.mock.calls[0][0]).toMatchObject({ service: null, method: null });
+    expect(event.properties.resource).toBeNull();
+    expect(insertValues.mock.calls[0][0]).toMatchObject({ service: null, resource: null, method: null });
   });
 });
