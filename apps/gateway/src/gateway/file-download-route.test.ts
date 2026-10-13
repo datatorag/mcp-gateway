@@ -276,6 +276,36 @@ describe("everything else", () => {
     expect((await fetch(base + path, { method: "POST" })).status).toBe(200);
   });
 
+  it("stops a link handed to another route as a parameter, the image optimizer first of all", async () => {
+    const path = await mint();
+    const token = path.slice(DOWNLOAD_PATH.length);
+    const errors: string[] = [];
+    const spy = vi.spyOn(console, "error").mockImplementation((...args) => void errors.push(args.map(String).join(" ")));
+    const carriers = [
+      `/_next/image?url=${path}&w=64&q=75`,
+      `/_next/image?url=${encodeURIComponent(path)}&w=64&q=75`,
+      `/_next/image?w=64&url=%252Ffiles%252Fd%252F${token}`,
+      `/_next/image?url=//files/d/${token}`,
+      `/_next/image?url=/FILES/d/${token}%`,
+      `/dashboard?next=${encodeURIComponent(`https://gw.example.test${path}`)}`,
+    ];
+    try {
+      for (const carrier of carriers) {
+        const res = await rawGet(carrier);
+        // 404 from the router, never the app's 418.
+        expect(res.status, carrier).toBe(404);
+        expect(res.body).toBe("This download link is not valid. Ask for a new one in your conversation.");
+      }
+    } finally {
+      spy.mockRestore();
+    }
+    expect([...errors, ...logLines].join("\n")).not.toContain(token.split(".")[0]);
+    // An ordinary image request, and an ordinary query, still reach the app.
+    expect((await rawGet("/_next/image?url=%2Flogo.png&w=64&q=75")).status).toBe(418);
+    expect((await rawGet("/docs/file-references?ref=files")).status).toBe(418);
+    expect((await fetch(base + path, { method: "POST" })).status).toBe(200);
+  });
+
   it("the app's last handler names a decode failure and prints nothing of the path", async () => {
     const errors: string[] = [];
     const spy = vi.spyOn(console, "error").mockImplementation((...args) => void errors.push(args.map(String).join(" ")));

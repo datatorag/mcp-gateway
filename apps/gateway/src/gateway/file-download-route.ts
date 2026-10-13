@@ -273,7 +273,7 @@ export function createFileDownloadRouter(opts: {
   // malformed escape there makes the framework print the path. Read raw,
   // never through a decoded parameter.
   router.use((req: Request, res: Response, next) => {
-    if (!looksLikeDownloadPath(req.url)) return next();
+    if (!looksLikeDownloadPath(req.url) && !queryCarriesDownloadPath(req.url)) return next();
     log(req.method, "invalid");
     sentence(res, "invalid");
   });
@@ -292,6 +292,25 @@ export function looksLikeDownloadPath(rawUrl: string): boolean {
     .replace(/\/{2,}/g, "/")
     .toLowerCase();
   return path === DOWNLOAD_PREFIX || path.startsWith(`${DOWNLOAD_PREFIX}/`);
+}
+
+/**
+ * Whether a request's QUERY STRING holds a download path. A link handed to
+ * some other route as a parameter is still a live token in a URL the app
+ * would see, and one such route, the image optimizer, prints the address it
+ * was asked to fetch when that address is not an image. No route of ours
+ * takes a download link as a parameter, so any request that carries one is
+ * answered here. Same spellings as the path check.
+ */
+export function queryCarriesDownloadPath(rawUrl: string): boolean {
+  const at = rawUrl.indexOf("?");
+  if (at === -1) return false;
+  return percentUnescape(percentUnescape(rawUrl.slice(at + 1)))
+    .replace(/\\/g, "/")
+    .replace(/\/(\.\/)+/g, "/")
+    .replace(/\/{2,}/g, "/")
+    .toLowerCase()
+    .includes(DOWNLOAD_PATH);
 }
 
 /**
