@@ -240,6 +240,198 @@ function isToolResult(value: unknown): value is CrossingResult {
   );
 }
 
+/** The source side of a reference, resolved for the session's user: whose
+ * token reads the file and which plugin answers it. */
+type ResolvedSource = {
+  ref: FileReference;
+  token: string;
+  mcpUrl: string;
+};
+
+/**
+ * THE SOURCE LEG, PART ONE: who can read the referenced file. No byte moves
+ * here. No connection, no grant or no plugin is a refusal in words.
+ */
+async function resolveSource(
+  opts: Pick<CrossFileOptions, "resolveToken" | "resolvePluginUrl" | "surface" | "connectionsUrl">,
+  ref: FileReference
+): Promise<{ ok: true; source: ResolvedSource } | { ok: false; result: CrossingResult }> {
+  const refType = FILE_REFERENCE_TYPES[ref.type];
+  // The source side, for the session's user. No connection, no bytes.
+  const serviceUrl = `${opts.connectionsUrl}/${refType.service}`;
+  const source = await opts.resolveToken(refType.service, ref.account);
+  if (!source?.token) {
+    return {
+      ok: false,
+      result: refuse(
+        ref.account
+          ? `No connected account found for ${echoName(ref.account)}. The file is ${refType.describes}: connect that account at ${serviceUrl}, then try again.`
+          : `${refType.service} is not connected. The file is ${refType.describes}: connect the account that holds it at ${serviceUrl}, then try again.`
+      ),
+    };
+  }
+  // Same pre-check, same module and same fail-open rule as every other call:
+  // a grant known to lack the scope is refused in words; one that cannot be
+  // read goes through.
+  const scope = checkScopeForTool({
+    toolName: refType.scopeTool,
+    service: refType.service,
+    granted: source.scopes,
+    surface: opts.surface,
+    connectionsUrl: serviceUrl,
+  });
+  if (!scope.ok) return { ok: false, result: refuse(scope.message) };
+
+  const sourceMcpUrl = await opts.resolvePluginUrl(refType.plugin);
+  if (!sourceMcpUrl) {
+    return {
+      ok: false,
+      result: refuse(`A ${ref.type} file cannot be read right now: the connector that holds it is not available.`),
+    };
+  }
+  return { ok: true, source: { ref, token: source.token, mcpUrl: sourceMcpUrl } };
+}
+
+/**
+ * Runs `run` while holding one of the user's and one of the host's transfer
+ * slots, or refuses. Everything that holds a file in memory runs inside
+ * this. Check and claim have no await between them, so two calls cannot both
+ * see a free slot; the slot is freed however `run` ends.
+ */
+async function withTransferSlot(
+  userId: string,
+  run: () => Promise<CrossingResult>
+): Promise<CrossingResult> {
+  if ((userInFlight.get(userId) ?? 0) >= MAX_TRANSFERS_PER_USER) {
+    return refuse(
+      "A file transfer of yours is already in progress. Files move one at a time: wait for it to finish, then try again."
+    );
+  }
+  if (hostInFlight >= MAX_TRANSFERS_HOST) {
+    return refuse(
+      "The service is busy moving other files right now. Nothing was read or uploaded; try again in a minute."
+    );
+  }
+  hostInFlight += 1;
+  userInFlight.set(userId, (userInFlight.get(userId) ?? 0) + 1);
+  try {
+    return await run();
+  } finally {
+    hostInFlight -= 1;
+    const left = (userInFlight.get(userId) ?? 1) - 1;
+    if (left <= 0) userInFlight.delete(userId);
+    else userInFlight.set(userId, left);
+  }
+}
+
+/** A file as the source gave it, whole and in memory. */
+type SourceFile = { bytes: Buffer<ArrayBuffer>; name: string; type: string };
+
+/**
+ * THE SOURCE LEG, PART TWO: the bytes, never more than the cap. Answers the
+ * file or a refusal in words; a source that cannot be reached, or the
+ * deadline, surfaces as the fetch's own throw for the caller to shape.
+ */
+async function fetchSourceFile(
+  source: ResolvedSource,
+  io: { fetchFn: typeof fetch; controller: AbortController }
+): Promise<{ ok: true; file: SourceFile } | { ok: false; result: CrossingResult }> {
+  const sourceRes = await io.fetchFn(routeUrl(source.mcpUrl, SOURCE_ROUTE), {
+    method: "POST",
+    headers: {
+      "X-User-Token": source.token,
+      "Content-Type": "application/json",
+    },
+    // Only the type and the fields that type declares go to the plugin.
+    // `account` was used here to choose the token, and anything else the
+    // caller put on the reference is dropped rather than passed through.
+    body: JSON.stringify({ ref: closedReference(source.ref), max_bytes: MAX_FILE_BYTES }),
+    signal: io.controller.signal,
+  });
+
+  if (sourceRes.status !== 200) {
+    const message = await routeMessage(sourceRes);
+    return {
+      ok: false,
+      result: refuse(`The file could not be read from its source, so nothing was uploaded: ${message}`),
+    };
+  }
+
+  const overCap = refuse(
+    `The file is larger than ${CAP_WORDS}, the most that can be moved in one call. Nothing was uploaded.`
+  );
+  const declared = Number(sourceRes.headers.get("content-length"));
+  if (Number.isFinite(declared) && declared > MAX_FILE_BYTES) {
+    io.controller.abort();
+    return { ok: false, result: overCap };
+  }
+  const body = await readCapped(sourceRes, MAX_FILE_BYTES);
+  if (body.over) {
+    io.controller.abort();
+    return { ok: false, result: overCap };
+  }
+
+  let fileName: string;
+  try {
+    fileName = decodeURIComponent(sourceRes.headers.get("x-file-name") ?? "");
+  } catch {
+    fileName = "";
+  }
+  if (!fileName) {
+    return {
+      ok: false,
+      result: refuse("The file's source did not give it a usable name, so nothing was uploaded."),
+    };
+  }
+  const fileType = sourceRes.headers.get("content-type") || "application/octet-stream";
+  return { ok: true, file: { bytes: body.bytes, name: fileName, type: fileType } };
+}
+
+/**
+ * THE DESTINATION LEG: hands a file to the plugin that stores it, with the
+ * tool's arguments, and answers that tool's own result.
+ */
+async function sendToDestination(
+  file: SourceFile,
+  dest: { url: string; token: string; toolName: string; encodedArgs: string },
+  io: { fetchFn: typeof fetch; controller: AbortController }
+): Promise<CrossingResult> {
+  const destRes = await io.fetchFn(routeUrl(dest.url, DESTINATION_ROUTE), {
+    method: "POST",
+    headers: {
+      "X-User-Token": dest.token,
+      "X-Tool-Name": dest.toolName,
+      "X-Tool-Args": dest.encodedArgs,
+      "X-File-Name": encodeURIComponent(file.name),
+      "X-File-Type": file.type,
+      "Content-Type": "application/octet-stream",
+    },
+    body: file.bytes,
+    signal: io.controller.signal,
+  });
+
+  if (destRes.status !== 200) {
+    const message = await routeMessage(destRes);
+    return refuse(`${dest.toolName} did not accept the file: ${message}`);
+  }
+
+  const answer = await readCapped(destRes, MAX_ROUTE_ANSWER_BYTES);
+  let parsed: unknown = null;
+  if (!answer.over) {
+    try {
+      parsed = JSON.parse(answer.bytes.toString("utf8"));
+    } catch {
+      parsed = null;
+    }
+  }
+  if (!isToolResult(parsed)) {
+    return refuse(
+      `${dest.toolName} took the file but its answer could not be read. The file may or may not have been uploaded; check the destination before trying again.`
+    );
+  }
+  return parsed;
+}
+
 /**
  * Runs a consuming tool: resolves its file reference to bytes from the source
  * plugin and hands them to the destination plugin, inside the one call.
@@ -256,10 +448,9 @@ export async function crossFile(opts: CrossFileOptions): Promise<CrossingResult>
 
   const read = readReference(opts.args, consuming.fileArg, opts.toolName);
   if (!read.ok) return refuse(read.text);
-  const ref = read.ref;
-  const refType = FILE_REFERENCE_TYPES[ref.type];
 
-  if (!opts.destinationToken) {
+  const destinationToken = opts.destinationToken;
+  if (!destinationToken) {
     return refuse(`${opts.toolName} needs a connected account before it can take a file.`);
   }
 
@@ -270,162 +461,52 @@ export async function crossFile(opts: CrossFileOptions): Promise<CrossingResult>
     );
   }
 
-  // The source side, for the session's user. No connection, no bytes.
-  const serviceUrl = `${opts.connectionsUrl}/${refType.service}`;
-  const source = await opts.resolveToken(refType.service, ref.account);
-  if (!source?.token) {
-    return refuse(
-      ref.account
-        ? `No connected account found for ${echoName(ref.account)}. The file is ${refType.describes}: connect that account at ${serviceUrl}, then try again.`
-        : `${refType.service} is not connected. The file is ${refType.describes}: connect the account that holds it at ${serviceUrl}, then try again.`
-    );
-  }
-  // Same pre-check, same module and same fail-open rule as every other call:
-  // a grant known to lack the scope is refused in words; one that cannot be
-  // read goes through.
-  const scope = checkScopeForTool({
-    toolName: refType.scopeTool,
-    service: refType.service,
-    granted: source.scopes,
-    surface: opts.surface,
-    connectionsUrl: serviceUrl,
-  });
-  if (!scope.ok) return refuse(scope.message);
+  const resolved = await resolveSource(opts, read.ref);
+  if (!resolved.ok) return resolved.result;
 
-  const sourceMcpUrl = await opts.resolvePluginUrl(refType.plugin);
-  if (!sourceMcpUrl) {
-    return refuse(`A ${ref.type} file cannot be read right now: the connector that holds it is not available.`);
-  }
-
-  // Limits. Check and claim with no await between them, so two calls cannot
-  // both see a free slot.
-  if ((userInFlight.get(opts.userId) ?? 0) >= MAX_TRANSFERS_PER_USER) {
-    return refuse(
-      "A file transfer of yours is already in progress. Files move one at a time: wait for it to finish, then try again."
-    );
-  }
-  if (hostInFlight >= MAX_TRANSFERS_HOST) {
-    return refuse(
-      "The service is busy moving other files right now. Nothing was read or uploaded; try again in a minute."
-    );
-  }
-  hostInFlight += 1;
-  userInFlight.set(opts.userId, (userInFlight.get(opts.userId) ?? 0) + 1);
-
-  const fetchFn = opts.fetchFn ?? fetch;
-  const timeoutMs = opts.timeoutMs ?? TRANSFER_TIMEOUT_MS;
-  const controller = new AbortController();
-  let timedOut = false;
-  const timer = setTimeout(() => {
-    timedOut = true;
-    controller.abort();
-  }, timeoutMs);
-  /** Which leg is running. Decides what a failure can honestly say about
-   * whether the file reached the destination. */
-  let leg: "source" | "destination" = "source";
-
-  try {
-    const sourceRes = await fetchFn(routeUrl(sourceMcpUrl, SOURCE_ROUTE), {
-      method: "POST",
-      headers: {
-        "X-User-Token": source.token,
-        "Content-Type": "application/json",
-      },
-      // Only the type and the fields that type declares go to the plugin.
-      // `account` was used here to choose the token, and anything else the
-      // caller put on the reference is dropped rather than passed through.
-      body: JSON.stringify({ ref: closedReference(ref), max_bytes: MAX_FILE_BYTES }),
-      signal: controller.signal,
-    });
-
-    if (sourceRes.status !== 200) {
-      const message = await routeMessage(sourceRes);
-      return refuse(`The file could not be read from its source, so nothing was uploaded: ${message}`);
-    }
-
-    const overCap = refuse(
-      `The file is larger than ${CAP_WORDS}, the most that can be moved in one call. Nothing was uploaded.`
-    );
-    const declared = Number(sourceRes.headers.get("content-length"));
-    if (Number.isFinite(declared) && declared > MAX_FILE_BYTES) {
+  return withTransferSlot(opts.userId, async () => {
+    const fetchFn = opts.fetchFn ?? fetch;
+    const timeoutMs = opts.timeoutMs ?? TRANSFER_TIMEOUT_MS;
+    const controller = new AbortController();
+    let timedOut = false;
+    const timer = setTimeout(() => {
+      timedOut = true;
       controller.abort();
-      return overCap;
-    }
-    const body = await readCapped(sourceRes, MAX_FILE_BYTES);
-    if (body.over) {
-      controller.abort();
-      return overCap;
-    }
+    }, timeoutMs);
+    /** Which leg is running. Decides what a failure can honestly say about
+     * whether the file reached the destination. */
+    let leg: "source" | "destination" = "source";
 
-    let fileName: string;
     try {
-      fileName = decodeURIComponent(sourceRes.headers.get("x-file-name") ?? "");
+      const fetched = await fetchSourceFile(resolved.source, { fetchFn, controller });
+      if (!fetched.ok) return fetched.result;
+
+      leg = "destination";
+      return await sendToDestination(
+        fetched.file,
+        { url: opts.destinationUrl, token: destinationToken, toolName: opts.toolName, encodedArgs },
+        { fetchFn, controller }
+      );
     } catch {
-      fileName = "";
-    }
-    if (!fileName) {
-      return refuse("The file's source did not give it a usable name, so nothing was uploaded.");
-    }
-    const fileType = sourceRes.headers.get("content-type") || "application/octet-stream";
-
-    leg = "destination";
-    const destRes = await fetchFn(routeUrl(opts.destinationUrl, DESTINATION_ROUTE), {
-      method: "POST",
-      headers: {
-        "X-User-Token": opts.destinationToken,
-        "X-Tool-Name": opts.toolName,
-        "X-Tool-Args": encodedArgs,
-        "X-File-Name": encodeURIComponent(fileName),
-        "X-File-Type": fileType,
-        "Content-Type": "application/octet-stream",
-      },
-      body: body.bytes,
-      signal: controller.signal,
-    });
-
-    if (destRes.status !== 200) {
-      const message = await routeMessage(destRes);
-      return refuse(`${opts.toolName} did not accept the file: ${message}`);
-    }
-
-    const answer = await readCapped(destRes, MAX_ROUTE_ANSWER_BYTES);
-    let parsed: unknown = null;
-    if (!answer.over) {
-      try {
-        parsed = JSON.parse(answer.bytes.toString("utf8"));
-      } catch {
-        parsed = null;
+      // The underlying error is deliberately not echoed: it is a transport
+      // detail, and nothing from a request that carried a token is repeated.
+      const seconds = Math.round(timeoutMs / 1000);
+      if (timedOut) {
+        return refuse(
+          leg === "source"
+            ? `The transfer was abandoned after ${seconds} seconds, while the file was still being read from its source. Nothing was uploaded.`
+            : `The transfer was abandoned after ${seconds} seconds, while the file was being handed to ${opts.toolName}. The file may or may not have been uploaded; check the destination before trying again.`
+        );
       }
-    }
-    if (!isToolResult(parsed)) {
-      return refuse(
-        `${opts.toolName} took the file but its answer could not be read. The file may or may not have been uploaded; check the destination before trying again.`
-      );
-    }
-    return parsed;
-  } catch {
-    // The underlying error is deliberately not echoed: it is a transport
-    // detail, and nothing from a request that carried a token is repeated.
-    const seconds = Math.round(timeoutMs / 1000);
-    if (timedOut) {
-      return refuse(
+      throw new Error(
         leg === "source"
-          ? `The transfer was abandoned after ${seconds} seconds, while the file was still being read from its source. Nothing was uploaded.`
-          : `The transfer was abandoned after ${seconds} seconds, while the file was being handed to ${opts.toolName}. The file may or may not have been uploaded; check the destination before trying again.`
+          ? "the file's source could not be reached. Nothing was uploaded."
+          : `the connection to ${opts.toolName} failed while the file was being handed over. The file may or may not have been uploaded; check the destination before trying again.`
       );
+    } finally {
+      clearTimeout(timer);
     }
-    throw new Error(
-      leg === "source"
-        ? "the file's source could not be reached. Nothing was uploaded."
-        : `the connection to ${opts.toolName} failed while the file was being handed over. The file may or may not have been uploaded; check the destination before trying again.`
-    );
-  } finally {
-    clearTimeout(timer);
-    hostInFlight -= 1;
-    const left = (userInFlight.get(opts.userId) ?? 1) - 1;
-    if (left <= 0) userInFlight.delete(opts.userId);
-    else userInFlight.set(opts.userId, left);
-  }
+  });
 }
 
 /** The reference as the source plugin gets it: its type and the string
