@@ -314,6 +314,29 @@ reporting. The edge in front of the gateway sees the
 path too, and that is outside this code; single use and the short life
 are what bound a token read from a log.
 
+Other code in the process prints paths too, and we do not own all of it:
+the framework's error handler, its image optimizer. Guarding each of
+those at its door did not hold, because each door has more spellings
+than a filter can list. So the rule is kept where they all end up.
+Whatever the process writes to its standard output or error has anything
+shaped exactly like a link token (22 URL-safe characters, a dot, 43 more)
+replaced with a fixed word before it is written. A shape breaks when a
+letter touches it or its dot is encoded, so both halves of every live
+link are also replaced by value, for as long as the link's record is
+held. The rule is on the output streams themselves and is installed by
+the server's first import. It does not look at requests, so it does not
+depend on how a request was spelled. An uncaught error is printed through
+the same streams when nothing else handles it.
+
+Not caught: a token its holder rewrote on purpose before sending it
+somewhere that prints it, a write straight to the descriptor, a token
+split across two writes, and a child process's own output.
+
+What that does not cover, and does not need to: a response body. A route
+that echoes a request back, such as a redirect or an error page, shows
+the token to whoever sent the request, who already holds the link. That
+is not a leak.
+
 The route has no rate limit of its own. A limit per client address would
 guard against guessing, and a 128-bit nonce does not need that guard; it
 would also rest on trusting a client-address header.
