@@ -4,6 +4,7 @@ import { apiKeys, oauthAccessTokens } from "@datatorag-mcp/db";
 import { generateApiKey, getKeyPrefix, hashApiKey } from "@datatorag-mcp/auth";
 import { isTokenLive } from "@/lib/token-liveness";
 import { classifyAuthFailure, type AuthFailureReason } from "./mcp-analytics";
+import { dropLinksForUser } from "./file-download";
 
 /**
  * The bearer on /mcp is one of two credentials (SCRUM-245).
@@ -193,5 +194,8 @@ export async function revokeApiKey(db: Database, userId: string, keyId: string):
     .set({ revokedAt: new Date() })
     .where(and(eq(apiKeys.id, keyId), eq(apiKeys.userId, userId), isNull(apiKeys.revokedAt)))
     .returning({ id: apiKeys.id });
+  // A download link is not tied to the key that made it, so a revoked key
+  // takes the user's open links with it (SCRUM-420).
+  if (rows.length === 1) dropLinksForUser(userId);
   return rows.length === 1;
 }

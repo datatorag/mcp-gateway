@@ -40,6 +40,10 @@ export const EVENTS = {
    * client session by prompt or by tool. */
   SKILL_SEARCHED: "skill_searched",
   SKILL_APPLIED: "skill_applied",
+  /** A download link was used and a file was sent (SCRUM-420). Carries the
+   * byte count and whether the send finished; never the name, the hash or
+   * the link. The call that made the link is an ordinary `tool_call`. */
+  FILE_DOWNLOADED: "file_downloaded",
   /** Scheduled skill runs (SCRUM-225). */
   SKILL_SCHEDULED: "skill_scheduled",
   SKILL_SCHEDULE_PAUSED: "skill_schedule_paused",

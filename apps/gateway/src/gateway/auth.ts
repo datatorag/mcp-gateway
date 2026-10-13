@@ -31,6 +31,7 @@ import {
 import { googleConnectRefusedUrl, renderConnectInterstitial } from "./connect-interstitial";
 import { GWS_SCOPE_LIST, grantedServiceCount, scopeDelta, serviceGrantStates } from "./scope-grant";
 import { getEnv } from "@datatorag-mcp/config";
+import { dropLinksForUser } from "./file-download";
 
 /** Where the requested route (`?next=` on the login URL) survives the trip
  * through Google's consent screen, which loses the query string — the same
@@ -369,10 +370,13 @@ export function createAuthRouter(
   router.post("/auth/logout", async (req, res) => {
     const sessionToken = req.cookies?.dtrmcp_session;
     if (sessionToken) {
-      await db
+      const revoked = await db
         .update(oauthAccessTokens)
         .set({ revokedAt: new Date() })
-        .where(eq(oauthAccessTokens.token, sessionToken));
+        .where(eq(oauthAccessTokens.token, sessionToken))
+        .returning({ userId: oauthAccessTokens.userId });
+      // Signing out takes the user's open download links with it (SCRUM-420).
+      for (const row of revoked) if (row.userId) dropLinksForUser(row.userId);
     }
     res.clearCookie("dtrmcp_session", { path: "/" });
     // The account a refused connect was tried with belongs to the person

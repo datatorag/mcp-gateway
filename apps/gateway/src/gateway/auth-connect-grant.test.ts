@@ -66,7 +66,13 @@ const dbMock = {
   update: () => ({
     set: (values: Record<string, unknown>) => {
       updates.push(values);
-      return { where: () => (updateFails ? Promise.reject(new Error("db down")) : Promise.resolve()) };
+      return {
+        where: () => {
+          const done = updateFails ? Promise.reject(new Error("db down")) : Promise.resolve();
+          // Sign-out reads back whose session it revoked (SCRUM-420).
+          return Object.assign(done, { returning: () => done.then(() => [{ userId: "user-1" }]) });
+        },
+      };
     },
   }),
 } as unknown as Database;

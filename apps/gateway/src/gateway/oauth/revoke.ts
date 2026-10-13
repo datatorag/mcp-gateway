@@ -1,3 +1,4 @@
+import { dropLinksForUser } from "../file-download";
 import { Router } from "express";
 import { and, eq, isNull } from "drizzle-orm";
 import type { Database } from "@datatorag-mcp/db";
@@ -44,6 +45,9 @@ export function createRevokeRouter(
 
       if (!row || row.clientId !== client_id) return;
       revokedUserId = row.userId;
+      // A revoked grant takes the user's open download links with it
+      // (SCRUM-420): a link is not tied to the credential that made it.
+      dropLinksForUser(row.userId);
 
       await tx
         .update(oauthRefreshTokens)

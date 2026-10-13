@@ -1,3 +1,6 @@
+// FIRST, for its effect: nothing shaped like a download link's token is
+// written to this process's output (SCRUM-420). See log-redaction.ts.
+import "./src/gateway/log-redaction-install";
 import next from "next";
 import express from "express";
 import cookieParser from "cookie-parser";
@@ -25,7 +28,7 @@ import { oauthRateLimit } from "./src/gateway/oauth/rate-limit";
 import { createAuthRouter } from "./src/gateway/auth";
 import { getPluginManager } from "./src/lib/plugin-manager";
 import { resolveBearer, touchApiKey } from "./src/gateway/bearer-auth";
-import { shutdownPosthog } from "./src/gateway/track";
+import { shutdownPosthog, trackFileDownload } from "./src/gateway/track";
 import {
   extractClientInfo,
   trackMcpRequestReceived,
@@ -42,6 +45,7 @@ import { healthBody } from "./src/gateway/health";
 import { posthogState } from "./src/lib/posthog-server";
 import { runNoActivationFollowup } from "./src/gateway/lifecycle";
 import { securityHeaders } from "./src/gateway/security-headers";
+import { createFileDownloadRouter, quietDecodeErrors } from "./src/gateway/file-download-route";
 
 const dev = process.env.NODE_ENV !== "production";
 
@@ -368,10 +372,23 @@ async function main() {
     res.status(400).json({ error: "Invalid or missing session" });
   });
 
+  // SCRUM-420: download links. Before the catch-all, so the app never sees
+  // a path with a token in it.
+  app.use(
+    createFileDownloadRouter({
+      db,
+      baseUrl,
+      onSent: (event) => void trackFileDownload(db, event),
+    })
+  );
+
   // Next.js handles all other routes (pages, API routes, static assets)
   app.all("/{*path}", (req, res) => {
     return handle(req, res);
   });
+
+  // Last: a path that cannot be decoded is not printed (SCRUM-420).
+  app.use(quietDecodeErrors);
 
   const port = env.GATEWAY_PORT;
   app.listen(port, () => {

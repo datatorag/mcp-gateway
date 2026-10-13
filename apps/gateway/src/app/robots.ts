@@ -12,7 +12,7 @@ export default function robots(): MetadataRoute.Robots {
            indefinitely, which is exactly what happened to /auth/login and its
            ?next= variants. The subtree is marked noindex in `auth/layout.tsx`
            instead, which requires letting Google fetch it. */
-        disallow: ["/api/", "/dashboard"],
+        disallow: ["/api/", "/dashboard", "/files/"],
       },
     ],
     sitemap: "https://datatorag.com/sitemap.xml",

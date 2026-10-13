@@ -239,7 +239,17 @@ describe("a skill run sees its own tools (SCRUM-238)", () => {
     expect(names).toContain("gws-mcp__gmail_search");
     expect(names).toContain("gws-mcp__gmail_send");
     expect(names).not.toContain("gws-mcp__totally_new_tool");
-    for (const b of BUILT_IN_TOOLS) expect(names).toContain(b.definition.name);
+    for (const b of BUILT_IN_TOOLS.filter((t) => !t.attended)) expect(names).toContain(b.definition.name);
+    // SCRUM-420: nobody is in a skill run to click a link, so the tools
+    // that need a person are not there. Not vacuous: one such tool exists.
+    const attended = BUILT_IN_TOOLS.filter((t) => t.attended).map((t) => t.definition.name);
+    expect(attended).toContain("file_download_link");
+    for (const name of attended) expect(names).not.toContain(name);
+  });
+
+  it("offers the download link on an ordinary turn, as a write that asks first", async () => {
+    const tools = await resolve();
+    expect(Object.keys(tools)).toContain("file_download_link");
   });
 
   it("offers every tool on an ordinary turn", async () => {
@@ -267,7 +277,7 @@ describe("a skill run sees its own tools (SCRUM-238)", () => {
     const tools = (await resolveUserPluginTools({ requestContext })) as Record<string, ResolvedTool>;
     const names = Object.keys(tools);
     expect(names.filter((n) => n.includes("__"))).toEqual([]);
-    for (const b of BUILT_IN_TOOLS) expect(names).toContain(b.definition.name);
+    for (const b of BUILT_IN_TOOLS.filter((t) => !t.attended)) expect(names).toContain(b.definition.name);
   });
 });
 

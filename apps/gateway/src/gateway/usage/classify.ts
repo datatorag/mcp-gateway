@@ -22,6 +22,12 @@ export interface ClassifyInput {
    * so the built-in registry in mcp-server.ts stays the single place that
    * decides what is a built-in and this file cannot drift from it. */
   builtin?: boolean;
+  /** The one exception to "built-ins never meter" (SCRUM-420). A built-in
+   * that moves a file through the gateway's memory is the same work a
+   * plugin crossing is, and is counted as one call like it. Declared on the
+   * built-in's own registry entry; absent on every other, which therefore
+   * stay unmetered exactly as before. */
+  meteredBuiltin?: boolean;
 }
 
 export interface ClassifyResult {
@@ -47,7 +53,7 @@ export function classifyOutcome(input: ClassifyInput): ClassifyResult {
   const isNonMeteredTool = input.toolName
     ? NON_METERED_TOOLS.has(input.toolName)
     : false;
-  const meterable = !isNonMeteredTool && !input.builtin;
+  const meterable = !isNonMeteredTool && (!input.builtin || input.meteredBuiltin === true);
 
   if (input.thrown) {
     return { status: "server_error", meter: false };

@@ -51,6 +51,10 @@ import {
 } from "./scope-grant";
 import { grantLine, type ConnectedAccountLine } from "./account-grant-line";
 import { crossFile, fileCrossingFor } from "./file-crossing";
+import { createDownloadLink, DOWNLOAD_TOOL, revokeLinksCarriedIn } from "./file-download";
+import { downloadDepsFor } from "./file-download-route";
+import { sourceResolversFor } from "./file-source";
+import type { Surface } from "./scope-grant";
 
 const ACCOUNT_PARAM_SCHEMA = {
   type: "string",
@@ -184,6 +188,15 @@ export const BUILT_IN_TOOLS: {
    * presentation, the call lookup is the guard, and a guard that lives only
    * in the listing is not one. */
   audience?: "admin";
+  /** Counted as one call, like a plugin tool (SCRUM-420). Absent on every
+   * entry but the one that moves a file through the gateway's memory. The
+   * dispatch also reports a metered entry's own `isError`, so a refusal is
+   * classified the way a plugin's refusal is. */
+  metered?: true;
+  /** Needs a person in the conversation: it answers something only a
+   * person can act on. Hidden from, and refused in, a session built with
+   * `unattended` (a skill run), in both the listing and the call lookup. */
+  attended?: true;
   handler: (
     args: Record<string, unknown> | undefined,
     /** `pool` is here for the test runner (SCRUM-303), which builds a second
@@ -191,7 +204,16 @@ export const BUILT_IN_TOOLS: {
      * Passed through rather than reached for as a singleton: the server is
      * already given its pool, and a module-level one would be a second
      * lifetime to get wrong. */
-    ctx: { db: Database; userId: string; connectionsUrl: string; pool: ConnectionPool }
+    ctx: {
+      db: Database;
+      userId: string;
+      connectionsUrl: string;
+      pool: ConnectionPool;
+      /** Absolute origin of this gateway, or "" when the session was built
+       * without one. */
+      baseUrl: string;
+      surface: Surface;
+    }
   ) => Promise<BuiltinResult>;
 }[] = [
   /* THE TEST RUNNER, AS THREE TOOLS (SCRUM-303). Admin-only: they are
@@ -592,6 +614,38 @@ export const BUILT_IN_TOOLS: {
       };
     },
   },
+  /* SCRUM-420: a file reference to the user's own disk. A write, because it
+   * produces a way to take a file out of the account; metered, because it is
+   * the same crossing through memory an attachment is; attended, because a
+   * link nobody is there to click is only a way for a file to leave. */
+  {
+    approval: "write",
+    metered: true,
+    attended: true,
+    definition: {
+      name: DOWNLOAD_TOOL,
+      description:
+        "Makes a download link for a file named by a file reference, so the user can save it to their own computer. A gmail_message reference gives a whole email as its original .eml exactly as Gmail returns it; a gmail_attachment reference gives one attachment of an email, named by the part id gmail_read lists for it. The answer is a receipt: the file's name, its size in bytes and its SHA-256, and a link on this service. The link opens a page with one button that saves the file. It works once and stops working after ten minutes. The receipt also carries a one-line command that saves the file without the page, under the sender's file name, in the directory it is run in. The file's content is not returned and does not enter the conversation. The link is for the user: a call to any tool on this service that carries the link is refused and the link is cancelled. One file a call, at most 25 MB.",
+      inputSchema: {
+        type: "object" as const,
+        properties: {
+          file: {
+            type: "object",
+            description:
+              'A file reference: {"type":"gmail_message","message_id":"..."} for an email, or {"type":"gmail_attachment","message_id":"...","part_id":"..."} for one attachment. An optional "account" names the connected Google account that holds the message.',
+          },
+        },
+        required: ["file"],
+      },
+    },
+    handler: (args, ctx) =>
+      createDownloadLink({
+        userId: ctx.userId,
+        args,
+        baseUrl: ctx.baseUrl,
+        deps: downloadDepsFor(ctx.db, ctx.userId, ctx.surface, ctx.connectionsUrl),
+      }) as Promise<BuiltinResult>,
+  },
   {
     approval: "read",
     definition: {
@@ -737,6 +791,13 @@ export function createMcpServer(
      * be excluded or isolated with one filter and a single call can be
      * traced back to the result row it produced. */
     testRunId?: string;
+    /** Nobody is in the conversation (a skill run). Built-ins that declare
+     * `attended` are neither listed nor callable. */
+    unattended?: boolean;
+    /** The origin download links are made on, when it is not `baseUrl`.
+     * The agent's in-process server passes this and no `baseUrl`, so the
+     * relative links its other messages rely on stay as they were. */
+    downloadBaseUrl?: string;
   }
 ): Server {
   const connectionsUrl = `${opts?.baseUrl ?? ""}/dashboard/connections`;
@@ -744,6 +805,10 @@ export function createMcpServer(
   const clientId = opts?.clientId ?? null;
   const protocolVersion = opts?.protocolVersion;
   const testRunId = opts?.testRunId ?? null;
+  const baseUrl = opts?.downloadBaseUrl ?? opts?.baseUrl ?? "";
+  /** The built-ins this session has at all. The listing filter and the call
+   * lookup below both read this one list, so the two cannot disagree. */
+  const builtinEntries = opts?.unattended ? BUILT_IN_TOOLS.filter((t) => !t.attended) : BUILT_IN_TOOLS;
   const server = new Server(
     { name: "datatorag-mcp", version: "0.1.0" },
     // Prompts (SCRUM-224): the skill catalogue as the native "apply a
@@ -801,7 +866,7 @@ export function createMcpServer(
     // `visibleBuiltins` would otherwise wait for the tool rows.
     const [rows, builtins] = await Promise.all([
       listUserToolRows(db, userId),
-      visibleBuiltins(db, userId),
+      visibleBuiltins(db, userId, builtinEntries),
     ]);
 
     const toolList: {
@@ -851,14 +916,46 @@ export function createMcpServer(
   server.setRequestHandler(CallToolRequestSchema, async (request) => {
     const { name, arguments: rawArgs } = request.params;
 
-    const builtin = await findVisibleBuiltin(db, userId, name);
+    // SCRUM-420: the gateway does not carry its own download link. Before
+    // any tool, built-in or plugin: arguments that hold a live link of this
+    // user's are refused and the link is cancelled, so a link cannot be
+    // mailed, posted or written anywhere through us.
+    if (rawArgs && revokeLinksCarriedIn(userId, () => JSON.stringify(rawArgs))) {
+      const text =
+        "This call carries a download link made by this service, and a download link cannot be passed to another tool. The call was not run and the link has been cancelled.";
+      void trackToolCall(db, {
+        userId,
+        clientId,
+        clientName: clientName(),
+        testRunId,
+        toolName: name,
+        connectorType: null,
+        accountEmail: undefined,
+        latencyMs: 0,
+        responseSizeBytes: null,
+        errorMessage: "download link carried in arguments",
+        outcome: { thrown: false, isError: true, source: surface, toolName: name, builtin: true },
+      });
+      return { content: [{ type: "text" as const, text }], isError: true };
+    }
+
+    const builtin = await findVisibleBuiltin(db, userId, name, builtinEntries);
     if (builtin) {
+      // A metered built-in is counted like a plugin call, so it stops where
+      // a plugin call stops: at the plan's allowance, before it runs.
+      if (builtin.metered) {
+        const allowance = await checkCallAllowance(db, userId);
+        if (!allowance.allowed) {
+          return { content: [{ type: "text" as const, text: allowance.message }], isError: true };
+        }
+      }
       const startTime = Date.now();
       try {
         const result = await builtin.handler(
           rawArgs as Record<string, unknown> | undefined,
-          { db, userId, connectionsUrl, pool }
+          { db, userId, connectionsUrl, pool, baseUrl, surface }
         );
+        const refused = builtin.metered ? !!result.isError : false;
         // Same fire-and-forget shape as the plugin path below. This call
         // going missing is a real regression we have shipped before: built-ins
         // answered on the wire and were absent from analytics entirely, which
@@ -875,8 +972,15 @@ export function createMcpServer(
           accountEmail: undefined,
           latencyMs: Date.now() - startTime,
           responseSizeBytes: JSON.stringify(result).length,
-          errorMessage: null,
-          outcome: { thrown: false, isError: false, source: surface, toolName: name, builtin: true },
+          errorMessage: refused ? (result.content[0]?.text ?? null) : null,
+          outcome: {
+            thrown: false,
+            isError: refused,
+            source: surface,
+            toolName: name,
+            builtin: true,
+            meteredBuiltin: builtin.metered,
+          },
         });
         return result;
       } catch (error) {
@@ -1150,20 +1254,7 @@ export function createMcpServer(
           args,
           destinationUrl: serverUrl,
           destinationToken: userToken,
-          resolveToken: (service, account) =>
-            resolveServiceToken(db, userId, service, account),
-          resolvePluginUrl: async (slug) => {
-            const [row] = await db
-              .select({
-                slug: mcpServers.slug,
-                containerPort: mcpServers.containerPort,
-                githubRepoUrl: mcpServers.githubRepoUrl,
-              })
-              .from(mcpServers)
-              .where(eq(mcpServers.slug, slug))
-              .limit(1);
-            return row ? buildPluginServerUrl(row) : null;
-          },
+          ...sourceResolversFor(db, userId),
           surface,
           connectionsUrl,
         });
