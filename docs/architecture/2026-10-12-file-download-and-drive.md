@@ -1,6 +1,7 @@
 # SCRUM-420: a file reference to the user's own disk, and to Drive
 
-Status: spec for review. Nothing here is built.
+Status: reviewed, and its open decisions ruled on 2026-10-13 (see
+"Decisions" at the end). Nothing here is built.
 
 ## Problem
 
@@ -135,7 +136,8 @@ receipt:
     "url": "https://<gateway host>/files/d/<token>",
     "expires_at": "2026-10-12T18:42:00Z",
     "uses": 1,
-    "markdown": "[Download Quarterly report.eml](https://<gateway host>/files/d/<token>)"
+    "markdown": "[Download Quarterly report.eml](https://<gateway host>/files/d/<token>)",
+    "command": "curl -f -X POST -OJ https://<gateway host>/files/d/<token>"
   },
   "note": "The link saves the file once and stops working after ten minutes. The file was not placed in this conversation."
 }
@@ -144,8 +146,20 @@ receipt:
 `sent` here means "what the link will send", and the click enforces it
 (below). `markdown` is a ready link so that every client shows something
 clickable: Claude Desktop and claude.ai render a markdown link in the
-reply, and a terminal client shows the bare `url`, which it can also
-`POST` to and save the answer. In the `markdown` label the characters `[`, `]`, `(` and `)` of the
+reply. `command` is one line for a client that can run a command or has a
+fetch tool: it makes the same `POST` the page's button makes and saves the
+file under the name the response gives, with no page in between. The
+token is letters, digits, `_`, `-` and one `.`, so the line needs no
+quoting. `-f` is there so a refusal saves nothing; without it the refusal
+sentence would be saved as a file.
+
+The command writes a file whose name the sender of the email chose into
+whatever directory it is run in. For a person that is a download. For a
+coding agent run inside a project it is a file planted by a stranger, so
+the route's name check also strips leading dots (no `.npmrc`, no
+`.env`), and the tool's description says the command saves a file under
+the sender's name in the current directory. A name such as `Makefile`
+still passes; the spec does not claim otherwise. In the `markdown` label the characters `[`, `]`, `(` and `)` of the
 name are replaced by spaces, so a file name cannot close the label and
 open a second link.
 
@@ -176,13 +190,14 @@ was minted with. The spec does not claim the tag does more than that.
 **Opening the link does not spend it.** A `GET` answers a small page on
 our host with the file's name, its size and one button, "Save file". The
 button is a form that `POST`s to the same URL, and only the `POST` sends
-the file. This is the spec's recommendation and a decision for review
-(below), because it costs the user one more click. The reason is that
+the file. It costs the user one more click. The reason is that
 many things fetch a URL with a plain `GET` and say nothing about what
 they are: a mail scanner, a chat preview, a browser's link check. If a
 `GET` spent the link, any of them would take the file and leave the user
 with "already used", and the user could not tell a scanner from a thief.
-A terminal client makes the `POST` itself.
+The button and a `POST` made by hand are the same request. A client that
+can make one saves the file with no page; the receipt's `command` is that
+request.
 
 A link is in one of three states: `open`, `sending`, `spent`.
 
@@ -260,7 +275,7 @@ Every other answer is `text/plain; charset=utf-8` with the same
 |---|---|---|---|
 | Second click | 410 | `This download link has already been used. A link works once. Ask for a new one in your conversation.` | spent |
 | Click while the first is running | 409 | `This download is already in progress.` | unchanged |
-| Expired | 410 | `This download link has expired. A link lasts ten minutes. Ask for a new one in your conversation.` | dropped |
+| Expired | 410 | `This download link has expired. A link lasts ten minutes. Ask for a new one in your conversation.` | kept ten more minutes, then dropped |
 | Unknown, altered, or minted before a restart | 404 | `This download link is not valid. Ask for a new one in your conversation.` | none |
 | The file no longer matches the receipt | 409 | `The file has changed at its source since this link was made, so nothing was sent. Ask for a new link.` | spent |
 | The source could not be read | 502 | `The file could not be read from its source. Nothing was sent. Try the link again.` | open |
@@ -336,8 +351,8 @@ The separate pool is there because a download is the one transfer whose
 speed the other end controls. With a shared pool, two accounts reading
 their own downloads slowly could keep both host slots busy and every
 attachment to Jira would be told the service is busy. The cost is memory:
-the host can now hold four files at once, 100 MB, where it held two.
-Whether the host has that room is open below.
+the host can now hold four files at once, 100 MB, where it held two. The
+host has that room.
 
 ### Exfiltration
 
@@ -359,9 +374,9 @@ one does not do:
    tools the client has from elsewhere (a web fetch, another server): the
    gateway never sees those calls.
 
-   A stronger rule, offered for review and not in the proposal: while a
-   user has a live link, every write through the gateway from that session
-   needs a confirm, whatever its arguments.
+   A stronger rule was considered and not taken: while a user has a live
+   link, every write through the gateway from that session needs a
+   confirm, whatever its arguments.
 2. **Single use and ten minutes.** A link that leaks is worth one download
    inside ten minutes, and only if it is used before the user's own click.
    If someone else used it first, the user's click says so in words, which
@@ -409,8 +424,9 @@ The refusals of `readReferencedFile` in the words used today (missing or
 malformed reference, unknown type, account not connected, scope not
 granted, connector unavailable, a transfer already in progress, service
 busy, over 25 MB, source unreachable, timed out), each ending "No link was
-made." in place of "Nothing was uploaded." One new one: this user already
-has three open links.
+made." in place of "Nothing was uploaded." Two new ones: this user already
+has three open links; and this user has made twelve links in a short time
+and has to wait for the oldest to lapse.
 
 ### Registry, classification, metering
 
@@ -419,11 +435,24 @@ on the entry (`write`). The handler context grows by what
 `readReferencedFile` needs: the surface, a token resolver bound to the
 session's user, and the plugin URL lookup.
 
-A built-in call is never metered. The Jira crossing is a plugin call and is
-metered like any other. So a download through this tool would be free
-where an attachment is not. That is a product decision, listed below; the
-spec's default is to leave it unmetered and record the call and the click
-as events.
+A download is metered as one call, the same as a Jira attachment: it is
+the same crossing through the gateway's memory. No built-in is metered
+today, so this is the one change to that rule, kept as small as it can
+be:
+
+- A built-in entry can declare `metered: true`. This tool is the only one
+  that does.
+- The built-in dispatch passes that to the tracker, and the classifier's
+  one line that excludes built-ins excludes only those that did not
+  declare it. Every other built-in stays unmetered by construction.
+- The dispatch reports a built-in's own `isError` for a metered entry, so
+  a refused call is classified the way a refused plugin call is. Today it
+  records every built-in answer as a success.
+
+What is counted is the tool call, once. The page and the `POST` are not
+tool calls and are not counted; each writes an event with its outcome and
+byte count. A link that is never used was still one call, as an
+attachment that Jira refused is.
 
 ### Docs, runner, changelog
 
@@ -535,8 +564,9 @@ In the DataToRAG agent the confirm card shows the same before the call
 runs, which means the card needs the folder read first; how the card gets
 it is a build question. The description says the folder comes from the
 user and never from the content of the file, as the Jira tool says of the
-issue. Whether to go further and refuse a folder the receiving account
-does not own, with shared drives as the exception, is open below.
+issue. The tool reports and does not refuse: a folder owned by someone
+else is a normal place to file something, and the receipt is where the
+user sees whose it is.
 
 ### Errors
 
@@ -580,20 +610,23 @@ say in its description that it is the route for an attachment over 25 MB.
 
 ## Stages
 
-**Stage 0, with stage 1.** The split of `crossFile`. No behaviour change.
+**Stage 1: the download link, in two changes.** One new thing in each.
 
-**Stage 1: the download link.** It is the thing that was asked for, and
-its one ruling (bearer, single use, no sign-in) is made. It is gateway
-only: one build, one rollout, no plugin change and no registry row. It is
-also the larger security surface, a new route that needs no sign-in, and
-its review should be sized for that rather than for its line count.
+- (a) The split of `crossFile` into a source leg and a destination leg.
+  No behaviour change; the existing tests pass unchanged.
+- (b) On top of it: the tool, the route, the page, the receipt, the
+  metering.
+
+It is the thing that was asked for. It is gateway only: no plugin change
+and no registry row. It is also the larger security surface, a new route
+that needs no sign-in, and its review should be sized for that rather
+than for its line count.
 
 **Stage 2: Drive.** A plugin route, a plugin tool, one line in the
 gateway, one registry row, and two rollouts in order. It is independent
-of stage 1 after stage 0. If the open decisions below hold the link up,
-Drive can go first with nothing to undo.
+of stage 1 (b).
 
-Rough split: stage 0 and 1 are all gateway (the split, the tool, the
+Rough split: stage 1 is all gateway (the split, the tool, the
 route, the link store, the argument check, the tests, docs). Stage 2 is
 mostly gws-mcp (route, tool, tests), with a one-line registration, the
 classification and the docs in the gateway.
@@ -616,25 +649,31 @@ the split and is not starved by two slow downloads.
 To be proven live, because fixtures cannot show it: Gmail answers the same
 bytes twice; Drive returns `sha256Checksum` on create; a 25 MB response
 reaches a browser whole through the edge; each supported client shows the
-link clickable and does not fetch it first.
+link clickable, and a client that can run the receipt's command saves the
+file with it.
 
-## Open decisions
+## Decisions
 
-1. The life of a link. Proposed: ten minutes.
-2. Whether a download is metered. Proposed: no, as every built-in.
-3. Whether the link opens a one-button page (proposed) or downloads at
-   once. This is a security decision more than a convenience one. A link
-   that downloads on `GET` is one click fewer, and anything that fetches
-   URLs on its own can take the file and spend the link.
-4. Whether downloads are served from a separate host. Attachment
-   disposition, `nosniff` and the sandbox policy are the proposed controls
-   on the main host and are enough on current browsers. A separate host is
-   the stronger control for bytes a stranger chose, and to count it must
-   be a separate registrable domain, not a subdomain that shares cookies.
-5. Whether the host has memory for two download slots beside the two
-   transfer slots.
-6. Whether a live link puts every write from that session behind a
-   confirm.
-7. Whether `drive_upload_file` refuses a folder the receiving account does
-   not own.
-8. Which stage ships first, if not the order above.
+Ruled on 2026-10-13.
+
+1. The link opens a one-button page; the button spends the link. The same
+   link answers a `POST` with the file, which is what the button does,
+   and the receipt carries a one-line command for it. A `GET` never
+   spends the link.
+2. A link lives ten minutes.
+3. A download is metered as one call.
+4. No separate download host in stage 1. Attachment disposition always,
+   never inline. If one is ever added it must be a separate registrable
+   domain, not a subdomain that shares cookies.
+5. Two download slots on the host beside the two transfer slots.
+6. A live link does not put the session's other writes behind a confirm.
+   Single use, ten minutes and the nonce refusal are the controls; the
+   page keeps anything that only fetches a link from spending it.
+7. `drive_upload_file` reports the folder's owner and sharing in the
+   receipt and does not refuse.
+8. The link first, as two changes: the split alone, then the link.
+
+Kept as specified: the tool stays off the agent surface until a skill run
+can be told from a chat; the file is read twice and none of its content
+is held between (its name, size and SHA-256 are); no registry row for a built-in; `gmail_save_attachment_to_drive`
+stays as it is.
