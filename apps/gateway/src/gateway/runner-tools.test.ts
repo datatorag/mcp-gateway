@@ -63,6 +63,8 @@ describe("the read tools refuse an empty call as a VALIDATION error", () => {
     const entry = BUILT_IN_TOOLS.find((t) => t.definition.name === name)!;
     const result = await entry.handler({}, {
       db: {} as never,
+      baseUrl: "",
+      surface: "mcp",
       userId: "u",
       connectionsUrl: "",
       pool: {} as never,
@@ -77,6 +79,8 @@ describe("the read tools refuse an empty call as a VALIDATION error", () => {
     const entry = BUILT_IN_TOOLS.find((t) => t.definition.name === name)!;
     const result = await entry.handler({ run_id: "   " }, {
       db: {} as never,
+      baseUrl: "",
+      surface: "mcp",
       userId: "u",
       connectionsUrl: "",
       pool: {} as never,

@@ -151,7 +151,8 @@ describe("built-in tools", () => {
 
   it("every built-in call emits tool_call — builtin, unmetered surface props intact", async () => {
     const client = await connectedClient();
-    for (const t of BUILT_IN_TOOLS) {
+    // The metered built-in is the one exception and has its own test below.
+    for (const t of BUILT_IN_TOOLS.filter((entry) => !entry.metered)) {
       trackToolCall.mockClear();
       const result = await client.callTool({
         name: t.definition.name,
@@ -184,6 +185,36 @@ describe("built-in tools", () => {
         })
       );
     }
+  });
+
+  it("exactly one built-in is metered, and it says so on the event with its own outcome (SCRUM-420)", async () => {
+    // The exception is declared on the entry. If a second entry ever
+    // declares it, this fails and somebody decides that on purpose.
+    expect(BUILT_IN_TOOLS.filter((t) => t.metered).map((t) => t.definition.name)).toEqual(["file_download_link"]);
+
+    const client = await connectedClient();
+    trackToolCall.mockClear();
+    // Not a file reference, so the tool refuses before it reads anything.
+    const result = await client.callTool({ name: "file_download_link", arguments: { file: "smoke" } });
+    expect(result.isError).toBe(true);
+    expect(trackToolCall).toHaveBeenCalledTimes(1);
+    expect(trackToolCall).toHaveBeenCalledWith(
+      dbMock,
+      expect.objectContaining({
+        toolName: "file_download_link",
+        errorMessage: expect.stringContaining("not an object"),
+        outcome: expect.objectContaining({ thrown: false, isError: true, builtin: true, meteredBuiltin: true }),
+      })
+    );
+  });
+
+  it("no other built-in carries the metered flag", async () => {
+    const client = await connectedClient();
+    trackToolCall.mockClear();
+    await client.callTool({ name: "echo", arguments: { message: "hi" } });
+    const outcome = trackToolCall.mock.calls[0][1].outcome;
+    expect(outcome.builtin).toBe(true);
+    expect(outcome.meteredBuiltin).toBeUndefined();
   });
 
   it("a built-in that throws still emits, as thrown and still builtin", async () => {

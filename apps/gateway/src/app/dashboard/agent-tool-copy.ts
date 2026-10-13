@@ -34,6 +34,7 @@ import {
   CheckCircleIcon,
   ClipboardListIcon,
   CodeIcon,
+  DownloadIcon,
   PlayIcon,
   Link2Icon,
   PlugIcon,
@@ -60,6 +61,11 @@ export const INTERNAL_TOOL_DISPLAY: Record<
   echo: {
     label: "Testing the connection",
     icon: PlugIcon,
+  },
+  // SCRUM-420: a file reference to the user's own disk.
+  file_download_link: {
+    label: "Making a download link",
+    icon: DownloadIcon,
   },
   // The skill catalogue over MCP (SCRUM-224), reachable from the agent too.
   // The test runner (SCRUM-303). Admin-only, so most readers never see

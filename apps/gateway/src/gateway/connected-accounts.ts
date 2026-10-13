@@ -1,3 +1,4 @@
+import { dropLinksForUser } from "./file-download";
 import { eq, and } from "drizzle-orm";
 import type { Database } from "@datatorag-mcp/db";
 import { connectedAccounts, serviceConnections } from "@datatorag-mcp/db";
@@ -329,6 +330,10 @@ export async function disconnectAccount(
 
   if (!account) return;
 
+  // A download link reads with this user's connection when it is used; one
+  // made before a disconnect does not outlive it (SCRUM-420).
+  dropLinksForUser(userId);
+
   // Tell Google before forgetting locally: deleting only our rows leaves the
   // grant live upstream, where a previously leaked refresh token would keep
   // working. Best effort — revocation failure never blocks the disconnect,
@@ -389,6 +394,7 @@ export async function disconnectService(
     .where(
       and(eq(serviceConnections.userId, userId), eq(serviceConnections.service, service))
     );
+  dropLinksForUser(userId);
   // Tell the provider before forgetting locally. Never blocks the delete: a
   // provider that is down must not leave the user unable to disconnect.
   await Promise.all(rows.map((row) => revokeUpstream(service, row)));

@@ -325,6 +325,18 @@ async function capturePlaygroundEvent(
   }
 }
 
+/** SCRUM-420: a download link was used. Not a tool call and not metered:
+ * the call that made the link was, once. Outcome and size only. */
+export async function trackFileDownload(
+  db: Database,
+  props: { userId: string; bytes: number; complete: boolean }
+): Promise<void> {
+  return capturePlaygroundEvent(db, props.userId, EVENTS.FILE_DOWNLOADED, {
+    bytes: props.bytes,
+    complete: props.complete,
+  });
+}
+
 /** SCRUM-224: the catalogue over MCP. A search, and a skill handed to a
  * client session by prompt or by tool, attributed by slug the same way a
  * dashboard run is. Intent events; activation is unchanged. */

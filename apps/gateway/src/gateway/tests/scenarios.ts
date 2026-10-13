@@ -171,6 +171,10 @@ export const SCENARIOS: Scenario[] = [
       "D13", // a forward carries both the note and the original's token
       /* And taking something out of it. */
       "D15", // an attachment saved to Drive matches in size and md5
+      /* And out to the user's own disk (SCRUM-420). Read only: no mail is
+       * sent, moved or trashed by either step. */
+      "FD1", // a download link shows a page, saves once, and the bytes match
+      "FD2", // a call carrying a live link is refused and the link cancelled
     ],
   },
   {

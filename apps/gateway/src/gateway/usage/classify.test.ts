@@ -89,6 +89,17 @@ describe("classifyOutcome", () => {
     ).toEqual({ status: "user_error", meter: false });
   });
 
+  it("meters the one built-in that declares it, as a plugin call is metered (SCRUM-420)", () => {
+    const call = { source: "mcp" as const, toolName: "file_download_link", builtin: true, meteredBuiltin: true };
+    expect(classifyOutcome({ ...call, thrown: false, isError: false })).toEqual({ status: "success", meter: true });
+    // A refusal is metered the way a plugin's refusal is.
+    expect(classifyOutcome({ ...call, thrown: false, isError: true })).toEqual({ status: "user_error", meter: true });
+    // A call we broke ourselves is never metered, built-in or not.
+    expect(classifyOutcome({ ...call, thrown: true })).toEqual({ status: "server_error", meter: false });
+    // The flag does nothing without the declaration being true.
+    expect(classifyOutcome({ ...call, meteredBuiltin: false, thrown: false })).toEqual({ status: "success", meter: false });
+  });
+
   it("does not meter oauth-refresh tool calls", () => {
     const r = classifyOutcome({
       thrown: false,

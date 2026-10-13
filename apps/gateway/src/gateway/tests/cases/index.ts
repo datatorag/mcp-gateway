@@ -78,6 +78,8 @@ import { jr7JiraKeyRefused } from "./jr7-jira-key-refused";
 import { jr8JiraAttachEmail } from "./jr8-jira-attach-email";
 import { jr9JiraAttachMissingIssue } from "./jr9-jira-attach-missing-issue";
 import { jr10JiraAttachEmailAttachment } from "./jr10-jira-attach-email-attachment";
+import { fd1DownloadLink } from "./fd1-download-link";
+import { fd2DownloadLinkNotCarried } from "./fd2-download-link-not-carried";
 import { tk1TasksLifecycle } from "./tk1-tasks-lifecycle";
 import { co1ContactsLifecycle } from "./co1-contacts-lifecycle";
 import { co2ContactsSearch } from "./co2-contacts-search";
@@ -206,6 +208,8 @@ export const CASES: TestCase[] = [
   jr8JiraAttachEmail,
   jr9JiraAttachMissingIssue,
   jr10JiraAttachEmailAttachment,
+  fd1DownloadLink,
+  fd2DownloadLinkNotCarried,
   tk1TasksLifecycle,
   co1ContactsLifecycle,
   co2ContactsSearch,

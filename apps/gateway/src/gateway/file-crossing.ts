@@ -76,6 +76,10 @@ export function referenceExample(type: string): string {
 
 export const MAX_FILE_BYTES = 25 * 1024 * 1024;
 export const MAX_TRANSFERS_HOST = 2;
+/** Downloads to a browser have their own host slots (SCRUM-420). A download
+ * is the one transfer whose speed the other end controls, so in a shared
+ * pool two slow readers could keep every attachment waiting. */
+export const MAX_DOWNLOADS_HOST = 2;
 export const MAX_TRANSFERS_PER_USER = 1;
 export const TRANSFER_TIMEOUT_MS = 60_000;
 
@@ -124,24 +128,53 @@ export function fileCrossingFor(tool: string): { fileArg: string } | null {
   return Object.hasOwn(FILE_CONSUMING_TOOLS, tool) ? FILE_CONSUMING_TOOLS[tool] : null;
 }
 
-let hostInFlight = 0;
+/** A set of host slots. The per-user count is shared by every pool: one
+ * file per user in memory at a time, whichever way it is going. */
+type SlotPool = { inFlight: number; readonly max: number };
+const POOLS = {
+  transfer: { inFlight: 0, max: MAX_TRANSFERS_HOST } as SlotPool,
+  download: { inFlight: 0, max: MAX_DOWNLOADS_HOST } as SlotPool,
+};
+export type SlotPoolName = keyof typeof POOLS;
 const userInFlight = new Map<string, number>();
 
 /** How many transfers are running, for tests and nothing else. */
 export function transfersInFlight(): { host: number; users: number } {
-  return { host: hostInFlight, users: userInFlight.size };
+  return { host: POOLS.transfer.inFlight, users: userInFlight.size };
 }
 
-function refuse(text: string): CrossingResult {
+/** The same for the download pool. */
+export function downloadsInFlight(): number {
+  return POOLS.download.inFlight;
+}
+
+/** What a refusal says did not happen. The Jira crossing uploads; a download
+ * link does not, and a refusal that says "nothing was uploaded" about a link
+ * describes the wrong thing. */
+export type RefusalWords = {
+  /** Mid-sentence, e.g. "nothing was uploaded". */
+  clause: string;
+  /** A sentence of its own, e.g. "Nothing was uploaded." */
+  sentence: string;
+  /** For the busy refusal, e.g. "Nothing was read or uploaded". */
+  busy: string;
+};
+const UPLOAD_WORDS: RefusalWords = {
+  clause: "nothing was uploaded",
+  sentence: "Nothing was uploaded.",
+  busy: "Nothing was read or uploaded",
+};
+
+export function refuse(text: string): CrossingResult {
   return { content: [{ type: "text", text }], isError: true };
 }
 
 const MB = 1024 * 1024;
 const CAP_WORDS = `${MAX_FILE_BYTES / MB} MB`;
 
-type FileReference = { type: string; account?: string; [key: string]: unknown };
+export type FileReference = { type: string; account?: string; [key: string]: unknown };
 
-function readReference(
+export function readReference(
   args: Record<string, unknown>,
   fileArg: string,
   toolName: string
@@ -293,39 +326,63 @@ async function resolveSource(
 }
 
 /**
- * Runs `run` while holding one of the user's and one of the host's transfer
- * slots, or refuses. Everything that holds a file in memory runs inside
- * this. Check and claim have no await between them, so two calls cannot both
- * see a free slot; the slot is freed however `run` ends.
+ * Claims one of the user's and one of the pool's slots, or refuses.
+ * Everything that holds a file in memory holds one. Check and claim have no
+ * await between them, so two calls cannot both see a free slot.
  */
+function claimSlot(
+  userId: string,
+  pool: SlotPool,
+  words: RefusalWords
+): { ok: true; release: () => void } | { ok: false; result: CrossingResult } {
+  if ((userInFlight.get(userId) ?? 0) >= MAX_TRANSFERS_PER_USER) {
+    return {
+      ok: false,
+      result: refuse(
+        "A file transfer of yours is already in progress. Files move one at a time: wait for it to finish, then try again."
+      ),
+    };
+  }
+  if (pool.inFlight >= pool.max) {
+    return {
+      ok: false,
+      result: refuse(
+        `The service is busy moving other files right now. ${words.busy}; try again in a minute.`
+      ),
+    };
+  }
+  pool.inFlight += 1;
+  userInFlight.set(userId, (userInFlight.get(userId) ?? 0) + 1);
+  let released = false;
+  return {
+    ok: true,
+    release: () => {
+      if (released) return;
+      released = true;
+      pool.inFlight -= 1;
+      const left = (userInFlight.get(userId) ?? 1) - 1;
+      if (left <= 0) userInFlight.delete(userId);
+      else userInFlight.set(userId, left);
+    },
+  };
+}
+
+/** Runs `run` inside a transfer slot; the slot is freed however it ends. */
 async function withTransferSlot(
   userId: string,
   run: () => Promise<CrossingResult>
 ): Promise<CrossingResult> {
-  if ((userInFlight.get(userId) ?? 0) >= MAX_TRANSFERS_PER_USER) {
-    return refuse(
-      "A file transfer of yours is already in progress. Files move one at a time: wait for it to finish, then try again."
-    );
-  }
-  if (hostInFlight >= MAX_TRANSFERS_HOST) {
-    return refuse(
-      "The service is busy moving other files right now. Nothing was read or uploaded; try again in a minute."
-    );
-  }
-  hostInFlight += 1;
-  userInFlight.set(userId, (userInFlight.get(userId) ?? 0) + 1);
+  const slot = claimSlot(userId, POOLS.transfer, UPLOAD_WORDS);
+  if (!slot.ok) return slot.result;
   try {
     return await run();
   } finally {
-    hostInFlight -= 1;
-    const left = (userInFlight.get(userId) ?? 1) - 1;
-    if (left <= 0) userInFlight.delete(userId);
-    else userInFlight.set(userId, left);
+    slot.release();
   }
 }
 
 /** A file as the source gave it, whole and in memory. */
-type SourceFile = { bytes: Buffer<ArrayBuffer>; name: string; type: string };
+export type SourceFile = { bytes: Buffer<ArrayBuffer>; name: string; type: string };
 
 /**
  * THE SOURCE LEG, PART TWO: the bytes, never more than the cap. Answers the
@@ -334,7 +391,8 @@ type SourceFile = { bytes: Buffer<ArrayBuffer>; name: string; type: string };
  */
 async function fetchSourceFile(
   source: ResolvedSource,
-  io: { fetchFn: typeof fetch; controller: AbortController }
+  io: { fetchFn: typeof fetch; controller: AbortController },
+  words: RefusalWords = UPLOAD_WORDS
 ): Promise<{ ok: true; file: SourceFile } | { ok: false; result: CrossingResult }> {
   const sourceRes = await io.fetchFn(routeUrl(source.mcpUrl, SOURCE_ROUTE), {
     method: "POST",
@@ -353,12 +411,12 @@ async function fetchSourceFile(
     const message = await routeMessage(sourceRes);
     return {
       ok: false,
-      result: refuse(`The file could not be read from its source, so nothing was uploaded: ${message}`),
+      result: refuse(`The file could not be read from its source, so ${words.clause}: ${message}`),
     };
   }
 
   const overCap = refuse(
-    `The file is larger than ${CAP_WORDS}, the most that can be moved in one call. Nothing was uploaded.`
+    `The file is larger than ${CAP_WORDS}, the most that can be moved in one call. ${words.sentence}`
   );
   const declared = Number(sourceRes.headers.get("content-length"));
   if (Number.isFinite(declared) && declared > MAX_FILE_BYTES) {
@@ -380,11 +438,80 @@ async function fetchSourceFile(
   if (!fileName) {
     return {
       ok: false,
-      result: refuse("The file's source did not give it a usable name, so nothing was uploaded."),
+      result: refuse(`The file's source did not give it a usable name, so ${words.clause}.`),
     };
   }
   const fileType = sourceRes.headers.get("content-type") || "application/octet-stream";
   return { ok: true, file: { bytes: body.bytes, name: fileName, type: fileType } };
+}
+
+export type ReferencedFileOptions = Pick<
+  CrossFileOptions,
+  "userId" | "resolveToken" | "resolvePluginUrl" | "surface" | "connectionsUrl" | "fetchFn" | "timeoutMs"
+> & {
+  /** A reference `readReference` accepted. */
+  ref: FileReference;
+  pool: SlotPoolName;
+  words: RefusalWords;
+};
+
+/** Why a referenced file was not handed over. `busy` read nothing; `source`
+ * tried and did not get the file. */
+export type ReferencedFileRefusal = { ok: false; reason: "busy" | "source"; result: CrossingResult };
+
+/**
+ * THE SOURCE LEG, WHOLE, for a consumer that is not a plugin (SCRUM-420).
+ *
+ * Reads the referenced file for the session's user and runs `use` on it
+ * while the slot is still held, so the file is in memory only inside a
+ * slot. The deadline covers the read; `use` sets its own.
+ *
+ * This is the only door to the read outside this module: the slot and the
+ * deadline cannot be left out by a caller, because the caller never holds
+ * the pieces. It never throws for a source it could not reach; that is a
+ * refusal in words here, since there is no plugin call for a throw to mean
+ * something about.
+ */
+export async function withReferencedFile<T>(
+  opts: ReferencedFileOptions,
+  use: (file: SourceFile) => Promise<T>
+): Promise<{ ok: true; value: T } | ReferencedFileRefusal> {
+  const resolved = await resolveSource(opts, opts.ref);
+  if (!resolved.ok) return { ok: false, reason: "source", result: resolved.result };
+
+  const slot = claimSlot(opts.userId, POOLS[opts.pool], opts.words);
+  if (!slot.ok) return { ok: false, reason: "busy", result: slot.result };
+  try {
+    const timeoutMs = opts.timeoutMs ?? TRANSFER_TIMEOUT_MS;
+    const controller = new AbortController();
+    let timedOut = false;
+    const timer = setTimeout(() => {
+      timedOut = true;
+      controller.abort();
+    }, timeoutMs);
+    let fetched: Awaited<ReturnType<typeof fetchSourceFile>>;
+    try {
+      fetched = await fetchSourceFile(resolved.source, { fetchFn: opts.fetchFn ?? fetch, controller }, opts.words);
+    } catch {
+      // Not echoed, as in crossFile: a transport detail of a request that
+      // carried a token.
+      return {
+        ok: false,
+        reason: "source",
+        result: refuse(
+          timedOut
+            ? `The read was abandoned after ${Math.round(timeoutMs / 1000)} seconds, while the file was still being read from its source. ${opts.words.sentence}`
+            : `The file's source could not be reached. ${opts.words.sentence}`
+        ),
+      };
+    } finally {
+      clearTimeout(timer);
+    }
+    if (!fetched.ok) return { ok: false, reason: "source", result: fetched.result };
+    return { ok: true, value: await use(fetched.file) };
+  } finally {
+    slot.release();
+  }
 }
 
 /**

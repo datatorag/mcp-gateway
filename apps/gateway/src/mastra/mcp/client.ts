@@ -11,6 +11,7 @@ import { classifyWrite } from "@/gateway/playground/tools";
 import { capToolOutput } from "@/gateway/playground/cap";
 import { EPHEMERAL_CACHE_OPTIONS } from "@/mastra/agents/datatorag";
 import { getDb } from "@/lib/db";
+import { getEnv } from "@datatorag-mcp/config";
 import { buildIntrospectionTools } from "@/mastra/tools/introspection";
 import { skillRunApproval } from "./skill-run-gate";
 
@@ -220,9 +221,17 @@ export async function resolveUserPluginTools({
   if (typeof userId !== "string" || userId.length === 0) return {};
 
   const db = getDb();
+  const skillSlug = requestContext.get(SKILL_RUN_CONTEXT_KEY);
+  const skillRun = typeof skillSlug === "string";
   const server = createMcpServer(userId, db, agentPool, {
     surface: "agent",
     clientId: WEB_OAUTH_CLIENT_ID,
+    // The agent's server is built in process and was given no origin; a
+    // download link (SCRUM-420) has to be an absolute URL on this gateway.
+    downloadBaseUrl: getEnv().GATEWAY_BASE_URL,
+    // A skill run has nobody in the conversation: the tools that need a
+    // person are not there for it.
+    unattended: skillRun,
   });
   const client = new Client(
     { name: AGENT_CLIENT_NAME, version: "1.0.0" },
@@ -235,8 +244,6 @@ export async function resolveUserPluginTools({
   ]);
 
   const { tools } = await client.listTools();
-  const skillSlug = requestContext.get(SKILL_RUN_CONTEXT_KEY);
-  const skillRun = typeof skillSlug === "string";
   // SCRUM-238: a skill run sees the tools its skill names plus the gateway's
   // built-ins, nothing else. The built-ins are the fixed set the MCP server
   // registers (no namespace in the name), never something a skill can widen:
