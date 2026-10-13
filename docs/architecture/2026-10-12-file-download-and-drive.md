@@ -328,9 +328,13 @@ the server's first import. It does not look at requests, so it does not
 depend on how a request was spelled. An uncaught error is printed through
 the same streams when nothing else handles it.
 
-Not caught: a token its holder rewrote on purpose before sending it
-somewhere that prints it, a write straight to the descriptor, a token
-split across two writes, and a child process's own output.
+Three things it does not catch, accepted as they are: a write straight to
+the descriptor, a token split across two writes, and a child process's
+own output.
+
+Out of scope: a holder who rewrites their own token (reversed, encoded
+some other way) before sending it somewhere that prints it. They already
+hold the link.
 
 What that does not cover, and does not need to: a response body. A route
 that echoes a request back, such as a redirect or an error page, shows
