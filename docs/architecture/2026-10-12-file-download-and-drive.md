@@ -211,10 +211,9 @@ A link is in one of three states: `open`, `sending`, `spent`.
   the record. Only if they are equal does it send a byte.
 - If the read fails before any byte is sent (the source refused, the
   service is busy, the read timed out), the record goes back to `open`.
-  The user can try again until the expiry. A failed read from the source
-  counts as a try and a link takes at most three, so a link cannot be
-  used to make the gateway read the same large file over and over. A
-  "busy" answer reads nothing and does not count.
+  The user can try again until the expiry. Failed reads are not counted:
+  the one slot per user and the ten minute life already bound how often a
+  link can make the gateway read a file.
 - Once the status line of a 200 is written the record is `spent`, whether
   or not the browser finishes the download. A download that breaks half
   way needs a new link.
@@ -230,9 +229,11 @@ A link is in one of three states: `open`, `sending`, `spent`.
 
 Ten minutes is the proposed life. It has to cover a person reading the
 reply and clicking; it does not have to cover a person coming back after
-lunch. At most three open links per user, and at most twelve records of
+lunch. At most ten open links per user, and at most forty records of
 any state held for one user, so minting and spending in a loop cannot
-fill the store; a call that would pass either is refused in words and
+fill the store. The numbers are set by the ordinary case, which is one
+email with three attachments and its original, four links at once, several
+times in ten minutes; a call that would pass either is refused in words and
 mints nothing. A record is a few hundred bytes, so
 the host's own ceiling is set high (10,000) and is there only to bound
 memory. A low host ceiling would let a handful of accounts lock the
@@ -282,7 +283,6 @@ Every other answer is `text/plain; charset=utf-8` with the same
 | Busy (a slot is taken) | 503, `Retry-After: 30` | `The service is busy moving other files. Nothing was sent. Try the link again in a minute.` | open |
 | `GET` on a live link | 200 | the page with the name, the size and the "Save file" button | unchanged |
 | `GET` on a dead link | as the rows above | the same sentence, and no button | unchanged |
-| Three failed tries | 410 | `This download link has stopped working after three failed tries. Ask for a new one in your conversation.` | spent |
 | Any method but `GET` and `POST` | 405 | nothing | unchanged |
 
 The page is static HTML with no script, sent with
@@ -309,14 +309,14 @@ previewer that copies titles copies nothing about the file.
 The route writes one log line per request: the outcome, the byte count,
 and never the path, the token, the name or the user's address. The token
 is in the URL path, so the same has to hold for everything else that sees
-a request: any request logging in front of the route, error reporting,
-and the rate limiter's keys. The edge in front of the gateway sees the
+a request: any request logging in front of the route and error
+reporting. The edge in front of the gateway sees the
 path too, and that is outside this code; single use and the short life
-are what bound a token read from a log. The route is rate limited per
-client address, taken from the edge's client-address header and not from
-the connection, or every request would share one bucket. That header can
-be trusted only while the origin accepts connections from the edge alone;
-the limit depends on that staying true.
+are what bound a token read from a log.
+
+The route has no rate limit of its own. A limit per client address would
+guard against guessing, and a 128-bit nonce does not need that guard; it
+would also rest on trusting a client-address header.
 
 ### Where the file is
 
@@ -425,7 +425,7 @@ malformed reference, unknown type, account not connected, scope not
 granted, connector unavailable, a transfer already in progress, service
 busy, over 25 MB, source unreachable, timed out), each ending "No link was
 made." in place of "Nothing was uploaded." Two new ones: this user already
-has three open links; and this user has made twelve links in a short time
+has ten open links; and this user has made forty links in a short time
 and has to wait for the oldest to lapse.
 
 ### Registry, classification, metering
@@ -638,7 +638,7 @@ Proven: nothing. This is a spec.
 To be proven by test when built, each with a control that fails when the
 guard is removed: a second click is refused; two clicks at once produce
 one file; a changed file sends nothing; a `GET` does not spend the link;
-a fourth try after three failures is refused; a link is dead after the
+a link is dead after the
 user disconnects the account; a nonce in a tool argument, plain, URL
 encoded or base64, is refused and the link revoked; no response carrying
 file bytes is ever `inline`; no log line from the route or from any
