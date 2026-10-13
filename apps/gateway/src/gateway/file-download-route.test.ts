@@ -19,7 +19,7 @@ import {
   quietDecodeErrors,
   sendBytes,
 } from "./file-download-route";
-import { request as httpRequest } from "node:http";
+import { rawGet as rawGetAt } from "../test-utils/raw-get";
 import { securityHeaders } from "./security-headers";
 
 const FILE = Buffer.from("From: a@example.com\r\nSubject: fixture\r\n\r\nbody\r\n");
@@ -74,20 +74,7 @@ beforeEach(() => {
   logLines.length = 0;
 });
 
-/** A GET whose path goes on the wire exactly as written. */
-function rawGet(path: string): Promise<{ status: number; body: string }> {
-  return new Promise((resolve, reject) => {
-    const { hostname, port } = new URL(base);
-    const req = httpRequest({ hostname, port, path, method: "GET" }, (res) => {
-      let body = "";
-      res.setEncoding("utf8");
-      res.on("data", (chunk) => (body += chunk));
-      res.on("end", () => resolve({ status: res.statusCode ?? 0, body }));
-    });
-    req.on("error", reject);
-    req.end();
-  });
-}
+const rawGet = (path: string) => rawGetAt(base, path);
 
 async function mint(ref: Record<string, unknown> = { type: "gmail_message", message_id: "m1" }): Promise<string> {
   const result = await createDownloadLink({ userId: "user-1", args: { file: ref }, baseUrl: "https://gw.example.test", deps });

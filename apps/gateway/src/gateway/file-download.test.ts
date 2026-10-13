@@ -97,8 +97,12 @@ describe("the tool call", () => {
 
   it("carries nothing in the URL but the token: no message id, no name, no user", async () => {
     const w = world();
-    const url = String(receiptOf(await w.mint()).link.url);
-    for (const secret of ["m1", "Quarterly", "user-1"]) expect(url).not.toContain(secret);
+    // Long enough that a random token cannot contain them by chance: a two
+    // character id did, about once in a few hundred runs.
+    const minted = await w.mint("user-fixture-0001", { file: { type: "gmail_message", message_id: "message-fixture-0001" } });
+    const url = String(receiptOf(minted).link.url);
+    for (const secret of ["message-fixture-0001", "Quarterly", "user-fixture-0001"]) expect(url).not.toContain(secret);
+    expect(new URL(url).search).toBe("");
   });
 
   it("sends the source a reference closed to its type's fields", async () => {

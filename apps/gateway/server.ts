@@ -1,3 +1,6 @@
+// FIRST, for its effect: nothing shaped like a download link's token is
+// written to this process's output (SCRUM-420). See log-redaction.ts.
+import "./src/gateway/log-redaction-install";
 import next from "next";
 import express from "express";
 import cookieParser from "cookie-parser";

@@ -26,6 +26,7 @@
 
 import { createHash, createHmac, randomBytes } from "node:crypto";
 import { safeStringEqual } from "@datatorag-mcp/auth";
+import { forgetValue, redactValue } from "./log-redaction";
 import {
   FILE_REFERENCE_TYPES,
   readReference,
@@ -116,6 +117,7 @@ if (!store.sweeper) {
 
 /** Forgets every link and changes the key, as a restart does. For tests. */
 export function resetDownloadLinks(): void {
+  for (const record of [...records.values()]) drop(record);
   store.key = randomBytes(32);
   records.clear();
   byUser.clear();
@@ -143,6 +145,8 @@ function tagFor(r: LinkRecord): string {
 }
 
 function drop(record: LinkRecord): void {
+  forgetValue(record.nonce);
+  forgetValue(tagFor(record));
   records.delete(record.nonce);
   const mine = byUser.get(record.userId);
   mine?.delete(record);
@@ -363,7 +367,12 @@ export async function createDownloadLink(opts: {
   if (!byUser.has(opts.userId)) byUser.set(opts.userId, new Set());
   byUser.get(opts.userId)!.add(record);
 
-  const url = `${opts.baseUrl.replace(/\/+$/, "")}${DOWNLOAD_PATH}${record.nonce}.${tagFor(record)}`;
+  const tag = tagFor(record);
+  // Neither half is ever written to the process's output while the record
+  // is held, whatever prints it and whatever touches it.
+  redactValue(record.nonce);
+  redactValue(tag);
+  const url = `${opts.baseUrl.replace(/\/+$/, "")}${DOWNLOAD_PATH}${record.nonce}.${tag}`;
   const receipt = {
     file: { name: file.name, type: file.type },
     sent: { bytes: file.bytes, sha256: file.sha256 },
