@@ -30,7 +30,9 @@ export const tools = pgTable("tools", {
   //
   // What this column is for: a cross-check. A test asserts our classification
   // and the plugin's own declaration agree, so the next divergence surfaces in
-  // a diff instead of quietly widening what runs unasked.
+  // a diff instead of quietly widening what runs unasked. It is also served to
+  // external MCP clients as annotations.readOnlyHint in tools/list (absent when
+  // NULL; SCRUM-326), where the client makes its own approval decision.
   //
   // (This comment previously said it drove the gate. It did, before the
   // refactor that removed that trust deliberately. A stale comment about a
