@@ -171,6 +171,40 @@ export const contactsTools: ToolDef[] = [
   },
 ];
 
+/** What contacts_directory_search answers when Google refuses the token for
+ * scope (SCRUM-422). searchDirectoryPeople accepts only the directory.readonly
+ * scope, which the gateway does not request, so every call was a raw 403. A
+ * reconnect would not add the scope, so the words promise nothing. They also
+ * must not match the gateway's insufficient-scope patterns, or the gateway
+ * swaps them for its reconnect message. */
+export const NO_DIRECTORY_ACCESS =
+  "contacts_directory_search: searching an organization directory is a Google Workspace feature, " +
+  "and personal Gmail accounts have no directory. This connection's Google grant does not include " +
+  "directory access, so the search could not run.";
+
+/** Google's scope refusal as the transport throws it:
+ * `API error: {"error":{"code":403,"message":"…","reason":"…"}}`, where
+ * `reason` is ACCESS_TOKEN_SCOPE_INSUFFICIENT in Google's newer error format
+ * and insufficientPermissions in the older one. Any other error, including a
+ * 403 for another reason, is not this. */
+function isScopeInsufficient(err: unknown): boolean {
+  const text = err instanceof Error ? err.message : String(err);
+  const prefix = "API error: ";
+  if (!text.startsWith(prefix)) return false;
+  let e: { code?: unknown; message?: unknown; reason?: unknown } | undefined;
+  try {
+    e = (JSON.parse(text.slice(prefix.length)) as { error?: typeof e }).error;
+  } catch {
+    return false;
+  }
+  if (e?.code !== 403) return false;
+  return (
+    e.reason === "ACCESS_TOKEN_SCOPE_INSUFFICIENT" ||
+    e.reason === "insufficientPermissions" ||
+    (typeof e.message === "string" && /insufficient authentication scopes/i.test(e.message))
+  );
+}
+
 const PERSON_FIELDS =
   "names,emailAddresses,phoneNumbers,organizations,biographies,metadata";
 
@@ -275,14 +309,20 @@ export async function handleContacts(
     }
 
     case "contacts_directory_search": {
-      const result = await client.api("people", "people", "searchDirectoryPeople", {
-        params: {
-          query: args.query,
-          pageSize: (args.max_results as number) || 10,
-          readMask: PERSON_FIELDS,
-          sources: "DIRECTORY_SOURCE_TYPE_DOMAIN_PROFILE",
-        },
-      });
+      let result;
+      try {
+        result = await client.api("people", "people", "searchDirectoryPeople", {
+          params: {
+            query: args.query,
+            pageSize: (args.max_results as number) || 10,
+            readMask: PERSON_FIELDS,
+            sources: "DIRECTORY_SOURCE_TYPE_DOMAIN_PROFILE",
+          },
+        });
+      } catch (err) {
+        if (isScopeInsufficient(err)) throw new Error(NO_DIRECTORY_ACCESS);
+        throw err;
+      }
       return jsonResponse(result.data);
     }
 
