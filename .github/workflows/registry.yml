@@ -1,0 +1,155 @@
+# A production registry change: one file, checked, approved, then run
+# (SCRUM-423). The shape is release.yml's.
+#
+#   request  No secret, no environment. Checks the run is from main, the file
+#            is a registry change file under registry/ at this commit, its
+#            sha256 is the one named at dispatch, and its text passes
+#            scripts/registry-file-check.mjs, the grammar of exactly what
+#            scripts/registry-diff.mjs writes. Then prints the request: the
+#            file, its sha256, the rows it touches, and the full text.
+#   apply    Waits on the `production` environment, which is limited to main
+#            and needs its reviewer's approval. Then checks the same things
+#            again, in the job that holds the secret, and sends the file's
+#            exact bytes as ONE simple query, as the restricted role in
+#            registry/roles/registry-writer.sql. Prints the rows the file's
+#            closing read returns.
+#
+# The approval is a record, not a control (see the SCRUM-394 spec, section
+# 6): the control is that a person says go, in words, before it is asked for.
+# The sha256 in the run's name is how the approver knows the run in front of
+# them is the change they were shown.
+#
+# The connection string is a secret of the `production` ENVIRONMENT, given to
+# the one step that connects. A run that is not from main cannot reach the
+# environment, because the environment's deployment rule allows main only.
+#
+# Every value that comes from the event reaches a script through `env`, never
+# through `${{ }}` inside a `run` line. Actions are GitHub's own, pinned to a
+# commit.
+name: registry
+run-name: ${{ inputs.rollback && 'rollback' || 'apply' }} ${{ inputs.file }} sha256 ${{ inputs.sha256 }}
+
+on:
+  workflow_dispatch:
+    inputs:
+      file:
+        description: The forward file, a path under registry/ such as registry/2026-10-13-example.sql
+        required: true
+        type: string
+      sha256:
+        description: The sha256 of the file that will run (the rollback file's, for a rollback)
+        required: true
+        type: string
+      rollback:
+        description: Run the matching .rollback.sql instead
+        required: false
+        type: boolean
+        default: false
+
+permissions: {}
+
+jobs:
+  request:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    outputs:
+      path: ${{ steps.request.outputs.path }}
+    env:
+      REF: ${{ github.ref }}
+      INPUT_FILE: ${{ inputs.file }}
+      INPUT_SHA256: ${{ inputs.sha256 }}
+      INPUT_ROLLBACK: ${{ inputs.rollback }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 20
+      - name: What will be run, once approved
+        id: request
+        run: |
+          set -euo pipefail
+          [ "$REF" = "refs/heads/main" ] \
+            || { echo "A registry change runs from main, so the check it passes is main's."; exit 1; }
+          # The forward file's name only: no directory but registry/, no dots
+          # but the extension, so neither ../ nor registry/roles/ can be named.
+          [[ "$INPUT_FILE" =~ ^registry/[a-z0-9-]+\.sql$ ]] \
+            || { echo "The file must be a path like registry/<name>.sql."; exit 1; }
+          [[ "$INPUT_SHA256" =~ ^[0-9a-f]{64}$ ]] \
+            || { echo "The sha256 must be 64 lowercase hex characters."; exit 1; }
+          path="$INPUT_FILE"
+          if [ "$INPUT_ROLLBACK" = true ]; then path="${INPUT_FILE%.sql}.rollback.sql"; fi
+          [ -f "$path" ] || { echo "There is no $path at this commit."; exit 1; }
+          echo "path=$path" >>"$GITHUB_OUTPUT"
+          request=$(node scripts/registry-file-check.mjs "$path" --sha256 "$INPUT_SHA256")
+          # The file's text is shown inside a code fence longer than any run
+          # of backticks in it, so a tool description cannot close the fence
+          # and write approver-facing text of its own.
+          longest=$( { grep -oE '`+' "$path" || true; } | awk '{ if (length($0) > m) m = length($0) } END { print m + 0 }')
+          fence=$(printf '`%.0s' $(seq 1 $((longest < 3 ? 3 : longest + 1))))
+          {
+            echo "Request, once approved: run \`$path\` on production."
+            echo
+            echo '```'
+            printf '%s\n' "$request"
+            echo '```'
+            echo
+            echo "The full text that will run:"
+            echo
+            echo "${fence}sql"
+            cat "$path"
+            echo "$fence"
+          } >>"$GITHUB_STEP_SUMMARY"
+          printf '%s\n' "$request"
+
+  apply:
+    needs: request
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    environment: production
+    permissions:
+      contents: read
+    concurrency:
+      group: registry-production
+      cancel-in-progress: false
+    env:
+      REF: ${{ github.ref }}
+      FILE_PATH: ${{ needs.request.outputs.path }}
+      INPUT_SHA256: ${{ inputs.sha256 }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 20
+      - name: The driver, and nothing else, from the lockfile
+        # Before the secret reaches any step. The db package's production
+        # dependencies only, with their integrity hashes, and no install
+        # scripts.
+        run: |
+          set -euo pipefail
+          corepack enable && corepack prepare pnpm@9.15.0 --activate
+          pnpm install --frozen-lockfile --prod --ignore-scripts --filter @datatorag-mcp/db
+      - name: Run the change
+        env:
+          REGISTRY_DATABASE_URL: ${{ secrets.REGISTRY_DATABASE_URL }}
+        run: |
+          set -euo pipefail
+          [ "$REF" = "refs/heads/main" ] || { echo "Not from main."; exit 1; }
+          [[ "$FILE_PATH" =~ ^registry/[a-z0-9-]+(\.rollback)?\.sql$ ]] \
+            || { echo "The request job did not pass on a registry file."; exit 1; }
+          rc=0
+          node scripts/registry-apply.mjs "$FILE_PATH" "$INPUT_SHA256" >"$RUNNER_TEMP/out" || rc=$?
+          cat "$RUNNER_TEMP/out"
+          {
+            echo "Ran \`$FILE_PATH\`, exit $rc:"
+            echo
+            echo '```'
+            cat "$RUNNER_TEMP/out"
+            echo '```'
+          } >>"$GITHUB_STEP_SUMMARY"
+          exit "$rc"
