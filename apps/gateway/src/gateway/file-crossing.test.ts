@@ -140,9 +140,10 @@ async function bodyBytes(call: Call): Promise<Buffer> {
 const idle = { host: 0, users: 0 };
 
 describe("the registry", () => {
-  it("is explicit: one consuming tool, two reference types, the stated limits", () => {
+  it("is explicit: two consuming tools, two reference types, the stated limits", () => {
     expect(FILE_CONSUMING_TOOLS).toEqual({
       "atlassian-mcp__jira_add_attachment": { fileArg: "file" },
+      "gws-mcp__drive_upload_file": { fileArg: "file" },
     });
     expect(Object.keys(FILE_REFERENCE_TYPES)).toEqual(["gmail_message", "gmail_attachment"]);
     expect(FILE_REFERENCE_TYPES).toMatchObject({

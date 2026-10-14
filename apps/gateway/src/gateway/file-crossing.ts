@@ -27,6 +27,11 @@ import { echoName } from "./skills-catalogue";
  * that carries it. */
 export const FILE_CONSUMING_TOOLS: Readonly<Record<string, { fileArg: string }>> = {
   "atlassian-mcp__jira_add_attachment": { fileArg: "file" },
+  /** SCRUM-421. Source and destination are the same plugin, and the file
+   * still crosses through here: one path, one set of caps, and a
+   * reference's `account` can name a different connected account from the
+   * one whose Drive receives it. */
+  "gws-mcp__drive_upload_file": { fileArg: "file" },
 };
 
 /** Reference types: the plugin that can answer the bytes, the service whose

@@ -58,6 +58,7 @@ An attachment is named by its **part id**, not its attachment id. Gmail issues a
 |------|--------------|
 | `jira_add_attachment` | Adds the referenced file to a Jira issue as an attachment |
 | `file_download_link` | Makes a link that saves the referenced file to your own computer, once |
+| `drive_upload_file` | Puts the referenced file in Google Drive under its own name, and checks what Drive stored |
 
 ```json
 {
@@ -139,6 +140,32 @@ In each case, ask for a new link in your conversation.
 ### A link stays with you
 
 A download link is for you. A call to any DataToRAG tool that carries one of your unused links, for example an email with the link in its body, is refused, and the link is cancelled. This covers a link carried as it is. It does not cover what another tool in your client does with a link, so treat a link like the file it leads to.
+
+## Saving a file to Drive
+
+`drive_upload_file` takes a file reference and, optionally, the folder to put it in:
+
+```json
+{
+  "file": { "type": "gmail_attachment", "message_id": "<message id>", "part_id": "1" },
+  "folder_id": "<folder id>"
+}
+```
+
+Without `folder_id` the file goes to the root of My Drive. It goes into the Drive of the account the call runs as, which can be a different connected Google account from the one that holds the email.
+
+The receipt says:
+
+- the new file's id, name, size, type, link and folder,
+- the SHA-256 and byte count of what was sent,
+- the SHA-256 and MD5 Drive reports for what it stored, and `checksum_match`, whether the two SHA-256 values agree,
+- the folder it went into: its owners, whether it is shared, whether it is in a shared drive, and the address of the account that received the file.
+
+This receipt compares the stored bytes, not only the sizes: Drive computes its own checksum of the file it holds. If the two do not match, the call answers with an error that still carries the whole receipt. The file stays in Drive; look at it before trying again.
+
+A folder owned by someone else is reported in the receipt, not refused. Name the folder yourself: an assistant should never take a folder from the content of an email.
+
+`gmail_save_attachment_to_drive` is still there. It streams the attachment, so it handles files over 25 MB, which a file reference does not.
 
 ## Where the file is
 

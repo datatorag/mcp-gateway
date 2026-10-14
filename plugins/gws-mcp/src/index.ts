@@ -4,6 +4,7 @@ import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/
 import { createMcpServer } from "./create-server.js";
 import { GwsClient } from "./gws-client.js";
 import { FILE_BYTES_PATH, serveFileBytes } from "./internal/file-bytes.js";
+import { CONSUME_PATH, handleConsume } from "./internal/consume.js";
 
 const PORT = parseInt(process.env.PORT || "39147", 10);
 
@@ -19,6 +20,28 @@ const httpServer = createServer(async (req, res) => {
   // read with the same per-user token /mcp receives (SCRUM-384).
   if (req.url === FILE_BYTES_PATH) {
     await serveFileBytes(req, res, (accessToken) => new GwsClient({ accessToken }));
+    return;
+  }
+
+  // Private to the gateway, not an MCP tool: the gateway hands this plugin
+  // a file's bytes for a tool that takes a file reference (SCRUM-421).
+  if (req.url === CONSUME_PATH) {
+    const result = await handleConsume({
+      method: req.method,
+      headers: req.headers,
+      // destroyOnReturn: false, because a refusal stops reading early and
+      // the default would tear the socket down before the answer is written.
+      body: req.iterator({ destroyOnReturn: false }),
+    });
+    const headers: Record<string, string> = { "Content-Type": "application/json" };
+    if (result.status === 405) headers.Allow = "POST";
+    // A refusal can leave part of the body unread: close after answering
+    // and discard what is still arriving, never buffer it.
+    if (!req.complete) {
+      headers.Connection = "close";
+      req.resume();
+    }
+    res.writeHead(result.status, headers).end(JSON.stringify(result.body));
     return;
   }
 

@@ -3,6 +3,7 @@ import type { ToolDef } from "./annotations.js";
 import { genericTools, handleGeneric } from "./generic.js";
 import { gmailTools, handleGmail } from "./gmail.js";
 import { driveTools, handleDrive } from "./drive.js";
+import { driveUploadTools, handleDriveUpload } from "./drive-upload.js";
 import { calendarTools, handleCalendar } from "./calendar.js";
 import { contactsTools, handleContacts } from "./contacts.js";
 import { sheetsTools, handleSheets } from "./sheets.js";
@@ -26,6 +27,7 @@ const modules: [ToolDef[], ToolHandler][] = [
   [calendarTools, handleCalendar],
   [contactsTools, handleContacts],
   [driveTools, handleDrive],
+  [driveUploadTools, handleDriveUpload],
   [sheetsTools, handleSheets],
   [sheetsRowTools, handleSheetsRows],
   [sheetsFormatTools, handleSheetsFormat],

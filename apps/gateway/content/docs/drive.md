@@ -56,6 +56,7 @@ the conversation to be read.
 | `drive_read_file` | Read a file's text content by file ID. Handles Google Docs, Sheets and Slides, Office `.docx`/`.xlsx`/`.pptx` (converted automatically), and `.txt`/`.csv`. Returns the extracted text directly, with no local download |
 | `drive_create_folder` | Create a new folder, optionally inside a parent folder |
 | `drive_rename_file` | Rename a file or folder by ID. Changes the name only: content, location and sharing are untouched. Works on Docs, Sheets, Slides and folders |
+| `drive_upload_file` | Put an email or one of its attachments into Drive, named by a [file reference](/docs/file-references). The receipt includes the SHA-256 Drive reports for what it stored and whether it matches what was sent, and the owners and sharing of the folder it went into |
 | `drive_copy_file` | Copy a file and name the copy in the same call, optionally into another folder with `parent_id`. The copy carries the original's tabs, formatting and formulas. **Folders cannot be copied** |
 
 ## What `drive_read_file` can and cannot read

@@ -75,6 +75,7 @@ export const REGISTRY_CLASSIFICATION: ReadonlyArray<readonly [string, "read" | "
   ["gws-mcp__drive_read_file", "read"],
   ["gws-mcp__drive_rename_file", "write"],
   ["gws-mcp__drive_search", "read"],
+  ["gws-mcp__drive_upload_file", "write"],
   ["gws-mcp__gmail_create_draft", "write"],
   ["gws-mcp__gmail_create_label", "write"],
   ["gws-mcp__gmail_delete_draft", "write"],
