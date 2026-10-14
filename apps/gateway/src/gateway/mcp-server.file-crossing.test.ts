@@ -81,6 +81,31 @@ beforeEach(() => {
   callPluginToolOnce.mockResolvedValue({ content: [{ type: "text", text: "ok" }] });
 });
 
+describe("drive_upload_file (SCRUM-421)", () => {
+  it("goes through the crossing like the Jira tool, with the Drive account's own token", async () => {
+    selectLimit.mockResolvedValue([{ id: "srv-1", slug: "gws-mcp", containerPort: 40000, githubRepoUrl: null }]);
+    resolveServiceToken.mockResolvedValue({ token: "drive-token-fixture", accountEmail: "drive@example.com", scopes: null });
+    const client = await connectedClient();
+    const result = await client.callTool({
+      name: "gws-mcp__drive_upload_file",
+      arguments: { file: FILE, folder_id: "folder-1", account: "drive@example.com" },
+    });
+    expect(result).toMatchObject(RECEIPT);
+    expect(callPluginToolOnce).not.toHaveBeenCalled();
+    expect(crossFile).toHaveBeenCalledTimes(1);
+    const opts = crossFile.mock.calls[0][0] as CrossFileOptions;
+    expect(opts).toMatchObject({
+      tool: "gws-mcp__drive_upload_file",
+      toolName: "drive_upload_file",
+      destinationToken: "drive-token-fixture",
+    });
+    // The receiving account was used to pick the token; the reference keeps
+    // its own, which may name a different connected account.
+    expect(opts.args).toEqual({ file: FILE, folder_id: "folder-1" });
+    expect(resolveServiceToken).toHaveBeenCalledWith(dbMock, "user-1", "google-workspace", "drive@example.com");
+  });
+});
+
 describe("a tool that takes a file", () => {
   it("goes through the crossing, not the plugin call, with the destination's own token", async () => {
     const client = await connectedClient();
