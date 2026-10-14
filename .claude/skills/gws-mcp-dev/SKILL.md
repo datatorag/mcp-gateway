@@ -116,7 +116,10 @@ gateway deploy carries it. What goes with it:
    <new gateway sha>` writes `forward.sql` and `rollback.sql` from the two
    commits' tool files in CI. Every statement is guarded by the md5 of the
    row as the running commit served it, both files are headed NOT RUN, and
-   the command opens no database connection: a person runs the file. Both
+   the command opens no database connection. The pair is committed under
+   `registry/` and run on production by the `registry` workflow, approved
+   in GitHub (SCRUM-423; `registry/README.md`), once its role and secret
+   exist; until then a person runs the file. Both
    commits must have been built on main after tool files were kept. The
    order against the deploy is in the spec's section 5. Prove the result
    from `tools/list` through the gateway, not from the plugin's source.
