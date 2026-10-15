@@ -2,8 +2,8 @@
 title: "We Said Claude Couldn't Send Email. It Can Now."
 excerpt: "This post used to argue that Claude's native Gmail connector drafts but never sends. As of August 24, 2026 that is wrong: it sends, replies, and forwards. Here is the corrected comparison, and the two rows that are still ours."
 date: "2026-04-21"
-updated: "2026-10-09"
-updatedNote: "Fourth correction, October 9, in the same direction as the others: the native connector does delete a draft. It has a delete_draft tool, so the 'Delete a draft' row now reads Yes for both and the paragraph that said it had no way to remove one is rewritten. The trash row said Partial for us and now says No: we have no tool that trashes a message. The Docs line under 'what is left' said the native connector only reads; it also creates a new doc, and what it cannot do is edit one. Still standing from the MAJOR CORRECTION of August 24: the central claim of this post is no longer true. Claude's native Gmail connector now exposes send_message (including sending an existing draft), reply with reply-all, and forward. The original title was 'Claude Can Draft Your Email. It Can't Send It.' We have rewritten the post rather than retitling around the edges, because the gap it was built on has closed. Earlier corrections on August 7 and August 11 covered labelling and thread-level filing."
+updated: "2026-10-15"
+updatedNote: "October 15: the Docs line under 'what is left' now says 'as of our last check' and points to the dated note on the Drive post: Anthropic announced Docs, Sheets and Slides editing connectors on 6 October 2026, and they had not reached our account by 15 October. Fourth correction, October 9, in the same direction as the others: the native connector does delete a draft. It has a delete_draft tool, so the 'Delete a draft' row now reads Yes for both and the paragraph that said it had no way to remove one is rewritten. The trash row said Partial for us and now says No: we have no tool that trashes a message. The Docs line under 'what is left' said the native connector only reads; it also creates a new doc, and what it cannot do is edit one. Still standing from the MAJOR CORRECTION of August 24: the central claim of this post is no longer true. Claude's native Gmail connector now exposes send_message (including sending an existing draft), reply with reply-all, and forward. The original title was 'Claude Can Draft Your Email. It Can't Send It.' We have rewritten the post rather than retitling around the edges, because the gap it was built on has closed. Earlier corrections on August 7 and August 11 covered labelling and thread-level filing."
 author: "Manuel Yang"
 category: "Comparison"
 coverImage: "/blog/gmail-comparison.png"
@@ -89,7 +89,8 @@ moved to the services where the native connectors stop short:
 
 - **Sheets.** No native cell-level editing. Ours reads, updates, appends, and manages tabs.
 - **Slides.** Native Drive creates an empty deck. Nothing native writes content onto slides.
-- **Docs.** Native reads a doc and creates a new one, and cannot edit either. Ours creates,
+- **Docs.** Native reads a doc and creates a new one, and cannot edit either, as of our last
+  check; see the note on the [Drive post](/blog/claude-google-drive-vs-datatorag-editing). Ours creates,
   writes, and batch-updates.
 - **Contacts and Tasks.** No native connector at all.
 

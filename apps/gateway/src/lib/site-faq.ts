@@ -160,7 +160,7 @@ export const SITE_FAQ_PAGES: SiteFaqPage[] = [
             // built-in connectors stop. What it has no tool for is a file,
             // which is the fourth item now. Every item here must be a row
             // the comparison table on the home page marks No for built-in.
-            a: `Edit them. Where the built-in connectors stop is one verb past creating a document: through DataToRAG your assistant changes cells in a spreadsheet you already have, writes content into an existing doc, puts slides into a deck that arrived empty, and attaches an email or a file inside it to a Jira issue, with your approval on every one. Those gaps come from enumerating each connector's tool surface on ${VERIFIED_ON}, and the [three way comparison](/blog/hosted-google-workspace-mcp) re-enumerated all three surfaces on 24 August 2026.`,
+            a: `Edit them. Where the built-in connectors stop is one verb past creating a document: through DataToRAG your assistant changes cells in a spreadsheet you already have, writes content into an existing doc, puts slides into a deck that arrived empty, and attaches an email or a file inside it to a Jira issue, with your approval on every one. Those gaps come from enumerating each connector's tool surface on ${VERIFIED_ON}, and the [three way comparison](/blog/hosted-google-workspace-mcp) re-enumerated all three surfaces on 24 August 2026. Anthropic announced Docs, Sheets and Slides editing connectors in beta on 6 October 2026. As of 15 October 2026 they were not available on our account, so this answer is what we could verify ourselves. We will re-test and correct this the day they reach us.`,
           },
           {
             q: "Which AI clients can connect to it?",

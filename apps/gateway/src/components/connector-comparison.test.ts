@@ -98,15 +98,19 @@ describe("the comparison table as checked on its date", () => {
 });
 
 describe("the surfaces that repeat the table agree with it", () => {
-  it("the home page description does not say the Drive connector cannot change a file", () => {
-    // It renames, moves and trashes files. What it cannot do is edit what is
-    // inside one, and the description is the sentence search results quote.
+  it("the home page description makes no claim about what the built-in connector cannot do", () => {
+    // It renames, moves and trashes files. Until 15 October 2026 this said
+    // it cannot edit what is inside one. Anthropic announced Docs, Sheets and
+    // Slides editing connectors on 6 October 2026 that we could not yet test,
+    // so the sentence search results quote now says what we do and nothing
+    // about what they cannot. The table, which carries the dated note, is
+    // where that comparison lives.
     const page = readFileSync(join(__dirname, "../app/page.tsx"), "utf8");
     const description = page.match(/const HOME_DESCRIPTION =\s*\n?\s*"([^"]+)"/)?.[1];
     expect(description, "HOME_DESCRIPTION not found").toBeDefined();
     expect(row("Rename a file").builtIn).toBe(true);
-    expect(description).not.toMatch(/can't change them|cannot change them|read-only/i);
-    expect(description).toMatch(/can't edit what's in them/);
+    expect(description).not.toMatch(/can't|cannot|can not|read-only|unable/i);
+    expect(description).toMatch(/DataToRAG edits them in place/);
     // Search results cut around here.
     expect(description!.length).toBeLessThanOrEqual(160);
   });
