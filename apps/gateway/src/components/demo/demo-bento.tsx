@@ -89,10 +89,15 @@ export const CELLS: {
   solution: string;
 }[] = [
   {
+    // NOT A COMPARISON, as of 15 October 2026. This said Claude reads the
+    // sheet and hands you rows to paste. Claude's own Sheets connector, in
+    // beta since October 2026, edits a sheet in place, and the table on this
+    // page concedes it, so the line now says what the reader wants and
+    // nothing about anyone else, as the Gmail line below does.
     id: "sheets",
     weight: "lead",
     problem:
-      "Claude reads the sheet you already keep, then hands you rows to paste in yourself.",
+      "You wanted the rows in the sheet you already keep, not pasted in by hand.",
     solution:
       "DataToRAG changes the rows in that same file, after asking you first.",
   },

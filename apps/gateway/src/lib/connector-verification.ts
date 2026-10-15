@@ -18,5 +18,13 @@
  * one section was is the overclaim the separate dates existed to prevent.
  *
  * Rendered, not just recorded. Change it only when the rows have actually
- * been retested, and see the rules in `components/connector-comparison.tsx`. */
-export const VERIFIED_ON = "9 October 2026";
+ * been retested, and see the rules in `components/connector-comparison.tsx`.
+ *
+ * 15 October 2026: every group but Google Slides was re-enumerated that day,
+ * including the new Docs and Sheets connectors. Slides was not, so by the
+ * rule above it keeps the date it was last checked, in a constant of its own,
+ * and the Slides section says so. When Slides is re-enumerated, fold it back. */
+export const VERIFIED_ON = "15 October 2026";
+
+/** The one group not re-enumerated on VERIFIED_ON. */
+export const SLIDES_VERIFIED_ON = "9 October 2026";

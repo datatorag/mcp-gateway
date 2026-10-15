@@ -1,5 +1,5 @@
 import { CircleCheckIcon, CircleMinusIcon } from "lucide-react";
-import { VERIFIED_ON } from "@/lib/connector-verification";
+import { SLIDES_VERIFIED_ON, VERIFIED_ON } from "@/lib/connector-verification";
 
 /**
  * The full capability comparison against Claude's built-in Google connectors.
@@ -96,26 +96,33 @@ export const GROUPS: Group[] = [
     rows: [
       { capability: "Read a sheet", builtIn: true, ours: true },
       { capability: "Create a new sheet", builtIn: true, ours: true },
-      { capability: "Update a cell", builtIn: false, ours: true, emphasis: true },
-      { capability: "Append a row", builtIn: false, ours: true, emphasis: true },
-      { capability: "Add, rename or delete a tab", builtIn: false, ours: true },
-      { capability: "Clear a range", builtIn: false, ours: true },
-      { capability: "Query a sheet with a filter", builtIn: false, ours: true },
-      { capability: "Format cells and tables", builtIn: false, ours: true },
+      // Conceded on 15 October 2026: the Sheets connector (beta on claude.ai
+      // since October 2026) writes values and formulas, appends, clears and
+      // runs the full batch update. It reads one range per call and has no
+      // query language, which is why the query row stays ours.
+      { capability: "Update a cell", builtIn: true, ours: true },
+      { capability: "Append a row", builtIn: true, ours: true },
+      { capability: "Add, rename or delete a tab", builtIn: true, ours: true },
+      { capability: "Clear a range", builtIn: true, ours: true },
+      { capability: "Query a sheet with a filter", builtIn: false, ours: true, emphasis: true },
+      { capability: "Format cells and tables", builtIn: true, ours: true },
+      { capability: "Two Google accounts in one request", builtIn: false, ours: true, emphasis: true },
     ],
-    note: "Spreadsheets have no connector of their own. They come through Drive, and the Drive connector ships no tool that changes a file's content, for any file type. It can rename a file or move it. Anthropic announced Docs, Sheets and Slides editing connectors in beta on 6 October 2026. As of 15 October 2026 they were not available on our account, so the rows here are what we could verify ourselves. We will re-test and correct this the day they reach us.",
+    note: "Google Sheets has its own connector since October 2026, in beta on claude.ai, on the Sheets API: values in and out, formulas, clearing, inserting rows and columns, and the full batch update for tabs, formatting and charts. It reads one range per call and has no query language. Enumerated 15 October 2026.",
   },
   {
     service: "Google Docs",
     rows: [
       { capability: "Read a doc", builtIn: true, ours: true },
       { capability: "Create a new doc", builtIn: true, ours: true },
-      { capability: "Edit an existing doc", builtIn: false, ours: true, emphasis: true },
+      // Conceded on 15 October 2026: the Docs connector (beta on claude.ai
+      // since October 2026) edits a doc in place through the batch update.
+      { capability: "Edit an existing doc", builtIn: true, ours: true },
       // Conceded on 9 October 2026: the Drive connector moves a file to the
       // trash. Ours deletes. Either way the doc is gone from where it was.
       { capability: "Delete or trash a doc", builtIn: true, ours: true },
     ],
-    note: "Asked to fix a typo, the built-in connector reads the document, tells you what is wrong, and creates a new file with the correction. The original is untouched. Anthropic announced Docs, Sheets and Slides editing connectors in beta on 6 October 2026. As of 15 October 2026 they were not available on our account, so the rows here are what we could verify ourselves. We will re-test and correct this the day they reach us.",
+    note: "Google Docs has its own connector since October 2026, in beta on claude.ai: one read and one batch update that inserts, deletes, replaces, styles, and can write as tracked suggestions. Enumerated 15 October 2026.",
   },
   {
     service: "Google Slides",
@@ -124,7 +131,7 @@ export const GROUPS: Group[] = [
       { capability: "Put content in it", builtIn: false, ours: true, emphasis: true },
       { capability: "Read an existing deck", builtIn: true, ours: true },
     ],
-    note: "This one surprised us. The built-in connector does make a real Google Slides deck. It just arrives with one blank slide, an empty title and an empty subtitle, because a Google-native deck with content is refused. You get the container and you fill it in yourself. The connector will convert a .pptx you upload, if you have the file. Anthropic announced Docs, Sheets and Slides editing connectors in beta on 6 October 2026. As of 15 October 2026 they were not available on our account, so the rows here are what we could verify ourselves. We will re-test and correct this the day they reach us.",
+    note: `This one surprised us. The built-in connector does make a real Google Slides deck. It just arrives with one blank slide, an empty title and an empty subtitle, because a Google-native deck with content is refused. You get the container and you fill it in yourself. The connector will convert a .pptx you upload, if you have the file. Anthropic announced a Slides editing connector in beta on 6 October 2026, alongside the Docs and Sheets ones. We had not enumerated it by 15 October 2026, so these rows are as we verified them on ${SLIDES_VERIFIED_ON}. We will re-test and correct this when we have.`,
   },
   {
     service: "Gmail",
@@ -196,7 +203,7 @@ export const GROUPS: Group[] = [
       // and our own Drive comparison post has said so since August.
       { capability: "Create a folder", builtIn: true, ours: true },
     ],
-    note: "The built-in Drive connector is more capable than ours, and it is not close. It downloads a file, reads its metadata and who it is shared with, shares it with someone new, lists what you opened recently and moves a file between folders. We do none of those. Our advantage was never Drive breadth. It is that we can change the files Drive gives you access to.",
+    note: "The built-in Drive connector is more capable than ours, and it is not close. It downloads a file, reads its metadata and who it is shared with, shares it with someone new, lists what you opened recently and moves a file between folders. We do none of those. Our advantage was never Drive breadth. It is what we do with a file across services and accounts: an email's attachment onto a Jira issue or into Drive, and two Google accounts in one request.",
   },
   {
     service: "Beyond Google",
@@ -263,13 +270,12 @@ export function ConnectorComparison() {
         </p>
         <p className="mx-auto mt-3 max-w-xl text-sm text-muted-foreground">
           Everything below was checked by hand against both products on{" "}
-          {VERIFIED_ON}. That check moved several rows toward the built-in
-          connectors: deleting a draft, trashing a doc, creating a folder,
-          and Jira and Confluence, where this table had left out
-          Claude&rsquo;s Atlassian connector. One moved toward us: we copy
-          Drive files now. The rows on querying and formatting sheets,
-          trashing mail, sharing, renaming and moving files, and Jira
-          attachments are new.
+          {VERIFIED_ON}, except Google Slides, last checked on{" "}
+          {SLIDES_VERIFIED_ON}. That check moved most of the Sheets rows and
+          the Docs edit row to the built-in connectors: Claude has Google
+          Docs and Sheets connectors of its own since October 2026, in beta,
+          and they edit files in place. Querying a sheet and working two
+          Google accounts in one request stay ours.
         </p>
       </div>
 
