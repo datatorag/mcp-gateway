@@ -188,25 +188,25 @@ export default async function HomePage() {
                 className="animate-fade-in-up mt-6 font-display text-4xl font-extrabold leading-[1.1] tracking-tight text-white sm:text-5xl lg:text-6xl lg:max-[1119px]:text-[3.375rem]"
                 style={{ animationDelay: "0.06s" }}
               >
-                Claude reads{" "}
-                <span className="whitespace-nowrap">your spreadsheet.</span>{" "}
+                One connection to Gmail, Drive, Sheets and Jira.{" "}
                 <span className="text-blue-200">
-                  <span className="whitespace-nowrap">We let it</span>{" "}
-                  <span className="whitespace-nowrap">edit one.</span>
+                  <span className="whitespace-nowrap">Claude moves the work</span>{" "}
+                  <span className="whitespace-nowrap">between them.</span>
                 </span>
               </h1>
               <p
                 className="animate-fade-in-up mx-auto mt-6 max-w-2xl text-base leading-relaxed text-white/60 sm:text-lg lg:mx-0"
                 style={{ animationDelay: "0.12s" }}
               >
-                Append the rows, send the email, update the ticket.{" "}
+                File the email on the Jira issue, save its attachment to
+                Drive, update the sheet, send the reply.{" "}
                 {/* Fallback is rounded, not an exact number: it only renders
                     when the count query failed, and stating a precise figure
                     we did not just read is how a wrong one ships. Matches the
                     pricing page and the lead page. */}
                 {totalTools > 0 ? totalTools : "70+"} tools across Google
-                Workspace, Jira and Confluence behind one URL, and every write
-                asks you first.
+                Workspace, Jira and Confluence behind one URL, in Claude, Claude
+                Code, Cursor or your own app, and every write asks you first.
               </p>
               <div
                 className="animate-fade-in-up mt-8 flex flex-wrap items-center justify-center gap-3 lg:justify-start"

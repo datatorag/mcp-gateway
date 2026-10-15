@@ -1,35 +1,38 @@
 ---
-title: "Claude Can Read Your Google Docs. It Can't Edit Them."
-excerpt: "Claude's native Google Drive connector reads your files and creates new ones, but it can't change what is inside a file you already have. DataToRAG lets Claude write Docs, update Sheets, and edit Slides in place."
+title: "Claude Can Edit Your Google Docs and Sheets Now. Here Is What It Still Cannot Do."
+excerpt: "Since October 2026 Claude has Google Docs and Sheets connectors of its own, in beta, and they edit files in place. What they do not do: move a file between services, work two Google accounts at once, query a sheet, or follow you outside claude.ai."
 date: "2026-04-21"
 updated: "2026-10-15"
-updatedNote: "Fourth note, October 15. Anthropic announced Docs, Sheets and Slides editing connectors in beta on 6 October 2026. As of 15 October 2026 they were not available on our account, so what this post says about them is what we could verify ourselves. We will re-test and correct this the day they reach us. Earlier, the third correction, October 9. Two things changed in the comparison. We copy files now, so 'Copy an existing file' reads Yes for both. And the native connector can rename a file, move it to another folder or put it in the trash, so 'everything it writes is a new file' was too broad and is narrowed to what still holds: it cannot change what is inside a file you already have. Earlier: a second correction, in the same direction as the first. July 30 fixed an excerpt that called the native connector 'effectively read-only'. Re-enumerating it on August 11 shows two more places this post understated it: creating files needs no code execution, it is a first-class Drive tool that makes Docs, Sheets, presentations and folders, so the folders row that said No for them was wrong, and the table never mentioned copying files or reading sharing permissions, which they do and we do not. The thesis is unchanged and was re-checked: nothing in the native surface edits a file that already exists."
+updatedNote: "Fifth note, October 15, later the same day. The central claim of this post is no longer true. Claude's Google Docs and Sheets connectors, in beta on claude.ai since October 2026 and enumerated on 15 October 2026, edit files in place: Sheets writes values and formulas, appends, clears, inserts rows and columns and runs the full batch update; Docs runs a full batch update, including tracked suggestions. So the title, the short answer, the table and the sections built on the old gap are rewritten. The original title was 'Claude Can Read Your Google Docs. It Can't Edit Them.' The Drive connector itself still changes no file's content, and the Slides connector had not been enumerated, so the Slides rows stand as they were. Earlier, fourth note, October 15. Anthropic announced Docs, Sheets and Slides editing connectors in beta on 6 October 2026. As of 15 October 2026 they were not available on our account, so what this post says about them is what we could verify ourselves. We will re-test and correct this the day they reach us. Earlier, the third correction, October 9. Two things changed in the comparison. We copy files now, so 'Copy an existing file' reads Yes for both. And the native connector can rename a file, move it to another folder or put it in the trash, so 'everything it writes is a new file' was too broad and is narrowed to what still holds: it cannot change what is inside a file you already have. Earlier: a second correction, in the same direction as the first. July 30 fixed an excerpt that called the native connector 'effectively read-only'. Re-enumerating it on August 11 shows two more places this post understated it: creating files needs no code execution, it is a first-class Drive tool that makes Docs, Sheets, presentations and folders, so the folders row that said No for them was wrong, and the table never mentioned copying files or reading sharing permissions, which they do and we do not. The thesis is unchanged and was re-checked: nothing in the native surface edits a file that already exists."
 author: "Manuel Yang"
 category: "Comparison"
 coverImage: "/blog/drive-comparison.png"
 tags: ["google-drive", "google-docs", "sheets", "slides", "claude", "comparison", "google-workspace"]
 ---
 
-**Short answer:** no, as far as we could verify on 15 October 2026, Claude's native Drive connector cannot edit an existing Google Doc. Anthropic announced Docs, Sheets and Slides editing connectors in beta on 6 October 2026. As of 15 October 2026 they were not available on our account, so what this post says about them is what we could verify ourselves. We will re-test and correct this the day they reach us. As of October 9, 2026 the Drive connector reads, searches, copies and creates files, including new Docs and Sheets with content in them, and it can rename, move or trash a file, but nothing in its tool surface changes what is inside a document that already exists. DataToRAG edits Docs, Sheets and Slides in place.
+**Short answer:** yes, for Docs and Sheets, as of October 2026. Claude's Google Docs and Sheets connectors, in beta on claude.ai and enumerated on 15 October 2026, edit a file you already have: a cell, a formula, a new row, a tab, formatting, a paragraph, a tracked suggestion. The Drive connector itself still changes no file's content; it reads, creates, copies, renames, moves and trashes. The Slides connector had not been enumerated when this was written, so the Slides rows below are as we last verified them. What is left for DataToRAG is the space between services and accounts: an email's attachment onto a Jira issue, into Drive or onto your computer with a checksum, two Google accounts in one request, a query over a sheet, and the same tools in Claude Code, Cursor or your own app.
 
-Ask Claude to read your quarterly report in Google Docs. It reads it. Ask Claude to fix the typo in paragraph three. It can hand you the corrected text, or even put that text in a brand new document. What it cannot do is fix the typo in the document you asked about.
+This post used to have a different title and a simpler argument. Claude could read your quarterly report and could not fix the typo in it, and that gap was the whole post. It closed in October 2026, and pretending otherwise would make everything else here harder to trust.
 
-That's the shape of the native Google Drive connector in Claude. Read any Google Workspace file, edit none of them.
+## What the built-in connectors do now
 
-The [specifics](https://support.claude.com/en/articles/10166901-use-google-workspace-connectors): Claude reads Google Docs directly, exports Sheets to CSV so it can parse the cells, and exports Slides as plain text so it can extract the content. Creating is a first-class part of that surface, and this post used to undersell it. The connector makes new Docs, Sheets, presentations and folders on its own, and text you give it converts into a real Google Doc, so "it can only hand you text" is not the limit.
+Three of them touch your files, and they divide the work.
 
-The limit is narrower and it does not move: any content it writes goes into a NEW file. It can rename a file you already have, move it to another folder or put it in the trash, and that is as far as it reaches into one. Comments on existing documents, edits to a sentence, appending a row to a sheet, fixing a typo on slide 4. None of that happens from the connector, because no tool in it opens a file you already have and changes what is in it. A created presentation is the sharpest version of this, since it arrives with one empty slide and nothing in the native surface can put a word onto it.
+- **Google Sheets** has nine tools on the Sheets API: values in and out, formulas, appending, clearing, inserting rows and columns, copying a tab to another spreadsheet, and the full batch update, which covers tabs, formatting and charts. It reads one range per call, and it has no query language.
+- **Google Docs** has two: one read, and one batch update that inserts, deletes, replaces and styles text, and can write as tracked suggestions instead of direct edits.
+- **Google Drive** finds, reads, creates, copies, renames, moves and trashes files, and tells you who a file is shared with. It still changes nothing inside one.
 
-DataToRAG's connector reads the same surfaces and writes back to every one of them.
+All of this was enumerated on 15 October 2026. Both new connectors are in beta.
 
 ## Feature comparison
 
-| Capability | Claude native Google Drive | DataToRAG Google Workspace |
+| Capability | Claude built-in (Drive, Docs, Sheets) | DataToRAG Google Workspace |
 |---|---|---|
 | Search and read Google Docs, Sheets, Slides | Yes | Yes |
-| Edit an existing Google Doc in place | No | Yes |
-| Update Sheet cells or append rows | No | Yes |
-| Edit an existing Slides deck | No | Yes |
+| Edit an existing Google Doc in place | Yes | Yes |
+| Update Sheet cells or append rows | Yes | Yes |
+| Query a sheet with a filter | No | Yes |
+| Edit an existing Slides deck | No (last verified 9 October 2026) | Yes |
 | Create a new Doc or Sheet, with content | Yes | Yes |
 | Create a new Slides deck | Yes, but it arrives empty | Yes, with content |
 | Create folders in Drive | Yes | Yes |
@@ -40,43 +43,28 @@ DataToRAG's connector reads the same surfaces and writes back to every one of th
 | Add comments to files | No | No |
 | Real-time sync of Docs in Claude Projects | Yes | No |
 | Drive Cataloging / RAG indexing (Enterprise) | Yes | No |
-| Multi-account (work + personal Google) | No | Yes |
+| Two Google accounts in one request | No | Yes |
+| Put an email's attachment on a Jira issue, in Drive, or on your computer | No | Yes |
+| The same tools in Claude Code, Cursor or your own app | No | Yes |
 
-## The write side of the connector
+"Query a sheet" means a filter or aggregate run over the data, the way a QUERY formula would, rather than reading a range and working it out in the chat.
 
-- `docs_create`: create a new Google Doc, optionally with initial content.
-- `docs_write`: write or replace the content of a document.
-- `docs_batch_update`: apply a sequence of programmatic edits (insert, delete, format) to an existing Doc.
-- `sheets_update`: write values to specific ranges.
-- `sheets_append`: add rows at the end of a sheet.
-- `sheets_create`: create new sheets seeded with data.
-- `slides_create`: create decks from a structured spec.
-- `slides_batch_update`: edit existing decks (change text, update shapes, swap content).
-- `drive_create_folder`: organize, don't just dump files at the root.
+## The write side of ours
 
-The difference isn't "more tools." It's that a workflow that starts with reading a doc can end with editing that same doc. The conversation doesn't have to terminate in "here's the output, go paste it yourself."
+- `docs_create`, `docs_write`, `docs_batch_update`: create a Doc, write it, or apply a sequence of edits to one that exists.
+- `sheets_update`, `sheets_append`, `sheets_query`: write ranges, add rows, and run a filter or aggregate over a sheet.
+- `slides_create`, `slides_batch_update`: build a deck with content, and edit one that exists.
+- `jira_add_attachment`, `drive_upload_file`, `file_download_link`: take an email, or an attachment inside it, to a Jira issue, into Drive or onto your computer, with the SHA-256 of what was sent.
 
-## Three workflows that become possible
+Every tool takes an account, so a work inbox and a personal Drive are one request. And every write asks you first.
 
-**Doc editing.** Read a Google Doc, fix typos, restructure sections, and save the changes back to the same doc. One source of truth. No fork of the text floating around in a chat transcript.
+## Where each one fits
 
-**Sheet automation.** Pull numbers out of an email, append a row to a tracking sheet, update another cell that feeds a dashboard. A weekly-report workflow that runs end to end with zero copy-paste.
+If the job is editing a Doc or a Sheet you already have, in claude.ai, on one Google account, the built-in connectors now do it, and they cost nothing. Use them.
 
-**Deck updates.** Read a slide deck, change "Q1" to "Q2" everywhere, update three data labels, swap a title. Claude's Drive connector reads the text of the deck. Ours rewrites it in place.
-
-## What Claude's Drive connector is good at
-
-Reading, searching and starting things. If all you want is "summarize this 40-page contract," "find the doc where we agreed on the new pricing," or "draft this up as a new doc in my Drive," the native connector handles it cleanly, cites sources, and syncs Docs added to a Project in real time. It also moves files between folders and can tell you who a file is shared with, neither of which we do. The limitation only hurts when the thing you want to change already exists.
+DataToRAG is for the work that crosses a line: a file that has to go from Gmail to Jira, a report that reads one account and writes another, a sheet you want to query rather than scroll, or the same tools in Claude Code, Cursor or an application of your own.
 
 Enterprise users also get Drive Cataloging, which indexes content with RAG for fuzzy search across a large corpus. DataToRAG doesn't do that. If your workflow is "search across 50,000 documents," Claude Enterprise is the right tool.
-
-If your workflow is "read one doc, change three sentences, save," DataToRAG is.
-
-## The prompt that reveals the gap
-
-Try this: "Read my Q2 roadmap Doc, add a new section titled 'Customer feedback themes,' and list our top five themes from recent customer emails."
-
-On the Drive connector, the best you get is that section in a new document, with your roadmap Doc untouched. On DataToRAG, the answer is the roadmap Doc itself, updated, with a link.
 
 ## Try it
 
