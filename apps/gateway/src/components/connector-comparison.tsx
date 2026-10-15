@@ -103,7 +103,7 @@ export const GROUPS: Group[] = [
       { capability: "Query a sheet with a filter", builtIn: false, ours: true },
       { capability: "Format cells and tables", builtIn: false, ours: true },
     ],
-    note: "Spreadsheets have no connector of their own. They come through Drive, and the Drive connector ships no tool that changes a file's content, for any file type. It can rename a file or move it.",
+    note: "Spreadsheets have no connector of their own. They come through Drive, and the Drive connector ships no tool that changes a file's content, for any file type. It can rename a file or move it. Anthropic announced Docs, Sheets and Slides editing connectors in beta on 6 October 2026. As of 15 October 2026 they were not available on our account, so the rows here are what we could verify ourselves. We will re-test and correct this the day they reach us.",
   },
   {
     service: "Google Docs",
@@ -115,7 +115,7 @@ export const GROUPS: Group[] = [
       // trash. Ours deletes. Either way the doc is gone from where it was.
       { capability: "Delete or trash a doc", builtIn: true, ours: true },
     ],
-    note: "Asked to fix a typo, the built-in connector reads the document, tells you what is wrong, and creates a new file with the correction. The original is untouched.",
+    note: "Asked to fix a typo, the built-in connector reads the document, tells you what is wrong, and creates a new file with the correction. The original is untouched. Anthropic announced Docs, Sheets and Slides editing connectors in beta on 6 October 2026. As of 15 October 2026 they were not available on our account, so the rows here are what we could verify ourselves. We will re-test and correct this the day they reach us.",
   },
   {
     service: "Google Slides",
@@ -124,7 +124,7 @@ export const GROUPS: Group[] = [
       { capability: "Put content in it", builtIn: false, ours: true, emphasis: true },
       { capability: "Read an existing deck", builtIn: true, ours: true },
     ],
-    note: "This one surprised us. The built-in connector does make a real Google Slides deck. It just arrives with one blank slide, an empty title and an empty subtitle, because a Google-native deck with content is refused. You get the container and you fill it in yourself. The connector will convert a .pptx you upload, if you have the file.",
+    note: "This one surprised us. The built-in connector does make a real Google Slides deck. It just arrives with one blank slide, an empty title and an empty subtitle, because a Google-native deck with content is refused. You get the container and you fill it in yourself. The connector will convert a .pptx you upload, if you have the file. Anthropic announced Docs, Sheets and Slides editing connectors in beta on 6 October 2026. As of 15 October 2026 they were not available on our account, so the rows here are what we could verify ourselves. We will re-test and correct this the day they reach us.",
   },
   {
     service: "Gmail",

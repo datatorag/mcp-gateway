@@ -2,8 +2,8 @@
 title: "Hosted Google Workspace MCP: DataToRAG vs Google's Official Servers vs Claude's Native Connectors"
 excerpt: "Google shipped eight official Workspace MCP servers. Claude has three native connectors. We host one endpoint. Every tool on all three, enumerated on August 24, 2026, including the surprise: Google's own Gmail MCP cannot send email."
 date: "2026-08-24"
-updated: "2026-10-09"
-updatedNote: "October 9: the three-way table said No for Jira and Confluence under Claude native, and the closing list called Jira alongside Workspace the one nobody else covers. Claude has an Atlassian connector of its own, separate from its Google ones, so both are corrected. What holds is narrower: here Jira, Confluence and Google Workspace sit behind one endpoint. Everything else in the post is as enumerated on August 24, 2026."
+updated: "2026-10-15"
+updatedNote: "October 15: a dated note in the native connectors section. Anthropic announced Docs, Sheets and Slides editing connectors in beta on 6 October 2026. As of 15 October 2026 they were not available on our account, so what this post says about them is what we could verify ourselves. We will re-test and correct this the day they reach us. October 9: the three-way table said No for Jira and Confluence under Claude native, and the closing list called Jira alongside Workspace the one nobody else covers. Claude has an Atlassian connector of its own, separate from its Google ones, so both are corrected. What holds is narrower: here Jira, Confluence and Google Workspace sit behind one endpoint. Everything else in the post is as enumerated on August 24, 2026."
 author: "Manuel Yang"
 category: "Comparison"
 tags: ["google-workspace", "mcp", "hosted-mcp", "claude", "comparison", "gmail", "sheets"]
@@ -83,6 +83,8 @@ Calendar connector exposes the same nine, by the same names.
 
 Three of them: **Gmail, Calendar, Drive. That is the entire native Google surface.** No Sheets,
 no Docs, no Slides, no Contacts, no Tasks. Not thin versions, none at all.
+
+*October 15: Anthropic announced Docs, Sheets and Slides editing connectors in beta on 6 October 2026. As of 15 October 2026 they were not available on our account, so what this post says about them is what we could verify ourselves. We will re-test and correct this the day they reach us.*
 
 Gmail is the big one and, as of August, it sends. Calendar is excellent. Drive covers share,
 permissions, copy and trash. Exact counts are in the table below, next to the date they were
