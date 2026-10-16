@@ -32,7 +32,8 @@ export type UserToolRow = {
    * the tool name alone (see playground/tools.ts `classifyWrite`) and no code
    * path reads this field to make a security decision. It is kept because it
    * is a true record of what the server said, which is worth having when
-   * auditing a plugin. */
+   * auditing a plugin, and since SCRUM-326 tools/list serves it to external
+   * clients as a hint (their approval decision, not ours). */
   readOnlyHint: boolean | null;
 };
 
