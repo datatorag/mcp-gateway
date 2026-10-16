@@ -3,10 +3,11 @@
  *
  * gws_run is one tool name over every Google API call the dedicated tools
  * do not cover, so its usage rows and events said nothing about what ran.
- * The three names that identify the call are lifted off its arguments and
- * carried as fields; the arguments themselves, the params and any body never
- * leave the call. Every other tool gets null in all three, so a filter on
- * any of them selects gws_run calls and nothing else.
+ * The three names that identify the call, and the names of the parameters
+ * it passed, are lifted off its arguments and carried as fields; argument
+ * values, param values and body values never leave the call. Every other
+ * tool gets null in all four, so a filter on any of them selects gws_run
+ * calls and nothing else.
  *
  * The resource is the third name because service and method do not identify
  * a call on their own: "get" on gmail is a message or an attachment, "list"
@@ -31,6 +32,40 @@ const NAME = /^[A-Za-z0-9_.-]+$/;
  * a word made only of letters still passes. */
 const RESOURCE = /^[A-Za-z]+(\.[A-Za-z]+)*$/;
 
+/** The names of the parameters a call passed (SCRUM-419), never their
+ * values: the model's choice of gws_run over a dedicated tool is often
+ * explained by which parameter it needed. Only the top-level keys of
+ * `params` and of the request body are read; a key is kept when it has the
+ * shape of a parameter name and is short, and the list is sorted,
+ * deduplicated and capped, so a call cannot widen the row. */
+const PARAM_NAME = /^[A-Za-z][A-Za-z0-9_]*$/;
+const MAX_PARAM_NAME_LEN = 32;
+const MAX_PARAM_NAMES = 24;
+
+function keysOf(value: unknown): string[] {
+  return value !== null && typeof value === "object" && !Array.isArray(value) ? Object.keys(value) : [];
+}
+
+function paramNames(args: Record<string, unknown>): string | null {
+  // The plugin sends json_body when given and body otherwise; read the same one.
+  const body = args.json_body ?? args.body;
+  const names = [...new Set([...keysOf(args.params), ...keysOf(body)])]
+    .filter((key) => key.length <= MAX_PARAM_NAME_LEN && PARAM_NAME.test(key))
+    .sort()
+    .slice(0, MAX_PARAM_NAMES);
+  return names.length > 0 ? names.join(",") : null;
+}
+
+export interface GwsRunFields {
+  service: string | null;
+  resource: string | null;
+  method: string | null;
+  /** Comma-joined parameter names, e.g. "calendarId,maxResults,timeMin". */
+  paramNames: string | null;
+}
+
+const NONE: GwsRunFields = { service: null, resource: null, method: null, paramNames: null };
+
 function shortString(value: unknown, shape: RegExp = NAME): string | null {
   return typeof value === "string" && value.length <= MAX_LEN && shape.test(value) ? value : null;
 }
@@ -38,12 +73,13 @@ function shortString(value: unknown, shape: RegExp = NAME): string | null {
 export function gwsRunFields(
   toolName: string,
   args: Record<string, unknown> | undefined
-): { service: string | null; resource: string | null; method: string | null } {
+): GwsRunFields {
   const bare = toolName.includes("__") ? toolName.slice(toolName.indexOf("__") + 2) : toolName;
-  if (bare !== GWS_RUN || !args) return { service: null, resource: null, method: null };
+  if (bare !== GWS_RUN || !args) return NONE;
   return {
     service: shortString(args.service),
     resource: shortString(args.resource, RESOURCE),
     method: shortString(args.method),
+    paramNames: paramNames(args),
   };
 }

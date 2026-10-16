@@ -86,3 +86,40 @@ calls that spread the fields.
   BEFORE THIS CODE SERVES. The row insert names the column, so a build
   running against a database without it fails every usage row write, and
   those writes are logged and dropped, not retried.
+
+## Amended again by SCRUM-419: the names of the parameters passed
+
+Service, resource and method say which call ran. They do not say why the
+caller reached for the raw call when a dedicated tool exists for the same
+resource, and the usual answer is a parameter the dedicated tool does not
+take. So a `gws_run` call now also carries the NAMES of the parameters it
+passed, never their values: `param_names`, e.g.
+`calendarId,maxResults,singleEvents,timeMin`.
+
+- Read from the top-level keys of `params` and of the request body (the
+  body the plugin sends: `json_body` when given, `body` otherwise). Nested
+  keys are not read. A value is never read at all: the extractor takes
+  `Object.keys` and nothing else.
+- Each key must match `^[A-Za-z][A-Za-z0-9_]*$` and be at most 32
+  characters, so a key that is really an address, an id with a hyphen, or a
+  path is dropped. The list is deduplicated, sorted, capped at 24 names and
+  comma-joined. No surviving key, or any other tool: null.
+- `usage_events.param_names`: nullable text, no default, no index, in the
+  same migration `0021` as `resource`, which therefore adds both columns.
+  Both statements use `ADD COLUMN IF NOT EXISTS`, so a database that
+  already has either column (a branch where one was added by hand) applies
+  the journaled migration without an error. It rides on the `tool_call`
+  event as `param_names`.
+- What the limits do not do: a key is whatever the caller typed, so a
+  caller that puts data in a key name and keeps it in that shape (letters
+  first, no punctuation, 32 characters or fewer) gets it recorded. The rule
+  keeps every value out; it cannot make a key not be a key.
+- Proven by test: the names of params and body are listed, values are not,
+  even values shaped exactly like names; malformed, long and nested keys
+  are dropped; the cap holds; the field reaches the event, the row and the
+  tracker through the real CallTool path. Each rule (keys not values, the
+  key filter, the length cap, the list cap, the sort, the body, the body
+  precedence) and each of the places the field passes through was broken in
+  turn and a test failed.
+- Not proven: the migration applied to production. As with `resource`, THE
+  COLUMNS MUST EXIST BEFORE THIS CODE SERVES.

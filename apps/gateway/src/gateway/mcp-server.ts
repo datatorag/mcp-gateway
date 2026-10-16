@@ -1028,7 +1028,8 @@ export function createMcpServer(
     const args = rawArgs as Record<string, unknown>;
     // SCRUM-227, SCRUM-419: a gws_run call is named by its service, resource
     // and method on the event and the row, each kept only when it has the
-    // shape of a name. The params and any body never leave this handler.
+    // shape of a name, plus the names of the params and body keys it passed.
+    // No param or body value leaves this handler.
     const runFields = gwsRunFields(name, args);
 
     const separatorIndex = name.indexOf(NAMESPACE_SEPARATOR);

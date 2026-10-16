@@ -88,11 +88,11 @@ describe("writeUsageEvent carries service and method (SCRUM-227)", () => {
   const values = vi.fn().mockResolvedValue(undefined);
   const db = { insert: () => ({ values }) } as unknown as Database;
 
-  it("writes the three fields when given and null when not", async () => {
+  it("writes the four fields when given and null when not", async () => {
     values.mockClear();
-    await writeUsageEvent(db, { ...baseInput(null), toolName: "gws-mcp__gws_run", service: "drive", resource: "files", method: "files.list" });
-    expect(values.mock.calls[0][0]).toMatchObject({ service: "drive", resource: "files", method: "files.list" });
+    await writeUsageEvent(db, { ...baseInput(null), toolName: "gws-mcp__gws_run", service: "drive", resource: "files", method: "files.list", paramNames: "pageSize,q" });
+    expect(values.mock.calls[0][0]).toMatchObject({ service: "drive", resource: "files", method: "files.list", paramNames: "pageSize,q" });
     await writeUsageEvent(db, baseInput(null));
-    expect(values.mock.calls[1][0]).toMatchObject({ service: null, resource: null, method: null });
+    expect(values.mock.calls[1][0]).toMatchObject({ service: null, resource: null, method: null, paramNames: null });
   });
 });

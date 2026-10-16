@@ -42,6 +42,11 @@ export const usageEvents = pgTable(
      * resources of a service. Kept only when it has the shape of a resource
      * name (dotted segments of letters); null otherwise. */
     resource: text("resource"),
+    /** For gws_run only (SCRUM-419): the names of the parameters the call
+     * passed (top-level keys of params and of the body), sorted and
+     * comma-joined, "calendarId,maxResults,timeMin". Names only, never a
+     * value; null for every other tool and for a call that passed none. */
+    paramNames: text("param_names"),
   },
   (table) => [
     index("idx_usage_events_user_created").on(

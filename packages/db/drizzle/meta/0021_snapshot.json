@@ -1,5 +1,5 @@
 {
-  "id": "18594566-00c2-436c-a462-85f71c62d467",
+  "id": "7b2e030b-2212-4dfd-8280-305267236995",
   "prevId": "82a5f517-9698-4918-9769-ddf0fd4ed5e7",
   "version": "7",
   "dialect": "postgresql",
@@ -2612,6 +2612,12 @@
         },
         "resource": {
           "name": "resource",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "param_names": {
+          "name": "param_names",
           "type": "text",
           "primaryKey": false,
           "notNull": false
