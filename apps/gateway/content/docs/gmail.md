@@ -105,6 +105,7 @@ The Gmail connector gives your AI assistant full access to your inbox: searching
 | `gmail_update_draft` | Update an existing draft. This replaces the whole draft: files it held are dropped unless passed again in `attachments` |
 | `gmail_send_draft` | Send an existing draft. A draft that already carries the signature is sent unchanged; one without gets it, including a draft that holds files |
 | `gmail_delete_draft` | Delete a draft |
+| `gmail_list_drafts` | List the drafts in the mailbox: each draft's ID, the ID of the message it holds and its thread, optionally narrowed with a Gmail search `query`. The draft ID feeds `gmail_update_draft`, `gmail_send_draft` and `gmail_delete_draft` |
 | `gmail_mark_read` | Mark messages as read, for a single message or a batch of up to 1,000 IDs. With no labels given it removes UNREAD; with `add_labels` or `remove_labels` given it applies exactly those and nothing else. For label changes beyond read state, use `gmail_label_message` |
 | `gmail_label_message` | Label many messages in one call: `message_ids` (up to 1,000) with `add_labels` and `remove_labels`, one `batchModify` request, a per-message outcome in the result; `message_id` for a single message. Removing INBOX archives a message; removing UNREAD marks it read |
 | `gmail_create_label` | Create a label. Nested labels use `/` in the name (e.g., `Alerts/Invoices`). Returns the created label, including its ID. If a label with that name already exists, it returns that label with `existed: true` instead of an error |
@@ -113,6 +114,9 @@ The Gmail connector gives your AI assistant full access to your inbox: searching
 | `gmail_update_label` | Rename a label or change its visibility. Takes the label ID, not the name. Renaming keeps the label on already-labeled messages |
 | `gmail_delete_label` | Delete a label by ID. The label is removed from every message carrying it; the messages themselves are not deleted. System labels (INBOX, UNREAD, SENT) cannot be deleted |
 | `gmail_save_attachment_to_drive` | Save an email attachment directly to Google Drive. The file streams from Gmail into Drive, so a large attachment arrives whole |
+| `gmail_get_attachment` | Describe one attachment by message ID and part ID: file name, type, size and a current attachment ID. A text attachment (plain text, CSV, JSON, XML, HTML, calendar files) of up to 0.5 MB comes back as text; anything else, or anything larger, is described with its size and no content. File bytes are never returned as base64 |
+| `gmail_trash` | Move one message to Trash. It stays there for 30 days before Gmail deletes it, and `gmail_untrash` restores it before then |
+| `gmail_untrash` | Take one message out of Trash |
 
 ## Attachments
 

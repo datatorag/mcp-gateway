@@ -111,7 +111,64 @@ export const driveTools: ToolDef[] = [
     },
     annotations: CREATE("Copy Drive file"),
   },
+  {
+    name: "drive_get_file",
+    description:
+      "Describes one file or folder in Google Drive without reading its content. Takes the file ID. Returns its name, MIME type, size in bytes when Drive reports one (folders have none), the IDs of the folders it is in, its owners' names and addresses, when it was created and last modified, its link, whether it is in Trash, whether it is shared, and the shared drive it belongs to when it is in one. A file the account cannot see answers as not found.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        file_id: {
+          type: "string",
+          description: "The Google Drive file or folder ID to describe",
+        },
+      },
+      required: ["file_id"],
+    },
+    annotations: READ("Get Drive file details"),
+  },
+  {
+    name: "drive_move_file",
+    description:
+      "Moves a file or folder in Google Drive into another folder. Takes the file ID and the destination folder ID. The item is added to the destination folder and removed from the folder or folders it was in, so it ends up in one place; its name, content and ID are unchanged. Returns the item's ID, name, the folder it is now in and its link. An item already in the destination folder is left where it is and reported as not moved.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        file_id: {
+          type: "string",
+          description: "The Google Drive file or folder ID to move",
+        },
+        folder_id: {
+          type: "string",
+          description: "The ID of the folder to move it into",
+        },
+      },
+      required: ["file_id", "folder_id"],
+    },
+    annotations: MUTATE("Move Drive file to another folder"),
+  },
+  {
+    name: "drive_trash_file",
+    description:
+      "Moves a file or folder in Google Drive to Trash. Takes the file ID. The item stays in Trash, where Drive deletes it for good after 30 days and where its owner can restore it before then; trashing a folder trashes what is inside it. Returns the item's ID, name and its trashed state as Drive reports it afterwards. Works on any Drive item the account is allowed to trash, including Docs, Sheets and Slides.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        file_id: {
+          type: "string",
+          description: "The Google Drive file or folder ID to move to Trash",
+        },
+      },
+      required: ["file_id"],
+    },
+    annotations: MUTATE("Move Drive file to Trash"),
+  },
 ];
+
+/** What drive_get_file reads: the facts about a file, never its content. */
+export const FILE_DETAIL_FIELDS =
+  "id,name,mimeType,size,parents,owners(displayName,emailAddress)," +
+  "createdTime,modifiedTime,webViewLink,trashed,shared,driveId";
 
 const GOOGLE_DOC = "application/vnd.google-apps.document";
 const GOOGLE_SHEET = "application/vnd.google-apps.spreadsheet";
@@ -195,6 +252,52 @@ export async function handleDrive(
         body,
         "id,name,parents,webViewLink"
       );
+      return jsonResponse(result.data);
+    }
+
+    case "drive_get_file": {
+      const result = await client.api("drive", "files", "get", {
+        params: { fileId: args.file_id as string, fields: FILE_DETAIL_FIELDS, supportsAllDrives: true },
+      });
+      return jsonResponse(result.data);
+    }
+
+    case "drive_move_file": {
+      const fileId = args.file_id as string;
+      const folderId = requireNonBlank(toolName, "folder_id", args.folder_id as string);
+      // A move in Drive is "add this parent, remove those", so the folders
+      // the item is in now have to be read first. Leaving them in place
+      // would add a second location rather than move anything.
+      const current = await client.api("drive", "files", "get", {
+        params: { fileId, fields: "id,name,parents,webViewLink", supportsAllDrives: true },
+      });
+      const before = (current.data ?? {}) as { id?: string; name?: string; parents?: string[]; webViewLink?: string };
+      const parents = Array.isArray(before.parents) ? before.parents : [];
+      if (parents.length === 1 && parents[0] === folderId) {
+        return jsonResponse({ ...before, moved: false, note: "The item is already in that folder." });
+      }
+      const from = parents.filter((p) => p !== folderId);
+      const result = await client.api("drive", "files", "update", {
+        params: {
+          fileId,
+          addParents: folderId,
+          ...(from.length > 0 ? { removeParents: from.join(",") } : {}),
+          supportsAllDrives: true,
+          fields: "id,name,parents,webViewLink",
+        },
+        // files.update is a PATCH and whatever is in the body gets written.
+        // A move changes no field of the file, so the body is empty.
+        jsonBody: {},
+      });
+      return jsonResponse({ ...(result.data as Record<string, unknown>), moved: true });
+    }
+
+    case "drive_trash_file": {
+      const result = await client.api("drive", "files", "update", {
+        params: { fileId: args.file_id as string, supportsAllDrives: true, fields: "id,name,trashed" },
+        // The one field this call is for, and no other.
+        jsonBody: { trashed: true },
+      });
       return jsonResponse(result.data);
     }
 

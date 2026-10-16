@@ -72,19 +72,27 @@ export const REGISTRY_CLASSIFICATION: ReadonlyArray<readonly [string, "read" | "
   ["gws-mcp__docs_write", "write"],
   ["gws-mcp__drive_copy_file", "write"],
   ["gws-mcp__drive_create_folder", "write"],
+  ["gws-mcp__drive_get_file", "read"],
+  // Removes the file from the folder it was in.
+  ["gws-mcp__drive_move_file", "write"],
   ["gws-mcp__drive_read_file", "read"],
   ["gws-mcp__drive_rename_file", "write"],
   ["gws-mcp__drive_search", "read"],
+  ["gws-mcp__drive_trash_file", "write"],
   ["gws-mcp__drive_upload_file", "write"],
   ["gws-mcp__gmail_create_draft", "write"],
   ["gws-mcp__gmail_create_label", "write"],
   ["gws-mcp__gmail_delete_draft", "write"],
   ["gws-mcp__gmail_delete_label", "write"],
   ["gws-mcp__gmail_forward", "write"],
+  // Returns an attachment's description and, for a text type, its text. It
+  // saves nothing: gmail_save_attachment_to_drive is the one that writes.
+  ["gws-mcp__gmail_get_attachment", "read"],
   // No token here matches WRITE_VERBS — "label"/"message" aren't write verbs.
   // This lands on "write" via the fail-closed default, not a recognised verb.
   ["gws-mcp__gmail_label_message", "write"],
   ["gws-mcp__gmail_list", "read"],
+  ["gws-mcp__gmail_list_drafts", "read"],
   ["gws-mcp__gmail_list_filters", "read"],
   ["gws-mcp__gmail_list_labels", "read"],
   // Changes the mailbox: an unread message stops being unread. Cheap to undo,
@@ -96,6 +104,9 @@ export const REGISTRY_CLASSIFICATION: ReadonlyArray<readonly [string, "read" | "
   ["gws-mcp__gmail_search", "read"],
   ["gws-mcp__gmail_send", "write"],
   ["gws-mcp__gmail_send_draft", "write"],
+  ["gws-mcp__gmail_trash", "write"],
+  // Restores, and still changes where a message lives, so it prompts.
+  ["gws-mcp__gmail_untrash", "write"],
   ["gws-mcp__gmail_update_draft", "write"],
   // Renames a label / changes visibility only — destroys no data, still not a read.
   ["gws-mcp__gmail_update_label", "write"],
@@ -107,12 +118,14 @@ export const REGISTRY_CLASSIFICATION: ReadonlyArray<readonly [string, "read" | "
   ["gws-mcp__sheets_append", "write"],
   ["gws-mcp__sheets_batch_update", "write"],
   ["gws-mcp__sheets_clear", "write"],
+  ["gws-mcp__sheets_copy_tab_to", "write"],
   ["gws-mcp__sheets_create", "write"],
   ["gws-mcp__sheets_delete", "write"],
   ["gws-mcp__sheets_delete_tab", "write"],
   ["gws-mcp__sheets_find_rows", "read"],
   ["gws-mcp__sheets_format_range", "write"],
   ["gws-mcp__sheets_format_table", "write"],
+  ["gws-mcp__sheets_get_metadata", "read"],
   ["gws-mcp__sheets_query", "read"],
   ["gws-mcp__sheets_read", "read"],
   ["gws-mcp__sheets_rename_tab", "write"],

@@ -59,12 +59,19 @@ import { sh2SheetsBatch } from "./sh2-sheets-batch";
 import { sh3SheetsFormatTable } from "./sh3-sheets-format-table";
 import { sh4SheetsRename } from "./sh4-sheets-rename";
 import { sh5SheetsDelete } from "./sh5-sheets-delete";
+import { sh6SheetsMetadata } from "./sh6-sheets-metadata";
+import { sh7SheetsCopyTab } from "./sh7-sheets-copy-tab";
 import { gm1GmailUpdateLabel } from "./gm1-gmail-update-label";
 import { gm2GmailList } from "./gm2-gmail-list";
 import { gm3GmailMarkRead } from "./gm3-gmail-mark-read";
 import { gm4GmailMarkReadDefault } from "./gm4-gmail-mark-read-default";
+import { gm5GmailListDrafts } from "./gm5-gmail-list-drafts";
+import { gm6GmailTrashUntrash } from "./gm6-gmail-trash-untrash";
+import { gm7GmailGetAttachment } from "./gm7-gmail-get-attachment";
 import { dr1DriveFolder } from "./dr1-drive-folder";
 import { dr2DriveRead } from "./dr2-drive-read";
+import { dr3DriveGetFile } from "./dr3-drive-get-file";
+import { dr4DriveMoveTrash } from "./dr4-drive-move-trash";
 import { ca1CalendarGet } from "./ca1-calendar-get";
 import { ca2CalendarUpdate } from "./ca2-calendar-update";
 import { ca3CalendarFreebusy } from "./ca3-calendar-freebusy";
@@ -189,12 +196,19 @@ export const CASES: TestCase[] = [
   sh3SheetsFormatTable,
   sh4SheetsRename,
   sh5SheetsDelete,
+  sh6SheetsMetadata,
+  sh7SheetsCopyTab,
   gm1GmailUpdateLabel,
   gm2GmailList,
   gm3GmailMarkRead,
   gm4GmailMarkReadDefault,
+  gm5GmailListDrafts,
+  gm6GmailTrashUntrash,
+  gm7GmailGetAttachment,
   dr1DriveFolder,
   dr2DriveRead,
+  dr3DriveGetFile,
+  dr4DriveMoveTrash,
   ca1CalendarGet,
   ca2CalendarUpdate,
   ca3CalendarFreebusy,

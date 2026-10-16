@@ -8,17 +8,17 @@ This server powers the Google Workspace connector of [DataToRAG](https://datator
 
 | Service | Tools | Operations |
 |---------|-------|------------|
-| **Gmail** | 18 | send, reply, forward, read, search, list, create draft, update draft, send draft, delete draft, mark read, list filters, create label, list labels, update label, delete label, label message, save attachment to Drive |
+| **Gmail** | 22 | send, reply, forward, read, search, list, create draft, update draft, send draft, delete draft, mark read, list filters, create label, list labels, update label, delete label, label message, save attachment to Drive, trash, untrash, list drafts, get attachment |
 | **Calendar** | 6 | list events, get event, create, update, delete, freebusy |
 | **Contacts** | 7 | search, get, list, create, update, delete, directory search |
-| **Drive** | 6 | search, read file, create folder, rename, copy, upload a referenced file |
-| **Sheets** | 14 | read, query, update, append, create, delete, add tab, rename tab, delete tab, clear, find rows, format range, format table, batch update |
+| **Drive** | 9 | search, read file, create folder, rename, copy, upload a referenced file, get file, move, trash |
+| **Sheets** | 16 | read, query, update, append, create, delete, add tab, rename tab, delete tab, clear, find rows, format range, format table, batch update, get metadata, copy tab to another spreadsheet |
 | **Docs** | 5 | get, write, batch update, create, delete |
 | **Slides** | 4 | get, create, batch update, delete |
 | **Tasks** | 7 | list task lists, create task list, list tasks, create, update, complete, delete |
-| **Generic** | 1 | `gws_run` — fallback for any GWS API not covered above |
+| **Generic** | 1 | `gws_run`: a custom query tool for the Gmail, Calendar, Drive, Sheets, Docs, Slides, People and Tasks API methods not covered above |
 
-**68 tools total.** All tools support shared (team) Drives.
+**77 tools total.** All tools support shared (team) Drives.
 
 ### Key tool details
 
