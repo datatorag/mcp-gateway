@@ -43,9 +43,11 @@ function describe(value: unknown): string {
  * The value a double-encoded string stands for, when it decodes to exactly
  * the declared container type (per SCRUM-269); `undefined` otherwise. Only
  * arrays and objects: a number or boolean sent as a string is a deliberate
- * rejection, and coercing it would change what the value means.
+ * rejection, and coercing it would change what the value means. Exported for
+ * gws_run's free-form params, where the same rule applies to the params a
+ * method declares repeated (SCRUM-298).
  */
-function unwrapJsonString(value: string, expected: "array" | "object"): unknown {
+export function unwrapJsonString(value: string, expected: "array" | "object"): unknown {
   let parsed: unknown;
   try {
     parsed = JSON.parse(value);
