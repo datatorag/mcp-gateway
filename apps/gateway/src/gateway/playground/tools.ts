@@ -4,6 +4,7 @@ import { mcpServers } from "@datatorag-mcp/db";
 import { NAMESPACE_SEPARATOR } from "../plugin-manager";
 import { PLUGIN_SERVICE_MAP, getServiceToken } from "../service-token";
 import { buildPluginServerUrl, callPluginToolOnce } from "../user-tools";
+import { GWS_RUN_REFUSAL, gwsRunHiddenFrom } from "../gws-run-access";
 
 /**
  * Two things live here, and they are no longer one feature.
@@ -255,6 +256,12 @@ export async function executeUserTool(
   args: Record<string, unknown>
 ): Promise<{ text: string; isError: boolean }> {
   const { serverSlug, toolName } = parseNamespacedName(namespacedName);
+
+  // SCRUM-419: gws_run is refused here for an account not on its allowlist,
+  // as on the MCP path; this route does not consult the listing.
+  if (await gwsRunHiddenFrom(db, userId, namespacedName)) {
+    throw new ToolCallError(GWS_RUN_REFUSAL, 403);
+  }
 
   const [mcpServer] = await db
     .select({

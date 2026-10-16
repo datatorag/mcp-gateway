@@ -163,6 +163,17 @@ gateway deploy carries it. What goes with it:
 
 ## Gotchas
 
+- **`gws_run` is hidden from everyone but an allowlist (SCRUM-419).**
+  The gateway lists and dispatches it only for the login emails in
+  `GWS_RUN_ALLOWED_ACCOUNTS` (empty means nobody; values in SSM, never
+  here); anyone else gets a fixed refusal naming the dedicated tool
+  families, unmetered. The registry row stays. The public tool count and
+  `/tools/gws-mcp` leave it out for everyone (`src/lib/public-tools.ts`),
+  so a public count is one below the registry's row count. A smoke case
+  that calls `gws_run` needs the admin who triggers the run on the list.
+  The access rule is `apps/gateway/src/gateway/gws-run-access.ts`; a new
+  read of the tools table for a public page goes through
+  `public-tools.ts`, not a query of its own.
 - **Dotted API paths in `gws_run`.** Resources nest under a parent —
   `users.messages`, `users.drafts`, `users.messages.attachments` — not
   bare names like `drafts`. Get this wrong and the call is refused as an

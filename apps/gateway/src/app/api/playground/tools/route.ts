@@ -4,9 +4,10 @@ import { db } from "@/lib/db";
 import { withRoute } from "@/lib/with-route";
 import { tools, mcpServers } from "@datatorag-mcp/db";
 import { SERVICE_PLUGIN_MAP } from "@/gateway/service-token";
+import { gwsRunHiddenFrom } from "@/gateway/gws-run-access";
 
 // GET /api/playground/tools?service=google-workspace
-export const GET = withRoute(async (_userId, request) => {
+export const GET = withRoute(async (userId, request) => {
   const service = request.nextUrl.searchParams.get("service");
   if (!service) {
     return NextResponse.json(
@@ -35,5 +36,11 @@ export const GET = withRoute(async (_userId, request) => {
     .where(eq(mcpServers.slug, slug))
     .orderBy(tools.name);
 
-  return NextResponse.json({ tools: rows });
+  // SCRUM-419: the tool tester lists gws_run only for the allowlist, as the
+  // MCP listing does.
+  const visible = [];
+  for (const row of rows) {
+    if (!(await gwsRunHiddenFrom(db, userId, row.namespacedName))) visible.push(row);
+  }
+  return NextResponse.json({ tools: visible });
 });

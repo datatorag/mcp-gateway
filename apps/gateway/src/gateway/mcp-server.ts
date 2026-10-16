@@ -43,6 +43,7 @@ import {
 import { trackToolCall } from "./track";
 import { trackMcpToolsListed } from "./mcp-analytics";
 import { checkCallAllowance } from "./billing/enforce";
+import { GWS_RUN_REFUSAL, gwsRunHiddenFrom } from "./gws-run-access";
 import {
   checkScopeForTool,
   missingScopeMessage,
@@ -1010,6 +1011,16 @@ export function createMcpServer(
           isError: true,
         };
       }
+    }
+
+    // SCRUM-419: gws_run is for the allowlisted accounts only. For anyone
+    // else it is not on the list, and a direct call (a client holding an old
+    // list, or a name typed by hand) is refused here, before the allowance
+    // gate, so it is never metered: to this account the tool does not exist,
+    // and an unknown tool is not metered either. Charging a call to a tool
+    // we took off someone's list would bill them for our change.
+    if (await gwsRunHiddenFrom(db, userId, name)) {
+      return { content: [{ type: "text" as const, text: GWS_RUN_REFUSAL }], isError: true };
     }
 
     // Allowance gate, BEFORE any dispatch work. Built-ins are above this line
