@@ -170,3 +170,22 @@ test("refuses a comment above a delete that names another row", () => {
   assert.notEqual(text, delBase);
   assert.throws(() => checkRegistryFile(text), (err) => err instanceof Refusal && /comment above the delete/.test(err.message));
 });
+
+test("every committed pair is a forward and its exact inverse, on the same rows of the same plugin", () => {
+  const dir = new URL("../registry/", import.meta.url).pathname;
+  const forwards = readdirSync(dir).filter((f) => f.endsWith(".sql") && !f.endsWith(".rollback.sql"));
+  assert.ok(forwards.length >= 2);
+  const inverse = { adds: "removes", removes: "adds", changes: "changes" };
+  for (const f of forwards) {
+    const back = f.replace(/\.sql$/, ".rollback.sql");
+    const fwd = checkRegistryFile(readFileSync(join(dir, f), "utf8"));
+    const rev = checkRegistryFile(readFileSync(join(dir, back), "utf8"));
+    assert.equal(rev.slug, fwd.slug, f);
+    const expected = fwd.ops.map((o) => `${inverse[o.op]} ${o.name}`).sort();
+    assert.deepEqual(rev.ops.map((o) => `${o.op} ${o.name}`).sort(), expected, f);
+    // The forward ends at the count the rollback starts from, and back.
+    const delta = (r) => r.ops.filter((o) => o.op === "adds").length - r.ops.filter((o) => o.op === "removes").length;
+    assert.equal(fwd.expectedRows - delta(fwd), rev.expectedRows, f);
+    assert.equal(rev.expectedRows - delta(rev), fwd.expectedRows, f);
+  }
+});
