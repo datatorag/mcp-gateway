@@ -313,12 +313,15 @@ describe("gws_run service and method reach the tracker (SCRUM-227)", () => {
     const client = await connectedClient();
     await client.callTool({
       name: "gws-mcp__gws_run",
-      arguments: { service: "calendar", resource: "events", method: "list", params: { calendarId: "primary" } },
+      arguments: { service: "calendar", resource: "events", method: "list", params: { calendarId: "primary", maxResults: 5 } },
     });
     const [, props] = trackToolCall.mock.calls.at(-1)!;
     expect(props.service).toBe("calendar");
     expect(props.method).toBe("list");
-    expect(JSON.stringify(props)).not.toContain("calendarId");
+    expect(props.resource).toBe("events");
+    // SCRUM-419: the parameter names travel, their values do not.
+    expect(props.paramNames).toBe("calendarId,maxResults");
+    expect(JSON.stringify(props)).not.toContain("primary");
   });
 
   it("hands null in both for a dedicated tool", async () => {
@@ -329,5 +332,7 @@ describe("gws_run service and method reach the tracker (SCRUM-227)", () => {
     const [, props] = trackToolCall.mock.calls.at(-1)!;
     expect(props.service).toBeNull();
     expect(props.method).toBeNull();
+    expect(props.resource).toBeNull();
+    expect(props.paramNames).toBeNull();
   });
 });

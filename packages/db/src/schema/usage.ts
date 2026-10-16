@@ -36,6 +36,17 @@ export const usageEvents = pgTable(
      * every other tool, so a filter on either field is exact. */
     service: text("service"),
     method: text("method"),
+    /** For gws_run only (SCRUM-419): the API resource path the method was
+     * called on ("users.messages.attachments", "calendarList"). Service and
+     * method alone do not name the call: one method name exists on several
+     * resources of a service. Kept only when it has the shape of a resource
+     * name (dotted segments of letters); null otherwise. */
+    resource: text("resource"),
+    /** For gws_run only (SCRUM-419): the names of the parameters the call
+     * passed (top-level keys of params and of the body), sorted and
+     * comma-joined, "calendarId,maxResults,timeMin". Names only, never a
+     * value; null for every other tool and for a call that passed none. */
+    paramNames: text("param_names"),
   },
   (table) => [
     index("idx_usage_events_user_created").on(
