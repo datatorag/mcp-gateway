@@ -137,52 +137,36 @@ export default async function HomePage() {
                   MCP gateway for Google Workspace and Jira
                 </span>
               </div>
-              {/* The step down at the bottom of `lg` is not taste, it is the
-                  only thing that makes this headline fit there.
+              {/* "Claude moves the work" is kept on one line only where the
+                  column has room for it, and allowed to wrap everywhere else.
+                  Measured in Chrome (SCRUM-425): the phrase is 434px wide at
+                  36px, 579 at 48px and 724 at 60px.
 
-                  `your spreadsheet.` is `whitespace-nowrap`, so it sets a hard
-                  minimum width for this column: 551px at 60px in this face at
-                  `tracking-tight`. The column gets whatever is left of the row
-                  after the page padding (48), the flex gap (64) and the hero
-                  table (400), so `clientWidth - 512`. That does not reach 551 until
-                  about 1063, so from `lg` up to there the headline overran the
-                  row and `overflow-x-hidden` on <main> cropped the right edge,
-                  taking a slice of the column beside it with it.
+                  - Below `sm` the column is the viewport less 48px, 342 at 390.
+                    Kept whole, the phrase clipped the headline at both edges
+                    on every phone, because <main> is `overflow-x-hidden`.
+                  - From `sm` to `lg` the page is one column (592 at 640, 720
+                    at 768), so the 48px phrase fits.
+                  - From `lg` to `xl` the column is the viewport less the page
+                    padding (48), the gap (64) and the hero table (400): 512 at
+                    1024, 768 only at 1280. Kept whole, the 60px phrase pushed
+                    the column to 724 and the hero table off the right edge,
+                    cut by up to 116px. So it wraps there.
+                  - From `xl` (1280) the column is at least 768, and the phrase
+                    fits at 60px.
 
-                  Wrapping cannot save it: the phrase is one unbreakable word
-                  as far as layout is concerned, and at 60px it is wider than
-                  the whole column. Giving the space back does not work either
-                  — closing the flex gap entirely buys 64 and still lands
-                  short. So the type gives: 54px at the bottom of `lg`, 60px
-                  above it, which leaves 16px of slack at 1024.
-
-                  The switch is at 1119 rather than the 1063 the arithmetic
-                  asks for, because a `max-width` query matches the viewport
-                  WITH the scrollbar while the column is laid out inside
-                  `clientWidth`, WITHOUT it. Tying the switch to the real
-                  threshold would put it a couple of pixels from clipping and
-                  let the platform's scrollbar width decide, so it sits ~40px
-                  clear instead and 54px covers a slightly wider band than it
-                  strictly needs. For the same reason this is a media query
-                  and not a `vw` clamp — `vw` counts the scrollbar too, so a
-                  fluid size is optimistic about the space it has by exactly
-                  the amount that makes it clip.
-
-                  It is also `lg:max-[…]` rather than a bare `min-[…]`: named
-                  breakpoint variants outrank arbitrary ones in the cascade
-                  whatever their widths, so a plain `min-[1080px]:text-6xl`
-                  loses to `sm:text-5xl` and silently does nothing.
-
-                  Re-derive all of it if the hero table's width, the gap or the
-                  face changes. */}
+                  This replaces a step down to 54px at the bottom of `lg`,
+                  derived for an earlier headline ("your spreadsheet.") that
+                  no longer exists. Re-measure if the headline, the face, the
+                  gap or the hero table's width changes. */}
               <h1
-                className="animate-fade-in-up mt-6 font-display text-4xl font-extrabold leading-[1.1] tracking-tight text-white sm:text-5xl lg:text-6xl lg:max-[1119px]:text-[3.375rem]"
+                className="animate-fade-in-up mt-6 font-display text-4xl font-extrabold leading-[1.1] tracking-tight text-white sm:text-5xl lg:text-6xl"
                 style={{ animationDelay: "0.06s" }}
               >
                 One connection to Gmail, Drive, Sheets and Jira.{" "}
                 <span className="text-blue-200">
-                  <span className="whitespace-nowrap">Claude moves the work</span>{" "}
-                  <span className="whitespace-nowrap">between them.</span>
+                  <span className="sm:whitespace-nowrap lg:max-xl:whitespace-normal">Claude moves the work</span>{" "}
+                  <span className="sm:whitespace-nowrap lg:max-xl:whitespace-normal">between them.</span>
                 </span>
               </h1>
               <p
@@ -259,8 +243,8 @@ export default async function HomePage() {
 
             {/* The comparison is the hero shot (SCRUM-425), in the column the
                 video held, at the width it held: `max-w-md` stacked, 400px from
-                `lg` up. Same width on purpose, so the headline arithmetic
-                above still holds. Its rows come from the full table at
+                `lg` up. The headline's wrapping above is measured against
+                this width. Its rows come from the full table at
                 #comparison and nowhere else; see heroGroups(). */}
             <div
               className="animate-fade-in-up flex w-full flex-shrink-0 justify-center lg:w-auto"

@@ -89,6 +89,17 @@ describe("the comparison hero's rows", () => {
     expect(page).not.toContain("<HeroVideo");
   });
 
+  it("the headline beside it never holds a phrase on one line at every width", () => {
+    // A bare whitespace-nowrap in the H1 clipped it on every phone and, from
+    // lg to xl, pushed this table off the right edge. The fit itself was
+    // measured in a browser at 320 to 1440 (see the comment above the H1);
+    // this only stops the unconditional form coming back.
+    const page = readFileSync(join(__dirname, "../app/page.tsx"), "utf8");
+    const h1 = page.slice(page.indexOf("<h1"), page.indexOf("</h1>"));
+    expect(h1).not.toMatch(/className="[^"]*(?<![:\w-])whitespace-nowrap/);
+    expect(h1).toContain("lg:max-xl:whitespace-normal");
+  });
+
   it("contains no em-dashes, code comments included", () => {
     // The new file only: connector-comparison.tsx has older comments that
     // carry some, and the full table is out of this change's scope. Its rows
