@@ -16,9 +16,10 @@ This server powers the Google Workspace connector of [DataToRAG](https://datator
 | **Docs** | 5 | get, write, batch update, create, delete |
 | **Slides** | 4 | get, create, batch update, delete |
 | **Tasks** | 7 | list task lists, create task list, list tasks, create, update, complete, delete |
-| **Generic** | 1 | `gws_run`: a custom query tool for the Gmail, Calendar, Drive, Sheets, Docs, Slides, People and Tasks API methods not covered above |
 
-**77 tools total.** All tools support shared (team) Drives.
+**76 tools total.** All tools support shared (team) Drives.
+
+The plugin also serves a raw API fallback for internal use; the gateway does not list it to users, and the counts above leave it out.
 
 ### Key tool details
 
@@ -97,8 +98,6 @@ All modes include the `inlineObjects` metadata map (contentUri, size, margins, c
 
 **docs_write** — Uses batchUpdate API with insertText, correctly handles newlines, em dashes, and unicode characters.
 
-**gws_run** — Fallback tool for any Google Workspace API not covered by the dedicated tools. Accepts service, resource, method, params, and JSON body. Use only when no dedicated tool exists.
-
 ## Running under the gateway
 
 This is a service plugin of the DataToRAG gateway, not a server to run on its own. The gateway starts `server/index.js` as a child process, sets `PORT`, and sends each user's Google access token in the `X-User-Token` header; every call then goes to the Google REST API directly, and the `gws` CLI is never run. For development, from the repository root:
@@ -151,7 +150,7 @@ src/
     ├── docs.ts           # Docs tools (text/index/full modes, inline image metadata)
     ├── slides.ts         # Slides tools (trimmed responses, placeholder maps)
     ├── tasks.ts          # Google Tasks tools (lists, CRUD, complete)
-    ├── generic.ts        # Generic gws_run fallback
+    ├── generic.ts        # Raw API fallback, internal accounts only
     └── index.ts          # Tool registry (flat Map<name, handler>)
 ```
 

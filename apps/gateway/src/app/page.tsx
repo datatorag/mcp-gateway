@@ -1,7 +1,6 @@
 import type { Metadata } from "next";
-import { eq, sql } from "drizzle-orm";
 import { db } from "@/lib/db";
-import { mcpServers, tools } from "@datatorag-mcp/db";
+import { publicToolCount } from "@/lib/public-tools";
 import { Navbar } from "@/components/navbar";
 import { ShaderBackground } from "@/components/shader-background";
 import { IntegrationCatalog } from "@/components/integration-catalog";
@@ -86,18 +85,9 @@ export const metadata: Metadata = {
   },
 };
 
-async function getToolCount(): Promise<number> {
-  const [row] = await db
-    .select({ count: sql<number>`count(${tools.id})::int` })
-    .from(tools)
-    .innerJoin(mcpServers, eq(tools.mcpServerId, mcpServers.id))
-    .where(eq(mcpServers.status, "active"));
-  return row?.count ?? 0;
-}
-
 export default async function HomePage() {
   const [totalTools, userId] = await Promise.all([
-    getToolCount(),
+    publicToolCount(db),
     getSessionUserId(),
   ]);
   const signedIn = userId !== null;

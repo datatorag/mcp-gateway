@@ -22,11 +22,27 @@ import { allTools } from "./tools/index.js";
 const read = (file: string) =>
   readFileSync(path.join(process.cwd(), file), "utf-8");
 
+/** The README is also the public tool page (/tools/gws-mcp), so it counts
+ * what a user is offered. gws_run is served to an internal allowlist only
+ * (SCRUM-419): the gateway lists it to nobody else, and the README neither
+ * lists nor counts it. CLAUDE.md, for developers, counts everything. */
+const INTERNAL_ONLY = new Set(["gws_run"]);
+const publicTools = allTools.filter((t) => !INTERNAL_ONLY.has(t.name));
+
 describe("documented tool counts", () => {
-  it("README states the real total", () => {
+  it("README states the real total of the tools a user is offered", () => {
     const stated = /\*\*(\d+) tools total\.\*\*/.exec(read("README.md"));
     expect(stated, "README.md no longer states a total in the pinned form").not.toBeNull();
-    expect(Number(stated![1])).toBe(allTools.length);
+    expect(Number(stated![1])).toBe(publicTools.length);
+  });
+
+  it("README does not advertise the internal-only tools it leaves out of its counts", () => {
+    // The counts exclude them, so naming them would make the page a claim
+    // about a tool most readers cannot use.
+    for (const name of INTERNAL_ONLY) {
+      expect(allTools.some((t) => t.name === name), `${name} is no longer served`).toBe(true);
+      expect(read("README.md")).not.toContain(name);
+    }
   });
 
   it("CLAUDE.md states the real total", () => {
@@ -41,7 +57,7 @@ describe("documented tool counts", () => {
     const rows = [...read("README.md").matchAll(/^\| \*\*\w+\*\* \| (\d+) \|/gm)];
     expect(rows.length).toBeGreaterThan(0);
     const summed = rows.reduce((total, row) => total + Number(row[1]), 0);
-    expect(summed).toBe(allTools.length);
+    expect(summed).toBe(publicTools.length);
   });
 
   it("README's per-service counts match the tools each service actually ships", () => {

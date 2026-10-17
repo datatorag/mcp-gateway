@@ -106,7 +106,10 @@ goes red.
 
 The gateway serves `tools/list` from the **registry**, not from the plugin
 (`mcp-server.ts` → `listUserToolRows`). So an unregistered tool is invisible to
-every client, fresh or stale, and reconnecting cannot reveal it. Worse, the two
+every client, fresh or stale, and reconnecting cannot reveal it. (One
+registered tool is also left out on purpose: `gws_run` is listed only for the
+accounts in `GWS_RUN_ALLOWED_ACCOUNTS`, so a user's tools/list is one short of
+the registry unless they are on it. That is policy, not drift.) Worse, the two
 checks people reach for first are both **derived from the registry**:
 
 - the `tools` table row count, and
