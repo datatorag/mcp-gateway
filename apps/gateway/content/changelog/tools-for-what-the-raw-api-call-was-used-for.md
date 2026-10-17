@@ -1,6 +1,6 @@
 ---
 title: "Nine tools for what people were reaching the raw API call for"
-date: "2026-10-12"
+date: "2026-10-16"
 tags: ["gmail", "drive", "sheets", "calendar", "gws-mcp"]
 connector: "google-workspace"
 ---
@@ -39,3 +39,6 @@ Reading several ranges in one `sheets_read` call, with `ranges`, was already the
 query tool for the Gmail, Calendar, Drive, Sheets, Docs, Slides, People and Tasks APIs, with a
 link to Google's reference. In the Agent, the moving and trashing tools ask for approval
 before they run, like every other write.
+
+What the raw call was being used for, and why these nine: [We Read What People Used the Raw API
+Call For, and Built Nine Tools Instead](/blog/we-read-what-the-raw-api-call-was-for).
