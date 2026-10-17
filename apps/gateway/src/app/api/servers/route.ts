@@ -1,8 +1,9 @@
 import { NextResponse } from "next/server";
-import { eq, sql } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { withRoute } from "@/lib/with-route";
 import { mcpServers, tools } from "@datatorag-mcp/db";
+import { publiclyListedTool } from "@/gateway/gws-run-access";
 
 // GET /api/servers — list all servers with tool counts (authenticated)
 export const GET = withRoute(async () => {
@@ -15,7 +16,7 @@ export const GET = withRoute(async () => {
       toolCount: sql<number>`count(${tools.id})::int`,
     })
     .from(mcpServers)
-    .leftJoin(tools, eq(tools.mcpServerId, mcpServers.id))
+    .leftJoin(tools, and(eq(tools.mcpServerId, mcpServers.id), publiclyListedTool()))
     .groupBy(mcpServers.id)
     .orderBy(mcpServers.createdAt);
 

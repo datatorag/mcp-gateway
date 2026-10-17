@@ -1,9 +1,8 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { eq, sql } from "drizzle-orm";
 import { PROMO, isPromoCode } from "@/lib/promo";
 import { db } from "@/lib/db";
-import { mcpServers, tools } from "@datatorag-mcp/db";
+import { publicToolCount } from "@/lib/public-tools";
 import { Navbar } from "@/components/navbar";
 import {
   FREE_MONTHLY_CAP,
@@ -62,21 +61,12 @@ export const metadata: Metadata = {
 // so these conversations stay separable from ad-driven form fills.
 const CONTACT_HREF = "/contact?from=pricing";
 
-async function getToolCount(): Promise<number> {
-  const [row] = await db
-    .select({ count: sql<number>`count(${tools.id})::int` })
-    .from(tools)
-    .innerJoin(mcpServers, eq(tools.mcpServerId, mcpServers.id))
-    .where(eq(mcpServers.status, "active"));
-  return row?.count ?? 0;
-}
-
 export default async function PricingPage({
   searchParams,
 }: {
   searchParams?: Promise<Record<string, string | string[] | undefined>>;
 }) {
-  const totalTools = await getToolCount();
+  const totalTools = await publicToolCount(db);
   // SCRUM-231: the banner carries the campaign code here; only the exact
   // code is passed on, and the checkout route decides whether it applies.
   const params = (await searchParams) ?? {};
