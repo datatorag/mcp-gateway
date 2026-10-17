@@ -20,4 +20,5 @@ visible before you rely on it.
 The email can come from one connected Google account and go into the Drive of another. The file's
 content never enters the conversation and is never written to our disks.
 
-Details are on the [file references page](/docs/file-references).
+Details are on the [file references page](/docs/file-references). The story behind it: [Save the Email
+to Your Own Computer, With a Checksum You Can Check](/blog/save-the-email-to-your-own-computer).
