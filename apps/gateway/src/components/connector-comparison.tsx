@@ -237,6 +237,59 @@ export const GROUPS: Group[] = [
   },
 ];
 
+/** The rows the landing page's hero shows (SCRUM-425): every row of the
+ * table above that we have and the built-in connectors do not, and nothing
+ * else. Derived, never retyped, so a row flipped in GROUPS leaves the hero on
+ * the same deploy. A Yes/Yes row says nothing in a short claim, and a row we
+ * lose belongs in the full table, where it is conceded in context.
+ *
+ * Each hero group is a run of whole source groups, so the hero reads in the
+ * table's own order. The brief's first grouping (Sheets; Docs and Slides;
+ * Drive and Gmail; Jira and Confluence) left three of its four groups with one
+ * row each, because Docs and Drive have no such row left: both were conceded.
+ *
+ * `tag` names the service a row belongs to where its own label does not. It
+ * is null for the last group, whose labels name their service already
+ * ("Google Contacts", "Jira, ...") or span all of them. */
+export type HeroRow = Row & { tag: string | null };
+export type HeroGroup = { label: string; rows: HeroRow[]; slides: boolean };
+
+const HERO_SOURCES: { sources: string[]; fallbackLabel: string }[] = [
+  { sources: ["Google Sheets", "Google Docs", "Google Slides"], fallbackLabel: "Sheets, Docs and Slides" },
+  { sources: ["Gmail", "Google Calendar", "Google Drive"], fallbackLabel: "Gmail, Calendar and Drive" },
+  { sources: ["Beyond Google", "The one that changes how you work"], fallbackLabel: "Beyond Google" },
+];
+
+const TAGS: Record<string, string> = {
+  "Google Sheets": "Sheets",
+  "Google Docs": "Docs",
+  "Google Slides": "Slides",
+  Gmail: "Gmail",
+  "Google Calendar": "Calendar",
+  "Google Drive": "Drive",
+};
+
+const andList = (items: string[]) =>
+  items.length <= 1 ? items.join("") : `${items.slice(0, -1).join(", ")} and ${items[items.length - 1]}`;
+
+export function heroGroups(groups: Group[] = GROUPS): HeroGroup[] {
+  return HERO_SOURCES.map(({ sources, fallbackLabel }) => {
+    const rows: HeroRow[] = sources.flatMap((service) =>
+      (groups.find((g) => g.service === service)?.rows ?? [])
+        .filter((r) => !r.builtIn && r.ours)
+        .map((r) => ({ ...r, tag: TAGS[service] ?? null }))
+    );
+    // Labelled by the services that have a row in it, so a heading never
+    // names a service the group shows nothing for.
+    const tags = [...new Set(rows.map((r) => r.tag).filter((t): t is string => t !== null))];
+    return {
+      label: tags.length > 0 ? andList(tags) : fallbackLabel,
+      rows,
+      slides: rows.some((r) => r.tag === "Slides"),
+    };
+  }).filter((g) => g.rows.length > 0);
+}
+
 const Mark = ({ yes }: { yes: boolean }) =>
   yes ? (
     <>

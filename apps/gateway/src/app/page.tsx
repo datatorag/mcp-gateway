@@ -6,11 +6,12 @@ import { ShaderBackground } from "@/components/shader-background";
 import { IntegrationCatalog } from "@/components/integration-catalog";
 import { CircleCheckIcon, CircleMinusIcon } from "lucide-react";
 import { CasaBadge } from "@/components/casa-badge";
-import { ConnectorComparison } from "@/components/connector-comparison";
+import { ConnectorComparison, heroGroups } from "@/components/connector-comparison";
 import { StartupBarOffset } from "@/components/startupbar-offset";
 import { DemoBento } from "@/components/demo/demo-bento";
 import { DEMO_HEADING, DEMO_STANDFIRST } from "@/components/demo/demo-copy";
-import { HeroVideo } from "@/components/hero-video";
+import { ComparisonHero } from "@/components/comparison-hero";
+import { SLIDES_VERIFIED_ON, VERIFIED_ON } from "@/lib/connector-verification";
 import { SkillCard } from "@/components/skill-card";
 import { getAllSkills } from "@/lib/skills";
 import { getAllPersonas } from "@/lib/personas";
@@ -136,52 +137,36 @@ export default async function HomePage() {
                   MCP gateway for Google Workspace and Jira
                 </span>
               </div>
-              {/* The step down at the bottom of `lg` is not taste, it is the
-                  only thing that makes this headline fit there.
+              {/* "Claude moves the work" is kept on one line only where the
+                  column has room for it, and allowed to wrap everywhere else.
+                  Measured in Chrome (SCRUM-425): the phrase is 434px wide at
+                  36px, 579 at 48px and 724 at 60px.
 
-                  `your spreadsheet.` is `whitespace-nowrap`, so it sets a hard
-                  minimum width for this column: 551px at 60px in this face at
-                  `tracking-tight`. The column gets whatever is left of the row
-                  after the page padding (48), the flex gap (64) and the video
-                  (400) — `clientWidth - 512`. That does not reach 551 until
-                  about 1063, so from `lg` up to there the headline overran the
-                  row and `overflow-x-hidden` on <main> cropped the right edge,
-                  taking a slice of the video with it.
+                  - Below `sm` the column is the viewport less 48px, 342 at 390.
+                    Kept whole, the phrase clipped the headline at both edges
+                    on every phone, because <main> is `overflow-x-hidden`.
+                  - From `sm` to `lg` the page is one column (592 at 640, 720
+                    at 768), so the 48px phrase fits.
+                  - From `lg` to `xl` the column is the viewport less the page
+                    padding (48), the gap (64) and the hero table (400): 512 at
+                    1024, 768 only at 1280. Kept whole, the 60px phrase pushed
+                    the column to 724 and the hero table off the right edge,
+                    cut by up to 116px. So it wraps there.
+                  - From `xl` (1280) the column is at least 768, and the phrase
+                    fits at 60px.
 
-                  Wrapping cannot save it: the phrase is one unbreakable word
-                  as far as layout is concerned, and at 60px it is wider than
-                  the whole column. Giving the space back does not work either
-                  — closing the flex gap entirely buys 64 and still lands
-                  short. So the type gives: 54px at the bottom of `lg`, 60px
-                  above it, which leaves 16px of slack at 1024.
-
-                  The switch is at 1119 rather than the 1063 the arithmetic
-                  asks for, because a `max-width` query matches the viewport
-                  WITH the scrollbar while the column is laid out inside
-                  `clientWidth`, WITHOUT it. Tying the switch to the real
-                  threshold would put it a couple of pixels from clipping and
-                  let the platform's scrollbar width decide, so it sits ~40px
-                  clear instead and 54px covers a slightly wider band than it
-                  strictly needs. For the same reason this is a media query
-                  and not a `vw` clamp — `vw` counts the scrollbar too, so a
-                  fluid size is optimistic about the space it has by exactly
-                  the amount that makes it clip.
-
-                  It is also `lg:max-[…]` rather than a bare `min-[…]`: named
-                  breakpoint variants outrank arbitrary ones in the cascade
-                  whatever their widths, so a plain `min-[1080px]:text-6xl`
-                  loses to `sm:text-5xl` and silently does nothing.
-
-                  Re-derive all of it if the video width, the gap or the face
-                  changes. */}
+                  This replaces a step down to 54px at the bottom of `lg`,
+                  derived for an earlier headline ("your spreadsheet.") that
+                  no longer exists. Re-measure if the headline, the face, the
+                  gap or the hero table's width changes. */}
               <h1
-                className="animate-fade-in-up mt-6 font-display text-4xl font-extrabold leading-[1.1] tracking-tight text-white sm:text-5xl lg:text-6xl lg:max-[1119px]:text-[3.375rem]"
+                className="animate-fade-in-up mt-6 font-display text-4xl font-extrabold leading-[1.1] tracking-tight text-white sm:text-5xl lg:text-6xl"
                 style={{ animationDelay: "0.06s" }}
               >
                 One connection to Gmail, Drive, Sheets and Jira.{" "}
                 <span className="text-blue-200">
-                  <span className="whitespace-nowrap">Claude moves the work</span>{" "}
-                  <span className="whitespace-nowrap">between them.</span>
+                  <span className="sm:whitespace-nowrap lg:max-xl:whitespace-normal">Claude moves the work</span>{" "}
+                  <span className="sm:whitespace-nowrap lg:max-xl:whitespace-normal">between them.</span>
                 </span>
               </h1>
               <p
@@ -244,117 +229,6 @@ export default async function HomePage() {
                 className="animate-fade-in-up mt-2 text-white/50 lg:text-left"
               />
 
-              {/* Accuracy constraint: rows must stay create-vs-change (the
-                  built-in Drive connector can create new files) — never a
-                  general "no write access" claim.
-
-                  The column header below stays unnamed on purpose: the rows
-                  span more than one built-in connector, and the last one spans
-                  all of them, so naming the column after any single connector
-                  would make another row false. Claude has three Google
-                  connectors — Drive, Gmail, Calendar.
-
-                  There is no Gmail row here as of 18 September 2026: the
-                  built-in connector sends, replies and forwards, so the row
-                  that used to live here now reads Yes/Yes. The full table at
-                  #comparison concedes those three rows rather than dropping
-                  them, which is the right place for a concession. */}
-              <div
-                className="animate-fade-in-up mx-auto mt-8 w-full max-w-md lg:mx-0"
-                style={{ animationDelay: "0.2s" }}
-              >
-                <table className="w-full overflow-hidden rounded-xl border border-white/15 bg-white/5 text-sm backdrop-blur-sm">
-                  <thead>
-                    <tr className="border-b border-white/10 text-[11px] uppercase tracking-wider text-white/50">
-                      <th scope="col" className="px-4 py-2.5"></th>
-                      <th
-                        scope="col"
-                        className="px-2 py-2.5 text-center font-medium"
-                      >
-                        Built-in connector
-                      </th>
-                      <th
-                        scope="col"
-                        className="px-2 py-2.5 text-center font-medium text-blue-200"
-                      >
-                        DataToRAG
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody className="text-white/80">
-                    {[
-                      { capability: "Read a file", builtIn: true },
-                      { capability: "Edit an existing sheet", builtIn: false },
-                      // "Create a deck" MUST stay Yes for the built-in column.
-                      // Verified first-hand: the built-in connector creates a
-                      // genuine Google Slides presentation, real presentation
-                      // mimeType and a real edit URL, not an exported file. Any
-                      // row implying it cannot make a deck is false and takes
-                      // ten seconds to disprove. The gap is the next row: it
-                      // refuses to create one WITH content, so the deck arrives
-                      // with a single slide and an empty title and subtitle.
-                      { capability: "Create a deck", builtIn: true },
-                      { capability: "Put content in it", builtIn: false },
-                      // Was "Send an email", which was true until the built-in
-                      // connector gained send, reply and forward in August 2026
-                      // and false afterwards. Replaced rather than flipped: a
-                      // Yes/Yes row in a five-row hero is a row that says
-                      // nothing, and this one is already enumerated on the
-                      // hosted-google-workspace-mcp page and carried as its own
-                      // row further down this page.
-                      { capability: "Work across two Google accounts", builtIn: false },
-                    ].map(({ capability, builtIn }) => (
-                      <tr
-                        key={capability}
-                        className="border-b border-white/10 last:border-b-0"
-                      >
-                        <th
-                          scope="row"
-                          className="px-4 py-2.5 text-left font-normal"
-                        >
-                          {capability}
-                        </th>
-                        {[builtIn, true].map((yes, i) => (
-                          <td key={i} className="px-2 py-2.5 text-center">
-                            {yes ? (
-                              <>
-                                <svg
-                                  width="14"
-                                  height="14"
-                                  viewBox="0 0 16 16"
-                                  fill="none"
-                                  stroke="currentColor"
-                                  strokeWidth="2"
-                                  strokeLinecap="round"
-                                  strokeLinejoin="round"
-                                  aria-hidden="true"
-                                  className="inline-block text-white/90"
-                                >
-                                  <path d="M3 8.5l3.5 3.5L13 5" />
-                                </svg>
-                                <span className="sr-only">Yes</span>
-                              </>
-                            ) : (
-                              <span className="text-white/30" aria-hidden="true">
-                                &mdash;
-                              </span>
-                            )}
-                            {!yes && <span className="sr-only">No</span>}
-                          </td>
-                        ))}
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-                <a
-                  className="mt-3 inline-flex items-center gap-1 text-sm text-white/70 transition-colors hover:text-white"
-                  href="#comparison"
-                >
-                  See every capability we tested
-                  <span aria-hidden="true">&rarr;</span>
-                </a>
-              </div>
-
               {/* Badge lockup, not fine print. */}
               <div
                 className="animate-fade-in-up mt-6"
@@ -367,90 +241,21 @@ export default async function HomePage() {
               </div>
             </div>
 
-            {/* Hero video — vertical, to the right on desktop.
-
-                No `controls`: a scrub bar over it is the same platform chrome
-                the composition was rebuilt to shed.
-
-                `muted` is load-bearing, not decorative. This render carries a
-                REAL narration track (it is the same file that ships to YouTube
-                with sound), and a video with an audio stream will not autoplay
-                in most browsers without `muted` — the failure would look like a
-                broken video rather than a missing attribute. So the narration
-                is never heard here, by design, and the burned-in captions are
-                what carry every spoken claim. */}
+            {/* The comparison is the hero shot (SCRUM-425), in the column the
+                video held, at the width it held: `max-w-md` stacked, 400px from
+                `lg` up. The headline's wrapping above is measured against
+                this width. Its rows come from the full table at
+                #comparison and nowhere else; see heroGroups(). */}
             <div
               className="animate-fade-in-up flex w-full flex-shrink-0 justify-center lg:w-auto"
               style={{ animationDelay: "0.28s" }}
             >
-              {/* `max-w-md` on mobile, matching the comparison table above it
-                  rather than the fixed 340px the desktop column uses. The slot
-                  was 338px wide at every viewport, so on a narrow screen the
-                  stacked hero read as a table with a narrower video floating
-                  under it instead of one column.
-
-                  The video's caption size scales with this and is NOT the
-                  reason for the change; it is a side effect and is not to be
-                  tuned here or in the composition. */}
-              {/* The shadow is spelled out rather than `shadow-2xl` because
-                  `shadow-2xl` is black at 25% and this sits on a navy mesh:
-                  black over #0a1628 has almost no contrast left to spend, so
-                  the default read as nothing at all and the slot looked cut
-                  into the background rather than laid on it.
-
-                  Three layers, because elevation on a dark ground is not one
-                  shadow. The first is the CONTACT shadow — tight, barely
-                  offset, nearly opaque — and it is the one that stops the box
-                  looking pasted on. The last is AMBIENT: wide, far below, low
-                  opacity. The middle one only bridges them. A single large
-                  blur, whatever its opacity, reads as a glow instead.
-
-                  The colour is darker than the darkest part of the background
-                  (#010410 against #0a1628) for the same reason: on dark you
-                  buy separation with luminance below the ground, not with more
-                  alpha on a colour the ground already contains.
-
-                  The inset hairline along the top edge is the lit-surface cue
-                  — light falls from above, so the top edge catches it. It is
-                  inset rather than a `ring` so it does not double up with the
-                  border this box already carries.
-
-                  Judge any change to this at the delivered size against the
-                  live shader. It is tuned for 400px on navy, and it will look
-                  overdone zoomed in and on white. */}
-              <div
-                id="demo-video"
-                className="aspect-[9/16] w-full max-w-md overflow-hidden rounded-3xl border border-white/10 bg-white/5 shadow-[inset_0_1px_0_0_rgba(255,255,255,0.14),0_3px_8px_-2px_rgba(1,4,16,0.95),0_18px_36px_-10px_rgba(1,4,16,0.9),0_56px_100px_-18px_rgba(1,4,16,0.8)] backdrop-blur-sm lg:w-[400px] lg:max-w-[400px]"
-              >
-                {/* The NARRATED cut, playing silently (Manuel, 2026-08-07 —
-                    reverses the earlier "voiced is YouTube/social only" call).
-                    It carries ~10s of setup that the silent cut deliberately
-                    dropped, so it opens slower here than a hero usually would;
-                    that was chosen with the trade-off on the table, in exchange
-                    for the setup itself — the sheet, then Claude's own connector
-                    refusing to change it, then the reveal.
-
-                    Its claims are BURNED IN as captions, which is what makes
-                    that survivable with no audio: every spoken line is also on
-                    screen. Do not swap this for a cut without captions while the
-                    slot stays muted, and do not drop `muted` — autoplay is
-                    blocked without it, so the hero would sit on its poster.
-
-                    The file does carry a real narration track: AAC stereo,
-                    36.1s, mean -21.0 dB, peak -0.9 dB. Measured, because we
-                    have mis-called a silent AAC stream "no audio" before. So
-                    the sound is there and nobody could hear it, which is what
-                    the speaker button in `HeroVideo` is for: it is opt-in, it
-                    starts the narration from the top, it plays exactly one
-                    pass and then returns to this silent loop, and it goes
-                    quiet when the video scrolls away.
-
-                    That button is the ONLY way sound is meant to arrive here.
-                    `muted` stays the default state — dropping it does not give
-                    you audio, it gives you a blocked autoplay and a hero
-                    sitting on its poster, which is the failure this comment
-                    has warned about from the start. */}
-                <HeroVideo />
+              <div className="w-full max-w-md lg:w-[400px] lg:max-w-[400px]">
+                <ComparisonHero
+                  groups={heroGroups()}
+                  verifiedOn={VERIFIED_ON}
+                  slidesVerifiedOn={SLIDES_VERIFIED_ON}
+                />
               </div>
             </div>
           </div>
