@@ -18,11 +18,11 @@
 import { CircleCheckIcon, CircleMinusIcon } from "lucide-react";
 import type { HeroGroup } from "./connector-comparison";
 
-/** Delay of the first row's reveal, and the step between rows. Fifteen lines
- * (five group headings, ten rows) start within a second and finish by about
- * 1.3s. */
+/** Delay of the first row's reveal, and the step between rows. Twenty lines
+ * (five group headings, ten gap rows, five tie lines) start within a second
+ * and finish by about 1.3s. */
 export const REVEAL_START_S = 0.25;
-export const REVEAL_STEP_S = 0.05;
+export const REVEAL_STEP_S = 0.035;
 
 function Mark({ yes }: { yes: boolean }) {
   return yes ? (
@@ -95,6 +95,21 @@ export function ComparisonHero({
                 </td>
               </tr>
             ))}
+            {g.ties.length > 0 ? (
+              // What both connectors do (SCRUM-427): one muted line, so the
+              // gaps stay the point and the group does not read thin.
+              <tr data-tie="" className="hero-reveal bg-white/[0.03] text-white/55" style={reveal()}>
+                <th scope="row" className="px-4 py-2 text-left text-[12px] font-normal leading-snug">
+                  <span className="font-medium text-white/70">Both:</span> {g.ties.join(", ")}
+                </th>
+                <td className="px-1 py-2 text-center sm:px-2">
+                  <Mark yes />
+                </td>
+                <td className="px-1 py-2 text-center sm:px-2">
+                  <Mark yes />
+                </td>
+              </tr>
+            ) : null}
           </tbody>
         ))}
       </table>

@@ -262,25 +262,39 @@ export const GROUPS: Group[] = [
  *
  * `tag` names a row's service where its group does not: only the Jira row,
  * which sits with the Gmail attachments it acts on but belongs to the
- * Atlassian group of the full table. */
+ * Atlassian group of the full table.
+ *
+ * TIES (SCRUM-427): under its gaps, each hero group carries one line of what
+ * both connectors do, the Yes/Yes rows of the source groups named in
+ * `tiesFrom`, in the full table's order. A Google group with gaps only read
+ * thin. Rows where the built-in connector does more (built-in Yes, ours No)
+ * appear nowhere in the hero; they stay conceded in the full table. Beyond
+ * Google draws its ties from the Beyond Google source group, whose Yes/Yes
+ * rows are the Jira and Confluence ones. */
 export type HeroRow = Row & { tag: string | null };
-export type HeroGroup = { label: string; rows: HeroRow[]; slides: boolean };
+export type HeroGroup = { label: string; rows: HeroRow[]; ties: string[]; slides: boolean };
 
-const HERO_MAP: { label: string; rows: string[] }[] = [
-  { label: "Sheets", rows: ["Query a sheet with a filter", "Two Google accounts in one request"] },
+const HERO_MAP: { label: string; rows: string[]; tiesFrom: string[] }[] = [
+  {
+    label: "Sheets",
+    rows: ["Query a sheet with a filter", "Two Google accounts in one request"],
+    tiesFrom: ["Google Sheets"],
+  },
   {
     label: "Gmail attachments",
+    tiesFrom: ["Gmail"],
     rows: [
       "Save an email or an attachment to Drive",
       "Save an email or an attachment to your computer",
       "Jira, attach an email or one of its attachments to an issue",
     ],
   },
-  { label: "Slides", rows: ["Put content in it"] },
-  { label: "Calendar", rows: ["Free/busy lookup"] },
+  { label: "Slides", rows: ["Put content in it"], tiesFrom: ["Google Slides"] },
+  { label: "Calendar", rows: ["Free/busy lookup"], tiesFrom: ["Google Calendar"] },
   {
     label: "Beyond Google",
     rows: ["Google Contacts", "Google Tasks", "Work and personal account at the same time"],
+    tiesFrom: ["Beyond Google"],
   },
 ];
 
@@ -306,7 +320,7 @@ export function unmappedHeroGaps(groups: Group[] = GROUPS): string[] {
 
 export function heroGroups(groups: Group[] = GROUPS): HeroGroup[] {
   const gaps = new Map(heroGaps(groups).map((r) => [r.capability, r]));
-  return HERO_MAP.map(({ label, rows }) => {
+  return HERO_MAP.map(({ label, rows, tiesFrom }) => {
     const placed = rows.flatMap((capability) => {
       const gap = gaps.get(capability);
       if (!gap) return [];
@@ -316,6 +330,11 @@ export function heroGroups(groups: Group[] = GROUPS): HeroGroup[] {
     return {
       label,
       rows: placed.map(({ service: _service, ...row }) => row),
+      ties: tiesFrom.flatMap((service) =>
+        (groups.find((g) => g.service === service)?.rows ?? [])
+          .filter((r) => r.builtIn && r.ours)
+          .map((r) => r.capability)
+      ),
       slides: placed.some((r) => r.service === "Google Slides"),
     };
   }).filter((g) => g.rows.length > 0);
