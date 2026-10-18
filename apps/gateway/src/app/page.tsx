@@ -174,8 +174,10 @@ export default async function HomePage() {
                 style={{ animationDelay: "0.06s" }}
               >
                 One connection to Google Workspace and Jira.{" "}
-                {/* `block`: the second sentence always starts its own line. */}
-                <span className="block text-blue-200">
+                {/* From `sm` the second sentence starts its own line; on a
+                    phone it flows on from the first, which keeps the
+                    headline a line shorter and the table higher. */}
+                <span className="text-blue-200 sm:block">
                   <span className="sm:whitespace-nowrap lg:max-xl:whitespace-normal">Claude moves the work</span>{" "}
                   <span className="sm:whitespace-nowrap lg:max-xl:whitespace-normal">between them.</span>
                 </span>
@@ -383,7 +385,7 @@ export default async function HomePage() {
                 },
                 {
                   title: "Pre-Built Connectors",
-                  desc: "One-click integrations for Google Workspace, Salesforce, Databricks, Slack, and more. We handle the auth and schema mapping.",
+                  desc: "One connection for Google Workspace, Jira and Confluence. We handle the auth and schema mapping.",
                   icon: (
                     <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
                       <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83" />
@@ -520,9 +522,6 @@ export default async function HomePage() {
             </p>
             <div className="mt-3 flex flex-wrap gap-2">
               {[
-                "Salesforce",
-                "Databricks",
-                "Slack",
                 "HubSpot",
                 "PostgreSQL",
                 "Snowflake",
