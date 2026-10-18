@@ -6,6 +6,7 @@ author: "Manuel Yang"
 category: "Product"
 coverImage: "/blog/raw-call-to-named-tool.png"
 tags: ["gws-mcp", "sheets", "gmail", "drive", "mcp"]
+updated: "2026-10-17"
 ---
 
 Every connector has a gap somewhere, and ours has had the same answer to every gap since the first week: a tool called `gws_run` that sends one raw request to a Google API and gives back whatever Google says. Service, resource, method, parameters. If we had not built a tool for something, the model could still get there.
@@ -18,7 +19,7 @@ The raw call that the most different people made was asking Google Sheets for a 
 
 The second was Drive: describe this file, move it, trash it. We had search and rename and nothing in between.
 
-The third surprised me. About a third of the raw calls were for things we already had a tool for. Listing Gmail messages, reading one, creating a calendar event. The named tool existed and the model picked the raw one anyway. I still cannot say why from the record, and that is probably the most useful thing it told me: a model that can see a generic tool will sometimes take it over the specific one, and every time it does, it is guessing at Google's API shape instead of using ours.
+The third: about a third of the raw calls were for things we already had a tool for. Listing Gmail messages, reading one, creating a calendar event. The named tool existed and the model picked the raw one anyway. The record does not say why. What it does say: a model that can see a generic tool will sometimes take it over the specific one, and every time it does, it is guessing at Google's API shape instead of using ours.
 
 ## Nine tools
 
@@ -37,10 +38,10 @@ So the nameable gaps became tools, live today:
 
 Two existing tools changed too. `calendar_list_events` takes a page token now, which is probably what some of those raw calendar calls were about. And the raw tool's own description finally says which eight Google APIs it reaches, instead of promising ones it refuses.
 
-That takes the connector to 70+ named tools for Google Workspace, plus the raw one, which as of today you will not see (more below). I am aware that number is high. Anthropic's own Sheets connector has nine. The rule from here is that a tool gets added when the record shows people reaching for it, and a parameter gets added when the tool already exists. The record is what makes that a rule instead of a guess.
+That takes the connector to 70+ named tools for Google Workspace, plus the raw one, which as of today you will not see (more below). That is a high number. Anthropic's own Sheets connector has nine. The rule from here is that a tool gets added when the record shows people reaching for it, and a parameter gets added when the tool already exists. The record is what makes that a rule instead of a guess.
 
 ## The escape hatch goes behind a door
 
-With the gaps filled, there is nothing left that an outside user needs the raw call for, and every time the model picks it over a named tool it is a worse call for them and a blind spot for us. So from today `gws_run` is hidden from every account except our own and a few we have talked to. It still exists, and a client that calls it anyway gets a one-line answer naming the tools to use instead. If you are using it today for something these nine do not cover, tell me what, because that is the next tool. The full list of what changed is in the [changelog](/changelog).
+With the gaps filled, there is nothing left that an outside user needs the raw call for, and every time the model picks it over a named tool it is a worse call for them and a blind spot for us. So from today `gws_run` is hidden from every account except our own and a few we have talked to. It still exists, and a client that calls it anyway gets a one-line answer naming the tools to use instead. If you use it today for something these nine do not cover, tell me what. That is the next tool. The full list of what changed is in the [changelog](/changelog).
 
-Everything here went out the same way: the registry rows first, approved from my phone, then the build that serves them, then the test suite against production, with seven new cases for the seven new behaviours. All seven green on the first run against production, which does not happen often enough for me to stop mentioning it.
+Everything here went out the same way: the registry rows first, approved from my phone, then the build that serves them, then the test suite against production, with seven new cases for the seven new behaviours. All seven green on the first run against production.
