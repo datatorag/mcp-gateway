@@ -23,7 +23,7 @@ describe("the comparison hero", () => {
   it("renders every gap at once, under every group heading", () => {
     const groups = heroGroups();
     const total = groups.reduce((n, g) => n + g.rows.length, 0);
-    expect(total).toBe(9);
+    expect(total).toBe(10);
     expect(rows()).toHaveLength(total);
     expect([...doc.querySelectorAll('th[scope="colgroup"]')].map((th) => th.textContent)).toEqual(groups.map((g) => g.label));
     for (const g of groups) {
@@ -76,13 +76,21 @@ describe("the comparison hero", () => {
       return i;
     };
     expect(at("<h1")).toBeLessThan(at("<ComparisonHero"));
-    expect(at("<ComparisonHero")).toBeLessThan(at("behind one URL, and every write"));
+    expect(at("<ComparisonHero")).toBeLessThan(at("Workspace and Atlassian behind one URL, in Claude, Claude Code,"));
     expect(at("<ComparisonHero")).toBeLessThan(at("Get Started"));
-    expect(at("Get Started")).toBeLessThan(at("<SignInConsent"));
+    expect(at("Get Started")).toBeLessThan(at("Google-verified since June 2026"));
+    // The agreement line left the hero on Manuel's word; it is shown on the
+    // first screen after sign-in instead (agent-empty-state.test.tsx).
+    expect(hero).not.toContain("<SignInConsent");
     // The headline is the simpler one, with its second sentence on a line
     // of its own (SCRUM-426).
     const h1 = hero.slice(at("<h1"), hero.indexOf("</h1>"));
-    expect(h1).toContain("One connection to Google Workspace and more.");
+    expect(h1.replace(/\{\/\*[\s\S]*?\*\/\}/g, "").replace(/<[^>]+>|\{" "\}/g, " ").replace(/\s+/g, " ")).toContain(
+      "One connection to Google Workspace and more."
+    );
+    // "Google Workspace" is held together from 360px, so "Google" is never
+    // alone on a line of the headline.
+    expect(h1).toMatch(/<span className="min-\[360px\]:whitespace-nowrap">Google Workspace<\/span>/);
     // Its own line from sm up; on a phone it flows on, so the table sits higher.
     expect(h1).toMatch(/className="text-blue-200 sm:block"/);
     expect(h1).not.toMatch(/className="[^"]*(?<![:\w-])block[\s"]/);
@@ -97,8 +105,8 @@ describe("the comparison hero", () => {
     const soon = page.slice(page.indexOf("{/* Coming soon connectors */}"));
     const chips = soon.slice(soon.indexOf("{["), soon.indexOf("].map((name)"));
     expect([...chips.matchAll(/"([^"]+)"/g)].map((m) => m[1])).toEqual(["Notion"]);
-    // The pill above the headline is gone, and so is the long sentence.
+    // The pill above the headline is gone, and so is the old long sentence.
     expect(hero).not.toContain("MCP gateway for Google Workspace and Jira");
-    expect(hero).not.toContain("Claude Code, Cursor");
+    expect(hero).not.toContain("File the email on the Jira issue");
   });
 });

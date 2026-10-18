@@ -67,11 +67,13 @@ describe("the comparison table as checked on its date", () => {
     ["Query a sheet with a filter", false, true],
     ["Two Google accounts in one request", false, true],
     // The rows the 9 October 2026 check added.
-    ["Trash a message or thread", true, false],
     ["Rename a file", true, true],
-    ["Move a file to another folder", true, false],
     ["Share a file with someone", true, false],
     ["Jira, attach an email or one of its attachments to an issue", false, true],
+    // The rows the nine tools moved on 16 October 2026: ours now too.
+    ["Trash a message", true, true],
+    ["File metadata", true, true],
+    ["Move a file to another folder", true, true],
   ] as const)("%s", (capability, builtIn, ours) => {
     expect(row(capability)).toMatchObject({ builtIn, ours });
   });

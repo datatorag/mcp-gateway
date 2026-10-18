@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { GROUPS, heroGroups } from "./connector-comparison";
+import { GROUPS, heroGroups, unmappedHeroGaps } from "./connector-comparison";
 
 /**
  * The hero (SCRUM-425) is the comparison table's short claim, and it may hold
@@ -15,10 +15,45 @@ const sourceRows = GROUPS.flatMap((g) => g.rows.map((r) => ({ ...r, service: g.s
 const clone = () => GROUPS.map((g) => ({ ...g, rows: g.rows.map((r) => ({ ...r })) }));
 
 describe("the comparison hero's rows", () => {
-  it("are exactly the rows of the table that are No for built-in and Yes for us, in the table's order", () => {
+  it("are exactly the rows of the table that are No for built-in and Yes for us", () => {
     const hero = heroGroups().flatMap((g) => g.rows.map((r) => r.capability));
     const expected = sourceRows.filter((r) => !r.builtIn && r.ours).map((r) => r.capability);
-    expect(hero).toEqual(expected);
+    expect([...hero].sort()).toEqual([...expected].sort());
+    expect(hero).toHaveLength(10);
+  });
+
+  it("places every gap row: none falls outside the map", () => {
+    expect(unmappedHeroGaps()).toEqual([]);
+    // A row newly flipped to No/Yes that the map does not place is caught,
+    // not silently left out of the hero.
+    const groups = clone();
+    groups.find((g) => g.service === "Google Drive")!.rows.find((r) => r.capability === "Download file content")!.builtIn = false;
+    groups.find((g) => g.service === "Google Drive")!.rows.find((r) => r.capability === "Download file content")!.ours = true;
+    expect(unmappedHeroGaps(groups)).toEqual(["Download file content"]);
+  });
+
+  it("sits in Manuel's five groups, in his order", () => {
+    expect(heroGroups().map((g) => [g.label, g.rows.map((r) => r.capability)])).toEqual([
+      ["Sheets", ["Query a sheet with a filter", "Two Google accounts in one request"]],
+      [
+        "Gmail attachments",
+        [
+          "Save an attachment to Drive",
+          "Save an email or an attachment to your computer",
+          "Jira, attach an email or one of its attachments to an issue",
+        ],
+      ],
+      ["Slides", ["Put content in it"]],
+      ["Calendar", ["Free/busy lookup"]],
+      ["Beyond Google", ["Google Contacts", "Google Tasks", "Work and personal account at the same time"]],
+    ]);
+  });
+
+  it("tags only the Jira row, whose group does not name its service", () => {
+    const tagged = heroGroups().flatMap((g) => g.rows).filter((r) => r.tag !== null);
+    expect(tagged.map((r) => [r.capability, r.tag])).toEqual([
+      ["Jira, attach an email or one of its attachments to an issue", "Jira"],
+    ]);
   });
 
   it("carry each source row's text and marks unchanged", () => {
@@ -50,36 +85,24 @@ describe("the comparison hero's rows", () => {
     expect(heroGroups(groups).flatMap((g) => g.rows).map((r) => r.capability)).not.toContain("Free/busy lookup");
   });
 
-  it("has two to four rows in every group", () => {
-    const groups = heroGroups();
-    expect(groups.length).toBeGreaterThanOrEqual(2);
-    for (const g of groups) {
-      expect(g.rows.length, g.label).toBeGreaterThanOrEqual(2);
-      expect(g.rows.length, g.label).toBeLessThanOrEqual(4);
+  it("has one to three rows in every group, and no empty group", () => {
+    for (const g of heroGroups()) {
+      expect(g.rows.length, g.label).toBeGreaterThanOrEqual(1);
+      expect(g.rows.length, g.label).toBeLessThanOrEqual(3);
     }
   });
 
   it("drops a group whose every row is conceded, rather than showing an empty one", () => {
     const groups = clone();
-    for (const service of ["Gmail", "Google Calendar", "Google Drive"]) {
-      groups.find((g) => g.service === service)!.rows.forEach((r) => (r.builtIn = true));
-    }
-    const hero = heroGroups(groups);
-    expect(hero.map((g) => g.label)).toEqual(["Sheets and Slides", "Beyond Google"]);
-    expect(hero.every((g) => g.rows.length > 0)).toBe(true);
+    groups.find((g) => g.service === "Google Calendar")!.rows.forEach((r) => (r.builtIn = true));
+    expect(heroGroups(groups).map((g) => g.label)).toEqual(["Sheets", "Gmail attachments", "Slides", "Beyond Google"]);
   });
 
-  it("labels a group by the services it shows a row for, and flags the Slides row for its own date", () => {
-    const groups = heroGroups();
-    expect(groups.map((g) => g.label)).toEqual(["Sheets and Slides", "Gmail and Calendar", "Beyond Google"]);
-    expect(groups.map((g) => g.slides)).toEqual([true, false, false]);
-    // A group that loses its Slides row stops naming Slides and stops asking
-    // for the second date.
+  it("flags the Slides group for its own date, and stops when the Slides row goes", () => {
+    expect(heroGroups().map((g) => g.slides)).toEqual([false, false, true, false, false]);
     const noSlides = clone();
     noSlides.find((g) => g.service === "Google Slides")!.rows.forEach((r) => (r.builtIn = true));
-    const first = heroGroups(noSlides)[0];
-    expect(first.label).toBe("Sheets");
-    expect(first.slides).toBe(false);
+    expect(heroGroups(noSlides).some((g) => g.slides)).toBe(false);
   });
 
   it("the landing page no longer types rows of its own", () => {
@@ -97,7 +120,7 @@ describe("the comparison hero's rows", () => {
     const page = readFileSync(join(__dirname, "../app/page.tsx"), "utf8");
     const h1 = page.slice(page.indexOf("<h1"), page.indexOf("</h1>"));
     expect(h1).not.toMatch(/className="[^"]*(?<![:\w-])whitespace-nowrap/);
-    expect(h1).toContain("lg:max-xl:whitespace-normal");
+    expect(h1).toContain("sm:max-lg:whitespace-nowrap");
   });
 
   it("contains no em-dashes, code comments included", () => {

@@ -24,7 +24,6 @@ import { faqPageNode } from "@/lib/site-schema";
 import { siteFaqGroups, siteFaqs } from "@/lib/site-faq";
 import { SOCIAL_OPEN_GRAPH, SOCIAL_TWITTER } from "@/lib/social-card";
 import { signInHref } from "@/lib/sign-in";
-import { SignInConsent } from "@/components/sign-in-consent";
 
 /** Read once at module scope: the answers are static, the page is not. */
 const homeFaqs = siteFaqs("/");
@@ -135,61 +134,68 @@ export default async function HomePage() {
               buttons, the trust lines. A phone shows the table near the top
               instead of under five lines of copy.
 
-              From `lg` the table moves to a 400px right column spanning every
+              From `lg` the table moves to a 520px right column spanning every
               row, and the text sits in the middle three of five rows
               (`1fr auto auto auto 1fr`), so the extra height of the taller
               table goes above and below the text as a group, never between
               the headline and its sentence. The column widths are the ones
               the headline was measured against below: the page padding (48),
-              the gap (64) and 400.
+              the gap (64) and 520.
 
               `pt-12` is the room the pill above the headline used to take:
               without it, the headline's first line sat under the fixed navbar
               on a phone and the table touched it on a desktop. */}
-          <div className="mx-auto grid w-full max-w-7xl grid-cols-1 items-center px-6 pt-12 text-center lg:grid-cols-[minmax(0,1fr)_400px] lg:grid-rows-[1fr_auto_auto_auto_1fr] lg:gap-x-16 lg:text-left">
+          <div className="mx-auto grid w-full max-w-7xl grid-cols-1 items-center px-6 pt-12 text-center lg:grid-cols-[minmax(0,1fr)_520px] lg:grid-rows-[1fr_auto_auto_auto_1fr] lg:gap-x-16 lg:text-left">
               {/* "Claude moves the work" is kept on one line only where the
                   column has room for it, and allowed to wrap everywhere else.
-                  Measured in Chrome (SCRUM-425): the phrase is 434px wide at
-                  36px, 579 at 48px and 724 at 60px.
+                  Measured in Chrome (SCRUM-425, SCRUM-426): the phrase is
+                  434px wide at 36px, 579 at 48px and 724 at 60px.
 
                   - Below `sm` the column is the viewport less 48px, 342 at 390.
                     Kept whole, the phrase clipped the headline at both edges
                     on every phone, because <main> is `overflow-x-hidden`.
                   - From `sm` to `lg` the page is one column (592 at 640, 720
                     at 768), so the 48px phrase fits.
-                  - From `lg` to `xl` the column is the viewport less the page
-                    padding (48), the gap (64) and the hero table (400): 512 at
-                    1024, 768 only at 1280. Kept whole, the 60px phrase pushed
-                    the column to 724 and the hero table off the right edge,
-                    cut by up to 116px. So it wraps there.
-                  - From `xl` (1280) the column is at least 768, and the phrase
-                    fits at 60px.
+                  - From `lg` the column is the viewport less the page padding
+                    (48), the gap (64) and the hero table (520): 392 at 1024,
+                    and never more than 648, because the container stops at
+                    1280. The 60px phrase needs 724, so it wraps at every
+                    desktop width. Kept whole, it pushed the column wide and
+                    the table off the right edge.
 
-                  This replaces a step down to 54px at the bottom of `lg`,
-                  derived for an earlier headline ("your spreadsheet.") that
-                  no longer exists. Re-measure if the headline, the face, the
-                  gap or the hero table's width changes. */}
+                  Re-measure if the headline, the face, the gap or the hero
+                  table's width changes. */}
               <h1
-                className="animate-fade-in-up font-display text-4xl font-extrabold leading-[1.1] tracking-tight text-white sm:text-5xl lg:col-start-1 lg:row-start-2 lg:text-6xl"
+                className="animate-fade-in-up font-display text-3xl font-extrabold leading-[1.1] tracking-tight text-white sm:text-5xl lg:col-start-1 lg:row-start-2 lg:max-[1119px]:text-4xl xl:text-6xl"
                 style={{ animationDelay: "0.06s" }}
               >
-                One connection to Google Workspace and more.{" "}
+                One connection to{" "}
+                {/* "Google Workspace" stays together from 360px up, so
+                    "Google" is never alone on a line. Measured, the pair is
+                    about 300px at 30px, 347 at 36, 463 at 48 and 579 at 60,
+                    and each size is chosen so it fits its column: 30 on a
+                    phone, 48 from `sm`, 36 from `lg` to 1119 (a 392 to 487px
+                    column), 48 from 1120 and 60 from `xl` (a 648px column).
+                    Below 360 the column is under 300, so it may break there
+                    rather than run off the edge. */}
+                <span className="min-[360px]:whitespace-nowrap">Google Workspace</span>{" "}
+                and more.{" "}
                 {/* From `sm` the second sentence starts its own line; on a
                     phone it flows on from the first, which keeps the
                     headline a line shorter and the table higher. */}
                 <span className="text-blue-200 sm:block">
-                  <span className="sm:whitespace-nowrap lg:max-xl:whitespace-normal">Claude moves the work</span>{" "}
-                  <span className="sm:whitespace-nowrap lg:max-xl:whitespace-normal">between them.</span>
+                  <span className="sm:max-lg:whitespace-nowrap">Claude moves the work</span>{" "}
+                  <span className="sm:max-lg:whitespace-nowrap">between them.</span>
                 </span>
               </h1>
 
             {/* The comparison is the hero shot (SCRUM-425): all nine gaps at
-                once (SCRUM-426), `max-w-md` stacked, 400px from `lg` up. The
+                once (SCRUM-426), `max-w-md` stacked, 520px from `lg` up. The
                 headline's wrapping above is measured against this width. Its
                 rows come from the full table at #comparison and nowhere else;
                 see heroGroups(). */}
             <div
-              className="animate-fade-in-up mx-auto mt-6 w-full max-w-md lg:col-start-2 lg:row-span-5 lg:row-start-1 lg:mt-0 lg:w-[400px] lg:max-w-[400px]"
+              className="animate-fade-in-up mx-auto mt-6 w-full max-w-md lg:col-start-2 lg:row-span-5 lg:row-start-1 lg:mt-0 lg:w-[520px] lg:max-w-[520px]"
               style={{ animationDelay: "0.1s" }}
             >
               <ComparisonHero
@@ -208,8 +214,8 @@ export default async function HomePage() {
                   did not just read is how a wrong one ships. Matches the
                   pricing page and the lead page. */}
               {totalTools > 0 ? totalTools : "70+"} tools across Google
-              Workspace, Jira and Confluence behind one URL, and every write
-              asks you first.
+              Workspace and Atlassian behind one URL, in Claude, Claude Code,
+              Cursor or your own app.
             </p>
 
             <div
@@ -250,9 +256,10 @@ export default async function HomePage() {
                 </Link>{" "}
                 · Open source, self-host it if you prefer
               </p>
-              {/* What signing in agrees to, beside the button that now
-                  starts it (SCRUM-408). */}
-              <SignInConsent className="mt-1.5 text-[11px] text-white/50" />
+              {/* No sign-in agreement line here (SCRUM-426, Manuel). Get
+                  Started goes straight to Google, and the agreement is shown
+                  on the first screen after sign-in, where a new account
+                  lands; see playground.tsx. */}
 
               {/* Badge lockup, not fine print. Compact here, so it does not
                   compete with the table beside it. */}

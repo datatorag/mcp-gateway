@@ -18,10 +18,11 @@
 import { CircleCheckIcon, CircleMinusIcon } from "lucide-react";
 import type { HeroGroup } from "./connector-comparison";
 
-/** Delay of the first row's reveal, and the step between rows. Twelve lines
- * (three group headings, nine rows) finish inside about 1.2s. */
+/** Delay of the first row's reveal, and the step between rows. Fifteen lines
+ * (five group headings, ten rows) start within a second and finish by about
+ * 1.3s. */
 export const REVEAL_START_S = 0.25;
-export const REVEAL_STEP_S = 0.06;
+export const REVEAL_STEP_S = 0.05;
 
 function Mark({ yes }: { yes: boolean }) {
   return yes ? (
