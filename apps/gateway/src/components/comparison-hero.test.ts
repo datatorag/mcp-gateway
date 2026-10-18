@@ -38,7 +38,7 @@ describe("the comparison hero's rows", () => {
       [
         "Gmail attachments",
         [
-          "Save an attachment to Drive",
+          "Save an email or an attachment to Drive",
           "Save an email or an attachment to your computer",
           "Jira, attach an email or one of its attachments to an issue",
         ],

@@ -157,7 +157,10 @@ export const GROUPS: Group[] = [
       // Ours since 16 October 2026: gmail_trash and gmail_untrash. They act on
       // one message, so a thread is one call per message; the note says so.
       { capability: "Trash a message", builtIn: true, ours: true },
-      { capability: "Save an attachment to Drive", builtIn: false, ours: true },
+      // Broadened on 18 October 2026: drive_upload_file (since 13 October
+      // 2026) stores a whole email as its .eml in Drive as well as one
+      // attachment, so the row says both.
+      { capability: "Save an email or an attachment to Drive", builtIn: false, ours: true },
       // Ours since 13 October 2026 (file_download_link). The built-in
       // connector's tool list, enumerated 15 October 2026, has no download
       // to disk.
@@ -268,7 +271,7 @@ const HERO_MAP: { label: string; rows: string[] }[] = [
   {
     label: "Gmail attachments",
     rows: [
-      "Save an attachment to Drive",
+      "Save an email or an attachment to Drive",
       "Save an email or an attachment to your computer",
       "Jira, attach an email or one of its attachments to an issue",
     ],
@@ -347,7 +350,7 @@ export function ConnectorComparison() {
         <p className="mx-auto mt-5 max-w-xl text-muted-foreground">
           Claude&rsquo;s built-in connectors cover a lot, including reading,
           writing and editing in Docs and Sheets. The rows below show where
-          each one stops. What remains on their side: filtered sheet queries,
+          each one stops. What they still cannot do: filtered sheet queries,
           two accounts in one request, Slides content, saving mail and
           attachments to Drive or your computer, free/busy, Contacts and
           Tasks, and filing an email on a Jira issue.
