@@ -1,144 +1,86 @@
 // @vitest-environment jsdom
 
 /**
- * The comparison hero's motion (SCRUM-425): it plays a group at a time, holds
- * still under prefers-reduced-motion and while hovered or focused, lets a
- * keyboard reader step the groups, and names the Slides date when a Slides row
- * is in it. Driven with fake timers against the real component.
+ * The comparison hero (SCRUM-426): every gap at once, from the first paint,
+ * with one reveal that a reader who asked for less motion never gets.
+ * Rendered to markup the way the server sends it.
  */
 
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { act } from "react";
-import { createRoot, type Root } from "react-dom/client";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+import { describe, expect, it } from "vitest";
+import { renderToStaticMarkup } from "react-dom/server";
+import { ComparisonHero } from "./comparison-hero";
+import { heroGroups } from "./connector-comparison";
 
-let reduce = false;
-vi.stubGlobal("matchMedia", (query: string) => ({
-  matches: query.includes("reduce") ? reduce : false,
-  media: query,
-  addEventListener() {},
-  removeEventListener() {},
-}));
-
-const { ComparisonHero, GROUP_REST_MS, ROW_EVERY_MS, RESOLVE_MS } = await import("./comparison-hero");
-const { heroGroups } = await import("./connector-comparison");
-
-let container: HTMLDivElement;
-let root: Root;
-
-function mount() {
-  container = document.createElement("div");
-  document.body.appendChild(container);
-  root = createRoot(container);
-  act(() =>
-    root.render(
-      <ComparisonHero groups={heroGroups()} verifiedOn="15 October 2026" slidesVerifiedOn="9 October 2026" />
-    )
-  );
-  return container;
-}
-
-/** The table on show: the one carrying the caption. The others are laid out
- * in the same cell, invisible and hidden from assistive tech. */
-const current = () => container.querySelector("caption")!.closest("table")!;
-const heading = () => current().querySelector("thead th")!.textContent;
-const rowLabels = () =>
-  [...current().querySelectorAll("tbody tr:not(.invisible) th")].map((th) => th.textContent);
-const advance = (ms: number) => act(() => vi.advanceTimersByTime(ms));
-
-beforeEach(() => {
-  vi.useFakeTimers();
-  reduce = false;
-});
-afterEach(() => {
-  act(() => root.unmount());
-  container.remove();
-  vi.useRealTimers();
-});
+const html = renderToStaticMarkup(
+  <ComparisonHero groups={heroGroups()} verifiedOn="15 October 2026" slidesVerifiedOn="9 October 2026" />
+);
+const doc = new DOMParser().parseFromString(html, "text/html");
+const rows = () => [...doc.querySelectorAll('tbody th[scope="row"]')].map((th) => th.closest("tr")!);
 
 describe("the comparison hero", () => {
-  it("opens on the first group complete, then plays the next group a row at a time", () => {
-    mount();
-    const [first, second] = heroGroups();
-    expect(heading()).toBe(first.label);
-    expect(rowLabels()).toHaveLength(first.rows.length);
-    advance(GROUP_REST_MS);
-    expect(heading()).toBe(second.label);
-    expect(rowLabels()).toHaveLength(0);
-    advance(ROW_EVERY_MS);
-    expect(rowLabels()).toHaveLength(1);
-    advance(RESOLVE_MS);
-    advance(ROW_EVERY_MS);
-    expect(rowLabels()).toHaveLength(2);
-  });
-
-  it("keeps one height as it cycles: every group's whole table is laid out in one cell", () => {
-    // jsdom does no layout, so this holds the cause and the browser check
-    // holds the height. Every group, every row, always in the DOM; only the
-    // current table is visible or read.
-    mount();
+  it("renders every gap at once, under every group heading", () => {
     const groups = heroGroups();
-    const check = () => {
-      const tables = [...container.querySelectorAll("table")];
-      expect(tables).toHaveLength(groups.length);
-      tables.forEach((t, i) => expect(t.querySelectorAll("tbody tr"), groups[i].label).toHaveLength(groups[i].rows.length));
-      expect(tables.filter((t) => !t.classList.contains("invisible"))).toHaveLength(1);
-      // Invisible, never removed from layout: `hidden` or display none would
-      // let the box shrink to the current group again.
-      expect(tables.filter((t) => t.hidden || t.style.display === "none")).toHaveLength(0);
-      expect(tables.filter((t) => t.getAttribute("aria-hidden") !== "true")).toHaveLength(1);
-      expect(container.querySelectorAll("caption")).toHaveLength(1);
-    };
-    check();
-    advance(GROUP_REST_MS);
-    advance(ROW_EVERY_MS);
-    check();
+    const total = groups.reduce((n, g) => n + g.rows.length, 0);
+    expect(total).toBe(9);
+    expect(rows()).toHaveLength(total);
+    expect([...doc.querySelectorAll('th[scope="colgroup"]')].map((th) => th.textContent)).toEqual(groups.map((g) => g.label));
+    for (const g of groups) {
+      for (const r of g.rows) expect(html, r.capability).toContain(r.capability);
+    }
   });
 
-  it("under reduced motion shows the first group complete and never moves", () => {
-    reduce = true;
-    mount();
-    const [first] = heroGroups();
-    advance(GROUP_REST_MS * 5);
-    expect(heading()).toBe(first.label);
-    expect(rowLabels()).toHaveLength(first.rows.length);
+  it("holds no Yes/Yes row: every row reads No, then Yes", () => {
+    for (const tr of rows()) {
+      expect([...tr.querySelectorAll(".sr-only")].map((s) => s.textContent), tr.textContent!).toEqual(["No", "Yes"]);
+    }
   });
 
-  it("holds still while hovered", () => {
-    mount();
-    const [first] = heroGroups();
-    act(() => {
-      container.firstElementChild!.dispatchEvent(new MouseEvent("mouseover", { bubbles: true }));
-    });
-    advance(GROUP_REST_MS * 3);
-    expect(heading()).toBe(first.label);
+  it("is final in the markup itself, so reduced motion shows the finished table", () => {
+    // No state, no placeholder marks, nothing for a script to resolve: the
+    // only motion is the hero-reveal class, which exists only when the reader
+    // has not asked for less motion.
+    expect(html).not.toContain("rounded-full bg-white/30");
+    expect(doc.querySelectorAll("button")).toHaveLength(0);
+    for (const tr of rows()) expect(tr.classList.contains("hero-reveal")).toBe(true);
+    const css = readFileSync(join(__dirname, "../app/globals.css"), "utf8");
+    const rule = css.indexOf(".hero-reveal");
+    expect(rule).toBeGreaterThan(-1);
+    const media = css.lastIndexOf("@media", rule);
+    expect(css.slice(media, rule)).toContain("(prefers-reduced-motion: no-preference)");
+    // And it is the only place the class is defined.
+    expect(css.indexOf(".hero-reveal", rule + 1)).toBe(-1);
   });
 
-  it("steps the groups from the dots with the arrow keys, and holds still while focused", () => {
-    mount();
-    const groups = heroGroups();
-    const dots = () => [...container.querySelectorAll<HTMLButtonElement>("button")];
-    expect(dots()).toHaveLength(groups.length);
-    act(() => dots()[0].focus());
-    act(() => {
-      dots()[0].dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true }));
-    });
-    expect(heading()).toBe(groups[1].label);
-    expect(rowLabels()).toHaveLength(groups[1].rows.length);
-    expect(document.activeElement).toBe(dots()[1]);
-    advance(GROUP_REST_MS * 3);
-    expect(heading()).toBe(groups[1].label);
+  it("reveals in order, within about a second and a quarter", () => {
+    const delays = [...doc.querySelectorAll<HTMLElement>(".hero-reveal")].map((el) => parseFloat(el.style.animationDelay));
+    expect(delays).toEqual([...delays].sort((a, b) => a - b));
+    expect(Math.max(...delays)).toBeLessThanOrEqual(1);
   });
 
   it("names both dates, because a Slides row is in it, and links to the full table", () => {
-    mount();
-    const link = container.querySelector<HTMLAnchorElement>('a[href="#comparison"]')!;
+    const link = doc.querySelector<HTMLAnchorElement>('a[href="#comparison"]')!;
     expect(link.textContent).toContain("15 October 2026");
     expect(link.textContent).toContain("Google Slides on 9 October 2026");
   });
 
-  it("says Yes and No in words to a screen reader once a row resolves", () => {
-    mount();
-    const first = current().querySelector("tbody tr")!;
-    expect([...first.querySelectorAll(".sr-only")].map((s) => s.textContent)).toEqual(["No", "Yes"]);
+  it("on the landing page comes right after the headline, before the sentence and the buttons", () => {
+    // The DOM order is the phone order (the grid moves it beside the text
+    // from lg). Measured in the browser too: see the SCRUM-426 report.
+    const page = readFileSync(join(__dirname, "../app/page.tsx"), "utf8");
+    const hero = page.slice(page.indexOf("{/* Hero */}"), page.indexOf("</ShaderBackground>"));
+    const at = (needle: string) => {
+      const i = hero.indexOf(needle);
+      expect(i, needle).toBeGreaterThan(-1);
+      return i;
+    };
+    expect(at("<h1")).toBeLessThan(at("<ComparisonHero"));
+    expect(at("<ComparisonHero")).toBeLessThan(at("behind one URL, and every write"));
+    expect(at("<ComparisonHero")).toBeLessThan(at("Get Started"));
+    expect(at("Get Started")).toBeLessThan(at("<SignInConsent"));
+    // The pill above the headline is gone, and so is the long sentence.
+    expect(hero).not.toContain("MCP gateway for Google Workspace and Jira");
+    expect(hero).not.toContain("Claude Code, Cursor");
   });
 });
