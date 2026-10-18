@@ -24,7 +24,6 @@ import { faqPageNode } from "@/lib/site-schema";
 import { siteFaqGroups, siteFaqs } from "@/lib/site-faq";
 import { SOCIAL_OPEN_GRAPH, SOCIAL_TWITTER } from "@/lib/social-card";
 import { signInHref } from "@/lib/sign-in";
-import { SignInConsent } from "@/components/sign-in-consent";
 
 /** Read once at module scope: the answers are static, the page is not. */
 const homeFaqs = siteFaqs("/");
@@ -129,64 +128,101 @@ export default async function HomePage() {
               space goes above the hero and below the teaser — never between
               them. The hero→teaser gap is the teaser's fixed pt. */}
           <div className="relative flex min-h-[calc(100vh-4rem)] flex-col justify-center pb-12 pt-24">
-          <div className="mx-auto flex w-full max-w-7xl flex-col items-center gap-12 px-6 lg:flex-row lg:gap-16">
-            {/* Copy */}
-            <div className="flex-1 text-center lg:text-left">
-              <div className="animate-fade-in-up inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/10 px-4 py-1.5 backdrop-blur-sm">
-                <span className="text-xs font-medium text-white/90">
-                  MCP gateway for Google Workspace and Jira
-                </span>
-              </div>
+          {/* One grid, so the reading order can differ by width without a
+              second copy of anything (SCRUM-426). The DOM order is the phone
+              order: headline, the comparison table, the sentence, the
+              buttons, the trust lines. A phone shows the table near the top
+              instead of under five lines of copy.
+
+              From `lg` the table moves to a 520px right column spanning every
+              row, and the text sits in the middle three of five rows
+              (`1fr auto auto auto 1fr`), so the extra height of the taller
+              table goes above and below the text as a group, never between
+              the headline and its sentence. The column widths are the ones
+              the headline was measured against below: the page padding (48),
+              the gap (64) and 520.
+
+              `pt-12` is the room the pill above the headline used to take:
+              without it, the headline's first line sat under the fixed navbar
+              on a phone and the table touched it on a desktop. */}
+          <div className="mx-auto grid w-full max-w-7xl grid-cols-1 items-center px-6 pt-12 text-center lg:grid-cols-[minmax(0,1fr)_520px] lg:grid-rows-[1fr_auto_auto_auto_1fr] lg:gap-x-16 lg:text-left">
               {/* "Claude moves the work" is kept on one line only where the
                   column has room for it, and allowed to wrap everywhere else.
-                  Measured in Chrome (SCRUM-425): the phrase is 434px wide at
-                  36px, 579 at 48px and 724 at 60px.
+                  Measured in Chrome (SCRUM-425, SCRUM-426): the phrase is
+                  434px wide at 36px, 579 at 48px and 724 at 60px.
 
                   - Below `sm` the column is the viewport less 48px, 342 at 390.
                     Kept whole, the phrase clipped the headline at both edges
                     on every phone, because <main> is `overflow-x-hidden`.
                   - From `sm` to `lg` the page is one column (592 at 640, 720
                     at 768), so the 48px phrase fits.
-                  - From `lg` to `xl` the column is the viewport less the page
-                    padding (48), the gap (64) and the hero table (400): 512 at
-                    1024, 768 only at 1280. Kept whole, the 60px phrase pushed
-                    the column to 724 and the hero table off the right edge,
-                    cut by up to 116px. So it wraps there.
-                  - From `xl` (1280) the column is at least 768, and the phrase
-                    fits at 60px.
+                  - From `lg` the column is the viewport less the page padding
+                    (48), the gap (64) and the hero table (520): 392 at 1024,
+                    and never more than 648, because the container stops at
+                    1280. The 60px phrase needs 724, so it wraps at every
+                    desktop width. Kept whole, it pushed the column wide and
+                    the table off the right edge.
 
-                  This replaces a step down to 54px at the bottom of `lg`,
-                  derived for an earlier headline ("your spreadsheet.") that
-                  no longer exists. Re-measure if the headline, the face, the
-                  gap or the hero table's width changes. */}
+                  Re-measure if the headline, the face, the gap or the hero
+                  table's width changes. */}
               <h1
-                className="animate-fade-in-up mt-6 font-display text-4xl font-extrabold leading-[1.1] tracking-tight text-white sm:text-5xl lg:text-6xl"
+                className="animate-fade-in-up font-display text-3xl font-extrabold leading-[1.1] tracking-tight text-white sm:text-5xl lg:col-start-1 lg:row-start-2 lg:max-[1119px]:text-4xl xl:text-6xl"
                 style={{ animationDelay: "0.06s" }}
               >
-                One connection to Gmail, Drive, Sheets and Jira.{" "}
-                <span className="text-blue-200">
-                  <span className="sm:whitespace-nowrap lg:max-xl:whitespace-normal">Claude moves the work</span>{" "}
-                  <span className="sm:whitespace-nowrap lg:max-xl:whitespace-normal">between them.</span>
+                One connection to{" "}
+                {/* "Google Workspace" stays together from 360px up, so
+                    "Google" is never alone on a line. Measured, the pair is
+                    about 300px at 30px, 347 at 36, 463 at 48 and 579 at 60,
+                    and each size is chosen so it fits its column: 30 on a
+                    phone, 48 from `sm`, 36 from `lg` to 1119 (a 392 to 487px
+                    column), 48 from 1120 and 60 from `xl` (a 648px column).
+                    Below 360 the column is under 300, so it may break there
+                    rather than run off the edge. */}
+                <span className="min-[360px]:whitespace-nowrap">Google Workspace</span>{" "}
+                and more.{" "}
+                {/* From `sm` the second sentence starts its own line; on a
+                    phone it flows on from the first, which keeps the
+                    headline a line shorter and the table higher. */}
+                <span className="text-blue-200 sm:block">
+                  <span className="sm:max-lg:whitespace-nowrap">Claude moves the work</span>{" "}
+                  <span className="sm:max-lg:whitespace-nowrap">between them.</span>
                 </span>
               </h1>
-              <p
-                className="animate-fade-in-up mx-auto mt-6 max-w-2xl text-base leading-relaxed text-white/60 sm:text-lg lg:mx-0"
-                style={{ animationDelay: "0.12s" }}
-              >
-                File the email on the Jira issue, save its attachment to
-                Drive, update the sheet, send the reply.{" "}
-                {/* Fallback is rounded, not an exact number: it only renders
-                    when the count query failed, and stating a precise figure
-                    we did not just read is how a wrong one ships. Matches the
-                    pricing page and the lead page. */}
-                {totalTools > 0 ? totalTools : "70+"} tools across Google
-                Workspace, Jira and Confluence behind one URL, in Claude, Claude
-                Code, Cursor or your own app, and every write asks you first.
-              </p>
-              <div
-                className="animate-fade-in-up mt-8 flex flex-wrap items-center justify-center gap-3 lg:justify-start"
-                style={{ animationDelay: "0.18s" }}
-              >
+
+            {/* The comparison is the hero shot (SCRUM-425): all nine gaps at
+                once (SCRUM-426), `max-w-md` stacked, 520px from `lg` up. The
+                headline's wrapping above is measured against this width. Its
+                rows come from the full table at #comparison and nowhere else;
+                see heroGroups(). */}
+            <div
+              className="animate-fade-in-up mx-auto mt-6 w-full max-w-md lg:col-start-2 lg:row-span-5 lg:row-start-1 lg:mt-0 lg:w-[520px] lg:max-w-[520px]"
+              style={{ animationDelay: "0.1s" }}
+            >
+              <ComparisonHero
+                groups={heroGroups()}
+                verifiedOn={VERIFIED_ON}
+                slidesVerifiedOn={SLIDES_VERIFIED_ON}
+              />
+            </div>
+
+            <p
+              className="animate-fade-in-up mx-auto mt-6 max-w-2xl text-base leading-relaxed text-white/60 sm:text-lg lg:col-start-1 lg:row-start-3 lg:mx-0"
+              style={{ animationDelay: "0.12s" }}
+            >
+              {/* Fallback is rounded, not an exact number: it only renders
+                  when the count query failed, and stating a precise figure we
+                  did not just read is how a wrong one ships. Matches the
+                  pricing page and the lead page. */}
+              {totalTools > 0 ? totalTools : "70+"} tools across Google
+              Workspace and Atlassian behind one URL, in Claude, Claude Code,
+              Cursor or your own app.
+            </p>
+
+            <div
+              className="animate-fade-in-up mt-6 lg:col-start-1 lg:row-start-4"
+              style={{ animationDelay: "0.18s" }}
+            >
+              <div className="flex flex-wrap items-center justify-center gap-3 lg:justify-start">
                 <a
                   href={signInHref()}
                   className="rounded-full bg-white px-7 py-3 text-sm font-medium text-[#1a3a8f] transition-all hover:bg-white/90"
@@ -210,10 +246,7 @@ export default async function HomePage() {
                   to where it is load-bearing. Deliberately plain text plus one
                   link rather than a badge graphic: a self-drawn badge reads as
                   decoration, the sentence reads as a claim we will be held to. */}
-              <p
-                className="animate-fade-in-up mt-4 text-xs text-white/50 lg:text-left"
-                style={{ animationDelay: "0.22s" }}
-              >
+              <p className="mt-4 text-[11px] text-white/50">
                 Google-verified since June 2026 ·{" "}
                 <Link
                   href="/blog/casa-tier-2-verified"
@@ -223,40 +256,18 @@ export default async function HomePage() {
                 </Link>{" "}
                 · Open source, self-host it if you prefer
               </p>
-              {/* What signing in agrees to, beside the button that now
-                  starts it (SCRUM-408). */}
-              <SignInConsent
-                className="animate-fade-in-up mt-2 text-white/50 lg:text-left"
+              {/* No sign-in agreement line here (SCRUM-426, Manuel). Get
+                  Started goes straight to Google, and the agreement is shown
+                  on the first screen after sign-in, where a new account
+                  lands; see playground.tsx. */}
+
+              {/* Badge lockup, not fine print. Compact here, so it does not
+                  compete with the table beside it. */}
+              <CasaBadge
+                className="mt-4 justify-center lg:justify-start"
+                compact
+                tone="dark"
               />
-
-              {/* Badge lockup, not fine print. */}
-              <div
-                className="animate-fade-in-up mt-6"
-                style={{ animationDelay: "0.22s" }}
-              >
-                <CasaBadge
-                  className="justify-center lg:justify-start"
-                  tone="dark"
-                />
-              </div>
-            </div>
-
-            {/* The comparison is the hero shot (SCRUM-425), in the column the
-                video held, at the width it held: `max-w-md` stacked, 400px from
-                `lg` up. The headline's wrapping above is measured against
-                this width. Its rows come from the full table at
-                #comparison and nowhere else; see heroGroups(). */}
-            <div
-              className="animate-fade-in-up flex w-full flex-shrink-0 justify-center lg:w-auto"
-              style={{ animationDelay: "0.28s" }}
-            >
-              <div className="w-full max-w-md lg:w-[400px] lg:max-w-[400px]">
-                <ComparisonHero
-                  groups={heroGroups()}
-                  verifiedOn={VERIFIED_ON}
-                  slidesVerifiedOn={SLIDES_VERIFIED_ON}
-                />
-              </div>
             </div>
           </div>
 
@@ -381,7 +392,7 @@ export default async function HomePage() {
                 },
                 {
                   title: "Pre-Built Connectors",
-                  desc: "One-click integrations for Google Workspace, Salesforce, Databricks, Slack, and more. We handle the auth and schema mapping.",
+                  desc: "One connection for Google Workspace, Jira and Confluence. We handle the auth and schema mapping.",
                   icon: (
                     <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
                       <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83" />
@@ -518,14 +529,7 @@ export default async function HomePage() {
             </p>
             <div className="mt-3 flex flex-wrap gap-2">
               {[
-                "Salesforce",
-                "Databricks",
-                "Slack",
-                "HubSpot",
-                "PostgreSQL",
-                "Snowflake",
                 "Notion",
-                "GitHub",
               ].map((name) => (
                 <span
                   key={name}

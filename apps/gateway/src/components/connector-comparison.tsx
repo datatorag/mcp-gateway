@@ -154,10 +154,19 @@ export const GROUPS: Group[] = [
       // Conceded on 9 October 2026. The note used to say nothing in the
       // built-in surface deletes a draft it wrote; it has a tool that does.
       { capability: "Delete a draft", builtIn: true, ours: true },
-      { capability: "Trash a message or thread", builtIn: true, ours: false, emphasis: true },
-      { capability: "Save an attachment to Drive", builtIn: false, ours: true },
+      // Ours since 16 October 2026: gmail_trash and gmail_untrash. They act on
+      // one message, so a thread is one call per message; the note says so.
+      { capability: "Trash a message", builtIn: true, ours: true },
+      // Broadened on 18 October 2026: drive_upload_file (since 13 October
+      // 2026) stores a whole email as its .eml in Drive as well as one
+      // attachment, so the row says both.
+      { capability: "Save an email or an attachment to Drive", builtIn: false, ours: true },
+      // Ours since 13 October 2026 (file_download_link). The built-in
+      // connector's tool list, enumerated 15 October 2026, has no download
+      // to disk.
+      { capability: "Save an email or an attachment to your computer", builtIn: false, ours: true },
     ],
-    note: "The built-in connector sends, replies and forwards. It gained those verbs in August 2026, and this table claimed otherwise until 18 September 2026: if you read the older version of this row anywhere, including here, it was wrong. It also deletes a draft, which this table denied until 9 October 2026. It labels a whole thread in one call, where we work a message at a time, so a long thread means one call per message. It moves a message or a whole thread to the trash, and we have no tool for that. And it gained full label management earlier in 2026, so it can label, star, mark read and archive. What is left on our side is one thing: saving an attachment straight to Drive.",
+    note: "The built-in connector sends, replies and forwards. It gained those verbs in August 2026, and this table claimed otherwise until 18 September 2026: if you read the older version of this row anywhere, including here, it was wrong. It also deletes a draft, which this table denied until 9 October 2026. It labels a whole thread in one call, where we work a message at a time, so a long thread means one call per message. It moves a message or a whole thread to the trash. We trash and untrash a message since 16 October 2026, one message at a time, so a whole thread is one call per message. And it gained full label management earlier in 2026, so it can label, star, mark read and archive. Its tool list, enumerated 15 October 2026, has no download to disk. What is left on our side is saving an email or an attachment straight to Drive or to your computer.",
   },
   {
     service: "Google Calendar",
@@ -189,13 +198,16 @@ export const GROUPS: Group[] = [
       { capability: "Search files", builtIn: true, ours: true },
       { capability: "Read file content", builtIn: true, ours: true },
       { capability: "Download file content", builtIn: true, ours: false, emphasis: true },
-      { capability: "File metadata", builtIn: true, ours: false, emphasis: true },
+      // Ours since 16 October 2026: drive_get_file describes a file or folder
+      // without reading it.
+      { capability: "File metadata", builtIn: true, ours: true },
       { capability: "Sharing permissions", builtIn: true, ours: false, emphasis: true },
       // Reading who a file is shared with is the row above. This is the
       // write: it grants someone access. We have no tool for either.
       { capability: "Share a file with someone", builtIn: true, ours: false, emphasis: true },
       { capability: "Recently-opened files", builtIn: true, ours: false, emphasis: true },
-      { capability: "Move a file to another folder", builtIn: true, ours: false, emphasis: true },
+      // Ours since 16 October 2026: drive_move_file.
+      { capability: "Move a file to another folder", builtIn: true, ours: true },
       // A tie since 9 October 2026: we copy files now.
       { capability: "Copy a file", builtIn: true, ours: true },
       { capability: "Rename a file", builtIn: true, ours: true },
@@ -203,7 +215,7 @@ export const GROUPS: Group[] = [
       // and our own Drive comparison post has said so since August.
       { capability: "Create a folder", builtIn: true, ours: true },
     ],
-    note: "The built-in Drive connector is more capable than ours, and it is not close. It downloads a file, reads its metadata and who it is shared with, shares it with someone new, lists what you opened recently and moves a file between folders. We do none of those. Our advantage was never Drive breadth. It is what we do with a file across services and accounts: an email's attachment onto a Jira issue or into Drive, and two Google accounts in one request.",
+    note: "The built-in Drive connector is more capable than ours, and it is not close. It downloads a file, reads who it is shared with, shares it with someone new and lists what you opened recently. We do none of those. Since 16 October 2026 we read a file's metadata and move a file between folders, which this table denied until then. Our advantage was never Drive breadth. It is what we do with a file across services and accounts: an email's attachment onto a Jira issue or into Drive, and two Google accounts in one request.",
   },
   {
     service: "Beyond Google",
@@ -237,55 +249,74 @@ export const GROUPS: Group[] = [
   },
 ];
 
-/** The rows the landing page's hero shows (SCRUM-425): every row of the
- * table above that we have and the built-in connectors do not, and nothing
- * else. Derived, never retyped, so a row flipped in GROUPS leaves the hero on
- * the same deploy. A Yes/Yes row says nothing in a short claim, and a row we
- * lose belongs in the full table, where it is conceded in context.
+/** The rows the landing page's hero shows (SCRUM-425, SCRUM-426): every row
+ * of the table above that we have and the built-in connectors do not, and
+ * nothing else. The filter decides WHICH rows; the map below only decides
+ * WHERE each one sits, in Manuel's order. Text is never retyped, so a row
+ * flipped in GROUPS leaves the hero on the same deploy.
  *
- * Each hero group is a run of whole source groups, so the hero reads in the
- * table's own order. The brief's first grouping (Sheets; Docs and Slides;
- * Drive and Gmail; Jira and Confluence) left three of its four groups with one
- * row each, because Docs and Drive have no such row left: both were conceded.
+ * A gap row the map does not name is not shown, and a test fails on it
+ * (`unmappedHeroGaps`), so a future flip to No/Yes cannot drop out silently.
+ * A row the map names that is not a gap is simply absent, which is how a
+ * concession leaves the hero.
  *
- * `tag` names the service a row belongs to where its own label does not. It
- * is null for the last group, whose labels name their service already
- * ("Google Contacts", "Jira, ...") or span all of them. */
+ * `tag` names a row's service where its group does not: only the Jira row,
+ * which sits with the Gmail attachments it acts on but belongs to the
+ * Atlassian group of the full table. */
 export type HeroRow = Row & { tag: string | null };
 export type HeroGroup = { label: string; rows: HeroRow[]; slides: boolean };
 
-const HERO_SOURCES: { sources: string[]; fallbackLabel: string }[] = [
-  { sources: ["Google Sheets", "Google Docs", "Google Slides"], fallbackLabel: "Sheets, Docs and Slides" },
-  { sources: ["Gmail", "Google Calendar", "Google Drive"], fallbackLabel: "Gmail, Calendar and Drive" },
-  { sources: ["Beyond Google", "The one that changes how you work"], fallbackLabel: "Beyond Google" },
+const HERO_MAP: { label: string; rows: string[] }[] = [
+  { label: "Sheets", rows: ["Query a sheet with a filter", "Two Google accounts in one request"] },
+  {
+    label: "Gmail attachments",
+    rows: [
+      "Save an email or an attachment to Drive",
+      "Save an email or an attachment to your computer",
+      "Jira, attach an email or one of its attachments to an issue",
+    ],
+  },
+  { label: "Slides", rows: ["Put content in it"] },
+  { label: "Calendar", rows: ["Free/busy lookup"] },
+  {
+    label: "Beyond Google",
+    rows: ["Google Contacts", "Google Tasks", "Work and personal account at the same time"],
+  },
 ];
 
-const TAGS: Record<string, string> = {
-  "Google Sheets": "Sheets",
-  "Google Docs": "Docs",
-  "Google Slides": "Slides",
-  Gmail: "Gmail",
-  "Google Calendar": "Calendar",
-  "Google Drive": "Drive",
+const HERO_TAGS: Record<string, string> = {
+  "Jira, attach an email or one of its attachments to an issue": "Jira",
 };
 
-const andList = (items: string[]) =>
-  items.length <= 1 ? items.join("") : `${items.slice(0, -1).join(", ")} and ${items[items.length - 1]}`;
+/** Every row we have and the built-in connectors do not, with its source
+ * group's service. */
+function heroGaps(groups: Group[]) {
+  return groups.flatMap((g) =>
+    g.rows.filter((r) => !r.builtIn && r.ours).map((r) => ({ ...r, service: g.service }))
+  );
+}
+
+/** Gap rows the hero map does not place. Must be empty; a test holds it. */
+export function unmappedHeroGaps(groups: Group[] = GROUPS): string[] {
+  const placed = new Set(HERO_MAP.flatMap((g) => g.rows));
+  return heroGaps(groups)
+    .map((r) => r.capability)
+    .filter((c) => !placed.has(c));
+}
 
 export function heroGroups(groups: Group[] = GROUPS): HeroGroup[] {
-  return HERO_SOURCES.map(({ sources, fallbackLabel }) => {
-    const rows: HeroRow[] = sources.flatMap((service) =>
-      (groups.find((g) => g.service === service)?.rows ?? [])
-        .filter((r) => !r.builtIn && r.ours)
-        .map((r) => ({ ...r, tag: TAGS[service] ?? null }))
-    );
-    // Labelled by the services that have a row in it, so a heading never
-    // names a service the group shows nothing for.
-    const tags = [...new Set(rows.map((r) => r.tag).filter((t): t is string => t !== null))];
+  const gaps = new Map(heroGaps(groups).map((r) => [r.capability, r]));
+  return HERO_MAP.map(({ label, rows }) => {
+    const placed = rows.flatMap((capability) => {
+      const gap = gaps.get(capability);
+      if (!gap) return [];
+      const { service, ...row } = gap;
+      return [{ ...row, tag: HERO_TAGS[capability] ?? null, service }];
+    });
     return {
-      label: tags.length > 0 ? andList(tags) : fallbackLabel,
-      rows,
-      slides: rows.some((r) => r.tag === "Slides"),
+      label,
+      rows: placed.map(({ service: _service, ...row }) => row),
+      slides: placed.some((r) => r.service === "Google Slides"),
     };
   }).filter((g) => g.rows.length > 0);
 }
@@ -317,9 +348,12 @@ export function ConnectorComparison() {
           What each one can actually do
         </h2>
         <p className="mx-auto mt-5 max-w-xl text-muted-foreground">
-          Claude&rsquo;s built-in connectors are good, and for a lot of people
-          they&rsquo;re enough. We&rsquo;d rather you knew exactly where they stop
-          than found out halfway through a task.
+          Claude&rsquo;s built-in connectors cover a lot, including reading,
+          writing and editing in Docs and Sheets. The rows below show where
+          each one stops. What they still cannot do: filtered sheet queries,
+          two accounts in one request, Slides content, saving mail and
+          attachments to Drive or your computer, free/busy, Contacts and
+          Tasks, and filing an email on a Jira issue.
         </p>
         <p className="mx-auto mt-3 max-w-xl text-sm text-muted-foreground">
           Everything below was checked by hand against both products on{" "}
