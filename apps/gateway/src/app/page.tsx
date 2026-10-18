@@ -173,7 +173,7 @@ export default async function HomePage() {
                 className="animate-fade-in-up font-display text-4xl font-extrabold leading-[1.1] tracking-tight text-white sm:text-5xl lg:col-start-1 lg:row-start-2 lg:text-6xl"
                 style={{ animationDelay: "0.06s" }}
               >
-                One connection to Google Workspace and Jira.{" "}
+                One connection to Google Workspace and more.{" "}
                 {/* From `sm` the second sentence starts its own line; on a
                     phone it flows on from the first, which keeps the
                     headline a line shorter and the table higher. */}
@@ -522,11 +522,7 @@ export default async function HomePage() {
             </p>
             <div className="mt-3 flex flex-wrap gap-2">
               {[
-                "HubSpot",
-                "PostgreSQL",
-                "Snowflake",
                 "Notion",
-                "GitHub",
               ].map((name) => (
                 <span
                   key={name}

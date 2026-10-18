@@ -82,14 +82,21 @@ describe("the comparison hero", () => {
     // The headline is the simpler one, with its second sentence on a line
     // of its own (SCRUM-426).
     const h1 = hero.slice(at("<h1"), hero.indexOf("</h1>"));
-    expect(h1).toContain("One connection to Google Workspace and Jira.");
+    expect(h1).toContain("One connection to Google Workspace and more.");
     // Its own line from sm up; on a phone it flows on, so the table sits higher.
     expect(h1).toMatch(/className="text-blue-200 sm:block"/);
     expect(h1).not.toMatch(/className="[^"]*(?<![:\w-])block[\s"]/);
     expect(h1).toContain("Claude moves the work");
     expect(h1).not.toContain("Gmail, Drive, Sheets");
     // No connector we do not ship is named anywhere on the page (SCRUM-426).
-    for (const name of ["Salesforce", "Databricks", "Slack"]) expect(page, name).not.toContain(name);
+    for (const name of ["Salesforce", "Databricks", "Slack", "HubSpot", "PostgreSQL", "Snowflake"]) {
+      expect(page, name).not.toContain(name);
+    }
+    // "Coming soon" names only what has a ticket: Notion. GitHub is checked
+    // here, in the list, because the page rightly links our own repo on GitHub.
+    const soon = page.slice(page.indexOf("{/* Coming soon connectors */}"));
+    const chips = soon.slice(soon.indexOf("{["), soon.indexOf("].map((name)"));
+    expect([...chips.matchAll(/"([^"]+)"/g)].map((m) => m[1])).toEqual(["Notion"]);
     // The pill above the headline is gone, and so is the long sentence.
     expect(hero).not.toContain("MCP gateway for Google Workspace and Jira");
     expect(hero).not.toContain("Claude Code, Cursor");
