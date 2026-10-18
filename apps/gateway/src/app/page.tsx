@@ -173,8 +173,9 @@ export default async function HomePage() {
                 className="animate-fade-in-up font-display text-4xl font-extrabold leading-[1.1] tracking-tight text-white sm:text-5xl lg:col-start-1 lg:row-start-2 lg:text-6xl"
                 style={{ animationDelay: "0.06s" }}
               >
-                One connection to Gmail, Drive, Sheets and Jira.{" "}
-                <span className="text-blue-200">
+                One connection to Google Workspace and Jira.{" "}
+                {/* `block`: the second sentence always starts its own line. */}
+                <span className="block text-blue-200">
                   <span className="sm:whitespace-nowrap lg:max-xl:whitespace-normal">Claude moves the work</span>{" "}
                   <span className="sm:whitespace-nowrap lg:max-xl:whitespace-normal">between them.</span>
                 </span>

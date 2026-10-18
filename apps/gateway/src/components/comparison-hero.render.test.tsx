@@ -79,6 +79,13 @@ describe("the comparison hero", () => {
     expect(at("<ComparisonHero")).toBeLessThan(at("behind one URL, and every write"));
     expect(at("<ComparisonHero")).toBeLessThan(at("Get Started"));
     expect(at("Get Started")).toBeLessThan(at("<SignInConsent"));
+    // The headline is the simpler one, with its second sentence on a line
+    // of its own (SCRUM-426).
+    const h1 = hero.slice(at("<h1"), hero.indexOf("</h1>"));
+    expect(h1).toContain("One connection to Google Workspace and Jira.");
+    expect(h1).toMatch(/className="block text-blue-200"/);
+    expect(h1).toContain("Claude moves the work");
+    expect(h1).not.toContain("Gmail, Drive, Sheets");
     // The pill above the headline is gone, and so is the long sentence.
     expect(hero).not.toContain("MCP gateway for Google Workspace and Jira");
     expect(hero).not.toContain("Claude Code, Cursor");
