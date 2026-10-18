@@ -346,9 +346,11 @@ export function ConnectorComparison() {
         </h2>
         <p className="mx-auto mt-5 max-w-xl text-muted-foreground">
           Claude&rsquo;s built-in connectors cover a lot, including reading,
-          writing and editing in Docs and Sheets. The rows below are the gaps
-          that remain: filtered queries, two accounts in one request, Slides
-          content, and everything outside Google.
+          writing and editing in Docs and Sheets. The rows below show where
+          each one stops. What remains on their side: filtered sheet queries,
+          two accounts in one request, Slides content, saving mail and
+          attachments to Drive or your computer, free/busy, Contacts and
+          Tasks, and filing an email on a Jira issue.
         </p>
         <p className="mx-auto mt-3 max-w-xl text-sm text-muted-foreground">
           Everything below was checked by hand against both products on{" "}
