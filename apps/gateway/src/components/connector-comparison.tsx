@@ -131,7 +131,7 @@ export const GROUPS: Group[] = [
       { capability: "Put content in it", builtIn: false, ours: true, emphasis: true },
       { capability: "Read an existing deck", builtIn: true, ours: true },
     ],
-    note: `This one surprised us. The built-in connector does make a real Google Slides deck. It just arrives with one blank slide, an empty title and an empty subtitle, because a Google-native deck with content is refused. You get the container and you fill it in yourself. The connector will convert a .pptx you upload, if you have the file. Anthropic announced a Slides editing connector in beta on 6 October 2026, alongside the Docs and Sheets ones. We had not enumerated it by 15 October 2026, so these rows are as we verified them on ${SLIDES_VERIFIED_ON}. We will re-test and correct this when we have.`,
+    note: `The built-in connector does make a real Google Slides deck. It just arrives with one blank slide, an empty title and an empty subtitle, because a Google-native deck with content is refused. You get the container and you fill it in yourself. The connector will convert a .pptx you upload, if you have the file. Anthropic announced a Slides editing connector in beta on 6 October 2026, alongside the Docs and Sheets ones. We had not enumerated it by 15 October 2026, so these rows are as we verified them on ${SLIDES_VERIFIED_ON}. We will re-test and correct this when we have.`,
   },
   {
     service: "Gmail",
