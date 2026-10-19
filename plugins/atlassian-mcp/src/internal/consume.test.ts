@@ -217,6 +217,12 @@ describe("jira_add_attachment with bytes", () => {
     });
   });
 
+  it("names the attachment by a string id even when Jira answers a number (SCRUM-335)", async () => {
+    installFetch({ upload: (call) => stored(call, { id: 10042 }) });
+    const res = toolResult(await handleConsume(request()));
+    expect(JSON.parse(res.text).attachment.id).toBe("10042");
+  });
+
   it("hashes the bytes it received, across chunk boundaries", async () => {
     const res = toolResult(
       await handleConsume(
