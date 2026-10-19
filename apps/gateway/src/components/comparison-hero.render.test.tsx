@@ -11,13 +11,15 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
 import { ComparisonHero } from "./comparison-hero";
-import { heroGroups } from "./connector-comparison";
+import { GROUPS, heroGroups } from "./connector-comparison";
 
 const html = renderToStaticMarkup(
   <ComparisonHero groups={heroGroups()} verifiedOn="15 October 2026" slidesVerifiedOn="9 October 2026" />
 );
 const doc = new DOMParser().parseFromString(html, "text/html");
-const rows = () => [...doc.querySelectorAll('tbody th[scope="row"]')].map((th) => th.closest("tr")!);
+/** The gap rows; the one muted "Both:" line per group is a tie row. */
+const rows = () => [...doc.querySelectorAll('tbody tr:not([data-tie]) th[scope="row"]')].map((th) => th.closest("tr")!);
+const ties = () => [...doc.querySelectorAll("tbody tr[data-tie]")];
 
 describe("the comparison hero", () => {
   it("renders every gap at once, under every group heading", () => {
@@ -31,10 +33,22 @@ describe("the comparison hero", () => {
     }
   });
 
-  it("holds no Yes/Yes row: every row reads No, then Yes", () => {
+  it("every gap row reads No, then Yes; the only Yes/Yes rows are the Both lines", () => {
     for (const tr of rows()) {
       expect([...tr.querySelectorAll(".sr-only")].map((s) => s.textContent), tr.textContent!).toEqual(["No", "Yes"]);
     }
+    const groups = heroGroups();
+    expect(ties()).toHaveLength(groups.filter((g) => g.ties.length > 0).length);
+    for (const tr of ties()) {
+      expect(tr.querySelector("th")!.textContent!.startsWith("Both: "), tr.textContent!).toBe(true);
+      expect([...tr.querySelectorAll(".sr-only")].map((s) => s.textContent)).toEqual(["Yes", "Yes"]);
+    }
+  });
+
+  it("names no row the built-in connectors win, anywhere", () => {
+    const losses = GROUPS.flatMap((g) => g.rows).filter((r) => r.builtIn && !r.ours);
+    expect(losses.length).toBeGreaterThan(0);
+    for (const r of losses) expect(html, r.capability).not.toContain(r.capability);
   });
 
   it("is final in the markup itself, so reduced motion shows the finished table", () => {

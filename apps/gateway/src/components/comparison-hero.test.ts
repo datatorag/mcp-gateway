@@ -85,6 +85,50 @@ describe("the comparison hero's rows", () => {
     expect(heroGroups(groups).flatMap((g) => g.rows).map((r) => r.capability)).not.toContain("Free/busy lookup");
   });
 
+  it("carries, under each group, every Yes/Yes row of its source groups, in the table's order (SCRUM-427)", () => {
+    const sources: Record<string, string[]> = {
+      Sheets: ["Google Sheets"],
+      "Gmail attachments": ["Gmail"],
+      Slides: ["Google Slides"],
+      Calendar: ["Google Calendar"],
+      "Beyond Google": ["Beyond Google"],
+    };
+    for (const g of heroGroups()) {
+      const expected = sources[g.label].flatMap((s) =>
+        GROUPS.find((x) => x.service === s)!.rows.filter((r) => r.builtIn && r.ours).map((r) => r.short ?? r.capability)
+      );
+      expect(g.ties, g.label).toEqual(expected);
+      expect(g.ties.length, g.label).toBeGreaterThan(0);
+    }
+    // Beyond Google's ties are the Jira and Confluence rows, and only those.
+    expect(heroGroups().find((g) => g.label === "Beyond Google")!.ties).toEqual(["Jira basics", "Confluence basics"]);
+  });
+
+  it("names every tie by its short label, or its full label when it has none", () => {
+    // Every Yes/Yes row of a mapped source group is in a tie line, as
+    // `short ?? capability`; a row losing its short label still appears.
+    const groups = clone();
+    const forward = groups.find((g) => g.service === "Gmail")!.rows.find((r) => r.capability === "Forward")!;
+    expect(heroGroups(groups).find((g) => g.label === "Gmail attachments")!.ties).toContain("forward");
+    delete (forward as { short?: string }).short;
+    expect(heroGroups(groups).find((g) => g.label === "Gmail attachments")!.ties).toContain("Forward");
+    // The separator never appears inside a name.
+    for (const t of heroGroups().flatMap((g) => g.ties)) expect(t).not.toContain(" · ");
+    // Only Yes/Yes rows carry a short label: it is a tie-line name, nothing else.
+    for (const r of GROUPS.flatMap((g) => g.rows)) {
+      if ((r as { short?: string }).short !== undefined) expect(r.builtIn && r.ours, r.capability).toBe(true);
+    }
+  });
+
+  it("never puts a row we lose in a tie line, and a tie that stops being one leaves it", () => {
+    const allTies = heroGroups().flatMap((g) => g.ties);
+    const losses = GROUPS.flatMap((g) => g.rows).filter((r) => r.builtIn && !r.ours).map((r) => r.capability);
+    for (const l of losses) expect(allTies, l).not.toContain(l);
+    const groups = clone();
+    groups.find((g) => g.service === "Gmail")!.rows.find((r) => r.capability === "Forward")!.ours = false;
+    expect(heroGroups(groups).find((g) => g.label === "Gmail attachments")!.ties).not.toContain("forward");
+  });
+
   it("has one to three rows in every group, and no empty group", () => {
     for (const g of heroGroups()) {
       expect(g.rows.length, g.label).toBeGreaterThanOrEqual(1);

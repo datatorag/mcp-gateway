@@ -18,11 +18,11 @@
 import { CircleCheckIcon, CircleMinusIcon } from "lucide-react";
 import type { HeroGroup } from "./connector-comparison";
 
-/** Delay of the first row's reveal, and the step between rows. Fifteen lines
- * (five group headings, ten rows) start within a second and finish by about
- * 1.3s. */
+/** Delay of the first row's reveal, and the step between rows. Twenty lines
+ * (five group headings, ten gap rows, five tie lines) start within a second
+ * and finish by about 1.3s. */
 export const REVEAL_START_S = 0.25;
-export const REVEAL_STEP_S = 0.05;
+export const REVEAL_STEP_S = 0.035;
 
 function Mark({ yes }: { yes: boolean }) {
   return yes ? (
@@ -74,27 +74,47 @@ export function ComparisonHero({
               <th
                 scope="colgroup"
                 colSpan={3}
-                className="px-4 pb-1 pt-3 text-left font-display text-[13px] font-bold text-white"
+                className="px-4 pb-1 pt-3 lg:pt-2 text-left font-display text-[13px] font-bold text-white"
               >
                 {g.label}
               </th>
             </tr>
             {g.rows.map((row) => (
               <tr key={row.capability} className="hero-reveal border-b border-white/10 last:border-b-0" style={reveal()}>
-                <th scope="row" className={`px-4 py-2 text-left ${row.emphasis ? "font-semibold text-white" : "font-normal"}`}>
+                <th scope="row" className={`px-4 py-2 lg:py-1.5 text-left ${row.emphasis ? "font-semibold text-white" : "font-normal"}`}>
                   {row.tag ? (
                     <span className="mr-2 text-[10px] font-medium uppercase tracking-wider text-white/45">{row.tag}</span>
                   ) : null}
                   {row.capability}
                 </th>
-                <td className="px-1 py-2 text-center sm:px-2">
+                <td className="px-1 py-2 lg:py-1.5 text-center sm:px-2">
                   <Mark yes={row.builtIn} />
                 </td>
-                <td className="px-1 py-2 text-center sm:px-2">
+                <td className="px-1 py-2 lg:py-1.5 text-center sm:px-2">
                   <Mark yes={row.ours} />
                 </td>
               </tr>
             ))}
+            {g.ties.length > 0 ? (
+              // What both connectors do (SCRUM-427): one muted line, so the
+              // gaps stay the point and the group does not read thin. From
+              // `lg` every row is a little tighter (py-1.5, headings pt-2),
+              // so the table, now taller by five lines, stays within about
+              // 120px of the copy column beside it.
+              <tr data-tie="" className="hero-reveal bg-white/[0.03] text-white/55" style={reveal()}>
+                <th scope="row" className="px-4 py-2 lg:py-1.5 text-left text-[12px] font-normal leading-snug">
+                  {/* " · " and not a comma: some names have commas of
+                      their own ("create, update, delete"). */}
+                  <span className="font-medium text-white/70">Both:</span> {g.ties.join(" · ")}
+                </th>
+                <td className="px-1 py-2 lg:py-1.5 text-center sm:px-2">
+                  <Mark yes />
+                </td>
+                <td className="px-1 py-2 lg:py-1.5 text-center sm:px-2">
+                  <Mark yes />
+                </td>
+              </tr>
+            ) : null}
           </tbody>
         ))}
       </table>

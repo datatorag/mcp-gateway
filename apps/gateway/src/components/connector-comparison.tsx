@@ -75,6 +75,10 @@ import { SLIDES_VERIFIED_ON, VERIFIED_ON } from "@/lib/connector-verification";
 
 type Row = {
   capability: string;
+  /** A shorter name for the hero's "Both:" line only (SCRUM-427); the
+   * full table always shows `capability`. A shortening, never a new claim.
+   * A Yes/Yes row without one falls back to its full label. */
+  short?: string;
   builtIn: boolean;
   ours: boolean;
   /** Draws the eye to the rows the section exists for. Used sparingly. */
@@ -94,18 +98,18 @@ export const GROUPS: Group[] = [
   {
     service: "Google Sheets",
     rows: [
-      { capability: "Read a sheet", builtIn: true, ours: true },
-      { capability: "Create a new sheet", builtIn: true, ours: true },
+      { capability: "Read a sheet", short: "read", builtIn: true, ours: true },
+      { capability: "Create a new sheet", short: "create", builtIn: true, ours: true },
       // Conceded on 15 October 2026: the Sheets connector (beta on claude.ai
       // since October 2026) writes values and formulas, appends, clears and
       // runs the full batch update. It reads one range per call and has no
       // query language, which is why the query row stays ours.
-      { capability: "Update a cell", builtIn: true, ours: true },
-      { capability: "Append a row", builtIn: true, ours: true },
-      { capability: "Add, rename or delete a tab", builtIn: true, ours: true },
-      { capability: "Clear a range", builtIn: true, ours: true },
+      { capability: "Update a cell", short: "update cells", builtIn: true, ours: true },
+      { capability: "Append a row", short: "append rows", builtIn: true, ours: true },
+      { capability: "Add, rename or delete a tab", short: "tabs", builtIn: true, ours: true },
+      { capability: "Clear a range", short: "clear", builtIn: true, ours: true },
       { capability: "Query a sheet with a filter", builtIn: false, ours: true, emphasis: true },
-      { capability: "Format cells and tables", builtIn: true, ours: true },
+      { capability: "Format cells and tables", short: "format", builtIn: true, ours: true },
       { capability: "Two Google accounts in one request", builtIn: false, ours: true, emphasis: true },
     ],
     note: "Google Sheets has its own connector since October 2026, in beta on claude.ai, on the Sheets API: values in and out, formulas, clearing, inserting rows and columns, and the full batch update for tabs, formatting and charts. It reads one range per call and has no query language. Enumerated 15 October 2026.",
@@ -127,24 +131,24 @@ export const GROUPS: Group[] = [
   {
     service: "Google Slides",
     rows: [
-      { capability: "Create a deck", builtIn: true, ours: true, emphasis: true },
+      { capability: "Create a deck", short: "create a deck", builtIn: true, ours: true, emphasis: true },
       { capability: "Put content in it", builtIn: false, ours: true, emphasis: true },
-      { capability: "Read an existing deck", builtIn: true, ours: true },
+      { capability: "Read an existing deck", short: "read a deck", builtIn: true, ours: true },
     ],
     note: `The built-in connector does make a real Google Slides deck. It just arrives with one blank slide, an empty title and an empty subtitle, because a Google-native deck with content is refused. You get the container and you fill it in yourself. The connector will convert a .pptx you upload, if you have the file. Anthropic announced a Slides editing connector in beta on 6 October 2026, alongside the Docs and Sheets ones. We had not enumerated it by 15 October 2026, so these rows are as we verified them on ${SLIDES_VERIFIED_ON}. We will re-test and correct this when we have.`,
   },
   {
     service: "Gmail",
     rows: [
-      { capability: "Read and search mail", builtIn: true, ours: true },
-      { capability: "Write a draft", builtIn: true, ours: true },
+      { capability: "Read and search mail", short: "read and search", builtIn: true, ours: true },
+      { capability: "Write a draft", short: "drafts", builtIn: true, ours: true },
       // Conceded on 18 September 2026 after re-enumerating the built-in
       // connector's tool surface: send, reply with reply-all, and forward all
       // exist. No emphasis on a row we lose; see rule 3.
-      { capability: "Send it", builtIn: true, ours: true },
-      { capability: "Reply in thread", builtIn: true, ours: true },
-      { capability: "Forward", builtIn: true, ours: true },
-      { capability: "Label, star, mark read, archive a message", builtIn: true, ours: true },
+      { capability: "Send it", short: "send", builtIn: true, ours: true },
+      { capability: "Reply in thread", short: "reply", builtIn: true, ours: true },
+      { capability: "Forward", short: "forward", builtIn: true, ours: true },
+      { capability: "Label, star, mark read, archive a message", short: "labels and archive", builtIn: true, ours: true },
       {
         capability: "Label or unlabel a whole thread at once",
         builtIn: true,
@@ -153,10 +157,10 @@ export const GROUPS: Group[] = [
       },
       // Conceded on 9 October 2026. The note used to say nothing in the
       // built-in surface deletes a draft it wrote; it has a tool that does.
-      { capability: "Delete a draft", builtIn: true, ours: true },
+      { capability: "Delete a draft", short: "delete drafts", builtIn: true, ours: true },
       // Ours since 16 October 2026: gmail_trash and gmail_untrash. They act on
       // one message, so a thread is one call per message; the note says so.
-      { capability: "Trash a message", builtIn: true, ours: true },
+      { capability: "Trash a message", short: "trash", builtIn: true, ours: true },
       // Broadened on 18 October 2026: drive_upload_file (since 13 October
       // 2026) stores a whole email as its .eml in Drive as well as one
       // attachment, so the row says both.
@@ -171,8 +175,8 @@ export const GROUPS: Group[] = [
   {
     service: "Google Calendar",
     rows: [
-      { capability: "Read and list events", builtIn: true, ours: true },
-      { capability: "Create, update, delete an event", builtIn: true, ours: true },
+      { capability: "Read and list events", short: "read and list", builtIn: true, ours: true },
+      { capability: "Create, update, delete an event", short: "create, update, delete", builtIn: true, ours: true },
       {
         capability:
           "Rich event creation: recurrence, rooms, attachments, reminders",
@@ -182,7 +186,7 @@ export const GROUPS: Group[] = [
       },
       { capability: "RSVP to an invitation", builtIn: true, ours: false, emphasis: true },
       { capability: "Suggest a meeting time", builtIn: true, ours: false, emphasis: true },
-      { capability: "Search events by keyword", builtIn: true, ours: true },
+      { capability: "Search events by keyword", short: "search", builtIn: true, ours: true },
       { capability: "List your other calendars", builtIn: true, ours: false, emphasis: true },
       { capability: "Free/busy lookup", builtIn: false, ours: true },
     ],
@@ -224,8 +228,8 @@ export const GROUPS: Group[] = [
       { capability: "Google Tasks", builtIn: false, ours: true },
       // Both conceded on 9 October 2026. Claude has an Atlassian connector,
       // and it does every verb these two rows name. See rule 6.
-      { capability: "Jira, read, create, comment, transition", builtIn: true, ours: true },
-      { capability: "Confluence, read, create, edit pages", builtIn: true, ours: true },
+      { capability: "Jira, read, create, comment, transition", short: "Jira basics", builtIn: true, ours: true },
+      { capability: "Confluence, read, create, edit pages", short: "Confluence basics", builtIn: true, ours: true },
       {
         capability: "Jira, attach an email or one of its attachments to an issue",
         builtIn: false,
@@ -262,25 +266,39 @@ export const GROUPS: Group[] = [
  *
  * `tag` names a row's service where its group does not: only the Jira row,
  * which sits with the Gmail attachments it acts on but belongs to the
- * Atlassian group of the full table. */
+ * Atlassian group of the full table.
+ *
+ * TIES (SCRUM-427): under its gaps, each hero group carries one line of what
+ * both connectors do, the Yes/Yes rows of the source groups named in
+ * `tiesFrom`, in the full table's order. A Google group with gaps only read
+ * thin. Rows where the built-in connector does more (built-in Yes, ours No)
+ * appear nowhere in the hero; they stay conceded in the full table. Beyond
+ * Google draws its ties from the Beyond Google source group, whose Yes/Yes
+ * rows are the Jira and Confluence ones. */
 export type HeroRow = Row & { tag: string | null };
-export type HeroGroup = { label: string; rows: HeroRow[]; slides: boolean };
+export type HeroGroup = { label: string; rows: HeroRow[]; ties: string[]; slides: boolean };
 
-const HERO_MAP: { label: string; rows: string[] }[] = [
-  { label: "Sheets", rows: ["Query a sheet with a filter", "Two Google accounts in one request"] },
+const HERO_MAP: { label: string; rows: string[]; tiesFrom: string[] }[] = [
+  {
+    label: "Sheets",
+    rows: ["Query a sheet with a filter", "Two Google accounts in one request"],
+    tiesFrom: ["Google Sheets"],
+  },
   {
     label: "Gmail attachments",
+    tiesFrom: ["Gmail"],
     rows: [
       "Save an email or an attachment to Drive",
       "Save an email or an attachment to your computer",
       "Jira, attach an email or one of its attachments to an issue",
     ],
   },
-  { label: "Slides", rows: ["Put content in it"] },
-  { label: "Calendar", rows: ["Free/busy lookup"] },
+  { label: "Slides", rows: ["Put content in it"], tiesFrom: ["Google Slides"] },
+  { label: "Calendar", rows: ["Free/busy lookup"], tiesFrom: ["Google Calendar"] },
   {
     label: "Beyond Google",
     rows: ["Google Contacts", "Google Tasks", "Work and personal account at the same time"],
+    tiesFrom: ["Beyond Google"],
   },
 ];
 
@@ -306,7 +324,7 @@ export function unmappedHeroGaps(groups: Group[] = GROUPS): string[] {
 
 export function heroGroups(groups: Group[] = GROUPS): HeroGroup[] {
   const gaps = new Map(heroGaps(groups).map((r) => [r.capability, r]));
-  return HERO_MAP.map(({ label, rows }) => {
+  return HERO_MAP.map(({ label, rows, tiesFrom }) => {
     const placed = rows.flatMap((capability) => {
       const gap = gaps.get(capability);
       if (!gap) return [];
@@ -316,6 +334,11 @@ export function heroGroups(groups: Group[] = GROUPS): HeroGroup[] {
     return {
       label,
       rows: placed.map(({ service: _service, ...row }) => row),
+      ties: tiesFrom.flatMap((service) =>
+        (groups.find((g) => g.service === service)?.rows ?? [])
+          .filter((r) => r.builtIn && r.ours)
+          .map((r) => r.short ?? r.capability)
+      ),
       slides: placed.some((r) => r.service === "Google Slides"),
     };
   }).filter((g) => g.rows.length > 0);
