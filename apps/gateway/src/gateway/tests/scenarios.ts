@@ -208,6 +208,10 @@ export const SCENARIOS: Scenario[] = [
       "DR3", // a file's details place it in its folder, without its content
       "DR4", // a moved file leaves its old folder, and a trashed file reads back trashed
       "DR5", // a shared folder is readable by the reader, and listed as recent
+      "FD3", // a Drive file named by drive_file downloads as the bytes Drive stored
+      "FD4", // a Doc named by drive_export downloads as a PDF
+      "FD5", // a folder, a Doc as a stored file, and a format a Doc cannot take are refused
+      "DR6", // a Doc in one account's Drive is copied as a PDF into another's
     ],
   },
   {
@@ -248,6 +252,7 @@ export const SCENARIOS: Scenario[] = [
       "JR10", // one attachment of the standing message is attached by part id
       "JR11", // time logged on an issue is what its worklogs then report
       "JR12", // a link between two issues reads the right way round from each
+      "JR13", // a Doc exported as a PDF is attached to an issue, and the issue lists it
     ],
   },
   {

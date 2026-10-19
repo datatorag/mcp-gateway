@@ -27,9 +27,9 @@ describe("the comparison hero's rows", () => {
     // A row newly flipped to No/Yes that the map does not place is caught,
     // not silently left out of the hero.
     const groups = clone();
-    groups.find((g) => g.service === "Google Drive")!.rows.find((r) => r.capability === "Download file content")!.builtIn = false;
-    groups.find((g) => g.service === "Google Drive")!.rows.find((r) => r.capability === "Download file content")!.ours = true;
-    expect(unmappedHeroGaps(groups)).toEqual(["Download file content"]);
+    groups.find((g) => g.service === "Google Drive")!.rows.find((r) => r.capability === "Download a file to your computer")!.builtIn = false;
+    groups.find((g) => g.service === "Google Drive")!.rows.find((r) => r.capability === "Download a file to your computer")!.ours = true;
+    expect(unmappedHeroGaps(groups)).toEqual(["Download a file to your computer"]);
   });
 
   it("sits in Manuel's five groups, in his order", () => {

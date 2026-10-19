@@ -204,7 +204,11 @@ export const GROUPS: Group[] = [
     rows: [
       { capability: "Search files", builtIn: true, ours: true },
       { capability: "Read file content", builtIn: true, ours: true },
-      { capability: "Download file content", builtIn: true, ours: false, emphasis: true },
+      // Ours with SCRUM-428: file_download_link takes a drive_file or a
+      // drive_export reference. Renamed from "Download file content": what
+      // both do is get a file onto your computer, by different routes, and
+      // the note says how each one does it.
+      { capability: "Download a file to your computer", builtIn: true, ours: true },
       // Ours since 16 October 2026: drive_get_file describes a file or folder
       // without reading it.
       { capability: "File metadata", builtIn: true, ours: true },
@@ -224,7 +228,7 @@ export const GROUPS: Group[] = [
       // and our own Drive comparison post has said so since August.
       { capability: "Create a folder", builtIn: true, ours: true },
     ],
-    note: "The built-in Drive connector downloads a file's content, which we do not. The rest of this group both of us do: we read a file's metadata and move a file between folders since 16 October 2026, which this table denied until then, and we share a file, read who it is shared with and list recent files too. Our advantage was never Drive breadth. It is what we do with a file across services and accounts: an email's attachment onto a Jira issue or into Drive, and two Google accounts in one request.",
+    note: "Both connectors download a file. Ours hands you a single-use link with a checksum, or files the Drive file on a Jira issue; the built-in connector returns the content into the conversation. The rest of this group both of us do too: we read a file's metadata and move a file between folders since 16 October 2026, which this table denied until then, and we share a file, read who it is shared with and list recent files too. Our advantage was never Drive breadth. It is what we do with a file across services and accounts: an email's attachment onto a Jira issue or into Drive, and two Google accounts in one request.",
   },
   {
     service: "Beyond Google",

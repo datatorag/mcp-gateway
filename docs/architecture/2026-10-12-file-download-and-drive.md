@@ -34,6 +34,12 @@ a local copy" is guidance and a skill, not a tool.
 
 Read at `1d5e921`. Each line names where it was read.
 
+Since then, and not rewritten below because this section is what was read
+that day: there are two consuming tools (`drive_upload_file` joined
+`jira_add_attachment` with SCRUM-421), gws-mcp has its own
+`/internal/consume` route for it, and there are four reference types
+(`drive_file` and `drive_export` joined with SCRUM-428).
+
 - `gateway/file-crossing.ts`: two reference types (`gmail_message`,
   `gmail_attachment` by `part_id`) and one consuming tool. One function,
   `crossFile`, does both legs: it reads the whole file from the source

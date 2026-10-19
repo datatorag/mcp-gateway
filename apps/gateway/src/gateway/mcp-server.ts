@@ -626,14 +626,14 @@ export const BUILT_IN_TOOLS: {
     definition: {
       name: DOWNLOAD_TOOL,
       description:
-        "Makes a download link for a file named by a file reference, so the user can save it to their own computer. A gmail_message reference gives a whole email as its original .eml exactly as Gmail returns it; a gmail_attachment reference gives one attachment of an email, named by the part id gmail_read lists for it. The answer is a receipt: the file's name, its size in bytes and its SHA-256, and a link on this service. The link opens a page with one button that saves the file. It works once and stops working after ten minutes. The receipt also carries a one-line command that saves the file without the page, under the sender's file name, in the directory it is run in. The file's content is not returned and does not enter the conversation. The link is for the user: a call to any tool on this service that carries the link is refused and the link is cancelled. One file a call, at most 25 MB.",
+        "Makes a download link for a file named by a file reference, so the user can save it to their own computer. A gmail_message reference gives a whole email as its original .eml exactly as Gmail returns it; a gmail_attachment reference gives one attachment of an email, named by the part id gmail_read lists for it; a drive_file reference gives a Google Drive file as stored; a drive_export reference gives a Google Docs, Sheets or Slides file exported to a format such as pdf, docx or xlsx. The answer is a receipt: the file's name, its size in bytes and its SHA-256, and a link on this service. The link opens a page with one button that saves the file. It works once and stops working after ten minutes. The receipt also carries a one-line command that saves the file without the page, under the sender's file name, in the directory it is run in. The file's content is not returned and does not enter the conversation. The link is for the user: a call to any tool on this service that carries the link is refused and the link is cancelled. One file a call, at most 25 MB.",
       inputSchema: {
         type: "object" as const,
         properties: {
           file: {
             type: "object",
             description:
-              'A file reference: {"type":"gmail_message","message_id":"..."} for an email, or {"type":"gmail_attachment","message_id":"...","part_id":"..."} for one attachment. An optional "account" names the connected Google account that holds the message.',
+              'A file reference: {"type":"gmail_message","message_id":"..."} for an email, {"type":"gmail_attachment","message_id":"...","part_id":"..."} for one attachment, {"type":"drive_file","file_id":"..."} for a Drive file as stored, or {"type":"drive_export","file_id":"...","format":"pdf"} for a Google Docs, Sheets or Slides file exported. An optional "account" names the connected Google account that holds the message or file.',
           },
         },
         required: ["file"],
