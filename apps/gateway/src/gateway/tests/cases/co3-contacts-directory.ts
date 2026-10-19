@@ -1,5 +1,5 @@
 import type { TestCase } from "../types";
-import { resultJson } from "../result-json";
+import { resultJson, resultText } from "../result-json";
 
 type DirectoryResults = { people?: { resourceName?: string }[] };
 
@@ -20,6 +20,13 @@ type DirectoryResults = { people?: { resourceName?: string }[] };
  * A tool that could not reach Google throws instead. The title says "any
  * row it returns" for that reason: on a small domain this step can prove
  * only that the endpoint answered.
+ *
+ * A PERSONAL ACCOUNT HAS NO DIRECTORY (SCRUM-422). On a personal Gmail
+ * account the search cannot run, and the right answer is the tool's plain
+ * message saying so, not Google's scope 403 and not the gateway's
+ * "reconnect", which cannot help. So two answers pass: the plain message,
+ * checked phrase by phrase, or a list read as before for a Workspace
+ * account. Any other error is still a failure.
  */
 export const co3ContactsDirectory: TestCase = {
   id: "CO3",
@@ -27,14 +34,24 @@ export const co3ContactsDirectory: TestCase = {
   covers: ["gws-mcp__contacts_directory_search"],
   accounts: ["sender"],
   run: async (ctx) => {
-    const answered = resultJson<DirectoryResults>(
-      "contacts_directory_search",
-      await ctx.call(
-        "gws-mcp__contacts_directory_search",
-        { query: "a", max_results: 5 },
-        { as: "sender" }
-      )
+    const result = await ctx.call(
+      "gws-mcp__contacts_directory_search",
+      { query: "a", max_results: 5 },
+      { as: "sender" }
     );
+    if (result.isError) {
+      const text = resultText(result);
+      const plain = [
+        /Google Workspace feature/,
+        /personal Gmail accounts have no directory/i,
+        /does not include directory access/,
+      ].every((phrase) => phrase.test(text));
+      if (plain && !/reconnect|insufficient authentication scopes/i.test(text)) {
+        ctx.evidence("a personal account: the search answered that there is no directory, in plain words");
+        return;
+      }
+    }
+    const answered = resultJson<DirectoryResults>("contacts_directory_search", result);
     /* AN OBJECT FIRST. Reading a key off a scalar yields `undefined`, and
      * the absent-means-empty rule below would then call a bare string or a
      * number "a list of 0" in green. `firstArray` used to refuse those, so

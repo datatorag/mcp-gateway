@@ -107,7 +107,7 @@ export function accountArgs(
 }
 
 export type RunnerClient = {
-  listTools(): Promise<{ name: string; inputSchema?: Record<string, unknown> }[]>;
+  listTools(): Promise<{ name: string; inputSchema?: Record<string, unknown>; annotations?: Record<string, unknown> }[]>;
   callTool(name: string, args: Record<string, unknown>): Promise<{
     content: { type: string; text?: string }[];
     isError?: boolean;
@@ -135,9 +135,14 @@ export async function createRunnerClient(
   return {
     async listTools() {
       const { tools } = await client.listTools();
+      // ANNOTATIONS INCLUDED. This list is also what ctx.rpc("tools/list")
+      // hands a case, and E5 reads readOnlyHint from it: when this mapping
+      // kept only name and schema, E5 counted 0 of 115 annotated on a prod
+      // whose every row and every served tool carried the hint (SCRUM-326).
       return tools.map((t) => ({
         name: t.name,
         inputSchema: t.inputSchema as Record<string, unknown> | undefined,
+        ...(t.annotations ? { annotations: t.annotations as Record<string, unknown> } : {}),
       }));
     },
     async callTool(name, args) {

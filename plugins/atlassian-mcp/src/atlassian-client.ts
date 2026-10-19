@@ -32,6 +32,19 @@ export class AtlassianHttpError extends Error {
   }
 }
 
+/** A write's success answer as JSON, or {} when there is none.
+ *
+ * Some Atlassian writes succeed with no body at all: 204, and also a 201 with
+ * an empty body, which is what Jira's issueLink endpoint sends. Parsing that
+ * as JSON threw "Unexpected end of JSON input" AFTER the link was made, so
+ * the call reported a failure for something that had happened (SCRUM-428).
+ * The text is read first and parsed only when there is some. */
+export async function successBody(res: Response): Promise<unknown> {
+  if (res.status === 204) return {};
+  const text = await res.text();
+  return text.trim() === "" ? {} : JSON.parse(text);
+}
+
 export class AtlassianClient {
   private accessToken?: string;
   private cloudId?: string;
@@ -168,8 +181,7 @@ export class AtlassianClient {
       const text = await res.text();
       throw new Error(`Jira POST ${path} failed (${res.status}): ${text}`);
     }
-    if (res.status === 204) return {};
-    return res.json();
+    return successBody(res);
   }
 
   /** POST a multipart form, for the endpoints that take a file.
@@ -221,8 +233,7 @@ export class AtlassianClient {
       const text = await res.text();
       throw new Error(`Jira PUT ${path} failed (${res.status}): ${text}`);
     }
-    if (res.status === 204) return {};
-    return res.json();
+    return successBody(res);
   }
 
   async jiraDelete(path: string): Promise<void> {
@@ -267,8 +278,7 @@ export class AtlassianClient {
         `Confluence v2 POST ${path} failed (${res.status}): ${text}`
       );
     }
-    if (res.status === 204) return {};
-    return res.json();
+    return successBody(res);
   }
 
   async confluenceV2Put(path: string, body: unknown): Promise<unknown> {
@@ -285,7 +295,7 @@ export class AtlassianClient {
         `Confluence v2 PUT ${path} failed (${res.status}): ${text}`
       );
     }
-    return res.json();
+    return successBody(res);
   }
 
   async confluenceV2Delete(path: string): Promise<void> {
