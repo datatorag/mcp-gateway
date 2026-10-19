@@ -1,6 +1,8 @@
 import type { GwsClient } from "../gws-client.js";
 import { MUTATE, ToolDef } from "./annotations.js";
 import { jsonResponse } from "./response.js";
+import { unwrapJsonString } from "./validate.js";
+import { repeatedParams } from "../google-api/request.js";
 
 export const genericTools: ToolDef[] = [
   {
@@ -53,17 +55,46 @@ export const genericTools: ToolDef[] = [
   },
 ];
 
+/**
+ * A repeated param sent as a JSON string holding an array is that array
+ * (SCRUM-298), the rule SCRUM-269 applies to the dedicated tools' array
+ * arguments. Only the params the method declares repeated: anywhere else a
+ * string that looks like a JSON array (a search query) is a string. An array
+ * of objects or arrays is unwrapped too, so the client's own check refuses it
+ * by name instead of it going out as one literal value. Returns a copy; the
+ * caller's object is not changed.
+ */
+function unwrapRepeatedParams(
+  service: string,
+  resource: string,
+  method: string,
+  params: Record<string, unknown> | undefined
+): Record<string, unknown> | undefined {
+  if (!params) return params;
+  let out = params;
+  for (const key of repeatedParams(service, resource, method)) {
+    const value = params[key];
+    if (typeof value !== "string") continue;
+    const unwrapped = unwrapJsonString(value, "array");
+    if (unwrapped !== undefined) out = { ...out, [key]: unwrapped };
+  }
+  return out;
+}
+
 export async function handleGeneric(
   client: GwsClient,
   _toolName: string,
   args: Record<string, unknown>
 ) {
+  const service = args.service as string;
+  const resource = args.resource as string;
+  const method = args.method as string;
   const result = await client.api(
-    args.service as string,
-    args.resource as string,
-    args.method as string,
+    service,
+    resource,
+    method,
     {
-      params: args.params as Record<string, unknown> | undefined,
+      params: unwrapRepeatedParams(service, resource, method, args.params as Record<string, unknown> | undefined),
       jsonBody: args.json_body ?? args.body,
       pageAll: args.page_all as boolean | undefined,
       dryRun: args.dry_run as boolean | undefined,

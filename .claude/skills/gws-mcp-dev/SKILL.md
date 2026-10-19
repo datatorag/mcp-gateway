@@ -190,6 +190,9 @@ gateway deploy carries it. What goes with it:
   `ab0ffef`). An array of objects or arrays is refused before the call by
   `assertCarriableParams` in `gws-client.ts`, because the element would
   go out as one stringified value and Google blames the caller's input.
+  In `gws_run` a string that parses as a JSON array is taken as that array
+  for a param the method table declares `repeated` for that method, and for
+  no other param (SCRUM-298, the SCRUM-269 helper `unwrapJsonString`).
   Until SCRUM-178 the client refused EVERY array on a belief about the
   transport that was never measured; the recorded requests in
   `oracle.fixtures.json` pin what is sent, so a claim about the transport
