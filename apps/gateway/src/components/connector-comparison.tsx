@@ -235,6 +235,10 @@ export const GROUPS: Group[] = [
       // and it does every verb these two rows name. See rule 6.
       { capability: "Jira, read, create, comment, transition", short: "Jira basics", builtIn: true, ours: true },
       { capability: "Confluence, read, create, edit pages", short: "Confluence basics", builtIn: true, ours: true },
+      // Added with SCRUM-428, when the worklog, link and comment-thread tools
+      // shipped: both connectors do these.
+      { capability: "Jira, log work and link issues", short: "worklogs and links", builtIn: true, ours: true },
+      { capability: "Confluence, comment threads and inline comments", short: "comment threads", builtIn: true, ours: true },
       {
         capability: "Jira, attach an email or one of its attachments to an issue",
         builtIn: false,
@@ -242,7 +246,7 @@ export const GROUPS: Group[] = [
         emphasis: true,
       },
     ],
-    note: "Claude has an Atlassian connector of its own, and for reading, creating, commenting and moving an issue through its workflow it does what ours does. This table said otherwise until 9 October 2026. Where it stops is files: it has no tool that takes one, so an email, or a PDF inside it, cannot be put on an issue. Contacts and Tasks have no built-in connector at all.",
+    note: "Claude has an Atlassian connector of its own, and for reading, creating, commenting and moving an issue through its workflow it does what ours does. Both of us log work, link issues, and reply in Confluence comment threads, inline comments included. This table said otherwise until 9 October 2026. Where it stops is files: it has no tool that takes one, so an email, or a PDF inside it, cannot be put on an issue. Contacts and Tasks have no built-in connector at all.",
   },
   {
     service: "The one that changes how you work",

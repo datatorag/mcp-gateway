@@ -100,8 +100,14 @@ describe("the comparison hero's rows", () => {
       expect(g.ties, g.label).toEqual(expected);
       expect(g.ties.length, g.label).toBeGreaterThan(0);
     }
-    // Beyond Google's ties are the Jira and Confluence rows, and only those.
-    expect(heroGroups().find((g) => g.label === "Beyond Google")!.ties).toEqual(["Jira basics", "Confluence basics"]);
+    // Beyond Google's ties are the Jira and Confluence rows, and only those
+    // (the last two since SCRUM-428).
+    expect(heroGroups().find((g) => g.label === "Beyond Google")!.ties).toEqual([
+      "Jira basics",
+      "Confluence basics",
+      "worklogs and links",
+      "comment threads",
+    ]);
   });
 
   it("names every tie by its short label, or its full label when it has none", () => {
