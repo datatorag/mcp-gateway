@@ -1,6 +1,6 @@
 ---
 title: "Drive"
-description: "Search files, read content, and create folders in Google Drive."
+description: "Search files, read content, create folders, and move, copy, rename or trash files in Google Drive."
 order: 3
 section: "connectors"
 connector: "google-workspace"
@@ -56,8 +56,14 @@ the conversation to be read.
 | `drive_read_file` | Read a file's text content by file ID. Handles Google Docs, Sheets and Slides, Office `.docx`/`.xlsx`/`.pptx` (converted automatically), and `.txt`/`.csv`. Returns the extracted text directly, with no local download |
 | `drive_create_folder` | Create a new folder, optionally inside a parent folder |
 | `drive_rename_file` | Rename a file or folder by ID. Changes the name only: content, location and sharing are untouched. Works on Docs, Sheets, Slides and folders |
-| `drive_upload_file` | Put an email or one of its attachments into Drive, named by a [file reference](/docs/file-references). The receipt includes the SHA-256 Drive reports for what it stored and whether it matches what was sent, and the owners and sharing of the folder it went into |
+| `drive_upload_file` | Put an email, one of its attachments, or a file from another connected account's Drive (as stored, or a Google file exported, such as a Doc as a PDF) into Drive, named by a [file reference](/docs/file-references). The receipt includes the SHA-256 Drive reports for what it stored and whether it matches what was sent, and the owners and sharing of the folder it went into |
 | `drive_copy_file` | Copy a file and name the copy in the same call, optionally into another folder with `parent_id`. The copy carries the original's tabs, formatting and formulas. **Folders cannot be copied** |
+| `drive_get_file` | Describe a file or folder by ID without reading its content: name, type, size, the folders it is in, owners, created and modified times, link, and whether it is in Trash |
+| `drive_move_file` | Move a file or folder into another folder. It is removed from the folder it was in, so it ends up in one place; name, content and ID are unchanged |
+| `drive_trash_file` | Move a file or folder to Trash, where its owner can restore it for 30 days. Trashing a folder trashes what is inside it |
+| `drive_share_file` | Share a file or folder with one person by email, as reader, commenter or writer. Google emails them unless `notify` is false, with your `message` if you give one. The answer lists who has access afterwards |
+| `drive_get_file_permissions` | List who has access to a file or folder: each person, group, domain or link, with their role |
+| `drive_list_recent_files` | The files you opened most recently, or with `by: "modified"` the most recently changed, with name, type, time and link. `page_size` defaults to 20 |
 
 ## What `drive_read_file` can and cannot read
 

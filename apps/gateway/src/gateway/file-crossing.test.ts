@@ -140,12 +140,12 @@ async function bodyBytes(call: Call): Promise<Buffer> {
 const idle = { host: 0, users: 0 };
 
 describe("the registry", () => {
-  it("is explicit: two consuming tools, two reference types, the stated limits", () => {
+  it("is explicit: two consuming tools, four reference types, the stated limits", () => {
     expect(FILE_CONSUMING_TOOLS).toEqual({
       "atlassian-mcp__jira_add_attachment": { fileArg: "file" },
       "gws-mcp__drive_upload_file": { fileArg: "file" },
     });
-    expect(Object.keys(FILE_REFERENCE_TYPES)).toEqual(["gmail_message", "gmail_attachment"]);
+    expect(Object.keys(FILE_REFERENCE_TYPES)).toEqual(["gmail_message", "gmail_attachment", "drive_file", "drive_export"]);
     expect(FILE_REFERENCE_TYPES).toMatchObject({
       gmail_message: { plugin: "gws-mcp", service: "google-workspace", requiredStrings: ["message_id"] },
       // The PART id, never the attachment id: Gmail issues a new attachment
@@ -155,6 +155,15 @@ describe("the registry", () => {
         service: "google-workspace",
         requiredStrings: ["message_id", "part_id"],
         scopeTool: "gmail_read",
+      },
+      drive_file: { plugin: "gws-mcp", service: "google-workspace", requiredStrings: ["file_id"], scopeTool: "drive_read_file" },
+      // The format is required, so it reaches the plugin and the link's
+      // signature covers it (SCRUM-428).
+      drive_export: {
+        plugin: "gws-mcp",
+        service: "google-workspace",
+        requiredStrings: ["file_id", "format"],
+        scopeTool: "drive_read_file",
       },
     });
     expect(MAX_FILE_BYTES).toBe(25 * 1024 * 1024);
@@ -175,6 +184,7 @@ describe("the registry", () => {
   it("builds each type's example from its required fields, so the words cannot drift from the check", () => {
     expect(referenceExample("gmail_message")).toBe('{"type":"gmail_message","message_id":"..."}');
     expect(referenceExample("gmail_attachment")).toBe('{"type":"gmail_attachment","message_id":"...","part_id":"..."}');
+    expect(referenceExample("drive_export")).toBe('{"type":"drive_export","file_id":"...","format":"..."}');
   });
 
   it("shows every type's example in a refusal, once each", async () => {
@@ -301,7 +311,9 @@ describe("refusals before any request", () => {
     ["a string", "msg-1", "file"],
     ["an array", [{ type: "gmail_message", message_id: "m" }], "file"],
     ["no type", { message_id: "m" }, "type"],
-    ["an unknown type", { type: "drive_file", file_id: "f" }, "drive_file"],
+    ["an unknown type", { type: "calendar_event", event_id: "e" }, "calendar_event"],
+    ["a Drive file with no file_id", { type: "drive_file" }, "file_id"],
+    ["an export with no format", { type: "drive_export", file_id: "f" }, "format"],
     ["a url type", { type: "url", url: "https://example.com/x" }, "gmail_message"],
     ["a prototype name as type", { type: "constructor", message_id: "m" }, "gmail_message"],
     ["no message_id", { type: "gmail_message" }, "message_id"],

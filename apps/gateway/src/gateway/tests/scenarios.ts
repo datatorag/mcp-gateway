@@ -120,6 +120,8 @@ export const SCENARIOS: Scenario[] = [
       "SH2", // a batch applies both requests and replies in order
       "SH3", // format a table: header frozen, values untouched
       "D14", // a bold background reads back, and clears again
+      "SH6", // the tabs, ids and sizes agree with the API, and no cell comes back
+      "SH7", // a copied tab is a new tab that carries the source's values
       "SH4", // a renamed tab drops its old name
       /* The read guards, which stay on the STANDING FIXTURE. They are about
        * values and shapes that only exist on a sheet nobody rewrites. */
@@ -150,6 +152,7 @@ export const SCENARIOS: Scenario[] = [
       /* Drafts. D3's never leaves; E15's does, which makes E15 THE FIRST
        * STEP THAT SENDS, because sending a draft is still sending. */
       "D3", //  a draft is created, read back by id, and deleted
+      "GM5", // a created draft is listed under its id, and leaves the list when deleted
       "E15", // a draft is signed once on write and not again on send
       /* THE MESSAGE THE REST OF THE LIFECYCLE IS ABOUT. Four steps below
        * consume it, and they are exactly the ones that declare
@@ -165,12 +168,16 @@ export const SCENARIOS: Scenario[] = [
       "GM2", // listing is bounded, and a filter that matches nothing is empty
       "GM3", // marking read clears UNREAD, and unread restores it
       "GM4", // mark_read with labels applies only those; with none it clears UNREAD
+      "GM6", // untrash takes the Trash label off and trash puts it back
+      "GM8", // spam takes a message out of the inbox and not spam brings it back
+      "GM9", // a label and a trash on a thread reach every message in it
       "E16", // three messages labelled in one call, and unlabelled together
       /* Answering it. */
       "D12", // a reply lands in the original's thread
       "D13", // a forward carries both the note and the original's token
       /* And taking something out of it. */
       "D15", // an attachment saved to Drive matches in size and md5
+      "GM7", // an attachment too large to return is described with its size
       /* And out to the user's own disk (SCRUM-420). Read only: no mail is
        * sent, moved or trashed by either step. */
       "FD1", // a download link shows a page, saves once, and the bytes match
@@ -198,6 +205,13 @@ export const SCENARIOS: Scenario[] = [
       "D9", //  a copy is renamed, found by its new name, and deleted
       "C4", //  search lists the fixture folder and the doc inside it
       "DR2", // reading the fixture doc returns the document's own text
+      "DR3", // a file's details place it in its folder, without its content
+      "DR4", // a moved file leaves its old folder, and a trashed file reads back trashed
+      "DR5", // a shared folder is readable by the reader, and listed as recent
+      "FD3", // a Drive file named by drive_file downloads as the bytes Drive stored
+      "FD4", // a Doc named by drive_export downloads as a PDF
+      "FD5", // a folder, a Doc as a stored file, and a format a Doc cannot take are refused
+      "DR6", // a Doc in one account's Drive is copied as a PDF into another's
     ],
   },
   {
@@ -212,6 +226,8 @@ export const SCENARIOS: Scenario[] = [
       "CA1", // a get by id returns that event, with its control summary
       "CA2", // an update changes what a later get returns
       "CA3", // freebusy is busy where an event was made and free beside it
+      "CA4", // the calendar list is compact; a suggested slot leaves once an event takes it
+      "CA5", // an answer to an invitation is what the organizer then sees
     ],
   },
   {
@@ -234,6 +250,9 @@ export const SCENARIOS: Scenario[] = [
       "JR8", // an email is attached as its original file, and the issue lists it
       "JR9", // attaching to an issue that does not exist sends nothing to Jira
       "JR10", // one attachment of the standing message is attached by part id
+      "JR11", // time logged on an issue is what its worklogs then report
+      "JR12", // a link between two issues reads the right way round from each
+      "JR13", // a Doc exported as a PDF is attached to an issue, and the issue lists it
     ],
   },
   {
@@ -278,6 +297,7 @@ export const SCENARIOS: Scenario[] = [
       "CF3", // a page listing of the fixture space answers addressably
       "CF1", // a page is created, edited, and deleted, and a later read refused
       "CF2", // a comment added to a page is visible to a later read
+      "CF5", // footer and inline comments and their replies, listed in their threads
       "CF4", // an attachment named by CQL is found by the attachment endpoint
     ],
   },

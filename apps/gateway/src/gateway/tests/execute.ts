@@ -805,6 +805,25 @@ export function makeContextParts(opts: {
         );
         return parseHeaders(result);
       },
+      /* SCRUM-428: the subjects of a whole thread, for the tools that move
+       * one. A read, through the same raw call readDraft uses. */
+      async readThreadSubjects(threadId) {
+        const result = await client.callTool(
+          "gws-mcp__gws_run",
+          accountArgs(
+            fixtures,
+            "gws-mcp__gws_run",
+            {
+              service: "gmail",
+              resource: "users.threads",
+              method: "get",
+              params: { userId: "me", id: threadId, format: "metadata", metadataHeaders: ["Subject"] },
+            },
+            role
+          )
+        );
+        return threadSubjects(result);
+      },
     };
   };
 
@@ -831,6 +850,7 @@ export function makeContextParts(opts: {
       // will act in rather than a different one.
       lookups: lookupsFor(role),
       trashable,
+      runStamp,
     });
     if (!verdict.ok) throw new Error(verdict.reason);
     return client.callTool(tool, sent);
@@ -978,6 +998,22 @@ export function makeContextParts(opts: {
  * carry stays undefined rather than becoming "", because the reply guard
  * treats a present-but-empty Reply-To differently from an absent one.
  */
+/** The Subject of every message in a `users.threads.get` result, or null
+ * when the thread cannot be read. A message with no Subject header counts as
+ * an empty subject, which the guard then refuses. */
+export function threadSubjects(result: ToolResult): string[] | null {
+  if (result.isError) return null;
+  try {
+    const parsed = JSON.parse(resultText(result)) as { messages?: { payload?: { headers?: { name?: string; value?: string }[] } }[] };
+    if (!Array.isArray(parsed.messages)) return null;
+    return parsed.messages.map(
+      (m) => m.payload?.headers?.find((h) => typeof h?.name === "string" && h.name.toLowerCase() === "subject")?.value ?? ""
+    );
+  } catch {
+    return null;
+  }
+}
+
 function parseHeaders(result: ToolResult) {
   if (result.isError) return null;
   try {

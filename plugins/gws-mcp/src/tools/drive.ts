@@ -111,7 +111,164 @@ export const driveTools: ToolDef[] = [
     },
     annotations: CREATE("Copy Drive file"),
   },
+  {
+    name: "drive_get_file",
+    description:
+      "Describes one file or folder in Google Drive without reading its content. Takes the file ID. Returns its name, MIME type, size in bytes when Drive reports one (folders have none), the IDs of the folders it is in, its owners' names and addresses, when it was created and last modified, its link, whether it is in Trash, whether it is shared, and the shared drive it belongs to when it is in one. A file the account cannot see answers as not found.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        file_id: {
+          type: "string",
+          description: "The Google Drive file or folder ID to describe",
+        },
+      },
+      required: ["file_id"],
+    },
+    annotations: READ("Get Drive file details"),
+  },
+  {
+    name: "drive_move_file",
+    description:
+      "Moves a file or folder in Google Drive into another folder. Takes the file ID and the destination folder ID. The item is added to the destination folder and removed from the folder or folders it was in, so it ends up in one place; its name, content and ID are unchanged. Returns the item's ID, name, the folder it is now in and its link. An item already in the destination folder is left where it is and reported as not moved.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        file_id: {
+          type: "string",
+          description: "The Google Drive file or folder ID to move",
+        },
+        folder_id: {
+          type: "string",
+          description: "The ID of the folder to move it into",
+        },
+      },
+      required: ["file_id", "folder_id"],
+    },
+    annotations: MUTATE("Move Drive file to another folder"),
+  },
+  {
+    name: "drive_trash_file",
+    description:
+      "Moves a file or folder in Google Drive to Trash. Takes the file ID. The item stays in Trash, where Drive deletes it for good after 30 days and where its owner can restore it before then; trashing a folder trashes what is inside it. Returns the item's ID, name and its trashed state as Drive reports it afterwards. Works on any Drive item the account is allowed to trash, including Docs, Sheets and Slides.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        file_id: {
+          type: "string",
+          description: "The Google Drive file or folder ID to move to Trash",
+        },
+      },
+      required: ["file_id"],
+    },
+    annotations: MUTATE("Move Drive file to Trash"),
+  },
+  {
+    name: "drive_share_file",
+    description:
+      "Shares a Google Drive file or folder with one person by email address, as reader, commenter or writer. Takes the file ID, the address and the role, and optionally a message for the notification email. Google emails the person unless notify is false. Returns the file ID and its permission list afterwards: who has access, at what role. Sharing a file with someone already on it at another role adds no second entry; Drive keeps one per person. This gives the person access to the file and, for a folder, to what is inside it.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        file_id: {
+          type: "string",
+          description: "The Google Drive file or folder ID to share.",
+        },
+        email: {
+          type: "string",
+          description: "The email address of the person to share with.",
+        },
+        role: {
+          type: "string",
+          enum: ["reader", "commenter", "writer"],
+          description: "The access to give: reader (view), commenter (view and comment) or writer (edit).",
+        },
+        message: {
+          type: "string",
+          description: "An optional message, sent in the notification email.",
+        },
+        notify: {
+          type: "boolean",
+          description: "Whether Google emails the person about the share (default: true).",
+        },
+      },
+      required: ["file_id", "email", "role"],
+    },
+    // Gives a person access to a file: an effect outside the account that
+    // cannot be taken back from their inbox.
+    annotations: MUTATE("Share Drive file with a person"),
+  },
+  {
+    name: "drive_get_file_permissions",
+    description:
+      "Lists who has access to a Google Drive file or folder and at what role. Takes the file ID. Returns one entry per permission: its ID, its type (user, group, domain or anyone), the role (owner, organizer, fileOrganizer, writer, commenter or reader), and the person's name and address or the domain where there is one. A file the account cannot see answers as not found.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        file_id: {
+          type: "string",
+          description: "The Google Drive file or folder ID.",
+        },
+      },
+      required: ["file_id"],
+    },
+    annotations: READ("List who has access to a Drive file"),
+  },
+  {
+    name: "drive_list_recent_files",
+    description:
+      "Lists the Google Drive files the account opened most recently, or the ones modified most recently, the most recent at the top. Returns one compact entry per file: its ID, name, MIME type, when it was last modified, when the account last opened it, and its link, plus a page token when more remain. Files in Trash are left out.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        by: {
+          type: "string",
+          enum: ["opened", "modified"],
+          description: "Order by when the account last opened each file, or by when each file was last modified by anyone (default: opened).",
+        },
+        page_size: {
+          type: "number",
+          description: "The most files to return in one page (default: 20, at most 100).",
+        },
+        page_token: {
+          type: "string",
+          description: "The nextPageToken from an earlier call, to read the page after it.",
+        },
+      },
+      required: [],
+    },
+    annotations: READ("List recent Drive files"),
+  },
 ];
+
+/** What drive_share_file and drive_get_file_permissions report for each
+ * permission: who, at what role. */
+const PERMISSION_FIELDS = "permissions(id,type,role,emailAddress,displayName,domain),nextPageToken";
+
+/** An address shaped enough to send to Drive; Drive is the judge of the rest. */
+const EMAIL = /^[^\s@,;<>"']+@[^\s@,;<>"']+\.[^\s@,;<>"']+$/;
+
+async function listPermissions(client: GwsClient, fileId: string) {
+  const result = await client.api("drive", "permissions", "list", {
+    params: { fileId, fields: PERMISSION_FIELDS, supportsAllDrives: true },
+  });
+  const data = (result.data ?? {}) as {
+    permissions?: { id?: string; type?: string; role?: string; emailAddress?: string; displayName?: string; domain?: string }[];
+  };
+  return (Array.isArray(data.permissions) ? data.permissions : []).map((p) => ({
+    id: p.id,
+    type: p.type,
+    role: p.role,
+    ...(p.emailAddress ? { email: p.emailAddress } : {}),
+    ...(p.displayName ? { name: p.displayName } : {}),
+    ...(p.domain ? { domain: p.domain } : {}),
+  }));
+}
+
+/** What drive_get_file reads: the facts about a file, never its content. */
+export const FILE_DETAIL_FIELDS =
+  "id,name,mimeType,size,parents,owners(displayName,emailAddress)," +
+  "createdTime,modifiedTime,webViewLink,trashed,shared,driveId";
 
 const GOOGLE_DOC = "application/vnd.google-apps.document";
 const GOOGLE_SHEET = "application/vnd.google-apps.spreadsheet";
@@ -196,6 +353,106 @@ export async function handleDrive(
         "id,name,parents,webViewLink"
       );
       return jsonResponse(result.data);
+    }
+
+    case "drive_get_file": {
+      const result = await client.api("drive", "files", "get", {
+        params: { fileId: args.file_id as string, fields: FILE_DETAIL_FIELDS, supportsAllDrives: true },
+      });
+      return jsonResponse(result.data);
+    }
+
+    case "drive_move_file": {
+      const fileId = args.file_id as string;
+      const folderId = requireNonBlank(toolName, "folder_id", args.folder_id as string);
+      // A move in Drive is "add this parent, remove those", so the folders
+      // the item is in now have to be read first. Leaving them in place
+      // would add a second location rather than move anything.
+      const current = await client.api("drive", "files", "get", {
+        params: { fileId, fields: "id,name,parents,webViewLink", supportsAllDrives: true },
+      });
+      const before = (current.data ?? {}) as { id?: string; name?: string; parents?: string[]; webViewLink?: string };
+      const parents = Array.isArray(before.parents) ? before.parents : [];
+      if (parents.length === 1 && parents[0] === folderId) {
+        return jsonResponse({ ...before, moved: false, note: "The item is already in that folder." });
+      }
+      const from = parents.filter((p) => p !== folderId);
+      const result = await client.api("drive", "files", "update", {
+        params: {
+          fileId,
+          addParents: folderId,
+          ...(from.length > 0 ? { removeParents: from.join(",") } : {}),
+          supportsAllDrives: true,
+          fields: "id,name,parents,webViewLink",
+        },
+        // files.update is a PATCH and whatever is in the body gets written.
+        // A move changes no field of the file, so the body is empty.
+        jsonBody: {},
+      });
+      return jsonResponse({ ...(result.data as Record<string, unknown>), moved: true });
+    }
+
+    case "drive_trash_file": {
+      const result = await client.api("drive", "files", "update", {
+        params: { fileId: args.file_id as string, supportsAllDrives: true, fields: "id,name,trashed" },
+        // The one field this call is for, and no other.
+        jsonBody: { trashed: true },
+      });
+      return jsonResponse(result.data);
+    }
+
+    case "drive_share_file": {
+      const fileId = requireNonBlank(toolName, "file_id", args.file_id as string);
+      const email = String(args.email ?? "").trim();
+      if (!EMAIL.test(email)) throw new Error("drive_share_file: email must be one email address.");
+      const role = args.role as string;
+      if (!["reader", "commenter", "writer"].includes(role)) {
+        throw new Error("drive_share_file: role must be reader, commenter or writer.");
+      }
+      const notify = args.notify !== false;
+      await client.api("drive", "permissions", "create", {
+        params: {
+          fileId,
+          supportsAllDrives: true,
+          sendNotificationEmail: notify,
+          ...(notify && typeof args.message === "string" && args.message !== "" ? { emailMessage: args.message } : {}),
+          fields: "id",
+        },
+        jsonBody: { type: "user", role, emailAddress: email },
+      });
+      return jsonResponse({ file_id: fileId, shared_with: email, role, notified: notify, permissions: await listPermissions(client, fileId) });
+    }
+
+    case "drive_get_file_permissions": {
+      const fileId = requireNonBlank(toolName, "file_id", args.file_id as string);
+      return jsonResponse({ file_id: fileId, permissions: await listPermissions(client, fileId) });
+    }
+
+    case "drive_list_recent_files": {
+      const byModified = args.by === "modified";
+      const params: Record<string, unknown> = {
+        q: "trashed = false",
+        orderBy: byModified ? "modifiedTime desc" : "viewedByMeTime desc",
+        pageSize: Math.min(Math.max(1, Math.floor(Number(args.page_size) || 20)), 100),
+        fields: "files(id,name,mimeType,modifiedTime,viewedByMeTime,webViewLink),nextPageToken",
+        supportsAllDrives: true,
+        includeItemsFromAllDrives: true,
+      };
+      if (args.page_token) params.pageToken = args.page_token;
+      const result = await client.api("drive", "files", "list", { params });
+      const data = (result.data ?? {}) as {
+        files?: { id?: string; name?: string; mimeType?: string; modifiedTime?: string; viewedByMeTime?: string; webViewLink?: string }[];
+        nextPageToken?: string;
+      };
+      const files = (Array.isArray(data.files) ? data.files : []).map((f) => ({
+        id: f.id,
+        name: f.name,
+        mime_type: f.mimeType,
+        modified: f.modifiedTime,
+        ...(f.viewedByMeTime ? { opened_by_me: f.viewedByMeTime } : {}),
+        link: f.webViewLink,
+      }));
+      return jsonResponse({ count: files.length, files, ...(data.nextPageToken ? { nextPageToken: data.nextPageToken } : {}) });
     }
 
     default:

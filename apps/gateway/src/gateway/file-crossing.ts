@@ -69,6 +69,27 @@ export const FILE_REFERENCE_TYPES: Readonly<
     scopeTool: "gmail_read",
     describes: "an attachment of a Gmail message",
   },
+  /** A Drive file as stored (SCRUM-428). A Google Docs, Sheets or Slides
+   * file has no stored bytes and is refused by the plugin with the
+   * drive_export reference to use instead. */
+  drive_file: {
+    plugin: "gws-mcp",
+    service: "google-workspace",
+    requiredStrings: ["file_id"],
+    scopeTool: "drive_read_file",
+    describes: "a Google Drive file",
+  },
+  /** A native file rendered to a format. The format is REQUIRED, and its own
+   * type, because only required fields reach the plugin and only they are
+   * covered by a download link's signature: an optional one would be dropped
+   * on the way. */
+  drive_export: {
+    plugin: "gws-mcp",
+    service: "google-workspace",
+    requiredStrings: ["file_id", "format"],
+    scopeTool: "drive_read_file",
+    describes: "a Google Docs, Sheets or Slides file exported to a format",
+  },
 };
 
 /** The example a refusal shows for a reference type: its type and every

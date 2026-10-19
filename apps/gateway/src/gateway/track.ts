@@ -60,6 +60,12 @@ export async function trackToolCall(
      * and method names, never the arguments. Null for every other tool. */
     service?: string | null;
     method?: string | null;
+    /** For gws_run only (SCRUM-419): the API resource path, a name like the
+     * two above. Null for every other tool. */
+    resource?: string | null;
+    /** For gws_run only (SCRUM-419): the comma-joined names of the params
+     * and body keys passed, never their values. Null for every other tool. */
+    paramNames?: string | null;
   }
 ): Promise<void> {
   // Metering + analytics run fire-and-forget off the tool-response path (see the
@@ -102,6 +108,8 @@ export async function trackToolCall(
           client_name: props.clientName ?? null,
           service: props.service ?? null,
           method: props.method ?? null,
+          resource: props.resource ?? null,
+          param_names: props.paramNames ?? null,
           ...identityProps(userEmail),
         },
       });
@@ -171,6 +179,8 @@ export async function trackToolCall(
         errorMessage: props.errorMessage,
         service: props.service ?? null,
         method: props.method ?? null,
+        resource: props.resource ?? null,
+        paramNames: props.paramNames ?? null,
       }).then((result) => {
         if (!result.ok) {
           console.warn(

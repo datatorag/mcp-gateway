@@ -150,6 +150,17 @@
   animation: fadeIn 0.4s ease-out forwards;
 }
 
+/* The landing hero table's one reveal (SCRUM-426). Defined only when the
+ * reader has not asked for less motion: under reduce the class does nothing,
+ * so the table is simply there, final, from the first paint. Each row sets its
+ * own animation-delay. */
+@media (prefers-reduced-motion: no-preference) {
+  .hero-reveal {
+    opacity: 0;
+    animation: fadeInUp 0.35s cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards;
+  }
+}
+
 *:focus-visible {
   outline: 2px solid var(--ring);
   outline-offset: 2px;

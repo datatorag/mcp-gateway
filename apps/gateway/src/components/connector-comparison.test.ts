@@ -3,7 +3,7 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { GROUPS } from "./connector-comparison";
 import { CELLS } from "./demo/demo-bento";
-import { VERIFIED_ON } from "@/lib/connector-verification";
+import { SLIDES_VERIFIED_ON, VERIFIED_ON } from "@/lib/connector-verification";
 import { siteFaqPages } from "@/lib/site-faq";
 
 /**
@@ -24,10 +24,16 @@ const row = (capability: string) => {
 };
 
 describe("the comparison table as checked on its date", () => {
-  it("carries one date, and renders it", () => {
-    expect(VERIFIED_ON).toBe("9 October 2026");
+  it("carries one date, and one exception, and renders both", () => {
+    // Every group but Slides was re-enumerated on 15 October 2026. Slides
+    // keeps the date it was last checked, by the rule in
+    // lib/connector-verification.ts, until it is re-enumerated too.
+    expect(VERIFIED_ON).toBe("15 October 2026");
+    expect(SLIDES_VERIFIED_ON).toBe("9 October 2026");
     const source = readFileSync(join(__dirname, "connector-comparison.tsx"), "utf8");
     expect(source).toContain("{VERIFIED_ON}");
+    expect(source).toContain("{SLIDES_VERIFIED_ON}");
+    expect(GROUPS.find((g) => g.service === "Google Slides")!.note).toContain(SLIDES_VERIFIED_ON);
     // The section dates are gone; a leftover would render a second date.
     expect(source).not.toContain("GMAIL_VERIFIED_ON");
     expect(source).not.toContain("CALENDAR_VERIFIED_ON");
@@ -49,14 +55,37 @@ describe("the comparison table as checked on its date", () => {
     ["Create a folder", true, true],
     ["Jira, read, create, comment, transition", true, true],
     ["Confluence, read, create, edit pages", true, true],
-    // The rows it added.
+    // The rows the 15 October 2026 check moved: Claude's Sheets and Docs
+    // connectors, in beta since October 2026, edit in place.
+    ["Update a cell", true, true],
+    ["Append a row", true, true],
+    ["Add, rename or delete a tab", true, true],
+    ["Clear a range", true, true],
+    ["Format cells and tables", true, true],
+    ["Edit an existing doc", true, true],
+    // What stays ours in Sheets, and the row that check added.
     ["Query a sheet with a filter", false, true],
-    ["Format cells and tables", false, true],
-    ["Trash a message or thread", true, false],
+    ["Two Google accounts in one request", false, true],
+    // The rows the 9 October 2026 check added.
     ["Rename a file", true, true],
-    ["Move a file to another folder", true, false],
-    ["Share a file with someone", true, false],
+    ["Share a file with someone", true, true],
     ["Jira, attach an email or one of its attachments to an issue", false, true],
+    // The rows the nine tools moved on 16 October 2026: ours now too.
+    ["Trash a message or thread", true, true],
+    // The rows SCRUM-428 moved: the built-in connectors' surface, matched.
+    ["Label or unlabel a whole thread at once", true, true],
+    ["Jira, log work and link issues", true, true],
+    ["Confluence, comment threads and inline comments", true, true],
+    ["Mark as spam", true, true],
+    ["RSVP to an invitation", true, true],
+    ["Suggest a meeting time", true, true],
+    ["List your other calendars", true, true],
+    ["Sharing permissions", true, true],
+    ["Recently-opened files", true, true],
+    ["File metadata", true, true],
+    ["Move a file to another folder", true, true],
+    // SCRUM-428 Part B: a Drive file or a Doc as PDF, by a single-use link.
+    ["Download a file to your computer", true, true],
   ] as const)("%s", (capability, builtIn, ours) => {
     expect(row(capability)).toMatchObject({ builtIn, ours });
   });
@@ -69,7 +98,7 @@ describe("the comparison table as checked on its date", () => {
       "RSVP to an invitation",
       "Suggest a meeting time",
       "List your other calendars",
-      "Download file content",
+      "Download a file to your computer",
       "File metadata",
       "Sharing permissions",
       "Recently-opened files",
@@ -98,15 +127,19 @@ describe("the comparison table as checked on its date", () => {
 });
 
 describe("the surfaces that repeat the table agree with it", () => {
-  it("the home page description does not say the Drive connector cannot change a file", () => {
-    // It renames, moves and trashes files. What it cannot do is edit what is
-    // inside one, and the description is the sentence search results quote.
+  it("the home page description makes no claim about what the built-in connector cannot do", () => {
+    // It renames, moves and trashes files. Until 15 October 2026 this said
+    // it cannot edit what is inside one. Anthropic announced Docs, Sheets and
+    // Slides editing connectors on 6 October 2026 that we could not yet test,
+    // so the sentence search results quote now says what we do and nothing
+    // about what they cannot. The table, which carries the dated note, is
+    // where that comparison lives.
     const page = readFileSync(join(__dirname, "../app/page.tsx"), "utf8");
     const description = page.match(/const HOME_DESCRIPTION =\s*\n?\s*"([^"]+)"/)?.[1];
     expect(description, "HOME_DESCRIPTION not found").toBeDefined();
     expect(row("Rename a file").builtIn).toBe(true);
-    expect(description).not.toMatch(/can't change them|cannot change them|read-only/i);
-    expect(description).toMatch(/can't edit what's in them/);
+    expect(description).not.toMatch(/can't|cannot|can not|read-only|unable/i);
+    expect(description).toMatch(/DataToRAG edits them in place/);
     // Search results cut around here.
     expect(description!.length).toBeLessThanOrEqual(160);
   });
@@ -145,8 +178,9 @@ describe("the surfaces that repeat the table agree with it", () => {
       expect(agreeing[line], `no table row recorded for: ${line}`).toBeDefined();
       expect(row(agreeing[line]).builtIn, line).toBe(false);
     }
-    // And the line about Sheets, which names Claude rather than a connector.
-    expect(row("Update a cell").builtIn).toBe(false);
+    // The Sheets line named Claude until 15 October 2026; it no longer names
+    // anyone, because the table concedes in-place editing.
+    expect(problemLines.some((line) => /^Claude reads the sheet/.test(line))).toBe(false);
   });
 
   it("no FAQ answer on the site denies a row the table concedes", () => {
@@ -157,10 +191,14 @@ describe("the surfaces that repeat the table agree with it", () => {
     expect(all.length).toBeGreaterThan(10);
     expect(row("Delete a draft").builtIn).toBe(true);
     expect(row("Create a folder").builtIn).toBe(true);
+    expect(row("Edit an existing doc").builtIn).toBe(true);
+    expect(row("Update a cell").builtIn).toBe(true);
     for (const { route, a } of all) {
       expect(a, route).not.toMatch(/cannot delete a draft|can't delete a draft|no draft delete/i);
       expect(a, route).not.toMatch(/cannot (send|reply|forward)/i);
       expect(a, route).not.toMatch(/cannot create a folder/i);
+      // Conceded on 15 October 2026: the Docs and Sheets connectors edit in place.
+      expect(a, route).not.toMatch(/cannot (change|edit) (what is inside|a file you already have|an existing)|no cell-level editing|cannot edit (a|the) (doc|sheet|spreadsheet)/i);
     }
   });
 
@@ -168,14 +206,28 @@ describe("the surfaces that repeat the table agree with it", () => {
     const answers = siteFaqPages()
       .flatMap((p) => p.faqs)
       .map((f) => f.a)
-      .filter((a) => a.includes("Where the built-in connectors stop"));
+      .filter((a) => a.includes("Where they stop is the edge of one service on one account"));
     expect(answers).toHaveLength(1);
     const [answer] = answers;
     expect(answer).toContain(VERIFIED_ON);
+    expect(answer).toContain(SLIDES_VERIFIED_ON);
+    // Each gap the answer names is a row the table marks No for built-in.
+    expect(answer).toMatch(/puts it on a Jira issue/);
+    expect(row("Jira, attach an email or one of its attachments to an issue").builtIn).toBe(false);
+    expect(answer).toMatch(/two Google accounts in one request/);
+    expect(row("Two Google accounts in one request").builtIn).toBe(false);
+    expect(answer).toMatch(/runs a query over a sheet/);
+    expect(row("Query a sheet with a filter").builtIn).toBe(false);
+    // And it concedes what the table concedes, with Slides left out until
+    // its connector is enumerated.
+    expect(row("Update a cell").builtIn).toBe(true);
+    expect(row("Edit an existing doc").builtIn).toBe(true);
+    expect(answer).toMatch(/its Docs and Sheets connectors/);
+    expect(answer).not.toMatch(/Slides connectors?,? in beta/);
+    expect(row("Put content in it").builtIn).toBe(false);
     // Creating and updating issues is something Claude's Atlassian connector
     // does, so it cannot be on a list of where the built-in connectors stop.
     expect(row("Jira, read, create, comment, transition").builtIn).toBe(true);
     expect(answer).not.toMatch(/files and updates Jira issues/);
-    expect(answer).toMatch(/attaches an email or a file inside it to a Jira issue/);
   });
 });

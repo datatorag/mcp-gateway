@@ -241,7 +241,9 @@ It does not render the env file (step 2b) and does not touch plugins (step 5).
    (served count flat); a new tool gets one `INSERT` plus the playground
    classification commit (count moves by one, smoke suite told in advance);
    a removed tool one `DELETE`. Full recipe and the reason in the
-   `ops-debugging` skill's "Plugin update + registry change" section.
+   `ops-debugging` skill's "Plugin update + registry change" section. The
+   change runs through the `registry` workflow (`registry/README.md`,
+   SCRUM-423) once its role and secret exist.
 
    **Verify the deploy** (as of 2026-07-13, `GET /api/servers` requires auth and returns
    `{"error":"Unauthorized"}` to anonymous requests — don't use it for status checks):

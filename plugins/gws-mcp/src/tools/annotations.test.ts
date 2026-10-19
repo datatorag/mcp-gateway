@@ -57,7 +57,7 @@ describe("tool annotations", () => {
     // (SCRUM-412). A tool by that name coming back would offer a login this
     // server cannot perform.
     expect(allTools.filter((t) => /auth/i.test(t.name)).map((t) => t.name)).toEqual([]);
-    expect(allTools).toHaveLength(68);
-    expect(new Set(allTools.map((t) => t.name)).size).toBe(68);
+    expect(allTools).toHaveLength(87);
+    expect(new Set(allTools.map((t) => t.name)).size).toBe(87);
   });
 });
