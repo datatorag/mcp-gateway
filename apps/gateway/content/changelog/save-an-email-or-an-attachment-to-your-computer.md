@@ -26,4 +26,6 @@ A link is for you. A call to any DataToRAG tool that carries one of your unused 
 and the link is cancelled. In a chat with the DataToRAG agent you are asked before a link is
 made, and a skill run cannot make one.
 
-Details and limits are on the [file references page](/docs/file-references).
+Details and limits are on the [file references page](/docs/file-references). The story behind it, and why
+the link opens a page with one button: [Save the Email to Your Own Computer, With a Checksum You
+Can Check](/blog/save-the-email-to-your-own-computer).

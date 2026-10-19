@@ -1,17 +1,17 @@
 import type { Metadata } from "next";
-import { eq, sql } from "drizzle-orm";
 import { db } from "@/lib/db";
-import { mcpServers, tools } from "@datatorag-mcp/db";
+import { publicToolCount } from "@/lib/public-tools";
 import { Navbar } from "@/components/navbar";
 import { ShaderBackground } from "@/components/shader-background";
 import { IntegrationCatalog } from "@/components/integration-catalog";
 import { CircleCheckIcon, CircleMinusIcon } from "lucide-react";
 import { CasaBadge } from "@/components/casa-badge";
-import { ConnectorComparison } from "@/components/connector-comparison";
+import { ConnectorComparison, heroGroups } from "@/components/connector-comparison";
 import { StartupBarOffset } from "@/components/startupbar-offset";
 import { DemoBento } from "@/components/demo/demo-bento";
 import { DEMO_HEADING, DEMO_STANDFIRST } from "@/components/demo/demo-copy";
-import { HeroVideo } from "@/components/hero-video";
+import { ComparisonHero } from "@/components/comparison-hero";
+import { SLIDES_VERIFIED_ON, VERIFIED_ON } from "@/lib/connector-verification";
 import { SkillCard } from "@/components/skill-card";
 import { getAllSkills } from "@/lib/skills";
 import { getAllPersonas } from "@/lib/personas";
@@ -24,7 +24,6 @@ import { faqPageNode } from "@/lib/site-schema";
 import { siteFaqGroups, siteFaqs } from "@/lib/site-faq";
 import { SOCIAL_OPEN_GRAPH, SOCIAL_TWITTER } from "@/lib/social-card";
 import { signInHref } from "@/lib/sign-in";
-import { SignInConsent } from "@/components/sign-in-consent";
 
 /** Read once at module scope: the answers are static, the page is not. */
 const homeFaqs = siteFaqs("/");
@@ -53,14 +52,14 @@ const HOME_TITLE =
    `lib/tool-count-claims.test.ts` fails if a bare count comes back here.
 
    It is also the one piece of copy with a hard length budget: search results
-   truncate around 160 characters, and this is 157. An earlier version listed
+   truncate around 160 characters, and this is 148. An earlier version listed
    services to avoid naming a number, which was the right instinct in the wrong
    string — the list ran to 226 and cut off "every write asks you first", the
    differentiator the rest of the sentence exists to set up. Keep additions
    inside the budget, and check what falls off the end rather than what reads
    well in the file. */
 const HOME_DESCRIPTION =
-  "Claude's Drive connector reads your files but can't edit what's in them. DataToRAG appends rows, sends email and updates tickets. Every write asks you first.";
+  "Claude's Drive connector reads your files. DataToRAG edits them in place, appends rows, sends email and updates tickets. Every write asks you first.";
 
 /* Canonical is self-referencing and absolute, on the non-www origin: Search
    Console was reporting the four origin variants (http/https x www/non-www)
@@ -86,18 +85,9 @@ export const metadata: Metadata = {
   },
 };
 
-async function getToolCount(): Promise<number> {
-  const [row] = await db
-    .select({ count: sql<number>`count(${tools.id})::int` })
-    .from(tools)
-    .innerJoin(mcpServers, eq(tools.mcpServerId, mcpServers.id))
-    .where(eq(mcpServers.status, "active"));
-  return row?.count ?? 0;
-}
-
 export default async function HomePage() {
   const [totalTools, userId] = await Promise.all([
-    getToolCount(),
+    publicToolCount(db),
     getSessionUserId(),
   ]);
   const signedIn = userId !== null;
@@ -138,80 +128,101 @@ export default async function HomePage() {
               space goes above the hero and below the teaser — never between
               them. The hero→teaser gap is the teaser's fixed pt. */}
           <div className="relative flex min-h-[calc(100vh-4rem)] flex-col justify-center pb-12 pt-24">
-          <div className="mx-auto flex w-full max-w-7xl flex-col items-center gap-12 px-6 lg:flex-row lg:gap-16">
-            {/* Copy */}
-            <div className="flex-1 text-center lg:text-left">
-              <div className="animate-fade-in-up inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/10 px-4 py-1.5 backdrop-blur-sm">
-                <span className="text-xs font-medium text-white/90">
-                  MCP gateway for Google Workspace and Jira
-                </span>
-              </div>
-              {/* The step down at the bottom of `lg` is not taste, it is the
-                  only thing that makes this headline fit there.
+          {/* One grid, so the reading order can differ by width without a
+              second copy of anything (SCRUM-426). The DOM order is the phone
+              order: headline, the comparison table, the sentence, the
+              buttons, the trust lines. A phone shows the table near the top
+              instead of under five lines of copy.
 
-                  `your spreadsheet.` is `whitespace-nowrap`, so it sets a hard
-                  minimum width for this column: 551px at 60px in this face at
-                  `tracking-tight`. The column gets whatever is left of the row
-                  after the page padding (48), the flex gap (64) and the video
-                  (400) — `clientWidth - 512`. That does not reach 551 until
-                  about 1063, so from `lg` up to there the headline overran the
-                  row and `overflow-x-hidden` on <main> cropped the right edge,
-                  taking a slice of the video with it.
+              From `lg` the table moves to a 520px right column spanning every
+              row, and the text sits in the middle three of five rows
+              (`1fr auto auto auto 1fr`), so the extra height of the taller
+              table goes above and below the text as a group, never between
+              the headline and its sentence. The column widths are the ones
+              the headline was measured against below: the page padding (48),
+              the gap (64) and 520.
 
-                  Wrapping cannot save it: the phrase is one unbreakable word
-                  as far as layout is concerned, and at 60px it is wider than
-                  the whole column. Giving the space back does not work either
-                  — closing the flex gap entirely buys 64 and still lands
-                  short. So the type gives: 54px at the bottom of `lg`, 60px
-                  above it, which leaves 16px of slack at 1024.
+              `pt-12` is the room the pill above the headline used to take:
+              without it, the headline's first line sat under the fixed navbar
+              on a phone and the table touched it on a desktop. */}
+          <div className="mx-auto grid w-full max-w-7xl grid-cols-1 items-center px-6 pt-12 text-center lg:grid-cols-[minmax(0,1fr)_520px] lg:grid-rows-[1fr_auto_auto_auto_1fr] lg:gap-x-16 lg:text-left">
+              {/* "Claude moves the work" is kept on one line only where the
+                  column has room for it, and allowed to wrap everywhere else.
+                  Measured in Chrome (SCRUM-425, SCRUM-426): the phrase is
+                  434px wide at 36px, 579 at 48px and 724 at 60px.
 
-                  The switch is at 1119 rather than the 1063 the arithmetic
-                  asks for, because a `max-width` query matches the viewport
-                  WITH the scrollbar while the column is laid out inside
-                  `clientWidth`, WITHOUT it. Tying the switch to the real
-                  threshold would put it a couple of pixels from clipping and
-                  let the platform's scrollbar width decide, so it sits ~40px
-                  clear instead and 54px covers a slightly wider band than it
-                  strictly needs. For the same reason this is a media query
-                  and not a `vw` clamp — `vw` counts the scrollbar too, so a
-                  fluid size is optimistic about the space it has by exactly
-                  the amount that makes it clip.
+                  - Below `sm` the column is the viewport less 48px, 342 at 390.
+                    Kept whole, the phrase clipped the headline at both edges
+                    on every phone, because <main> is `overflow-x-hidden`.
+                  - From `sm` to `lg` the page is one column (592 at 640, 720
+                    at 768), so the 48px phrase fits.
+                  - From `lg` the column is the viewport less the page padding
+                    (48), the gap (64) and the hero table (520): 392 at 1024,
+                    and never more than 648, because the container stops at
+                    1280. The 60px phrase needs 724, so it wraps at every
+                    desktop width. Kept whole, it pushed the column wide and
+                    the table off the right edge.
 
-                  It is also `lg:max-[…]` rather than a bare `min-[…]`: named
-                  breakpoint variants outrank arbitrary ones in the cascade
-                  whatever their widths, so a plain `min-[1080px]:text-6xl`
-                  loses to `sm:text-5xl` and silently does nothing.
-
-                  Re-derive all of it if the video width, the gap or the face
-                  changes. */}
+                  Re-measure if the headline, the face, the gap or the hero
+                  table's width changes. */}
               <h1
-                className="animate-fade-in-up mt-6 font-display text-4xl font-extrabold leading-[1.1] tracking-tight text-white sm:text-5xl lg:text-6xl lg:max-[1119px]:text-[3.375rem]"
+                className="animate-fade-in-up font-display text-3xl font-extrabold leading-[1.1] tracking-tight text-white sm:text-5xl lg:col-start-1 lg:row-start-2 lg:max-[1119px]:text-4xl xl:text-6xl"
                 style={{ animationDelay: "0.06s" }}
               >
-                Claude reads{" "}
-                <span className="whitespace-nowrap">your spreadsheet.</span>{" "}
-                <span className="text-blue-200">
-                  <span className="whitespace-nowrap">We let it</span>{" "}
-                  <span className="whitespace-nowrap">edit one.</span>
+                One connection to{" "}
+                {/* "Google Workspace" stays together from 360px up, so
+                    "Google" is never alone on a line. Measured, the pair is
+                    about 300px at 30px, 347 at 36, 463 at 48 and 579 at 60,
+                    and each size is chosen so it fits its column: 30 on a
+                    phone, 48 from `sm`, 36 from `lg` to 1119 (a 392 to 487px
+                    column), 48 from 1120 and 60 from `xl` (a 648px column).
+                    Below 360 the column is under 300, so it may break there
+                    rather than run off the edge. */}
+                <span className="min-[360px]:whitespace-nowrap">Google Workspace</span>{" "}
+                and more.{" "}
+                {/* From `sm` the second sentence starts its own line; on a
+                    phone it flows on from the first, which keeps the
+                    headline a line shorter and the table higher. */}
+                <span className="text-blue-200 sm:block">
+                  <span className="sm:max-lg:whitespace-nowrap">Claude moves the work</span>{" "}
+                  <span className="sm:max-lg:whitespace-nowrap">between them.</span>
                 </span>
               </h1>
-              <p
-                className="animate-fade-in-up mx-auto mt-6 max-w-2xl text-base leading-relaxed text-white/60 sm:text-lg lg:mx-0"
-                style={{ animationDelay: "0.12s" }}
-              >
-                Append the rows, send the email, update the ticket.{" "}
-                {/* Fallback is rounded, not an exact number: it only renders
-                    when the count query failed, and stating a precise figure
-                    we did not just read is how a wrong one ships. Matches the
-                    pricing page and the lead page. */}
-                {totalTools > 0 ? totalTools : "70+"} tools across Google
-                Workspace, Jira and Confluence behind one URL, and every write
-                asks you first.
-              </p>
-              <div
-                className="animate-fade-in-up mt-8 flex flex-wrap items-center justify-center gap-3 lg:justify-start"
-                style={{ animationDelay: "0.18s" }}
-              >
+
+            {/* The comparison is the hero shot (SCRUM-425): all nine gaps at
+                once (SCRUM-426), `max-w-md` stacked, 520px from `lg` up. The
+                headline's wrapping above is measured against this width. Its
+                rows come from the full table at #comparison and nowhere else;
+                see heroGroups(). */}
+            <div
+              className="animate-fade-in-up mx-auto mt-6 w-full max-w-md lg:col-start-2 lg:row-span-5 lg:row-start-1 lg:mt-0 lg:w-[520px] lg:max-w-[520px]"
+              style={{ animationDelay: "0.1s" }}
+            >
+              <ComparisonHero
+                groups={heroGroups()}
+                verifiedOn={VERIFIED_ON}
+                slidesVerifiedOn={SLIDES_VERIFIED_ON}
+              />
+            </div>
+
+            <p
+              className="animate-fade-in-up mx-auto mt-6 max-w-2xl text-base leading-relaxed text-white/60 sm:text-lg lg:col-start-1 lg:row-start-3 lg:mx-0"
+              style={{ animationDelay: "0.12s" }}
+            >
+              {/* Fallback is rounded, not an exact number: it only renders
+                  when the count query failed, and stating a precise figure we
+                  did not just read is how a wrong one ships. Matches the
+                  pricing page and the lead page. */}
+              {totalTools > 0 ? totalTools : "70+"} tools across Google
+              Workspace and Atlassian behind one URL, in Claude, Claude Code,
+              Cursor or your own app.
+            </p>
+
+            <div
+              className="animate-fade-in-up mt-6 lg:col-start-1 lg:row-start-4"
+              style={{ animationDelay: "0.18s" }}
+            >
+              <div className="flex flex-wrap items-center justify-center gap-3 lg:justify-start">
                 <a
                   href={signInHref()}
                   className="rounded-full bg-white px-7 py-3 text-sm font-medium text-[#1a3a8f] transition-all hover:bg-white/90"
@@ -235,10 +246,7 @@ export default async function HomePage() {
                   to where it is load-bearing. Deliberately plain text plus one
                   link rather than a badge graphic: a self-drawn badge reads as
                   decoration, the sentence reads as a claim we will be held to. */}
-              <p
-                className="animate-fade-in-up mt-4 text-xs text-white/50 lg:text-left"
-                style={{ animationDelay: "0.22s" }}
-              >
+              <p className="mt-4 text-[11px] text-white/50">
                 Google-verified since June 2026 ·{" "}
                 <Link
                   href="/blog/casa-tier-2-verified"
@@ -248,220 +256,18 @@ export default async function HomePage() {
                 </Link>{" "}
                 · Open source, self-host it if you prefer
               </p>
-              {/* What signing in agrees to, beside the button that now
-                  starts it (SCRUM-408). */}
-              <SignInConsent
-                className="animate-fade-in-up mt-2 text-white/50 lg:text-left"
+              {/* No sign-in agreement line here (SCRUM-426, Manuel). Get
+                  Started goes straight to Google, and the agreement is shown
+                  on the first screen after sign-in, where a new account
+                  lands; see playground.tsx. */}
+
+              {/* Badge lockup, not fine print. Compact here, so it does not
+                  compete with the table beside it. */}
+              <CasaBadge
+                className="mt-4 justify-center lg:justify-start"
+                compact
+                tone="dark"
               />
-
-              {/* Accuracy constraint: rows must stay create-vs-change (the
-                  built-in Drive connector can create new files) — never a
-                  general "no write access" claim.
-
-                  The column header below stays unnamed on purpose: the rows
-                  span more than one built-in connector, and the last one spans
-                  all of them, so naming the column after any single connector
-                  would make another row false. Claude has three Google
-                  connectors — Drive, Gmail, Calendar.
-
-                  There is no Gmail row here as of 18 September 2026: the
-                  built-in connector sends, replies and forwards, so the row
-                  that used to live here now reads Yes/Yes. The full table at
-                  #comparison concedes those three rows rather than dropping
-                  them, which is the right place for a concession. */}
-              <div
-                className="animate-fade-in-up mx-auto mt-8 w-full max-w-md lg:mx-0"
-                style={{ animationDelay: "0.2s" }}
-              >
-                <table className="w-full overflow-hidden rounded-xl border border-white/15 bg-white/5 text-sm backdrop-blur-sm">
-                  <thead>
-                    <tr className="border-b border-white/10 text-[11px] uppercase tracking-wider text-white/50">
-                      <th scope="col" className="px-4 py-2.5"></th>
-                      <th
-                        scope="col"
-                        className="px-2 py-2.5 text-center font-medium"
-                      >
-                        Built-in connector
-                      </th>
-                      <th
-                        scope="col"
-                        className="px-2 py-2.5 text-center font-medium text-blue-200"
-                      >
-                        DataToRAG
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody className="text-white/80">
-                    {[
-                      { capability: "Read a file", builtIn: true },
-                      { capability: "Edit an existing sheet", builtIn: false },
-                      // "Create a deck" MUST stay Yes for the built-in column.
-                      // Verified first-hand: the built-in connector creates a
-                      // genuine Google Slides presentation, real presentation
-                      // mimeType and a real edit URL, not an exported file. Any
-                      // row implying it cannot make a deck is false and takes
-                      // ten seconds to disprove. The gap is the next row: it
-                      // refuses to create one WITH content, so the deck arrives
-                      // with a single slide and an empty title and subtitle.
-                      { capability: "Create a deck", builtIn: true },
-                      { capability: "Put content in it", builtIn: false },
-                      // Was "Send an email", which was true until the built-in
-                      // connector gained send, reply and forward in August 2026
-                      // and false afterwards. Replaced rather than flipped: a
-                      // Yes/Yes row in a five-row hero is a row that says
-                      // nothing, and this one is already enumerated on the
-                      // hosted-google-workspace-mcp page and carried as its own
-                      // row further down this page.
-                      { capability: "Work across two Google accounts", builtIn: false },
-                    ].map(({ capability, builtIn }) => (
-                      <tr
-                        key={capability}
-                        className="border-b border-white/10 last:border-b-0"
-                      >
-                        <th
-                          scope="row"
-                          className="px-4 py-2.5 text-left font-normal"
-                        >
-                          {capability}
-                        </th>
-                        {[builtIn, true].map((yes, i) => (
-                          <td key={i} className="px-2 py-2.5 text-center">
-                            {yes ? (
-                              <>
-                                <svg
-                                  width="14"
-                                  height="14"
-                                  viewBox="0 0 16 16"
-                                  fill="none"
-                                  stroke="currentColor"
-                                  strokeWidth="2"
-                                  strokeLinecap="round"
-                                  strokeLinejoin="round"
-                                  aria-hidden="true"
-                                  className="inline-block text-white/90"
-                                >
-                                  <path d="M3 8.5l3.5 3.5L13 5" />
-                                </svg>
-                                <span className="sr-only">Yes</span>
-                              </>
-                            ) : (
-                              <span className="text-white/30" aria-hidden="true">
-                                &mdash;
-                              </span>
-                            )}
-                            {!yes && <span className="sr-only">No</span>}
-                          </td>
-                        ))}
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-                <a
-                  className="mt-3 inline-flex items-center gap-1 text-sm text-white/70 transition-colors hover:text-white"
-                  href="#comparison"
-                >
-                  See every capability we tested
-                  <span aria-hidden="true">&rarr;</span>
-                </a>
-              </div>
-
-              {/* Badge lockup, not fine print. */}
-              <div
-                className="animate-fade-in-up mt-6"
-                style={{ animationDelay: "0.22s" }}
-              >
-                <CasaBadge
-                  className="justify-center lg:justify-start"
-                  tone="dark"
-                />
-              </div>
-            </div>
-
-            {/* Hero video — vertical, to the right on desktop.
-
-                No `controls`: a scrub bar over it is the same platform chrome
-                the composition was rebuilt to shed.
-
-                `muted` is load-bearing, not decorative. This render carries a
-                REAL narration track (it is the same file that ships to YouTube
-                with sound), and a video with an audio stream will not autoplay
-                in most browsers without `muted` — the failure would look like a
-                broken video rather than a missing attribute. So the narration
-                is never heard here, by design, and the burned-in captions are
-                what carry every spoken claim. */}
-            <div
-              className="animate-fade-in-up flex w-full flex-shrink-0 justify-center lg:w-auto"
-              style={{ animationDelay: "0.28s" }}
-            >
-              {/* `max-w-md` on mobile, matching the comparison table above it
-                  rather than the fixed 340px the desktop column uses. The slot
-                  was 338px wide at every viewport, so on a narrow screen the
-                  stacked hero read as a table with a narrower video floating
-                  under it instead of one column.
-
-                  The video's caption size scales with this and is NOT the
-                  reason for the change; it is a side effect and is not to be
-                  tuned here or in the composition. */}
-              {/* The shadow is spelled out rather than `shadow-2xl` because
-                  `shadow-2xl` is black at 25% and this sits on a navy mesh:
-                  black over #0a1628 has almost no contrast left to spend, so
-                  the default read as nothing at all and the slot looked cut
-                  into the background rather than laid on it.
-
-                  Three layers, because elevation on a dark ground is not one
-                  shadow. The first is the CONTACT shadow — tight, barely
-                  offset, nearly opaque — and it is the one that stops the box
-                  looking pasted on. The last is AMBIENT: wide, far below, low
-                  opacity. The middle one only bridges them. A single large
-                  blur, whatever its opacity, reads as a glow instead.
-
-                  The colour is darker than the darkest part of the background
-                  (#010410 against #0a1628) for the same reason: on dark you
-                  buy separation with luminance below the ground, not with more
-                  alpha on a colour the ground already contains.
-
-                  The inset hairline along the top edge is the lit-surface cue
-                  — light falls from above, so the top edge catches it. It is
-                  inset rather than a `ring` so it does not double up with the
-                  border this box already carries.
-
-                  Judge any change to this at the delivered size against the
-                  live shader. It is tuned for 400px on navy, and it will look
-                  overdone zoomed in and on white. */}
-              <div
-                id="demo-video"
-                className="aspect-[9/16] w-full max-w-md overflow-hidden rounded-3xl border border-white/10 bg-white/5 shadow-[inset_0_1px_0_0_rgba(255,255,255,0.14),0_3px_8px_-2px_rgba(1,4,16,0.95),0_18px_36px_-10px_rgba(1,4,16,0.9),0_56px_100px_-18px_rgba(1,4,16,0.8)] backdrop-blur-sm lg:w-[400px] lg:max-w-[400px]"
-              >
-                {/* The NARRATED cut, playing silently (Manuel, 2026-08-07 —
-                    reverses the earlier "voiced is YouTube/social only" call).
-                    It carries ~10s of setup that the silent cut deliberately
-                    dropped, so it opens slower here than a hero usually would;
-                    that was chosen with the trade-off on the table, in exchange
-                    for the setup itself — the sheet, then Claude's own connector
-                    refusing to change it, then the reveal.
-
-                    Its claims are BURNED IN as captions, which is what makes
-                    that survivable with no audio: every spoken line is also on
-                    screen. Do not swap this for a cut without captions while the
-                    slot stays muted, and do not drop `muted` — autoplay is
-                    blocked without it, so the hero would sit on its poster.
-
-                    The file does carry a real narration track: AAC stereo,
-                    36.1s, mean -21.0 dB, peak -0.9 dB. Measured, because we
-                    have mis-called a silent AAC stream "no audio" before. So
-                    the sound is there and nobody could hear it, which is what
-                    the speaker button in `HeroVideo` is for: it is opt-in, it
-                    starts the narration from the top, it plays exactly one
-                    pass and then returns to this silent loop, and it goes
-                    quiet when the video scrolls away.
-
-                    That button is the ONLY way sound is meant to arrive here.
-                    `muted` stays the default state — dropping it does not give
-                    you audio, it gives you a blocked autoplay and a hero
-                    sitting on its poster, which is the failure this comment
-                    has warned about from the start. */}
-                <HeroVideo />
-              </div>
             </div>
           </div>
 
@@ -586,7 +392,7 @@ export default async function HomePage() {
                 },
                 {
                   title: "Pre-Built Connectors",
-                  desc: "One-click integrations for Google Workspace, Salesforce, Databricks, Slack, and more. We handle the auth and schema mapping.",
+                  desc: "One connection for Google Workspace, Jira and Confluence. We handle the auth and schema mapping.",
                   icon: (
                     <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
                       <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83" />
@@ -723,14 +529,7 @@ export default async function HomePage() {
             </p>
             <div className="mt-3 flex flex-wrap gap-2">
               {[
-                "Salesforce",
-                "Databricks",
-                "Slack",
-                "HubSpot",
-                "PostgreSQL",
-                "Snowflake",
                 "Notion",
-                "GitHub",
               ].map((name) => (
                 <span
                   key={name}

@@ -45,10 +45,20 @@ A tool that takes a file takes a **file reference**: a small object that says wh
 |-----------|--------|----------|
 | `gmail_message` | `message_id`, optional `account` | An email as its original `.eml` file, exactly as Gmail returns it |
 | `gmail_attachment` | `message_id`, `part_id`, optional `account` | One attachment of an email, under the sender's file name and type |
+| `drive_file` | `file_id`, optional `account` | A Google Drive file as stored, under its Drive name |
+| `drive_export` | `file_id`, `format`, optional `account` | A Google Docs, Sheets or Slides file exported to a format, named with its extension |
 
-More reference types will follow the same shape.
+A Google Docs, Sheets or Slides file has no stored file to send as it is, so as a `drive_file` it is refused with the `drive_export` reference to use instead. The formats are:
 
-A reference can only be resolved for you, with your own connection to the service it names. `account` picks which connected Google account holds the message when you have more than one.
+| A Google file | Exports as |
+|---------------|------------|
+| Docs | `pdf`, `docx`, `txt`, `md`, `html`, `rtf`, `odt`, `epub` |
+| Sheets | `pdf`, `xlsx`, `csv` and `tsv` (the first tab), `html` (a zip, one page per tab), `ods` |
+| Slides | `pdf`, `pptx`, `txt` (the slides' text), `odp` |
+
+A folder, a shortcut and a file in Trash are refused before anything is read. Google also limits how large an export can be; an export over that limit is refused as too large.
+
+A reference can only be resolved for you, with your own connection to the service it names. `account` picks which connected Google account holds the message or file when you have more than one. With `drive_upload_file`, that makes a reference the way to copy a file from one account's Drive into another's.
 
 An attachment is named by its **part id**, not its attachment id. Gmail issues a new attachment id every time a message is read, so an id copied out of one read does not match the next; the part id (`"1"`, `"0.1"`) is the attachment's place in the message and stays the same. `gmail_read` lists each attachment with its `partId`.
 

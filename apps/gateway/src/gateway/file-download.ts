@@ -70,6 +70,34 @@ const SEND_WORDS: RefusalWords = {
  * a fixed opaque type, never the one the sender of an email declared. */
 const DOWNLOAD_TYPE: Readonly<Record<string, string>> = { gmail_message: "message/rfc822" };
 
+/** A Drive export's type is the format the caller asked for, so it is ours
+ * rather than an uploader's, and a download carries it. HTML, and the zip a
+ * Sheet's HTML comes as, are left out: a page is the one type a browser
+ * would do something with besides save it. A stored Drive file keeps the
+ * opaque type, because its declared type is whoever uploaded it's word. */
+const EXPORT_DOWNLOAD_TYPE: Readonly<Record<string, string>> = {
+  pdf: "application/pdf",
+  docx: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  xlsx: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  pptx: "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+  odt: "application/vnd.oasis.opendocument.text",
+  ods: "application/vnd.oasis.opendocument.spreadsheet",
+  odp: "application/vnd.oasis.opendocument.presentation",
+  epub: "application/epub+zip",
+  rtf: "application/rtf",
+  csv: "text/csv",
+  tsv: "text/tab-separated-values",
+  txt: "text/plain",
+  md: "text/markdown",
+};
+
+export function downloadType(ref: FileReference): string {
+  if (ref.type === "drive_export" && typeof ref.format === "string" && Object.hasOwn(EXPORT_DOWNLOAD_TYPE, ref.format)) {
+    return EXPORT_DOWNLOAD_TYPE[ref.format];
+  }
+  return Object.hasOwn(DOWNLOAD_TYPE, ref.type) ? DOWNLOAD_TYPE[ref.type] : "application/octet-stream";
+}
+
 /** `open` and `sending` are alive; the rest say how the link ended. */
 type LinkState = "open" | "sending" | "used" | "changed" | "cancelled";
 
@@ -438,7 +466,7 @@ export async function redeemDownloadLink(
         const sending: SendingFile = {
           kind: "send",
           name: record.name,
-          type: DOWNLOAD_TYPE[record.ref.type] ?? "application/octet-stream",
+          type: downloadType(record.ref),
           bytes: file.bytes,
           userId: record.userId,
         };

@@ -8,6 +8,7 @@ import { createHash } from "node:crypto";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   createDownloadLink,
+  downloadType,
   dropLinksForUser,
   downloadLinksHeld,
   inspectLink,
@@ -506,5 +507,27 @@ describe("the name a download is saved under", () => {
     ["...", "download"],
   ])("%j becomes %j", (given, expected) => {
     expect(safeDownloadName(given)).toBe(expected);
+  });
+});
+
+/** SCRUM-428: the type a Drive download goes out with. An export's type is
+ * the format the caller chose, so it is ours to send; a stored Drive file's
+ * declared type is the uploader's word and stays opaque, as an email
+ * attachment's does. */
+describe("the type a download is sent with", () => {
+  it.each([
+    [{ type: "gmail_message", message_id: "m" }, "message/rfc822"],
+    [{ type: "gmail_attachment", message_id: "m", part_id: "1" }, "application/octet-stream"],
+    [{ type: "drive_file", file_id: "f" }, "application/octet-stream"],
+    // A format on a stored file chooses nothing: only an export is typed.
+    [{ type: "drive_file", file_id: "f", format: "pdf" }, "application/octet-stream"],
+    [{ type: "drive_export", file_id: "f", format: "pdf" }, "application/pdf"],
+    [{ type: "drive_export", file_id: "f", format: "xlsx" }, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"],
+    // A page is the one type a browser does something with besides save.
+    [{ type: "drive_export", file_id: "f", format: "html" }, "application/octet-stream"],
+    [{ type: "drive_export", file_id: "f", format: "constructor" }, "application/octet-stream"],
+    [{ type: "constructor" }, "application/octet-stream"],
+  ])("%j goes out as %s", (ref, type) => {
+    expect(downloadType(ref)).toBe(type);
   });
 });

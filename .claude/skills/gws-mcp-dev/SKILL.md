@@ -116,7 +116,10 @@ gateway deploy carries it. What goes with it:
    <new gateway sha>` writes `forward.sql` and `rollback.sql` from the two
    commits' tool files in CI. Every statement is guarded by the md5 of the
    row as the running commit served it, both files are headed NOT RUN, and
-   the command opens no database connection: a person runs the file. Both
+   the command opens no database connection. The pair is committed under
+   `registry/` and run on production by the `registry` workflow, approved
+   in GitHub (SCRUM-423; `registry/README.md`), once its role and secret
+   exist; until then a person runs the file. Both
    commits must have been built on main after tool files were kept. The
    order against the deploy is in the spec's section 5. Prove the result
    from `tools/list` through the gateway, not from the plugin's source.
@@ -140,9 +143,40 @@ gateway deploy carries it. What goes with it:
 - Every tool declares its annotations; in `gws-mcp` through the presets in
   `src/tools/annotations.ts`, never hand-written booleans.
 - A commit body explains why, and names what was smoke-tested live.
+- **A description describes; it does not instruct** (SCRUM-419). What the
+  tool does, what it takes, what it returns. No "always", "never", "must",
+  "use this instead of", no capitals for emphasis: those address the
+  reader's model rather than describe the tool, and a directory reviewer
+  reads them as a tool steering its caller. In `gws-mcp`,
+  `src/tools/described-not-instructed.test.ts` holds the rule for the tools
+  listed in it by name. A new tool goes on that list; an older description
+  is brought under the rule by adding its name and rewording it.
+- **Bytes do not travel through a tool response.** `gmail_get_attachment`
+  returns a text attachment as text, up to a stated size, and for anything
+  else a description with the size and the save-to-Drive route. A new tool
+  that reads a file follows it: text when it is text, never base64.
+- **A tool that moves mail gets a rule in the runner's guard, in the same
+  change.** `apps/gateway/src/gateway/tests/send-guard.ts` knows tools by
+  name. `gmail_trash` and `gmail_untrash` would have been callable on any
+  message from a test case until they were added to it; they are now held
+  to mail the run itself sent. The same holds past mail (SCRUM-428): a
+  thread move needs every message in the thread to carry the run's stamp,
+  a share goes only to a fixture account and with notify false, and an
+  RSVP needs send_updates none.
 
 ## Gotchas
 
+- **`gws_run` is hidden from everyone but an allowlist (SCRUM-419).**
+  The gateway lists and dispatches it only for the login emails in
+  `GWS_RUN_ALLOWED_ACCOUNTS` (empty means nobody; values in SSM, never
+  here); anyone else gets a fixed refusal naming the dedicated tool
+  families, unmetered. The registry row stays. The public tool count and
+  `/tools/gws-mcp` leave it out for everyone (`src/lib/public-tools.ts`),
+  so a public count is one below the registry's row count. A smoke case
+  that calls `gws_run` needs the admin who triggers the run on the list.
+  The access rule is `apps/gateway/src/gateway/gws-run-access.ts`; a new
+  read of the tools table for a public page goes through
+  `public-tools.ts`, not a query of its own.
 - **Dotted API paths in `gws_run`.** Resources nest under a parent —
   `users.messages`, `users.drafts`, `users.messages.attachments` — not
   bare names like `drafts`. Get this wrong and the call is refused as an

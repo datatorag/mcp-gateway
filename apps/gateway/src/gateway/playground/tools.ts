@@ -4,6 +4,7 @@ import { mcpServers } from "@datatorag-mcp/db";
 import { NAMESPACE_SEPARATOR } from "../plugin-manager";
 import { PLUGIN_SERVICE_MAP, getServiceToken } from "../service-token";
 import { buildPluginServerUrl, callPluginToolOnce } from "../user-tools";
+import { GWS_RUN_REFUSAL, gwsRunHiddenFrom } from "../gws-run-access";
 
 /**
  * Two things live here, and they are no longer one feature.
@@ -114,24 +115,34 @@ export const KNOWN_READ_TOOLS: ReadonlySet<string> = new Set<string>([
   "atlassian-mcp__jira_get_issue",
   "atlassian-mcp__jira_get_transitions",
   "atlassian-mcp__jira_list_fields",
+  "atlassian-mcp__jira_list_issue_links",
+  "atlassian-mcp__jira_list_worklogs",
   "atlassian-mcp__jira_search",
   "atlassian-mcp__jira_search_users",
   "gws-mcp__calendar_freebusy",
   "gws-mcp__calendar_get_event",
+  "gws-mcp__calendar_list_calendars",
   "gws-mcp__calendar_list_events",
+  "gws-mcp__calendar_suggest_time",
   "gws-mcp__contacts_directory_search",
   "gws-mcp__contacts_get",
   "gws-mcp__contacts_list",
   "gws-mcp__contacts_search",
   "gws-mcp__docs_get",
+  "gws-mcp__drive_get_file",
+  "gws-mcp__drive_get_file_permissions",
+  "gws-mcp__drive_list_recent_files",
   "gws-mcp__drive_read_file",
   "gws-mcp__drive_search",
+  "gws-mcp__gmail_get_attachment",
   "gws-mcp__gmail_list",
+  "gws-mcp__gmail_list_drafts",
   "gws-mcp__gmail_list_filters",
   "gws-mcp__gmail_list_labels",
   "gws-mcp__gmail_read",
   "gws-mcp__gmail_search",
   "gws-mcp__sheets_find_rows",
+  "gws-mcp__sheets_get_metadata",
   "gws-mcp__sheets_query",
   "gws-mcp__sheets_read",
   "gws-mcp__slides_get",
@@ -251,6 +262,12 @@ export async function executeUserTool(
   args: Record<string, unknown>
 ): Promise<{ text: string; isError: boolean }> {
   const { serverSlug, toolName } = parseNamespacedName(namespacedName);
+
+  // SCRUM-419: gws_run is refused here for an account not on its allowlist,
+  // as on the MCP path; this route does not consult the listing.
+  if (await gwsRunHiddenFrom(db, userId, namespacedName)) {
+    throw new ToolCallError(GWS_RUN_REFUSAL, 403);
+  }
 
   const [mcpServer] = await db
     .select({

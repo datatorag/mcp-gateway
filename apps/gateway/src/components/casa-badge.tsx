@@ -15,20 +15,26 @@ import { cn } from "@/lib/utils";
  */
 export function CasaBadge({
   tone = "light",
+  compact = false,
   className,
 }: {
   /** "dark" renders on dark grounds (the hero shader). */
   tone?: "light" | "dark";
+  /** A step smaller, for the landing hero, where it sits under the buttons
+   * and must not compete with the comparison table (SCRUM-426). */
+  compact?: boolean;
   className?: string;
 }) {
   const dark = tone === "dark";
+  const text = compact ? "text-[11px]" : "text-xs";
   return (
     <div
       className={cn("flex flex-wrap items-center gap-x-2.5 gap-y-1.5", className)}
     >
       <span
         className={cn(
-          "inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium",
+          "inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 font-medium",
+          compact ? "text-[11px]" : "text-xs",
           dark
             ? "border-white/20 bg-white/10 text-white/90"
             : "border-border bg-secondary/60 text-foreground/80"
@@ -45,7 +51,8 @@ export function CasaBadge({
       </span>
       <Link
         className={cn(
-          "text-xs underline underline-offset-4 transition-colors",
+          "underline underline-offset-4 transition-colors",
+          text,
           dark
             ? "text-white/60 hover:text-white/90"
             : "text-muted-foreground hover:text-foreground"

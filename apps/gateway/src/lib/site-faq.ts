@@ -1,6 +1,6 @@
 import type { ContentFaq } from "./content-collection";
 import { planLimits } from "@/gateway/billing/plans";
-import { VERIFIED_ON } from "./connector-verification";
+import { SLIDES_VERIFIED_ON, VERIFIED_ON } from "./connector-verification";
 
 /** Numbers and dates are IMPORTED, never retyped.
  *
@@ -94,7 +94,7 @@ export const SITE_FAQ_PAGES: SiteFaqPage[] = [
             // blog post had been rewritten to say so. The Gmail post IS linked,
             // and it is the strongest link in the set: it is the one that
             // carries the correction, title and all.
-            a: "For reading, you often don't, and mail is nearly settled: the native Gmail connector sends, replies and forwards, which it gained in August 2026 and we re-checked on October 9, 2026. What is left in mail is small and worth naming rather than inflating: it cannot file an attachment into Drive. Where the native surface still stops, as of that same check of its tool lists, is everything around the document: it can create a Slides deck, but the deck arrives empty and nothing native can put a slide or a word into it, and it cannot change what is inside a file you already have. It also works one Google account at a time, where connecting a work and a personal account here is one endpoint and one prompt. Native Calendar is genuinely strong, with full create, update and delete, and if calendars on one account are your whole job the native connector is the answer. We publish claim by claim comparisons and re-test them when the connectors change, including when the change goes against us: [we said Claude could not send email, and it can](/blog/claude-gmail-connector-vs-datatorag-send-reply), plus [Drive and Docs](/blog/claude-google-drive-vs-datatorag-editing), [Calendar](/blog/claude-google-calendar-vs-datatorag-multi-account), and [the full map of your options](/blog/claude-google-workspace-mcp-alternatives).",
+            a: "For reading, you often don't, and mail is nearly settled: the native Gmail connector sends, replies and forwards, which it gained in August 2026 and we re-checked on October 9, 2026. What is left in mail is small and worth naming rather than inflating: it cannot file an attachment into Drive. Docs and Sheets have their own connectors since October 2026, in beta, and they edit a file you already have (enumerated 15 October 2026). Slides, as of the October 9 check, gets as far as an empty deck: nothing native could put a slide or a word into it. It also works one Google account at a time, where connecting a work and a personal account here is one endpoint and one prompt. Native Calendar is genuinely strong, with full create, update and delete, and if calendars on one account are your whole job the native connector is the answer. We publish claim by claim comparisons and re-test them when the connectors change, including when the change goes against us: [we said Claude could not send email, and it can](/blog/claude-gmail-connector-vs-datatorag-send-reply), plus [Drive and Docs](/blog/claude-google-drive-vs-datatorag-editing), [Calendar](/blog/claude-google-calendar-vs-datatorag-multi-account), and [the full map of your options](/blog/claude-google-workspace-mcp-alternatives).",
           },
           {
             q: "Can it work across multiple accounts?",
@@ -160,7 +160,7 @@ export const SITE_FAQ_PAGES: SiteFaqPage[] = [
             // built-in connectors stop. What it has no tool for is a file,
             // which is the fourth item now. Every item here must be a row
             // the comparison table on the home page marks No for built-in.
-            a: `Edit them. Where the built-in connectors stop is one verb past creating a document: through DataToRAG your assistant changes cells in a spreadsheet you already have, writes content into an existing doc, puts slides into a deck that arrived empty, and attaches an email or a file inside it to a Jira issue, with your approval on every one. Those gaps come from enumerating each connector's tool surface on ${VERIFIED_ON}, and the [three way comparison](/blog/hosted-google-workspace-mcp) re-enumerated all three surfaces on 24 August 2026.`,
+            a: `Edit them, and move them. Claude's own Google connectors read and create files, and since October 2026 its Docs and Sheets connectors, in beta on claude.ai, edit them in place too. Where they stop is the edge of one service on one account. Nothing built in takes an attachment out of an email and puts it on a Jira issue, into Drive or onto your computer with a checksum you can verify. Nothing built in works two Google accounts in one request, or runs a query over a sheet, or gives Claude Code, Cursor or your own application the same tools. DataToRAG does those, with your approval on every write. Verified by enumerating each connector's tool surface on ${VERIFIED_ON}, and Slides on ${SLIDES_VERIFIED_ON}.`,
           },
           {
             q: "Which AI clients can connect to it?",
@@ -236,11 +236,11 @@ export const SITE_FAQ_PAGES: SiteFaqPage[] = [
           },
           {
             q: "Can it change a file, or only create new ones?",
-            a: "Change them, and that is the line this page is about. Changing a cell in a spreadsheet you already have, writing content into an existing doc and putting content onto slides are the three jobs where the built-in connectors stopped when all three surfaces were enumerated on 24 August 2026.",
+            a: "Change them. On 24 August 2026 changing a cell, writing into an existing doc and putting content onto slides were where the built-in connectors stopped. Since October 2026 Claude's own Docs and Sheets connectors, in beta, do the first two (enumerated 15 October 2026); slides, as of the 9 October 2026 check, still arrived empty. What stays ours is the work across services and accounts: an email's attachment onto a Jira issue or into Drive, two Google accounts in one request, and a query over a sheet.",
           },
           {
             q: "When are Claude's native connectors the better answer?",
-            a: "When calendars or file management are the whole job. The native connectors cover both better than DataToRAG does and they are free, and as of the 24 August 2026 enumeration their Google surface is Gmail, Calendar and Drive, with no Sheets, Docs, Slides, Contacts or Tasks connector and one Google account at a time.",
+            a: "When calendars or file management are the whole job. The native connectors cover both better than DataToRAG does and they are free, and their Google surface is Gmail, Calendar and Drive, and since October 2026 Docs and Sheets connectors in beta (enumerated 15 October 2026), with no Contacts or Tasks connector and one Google account at a time.",
           },
           {
             q: "What if having a third party in the path is not acceptable?",

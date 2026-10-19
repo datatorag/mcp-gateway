@@ -41,6 +41,10 @@ export interface UsageEventInput {
   /** gws_run only (SCRUM-227): the raw call's service and method; null otherwise. */
   service?: string | null;
   method?: string | null;
+  /** gws_run only (SCRUM-419): the raw call's API resource path; null otherwise. */
+  resource?: string | null;
+  /** gws_run only (SCRUM-419): comma-joined param and body key names, never values; null otherwise. */
+  paramNames?: string | null;
 }
 
 export type WriteResult =
@@ -87,6 +91,8 @@ export async function writeUsageEvent(
       errorMessage: capStoredErrorMessage(input.errorMessage),
       service: input.service ?? null,
       method: input.method ?? null,
+      resource: input.resource ?? null,
+      paramNames: input.paramNames ?? null,
     });
   }, timeoutMs);
 }

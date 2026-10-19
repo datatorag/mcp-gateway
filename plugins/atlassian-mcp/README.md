@@ -8,8 +8,8 @@ This server powers the Atlassian connector of [DataToRAG](https://datatorag.com)
 
 | Service | Operations |
 |---------|------------|
-| **Jira** | search (JQL), get issue, create, update, **delete (permanent)**, transition, get transitions, list fields, search users, get/add/edit/delete comments, get attachment, add attachment (from a file reference) |
-| **Confluence** | search (CQL), list pages, get page, create, edit, delete, get/add comments, get attachment |
+| **Jira** | search (JQL), get issue, create, update, **delete (permanent)**, transition, get transitions, list fields, search users, get/add/edit/delete comments, log work, list worklogs, link issues, list issue links and link types, get attachment, add attachment (from a file reference) |
+| **Confluence** | search (CQL), list pages, get page, create, edit, delete, get comments with their replies, add footer and inline comments and replies, get attachment |
 
 ### Key tool details
 
