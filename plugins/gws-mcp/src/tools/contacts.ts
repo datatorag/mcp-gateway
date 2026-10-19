@@ -255,14 +255,26 @@ export async function handleContacts(
 
     case "contacts_update": {
       const body = buildPersonBody(args);
-      const updateFields = Object.keys(body);
+      const updateFields = Object.keys(body).join(",");
+
+      // updateContact refuses a body without the person's current etag
+      // (SCRUM-319), so read it first. A failed read throws before any write.
+      const current = await client.api("people", "people", "get", {
+        params: { resourceName: args.resource_name, personFields: updateFields },
+      });
+      const etag = (current.data as { etag?: string } | undefined)?.etag;
+      if (!etag) {
+        throw new Error(
+          `Could not read the etag of ${args.resource_name}; the contact was not updated.`
+        );
+      }
 
       const result = await client.api("people", "people", "updateContact", {
         params: {
           resourceName: args.resource_name,
-          updatePersonFields: updateFields.join(","),
+          updatePersonFields: updateFields,
         },
-        jsonBody: body,
+        jsonBody: { etag, ...body },
       });
       return jsonResponse(result.data);
     }
