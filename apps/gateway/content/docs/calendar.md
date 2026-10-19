@@ -1,6 +1,6 @@
 ---
 title: "Calendar"
-description: "List, create, update, and delete events. Check free/busy availability."
+description: "List, create, update, and delete events. Check free/busy, suggest meeting times, answer invitations and list calendars."
 order: 2
 section: "connectors"
 connector: "google-workspace"
@@ -41,6 +41,9 @@ The Calendar connector lets your AI assistant manage your Google Calendar: viewi
 | `calendar_update_event` | Update an existing event |
 | `calendar_delete_event` | Delete an event |
 | `calendar_freebusy` | Check free/busy status for one or more people in a time range |
+| `calendar_suggest_time` | Suggest free slots of a given length for you and the attendees you name, within a window of up to 31 days, inside working hours in one time zone (the primary calendar's unless you give one). Slots start on the quarter hour and weekends are left out unless `include_weekends` is true. The answer says whose calendars were checked and whose could not be |
+| `calendar_respond_to_event` | Answer an invitation with accepted, declined or tentative, with an optional comment. Only your own response changes; the organizer is notified unless `send_updates` says otherwise |
+| `calendar_list_calendars` | List the calendars on the account: ID, name, whether it is the primary one, your access role and its time zone. The ID feeds the other Calendar tools |
 
 ## Required scopes
 

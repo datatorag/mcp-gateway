@@ -74,6 +74,7 @@ describe("the comparison table as checked on its date", () => {
     ["Trash a message or thread", true, true],
     // The rows SCRUM-428 moved: the built-in connectors' surface, matched.
     ["Label or unlabel a whole thread at once", true, true],
+    ["Mark as spam", true, true],
     ["RSVP to an invitation", true, true],
     ["Suggest a meeting time", true, true],
     ["List your other calendars", true, true],

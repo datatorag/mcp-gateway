@@ -2,8 +2,8 @@
 title: "We Said Claude Couldn't Send Email. It Can Now."
 excerpt: "This post used to argue that Claude's native Gmail connector drafts but never sends. As of August 24, 2026 that is wrong: it sends, replies, and forwards. Here is the corrected comparison, and the two rows that are still ours."
 date: "2026-04-21"
-updated: "2026-10-15"
-updatedNote: "October 15, later the same day: the Docs and Sheets lines and the closing line are corrected, and the Slides line carries its October 9 date. Claude's Google Docs connector, in beta since October 2026 and enumerated on 15 October 2026, edits an existing doc in place, and its Sheets connector edits cells and tabs. Earlier on October 15: the Docs line under 'what is left' now says 'as of our last check' and points to the dated note on the Drive post: Anthropic announced Docs, Sheets and Slides editing connectors on 6 October 2026, and they had not reached our account by 15 October. Fourth correction, October 9, in the same direction as the others: the native connector does delete a draft. It has a delete_draft tool, so the 'Delete a draft' row now reads Yes for both and the paragraph that said it had no way to remove one is rewritten. The trash row said Partial for us and now says No: we have no tool that trashes a message. The Docs line under 'what is left' said the native connector only reads; it also creates a new doc, and what it cannot do is edit one. Still standing from the MAJOR CORRECTION of August 24: the central claim of this post is no longer true. Claude's native Gmail connector now exposes send_message (including sending an existing draft), reply with reply-all, and forward. The original title was 'Claude Can Draft Your Email. It Can't Send It.' We have rewritten the post rather than retitling around the edges, because the gap it was built on has closed. Earlier corrections on August 7 and August 11 covered labelling and thread-level filing."
+updated: "2026-10-19"
+updatedNote: "October 19, 2026: two rows flip in our favour. We now label or unlabel a whole thread in one call, trash and untrash a whole thread, and mark and unmark spam, so 'Label or archive a whole thread in one call' and 'Trash, untrash, mark spam' read Yes for us as well. Earlier, October 15, later the same day: the Docs and Sheets lines and the closing line are corrected, and the Slides line carries its October 9 date. Claude's Google Docs connector, in beta since October 2026 and enumerated on 15 October 2026, edits an existing doc in place, and its Sheets connector edits cells and tabs. Earlier on October 15: the Docs line under 'what is left' now says 'as of our last check' and points to the dated note on the Drive post: Anthropic announced Docs, Sheets and Slides editing connectors on 6 October 2026, and they had not reached our account by 15 October. Fourth correction, October 9, in the same direction as the others: the native connector does delete a draft. It has a delete_draft tool, so the 'Delete a draft' row now reads Yes for both and the paragraph that said it had no way to remove one is rewritten. The trash row said Partial for us and now says No: we have no tool that trashes a message. The Docs line under 'what is left' said the native connector only reads; it also creates a new doc, and what it cannot do is edit one. Still standing from the MAJOR CORRECTION of August 24: the central claim of this post is no longer true. Claude's native Gmail connector now exposes send_message (including sending an existing draft), reply with reply-all, and forward. The original title was 'Claude Can Draft Your Email. It Can't Send It.' We have rewritten the post rather than retitling around the edges, because the gap it was built on has closed. Earlier corrections on August 7 and August 11 covered labelling and thread-level filing."
 author: "Manuel Yang"
 category: "Comparison"
 coverImage: "/blog/gmail-comparison.png"
@@ -50,15 +50,16 @@ frequently cited limitation of the native connector.
 | Delete a draft | Yes | Yes |
 | Mark messages read or unread | Yes | Yes |
 | Label or archive individual messages | Yes | Yes |
-| Label or archive a whole thread in one call | Yes | No |
-| Trash, untrash, mark spam | Yes | No |
+| Label or archive a whole thread in one call | Yes | Yes |
+| Trash, untrash, mark spam | Yes | Yes |
 | Save attachment to Drive server-side | No | Yes |
 | Multi-account (work + personal Gmail) | No | Yes |
 
 Both columns are what each connector exposes as tools, enumerated on August 24, 2026. Rows
 move. The date is there so you can tell how stale this table is when you find it. It moved
 again on October 9, 2026: the "Delete a draft" row said No for the native connector until
-then.
+then. And on October 19, 2026 the thread and spam rows changed on our side, when we shipped
+thread-level labels, thread trash and spam.
 
 ## What is left, stated without inflation
 
