@@ -874,9 +874,16 @@ export function createMcpServer(
       name: string;
       description: string;
       inputSchema: Record<string, unknown>;
+      annotations?: { readOnlyHint: boolean };
     }[] = [];
 
     for (const t of rows) {
+      // readOnlyHint is a hint to the CLIENT, from the same reviewed registry
+      // row as the description (SCRUM-326). A row that recorded nothing serves
+      // nothing, never a guessed false. The agent's own write gate does not
+      // read it; see classifyWrite.
+      const annotations =
+        typeof t.readOnlyHint === "boolean" ? { annotations: { readOnlyHint: t.readOnlyHint } } : {};
       if (t.requiredService) {
         const properties = {
           ...(t.schema.properties as Record<string, unknown>),
@@ -886,17 +893,23 @@ export function createMcpServer(
           name: t.namespacedName,
           description: t.description,
           inputSchema: { ...t.schema, properties },
+          ...annotations,
         });
       } else {
         toolList.push({
           name: t.namespacedName,
           description: t.description,
           inputSchema: t.schema,
+          ...annotations,
         });
       }
     }
 
-    for (const t of builtins) toolList.push(t.definition);
+    // A built-in's hint is its declared approval, the same field the agent's
+    // confirm card reads.
+    for (const t of builtins) {
+      toolList.push({ ...t.definition, annotations: { readOnlyHint: t.approval === "read" } });
+    }
 
     // A user who lists tools and then stops is a very different activation
     // signal from one whose client never connected. Counts and the asker's
