@@ -68,10 +68,17 @@ describe("the comparison table as checked on its date", () => {
     ["Two Google accounts in one request", false, true],
     // The rows the 9 October 2026 check added.
     ["Rename a file", true, true],
-    ["Share a file with someone", true, false],
+    ["Share a file with someone", true, true],
     ["Jira, attach an email or one of its attachments to an issue", false, true],
     // The rows the nine tools moved on 16 October 2026: ours now too.
-    ["Trash a message", true, true],
+    ["Trash a message or thread", true, true],
+    // The rows SCRUM-428 moved: the built-in connectors' surface, matched.
+    ["Label or unlabel a whole thread at once", true, true],
+    ["RSVP to an invitation", true, true],
+    ["Suggest a meeting time", true, true],
+    ["List your other calendars", true, true],
+    ["Sharing permissions", true, true],
+    ["Recently-opened files", true, true],
     ["File metadata", true, true],
     ["Move a file to another folder", true, true],
   ] as const)("%s", (capability, builtIn, ours) => {

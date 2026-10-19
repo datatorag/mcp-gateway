@@ -159,7 +159,10 @@ gateway deploy carries it. What goes with it:
   change.** `apps/gateway/src/gateway/tests/send-guard.ts` knows tools by
   name. `gmail_trash` and `gmail_untrash` would have been callable on any
   message from a test case until they were added to it; they are now held
-  to mail the run itself sent.
+  to mail the run itself sent. The same holds past mail (SCRUM-428): a
+  thread move needs every message in the thread to carry the run's stamp,
+  a share goes only to a fixture account and with notify false, and an
+  RSVP needs send_updates none.
 
 ## Gotchas
 

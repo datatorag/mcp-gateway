@@ -41,6 +41,10 @@ export interface GuardLookups {
   /** The message a reply would answer, since a reply carries no recipient
    * argument of its own. */
   readMessage(messageId: string): Promise<StoredRecipients | null>;
+  /** The subject of every message in a thread, for the tools that move a
+   * whole conversation (SCRUM-428). Null when the thread cannot be read.
+   * Optional: a guard without it refuses those tools. */
+  readThreadSubjects?(threadId: string): Promise<string[] | null>;
 }
 
 /**
@@ -183,10 +187,23 @@ const READ_METHODS = new Set([
   "getprofile",
 ]);
 
-/** Tools that move a message in or out of Trash. Not sends, and guarded
- * anyway: they change a real mailbox, and the raw call that does the same
- * thing is already held to mail this run sent. */
-const MAILBOX_MOVING_TOOLS = new Set(["gmail_trash", "gmail_untrash"]);
+/** Tools that move a message in or out of Trash, or in or out of spam. Not
+ * sends, and guarded anyway: they change a real mailbox, and the raw call
+ * that does the same thing is already held to mail this run sent. Spam joined
+ * with SCRUM-428: reporting a message moves it out of the inbox exactly as
+ * trashing it does. */
+const MAILBOX_MOVING_TOOLS = new Set(["gmail_trash", "gmail_untrash", "gmail_mark_spam", "gmail_unmark_spam"]);
+
+/** The same, for a whole conversation at once (SCRUM-428). Every message in
+ * the thread is held to the rule, read at the moment of the call: a thread
+ * this run started can be answered by anyone, and one stranger's reply in it
+ * makes it a thread this run does not own. */
+const THREAD_MOVING_TOOLS = new Set(["gmail_trash_thread", "gmail_untrash_thread"]);
+
+/** Tools that give a person access to a file (SCRUM-428). Sharing is an
+ * effect outside the account that no cleanup takes back from the recipient's
+ * inbox, so a run may share only with a configured mailbox, and silently. */
+const SHARING_TOOLS = new Set(["drive_share_file"]);
 
 function toolSuffix(tool: string): string {
   const i = tool.indexOf("__");
@@ -200,6 +217,10 @@ const CALENDAR_NOTIFYING_TOOLS = new Set([
   "calendar_create_event",
   "calendar_update_event",
   "calendar_delete_event",
+  // SCRUM-428. An answer to an invitation is mailed to the organizer unless
+  // told not to. It carries no attendee argument, like a cancellation, so
+  // send_updates none is its only protection.
+  "calendar_respond_to_event",
 ]);
 
 /**
@@ -317,6 +338,8 @@ export async function checkSend(
     name === "gmail_send_draft" ||
     name === "gws_run" ||
     MAILBOX_MOVING_TOOLS.has(name) ||
+    THREAD_MOVING_TOOLS.has(name) ||
+    SHARING_TOOLS.has(name) ||
     CALENDAR_NOTIFYING_TOOLS.has(name);
 
   if (!needsGuard) return { ok: true };
@@ -351,6 +374,28 @@ export async function checkSend(
       return {
         ok: false,
         reason: `send refused: ${name} may only move a message this run sent, and that subject does not carry this run's stamp and ${SUBJECT_PREFIX}`,
+      };
+    }
+    return { ok: true };
+  }
+
+  if (THREAD_MOVING_TOOLS.has(name)) {
+    const id = String(args.thread_id ?? "");
+    if (id.trim() === "" || id !== id.trim()) {
+      return { ok: false, reason: `send refused: ${name} names no thread, or one with space around its id` };
+    }
+    const stamp = opts.runStamp ?? "";
+    if (stamp === "") {
+      return { ok: false, reason: `send refused: ${name} needs this run's stamp to check the thread against, and none was given` };
+    }
+    const subjects = opts.lookups.readThreadSubjects ? await opts.lookups.readThreadSubjects(id) : null;
+    if (!subjects || subjects.length === 0) {
+      return { ok: false, reason: `send refused: the thread ${name} names could not be read first` };
+    }
+    if (!subjects.every((subject) => subject.includes(SUBJECT_PREFIX) && subject.includes(stamp))) {
+      return {
+        ok: false,
+        reason: `send refused: ${name} may only move a thread whose every message this run sent, carrying this run's stamp and ${SUBJECT_PREFIX}`,
       };
     }
     return { ok: true };
@@ -482,6 +527,18 @@ export async function checkSend(
 
   if (reader === null) {
     return { ok: false, reason: "send refused: no reader mailbox is mapped for this run" };
+  }
+
+  if (SHARING_TOOLS.has(name)) {
+    const email = String(args.email ?? "").trim().toLowerCase();
+    const permitted = new Set([reader, ...(sender ? [sender] : [])]);
+    if (!permitted.has(email)) {
+      return { ok: false, reason: "send refused: a file may be shared only with the reader or sender mailbox" };
+    }
+    if (args.notify !== false) {
+      return { ok: false, reason: "send refused: a share from a test run must pass notify false" };
+    }
+    return { ok: true };
   }
 
   if (CALENDAR_NOTIFYING_TOOLS.has(name)) {

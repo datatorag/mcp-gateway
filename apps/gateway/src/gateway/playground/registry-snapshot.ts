@@ -54,7 +54,10 @@ export const REGISTRY_CLASSIFICATION: ReadonlyArray<readonly [string, "read" | "
   ["gws-mcp__calendar_delete_event", "write"],
   ["gws-mcp__calendar_freebusy", "read"],
   ["gws-mcp__calendar_get_event", "read"],
+  ["gws-mcp__calendar_list_calendars", "read"],
   ["gws-mcp__calendar_list_events", "read"],
+  ["gws-mcp__calendar_respond_to_event", "write"],
+  ["gws-mcp__calendar_suggest_time", "read"],
   ["gws-mcp__calendar_update_event", "write"],
   ["gws-mcp__contacts_create", "write"],
   ["gws-mcp__contacts_delete", "write"],
@@ -74,10 +77,13 @@ export const REGISTRY_CLASSIFICATION: ReadonlyArray<readonly [string, "read" | "
   ["gws-mcp__drive_create_folder", "write"],
   ["gws-mcp__drive_get_file", "read"],
   // Removes the file from the folder it was in.
+  ["gws-mcp__drive_get_file_permissions", "read"],
+  ["gws-mcp__drive_list_recent_files", "read"],
   ["gws-mcp__drive_move_file", "write"],
   ["gws-mcp__drive_read_file", "read"],
   ["gws-mcp__drive_rename_file", "write"],
   ["gws-mcp__drive_search", "read"],
+  ["gws-mcp__drive_share_file", "write"],
   ["gws-mcp__drive_trash_file", "write"],
   ["gws-mcp__drive_upload_file", "write"],
   ["gws-mcp__gmail_create_draft", "write"],
@@ -98,6 +104,7 @@ export const REGISTRY_CLASSIFICATION: ReadonlyArray<readonly [string, "read" | "
   // Changes the mailbox: an unread message stops being unread. Cheap to undo,
   // still not something to do to someone's inbox unasked.
   ["gws-mcp__gmail_mark_read", "write"],
+  ["gws-mcp__gmail_mark_spam", "write"],
   ["gws-mcp__gmail_read", "read"],
   ["gws-mcp__gmail_reply", "write"],
   ["gws-mcp__gmail_save_attachment_to_drive", "write"],
@@ -106,7 +113,10 @@ export const REGISTRY_CLASSIFICATION: ReadonlyArray<readonly [string, "read" | "
   ["gws-mcp__gmail_send_draft", "write"],
   ["gws-mcp__gmail_trash", "write"],
   // Restores, and still changes where a message lives, so it prompts.
+  ["gws-mcp__gmail_trash_thread", "write"],
+  ["gws-mcp__gmail_unmark_spam", "write"],
   ["gws-mcp__gmail_untrash", "write"],
+  ["gws-mcp__gmail_untrash_thread", "write"],
   ["gws-mcp__gmail_update_draft", "write"],
   // Renames a label / changes visibility only — destroys no data, still not a read.
   ["gws-mcp__gmail_update_label", "write"],

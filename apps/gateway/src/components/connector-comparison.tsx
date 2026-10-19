@@ -149,18 +149,16 @@ export const GROUPS: Group[] = [
       { capability: "Reply in thread", short: "reply", builtIn: true, ours: true },
       { capability: "Forward", short: "forward", builtIn: true, ours: true },
       { capability: "Label, star, mark read, archive a message", short: "labels and archive", builtIn: true, ours: true },
-      {
-        capability: "Label or unlabel a whole thread at once",
-        builtIn: true,
-        ours: false,
-        emphasis: true,
-      },
+      // Ours with SCRUM-428: gmail_label_message takes a thread_id.
+      { capability: "Label or unlabel a whole thread at once", short: "label threads", builtIn: true, ours: true },
       // Conceded on 9 October 2026. The note used to say nothing in the
       // built-in surface deletes a draft it wrote; it has a tool that does.
       { capability: "Delete a draft", short: "delete drafts", builtIn: true, ours: true },
       // Ours since 16 October 2026: gmail_trash and gmail_untrash. They act on
       // one message, so a thread is one call per message; the note says so.
-      { capability: "Trash a message", short: "trash", builtIn: true, ours: true },
+      // A whole thread again with SCRUM-428: gmail_trash_thread and
+      // gmail_untrash_thread move a conversation in one call.
+      { capability: "Trash a message or thread", short: "trash", builtIn: true, ours: true },
       // Broadened on 18 October 2026: drive_upload_file (since 13 October
       // 2026) stores a whole email as its .eml in Drive as well as one
       // attachment, so the row says both.
@@ -170,7 +168,7 @@ export const GROUPS: Group[] = [
       // to disk.
       { capability: "Save an email or an attachment to your computer", builtIn: false, ours: true },
     ],
-    note: "The built-in connector sends, replies and forwards. It gained those verbs in August 2026, and this table claimed otherwise until 18 September 2026: if you read the older version of this row anywhere, including here, it was wrong. It also deletes a draft, which this table denied until 9 October 2026. It labels a whole thread in one call, where we work a message at a time, so a long thread means one call per message. It moves a message or a whole thread to the trash. We trash and untrash a message since 16 October 2026, one message at a time, so a whole thread is one call per message. And it gained full label management earlier in 2026, so it can label, star, mark read and archive. Its tool list, enumerated 15 October 2026, has no download to disk. What is left on our side is saving an email or an attachment straight to Drive or to your computer.",
+    note: "The built-in connector sends, replies and forwards. It gained those verbs in August 2026, and this table claimed otherwise until 18 September 2026: if you read the older version of this row anywhere, including here, it was wrong. It also deletes a draft, which this table denied until 9 October 2026. Both connectors now label a whole thread in one call, move a message or a whole thread to the trash and back, and report spam. And it gained full label management earlier in 2026, so it can label, star, mark read and archive. Its tool list, enumerated 15 October 2026, has no download to disk. What is left on our side is saving an email or an attachment straight to Drive or to your computer.",
   },
   {
     service: "Google Calendar",
@@ -184,14 +182,17 @@ export const GROUPS: Group[] = [
         ours: false,
         emphasis: true,
       },
-      { capability: "RSVP to an invitation", builtIn: true, ours: false, emphasis: true },
-      { capability: "Suggest a meeting time", builtIn: true, ours: false, emphasis: true },
+      // Both ours with SCRUM-428: calendar_respond_to_event and
+      // calendar_suggest_time, the latter built on our free/busy lookup.
+      { capability: "RSVP to an invitation", short: "RSVP", builtIn: true, ours: true },
+      { capability: "Suggest a meeting time", short: "suggest a time", builtIn: true, ours: true },
       { capability: "Search events by keyword", short: "search", builtIn: true, ours: true },
-      { capability: "List your other calendars", builtIn: true, ours: false, emphasis: true },
+      // Ours with SCRUM-428: calendar_list_calendars, five fields a calendar.
+      { capability: "List your other calendars", short: "list calendars", builtIn: true, ours: true },
       { capability: "Free/busy lookup", builtIn: false, ours: true },
     ],
     note: [
-      "On a single account, the built-in connector is the better calendar tool, and it isn't close. Its event creation does recurring events, room booking, attachments, and custom reminders, where ours creates plain events. It can RSVP and suggest meeting times, and list the other calendars on the account. Ours can't.",
+      "On a single account, the built-in connector still creates richer events: recurring events, room booking, attachments, and custom reminders, where ours creates plain events. Both of us answer invitations, suggest meeting times and list the other calendars on the account.",
       "What we add is span: both your calendars reachable in one request, without either account having to share anything with the other. Free/busy runs one lookup per account and the assistant combines them.",
       "One honest caveat: the built-in connector sees every calendar the connected account can see. If you already share your personal calendar with your work account, that covers the cross-account case for you. Our advantage is for calendars you'd rather not share.",
     ],
@@ -205,11 +206,13 @@ export const GROUPS: Group[] = [
       // Ours since 16 October 2026: drive_get_file describes a file or folder
       // without reading it.
       { capability: "File metadata", builtIn: true, ours: true },
-      { capability: "Sharing permissions", builtIn: true, ours: false, emphasis: true },
+      // Ours with SCRUM-428: drive_get_file_permissions.
+      { capability: "Sharing permissions", builtIn: true, ours: true },
       // Reading who a file is shared with is the row above. This is the
       // write: it grants someone access. We have no tool for either.
-      { capability: "Share a file with someone", builtIn: true, ours: false, emphasis: true },
-      { capability: "Recently-opened files", builtIn: true, ours: false, emphasis: true },
+      // Both ours with SCRUM-428: drive_share_file and drive_list_recent_files.
+      { capability: "Share a file with someone", builtIn: true, ours: true },
+      { capability: "Recently-opened files", builtIn: true, ours: true },
       // Ours since 16 October 2026: drive_move_file.
       { capability: "Move a file to another folder", builtIn: true, ours: true },
       // A tie since 9 October 2026: we copy files now.
@@ -219,7 +222,7 @@ export const GROUPS: Group[] = [
       // and our own Drive comparison post has said so since August.
       { capability: "Create a folder", builtIn: true, ours: true },
     ],
-    note: "The built-in Drive connector is more capable than ours, and it is not close. It downloads a file, reads who it is shared with, shares it with someone new and lists what you opened recently. We do none of those. Since 16 October 2026 we read a file's metadata and move a file between folders, which this table denied until then. Our advantage was never Drive breadth. It is what we do with a file across services and accounts: an email's attachment onto a Jira issue or into Drive, and two Google accounts in one request.",
+    note: "The built-in Drive connector downloads a file's content, which we do not. The rest of this group both of us do: we read a file's metadata and move a file between folders since 16 October 2026, which this table denied until then, and we share a file, read who it is shared with and list recent files too. Our advantage was never Drive breadth. It is what we do with a file across services and accounts: an email's attachment onto a Jira issue or into Drive, and two Google accounts in one request.",
   },
   {
     service: "Beyond Google",
