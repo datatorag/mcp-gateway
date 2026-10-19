@@ -146,7 +146,7 @@ export const confluenceTools = [
   {
     name: "confluence_get_comments",
     description:
-      "Get all comments on a Confluence page, including their body content and version info.",
+      "Get all comments on a Confluence page, footer and inline, with their replies, including their body content and version info. Each comment carries its type (footer or inline) and parent_id, the comment it replies to, or null for a comment on the page itself. An inline comment also carries the page text it is anchored to and whether it is open or resolved.",
     inputSchema: {
       type: "object" as const,
       properties: {
@@ -162,7 +162,7 @@ export const confluenceTools = [
   {
     name: "confluence_add_comment",
     description:
-      "Add a comment to a Confluence page. Optionally reply to an existing comment by providing parent_comment_id.",
+      "Add a comment to a Confluence page: a footer comment on the page, an inline comment anchored to a piece of the page's text with inline_text, or a reply to an existing footer or inline comment with parent_comment_id. A reply goes into the same kind of thread as the comment it answers. An inline_text that does not appear in the page is refused before anything is posted; when it appears more than once, inline_match picks which. Returns the new comment's ID, version, type and parent.",
     inputSchema: {
       type: "object" as const,
       properties: {
@@ -178,7 +178,17 @@ export const confluenceTools = [
         parent_comment_id: {
           type: "string",
           description:
-            "Optional ID of an existing comment to reply to.",
+            "Optional ID of an existing comment, footer or inline, to reply to.",
+        },
+        inline_text: {
+          type: "string",
+          description:
+            "Optional text on the page to anchor an inline comment to, exactly as it reads on the page. Not used with parent_comment_id.",
+        },
+        inline_match: {
+          type: "number",
+          description:
+            "Which occurrence of inline_text to anchor to, counting from 1, when it appears more than once (default 1).",
         },
       },
       required: ["page_id", "body"],
@@ -234,6 +244,8 @@ interface V2Comment {
   title?: string;
   version?: { number: number };
   body?: { storage?: { value: string } };
+  resolutionStatus?: string;
+  properties?: { inlineOriginalSelection?: string };
   _links?: { webui?: string };
 }
 
@@ -395,6 +407,106 @@ function xhtmlToText(xhtml: string): string {
 
 function stripTags(html: string): string {
   return html.replace(/<[^>]*>/g, "");
+}
+
+// ---------------------------------------------------------------------------
+// Comment threads
+// ---------------------------------------------------------------------------
+
+type CommentKind = "footer" | "inline";
+
+/** A thread deeper than this is listed to this depth. Confluence nests
+ * replies without a limit; a conversation that deep is rare, and each level
+ * is one more request per comment. */
+const MAX_REPLY_DEPTH = 5;
+
+function refusal(text: string) {
+  return { content: [{ type: "text" as const, text }], isError: true };
+}
+
+function escapeXml(text: string): string {
+  return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
+
+function shapeComment(c: V2Comment, type: CommentKind, parentId: string | null) {
+  return {
+    id: c.id,
+    title: c.title ?? null,
+    version: c.version?.number ?? null,
+    type,
+    parent_id: parentId,
+    body: c.body?.storage?.value ?? null,
+    ...(type === "inline"
+      ? {
+          selection: c.properties?.inlineOriginalSelection ?? null,
+          resolution_status: c.resolutionStatus ?? null,
+        }
+      : {}),
+  };
+}
+
+/** The comments given, each followed by its replies, depth first, so a
+ * thread reads in order. */
+async function withReplies(
+  client: AtlassianClient,
+  comments: V2Comment[],
+  type: CommentKind,
+  parentId: string | null,
+  depth: number,
+): Promise<ReturnType<typeof shapeComment>[]> {
+  const children = depth >= MAX_REPLY_DEPTH
+    ? comments.map(() => [] as V2Comment[])
+    : await Promise.all(
+        comments.map(async (c) =>
+          ((await client.confluenceV2Get(
+            `/${type}-comments/${encodeURIComponent(c.id)}/children?body-format=storage`,
+          )) as V2CommentsResult).results ?? [],
+        ),
+      );
+  const out: ReturnType<typeof shapeComment>[] = [];
+  for (const [i, c] of comments.entries()) {
+    out.push(shapeComment(c, type, parentId));
+    out.push(...(await withReplies(client, children[i], type, c.id, depth + 1)));
+  }
+  return out;
+}
+
+/** Whether a comment ID names a footer or an inline comment, or neither. */
+async function commentKind(client: AtlassianClient, id: string): Promise<CommentKind | null> {
+  for (const kind of ["footer", "inline"] as const) {
+    try {
+      await client.confluenceV2Get(`/${kind}-comments/${encodeURIComponent(id)}`);
+      return kind;
+    } catch {
+      // Not this kind, or not readable: try the other.
+    }
+  }
+  return null;
+}
+
+/** A page's storage body as the words a reader sees, for finding where an
+ * inline comment's text sits. Tags go, the XML entities, &nbsp; and numeric
+ * character references are decoded, and nothing else is rewritten, so the
+ * count matches the text the page shows. A non-breaking space stays one, so
+ * text typed with an ordinary space does not match it and is refused here
+ * rather than by Confluence. */
+export function pageText(storage: string): string {
+  return storage
+    .replace(/<[^>]*>/g, "")
+    .replace(/&nbsp;/g, "\u00a0")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"')
+    .replace(/&#(\d+);/g, (_m, n) => String.fromCodePoint(Number(n)))
+    .replace(/&#x([0-9a-f]+);/gi, (_m, n) => String.fromCodePoint(parseInt(n, 16)))
+    .replace(/&amp;/g, "&");
+}
+
+export function countOccurrences(text: string, needle: string): number {
+  if (needle === "") return 0;
+  let count = 0;
+  for (let at = text.indexOf(needle); at !== -1; at = text.indexOf(needle, at + needle.length)) count++;
+  return count;
 }
 
 // ---------------------------------------------------------------------------
@@ -573,48 +685,92 @@ export async function handleConfluence(
         ),
       ])) as [V2CommentsResult, V2CommentsResult];
 
-      const shape = (data: V2CommentsResult, type: "footer" | "inline") =>
-        (data.results ?? []).map((c) => ({
-          id: c.id,
-          title: c.title ?? null,
-          version: c.version?.number ?? null,
-          type,
-          body: c.body?.storage?.value ?? null,
-        }));
-
+      // The page endpoints list only the comments on the page itself; a
+      // reply is a child of the comment it answers, so each thread is walked.
       const comments = [
-        ...shape(footer, "footer"),
-        ...shape(inline, "inline"),
+        ...(await withReplies(client, footer.results ?? [], "footer", null, 0)),
+        ...(await withReplies(client, inline.results ?? [], "inline", null, 0)),
       ];
       return jsonResponse(comments);
     }
 
-    // ── Add comment (footer-comments; inline replies not supported) ─
+    // ── Add comment (footer, inline, or a reply in either thread) ─
     case "confluence_add_comment": {
       const pageId = args.page_id as string;
       const body = args.body as string;
       const parentCommentId = args.parent_comment_id as string | undefined;
 
-      const payload: Record<string, unknown> = {
-        pageId,
-        body: {
-          representation: "storage",
-          value: `<p>${body.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")}</p>`,
-        },
+      const inlineText = typeof args.inline_text === "string" ? args.inline_text : undefined;
+      const storageBody = {
+        representation: "storage",
+        value: `<p>${escapeXml(body)}</p>`,
       };
 
-      if (parentCommentId) {
-        payload.parentCommentId = parentCommentId;
+      if (parentCommentId && inlineText !== undefined) {
+        return refusal("parent_comment_id and inline_text do not go together: a reply sits in its parent's thread, wherever that is anchored. Nothing was posted.");
       }
 
-      const created = (await client.confluenceV2Post(
-        "/footer-comments",
-        payload,
-      )) as V2Comment;
+      if (parentCommentId) {
+        // A reply has to go to the endpoint of its parent's kind, so the
+        // parent is looked up first; a footer endpoint refuses an inline
+        // parent and the reverse.
+        const kind = await commentKind(client, parentCommentId);
+        if (!kind) {
+          return refusal(`No footer or inline comment ${JSON.stringify(parentCommentId)} could be read, so there is nothing to reply to. Nothing was posted.`);
+        }
+        const created = (await client.confluenceV2Post(`/${kind}-comments`, {
+          parentCommentId,
+          body: storageBody,
+        })) as V2Comment;
+        return jsonResponse({
+          id: created.id,
+          version: created.version?.number ?? null,
+          type: kind,
+          parent_id: parentCommentId,
+        });
+      }
+
+      if (inlineText !== undefined) {
+        if (inlineText.trim() === "") return refusal("inline_text is empty, so there is nothing to anchor to. Nothing was posted.");
+        const page = (await client.confluenceV2Get(
+          `/pages/${encodeURIComponent(pageId)}?body-format=storage`,
+        )) as V2Page;
+        const count = countOccurrences(pageText(page.body?.storage?.value ?? ""), inlineText);
+        if (count === 0) {
+          return refusal(`The text ${JSON.stringify(inlineText)} does not appear on page ${pageId}, so an inline comment cannot be anchored to it. Nothing was posted.`);
+        }
+        const match = args.inline_match === undefined ? 1 : args.inline_match;
+        if (!Number.isInteger(match) || (match as number) < 1 || (match as number) > count) {
+          return refusal(`inline_match is ${JSON.stringify(args.inline_match)}, and the text appears ${count} time(s) on the page. Nothing was posted.`);
+        }
+        const created = (await client.confluenceV2Post("/inline-comments", {
+          pageId,
+          body: storageBody,
+          inlineCommentProperties: {
+            textSelection: inlineText,
+            textSelectionMatchCount: count,
+            textSelectionMatchIndex: (match as number) - 1,
+          },
+        })) as V2Comment;
+        return jsonResponse({
+          id: created.id,
+          version: created.version?.number ?? null,
+          type: "inline",
+          parent_id: null,
+          selection: inlineText,
+        });
+      }
+
+      const created = (await client.confluenceV2Post("/footer-comments", {
+        pageId,
+        body: storageBody,
+      })) as V2Comment;
 
       return jsonResponse({
         id: created.id,
         version: created.version?.number ?? null,
+        type: "footer",
+        parent_id: null,
       });
     }
 

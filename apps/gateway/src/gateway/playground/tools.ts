@@ -115,6 +115,8 @@ export const KNOWN_READ_TOOLS: ReadonlySet<string> = new Set<string>([
   "atlassian-mcp__jira_get_issue",
   "atlassian-mcp__jira_get_transitions",
   "atlassian-mcp__jira_list_fields",
+  "atlassian-mcp__jira_list_issue_links",
+  "atlassian-mcp__jira_list_worklogs",
   "atlassian-mcp__jira_search",
   "atlassian-mcp__jira_search_users",
   "gws-mcp__calendar_freebusy",

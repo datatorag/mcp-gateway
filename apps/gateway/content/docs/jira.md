@@ -1,6 +1,6 @@
 ---
 title: "Jira"
-description: "Search issues with JQL, create, update, transition, and comment on tickets."
+description: "Search issues with JQL, create, update, transition, comment on, log work on and link tickets."
 order: 21
 section: "connectors"
 connector: "atlassian"
@@ -41,7 +41,7 @@ faqs:
       granular scopes instead.
 ---
 
-The Jira tools let your AI assistant search, create, update, and move issues through their workflow, plus add, edit and delete comments, look up an attachment's details, and add a file from another connected service as an attachment.
+The Jira tools let your AI assistant search, create, update, and move issues through their workflow, plus add, edit and delete comments, log and list time spent, link issues to each other, look up an attachment's details, and add a file from another connected service as an attachment.
 
 ## Available operations
 
@@ -57,6 +57,10 @@ The Jira tools let your AI assistant search, create, update, and move issues thr
 | `jira_add_comment` | Add a comment to an issue |
 | `jira_edit_comment` | Edit an existing comment |
 | `jira_delete_comment` | Delete a comment |
+| `jira_add_worklog` | Log time on an issue in Jira's duration format (`1h 30m`, `2d`), optionally with a start time and a comment. Returns the stored worklog |
+| `jira_list_worklogs` | List the time logged on an issue: each worklog's author, time, start and comment, with the total in seconds |
+| `jira_link_issues` | Link two issues by a link type's name or phrase, e.g. `PROJ-1` blocks `PROJ-2`. Returns the new link as Jira reports it |
+| `jira_list_issue_links` | List an issue's links, each read from that issue's side (blocks, is blocked by), and the link types the site has |
 | `jira_get_attachment` | Get attachment metadata by ID: filename, size, MIME type, content URL |
 | `jira_add_attachment` | Attach a file to an issue from a file reference: a Gmail message as its original `.eml`, or one of its attachments by part id, under the sender's file name. The file never passes through the conversation; the answer is a receipt with the name, size and SHA-256 of what was sent. See [Moving files between services](/docs/file-references) |
 | `jira_list_fields` | List all available fields (system + custom) to discover field IDs for creates/updates |

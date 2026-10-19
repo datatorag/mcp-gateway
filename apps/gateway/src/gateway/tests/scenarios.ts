@@ -246,6 +246,8 @@ export const SCENARIOS: Scenario[] = [
       "JR8", // an email is attached as its original file, and the issue lists it
       "JR9", // attaching to an issue that does not exist sends nothing to Jira
       "JR10", // one attachment of the standing message is attached by part id
+      "JR11", // time logged on an issue is what its worklogs then report
+      "JR12", // a link between two issues reads the right way round from each
     ],
   },
   {
@@ -290,6 +292,7 @@ export const SCENARIOS: Scenario[] = [
       "CF3", // a page listing of the fixture space answers addressably
       "CF1", // a page is created, edited, and deleted, and a later read refused
       "CF2", // a comment added to a page is visible to a later read
+      "CF5", // footer and inline comments and their replies, listed in their threads
       "CF4", // an attachment named by CQL is found by the attachment endpoint
     ],
   },

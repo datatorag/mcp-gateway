@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import { AtlassianHttpError, type AtlassianClient } from "../atlassian-client.js";
 import { jsonResponse, textResponse } from "./response.js";
+import { addWorklog, linkIssues, listIssueLinks, listWorklogs } from "./jira-work.js";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -593,6 +594,105 @@ export const jiraTools = [
     },
     annotations: { title: "Add attachment to Jira issue", readOnlyHint: false, destructiveHint: false },
   },
+  // 16. Add worklog
+  {
+    name: "jira_add_worklog",
+    description:
+      "Log time spent on a Jira issue. Takes the issue key, the time in Jira's duration format (\"1h 30m\", \"2d\", \"45m\"), and optionally when the work started and a comment. Returns the worklog Jira stored: its ID, author, time spent in Jira's words and in seconds, start time and comment. Jira adjusts the issue's remaining estimate as it does for time logged in its own interface. A time that is not a Jira duration is refused before anything is sent.",
+    inputSchema: {
+      type: "object" as const,
+      properties: {
+        issue_key: {
+          type: "string",
+          description: "The issue key (e.g. PROJ-123)",
+        },
+        time_spent: {
+          type: "string",
+          description: "Time spent, in Jira's duration format: weeks, days, hours and minutes, e.g. \"1h 30m\", \"2d\", \"45m\"",
+        },
+        started: {
+          type: "string",
+          description: "When the work started, as an ISO date and time (e.g. 2026-10-19T09:00:00Z). Defaults to now",
+        },
+        comment: {
+          type: "string",
+          description: "A comment on the worklog (plain text, will be converted to ADF)",
+        },
+      },
+      required: ["issue_key", "time_spent"],
+    },
+    annotations: { title: "Log work on Jira issue", readOnlyHint: false, destructiveHint: false },
+  },
+
+  // 17. List worklogs
+  {
+    name: "jira_list_worklogs",
+    description:
+      "List the time logged on a Jira issue. Returns each worklog's ID, author, time spent in Jira's words and in seconds, start time and comment as plain text, with the number of worklogs and the total time in seconds.",
+    inputSchema: {
+      type: "object" as const,
+      properties: {
+        issue_key: {
+          type: "string",
+          description: "The issue key (e.g. PROJ-123)",
+        },
+        max_results: {
+          type: "number",
+          description: "Maximum number of worklogs to return (default 100)",
+        },
+      },
+      required: ["issue_key"],
+    },
+    annotations: { title: "List Jira worklogs", readOnlyHint: true, destructiveHint: false },
+  },
+
+  // 18. Link issues
+  {
+    name: "jira_link_issues",
+    description:
+      "Link two Jira issues, such as one blocking another or one duplicating another. Takes the two issue keys and a link type, by its name (\"Blocks\") or by the phrase it reads with from the first issue (\"blocks\", \"is blocked by\", \"relates to\"), so issue_key blocks other_issue_key, or is blocked by it. The link types a site has are listed by jira_list_issue_links. An unknown type is refused with the site's types listed, and nothing is sent. Returns the new link and every link of the first issue afterwards, as Jira reports them.",
+    inputSchema: {
+      type: "object" as const,
+      properties: {
+        issue_key: {
+          type: "string",
+          description: "The issue the link phrase is said of (e.g. PROJ-123 in \"PROJ-123 blocks PROJ-124\")",
+        },
+        other_issue_key: {
+          type: "string",
+          description: "The other issue (e.g. PROJ-124)",
+        },
+        link_type: {
+          type: "string",
+          description: "The link type's name, or the phrase that reads from issue_key to other_issue_key (e.g. \"blocks\", \"is blocked by\", \"relates to\", \"duplicates\")",
+        },
+        comment: {
+          type: "string",
+          description: "A comment added with the link (plain text, will be converted to ADF)",
+        },
+      },
+      required: ["issue_key", "other_issue_key", "link_type"],
+    },
+    annotations: { title: "Link Jira issues", readOnlyHint: false, destructiveHint: false },
+  },
+
+  // 19. List issue links
+  {
+    name: "jira_list_issue_links",
+    description:
+      "List the links of a Jira issue: for each, its ID, type, the phrase that reads from this issue to the other one (\"blocks\", \"is blocked by\"), and the other issue's key, summary and status. Also returns the link types the site has, each with its name and its two phrases, which are what jira_link_issues takes.",
+    inputSchema: {
+      type: "object" as const,
+      properties: {
+        issue_key: {
+          type: "string",
+          description: "The issue key (e.g. PROJ-123)",
+        },
+      },
+      required: ["issue_key"],
+    },
+    annotations: { title: "List Jira issue links", readOnlyHint: true, destructiveHint: false },
+  },
 ];
 
 // ---------------------------------------------------------------------------
@@ -882,6 +982,16 @@ export async function handleJira(
         "The file could not be supplied: jira_add_attachment needs the gateway to resolve the file reference and hand over the bytes, and this call arrived without them. Nothing was sent.",
       );
     }
+
+    // ── 16-19. Worklogs and links (jira-work.ts) ────────────────
+    case "jira_add_worklog":
+      return addWorklog(client, args);
+    case "jira_list_worklogs":
+      return listWorklogs(client, args);
+    case "jira_link_issues":
+      return linkIssues(client, args);
+    case "jira_list_issue_links":
+      return listIssueLinks(client, args);
 
     default:
       throw new Error(`Unknown Jira tool: ${toolName}`);
