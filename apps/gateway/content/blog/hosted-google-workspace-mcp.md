@@ -2,8 +2,8 @@
 title: "Hosted Google Workspace MCP: DataToRAG vs Google's Official Servers vs Claude's Native Connectors"
 excerpt: "Google shipped eight official Workspace MCP servers. Claude has three native connectors. We host one endpoint. Every tool on all three, enumerated on August 24, 2026, including the surprise: Google's own Gmail MCP cannot send email."
 date: "2026-08-24"
-updated: "2026-10-15"
-updatedNote: "October 15, later the same day: Claude's native column is re-enumerated for Docs and Sheets. Claude has Google Docs and Sheets connectors of its own since October 2026, in beta, and both write, so the native connectors section, the table's Sheets and Docs rows and the closing list are corrected. Everything else is as enumerated on August 24, 2026. Earlier on October 15: a dated note in the native connectors section. Anthropic announced Docs, Sheets and Slides editing connectors in beta on 6 October 2026. As of 15 October 2026 they were not available on our account, so what this post says about them is what we could verify ourselves. We will re-test and correct this the day they reach us. October 9: the three-way table said No for Jira and Confluence under Claude native, and the closing list called Jira alongside Workspace the one nobody else covers. Claude has an Atlassian connector of its own, separate from its Google ones, so both are corrected. What holds is narrower: here Jira, Confluence and Google Workspace sit behind one endpoint. Everything else in the post is as enumerated on August 24, 2026."
+updated: "2026-10-19"
+updatedNote: "October 19, 2026: our own column is re-counted. We now ship suggest_time and respond_to_event, so the paragraph that said we ship neither is rewritten, and our Gmail, Calendar and Drive counts are now 26, 9 and 12. Earlier, October 15, later the same day: Claude's native column is re-enumerated for Docs and Sheets. Claude has Google Docs and Sheets connectors of its own since October 2026, in beta, and both write, so the native connectors section, the table's Sheets and Docs rows and the closing list are corrected. Everything else is as enumerated on August 24, 2026. Earlier on October 15: a dated note in the native connectors section. Anthropic announced Docs, Sheets and Slides editing connectors in beta on 6 October 2026. As of 15 October 2026 they were not available on our account, so what this post says about them is what we could verify ourselves. We will re-test and correct this the day they reach us. October 9: the three-way table said No for Jira and Confluence under Claude native, and the closing list called Jira alongside Workspace the one nobody else covers. Claude has an Atlassian connector of its own, separate from its Google ones, so both are corrected. What holds is narrower: here Jira, Confluence and Google Workspace sit behind one endpoint. Everything else in the post is as enumerated on August 24, 2026."
 author: "Manuel Yang"
 category: "Comparison"
 tags: ["google-workspace", "mcp", "hosted-mcp", "claude", "comparison", "gmail", "sheets"]
@@ -92,9 +92,10 @@ Gmail is the big one and, as of August, it sends. Calendar is excellent. Drive c
 permissions, copy and trash. Exact counts are in the table below, next to the date they were
 taken, because a competitor's tool count rots exactly as fast as our own.
 
-**Both are better than ours at what they cover.** Our Calendar has 6 tools against their 9: we
-ship no `suggest_time` and no `respond_to_event`. Our Drive has 3 against their 11, because our
-Drive tools exist to feed Docs, Sheets and Slides rather than to manage files.
+**They are still better at a few things they cover.** Since October 19, 2026 our Calendar has
+9 tools to their 9, `suggest_time` and `respond_to_event` included, but their events recur, book
+rooms and carry attachments, and ours do not. Our Drive has 12 to their 11 and shares, lists
+permissions and recent files like theirs; what it does not do is download the file itself.
 
 If the job is mail, calendar and files on one account, **use the native connectors.** They are
 free and we would be wasting your time.
@@ -107,9 +108,9 @@ free and we would be wasting your time.
 | Endpoints to configure | 5 connectors | **8 servers** | **1** |
 | Status | GA | **Developer Preview** | GA |
 | Gmail send / reply / forward | **yes** | **no** | **yes** |
-| Gmail tools | 27 | 11 | 18 |
-| Calendar | **9** | **9** | 6 |
-| Drive | **11** | yes | 3 |
+| Gmail tools | 27 | 11 | 26 |
+| Calendar | **9** | **9** | **9** |
+| Drive | 11 | yes | **12** |
 | Sheets writes | yes, 9 tools (15 October 2026) | **yes, deep** | yes, 9 tools |
 | Docs writes | yes, batch update (15 October 2026) | **yes, 47 ops** | yes, 5 tools |
 | Slides writes | **none** | **yes** | yes, 4 tools |
@@ -120,7 +121,7 @@ free and we would be wasting your time.
 | Jira + Confluence | yes, through a separate Atlassian connector | no | **yes, same endpoint** |
 | Self-host the gateway | no | not applicable | **yes, MIT** |
 
-Enumerated August 24, 2026, except the native Sheets and Docs rows, enumerated October 15, 2026. Counts are a poor way to judge a connector and a good way to spot a
+Enumerated August 24, 2026, except the native Sheets and Docs rows, enumerated October 15, 2026, and the DataToRAG Gmail, Calendar and Drive counts, as of October 19, 2026. Counts are a poor way to judge a connector and a good way to spot a
 hole.
 
 ## So what is the honest case for a hosted gateway

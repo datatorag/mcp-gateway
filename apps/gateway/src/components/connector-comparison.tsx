@@ -159,6 +159,8 @@ export const GROUPS: Group[] = [
       // A whole thread again with SCRUM-428: gmail_trash_thread and
       // gmail_untrash_thread move a conversation in one call.
       { capability: "Trash a message or thread", short: "trash", builtIn: true, ours: true },
+      // Added with SCRUM-428, when gmail_mark_spam shipped: both mark spam.
+      { capability: "Mark as spam", short: "spam", builtIn: true, ours: true },
       // Broadened on 18 October 2026: drive_upload_file (since 13 October
       // 2026) stores a whole email as its .eml in Drive as well as one
       // attachment, so the row says both.
@@ -168,7 +170,7 @@ export const GROUPS: Group[] = [
       // to disk.
       { capability: "Save an email or an attachment to your computer", builtIn: false, ours: true },
     ],
-    note: "The built-in connector sends, replies and forwards. It gained those verbs in August 2026, and this table claimed otherwise until 18 September 2026: if you read the older version of this row anywhere, including here, it was wrong. It also deletes a draft, which this table denied until 9 October 2026. Both connectors now label a whole thread in one call, move a message or a whole thread to the trash and back, and report spam. And it gained full label management earlier in 2026, so it can label, star, mark read and archive. Its tool list, enumerated 15 October 2026, has no download to disk. What is left on our side is saving an email or an attachment straight to Drive or to your computer.",
+    note: "The built-in connector sends, replies and forwards. It gained those verbs in August 2026, and this table claimed otherwise until 18 September 2026: if you read the older version of this row anywhere, including here, it was wrong. It also deletes a draft, which this table denied until 9 October 2026. Both connectors now label a whole thread in one call, move a message or a whole thread to the trash and back, and mark a message as spam and take it back out. And it gained full label management earlier in 2026, so it can label, star, mark read and archive. Its tool list, enumerated 15 October 2026, has no download to disk. What is left on our side is saving an email or an attachment straight to Drive or to your computer.",
   },
   {
     service: "Google Calendar",

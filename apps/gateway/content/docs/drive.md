@@ -61,6 +61,9 @@ the conversation to be read.
 | `drive_get_file` | Describe a file or folder by ID without reading its content: name, type, size, the folders it is in, owners, created and modified times, link, and whether it is in Trash |
 | `drive_move_file` | Move a file or folder into another folder. It is removed from the folder it was in, so it ends up in one place; name, content and ID are unchanged |
 | `drive_trash_file` | Move a file or folder to Trash, where its owner can restore it for 30 days. Trashing a folder trashes what is inside it |
+| `drive_share_file` | Share a file or folder with one person by email, as reader, commenter or writer. Google emails them unless `notify` is false, with your `message` if you give one. The answer lists who has access afterwards |
+| `drive_get_file_permissions` | List who has access to a file or folder: each person, group, domain or link, with their role |
+| `drive_list_recent_files` | The files you opened most recently, or with `by: "modified"` the most recently changed, with name, type, time and link. `page_size` defaults to 20 |
 
 ## What `drive_read_file` can and cannot read
 
