@@ -917,3 +917,71 @@ describe("the dedicated trash tools are held to mail this run sent", () => {
     expect(verdict).toEqual({ ok: true });
   });
 });
+
+/* SCRUM-428. The tools that match Claude's built-in connectors, each held to
+ * what a run may touch: spam is a move like trash; a whole thread only when
+ * every message in it is this run's; an answer to an invitation notifies the
+ * organizer unless told not to; a share only with a configured mailbox and
+ * without an email. */
+describe("the SCRUM-428 tools are held to what a run may touch", () => {
+  const STAMP = "a1b2c3d4";
+  const own = `${SUBJECT_PREFIX} delivery ${STAMP}-GM8`;
+  const opts = (over: Record<string, unknown> = {}, lookupsOver: Partial<GuardLookups> = {}) => ({
+    readerEmail: READER,
+    senderEmail: "sender@example.test",
+    lookups: { readDraft: async () => null, readMessage: vi.fn().mockResolvedValue({ subject: own }), ...lookupsOver },
+    runStamp: STAMP,
+    ...over,
+  });
+
+  it.each(["gws-mcp__gmail_mark_spam", "gws-mcp__gmail_unmark_spam"])("%s follows the trash rule", async (tool) => {
+    expect(await checkSend(tool, { message_id: "m1" }, opts())).toEqual({ ok: true });
+    const stranger = opts({}, { readMessage: vi.fn().mockResolvedValue({ subject: "Quarterly numbers" }) });
+    expect((await checkSend(tool, { message_id: "m1" }, stranger)).ok).toBe(false);
+  });
+
+  it.each(["gws-mcp__gmail_trash_thread", "gws-mcp__gmail_untrash_thread"])(
+    "%s ALLOWS a thread whose every message carries this run's stamp",
+    async (tool) => {
+      const readThreadSubjects = vi.fn().mockResolvedValue([own, `Re: ${own}`]);
+      expect(await checkSend(tool, { thread_id: "t1" }, opts({}, { readThreadSubjects }))).toEqual({ ok: true });
+      expect(readThreadSubjects).toHaveBeenCalledWith("t1");
+    }
+  );
+
+  it("REFUSES a thread with one message that is not this run's, one it cannot read, and a padded id", async () => {
+    const tool = "gws-mcp__gmail_trash_thread";
+    for (const subjects of [[own, "Re: something else"], [], null]) {
+      const verdict = await checkSend(tool, { thread_id: "t1" }, opts({}, { readThreadSubjects: async () => subjects }));
+      expect(verdict.ok, JSON.stringify(subjects)).toBe(false);
+    }
+    // No lookup at all is a refusal, not a pass.
+    expect((await checkSend(tool, { thread_id: "t1" }, opts())).ok).toBe(false);
+    expect((await checkSend(tool, { thread_id: " t1" }, opts({}, { readThreadSubjects: async () => [own] }))).ok).toBe(false);
+    for (const runStamp of [undefined, ""]) {
+      expect((await checkSend(tool, { thread_id: "t1" }, opts({ runStamp }, { readThreadSubjects: async () => [own] }))).ok).toBe(false);
+    }
+  });
+
+  it("calendar_respond_to_event must pass send_updates none", async () => {
+    expect(await checkSend("gws-mcp__calendar_respond_to_event", { event_id: "e1", response: "accepted", send_updates: "none" }, opts())).toEqual({
+      ok: true,
+    });
+    for (const send_updates of [undefined, "all", "externalOnly"]) {
+      const verdict = await checkSend("gws-mcp__calendar_respond_to_event", { event_id: "e1", response: "accepted", send_updates }, opts());
+      expect(verdict.ok, String(send_updates)).toBe(false);
+    }
+  });
+
+  it("drive_share_file only with the reader or sender mailbox, and silently", async () => {
+    const tool = "gws-mcp__drive_share_file";
+    expect(await checkSend(tool, { file_id: "f", email: READER, role: "reader", notify: false }, opts())).toEqual({ ok: true });
+    expect(await checkSend(tool, { file_id: "f", email: "SENDER@example.test", role: "writer", notify: false }, opts())).toEqual({ ok: true });
+    expect((await checkSend(tool, { file_id: "f", email: STRANGER, role: "reader", notify: false }, opts())).ok).toBe(false);
+    for (const notify of [undefined, true]) {
+      expect((await checkSend(tool, { file_id: "f", email: READER, role: "reader", notify }, opts())).ok, String(notify)).toBe(false);
+    }
+    // No reader mapped: nobody to share with.
+    expect((await checkSend(tool, { file_id: "f", email: READER, role: "reader", notify: false }, opts({ readerEmail: null }))).ok).toBe(false);
+  });
+});

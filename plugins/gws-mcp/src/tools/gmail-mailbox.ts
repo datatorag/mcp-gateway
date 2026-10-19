@@ -16,6 +16,8 @@ import { mb } from "../attachments/fetch.js";
 /**
  * Four mailbox calls that had no tool of their own (SCRUM-419): moving a
  * message to Trash and back, listing drafts, and reading one attachment.
+ * Then the rest of what Claude's built-in Gmail connector does to a mailbox
+ * (SCRUM-428): a whole thread to Trash and back, and spam and not spam.
  * Each was being reached through the raw API tool, where the caller has to
  * know Gmail's resource paths and the `userId` every one of them takes.
  */
@@ -92,6 +94,71 @@ export const gmailMailboxTools: ToolDef[] = [
     },
     // Restores; removes nothing and overwrites nothing.
     annotations: CREATE("Restore email from Trash"),
+  },
+  {
+    name: "gmail_trash_thread",
+    description:
+      "Moves a whole Gmail conversation to Trash: every message in the thread, in one call. Takes the thread ID. The messages leave the inbox and every other label view and stay in Trash, where Gmail deletes them for good after 30 days; gmail_untrash_thread restores them before then. Returns the thread ID and, for each message in it, the message ID and whether it is now in Trash.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        thread_id: {
+          type: "string",
+          description: "The ID of the thread to move to Trash, as gmail_search, gmail_list and gmail_read return it (threadId).",
+        },
+      },
+      required: ["thread_id"],
+    },
+    annotations: MUTATE("Move a whole email conversation to Trash"),
+  },
+  {
+    name: "gmail_untrash_thread",
+    description:
+      "Takes a whole Gmail conversation out of Trash: every message in the thread, in one call. Takes the thread ID. Returns the thread ID and, for each message in it, the message ID and whether it is still in Trash. Messages Gmail has already deleted from Trash are gone and are not in the answer.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        thread_id: {
+          type: "string",
+          description: "The ID of the thread to take out of Trash.",
+        },
+      },
+      required: ["thread_id"],
+    },
+    annotations: CREATE("Restore an email conversation from Trash"),
+  },
+  {
+    name: "gmail_mark_spam",
+    description:
+      "Reports one Gmail message as spam. Takes the message ID. The message gets Gmail's SPAM label and leaves the inbox, as the Report spam button does, and Gmail deletes spam for good after 30 days; gmail_unmark_spam moves it back before then. Returns the message ID, whether it is now in spam, and the labels it carries afterwards. Acts on the one message named, not on the rest of its thread.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        message_id: {
+          type: "string",
+          description: "The ID of the message to report as spam.",
+        },
+      },
+      required: ["message_id"],
+    },
+    annotations: MUTATE("Report email as spam"),
+  },
+  {
+    name: "gmail_unmark_spam",
+    description:
+      "Moves one Gmail message out of spam and back to the inbox, as the Not spam button does. Takes the message ID. Returns the message ID, whether it is still in spam, and the labels it carries afterwards.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        message_id: {
+          type: "string",
+          description: "The ID of the message to move out of spam.",
+        },
+      },
+      required: ["message_id"],
+    },
+    // Restores to the inbox; removes nothing a person would miss.
+    annotations: CREATE("Move email out of spam"),
   },
   {
     name: "gmail_list_drafts",
@@ -174,6 +241,47 @@ async function setTrashed(client: GwsClient, tool: string, args: Record<string, 
     thread_id: message.threadId,
     // Read from what Gmail answered, not from which method was called.
     in_trash: labelIds.includes("TRASH"),
+    labelIds,
+  });
+}
+
+async function setThreadTrashed(
+  client: GwsClient,
+  tool: string,
+  args: Record<string, unknown>,
+  method: "trash" | "untrash"
+) {
+  const id = requireId(tool, "thread_id", args.thread_id);
+  const params = { userId: "me", id };
+  // Two literal calls, as in setTrashed: the request test reads this source.
+  const result =
+    method === "trash"
+      ? await client.api("gmail", "users.threads", "trash", { params })
+      : await client.api("gmail", "users.threads", "untrash", { params });
+  const thread = (result.data ?? {}) as { id?: string; messages?: LabelledMessage[] };
+  const messages = (Array.isArray(thread.messages) ? thread.messages : []).map((m) => {
+    const labelIds = Array.isArray(m.labelIds) ? m.labelIds : [];
+    return { message_id: m.id, in_trash: labelIds.includes("TRASH") };
+  });
+  return jsonResponse({ thread_id: thread.id ?? id, message_count: messages.length, messages });
+}
+
+async function setSpam(client: GwsClient, tool: string, args: Record<string, unknown>, spam: boolean) {
+  const id = requireId(tool, "message_id", args.message_id);
+  // What Gmail's own buttons do: Report spam adds SPAM and takes the message
+  // out of the inbox; Not spam does the reverse.
+  const result = await client.api("gmail", "users.messages", "modify", {
+    params: { userId: "me", id },
+    jsonBody: spam
+      ? { addLabelIds: ["SPAM"], removeLabelIds: ["INBOX"] }
+      : { addLabelIds: ["INBOX"], removeLabelIds: ["SPAM"] },
+  });
+  const message = (result.data ?? {}) as LabelledMessage;
+  const labelIds = Array.isArray(message.labelIds) ? message.labelIds : [];
+  return jsonResponse({
+    message_id: message.id ?? id,
+    thread_id: message.threadId,
+    in_spam: labelIds.includes("SPAM"),
     labelIds,
   });
 }
@@ -294,6 +402,14 @@ export async function handleGmailMailbox(client: GwsClient, toolName: string, ar
       return setTrashed(client, toolName, args, "trash");
     case "gmail_untrash":
       return setTrashed(client, toolName, args, "untrash");
+    case "gmail_trash_thread":
+      return setThreadTrashed(client, toolName, args, "trash");
+    case "gmail_untrash_thread":
+      return setThreadTrashed(client, toolName, args, "untrash");
+    case "gmail_mark_spam":
+      return setSpam(client, toolName, args, true);
+    case "gmail_unmark_spam":
+      return setSpam(client, toolName, args, false);
     case "gmail_list_drafts":
       return listDrafts(client, args);
     case "gmail_get_attachment":

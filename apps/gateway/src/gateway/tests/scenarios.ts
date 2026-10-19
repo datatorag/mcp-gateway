@@ -169,6 +169,8 @@ export const SCENARIOS: Scenario[] = [
       "GM3", // marking read clears UNREAD, and unread restores it
       "GM4", // mark_read with labels applies only those; with none it clears UNREAD
       "GM6", // untrash takes the Trash label off and trash puts it back
+      "GM8", // spam takes a message out of the inbox and not spam brings it back
+      "GM9", // a label and a trash on a thread reach every message in it
       "E16", // three messages labelled in one call, and unlabelled together
       /* Answering it. */
       "D12", // a reply lands in the original's thread
@@ -205,6 +207,7 @@ export const SCENARIOS: Scenario[] = [
       "DR2", // reading the fixture doc returns the document's own text
       "DR3", // a file's details place it in its folder, without its content
       "DR4", // a moved file leaves its old folder, and a trashed file reads back trashed
+      "DR5", // a shared folder is readable by the reader, and listed as recent
     ],
   },
   {
@@ -219,6 +222,8 @@ export const SCENARIOS: Scenario[] = [
       "CA1", // a get by id returns that event, with its control summary
       "CA2", // an update changes what a later get returns
       "CA3", // freebusy is busy where an event was made and free beside it
+      "CA4", // the calendar list is compact; a suggested slot leaves once an event takes it
+      "CA5", // an answer to an invitation is what the organizer then sees
     ],
   },
   {

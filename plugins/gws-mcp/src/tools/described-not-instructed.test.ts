@@ -22,6 +22,17 @@ const DESCRIBED = [
   "drive_get_file",
   "drive_move_file",
   "drive_trash_file",
+  // SCRUM-428, the built-in connectors' surface.
+  "calendar_respond_to_event",
+  "calendar_list_calendars",
+  "calendar_suggest_time",
+  "gmail_trash_thread",
+  "gmail_untrash_thread",
+  "gmail_mark_spam",
+  "gmail_unmark_spam",
+  "drive_share_file",
+  "drive_get_file_permissions",
+  "drive_list_recent_files",
 ];
 
 /** Words that address the reader's behaviour instead of the tool's. */

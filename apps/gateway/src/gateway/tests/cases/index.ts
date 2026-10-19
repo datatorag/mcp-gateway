@@ -68,13 +68,18 @@ import { gm4GmailMarkReadDefault } from "./gm4-gmail-mark-read-default";
 import { gm5GmailListDrafts } from "./gm5-gmail-list-drafts";
 import { gm6GmailTrashUntrash } from "./gm6-gmail-trash-untrash";
 import { gm7GmailGetAttachment } from "./gm7-gmail-get-attachment";
+import { gm8GmailSpam } from "./gm8-gmail-spam";
+import { gm9GmailThread } from "./gm9-gmail-thread";
 import { dr1DriveFolder } from "./dr1-drive-folder";
 import { dr2DriveRead } from "./dr2-drive-read";
 import { dr3DriveGetFile } from "./dr3-drive-get-file";
 import { dr4DriveMoveTrash } from "./dr4-drive-move-trash";
+import { dr5DriveShareRecent } from "./dr5-drive-share-recent";
 import { ca1CalendarGet } from "./ca1-calendar-get";
 import { ca2CalendarUpdate } from "./ca2-calendar-update";
 import { ca3CalendarFreebusy } from "./ca3-calendar-freebusy";
+import { ca4CalendarCalendarsSuggest } from "./ca4-calendar-calendars-suggest";
+import { ca5CalendarRespond } from "./ca5-calendar-respond";
 import { jr1JiraFields } from "./jr1-jira-fields";
 import { jr2JiraUsers } from "./jr2-jira-users";
 import { jr3JiraUpdate } from "./jr3-jira-update";
@@ -205,13 +210,18 @@ export const CASES: TestCase[] = [
   gm5GmailListDrafts,
   gm6GmailTrashUntrash,
   gm7GmailGetAttachment,
+  gm8GmailSpam,
+  gm9GmailThread,
   dr1DriveFolder,
   dr2DriveRead,
   dr3DriveGetFile,
   dr4DriveMoveTrash,
+  dr5DriveShareRecent,
   ca1CalendarGet,
   ca2CalendarUpdate,
   ca3CalendarFreebusy,
+  ca4CalendarCalendarsSuggest,
+  ca5CalendarRespond,
   jr1JiraFields,
   jr2JiraUsers,
   jr3JiraUpdate,

@@ -8,16 +8,16 @@ This server powers the Google Workspace connector of [DataToRAG](https://datator
 
 | Service | Tools | Operations |
 |---------|-------|------------|
-| **Gmail** | 22 | send, reply, forward, read, search, list, create draft, update draft, send draft, delete draft, mark read, list filters, create label, list labels, update label, delete label, label message, save attachment to Drive, trash, untrash, list drafts, get attachment |
-| **Calendar** | 6 | list events, get event, create, update, delete, freebusy |
+| **Gmail** | 26 | send, reply, forward, read, search, list, create draft, update draft, send draft, delete draft, mark read, list filters, create label, list labels, update label, delete label, label message or thread, save attachment to Drive, trash, untrash, trash thread, untrash thread, mark spam, unmark spam, list drafts, get attachment |
+| **Calendar** | 9 | list events, get event, create, update, delete, freebusy, respond to an invitation, list calendars, suggest a time |
 | **Contacts** | 7 | search, get, list, create, update, delete, directory search |
-| **Drive** | 9 | search, read file, create folder, rename, copy, upload a referenced file, get file, move, trash |
+| **Drive** | 12 | search, read file, create folder, rename, copy, upload a referenced file, get file, move, trash, share, list permissions, list recent files |
 | **Sheets** | 16 | read, query, update, append, create, delete, add tab, rename tab, delete tab, clear, find rows, format range, format table, batch update, get metadata, copy tab to another spreadsheet |
 | **Docs** | 5 | get, write, batch update, create, delete |
 | **Slides** | 4 | get, create, batch update, delete |
 | **Tasks** | 7 | list task lists, create task list, list tasks, create, update, complete, delete |
 
-**76 tools total.** All tools support shared (team) Drives.
+**86 tools total.** All tools support shared (team) Drives.
 
 The plugin also serves a raw API fallback for internal use; the gateway does not list it to users, and the counts above leave it out.
 
