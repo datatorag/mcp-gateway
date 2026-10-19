@@ -90,6 +90,8 @@ import { jr7JiraKeyRefused } from "./jr7-jira-key-refused";
 import { jr8JiraAttachEmail } from "./jr8-jira-attach-email";
 import { jr9JiraAttachMissingIssue } from "./jr9-jira-attach-missing-issue";
 import { jr10JiraAttachEmailAttachment } from "./jr10-jira-attach-email-attachment";
+import { jr11JiraWorklogs } from "./jr11-jira-worklogs";
+import { jr12JiraLinks } from "./jr12-jira-links";
 import { fd1DownloadLink } from "./fd1-download-link";
 import { fd2DownloadLinkNotCarried } from "./fd2-download-link-not-carried";
 import { tk1TasksLifecycle } from "./tk1-tasks-lifecycle";
@@ -100,6 +102,7 @@ import { cf1ConfluencePage } from "./cf1-confluence-page";
 import { cf2ConfluenceComments } from "./cf2-confluence-comments";
 import { cf3ConfluenceList } from "./cf3-confluence-list";
 import { cf4ConfluenceAttachment } from "./cf4-confluence-attachment";
+import { cf5ConfluenceThreads } from "./cf5-confluence-threads";
 import { sk1SkillsOwn } from "./sk1-skills-own";
 import { sk2SkillsFork } from "./sk2-skills-fork";
 import { r1FrontDoor } from "./r1-front-door";
@@ -232,6 +235,8 @@ export const CASES: TestCase[] = [
   jr8JiraAttachEmail,
   jr9JiraAttachMissingIssue,
   jr10JiraAttachEmailAttachment,
+  jr11JiraWorklogs,
+  jr12JiraLinks,
   fd1DownloadLink,
   fd2DownloadLinkNotCarried,
   tk1TasksLifecycle,
@@ -242,6 +247,7 @@ export const CASES: TestCase[] = [
   cf2ConfluenceComments,
   cf3ConfluenceList,
   cf4ConfluenceAttachment,
+  cf5ConfluenceThreads,
   sk1SkillsOwn,
   sk2SkillsFork,
   r1FrontDoor,

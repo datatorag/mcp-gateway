@@ -27,9 +27,10 @@ faqs:
       version and link.
   - q: Can DataToRAG reply to an existing Confluence comment?
     a: >-
-      Yes. The Confluence comment tool adds a comment to a page and can
-      optionally reply to an existing page comment, and a companion tool reads every
-      comment on a page with its body content and version info.
+      Yes, to a footer comment or an inline one. The Confluence comment tool adds
+      a comment to a page, anchors an inline comment to text on the page, or
+      replies in an existing thread, and a companion tool reads every comment on
+      a page with its replies, its body content and version info.
 ---
 
 The Confluence tools let your AI assistant search space content, read and author pages, read and add comments, and look up an attachment's details.
@@ -44,8 +45,8 @@ The Confluence tools let your AI assistant search space content, read and author
 | `confluence_create_page` | Create a new page. Content must be in XHTML storage format |
 | `confluence_edit_page` | Update an existing page. Version auto-increments if not provided |
 | `confluence_delete_page` | Delete a page by ID |
-| `confluence_get_comments` | Get all comments on a page with body content and version info |
-| `confluence_add_comment` | Add a plain-text comment to a page, optionally replying to an existing page comment. Inline comments cannot be replied to |
+| `confluence_get_comments` | Get all comments on a page, footer and inline, with their replies in thread order. Each carries its type and the comment it replies to; an inline comment also carries the text it is anchored to and whether it is resolved |
+| `confluence_add_comment` | Add a plain-text comment to a page: a footer comment, an inline comment anchored to text on the page with `inline_text`, or a reply to a footer or inline comment with `parent_comment_id` |
 | `confluence_get_attachment` | Get metadata for a page attachment by filename |
 
 ## Required scopes

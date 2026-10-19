@@ -32,6 +32,7 @@ export const REGISTRY_CLASSIFICATION: ReadonlyArray<readonly [string, "read" | "
   ["atlassian-mcp__confluence_search", "read"],
   ["atlassian-mcp__jira_add_attachment", "write"],
   ["atlassian-mcp__jira_add_comment", "write"],
+  ["atlassian-mcp__jira_add_worklog", "write"],
   ["atlassian-mcp__jira_create_issue", "write"],
   ["atlassian-mcp__jira_delete_comment", "write"],
   // Permanent: Jira does not trash or archive a deleted issue, and the key is
@@ -45,7 +46,10 @@ export const REGISTRY_CLASSIFICATION: ReadonlyArray<readonly [string, "read" | "
   // Lists the transitions an issue COULD take; it does not take one.
   // `jira_transition_issue`, below, is the one that does.
   ["atlassian-mcp__jira_get_transitions", "read"],
+  ["atlassian-mcp__jira_link_issues", "write"],
   ["atlassian-mcp__jira_list_fields", "read"],
+  ["atlassian-mcp__jira_list_issue_links", "read"],
+  ["atlassian-mcp__jira_list_worklogs", "read"],
   ["atlassian-mcp__jira_search", "read"],
   ["atlassian-mcp__jira_search_users", "read"],
   ["atlassian-mcp__jira_transition_issue", "write"],
