@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { CREATE, MUTATE } from "./annotations.js";
+import { CREATE, MUTATE, READ } from "./annotations.js";
 import { driveTools, handleDrive } from "./drive.js";
 import { fakeClient, payload } from "./fake-client.test-helper.js";
 import { validateArgs } from "./validate.js";
@@ -192,5 +192,85 @@ describe("registration and consent", () => {
     // SCRUM-170 names this exact failure mode: the surface is what is
     // registered, not what is implemented.
     expect(tool(name)?.annotations).toEqual(expected);
+  });
+});
+
+/* SCRUM-419: describing, moving and trashing a file were only reachable
+ * through the raw API tool. */
+describe("drive_get_file", () => {
+  it("reads the facts about a file and none of its content", async () => {
+    const meta = { id: "f1", name: "Plan.pdf", mimeType: "application/pdf", size: "2048", parents: ["p1"], trashed: false };
+    const { client, calls } = fakeClient([{ data: meta }]);
+    const result = await handleDrive(client, "drive_get_file", { file_id: "f1" });
+    expect(calls).toHaveLength(1);
+    expect(calls[0]).toMatchObject({ service: "drive", resource: "files", method: "get", params: { fileId: "f1", supportsAllDrives: true } });
+    const params = calls[0].params as Record<string, unknown>;
+    // alt=media is what turns files.get into a download.
+    expect(params.alt).toBeUndefined();
+    for (const field of ["name", "mimeType", "size", "parents", "owners", "modifiedTime", "webViewLink", "trashed"]) {
+      expect(String(params.fields)).toContain(field);
+    }
+    expect(payload(result)).toEqual(meta);
+    expect(tool("drive_get_file")?.annotations).toEqual(READ("Get Drive file details"));
+  });
+});
+
+describe("drive_move_file", () => {
+  it("adds the destination and removes every folder the file was in, with an empty body", async () => {
+    const { client, calls } = fakeClient([
+      { data: { id: "f1", name: "Plan", parents: ["old-1", "old-2"] } },
+      { data: { id: "f1", name: "Plan", parents: ["new"], webViewLink: "https://drive/f1" } },
+    ]);
+    const result = await handleDrive(client, "drive_move_file", { file_id: "f1", folder_id: "new" });
+    expect(calls[1]).toMatchObject({
+      service: "drive",
+      resource: "files",
+      method: "update",
+      params: { fileId: "f1", addParents: "new", removeParents: "old-1,old-2", supportsAllDrives: true },
+    });
+    // files.update is a PATCH: a field in the body is a field written.
+    expect(calls[1].jsonBody).toEqual({});
+    expect(payload(result)).toMatchObject({ id: "f1", parents: ["new"], moved: true });
+  });
+
+  it("leaves a file that is already there alone, and says so", async () => {
+    const { client, calls } = fakeClient([{ data: { id: "f1", name: "Plan", parents: ["new"] } }]);
+    const result = await handleDrive(client, "drive_move_file", { file_id: "f1", folder_id: "new" });
+    expect(calls).toHaveLength(1);
+    expect(payload(result)).toMatchObject({ moved: false });
+  });
+
+  it("a file in the destination and one other folder leaves only the other", async () => {
+    const { client, calls } = fakeClient([{ data: { id: "f1", parents: ["new", "old"] } }, { data: { id: "f1", parents: ["new"] } }]);
+    await handleDrive(client, "drive_move_file", { file_id: "f1", folder_id: "new" });
+    expect(calls[1].params).toMatchObject({ addParents: "new", removeParents: "old" });
+  });
+
+  it("a file with no visible folder is added to the destination with nothing to remove", async () => {
+    const { client, calls } = fakeClient([{ data: { id: "f1" } }, { data: { id: "f1", parents: ["new"] } }]);
+    await handleDrive(client, "drive_move_file", { file_id: "f1", folder_id: "new" });
+    expect(calls[1].params).not.toHaveProperty("removeParents");
+  });
+
+  it("refuses a blank destination before any request", async () => {
+    const { client, calls } = fakeClient([]);
+    await expect(handleDrive(client, "drive_move_file", { file_id: "f1", folder_id: "  " })).rejects.toThrow(/folder_id/);
+    expect(calls).toHaveLength(0);
+  });
+
+  it("is marked as changing existing state", () => {
+    expect(tool("drive_move_file")?.annotations).toEqual(MUTATE("Move Drive file to another folder"));
+  });
+});
+
+describe("drive_trash_file", () => {
+  it("writes trashed and nothing else, through update and never delete", async () => {
+    const { client, calls } = fakeClient([{ data: { id: "f1", name: "Plan", trashed: true } }]);
+    const result = await handleDrive(client, "drive_trash_file", { file_id: "f1" });
+    expect(calls).toHaveLength(1);
+    expect(calls[0]).toMatchObject({ service: "drive", resource: "files", method: "update", params: { fileId: "f1", supportsAllDrives: true } });
+    expect(calls[0].jsonBody).toEqual({ trashed: true });
+    expect(payload(result)).toEqual({ id: "f1", name: "Plan", trashed: true });
+    expect(tool("drive_trash_file")?.annotations).toEqual(MUTATE("Move Drive file to Trash"));
   });
 });

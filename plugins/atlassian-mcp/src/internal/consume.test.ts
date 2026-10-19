@@ -385,8 +385,10 @@ describe("jira_add_attachment through the MCP path", () => {
     expect(tool?.inputSchema.required).toEqual(["issue_key", "file"]);
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const file = (tool?.inputSchema.properties as any).file;
-    expect(file.required).toEqual(["type", "message_id"]);
-    expect(file.properties.type.enum).toEqual(["gmail_message", "gmail_attachment"]);
+    // Only the type is required: a Gmail reference carries a message id, a
+    // Drive one a file id, and each property's text says which it goes with.
+    expect(file.required).toEqual(["type"]);
+    expect(file.properties.type.enum).toEqual(["gmail_message", "gmail_attachment", "drive_file", "drive_export"]);
     expect(tool?.description).not.toContain(String.fromCharCode(0x2014));
   });
 
@@ -407,10 +409,15 @@ describe("jira_add_attachment through the MCP path", () => {
     // reference built from it stops naming anything.
     expect(Object.keys(file.properties).sort()).toEqual([
       "account",
+      "file_id",
+      "format",
       "message_id",
       "part_id",
       "type",
     ]);
+    expect(file.properties.file_id.description).toMatch(/Required with drive_file and drive_export/);
+    expect(file.properties.format.description).toMatch(/pdf/);
+    expect(file.description).toContain('"type": "drive_export"');
     expect(file.description).toContain('"type": "gmail_message"');
     expect(file.description).toContain('"type": "gmail_attachment"');
     expect(file.description).toContain('"part_id"');

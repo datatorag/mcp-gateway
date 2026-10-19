@@ -57,6 +57,7 @@ The Sheets connector lets your AI assistant read data from spreadsheets, write t
 | Tool | Description |
 |------|-------------|
 | `sheets_read` | Read one range, or several ranges in one call (`ranges: [...]`), one block per range in request order, a range asked for twice included (e.g., `Sheet1!A1:D10`) |
+| `sheets_get_metadata` | Describe a spreadsheet without reading a cell: its title, locale and time zone, and each tab's title, `sheetId`, position, grid size and frozen rows and columns. The title is what a range names a tab by; the `sheetId` is what `sheets_batch_update` addresses it by |
 | `sheets_create` | Create a new spreadsheet |
 | `sheets_update` | Update specific cells in a sheet |
 | `sheets_append` | Append rows to the end of a sheet |
@@ -64,6 +65,7 @@ The Sheets connector lets your AI assistant read data from spreadsheets, write t
 | `sheets_add_tab` | Add a new tab to an existing spreadsheet, with an optional header row |
 | `sheets_rename_tab` | Rename a tab by its current title; data is untouched, but saved ranges that name the old title stop resolving |
 | `sheets_clear` | Clear values in a range while keeping the tab and its formatting; a bare tab name clears the whole tab |
+| `sheets_copy_tab_to` | Copy one tab, by its title, into another spreadsheet. The copy arrives as a new tab with its values, formulas and formatting; nothing already in the destination changes |
 | `sheets_delete_tab` | Delete a tab and every row in it; this cannot be undone via the API, so use `sheets_clear` when you only want to empty a tab |
 | `sheets_find_rows` | Find the rows whose value in one column matches, and get back their row numbers plus a ready-made A1 range for each, so a lookup can be followed straight by an update. Searches many values in one call |
 | `sheets_query` | Run a query in the QUERY() language over a range and get back only the matching rows: select, where, group by, order by, limit and the aggregates, in one call. Columns by sheet letter. A tab that does not exist is refused with the list of tabs. Read-only |

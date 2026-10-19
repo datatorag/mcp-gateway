@@ -8,19 +8,19 @@ export const genericTools: ToolDef[] = [
   {
     name: "gws_run",
     description:
-      "FALLBACK ONLY — use dedicated tools first (gmail_*, calendar_*, drive_*, sheets_*, docs_*, slides_*, contacts_*). Only use gws_run when no dedicated tool exists for the operation, e.g. Chat, Admin, Tasks, or advanced API calls not covered by other tools. Commands follow the pattern: gws <service> <resource> <method>.",
+      "A custom query tool for the Google Workspace REST APIs: sends one request to one API method and returns the API's own JSON response. It reaches the methods of eight APIs, named here as Google's reference names them: Gmail (gmail), Calendar (calendar), Drive (drive), Sheets (sheets), Docs (docs), Slides (slides), People (people) and Tasks (tasks). A call is a service, a resource path and a method, as listed under each API's REST reference at https://developers.google.com/workspace, plus the method's query parameters and, for a method that takes one, a JSON request body. It reaches methods that have no dedicated gmail_, calendar_, drive_, sheets_, docs_, slides_, contacts_ or tasks_ tool, with the access the connected account granted. A service, resource or method outside those eight APIs is refused before any request is sent. A response over 900 KB is cut at that size.",
     inputSchema: {
       type: "object",
       properties: {
         service: {
           type: "string",
           description:
-            "Google Workspace service (e.g., calendar, chat, admin, classroom, contacts, drive, gmail, sheets, docs, slides)",
+            "The API to call: one of gmail, calendar, drive, sheets, docs, slides, people, tasks.",
         },
         resource: {
           type: "string",
           description:
-            "API resource. Nested resources use dotted paths matching the API's REST structure — Gmail resources live under users (users.messages, users.drafts, users.labels, users.messages.attachments), not bare names like 'drafts'. Top-level examples: events (calendar), files (drive), spaces (chat).",
+            "The API resource, as a dotted path matching the API's REST structure. Gmail's resources sit under users (users.messages, users.drafts, users.labels, users.messages.attachments); Sheets has spreadsheets, spreadsheets.values and spreadsheets.sheets; top-level examples are events and calendarList (calendar) and files (drive).",
         },
         method: {
           type: "string",

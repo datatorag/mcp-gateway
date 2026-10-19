@@ -59,15 +59,28 @@ import { sh2SheetsBatch } from "./sh2-sheets-batch";
 import { sh3SheetsFormatTable } from "./sh3-sheets-format-table";
 import { sh4SheetsRename } from "./sh4-sheets-rename";
 import { sh5SheetsDelete } from "./sh5-sheets-delete";
+import { sh6SheetsMetadata } from "./sh6-sheets-metadata";
+import { sh7SheetsCopyTab } from "./sh7-sheets-copy-tab";
 import { gm1GmailUpdateLabel } from "./gm1-gmail-update-label";
 import { gm2GmailList } from "./gm2-gmail-list";
 import { gm3GmailMarkRead } from "./gm3-gmail-mark-read";
 import { gm4GmailMarkReadDefault } from "./gm4-gmail-mark-read-default";
+import { gm5GmailListDrafts } from "./gm5-gmail-list-drafts";
+import { gm6GmailTrashUntrash } from "./gm6-gmail-trash-untrash";
+import { gm7GmailGetAttachment } from "./gm7-gmail-get-attachment";
+import { gm8GmailSpam } from "./gm8-gmail-spam";
+import { gm9GmailThread } from "./gm9-gmail-thread";
 import { dr1DriveFolder } from "./dr1-drive-folder";
 import { dr2DriveRead } from "./dr2-drive-read";
+import { dr3DriveGetFile } from "./dr3-drive-get-file";
+import { dr4DriveMoveTrash } from "./dr4-drive-move-trash";
+import { dr5DriveShareRecent } from "./dr5-drive-share-recent";
+import { dr6DriveCrossAccount } from "./dr6-drive-cross-account";
 import { ca1CalendarGet } from "./ca1-calendar-get";
 import { ca2CalendarUpdate } from "./ca2-calendar-update";
 import { ca3CalendarFreebusy } from "./ca3-calendar-freebusy";
+import { ca4CalendarCalendarsSuggest } from "./ca4-calendar-calendars-suggest";
+import { ca5CalendarRespond } from "./ca5-calendar-respond";
 import { jr1JiraFields } from "./jr1-jira-fields";
 import { jr2JiraUsers } from "./jr2-jira-users";
 import { jr3JiraUpdate } from "./jr3-jira-update";
@@ -78,8 +91,14 @@ import { jr7JiraKeyRefused } from "./jr7-jira-key-refused";
 import { jr8JiraAttachEmail } from "./jr8-jira-attach-email";
 import { jr9JiraAttachMissingIssue } from "./jr9-jira-attach-missing-issue";
 import { jr10JiraAttachEmailAttachment } from "./jr10-jira-attach-email-attachment";
+import { jr11JiraWorklogs } from "./jr11-jira-worklogs";
+import { jr12JiraLinks } from "./jr12-jira-links";
+import { jr13JiraAttachDocPdf } from "./jr13-jira-attach-doc-pdf";
 import { fd1DownloadLink } from "./fd1-download-link";
 import { fd2DownloadLinkNotCarried } from "./fd2-download-link-not-carried";
+import { fd3DownloadDriveFile } from "./fd3-download-drive-file";
+import { fd4DownloadDocPdf } from "./fd4-download-doc-pdf";
+import { fd5DriveReferenceRefusals } from "./fd5-drive-reference-refusals";
 import { tk1TasksLifecycle } from "./tk1-tasks-lifecycle";
 import { co1ContactsLifecycle } from "./co1-contacts-lifecycle";
 import { co2ContactsSearch } from "./co2-contacts-search";
@@ -88,6 +107,7 @@ import { cf1ConfluencePage } from "./cf1-confluence-page";
 import { cf2ConfluenceComments } from "./cf2-confluence-comments";
 import { cf3ConfluenceList } from "./cf3-confluence-list";
 import { cf4ConfluenceAttachment } from "./cf4-confluence-attachment";
+import { cf5ConfluenceThreads } from "./cf5-confluence-threads";
 import { sk1SkillsOwn } from "./sk1-skills-own";
 import { sk2SkillsFork } from "./sk2-skills-fork";
 import { r1FrontDoor } from "./r1-front-door";
@@ -189,15 +209,28 @@ export const CASES: TestCase[] = [
   sh3SheetsFormatTable,
   sh4SheetsRename,
   sh5SheetsDelete,
+  sh6SheetsMetadata,
+  sh7SheetsCopyTab,
   gm1GmailUpdateLabel,
   gm2GmailList,
   gm3GmailMarkRead,
   gm4GmailMarkReadDefault,
+  gm5GmailListDrafts,
+  gm6GmailTrashUntrash,
+  gm7GmailGetAttachment,
+  gm8GmailSpam,
+  gm9GmailThread,
   dr1DriveFolder,
   dr2DriveRead,
+  dr3DriveGetFile,
+  dr4DriveMoveTrash,
+  dr5DriveShareRecent,
+  dr6DriveCrossAccount,
   ca1CalendarGet,
   ca2CalendarUpdate,
   ca3CalendarFreebusy,
+  ca4CalendarCalendarsSuggest,
+  ca5CalendarRespond,
   jr1JiraFields,
   jr2JiraUsers,
   jr3JiraUpdate,
@@ -208,8 +241,14 @@ export const CASES: TestCase[] = [
   jr8JiraAttachEmail,
   jr9JiraAttachMissingIssue,
   jr10JiraAttachEmailAttachment,
+  jr11JiraWorklogs,
+  jr12JiraLinks,
+  jr13JiraAttachDocPdf,
   fd1DownloadLink,
   fd2DownloadLinkNotCarried,
+  fd3DownloadDriveFile,
+  fd4DownloadDocPdf,
+  fd5DriveReferenceRefusals,
   tk1TasksLifecycle,
   co1ContactsLifecycle,
   co2ContactsSearch,
@@ -218,6 +257,7 @@ export const CASES: TestCase[] = [
   cf2ConfluenceComments,
   cf3ConfluenceList,
   cf4ConfluenceAttachment,
+  cf5ConfluenceThreads,
   sk1SkillsOwn,
   sk2SkillsFork,
   r1FrontDoor,

@@ -2,6 +2,7 @@ import type { IncomingMessage, ServerResponse } from "node:http";
 import type { GwsClient } from "../gws-client.js";
 import { gmailAttachment } from "./file-bytes/gmail-attachment.js";
 import { gmailMessage } from "./file-bytes/gmail-message.js";
+import { driveExport, driveFile } from "./file-bytes/drive-file.js";
 import { refuse, type FileBytesResponse, type Resolver } from "./file-bytes/shared.js";
 
 export { MAX_NAME_LENGTH, type FileBytesCode, type FileBytesResponse } from "./file-bytes/shared.js";
@@ -33,6 +34,8 @@ export const MAX_REQUEST_BYTES = 16 * 1024;
 export const RESOLVERS: Record<string, Resolver> = {
   gmail_message: gmailMessage,
   gmail_attachment: gmailAttachment,
+  drive_file: driveFile,
+  drive_export: driveExport,
 };
 
 export interface FileBytesRequest {

@@ -2,7 +2,8 @@ import { notFound } from "next/navigation";
 import { eq } from "drizzle-orm";
 import { marked } from "marked";
 import { db } from "@/lib/db";
-import { mcpServers, tools } from "@datatorag-mcp/db";
+import { mcpServers } from "@datatorag-mcp/db";
+import { publicServerTools } from "@/lib/public-tools";
 import { PLUGINS_DIR } from "@/gateway/plugins-dir";
 import { readPluginReadme } from "@/gateway/plugin-readme";
 import { Navbar } from "@/components/navbar";
@@ -28,7 +29,7 @@ async function getServer(slug: string) {
   if (!server || server.status !== "active") return null;
 
   const [serverTools, readmeHtml] = await Promise.all([
-    db.select().from(tools).where(eq(tools.mcpServerId, server.id)),
+    publicServerTools(db, server.id),
     getReadmeHtml(slug),
   ]);
 

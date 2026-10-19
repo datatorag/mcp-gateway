@@ -8,17 +8,18 @@ This server powers the Google Workspace connector of [DataToRAG](https://datator
 
 | Service | Tools | Operations |
 |---------|-------|------------|
-| **Gmail** | 18 | send, reply, forward, read, search, list, create draft, update draft, send draft, delete draft, mark read, list filters, create label, list labels, update label, delete label, label message, save attachment to Drive |
-| **Calendar** | 6 | list events, get event, create, update, delete, freebusy |
+| **Gmail** | 26 | send, reply, forward, read, search, list, create draft, update draft, send draft, delete draft, mark read, list filters, create label, list labels, update label, delete label, label message or thread, save attachment to Drive, trash, untrash, trash thread, untrash thread, mark spam, unmark spam, list drafts, get attachment |
+| **Calendar** | 9 | list events, get event, create, update, delete, freebusy, respond to an invitation, list calendars, suggest a time |
 | **Contacts** | 7 | search, get, list, create, update, delete, directory search |
-| **Drive** | 6 | search, read file, create folder, rename, copy, upload a referenced file |
-| **Sheets** | 14 | read, query, update, append, create, delete, add tab, rename tab, delete tab, clear, find rows, format range, format table, batch update |
+| **Drive** | 12 | search, read file, create folder, rename, copy, upload a referenced file, get file, move, trash, share, list permissions, list recent files |
+| **Sheets** | 16 | read, query, update, append, create, delete, add tab, rename tab, delete tab, clear, find rows, format range, format table, batch update, get metadata, copy tab to another spreadsheet |
 | **Docs** | 5 | get, write, batch update, create, delete |
 | **Slides** | 4 | get, create, batch update, delete |
 | **Tasks** | 7 | list task lists, create task list, list tasks, create, update, complete, delete |
-| **Generic** | 1 | `gws_run` — fallback for any GWS API not covered above |
 
-**68 tools total.** All tools support shared (team) Drives.
+**86 tools total.** All tools support shared (team) Drives.
+
+The plugin also serves a raw API fallback for internal use; the gateway does not list it to users, and the counts above leave it out.
 
 ### Key tool details
 
@@ -97,8 +98,6 @@ All modes include the `inlineObjects` metadata map (contentUri, size, margins, c
 
 **docs_write** — Uses batchUpdate API with insertText, correctly handles newlines, em dashes, and unicode characters.
 
-**gws_run** — Fallback tool for any Google Workspace API not covered by the dedicated tools. Accepts service, resource, method, params, and JSON body. Use only when no dedicated tool exists.
-
 ## Running under the gateway
 
 This is a service plugin of the DataToRAG gateway, not a server to run on its own. The gateway starts `server/index.js` as a child process, sets `PORT`, and sends each user's Google access token in the `X-User-Token` header; every call then goes to the Google REST API directly, and the `gws` CLI is never run. For development, from the repository root:
@@ -151,7 +150,7 @@ src/
     ├── docs.ts           # Docs tools (text/index/full modes, inline image metadata)
     ├── slides.ts         # Slides tools (trimmed responses, placeholder maps)
     ├── tasks.ts          # Google Tasks tools (lists, CRUD, complete)
-    ├── generic.ts        # Generic gws_run fallback
+    ├── generic.ts        # Raw API fallback, internal accounts only
     └── index.ts          # Tool registry (flat Map<name, handler>)
 ```
 

@@ -1,16 +1,16 @@
 ---
 title: "Claude's Calendar Connector Works. Unless You Have Two Calendars."
-excerpt: "On a single account, Claude's native Calendar connector does more than ours: it searches events, suggests times, and RSVPs. What it can't do is see two calendars at once."
+excerpt: "On a single account, Claude's native Calendar connector does more than ours: it searches by meaning, and its events recur, book rooms and carry attachments. What it can't do is see two calendars at once."
 date: "2026-04-21"
-updated: "2026-08-11"
-updatedNote: "This post used to claim feature parity on Calendar. That is no longer true, and it is now wrong in our favour: re-enumerating both connectors on August 11, 2026 shows the native one has time suggestion, calendar listing and RSVP, none of which we ship, plus semantic event search where ours matches keywords. The comparison table and the parity paragraphs are rewritten around what each side actually does, and the RSVP row, which said Yes for us, now says No."
+updated: "2026-10-19"
+updatedNote: "October 19, 2026: three rows flip to Yes for us. We now RSVP to an invitation, list the calendars on an account and suggest meeting times, so the short answer, the table, our tool list and the section on when the native connector is the better choice are rewritten around what still differs: recurrence, rooms, attachments and meaning-based search on their side, two accounts on ours. Earlier, this post used to claim feature parity on Calendar. That is no longer true, and it is now wrong in our favour: re-enumerating both connectors on August 11, 2026 shows the native one has time suggestion, calendar listing and RSVP, none of which we ship, plus semantic event search where ours matches keywords. The comparison table and the parity paragraphs are rewritten around what each side actually does, and the RSVP row, which said Yes for us, now says No."
 author: "Manuel Yang"
 category: "Comparison"
 coverImage: "/blog/calendar-comparison.png"
 tags: ["google-calendar", "claude", "multi-account", "comparison", "google-workspace"]
 ---
 
-**Short answer:** on one Google account, Claude's native Calendar connector is the better tool, and it is not close. It creates, updates and deletes events, suggests meeting times across attendees, lists your other calendars, and RSVPs to invitations. We do not ship those last three, and where we both search, its search understands what you meant while ours matches the words you typed. What it cannot do is hold two accounts at once, which is the whole reason this post exists.
+**Short answer:** on one Google account, Claude's native Calendar connector is the better tool, and it is not close. It creates, updates and deletes events, suggests meeting times across attendees, lists your other calendars, and RSVPs to invitations. Since October 19, 2026 we do those last three as well, but its events can recur, book rooms and carry attachments, and where we both search, its search understands what you meant while ours matches the words you typed. What it cannot do is hold two accounts at once, which is the whole reason this post exists.
 
 I'll give Claude credit, and more of it than this post gave when it went up. The native Google Calendar connector is the most feature-complete piece of the Workspace integration. Enumerating its tools on August 11, 2026: it creates events, updates them, deletes them, searches your calendar in plain language, suggests free slots across a set of attendees, lists every calendar you have access to, and responds to invitations with an accept, a decline or a maybe. Its event search is semantic, so it answers "the review with the design team" without you naming the event. Since Claude Code v2.1.46 (February 2026), the same connector works inside Claude Code too.
 
@@ -36,10 +36,10 @@ the tool is not on our wire today, not that it is impossible.
 | Update events | Yes | Yes |
 | Delete events | Yes | Yes |
 | Add a Google Meet link | Yes | Yes |
-| Find when people are free | Yes, as suggested slots | Yes, as raw busy blocks |
+| Find when people are free | Yes, as suggested slots | Yes, as suggested slots or raw busy blocks |
 | Search your calendar by keyword | Yes | Yes |
-| RSVP to an invitation | Yes | No |
-| See which calendars you have | Yes | No, you pass the calendar ID |
+| RSVP to an invitation | Yes | Yes |
+| See which calendars you have | Yes | Yes |
 | Recurring events | Yes | No |
 | Book a room as a bookable resource | Yes | No, the room name goes in the location text |
 | Attachments, custom reminders, guest permissions | Yes | No |
@@ -52,11 +52,13 @@ That table used to read as a wall of matching Yeses with a multi-account section
 on the end, which was wrong twice over: it claimed RSVP for us, which we have never
 shipped, and it flattened a real depth difference into parity. On one calendar the
 native connector is simply the richer tool. We would rather say so than have you find
-out by asking Claude to RSVP through us.
+out by asking Claude to RSVP through us. Since October 19, 2026 that RSVP works, and so do
+suggested times and the calendar list; the depth difference that remains is recurrence,
+rooms, attachments and search by meaning.
 
 ## What multi-account support looks like
 
-Our Calendar surface is deliberately narrow, six tools that cover the core of the job:
+Our Calendar surface is nine tools:
 
 - `calendar_list_events`
 - `calendar_get_event`
@@ -64,6 +66,9 @@ Our Calendar surface is deliberately narrow, six tools that cover the core of th
 - `calendar_update_event`
 - `calendar_delete_event`
 - `calendar_freebusy`
+- `calendar_suggest_time`
+- `calendar_respond_to_event`
+- `calendar_list_calendars`
 
 Every one of those tools accepts an optional `account` parameter. At the gateway level we store multiple Google account tokens per user and route each tool call to the right one. You can:
 
@@ -79,8 +84,8 @@ The architecture behind this is described in a [previous post on multi-account f
 
 If you have exactly one Google account that holds your whole calendar life, use the
 native connector. Not "it's fine" as a consolation: on that one account it does more
-than we do. It suggests times across a group, RSVPs for you, searches by meaning rather than
-by keyword, and handles recurrence, rooms and attachments we do not touch. The only
+than we do. It searches by meaning rather than by keyword, and handles recurrence, rooms and
+attachments we do not touch. Suggesting times and answering invitations, both of us do. The only
 question worth asking is whether your scheduling picture is complete with one account.
 
 ## The edge case that isn't edge

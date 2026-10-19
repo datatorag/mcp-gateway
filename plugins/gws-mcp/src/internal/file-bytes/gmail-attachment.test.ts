@@ -381,13 +381,13 @@ describe("the file name and type", () => {
 
 describe("the registry of reference types", () => {
   it("the unsupported-type text lists every registered type", async () => {
-    const { res, calls } = await run([], request({ type: "drive_file", file_id: "abc" }));
+    const { res, calls } = await run([], request({ type: "calendar_event", event_id: "abc" }));
     expect(res.status).toBe(400);
     expect(errorOf(res)).toEqual({
       code: "unsupported_ref",
       error: `This reference type is not supported. Supported: ${Object.keys(RESOLVERS).join(", ")}.`,
     });
-    expect(errorOf(res).error).toContain("gmail_message, gmail_attachment");
+    expect(errorOf(res).error).toContain("gmail_message, gmail_attachment, drive_file, drive_export");
     expect(calls).toHaveLength(0);
   });
 
