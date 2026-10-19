@@ -75,6 +75,7 @@ import { dr2DriveRead } from "./dr2-drive-read";
 import { dr3DriveGetFile } from "./dr3-drive-get-file";
 import { dr4DriveMoveTrash } from "./dr4-drive-move-trash";
 import { dr5DriveShareRecent } from "./dr5-drive-share-recent";
+import { dr6DriveCrossAccount } from "./dr6-drive-cross-account";
 import { ca1CalendarGet } from "./ca1-calendar-get";
 import { ca2CalendarUpdate } from "./ca2-calendar-update";
 import { ca3CalendarFreebusy } from "./ca3-calendar-freebusy";
@@ -92,8 +93,12 @@ import { jr9JiraAttachMissingIssue } from "./jr9-jira-attach-missing-issue";
 import { jr10JiraAttachEmailAttachment } from "./jr10-jira-attach-email-attachment";
 import { jr11JiraWorklogs } from "./jr11-jira-worklogs";
 import { jr12JiraLinks } from "./jr12-jira-links";
+import { jr13JiraAttachDocPdf } from "./jr13-jira-attach-doc-pdf";
 import { fd1DownloadLink } from "./fd1-download-link";
 import { fd2DownloadLinkNotCarried } from "./fd2-download-link-not-carried";
+import { fd3DownloadDriveFile } from "./fd3-download-drive-file";
+import { fd4DownloadDocPdf } from "./fd4-download-doc-pdf";
+import { fd5DriveReferenceRefusals } from "./fd5-drive-reference-refusals";
 import { tk1TasksLifecycle } from "./tk1-tasks-lifecycle";
 import { co1ContactsLifecycle } from "./co1-contacts-lifecycle";
 import { co2ContactsSearch } from "./co2-contacts-search";
@@ -220,6 +225,7 @@ export const CASES: TestCase[] = [
   dr3DriveGetFile,
   dr4DriveMoveTrash,
   dr5DriveShareRecent,
+  dr6DriveCrossAccount,
   ca1CalendarGet,
   ca2CalendarUpdate,
   ca3CalendarFreebusy,
@@ -237,8 +243,12 @@ export const CASES: TestCase[] = [
   jr10JiraAttachEmailAttachment,
   jr11JiraWorklogs,
   jr12JiraLinks,
+  jr13JiraAttachDocPdf,
   fd1DownloadLink,
   fd2DownloadLinkNotCarried,
+  fd3DownloadDriveFile,
+  fd4DownloadDocPdf,
+  fd5DriveReferenceRefusals,
   tk1TasksLifecycle,
   co1ContactsLifecycle,
   co2ContactsSearch,

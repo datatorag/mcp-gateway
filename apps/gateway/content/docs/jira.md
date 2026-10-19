@@ -62,7 +62,7 @@ The Jira tools let your AI assistant search, create, update, and move issues thr
 | `jira_link_issues` | Link two issues by a link type's name or phrase, e.g. `PROJ-1` blocks `PROJ-2`. Returns the new link as Jira reports it |
 | `jira_list_issue_links` | List an issue's links, each read from that issue's side (blocks, is blocked by), and the link types the site has |
 | `jira_get_attachment` | Get attachment metadata by ID: filename, size, MIME type, content URL |
-| `jira_add_attachment` | Attach a file to an issue from a file reference: a Gmail message as its original `.eml`, or one of its attachments by part id, under the sender's file name. The file never passes through the conversation; the answer is a receipt with the name, size and SHA-256 of what was sent. See [Moving files between services](/docs/file-references) |
+| `jira_add_attachment` | Attach a file to an issue from a file reference: a Gmail message as its original `.eml`, one of its attachments by part id under the sender's file name, a Google Drive file as stored, or a Google Docs, Sheets or Slides file exported, such as a Doc as a PDF. The file never passes through the conversation; the answer is a receipt with the name, size and SHA-256 of what was sent. See [Moving files between services](/docs/file-references) |
 | `jira_list_fields` | List all available fields (system + custom) to discover field IDs for creates/updates |
 | `jira_search_users` | Search users by name, username, or email. Returns display names and account IDs |
 | `jira_delete_issue` | Permanently delete an issue. See the warning below before using it |

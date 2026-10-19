@@ -84,6 +84,8 @@ describe("the comparison table as checked on its date", () => {
     ["Recently-opened files", true, true],
     ["File metadata", true, true],
     ["Move a file to another folder", true, true],
+    // SCRUM-428 Part B: a Drive file or a Doc as PDF, by a single-use link.
+    ["Download a file to your computer", true, true],
   ] as const)("%s", (capability, builtIn, ours) => {
     expect(row(capability)).toMatchObject({ builtIn, ours });
   });
@@ -96,7 +98,7 @@ describe("the comparison table as checked on its date", () => {
       "RSVP to an invitation",
       "Suggest a meeting time",
       "List your other calendars",
-      "Download file content",
+      "Download a file to your computer",
       "File metadata",
       "Sharing permissions",
       "Recently-opened files",
