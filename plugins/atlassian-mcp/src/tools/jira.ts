@@ -89,6 +89,17 @@ function reason(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
 }
 
+/** An attachment id as every tool serves it: a string, or null when Jira
+ * named none. Jira lists an issue's attachments with string ids but answers
+ * /attachment/{id} with a number, so passing the field through made the
+ * same attachment look like two different ones to a caller comparing them
+ * (SCRUM-335). */
+function servedAttachmentId(value: unknown): string | null {
+  if (typeof value === "string") return value;
+  if (typeof value === "number" && Number.isFinite(value)) return String(value);
+  return null;
+}
+
 // ---------------------------------------------------------------------------
 // jira_add_attachment
 // ---------------------------------------------------------------------------
@@ -201,7 +212,7 @@ export async function addJiraAttachment(
   const site = await client.getSite();
   const receipt: Record<string, unknown> = {
     attachment: {
-      id: first.id ?? null,
+      id: servedAttachmentId(first.id),
       filename: first.filename ?? null,
       size: first.size ?? null,
       mime_type: first.mimeType ?? null,
@@ -792,7 +803,7 @@ export async function handleJira(
         attachments: Array.isArray(fields.attachment)
           ? // eslint-disable-next-line @typescript-eslint/no-explicit-any
             fields.attachment.map((a: any) => ({
-              id: a.id,
+              id: servedAttachmentId(a.id),
               filename: a.filename,
               size: a.size,
               mimeType: a.mimeType,
@@ -944,7 +955,7 @@ export async function handleJira(
       )) as Record<string, any>;
 
       const result = {
-        id: raw.id,
+        id: servedAttachmentId(raw.id),
         filename: raw.filename,
         size: raw.size,
         mimeType: raw.mimeType,
