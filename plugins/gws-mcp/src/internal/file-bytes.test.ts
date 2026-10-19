@@ -186,7 +186,7 @@ describe("refusals before any call to Gmail", () => {
   });
 
   it.each([
-    ["a Drive file", { type: "drive_file", file_id: "abc" }],
+    ["a Calendar event", { type: "calendar_event", event_id: "abc" }],
     ["a missing type", { message_id: ID }],
     ["a near miss in case", { type: "Gmail_Message", message_id: ID }],
     ["a type that is not a string", { type: ["gmail_message"], message_id: ID }],

@@ -43,6 +43,7 @@ import {
 import { trackToolCall } from "./track";
 import { trackMcpToolsListed } from "./mcp-analytics";
 import { checkCallAllowance } from "./billing/enforce";
+import { GWS_RUN_REFUSAL, gwsRunHiddenFrom } from "./gws-run-access";
 import {
   checkScopeForTool,
   missingScopeMessage,
@@ -625,14 +626,14 @@ export const BUILT_IN_TOOLS: {
     definition: {
       name: DOWNLOAD_TOOL,
       description:
-        "Makes a download link for a file named by a file reference, so the user can save it to their own computer. A gmail_message reference gives a whole email as its original .eml exactly as Gmail returns it; a gmail_attachment reference gives one attachment of an email, named by the part id gmail_read lists for it. The answer is a receipt: the file's name, its size in bytes and its SHA-256, and a link on this service. The link opens a page with one button that saves the file. It works once and stops working after ten minutes. The receipt also carries a one-line command that saves the file without the page, under the sender's file name, in the directory it is run in. The file's content is not returned and does not enter the conversation. The link is for the user: a call to any tool on this service that carries the link is refused and the link is cancelled. One file a call, at most 25 MB.",
+        "Makes a download link for a file named by a file reference, so the user can save it to their own computer. A gmail_message reference gives a whole email as its original .eml exactly as Gmail returns it; a gmail_attachment reference gives one attachment of an email, named by the part id gmail_read lists for it; a drive_file reference gives a Google Drive file as stored; a drive_export reference gives a Google Docs, Sheets or Slides file exported to a format such as pdf, docx or xlsx. The answer is a receipt: the file's name, its size in bytes and its SHA-256, and a link on this service. The link opens a page with one button that saves the file. It works once and stops working after ten minutes. The receipt also carries a one-line command that saves the file without the page, under the sender's file name, in the directory it is run in. The file's content is not returned and does not enter the conversation. The link is for the user: a call to any tool on this service that carries the link is refused and the link is cancelled. One file a call, at most 25 MB.",
       inputSchema: {
         type: "object" as const,
         properties: {
           file: {
             type: "object",
             description:
-              'A file reference: {"type":"gmail_message","message_id":"..."} for an email, or {"type":"gmail_attachment","message_id":"...","part_id":"..."} for one attachment. An optional "account" names the connected Google account that holds the message.',
+              'A file reference: {"type":"gmail_message","message_id":"..."} for an email, {"type":"gmail_attachment","message_id":"...","part_id":"..."} for one attachment, {"type":"drive_file","file_id":"..."} for a Drive file as stored, or {"type":"drive_export","file_id":"...","format":"pdf"} for a Google Docs, Sheets or Slides file exported. An optional "account" names the connected Google account that holds the message or file.',
           },
         },
         required: ["file"],
@@ -1025,6 +1026,16 @@ export function createMcpServer(
       }
     }
 
+    // SCRUM-419: gws_run is for the allowlisted accounts only. For anyone
+    // else it is not on the list, and a direct call (a client holding an old
+    // list, or a name typed by hand) is refused here, before the allowance
+    // gate, so it is never metered: to this account the tool does not exist,
+    // and an unknown tool is not metered either. Charging a call to a tool
+    // we took off someone's list would bill them for our change.
+    if (await gwsRunHiddenFrom(db, userId, name)) {
+      return { content: [{ type: "text" as const, text: GWS_RUN_REFUSAL }], isError: true };
+    }
+
     // Allowance gate, BEFORE any dispatch work. Built-ins are above this line
     // on purpose — they are unmetered connectivity probes and must keep
     // answering for a capped user. A refusal here is a product state, not an
@@ -1039,8 +1050,10 @@ export function createMcpServer(
     }
 
     const args = rawArgs as Record<string, unknown>;
-    // SCRUM-227: a gws_run call is named by its service and method on the
-    // event and the row; the arguments themselves never leave this handler.
+    // SCRUM-227, SCRUM-419: a gws_run call is named by its service, resource
+    // and method on the event and the row, each kept only when it has the
+    // shape of a name, plus the names of the params and body keys it passed.
+    // No param or body value leaves this handler.
     const runFields = gwsRunFields(name, args);
 
     const separatorIndex = name.indexOf(NAMESPACE_SEPARATOR);

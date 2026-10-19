@@ -5,6 +5,7 @@ import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 import { PLUGIN_SERVICE_MAP } from "./service-token";
 import { listConnectedServiceIds } from "./connected-services";
+import { gwsRunHiddenFrom } from "./gws-run-access";
 
 /**
  * The single definition of "which registry tools can this user see" plus the
@@ -42,7 +43,8 @@ export type UserToolRow = {
  * connected. The connected set comes from connectedAccounts.connectorType
  * PRIMARILY, falling back to un-migrated serviceConnections ONLY when the
  * connectedAccounts set is empty. Tools are filtered to
- * mcpServers.status = "active" AND tools.enabled = true.
+ * mcpServers.status = "active" AND tools.enabled = true, and gws_run is
+ * dropped for every account not on its allowlist (gws-run-access.ts).
  */
 export async function listUserToolRows(
   db: Database,
@@ -73,6 +75,10 @@ export async function listUserToolRows(
 
     // Skip tools for services the user hasn't connected.
     if (requiredService && !connectedServices.has(requiredService)) continue;
+
+    // SCRUM-419: gws_run only for the allowlisted accounts. The dispatch
+    // paths refuse it too, so leaving it off the list is not the only gate.
+    if (await gwsRunHiddenFrom(db, userId, t.namespacedName)) continue;
 
     result.push({
       namespacedName: t.namespacedName,

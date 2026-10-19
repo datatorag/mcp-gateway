@@ -49,6 +49,7 @@ classify_path() {
     plugins/atlassian-mcp/*) echo atlassian-mcp ;;
     apps/gateway/*|packages/*|docker/*) echo gateway ;;
     scripts/*) echo scripts ;;
+    registry/*) echo scripts ;; # its files are checked by the scripts' tests
     .github/*) echo all ;;
     package.json|pnpm-lock.yaml|pnpm-workspace.yaml|turbo.json|tsconfig.base.json|.npmrc) echo all ;;
     .env.example) echo gateway ;; # a gateway test reads it
@@ -96,6 +97,7 @@ self_test() {
   expect "a shared package" "gateway" "packages/db/src/index.ts"
   expect "the compose file" "gateway" "docker/docker-compose.prod.yml"
   expect "a script" "scripts" "scripts/gate.sh"
+  expect "a registry change file is checked by the scripts' tests" "scripts" "registry/2026-10-13-example.sql"
   expect "the canary is its own surface, not the gateway's" "canary" "docker/canary/server.mjs"
   expect "the canary beside the compose file selects both" "gateway canary" "docker/canary/Dockerfile" "docker/docker-compose.prod.yml"
   expect "documentation only" "" "docs/architecture/x.md" ".claude/skills/deploy/SKILL.md" "README.md"
@@ -149,6 +151,8 @@ run_scripts() {
   python3 -m unittest scripts/test_leak_scan.py
   node scripts/registry-diff.mjs --self-test
   node --test scripts/registry-diff.test.mjs
+  node --test scripts/registry-file-check.test.mjs
+  node --test scripts/registry-apply.test.mjs
   local t
   for t in scripts/hooks/test_*.py; do
     python3 -m unittest "$t"

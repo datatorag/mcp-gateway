@@ -8,7 +8,7 @@
  * mcp-server.builtins.test.ts, whose harness this mirrors.
  */
 
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import type { Database } from "@datatorag-mcp/db";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
@@ -38,6 +38,11 @@ const resolveServiceToken = vi.fn();
 vi.mock("./service-token", () => ({
   PLUGIN_SERVICE_MAP: { "gws-mcp": "google-workspace" },
   resolveServiceToken: (...args: unknown[]) => resolveServiceToken(...args),
+}));
+
+// SCRUM-419: gws_run is served only to allowlisted login emails.
+vi.mock("./user-email", () => ({
+  resolveUserEmail: vi.fn().mockResolvedValue("member@example.com"),
 }));
 
 import { createMcpServer } from "./mcp-server";
@@ -307,18 +312,28 @@ describe("the 403 rewrite (the net behind the gate)", () => {
  * tracker with its service and method and nothing of its arguments; any
  * other tool reaches it with null in both. */
 describe("gws_run service and method reach the tracker (SCRUM-227)", () => {
+  beforeEach(() => {
+    process.env.GWS_RUN_ALLOWED_ACCOUNTS = "member@example.com";
+  });
+  afterEach(() => {
+    delete process.env.GWS_RUN_ALLOWED_ACCOUNTS;
+  });
+
   it("hands service and method for gws_run, and only those", async () => {
     resolveServiceToken.mockResolvedValue({ token: "tok", accountEmail: "a@example.com", scopes: FULL_GRANT });
     callPluginToolOnce.mockResolvedValue({ isError: false, content: [{ type: "text", text: "{}" }] });
     const client = await connectedClient();
     await client.callTool({
       name: "gws-mcp__gws_run",
-      arguments: { service: "calendar", resource: "events", method: "list", params: { calendarId: "primary" } },
+      arguments: { service: "calendar", resource: "events", method: "list", params: { calendarId: "primary", maxResults: 5 } },
     });
     const [, props] = trackToolCall.mock.calls.at(-1)!;
     expect(props.service).toBe("calendar");
     expect(props.method).toBe("list");
-    expect(JSON.stringify(props)).not.toContain("calendarId");
+    expect(props.resource).toBe("events");
+    // SCRUM-419: the parameter names travel, their values do not.
+    expect(props.paramNames).toBe("calendarId,maxResults");
+    expect(JSON.stringify(props)).not.toContain("primary");
   });
 
   it("hands null in both for a dedicated tool", async () => {
@@ -329,5 +344,7 @@ describe("gws_run service and method reach the tracker (SCRUM-227)", () => {
     const [, props] = trackToolCall.mock.calls.at(-1)!;
     expect(props.service).toBeNull();
     expect(props.method).toBeNull();
+    expect(props.resource).toBeNull();
+    expect(props.paramNames).toBeNull();
   });
 });

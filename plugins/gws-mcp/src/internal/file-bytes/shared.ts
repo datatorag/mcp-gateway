@@ -73,7 +73,7 @@ export const tooLarge = (what: string, size: number, cap: number) =>
 
 /** What Google said, out of the transport's error text, without the wrapper.
  * The transport never puts the token in an error, so neither does this. */
-function googleError(err: unknown): { status?: number; message: string } {
+export function googleError(err: unknown): { status?: number; message: string } {
   const text = errorMessage(err).split("\n\n[transient")[0];
   const m = /^API error: (\{.*\})$/s.exec(text);
   if (m) {
@@ -141,4 +141,22 @@ export function fitName(head: string, tail: string): string {
   }
   // toWellFormed: a lone surrogate would make encodeURIComponent throw.
   return (head ? head + tail : tail.trimStart()).toWellFormed();
+}
+
+/** A raw byte stream held only up to the cap: the read stops at the first
+ * byte past `maxBytes`, because a size Google reported beforehand is not a
+ * promise and an export's size is not reported at all. `over` is how many
+ * bytes had arrived then. */
+export async function readStreamCapped(
+  stream: AsyncIterable<Uint8Array>,
+  maxBytes: number
+): Promise<{ body: Buffer } | { over: number }> {
+  const chunks: Buffer[] = [];
+  let size = 0;
+  for await (const chunk of stream) {
+    size += chunk.length;
+    if (size > maxBytes) return { over: size };
+    chunks.push(Buffer.from(chunk.buffer, chunk.byteOffset, chunk.length));
+  }
+  return { body: Buffer.concat(chunks, size) };
 }

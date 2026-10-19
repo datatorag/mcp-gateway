@@ -1,0 +1,76 @@
+-- The role the registry workflow connects as (SCRUM-423). PROPOSAL: run once
+-- on production by a person, on a confirmation that names the database.
+--
+-- It can read the two registry tables, add and remove rows of `tools`, and
+-- change four columns of a row. Nothing else: no other table, no schema
+-- change, no role or database rights. So even a file that got past the check
+-- in scripts/registry-file-check.mjs could only change registry rows.
+--
+-- CREATED HERE BY SQL, NEVER IN THE PROVIDER'S CONSOLE: a role made in the
+-- console is given membership of the provider's administrative role, which
+-- would undo every line below.
+--
+-- NO PASSWORD IN THIS FILE. The role is created unable to log in. Its
+-- password is set afterwards by the person who will hold it, so that the
+-- password never appears as SQL text anywhere (a SQL editor's history and
+-- the server's statement log can both keep an `ALTER ROLE ... PASSWORD`):
+-- in a psql session as an administrator,
+--   \password registry_writer
+--   ALTER ROLE registry_writer LOGIN;
+-- `\password` hashes the password on the client before sending it. The
+-- resulting connection string goes into the parameter store and the
+-- `production` environment's REGISTRY_DATABASE_URL secret, in that order.
+
+BEGIN;
+CREATE ROLE registry_writer NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS CONNECTION LIMIT 2;
+
+GRANT USAGE ON SCHEMA public TO registry_writer;
+GRANT SELECT ON mcp_servers TO registry_writer;
+GRANT SELECT, DELETE ON tools TO registry_writer;
+GRANT INSERT (mcp_server_id, name, namespaced_name, description, input_schema_json, read_only_hint) ON tools TO registry_writer;
+GRANT UPDATE (description, input_schema_json, read_only_hint, updated_at) ON tools TO registry_writer;
+
+-- The check reads string literals with standard_conforming_strings on; the
+-- server must read them the same way. The workflow also sets it on connect
+-- and refuses to run if it is not on.
+ALTER ROLE registry_writer SET standard_conforming_strings = on;
+ALTER ROLE registry_writer SET search_path = public;
+ALTER ROLE registry_writer SET statement_timeout = '30s';
+ALTER ROLE registry_writer SET lock_timeout = '5s';
+ALTER ROLE registry_writer SET idle_in_transaction_session_timeout = '60s';
+COMMIT;
+
+-- AFTER IT RUNS, these must hold. Each query's expected answer is on its
+-- comment line; any other answer means stop and drop the role.
+--
+-- No membership of any other role (expected: no rows):
+SELECT r.rolname FROM pg_auth_members m JOIN pg_roles r ON r.oid = m.roleid
+WHERE m.member = 'registry_writer'::regrole;
+--
+-- No special attribute (expected: one row, every column false):
+SELECT rolsuper, rolcreaterole, rolcreatedb, rolreplication, rolbypassrls, rolinherit
+FROM pg_roles WHERE rolname = 'registry_writer';
+--
+-- Table rights are exactly these (expected: mcp_servers SELECT; tools DELETE, SELECT):
+SELECT table_name, privilege_type FROM information_schema.role_table_grants
+WHERE grantee = 'registry_writer' ORDER BY table_name, privilege_type;
+--
+-- Column rights for writing are exactly these (expected: INSERT on the six
+-- columns above, UPDATE on the four). The table-wide SELECT also lists every
+-- column as SELECT, which is why the query keeps to INSERT and UPDATE:
+SELECT privilege_type, column_name FROM information_schema.column_privileges
+WHERE grantee = 'registry_writer' AND table_name = 'tools' AND privilege_type IN ('INSERT', 'UPDATE')
+ORDER BY privilege_type, column_name;
+--
+-- No right to create in the schema (expected: false):
+SELECT has_schema_privilege('registry_writer', 'public', 'CREATE');
+--
+-- No right on any other table in the schema, by any route, PUBLIC included
+-- (expected: no rows):
+SELECT c.relname FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
+WHERE n.nspname = 'public' AND c.relkind IN ('r', 'p', 'v', 'm')
+  AND c.relname NOT IN ('tools', 'mcp_servers')
+  AND (has_table_privilege('registry_writer', c.oid, 'SELECT')
+    OR has_table_privilege('registry_writer', c.oid, 'INSERT')
+    OR has_table_privilege('registry_writer', c.oid, 'UPDATE')
+    OR has_table_privilege('registry_writer', c.oid, 'DELETE'));

@@ -74,6 +74,12 @@ export function supportsMediaDownload(service: string, resource: string, method:
   return lookup(service, resource, method).entry.mediaDownload === true;
 }
 
+/** The query parameters the method reads as a repeated key. Throws the
+ * same unknown-method error a call to it would. */
+export function repeatedParams(service: string, resource: string, method: string): readonly string[] {
+  return lookup(service, resource, method).entry.repeated;
+}
+
 export function buildRequest(
   service: string,
   resource: string,

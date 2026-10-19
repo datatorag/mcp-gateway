@@ -516,7 +516,7 @@ export const gmailTools: ToolDef[] = [
   {
     name: "gmail_label_message",
     description:
-      'Label many messages in ONE call: pass message_ids (up to 1000) with add_labels and/or remove_labels, and every message is modified by a single users.messages.batchModify request. Do not call this once per message. The label-and-mark-read pair is one call: add_labels: ["<label id>"], remove_labels: ["UNREAD"]. Removing INBOX archives; removing UNREAD marks read. Label IDs come from gmail_list_labels. Returns a per-message outcome (results[]: id, ok, error) so a partial batch is visible; if the batch request is refused, each id is retried on its own and reported. message_id is for a single message only.',
+      'Label many messages in ONE call: pass message_ids (up to 1000) with add_labels and/or remove_labels, and every message is modified by a single users.messages.batchModify request. Do not call this once per message. The label-and-mark-read pair is one call: add_labels: ["<label id>"], remove_labels: ["UNREAD"]. Removing INBOX archives; removing UNREAD marks read. Label IDs come from gmail_list_labels. Returns a per-message outcome (results[]: id, ok, error) so a partial batch is visible; if the batch request is refused, each id is retried on its own and reported. message_id is for a single message only; thread_id labels every message of one conversation.',
     inputSchema: {
       type: "object",
       properties: {
@@ -529,6 +529,11 @@ export const gmailTools: ToolDef[] = [
         message_id: {
           type: "string",
           description: "A single message ID, for the one-message case only. Provide either this or message_ids.",
+        },
+        thread_id: {
+          type: "string",
+          description:
+            "A thread ID, to label or unlabel every message in that conversation in one call, as Gmail does when a conversation is selected. Provide this instead of message_id or message_ids.",
         },
         add_labels: {
           type: "array",
@@ -1562,6 +1567,27 @@ export async function handleGmail(
       const body: Record<string, unknown> = {};
       if (addLabels?.length) body.addLabelIds = addLabels;
       if (removeLabels?.length) body.removeLabelIds = removeLabels;
+      // SCRUM-428: a whole conversation in one call, as Claude's built-in
+      // connector does. users.threads.modify applies the change to every
+      // message in the thread.
+      if (args.thread_id !== undefined) {
+        if (args.message_id !== undefined || (args.message_ids as unknown[] | undefined)?.length) {
+          throw new Error("Provide thread_id, or message_id / message_ids, not both");
+        }
+        if (typeof args.thread_id !== "string" || !/^[A-Za-z0-9_-]+$/.test(args.thread_id)) {
+          throw new Error("gmail_label_message: thread_id must be a Gmail ID of letters, digits, _ and -.");
+        }
+        const result = await client.api("gmail", "users.threads", "modify", {
+          params: { userId: "me", id: args.thread_id },
+          jsonBody: body,
+        });
+        const thread = (result.data ?? {}) as { id?: string; messages?: { id?: string; labelIds?: string[] }[] };
+        const messages = (Array.isArray(thread.messages) ? thread.messages : []).map((m) => ({
+          id: m.id,
+          labelIds: Array.isArray(m.labelIds) ? m.labelIds : [],
+        }));
+        return jsonResponse({ thread_id: thread.id ?? args.thread_id, message_count: messages.length, messages });
+      }
       return modifyMessageLabels(client, args, body);
     }
 
