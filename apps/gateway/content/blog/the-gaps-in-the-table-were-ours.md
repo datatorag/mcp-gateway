@@ -12,7 +12,7 @@ The comparison table on our home page is the first thing a visitor sees now. It 
 
 ## What changed on October 19
 
-Ten Google tools, four Jira tools, two Confluence tools widened, and Drive files as file references. All live, all in the registry, with tests that run against production.
+On the Google side, ten tools; on the Atlassian side, four Jira tools, two Confluence tools widened, and Drive files as file references. All live, all in the registry, with tests that run against production.
 
 **Calendar.** `calendar_respond_to_event` answers an invitation as accepted, declined or tentative, and changes only your own response. `calendar_suggest_time` takes the people you name, a duration and a range, reads everyone's free/busy including your own, and returns slots inside working hours, with the people whose calendars it could not read listed separately so a missing answer is never silent. `calendar_list_calendars` lists the calendars on the account.
 
