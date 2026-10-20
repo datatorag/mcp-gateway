@@ -6,8 +6,12 @@
  */
 
 import { describe, expect, it } from "vitest";
+import type { ToolResult } from "./types";
 import {
+  arrivalQuery,
   countSignatureBlocks,
+  NO_MESSAGES,
+  searchHits,
   decodePart,
   flattenParts,
   isMultipartAlternative,
@@ -112,5 +116,35 @@ describe("flattenParts", () => {
   it("includes the parent as well as the children", () => {
     const tree = { mimeType: "multipart/mixed", parts: [{ mimeType: "text/plain" }] };
     expect(flattenParts(tree).map((p) => p.mimeType)).toEqual(["multipart/mixed", "text/plain"]);
+  });
+});
+
+/** SCRUM-428, run 103bb1d2: with two accounts on different domains, a
+ * reply and a draft arrived in the recipient's Spam and the cases, whose
+ * searches left Spam out, timed out waiting for mail that had arrived. */
+describe("arrival across the recipient's own filing", () => {
+  const hit = (id: string, labelIds: string[]) => ({ id, labelIds });
+
+  it("counts a message the recipient filed as Spam as delivered", () => {
+    expect(deliveredIds([hit("a", ["INBOX"]), hit("b", ["SPAM", "UNREAD"])])).toEqual(["a", "b"]);
+  });
+
+  it("still never counts a draft, or a message in neither the inbox nor Spam", () => {
+    expect(deliveredIds([hit("d", ["DRAFT", "INBOX"]), hit("s", ["SENT"]), hit("t", ["TRASH"])])).toEqual([]);
+  });
+
+  it("searches everywhere but Trash", () => {
+    expect(arrivalQuery('subject:"x"')).toBe('in:anywhere -in:trash subject:"x"');
+  });
+
+  const answer = (value: unknown): ToolResult => ({ content: [{ type: "text", text: JSON.stringify(value) }] });
+
+  it("reads the plugin's no-match answer as an empty list, so a sweep with nothing to sweep does not throw", () => {
+    expect(searchHits(answer(NO_MESSAGES))).toEqual([]);
+  });
+
+  it("reads a list as its hits, and anything else as unreadable", () => {
+    expect(searchHits(answer([{ id: "a" }]))).toEqual([{ id: "a" }]);
+    expect(searchHits(answer("something else"))).toBeNull();
   });
 });

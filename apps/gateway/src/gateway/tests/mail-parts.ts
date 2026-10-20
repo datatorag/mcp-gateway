@@ -70,8 +70,24 @@ export function isMultipartAlternative(payload: MailPart | undefined): boolean {
 }
 
 /**
- * The ids of the search hits that were DELIVERED: labelled INBOX, and not
- * DRAFT.
+ * Where a case looks for a message to arrive: everywhere but Trash
+ * (SCRUM-428). Gmail's search leaves Spam out by default, and with two
+ * fixture accounts on different domains the receiving Gmail filed first
+ * contact as Spam: in run 103bb1d2 D12's reply and E15's unsigned draft both
+ * arrived, in Spam, and both cases timed out waiting. How a recipient files
+ * a message is that mailbox's call, not something the product did; the
+ * message arrived. Trash stays out, because a case trashes what it is done
+ * with and an old copy must not read as a new arrival.
+ */
+export const ARRIVAL_SCOPE = "in:anywhere -in:trash";
+
+export function arrivalQuery(query: string): string {
+  return `${ARRIVAL_SCOPE} ${query}`;
+}
+
+/**
+ * The ids of the search hits that were DELIVERED: labelled INBOX or SPAM
+ * (where the recipient filed it, see ARRIVAL_SCOPE), and not DRAFT.
  *
  * ONE MAILBOX NOW SITS BEHIND BOTH ROLES, and that changes what a search
  * of "the reader mailbox" can find. Gmail's message search includes drafts,
@@ -92,7 +108,7 @@ export function deliveredIds(hits: unknown): string[] {
         typeof (h as { id?: unknown }).id === "string" &&
         Array.isArray((h as { labelIds?: unknown }).labelIds)
     )
-    .filter((h) => h.labelIds.includes("INBOX") && !h.labelIds.includes("DRAFT"))
+    .filter((h) => (h.labelIds.includes("INBOX") || h.labelIds.includes("SPAM")) && !h.labelIds.includes("DRAFT"))
     .map((h) => h.id);
 }
 
@@ -100,4 +116,18 @@ export function deliveredIds(hits: unknown): string[] {
  * nothing answers a JSON string, not a list, and reads as none. */
 export function deliveredFromSearch(res: ToolResult): string[] {
   return deliveredIds(firstArray(resultJson("gmail_search", res)));
+}
+
+/** The plugin's own answer to a search that matched nothing. */
+export const NO_MESSAGES = "No messages found.";
+
+/** The hits of a `gmail_search` answer: the list, an empty list for the
+ * plugin's no-match answer, or null when the answer is neither, so a
+ * cleanup can tell "nothing to sweep" from "could not read the search"
+ * (SCRUM-428: the D12 sweep threw on an empty search and reported residue
+ * that was really a reply filed somewhere the search did not look). */
+export function searchHits(res: ToolResult): unknown[] | null {
+  const parsed = resultJson<unknown>("gmail_search", res);
+  if (parsed === NO_MESSAGES) return [];
+  return firstArray(parsed);
 }
