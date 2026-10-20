@@ -23,3 +23,5 @@ opened or changed most recently.
 
 Every one of them takes an account, like the rest of the connector. In the Agent, the ones that
 change something ask for approval before they run.
+
+Why these, and what the table says now: [The Gaps in the Comparison Table Were Ours. They Are Closed.](/blog/the-gaps-in-the-table-were-ours).

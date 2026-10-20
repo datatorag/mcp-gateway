@@ -21,3 +21,5 @@ the text it is anchored to and whether it is resolved.
 
 In the Agent, logging work, linking and commenting ask for approval before they run, like every
 other write.
+
+Why these, and what the table says now: [The Gaps in the Comparison Table Were Ours. They Are Closed.](/blog/the-gaps-in-the-table-were-ours).
