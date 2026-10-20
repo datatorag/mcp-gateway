@@ -4,6 +4,8 @@ import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import type { Database, TestRunScope, TestRunTotals } from "@datatorag-mcp/db";
 import { getEnv } from "@datatorag-mcp/config";
 import { createMcpServer } from "../mcp-server";
+import { FILE_CONSUMING_TOOLS } from "../file-crossing";
+import { DOWNLOAD_TOOL } from "../file-download";
 import { NAMESPACE_SEPARATOR, PLUGINS_DIR, PLUGINS_FROM_IMAGE } from "../plugin-manager";
 import { resultText } from "./result-json";
 import type { ConnectionPool } from "../pool";
@@ -104,6 +106,25 @@ export function accountArgs(
     throw new Error(`${tool}: no account is mapped for ${role}, and a plugin call never falls back to the default`);
   }
   return { ...args, account };
+}
+
+/**
+ * ONE FILE TRANSFER AT A TIME, ACROSS SCENARIOS (SCRUM-428).
+ *
+ * The gateway moves one file per user at a time and refuses a second with
+ * "A file transfer of yours is already in progress". Every case runs as the
+ * same runner user, and the cases that move a file sit in three scenarios
+ * (Gmail, Drive, Jira) that run in parallel, so the scenario lock never held
+ * them apart. With two fixture accounts the Drive cases stopped skipping and
+ * four of them met that refusal in one run. A refusal of the runner's own
+ * making is not a finding, so a case that covers a tool that moves a file
+ * holds this lock as well as its scenario's. Derived from the gateway's own
+ * list of those tools, so a new one is held without anyone remembering.
+ */
+export const FILE_TRANSFER_LOCK = "file-transfer";
+
+export function movesAFile(testCase: Pick<TestCase, "covers">): boolean {
+  return testCase.covers.some((tool) => tool === DOWNLOAD_TOOL || Object.hasOwn(FILE_CONSUMING_TOOLS, tool));
 }
 
 export type RunnerClient = {
@@ -472,7 +493,8 @@ async function driveRun(opts: {
      * because it looks like protection. */
     const serialised = runnable.map((c) => {
       const scenarioKey = scenarioOf(c.id)?.key;
-      return scenarioKey ? { ...c, serial: `scenario:${scenarioKey}` } : c;
+      const scoped = scenarioKey ? { ...c, serial: `scenario:${scenarioKey}` } : c;
+      return movesAFile(c) ? { ...scoped, locks: [FILE_TRANSFER_LOCK] } : scoped;
     });
 
     const executed = await runPool(serialised, async (testCase) => {

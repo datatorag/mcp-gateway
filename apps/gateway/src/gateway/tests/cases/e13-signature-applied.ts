@@ -1,6 +1,6 @@
 import type { TestCase } from "../types";
 import { firstArray, resultJson, resultText } from "../result-json";
-import { countSignatureBlocks, isMultipartAlternative, partText, type MailPart, deliveredFromSearch, firstSignatureBlock } from "../mail-parts";
+import { countSignatureBlocks, isMultipartAlternative, partText, type MailPart, deliveredFromSearch, firstSignatureBlock, arrivalQuery } from "../mail-parts";
 
 /**
  * E13 (smoke row E13): the signature is applied on send, ONCE, and
@@ -123,7 +123,7 @@ export const e13SignatureApplied: TestCase = {
         async () => {
           const found = await ctx.call(
             "gws-mcp__gmail_search",
-            { query: `subject:"E13 ${suffix} ${ctx.stamp}"`, max_results: 5 },
+            { query: arrivalQuery(`subject:"E13 ${suffix} ${ctx.stamp}"`), max_results: 5 },
             { as: "reader" }
           );
           return deliveredFromSearch(found)[0];
@@ -136,6 +136,15 @@ export const e13SignatureApplied: TestCase = {
         }
       });
 
+      /* THE SENT COPY IS WHAT THE PRODUCT MADE, and it is what the claims
+       * below are about. The received copy is what the recipient's mail
+       * system kept, and that can differ: in run 103bb1d2 (SCRUM-428) the
+       * reader, now a Google Workspace mailbox, held a plain part with the
+       * signature appended, while the sender's sent copy of the same message
+       * held the body alone. So arrival is still awaited above, as proof of
+       * delivery, and the parts are read from the sent copy. With one
+       * account behind both roles these were the same message. */
+      if (!sentId) throw new Error(`the ${suffix} send answered no id, so what it sent cannot be read back`);
       const full = resultJson<{ payload?: MailPart }>(
         "gws_run",
         await ctx.call(
@@ -144,9 +153,9 @@ export const e13SignatureApplied: TestCase = {
             service: "gmail",
             resource: "users.messages",
             method: "get",
-            params: { userId: "me", id, format: "full" },
+            params: { userId: "me", id: sentId, format: "full" },
           },
-          { as: "reader" }
+          { as: "sender" }
         )
       );
       return { answer: resultText(sent), payload: full.payload };

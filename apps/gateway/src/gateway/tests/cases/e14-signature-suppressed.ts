@@ -1,6 +1,6 @@
 import type { TestCase } from "../types";
 import { resultJson, resultText } from "../result-json";
-import { decodePart, deliveredFromSearch, flattenParts, type MailPart } from "../mail-parts";
+import { decodePart, deliveredFromSearch, flattenParts, type MailPart, arrivalQuery } from "../mail-parts";
 
 /**
  * E14 (smoke row E14): `signature: false` must SUPPRESS, and the
@@ -37,7 +37,7 @@ export const e14SignatureSuppressed: TestCase = {
       async () => {
         const found = await ctx.call(
           "gws-mcp__gmail_search",
-          { query: `subject:"${ctx.stamp}"`, max_results: 5 },
+          { query: arrivalQuery(`subject:"${ctx.stamp}"`), max_results: 5 },
           { as: "reader" }
         );
         return deliveredFromSearch(found)[0];
