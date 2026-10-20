@@ -46,6 +46,7 @@ import { posthogState } from "./src/lib/posthog-server";
 import { runNoActivationFollowup } from "./src/gateway/lifecycle";
 import { securityHeaders } from "./src/gateway/security-headers";
 import { createFileDownloadRouter, quietDecodeErrors } from "./src/gateway/file-download-route";
+import { createUsageSnapshotHandler, refreshUsageSnapshot, usageSnapshotEnabled, USAGE_SNAPSHOT_PATH } from "./src/gateway/usage/snapshot";
 
 const dev = process.env.NODE_ENV !== "production";
 
@@ -136,8 +137,17 @@ async function main() {
     { timezone: "UTC" }
   );
 
+  // Usage snapshot for HQ's board dashboard (SCRUM-430): hourly, and once
+  // now so a restart does not leave the endpoint empty until the next hour.
+  // Off, with no query at all, unless a token hash is configured.
+  const usageSnapshotJob = usageSnapshotEnabled()
+    ? cron.schedule("0 * * * *", () => void refreshUsageSnapshot(db), { timezone: "UTC" })
+    : null;
+  if (usageSnapshotJob) void refreshUsageSnapshot(db);
+
   const shutdown = async () => {
     console.log("Shutting down...");
+    usageSnapshotJob?.stop();
     rollupJob.stop();
     digestJob.stop();
     followupJob.stop();
@@ -206,6 +216,9 @@ async function main() {
     })
   );
   app.use(createTokenRouter(db));
+  // Before Next: a request that fails its token check is passed on and gets
+  // Next's ordinary 404 (SCRUM-430).
+  app.get(USAGE_SNAPSHOT_PATH, createUsageSnapshotHandler());
   app.use(
     createRevokeRouter(db, {
       // SEC-8: DB-side revocation 401s new requests, but an already-open SSE
