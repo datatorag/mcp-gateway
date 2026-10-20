@@ -58,8 +58,8 @@ export async function runPool<T>(
    * runnable, no future event can change that. */
   let running = 0;
 
-  function releaseLock(lock: string | undefined): void {
-    if (lock) held.delete(lock);
+  function releaseLocks(locks: readonly string[]): void {
+    for (const lock of locks) held.delete(lock);
     const woken = waiters;
     waiters = [];
     for (const wake of woken) wake();
@@ -73,7 +73,7 @@ export async function runPool<T>(
   /** Finished, and wake anyone parked behind it. */
   function finish(testCase: TestCase): void {
     done.add(testCase.id);
-    releaseLock(testCase.serial);
+    releaseLocks(locksHeldBy(testCase));
   }
 
   /** The next case whose lock, if it has one, nobody is holding. Returning
@@ -94,11 +94,11 @@ export async function runPool<T>(
      * it will never complete; the caller reports those separately as
      * unresolved. */
     const index = queue.findIndex(
-      (c) => (!c.serial || !held.has(c.serial)) && needsMet(c)
+      (c) => locksHeldBy(c).every((lock) => !held.has(lock)) && needsMet(c)
     );
     if (index === -1) return undefined;
     const [testCase] = queue.splice(index, 1);
-    if (testCase.serial) held.add(testCase.serial);
+    for (const lock of locksHeldBy(testCase)) held.add(lock);
     return testCase;
   }
 
@@ -161,7 +161,12 @@ export async function runPool<T>(
   return results;
 }
 
+/** Every lock a case holds while it runs: its `serial` and its `locks`. */
+export function locksHeldBy(testCase: TestCase): string[] {
+  return [...new Set([testCase.serial, ...(testCase.locks ?? [])].filter((s): s is string => Boolean(s)))];
+}
+
 /** True while at least one case with this lock is still to run or running. */
 export function locksOf(cases: readonly TestCase[]): string[] {
-  return [...new Set(cases.map((c) => c.serial).filter((s): s is string => Boolean(s)))];
+  return [...new Set(cases.flatMap(locksHeldBy))];
 }

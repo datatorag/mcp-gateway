@@ -11,10 +11,16 @@ type Recent = { count?: number; files?: { id?: string; name?: string; modified?:
  * reader can then see the folder, and `drive_list_recent_files` finds it
  * among the most recently modified.
  *
- * Everything happens inside the fixture folder, on a folder made here and
- * deleted here. The share goes to the reader mailbox only and with notify
- * false, which the runner's guard requires: a share is an effect on another
- * person, and the email it sends is not something a cleanup takes back.
+ * The folder is made here, in the sender's My Drive root, and deleted here.
+ * NOT INSIDE THE FIXTURE FOLDER (SCRUM-428): the reader holds writer on that
+ * folder, which D15 needs, and Drive keeps one permission per person with
+ * the stronger role winning, so a reader share of anything inside it reads
+ * back as writer. Asserting "at least reader" instead would pass a share
+ * that did nothing, on the inherited role. In the root the reader has no
+ * access until this share gives it. The share goes to the reader mailbox
+ * only and with notify false, which the runner's guard requires: a share is
+ * an effect on another person, and the email it sends is not something a
+ * cleanup takes back.
  *
  * The reader reading the folder is the proof that matters: a permission list
  * that says reader could be what the tool echoed, while the reader's own
@@ -34,10 +40,8 @@ export const dr5DriveShareRecent: TestCase = {
   ],
   accounts: ["sender", "reader"],
   distinctAccounts: true,
-  fixtures: ["folder"],
   timeoutMs: 120_000,
   run: async (ctx) => {
-    const parent_id = ctx.fixture("folder");
     const name = `[smoke] DR5 shared ${ctx.stamp}`;
     const reader = ctx.address("reader").toLowerCase();
 
@@ -56,7 +60,7 @@ export const dr5DriveShareRecent: TestCase = {
 
     const folder_id = resultJson<{ id?: string }>(
       "drive_create_folder",
-      await ctx.call("gws-mcp__drive_create_folder", { name, parent_id }, { as: "sender" })
+      await ctx.call("gws-mcp__drive_create_folder", { name }, { as: "sender" })
     ).id;
     if (!folder_id) throw new Error("creating a folder answered without an id, so there is nothing to share");
 

@@ -1,6 +1,6 @@
 import type { TestCase } from "../types";
 import { resultJson } from "../result-json";
-import { deliveredFromSearch } from "../mail-parts";
+import { deliveredFromSearch, arrivalQuery } from "../mail-parts";
 
 /**
  * D13 (smoke row D13): a forward must CARRY THE ORIGINAL.
@@ -42,7 +42,7 @@ export const d13ForwardCarries: TestCase = {
       async () => {
         const found = await ctx.call(
           "gws-mcp__gmail_search",
-          { query: `"${from.runStamp}" ${note}`, max_results: 10 },
+          { query: arrivalQuery(`"${from.runStamp}" ${note}`), max_results: 10 },
           { as: "reader" }
         );
         return deliveredFromSearch(found)[0];

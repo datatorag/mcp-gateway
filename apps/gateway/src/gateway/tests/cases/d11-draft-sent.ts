@@ -1,6 +1,6 @@
 import type { TestCase } from "../types";
 import { firstArray, resultJson } from "../result-json";
-import { deliveredFromSearch } from "../mail-parts";
+import { deliveredFromSearch, arrivalQuery } from "../mail-parts";
 
 /**
  * D11 (smoke row D11): a draft that is sent must LEAVE the drafts
@@ -52,7 +52,7 @@ export const d11DraftSent: TestCase = {
       async () => {
         const found = await ctx.call(
           "gws-mcp__gmail_search",
-          { query: `subject:"${ctx.stamp}"`, max_results: 5 },
+          { query: arrivalQuery(`subject:"${ctx.stamp}"`), max_results: 5 },
           { as: "reader" }
         );
         return deliveredFromSearch(found)[0];
