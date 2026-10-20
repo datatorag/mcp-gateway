@@ -42,4 +42,4 @@ The five comparison posts on this blog that made claims the other way carry a da
 
 ## What this costs you
 
-Nothing in tokens you do not ask for. Every tool in the connector has a short description and a schema that names only the arguments it takes, and the gateway serves 115 of them. A tool you never call is a few lines in the list. The full table, with every row and its test, is on the [home page](https://datatorag.com).
+Nothing in tokens you do not ask for. Every tool in the connector has a short description and a schema that names only the arguments it takes, and the gateway serves over a hundred of them. A tool you never call is a few lines in the list. The full table, with every row and its test, is on the [home page](https://datatorag.com).
