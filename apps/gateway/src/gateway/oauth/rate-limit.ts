@@ -26,7 +26,7 @@ if (typeof setInterval !== "undefined") {
 // is absent (a direct-to-origin hit, or local dev) we fall back to the real TCP
 // peer — never a client-supplied header, which would let an attacker evade the
 // cap or pin it onto a victim's IP.
-function getClientIp(req: Request): string {
+export function getClientIp(req: Request): string {
   const cf = req.headers["cf-connecting-ip"];
   const cfIp = Array.isArray(cf) ? cf[0] : cf;
   if (cfIp) return cfIp.trim();

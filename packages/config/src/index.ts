@@ -56,6 +56,10 @@ const envSchema = z.object({
   // Comma-separated; values live in env/SSM only — never in this public repo.
   // Keep mirrored with the PostHog "Internal / Test users" cohort.
   INTERNAL_EXCLUDE_EMAILS: z.string().default(""),
+  // SCRUM-430: SHA-256 (hex) of the bearer token HQ's board dashboard sends
+  // to /api/admin/usage/snapshot. The hash only, never the token. Empty or
+  // not 64 hex characters: the endpoint and its hourly cron are off.
+  USAGE_SNAPSHOT_TOKEN_SHA256: z.string().default(""),
   /** The gateway build's own sha (SCRUM-303), baked into the image as a
    * BUILD ARGUMENT rather than rendered into `.env`: the container has never
    * known which commit it is, because the deploy script writes the sha to a
