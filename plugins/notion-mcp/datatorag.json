@@ -1,0 +1,13 @@
+{
+  "name": "Notion",
+  "description": "Notion: search, pages as markdown, databases and their rows, comments, and people",
+  "oauth": {
+    "provider": "notion",
+    "authorizeUrl": "https://api.notion.com/v1/oauth/authorize",
+    "tokenUrl": "https://api.notion.com/v1/oauth/token",
+    "clientIdEnv": "$NOTION_OAUTH_CLIENT_ID",
+    "clientSecretEnv": "$NOTION_OAUTH_CLIENT_SECRET",
+    "scopes": [],
+    "owner": "user"
+  }
+}

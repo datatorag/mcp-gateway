@@ -1,0 +1,36 @@
+{
+  "status": 200,
+  "request": {
+    "method": "GET",
+    "path": "/v1/users/me"
+  },
+  "body": {
+    "object": "user",
+    "id": "d11587f7-a092-4c9c-84bc-a2746ab455a8",
+    "name": "DataToRAG MCP",
+    "avatar_url": "https://example.com/avatar.png",
+    "type": "bot",
+    "bot": {
+      "owner": {
+        "type": "user",
+        "user": {
+          "object": "user",
+          "id": "460f4399-740e-44ab-827d-0134421cdedf",
+          "name": "Test User",
+          "avatar_url": "https://example.com/avatar.png",
+          "type": "person",
+          "person": {
+            "email": "test-user@example.com",
+            "email_verified": true
+          }
+        }
+      },
+      "workspace_name": "Test Workspace",
+      "workspace_id": "a79c687a-04a1-4115-85c2-fc71e15da216",
+      "workspace_limits": {
+        "max_file_upload_size_in_bytes": 5242880
+      }
+    },
+    "request_id": "aafe5cb8-7807-4bc1-8a2c-351f934af62d"
+  }
+}

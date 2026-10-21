@@ -35,7 +35,7 @@ PLACEHOLDER_DATABASE_URL="unset://database.invalid/unset"
 #   gateway  typecheck and tests of apps/gateway
 #   scripts  the self-tests of the scripts in scripts/
 #   canary   the test of the do-nothing container in docker/canary
-#   gws-mcp, atlassian-mcp
+#   gws-mcp, atlassian-mcp, notion-mcp
 #            a plugin's build and tests. A plugin path selects its own row
 #            AND the gateway: the plugins ship inside the gateway's image, so
 #            a plugin change is a gateway change wherever an image is decided
@@ -47,6 +47,7 @@ classify_path() {
     docker/canary/*) echo canary ;; # before docker/*, which is the gateway's
     plugins/gws-mcp/*) echo gws-mcp ;;
     plugins/atlassian-mcp/*) echo atlassian-mcp ;;
+    plugins/notion-mcp/*) echo notion-mcp ;;
     apps/gateway/*|packages/*|docker/*) echo gateway ;;
     scripts/*) echo scripts ;;
     registry/*) echo scripts ;; # its files are checked by the scripts' tests
@@ -59,7 +60,7 @@ classify_path() {
 }
 
 surfaces_for() {
-  local path surface want_gateway=0 want_scripts=0 want_canary=0 want_gws=0 want_atlassian=0
+  local path surface want_gateway=0 want_scripts=0 want_canary=0 want_gws=0 want_atlassian=0 want_notion=0
   while IFS= read -r path; do
     [ -n "$path" ] || continue
     surface=$(classify_path "$path")
@@ -69,7 +70,8 @@ surfaces_for() {
       canary) want_canary=1 ;;
       gws-mcp) want_gateway=1; want_gws=1 ;;
       atlassian-mcp) want_gateway=1; want_atlassian=1 ;;
-      all) want_gateway=1; want_scripts=1; want_canary=1; want_gws=1; want_atlassian=1 ;;
+      notion-mcp) want_gateway=1; want_notion=1 ;;
+      all) want_gateway=1; want_scripts=1; want_canary=1; want_gws=1; want_atlassian=1; want_notion=1 ;;
       none) ;;
     esac
   done
@@ -78,6 +80,7 @@ surfaces_for() {
   [ "$want_canary" = 1 ] && echo canary
   [ "$want_gws" = 1 ] && echo gws-mcp
   [ "$want_atlassian" = 1 ] && echo atlassian-mcp
+  [ "$want_notion" = 1 ] && echo notion-mcp
   return 0
 }
 
@@ -104,16 +107,18 @@ self_test() {
   expect "the example env file is read by a gateway test" "gateway" ".env.example"
   expect "a file moved out of the gateway still names where it was" "gateway" "apps/gateway/src/guard.test.ts" "docs/guard.test.ts"
   expect "documentation beside code still selects the code" "gateway" "docs/x.md" "apps/gateway/server.ts"
-  expect "the lockfile selects everything" "gateway scripts canary gws-mcp atlassian-mcp" "pnpm-lock.yaml"
-  expect "a workflow selects everything" "gateway scripts canary gws-mcp atlassian-mcp" ".github/workflows/ci.yml"
+  expect "the lockfile selects everything" "gateway scripts canary gws-mcp atlassian-mcp notion-mcp" "pnpm-lock.yaml"
+  expect "a workflow selects everything" "gateway scripts canary gws-mcp atlassian-mcp notion-mcp" ".github/workflows/ci.yml"
   # The known-bad cases: a path nobody listed must never come out as nothing.
-  expect "an unknown top-level directory selects everything" "gateway scripts canary gws-mcp atlassian-mcp" "services/new-thing/src/index.ts"
-  expect "a plugin nobody listed selects everything" "gateway scripts canary gws-mcp atlassian-mcp" "plugins/new-thing/src/index.ts"
+  expect "an unknown top-level directory selects everything" "gateway scripts canary gws-mcp atlassian-mcp notion-mcp" "services/new-thing/src/index.ts"
+  expect "a plugin nobody listed selects everything" "gateway scripts canary gws-mcp atlassian-mcp notion-mcp" "plugins/new-thing/src/index.ts"
   expect "a plugin selects its own tests and the gateway" "gateway gws-mcp" "plugins/gws-mcp/src/tools/gmail.ts"
   expect "the other plugin does not run the first one's tests" "gateway atlassian-mcp" "plugins/atlassian-mcp/src/index.ts"
+  expect "the Notion plugin selects its own tests and the gateway, no other plugin's" "gateway notion-mcp" "plugins/notion-mcp/src/notion-client.ts"
+  expect "two plugins select both, and the gateway once" "gateway gws-mcp notion-mcp" "plugins/gws-mcp/src/index.ts" "plugins/notion-mcp/README.md"
   expect "a plugin's documentation is still the plugin" "gateway gws-mcp" "plugins/gws-mcp/README.md"
-  expect "an unknown root file selects everything" "gateway scripts canary gws-mcp atlassian-mcp" "Makefile"
-  expect "a path that only looks like docs selects everything" "gateway scripts canary gws-mcp atlassian-mcp" "docs-private/x.md"
+  expect "an unknown root file selects everything" "gateway scripts canary gws-mcp atlassian-mcp notion-mcp" "Makefile"
+  expect "a path that only looks like docs selects everything" "gateway scripts canary gws-mcp atlassian-mcp notion-mcp" "docs-private/x.md"
   if [ "$failed" = 1 ]; then
     exit 2
   fi
@@ -209,7 +214,7 @@ main() {
       gateway) run_gateway ;;
       scripts) run_scripts ;;
       canary) run_canary ;;
-      gws-mcp|atlassian-mcp) run_plugin "$s" ;;
+      gws-mcp|atlassian-mcp|notion-mcp) run_plugin "$s" ;;
     esac
   done
   echo "gate: ok for: $(echo $surfaces). Not covered: the security review, the leak scan, the production build, and any suite that reported skipped."

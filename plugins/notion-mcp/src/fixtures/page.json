@@ -1,0 +1,64 @@
+{
+  "status": 200,
+  "request": {
+    "method": "GET",
+    "path": "/v1/pages/122f53f3-d53e-4072-842d-9891b983e4e0"
+  },
+  "body": {
+    "object": "page",
+    "id": "122f53f3-d53e-4072-842d-9891b983e4e0",
+    "created_time": "2026-10-21T03:32:00.000Z",
+    "last_edited_time": "2026-10-21T03:37:00.000Z",
+    "created_by": {
+      "object": "user",
+      "id": "460f4399-740e-44ab-827d-0134421cdedf"
+    },
+    "last_edited_by": {
+      "object": "user",
+      "id": "460f4399-740e-44ab-827d-0134421cdedf"
+    },
+    "cover": null,
+    "icon": {
+      "type": "icon",
+      "icon": {
+        "name": "checklist",
+        "color": "green"
+      }
+    },
+    "parent": {
+      "type": "workspace",
+      "workspace": true
+    },
+    "in_trash": false,
+    "is_archived": false,
+    "is_locked": false,
+    "properties": {
+      "title": {
+        "id": "title",
+        "type": "title",
+        "title": [
+          {
+            "type": "text",
+            "text": {
+              "content": "To Do List",
+              "link": null
+            },
+            "annotations": {
+              "bold": false,
+              "italic": false,
+              "strikethrough": false,
+              "underline": false,
+              "code": false,
+              "color": "default"
+            },
+            "plain_text": "To Do List",
+            "href": null
+          }
+        ]
+      }
+    },
+    "url": "https://app.notion.com/p/To-Do-List-122f53f3d53e4072842d9891b983e4e0",
+    "public_url": null,
+    "request_id": "f92a6df6-7dd7-4252-8e7f-b519c0443f8b"
+  }
+}
