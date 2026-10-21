@@ -55,6 +55,23 @@ Add Notion as the third connector, next to Google Workspace and Atlassian.
 The pitch is the one the other connectors make:
 fewer, better-shaped tools, several accounts under one login, one bill.
 
+### Success criteria
+
+The request behind this connector was for lower overhead than Notion's own
+connector while doing everything it does. "Overhead" was never defined
+further, so it is measured as two halves, and both are the acceptance test:
+
+1. **Capability parity** with the content tools of Notion's hosted MCP
+   (search, fetch, create and update pages, databases and data sources,
+   query rows, views, comments, move, duplicate, trash and restore), plus
+   reading the current user and the workspace's people. Notion AI, Notion
+   Calendar, memory and skills are out of scope; they are not reachable
+   from the REST API. Where a hosted feature has no REST equivalent, the
+   gap is named, not hidden.
+2. **Lower measured overhead:** the tool list's token cost, and the size of
+   a page read and a row query, ours against the hosted server's, by the
+   method in section 5.
+
 ## Recommendation
 
 Build our own plugin (`notion-mcp`) on Notion's REST API, the way `gws-mcp`
@@ -170,11 +187,12 @@ Read from Notion's developer docs on 2026-10-02.
 - Refresh: `refreshNotionToken` in `REFRESH_FN`. It persists the new refresh
   token on every use, as the Atlassian function does. Two things have to be
   right that the Atlassian path gets away without:
-  - Notion's token schema has no `expires_in`. The gateway refreshes only
-    when `token_expires_at` is in the past and treats null as never
-    expiring. If Notion access tokens expire without saying when, the
-    refresh has to be driven by a 401 from the API instead. Which of the two
-    is true is a stage 0 observation, not a guess.
+  - Notion's token schema has no `expires_in`, and stage 0 saw none
+    (section 8). The gateway refreshes only when `token_expires_at` is in
+    the past and treats null as never expiring. If Notion access tokens
+    expire without saying when, the refresh has to be driven by a 401 from
+    the API instead. Which of the two is true is a stage 0 observation, not
+    a guess.
   - The existing refresh has no lock, so two concurrent calls can both
     present the same refresh token. With rotation that can end the
     connection. The Notion refresh takes a row lock, the way the OAuth
@@ -349,6 +367,15 @@ our integration across every customer, or our integration within one
 workspace. If it is the first, every user of the connector shares 180
 requests a minute, and the connector stops being a product at a few dozen
 active users. Stage 0 measures this with two workspaces before anything is built on it.
+
+**Observed 2026-10-21 03:40 UTC: per workspace, not global.** One grant was
+driven with sequential `POST /v1/search` calls: request 181 returned 429
+`rate_limited` after 44.5 seconds, with `Retry-After: 16`. In the same window
+a grant for a second workspace, same connection and same Notion login, was
+served (200), and the first grant was still refused on the next call (the
+control). So the 180 a minute belongs to the connection's grant in one
+workspace. Not measured: whether two people in the same workspace share
+it; the docs' "per workspace" pool suggests they do.
 
 ## 5. Overhead, measured
 
@@ -528,17 +555,42 @@ published request limits are respected (sections 3 and 4).
 
 ## 8. Risks, unknowns, and what would stop this
 
-Unknown until observed in stage 0:
+Observed in stage 0 on 2026-10-21 (UTC), against the registered connection
+with two workspaces under one Notion login. Field names and statuses only;
+no token was recorded.
 
-1. Whether REST access tokens expire, and how we learn that they have.
-2. Whether a used refresh token is dead immediately, and whether
-   re-authorizing a workspace kills the previous pair.
-3. Whether the rate limit is shared across all our users.
-4. What revoke does on Notion's side, and what the API returns after a user
-   removes the connection.
-5. The hosted server's tool list size, and the size of a page read and a
-   database query through it and through REST markdown.
-6. Whether registration asks for anything the docs do not list.
+1. **Token response.** Fields: `access_token`, `refresh_token`, `bot_id`,
+   `workspace_id`, `workspace_name`, `workspace_icon`, `owner`,
+   `duplicated_template_id`, `token_type`, `request_id`. No `expires_in`.
+   `owner.type` is `user` and carries the person's email. Whether access
+   tokens expire at all: a token left unrefreshed is being called every 30
+   minutes for 24 hours; result pending.
+2. **Refresh rotates both tokens, and the old pair is not dead at once.**
+   The old pair stays valid until the new access token is first used.
+   Before that, presenting the old refresh token again succeeds, mints a
+   further pair, and invalidates the unused one. After the new access token
+   has been used, the old refresh token is refused (400 `invalid_grant`,
+   "Invalid refresh token") and the old access token answers 401
+   `unauthorized`. Consequences: a refresh whose response was lost before it
+   was stored can be retried with the stored token; two concurrent refreshes
+   still race, so the row lock stays; and one `invalid_grant` is not proof
+   of a dead connection until the row has been re-read.
+   `POST /v1/oauth/introspect` reports `active: false` for every refresh
+   token, working ones included, so it is usable for access tokens only.
+3. **Rate limit:** per workspace, not shared across workspaces (section 4).
+4. **Revoke:** `POST /v1/oauth/revoke` answers 200 and the token answers 401
+   at once; a grant for another workspace is unaffected. Not yet observed:
+   whether the connection also leaves the workspace's settings, and what
+   the API returns after a user removes it there.
+5. **Unshared page:** 404 `object_not_found`, the message naming the
+   connection and saying to share the page with it. A page id that does not
+   exist returns the identical response, so the plugin's worded refusal has
+   to cover both.
+6. **Markdown read:** 200 with `markdown`, `truncated` and
+   `unknown_block_ids`, as documented; a template page was 1,741 bytes.
+7. Still open: re-authorizing the same workspace (whether the earlier pair
+   survives, whether `bot_id` changes), and the hosted server's tool list
+   size against ours (section 5).
 
 Risks:
 
