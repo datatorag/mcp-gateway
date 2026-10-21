@@ -241,3 +241,11 @@ describe("the cache", () => {
     expect(await getStatusModel(db, NOW)).toBeNull();
   });
 });
+
+describe("a skipped probe is not evidence (SCRUM-366)", () => {
+  it("shows a tool whose only probe was skipped as not run, never working", () => {
+    const model = buildStatusModel(RUN, [row("A0", "case", "pass"), row("contract:gws-mcp__gmail_send", "contract", "skip")], [], NOW);
+    const tool = model.surfaces.flatMap((s) => s.tools).find((t) => t.name === "gmail_send");
+    expect(tool?.state).toBe("not_run");
+  });
+});
