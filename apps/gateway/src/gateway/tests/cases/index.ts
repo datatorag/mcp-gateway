@@ -119,6 +119,13 @@ import { nt4NotionGetDatabase } from "./nt4-notion-get-database";
 import { nt5NotionQuery } from "./nt5-notion-query";
 import { nt6NotionComments } from "./nt6-notion-comments";
 import { nt7NotionTwoWorkspaces } from "./nt7-notion-two-workspaces";
+import { nt8NotionDuplicate } from "./nt8-notion-duplicate";
+import { nt9NotionPageContent } from "./nt9-notion-page-content";
+import { nt10NotionMove } from "./nt10-notion-move";
+import { nt11NotionCommentLifecycle } from "./nt11-notion-comment-lifecycle";
+import { nt12NotionDatabase } from "./nt12-notion-database";
+import { nt13NotionRowProperties } from "./nt13-notion-row-properties";
+import { nt14NotionView } from "./nt14-notion-view";
 
 /**
  * Every registered case (SCRUM-303).
@@ -274,6 +281,13 @@ export const CASES: TestCase[] = [
   nt5NotionQuery,
   nt6NotionComments,
   nt7NotionTwoWorkspaces,
+  nt8NotionDuplicate,
+  nt9NotionPageContent,
+  nt10NotionMove,
+  nt11NotionCommentLifecycle,
+  nt12NotionDatabase,
+  nt13NotionRowProperties,
+  nt14NotionView,
   r1FrontDoor,
   r2AdminOnly,
 ];

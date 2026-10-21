@@ -49,6 +49,10 @@ const WRITE_VERBS = new Set([
   "respond", "move", "copy", "edit", "remove", "upload", "batch",
   "run", "exec", "execute", "publish", "share", "grant", "revoke",
   "archive", "trash", "rename", "submit", "restore", "cancel", "clear",
+  // SCRUM-366: `notion_duplicate_page` creates a page. Without this it was a
+  // write only by the fail-closed default, one allowlist entry from running
+  // unprompted.
+  "duplicate",
 ]);
 
 /** The floor of the write classification: whether a namespaced tool mutates

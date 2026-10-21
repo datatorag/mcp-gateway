@@ -17,7 +17,8 @@ import {
 // tests only; this is the proof that the SQL they write does what the files
 // say against the real schema (drizzle migrations), with real jsonb md5s:
 // the forward inserts the mcp_servers row on the lowest free port from 40000
-// and the six notion-mcp tools, the rollback removes exactly those, and every
+// and every tool the plugin serves (counted from its tool list, never written
+// down here), the rollback removes exactly those, and every
 // guard refuses and changes nothing when the rows are not what the file
 // expects. Every file runs AS registry_writer, the role created from
 // registry/roles/registry-writer.sql, so the grants are proven sufficient too.
@@ -66,6 +67,8 @@ describe.skipIf(!dockerAvailable)("a new plugin's registry pair, on real Postgre
   let forward: string;
   let rollback: string;
   let toolNames: string[];
+  /** Each tool's read-only hint as the plugin declares it, by name. */
+  let hints: Map<string, boolean>;
 
   /** Runs a registry file the way the workflow does: one transaction, as the role. */
   const runAsRole = (file: string) =>
@@ -166,6 +169,11 @@ describe.skipIf(!dockerAvailable)("a new plugin's registry pair, on real Postgre
     // What the plugin serves is its tool array as JSON on the wire.
     const toolFile = toToolFile(JSON.parse(JSON.stringify(allTools)));
     toolNames = toolFile.tools.map((t: { name: string }) => t.name);
+    hints = new Map(
+      (allTools as { name: string; annotations: { readOnlyHint: boolean } }[]).map((t) => [t.name, t.annotations.readOnlyHint])
+    );
+    // The tool file carries every tool the plugin serves, and nothing else.
+    expect([...toolNames].sort()).toEqual([...hints.keys()].sort());
     const row = diffMod.serverRow(
       SLUG,
       readJson("plugins/notion-mcp/datatorag.json"),
@@ -187,8 +195,9 @@ describe.skipIf(!dockerAvailable)("a new plugin's registry pair, on real Postgre
     await seed();
   });
 
-  it("the forward adds the server row on the lowest free port and its six tools; the rollback reverts it all", async () => {
-    expect(toolNames).toHaveLength(6);
+  it("the forward adds the server row on the lowest free port and every tool the plugin serves; the rollback reverts it all", async () => {
+    // A plugin with no tools would make every assertion below vacuous.
+    expect(toolNames.length).toBeGreaterThan(0);
     const before = await snapshot();
 
     await runAsRole(forward);
@@ -208,7 +217,10 @@ describe.skipIf(!dockerAvailable)("a new plugin's registry pair, on real Postgre
     expect(JSON.parse(String(added[0].manifest))).toEqual(manifest);
     const joined = after.tools.filter((t) => t.slug === SLUG);
     expect(joined.map((t) => t.name).sort()).toEqual([...toolNames].sort());
-    expect(joined.every((t) => t.read_only_hint === true && t.enabled === true)).toBe(true);
+    expect(joined.every((t) => t.enabled === true)).toBe(true);
+    // Each row carries the hint its own tool declares: reads true, writes false.
+    for (const t of joined) expect(t.read_only_hint, String(t.name)).toBe(hints.get(String(t.name)));
+    expect(new Set(joined.map((t) => t.read_only_hint))).toEqual(new Set(hints.values()));
     // The other plugins' rows are untouched, column for column.
     expect(after.servers.filter((s) => s.slug !== SLUG)).toEqual(before.servers);
     expect(after.tools.filter((t) => t.slug !== SLUG)).toEqual(before.tools);

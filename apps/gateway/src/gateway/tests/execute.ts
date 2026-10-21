@@ -17,7 +17,14 @@ import { CASES } from "./cases";
 import { orderByNeeds, runOneCase, type ContextParts } from "./runner";
 import { runPool } from "./pool";
 import { isWorkspaceRole, parseFixtureMap } from "./fixtures";
-import { checkSend, SUBJECT_PREFIX, type GuardLookups } from "./send-guard";
+import {
+  checkSend,
+  newNotionCreated,
+  recordNotionCreated,
+  SUBJECT_PREFIX,
+  type GuardLookups,
+  type NotionCreated,
+} from "./send-guard";
 import type { AccountRole, FixtureKey, TestCase, ToolResult } from "./types";
 import { finishRun, recordResult, startRun } from "./store";
 import { missingCheckouts, pluginShasFor } from "./plugin-sha";
@@ -412,6 +419,10 @@ async function driveRun(opts: {
 
     // 3. EXECUTE, four at a time, with locks honoured.
     const shared = new Map<string, Record<string, unknown>>();
+    /* What this run created in Notion, for every case in it: one case's
+     * created page is another's parent, and a cleanup must still be allowed
+     * to reach it. Per run, never per process. */
+    const notionCreated = newNotionCreated();
     const failed = new Set<string>();
 
     const servedNames = new Set(served.map((t) => t.name));
@@ -524,6 +535,7 @@ async function driveRun(opts: {
             runStamp: runId.slice(0, 8),
             shared,
             caseId,
+            notionCreated,
           }),
       });
       if (outcome.status !== "pass") failed.add(testCase.id);
@@ -785,11 +797,16 @@ export function makeContextParts(opts: {
    */
   shared?: Map<string, Record<string, unknown>>;
   caseId?: string;
+  /** The Notion objects this RUN created, recorded from each create's
+   * answer as it passes through `dispatch`, so later writes in the run may
+   * reach them (SCRUM-366). Absent in unit tests, which get an empty set. */
+  notionCreated?: NotionCreated;
 }): ContextParts {
   const { client, fixtures, called } = opts;
   // A value nothing can contain, so an absent stamp refuses every trash
   // rather than permitting any.
   const runStamp = opts.runStamp ?? "\u0000no-stamp";
+  const notionCreated = opts.notionCreated ?? newNotionCreated();
 
   const needs = (what: string) => {
     throw new Error(`ctx.gateway.${what}: this run has no database or plugin pool`);
@@ -945,9 +962,18 @@ export function makeContextParts(opts: {
       lookups: lookupsFor(role),
       trashable,
       runStamp,
+      notion: {
+        page: fixtures.fixture("notionPage"),
+        dataSource: fixtures.fixture("notionDataSource"),
+        database: fixtures.fixture("notionDatabase"),
+        created: notionCreated,
+      },
     });
     if (!verdict.ok) throw new Error(verdict.reason);
-    return client.callTool(tool, sent);
+    const result = await client.callTool(tool, sent);
+    // Only an answer that is not an error names something the run created.
+    if (!result.isError) recordNotionCreated(notionCreated, tool, resultText(result));
+    return result;
   };
 
   return {

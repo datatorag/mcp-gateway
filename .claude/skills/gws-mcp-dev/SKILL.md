@@ -82,9 +82,15 @@ Notion version changes nothing until the header moves. Rate refusals
 (429, Notion's 529) are retried only for tools marked read-only, never by
 HTTP method, because search and data-source queries are POSTs. Notion
 answers an unshared page and a missing one with the same 404
-`object_not_found`; the client words both. Property values go in and out
-as plain values through `src/properties.ts`. It was born in this
-repository (SCRUM-366), so it has no imported history.
+`object_not_found`; the client words both. 18 tools: six reads
+(`src/tools/notion.ts`) and twelve writes (`src/tools/notion-write.ts`),
+every write annotated destructive and never retried. Content goes in as
+Notion's markdown; property values go in and out as plain values
+(`src/properties.ts` reads, `src/encode.ts` writes against the data
+source schema). Deleting a page is `notion_update_page` with `in_trash`,
+and a duplicate is a read plus a create. Its writes have rules in the
+runner's send guard (see Conventions). It was born in this repository
+(SCRUM-366), so it has no imported history.
 
 **Adding a plugin.** Three places name each plugin one by one and refuse or
 skip an unknown one: the gateway `Dockerfile` (its files and a
@@ -198,7 +204,11 @@ gateway deploy carries it. What goes with it:
   to mail the run itself sent. The same holds past mail (SCRUM-428): a
   thread move needs every message in the thread to carry the run's stamp,
   a share goes only to a fixture account and with notify false, and an
-  RSVP needs send_updates none.
+  RSVP needs send_updates none. Notion (SCRUM-366): a write reaches only the
+  fixture page, data source and database and what the run created (known by
+  the id each create answered with, not by title), every create is titled
+  with the smoke prefix and run stamp, and a comment or page content may not
+  mention a person. A new `notion_` write tool is refused until it has a rule.
 
 ## Gotchas
 
