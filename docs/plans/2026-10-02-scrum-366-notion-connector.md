@@ -214,6 +214,13 @@ live.
 
 ## Stage 2: writes
 
+0. Scope (2026-10-20): parity with the hosted server's content tools is the
+   acceptance test, so stage 2 carries the five writes below plus
+   `notion_create_database`, `notion_update_data_source`,
+   `notion_create_view`, `notion_update_view`, `notion_update_comment`,
+   `notion_delete_comment` and an imitated duplicate, each with its
+   registry row, classification and runner case. The design's parity map
+   names what REST cannot do; those gaps are documented, not built.
 1. Five write tools in the plugin: property encoding from plain values
    against the data source schema, rich-text chunking for property and
    comment text, markdown content through Notion's endpoints, the async

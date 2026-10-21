@@ -1,0 +1,16 @@
+{
+  "status": 200,
+  "request": {
+    "method": "GET",
+    "path": "/v1/comments?block_id=122f53f3-d53e-4072-842d-9891b983e4e0"
+  },
+  "body": {
+    "object": "list",
+    "results": [],
+    "next_cursor": null,
+    "has_more": false,
+    "type": "comment",
+    "comment": {},
+    "request_id": "de724ae2-0827-4270-8c4b-f2d083c7c4dd"
+  }
+}

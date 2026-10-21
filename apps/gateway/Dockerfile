@@ -37,6 +37,7 @@ COPY apps/gateway/package.json apps/gateway/
 # manifests to match the lockfile.
 COPY plugins/gws-mcp/package.json plugins/gws-mcp/
 COPY plugins/atlassian-mcp/package.json plugins/atlassian-mcp/
+COPY plugins/notion-mcp/package.json plugins/notion-mcp/
 
 
 FROM base AS build
@@ -67,7 +68,8 @@ RUN pnpm run build --filter=@datatorag-mcp/gateway && rm -rf apps/gateway/.next/
 # Each plugin is compiled here (tsc into server/), from the same commit as
 # the gateway. Nothing is compiled in the running container.
 RUN pnpm --filter @datatorag-mcp/gws-mcp run build \
- && pnpm --filter @datatorag-mcp/atlassian-mcp run build
+ && pnpm --filter @datatorag-mcp/atlassian-mcp run build \
+ && pnpm --filter @datatorag-mcp/notion-mcp run build
 
 
 FROM base AS runtime
@@ -93,15 +95,17 @@ COPY apps/gateway/content apps/gateway/content
 # dependencies; the production install above already covers their packages.
 COPY --from=build /app/plugins/gws-mcp/server plugins/gws-mcp/server
 COPY --from=build /app/plugins/atlassian-mcp/server plugins/atlassian-mcp/server
+COPY --from=build /app/plugins/notion-mcp/server plugins/notion-mcp/server
 COPY plugins/gws-mcp/datatorag.json plugins/gws-mcp/README.md plugins/gws-mcp/
 COPY plugins/atlassian-mcp/datatorag.json plugins/atlassian-mcp/README.md plugins/atlassian-mcp/
+COPY plugins/notion-mcp/datatorag.json plugins/notion-mcp/README.md plugins/notion-mcp/
 # A client secret file is written beside the compiled code only by the desktop
 # bundle's own build script, and git ignores it. It must never be in an image.
 RUN if find /app/plugins -name oauth.json -not -path '*/node_modules/*' | grep -q .; then \
       echo "oauth.json found under /app/plugins" >&2; exit 1; fi
 # One non-root account per plugin, named plugin-<slug> (SCRUM-390). The
 # manager starts each plugin as its own account, so a plugin cannot read the
-# gateway's environment or memory, or the other plugin's. No home, no shell,
+# gateway's environment or memory, or another plugin's. No home, no shell,
 # no password. The plugin files stay root's: a plugin can read and run its
 # code and cannot change it. A plugin directory with no account, or an account
 # that is root, fails the build here; in a running gateway it would be a
@@ -109,7 +113,9 @@ RUN if find /app/plugins -name oauth.json -not -path '*/node_modules/*' | grep -
 RUN groupadd --system --gid 901 plugin-gws-mcp \
  && useradd --system --uid 901 --gid 901 --no-create-home --home-dir /nonexistent --shell /usr/sbin/nologin plugin-gws-mcp \
  && groupadd --system --gid 902 plugin-atlassian-mcp \
- && useradd --system --uid 902 --gid 902 --no-create-home --home-dir /nonexistent --shell /usr/sbin/nologin plugin-atlassian-mcp
+ && useradd --system --uid 902 --gid 902 --no-create-home --home-dir /nonexistent --shell /usr/sbin/nologin plugin-atlassian-mcp \
+ && groupadd --system --gid 903 plugin-notion-mcp \
+ && useradd --system --uid 903 --gid 903 --no-create-home --home-dir /nonexistent --shell /usr/sbin/nologin plugin-notion-mcp
 RUN for dir in /app/plugins/*/; do \
       name="plugin-$(basename "$dir")"; \
       uid="$(id -u "$name" 2>/dev/null)" || { echo "no account $name for $dir" >&2; exit 1; }; \

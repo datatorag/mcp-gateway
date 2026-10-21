@@ -118,9 +118,10 @@ its tools through.
 
 - It gives up the pitch. The tool list, the descriptions and the response
   shapes would be Notion's, so the overhead would be Notion's too.
-- The tool list is not ours to hold steady. Notion's documented list is
-  about 35 tools, a third of them for Notion AI, custom agents and meeting
-  notes, which need paid Notion plans. One tool was deprecated on
+- The tool list is not ours to hold steady. Notion's documented list was
+  about 35 tools on 2026-10-02; an authenticated client saw 65 on
+  2026-10-20, many of them for Notion AI, custom agents, meeting notes and
+  Notion Calendar, several needing paid Notion plans. One tool was deprecated on
   2026-09-29. Our registry, write classification and test coverage all
   assume a tool set we review; a proxied one changes under us.
 - Auth is a second, different OAuth: dynamic client registration against
@@ -308,11 +309,19 @@ There is no delete tool because Notion's API has no hard delete for pages:
 `notion_create_page` returned, and `in_trash: false` is the restore. That
 also gives the test runner a restoring pair.
 
+### Added for parity on 2026-10-20
+
+Parity with the hosted server's content tools is the acceptance test
+(Success criteria), so these move out of "later" and into stage 2:
+`notion_create_database`, `notion_update_data_source`,
+`notion_create_view`, `notion_update_view`, `notion_update_comment`,
+`notion_delete_comment`, and an imitated duplicate. The parity map below
+names each.
+
 ### Later, each on a concrete request
 
-Create and update databases and data sources; a raw block read for the
-blocks markdown reports as unknown (bookmarks, embeds, link previews);
-file uploads and attachments; views; editing and deleting comments.
+A raw block read for the blocks markdown reports as unknown (bookmarks,
+embeds, link previews); file uploads and attachments.
 
 ### What parity means, stated honestly
 
@@ -329,6 +338,41 @@ Against the six areas in the ask:
   as not immediate and not guaranteed complete. The hosted MCP searches
   content. This is the largest known gap between the recommended shape and
   the hosted server.
+
+### Parity map against the hosted server (2026-10-20)
+
+The hosted server's tool list was read on 2026-10-20 from an authenticated
+client: 65 tools, of which the content tools below are the parity target.
+Notion AI, Notion Calendar, memory, skills and the custom-agent tools are
+out of scope. Each REST endpoint was read from Notion's API reference for
+version `2026-03-11` the same day.
+
+| Hosted tool | REST | Ours |
+|---|---|---|
+| search | `POST /v1/search`, titles only | `notion_search`; content search is a gap |
+| fetch | pages (markdown), databases, data sources, views | `notion_get_page`, `notion_get_database` (with its data sources and views) |
+| query-data-sources | filter and sort; saved-view query | `notion_query_data_source`, filter mode and a `view_id` mode; SQL mode is a gap |
+| query-multiple-data-sources | none | gap: no SQL, no joins |
+| get-comments | `GET /v1/comments`, unresolved only | `notion_get_comments`; resolved comments are a gap |
+| get-self, get-users | `GET /v1/users/me`, `GET /v1/users` | `notion_list_users`, with `me` |
+| create-pages | `POST /v1/pages`, one per call | `notion_create_page`; a bulk call loops |
+| update-page | `PATCH /v1/pages/{id}` and `/markdown` (passage edit, replace, insert), template | `notion_update_page`, `notion_update_page_content` |
+| delete-pages, restore-pages | `in_trash` on the page | `notion_update_page` |
+| move-pages | `POST /v1/pages/{id}/move`, pages only | `notion_move_page` |
+| duplicate-page | none | imitated, read then create; loses comments and some block fidelity, and says so |
+| create-database | `POST /v1/databases` | `notion_create_database` |
+| update-data-source | `PATCH /v1/data_sources/{id}` | `notion_update_data_source` |
+| delete-databases | `in_trash` on the database | `notion_update_data_source` or the database's own `in_trash` |
+| create-view, update-view | `/v1/views` | `notion_create_view`, `notion_update_view` |
+| create-comment | page, block, reply | `notion_create_comment`; a comment on selected text is a gap |
+| update-comment, delete-comment | own comments only | `notion_update_comment`, `notion_delete_comment` |
+| set-comment-reaction, set-discussion-resolved | none | gap |
+
+The gaps, in one place: content search, SQL queries and joins, resolved
+comments, comments on selected text, reactions, resolving a discussion, and
+a native duplicate. Every one is a missing REST endpoint, not a choice. The
+hosted server also gates several of its own (AI search, SQL joins, comment
+edit, reactions) behind Notion's paid plans.
 
 ### What the plugin does that a one-to-one mapping does not
 

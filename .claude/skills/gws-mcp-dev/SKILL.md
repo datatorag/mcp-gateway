@@ -1,14 +1,14 @@
 ---
 name: gws-mcp-dev
-description: Use when developing a connector plugin under plugins/ (gws-mcp, atlassian-mcp): adding or changing tools. Where the plugins live now, tool-definition patterns, the client and auth model, build and test, the freeze window, and the ship tail back into the gateway.
+description: Use when developing a connector plugin under plugins/ (gws-mcp, atlassian-mcp, notion-mcp): adding or changing tools. Where the plugins live now, tool-definition patterns, the client and auth model, build and test, the freeze window, and the ship tail back into the gateway.
 ---
 
-# Plugin development (gws-mcp, atlassian-mcp)
+# Plugin development (gws-mcp, atlassian-mcp, notion-mcp)
 
-The two connector plugins live in this repository, at `plugins/gws-mcp` and
-`plugins/atlassian-mcp`, as workspace packages `@datatorag-mcp/gws-mcp` and
-`@datatorag-mcp/atlassian-mcp`. They were imported from their own
-repositories with their history (SCRUM-390). Those repositories are frozen:
+The connector plugins live in this repository, at `plugins/gws-mcp`,
+`plugins/atlassian-mcp` and `plugins/notion-mcp`, as workspace packages
+`@datatorag-mcp/<slug>`. The first two were imported from their own
+repositories with their history (SCRUM-390); `notion-mcp` started here. Those repositories are frozen:
 `main` is locked on both, and nothing new goes there.
 
 Each plugin's `CLAUDE.md` (`plugins/<slug>/CLAUDE.md`) holds the facts about
@@ -28,7 +28,7 @@ and `PORT` and nothing else (see `codebase-map`).
 | Source | `plugins/<slug>/src`, compiled by `tsc` to `plugins/<slug>/server` (gitignored) |
 | Build and test | `pnpm --filter @datatorag-mcp/<slug> run build` and `... run test` from the repo root. One root lockfile; a plugin has none of its own |
 | Gate | `scripts/gate.sh`: a path under `plugins/<slug>/` runs that plugin's build and tests and the gateway's |
-| Image | The gateway's `Dockerfile` compiles both plugins and ships them at `/app/plugins/<slug>`. There is no plugin image |
+| Image | The gateway's `Dockerfile` compiles every plugin and ships them at `/app/plugins/<slug>`. There is no plugin image |
 | What production runs | **The copies in the image**, since the cutover (the spec's step 10): the `Dockerfile` sets `DATATORAG_PLUGINS_DIR=/app/plugins` and the manager starts each plugin from there. A change under `plugins/` ships with the gateway image through the pipeline, and a rollback of the image is the rollback of the plugins. The plugins volume is no longer mounted (the close-out, step 12), so an image from before the cutover would start no plugin and is not a rollback target. The old repositories are archived; their READMEs name this one |
 | Who a plugin runs as | In the image, its own non-root account `plugin-<slug>` (the `Dockerfile` creates one per plugin; the manager starts the child with that user and group). It can read and run its code and cannot write it, has no home directory, and cannot read the gateway's process or the other plugin's. So a plugin must not write beside its code or under a home directory: use the system temp directory, or nothing. On a laptop it runs as you |
 | Tool files | When CI builds the gateway image it starts each plugin from it and keeps `tools-<slug>.json` (what the plugin SERVED: name, description, schema, read-only hint) beside the image's digest record. `scripts/image-plugin-tools.sh <image> <dir>` does the same locally |
@@ -46,7 +46,7 @@ The plan, its steps and what each one proves:
 shows only the import commit. The real history is
 `git log --full-history -- src/tools/gmail.ts plugins/gws-mcp/src/tools/gmail.ts`.
 
-## Anatomy (both plugins)
+## Anatomy (every plugin)
 
 - `src/tools/*.ts`: one file per service, tool schemas plus a
   `handle<Service>()` dispatch. `src/tools/index.ts` aggregates them.
@@ -75,6 +75,23 @@ person wrote. There is no authentication tool: `gws_auth_setup` was removed
 
 **`atlassian-mcp` specifics.** Calls the Atlassian REST API directly through
 `src/atlassian-client.ts`.
+
+**`notion-mcp` specifics.** Calls Notion's REST API through
+`src/notion-client.ts` with `Notion-Version: 2026-03-11` pinned, so a new
+Notion version changes nothing until the header moves. Rate refusals
+(429, Notion's 529) are retried only for tools marked read-only, never by
+HTTP method, because search and data-source queries are POSTs. Notion
+answers an unshared page and a missing one with the same 404
+`object_not_found`; the client words both. Property values go in and out
+as plain values through `src/properties.ts`. It was born in this
+repository (SCRUM-366), so it has no imported history.
+
+**Adding a plugin.** Three places name each plugin one by one and refuse or
+skip an unknown one: the gateway `Dockerfile` (its files and a
+`plugin-<slug>` account, without which it is never started),
+`scripts/gate.sh`'s path table (an unlisted plugin path falls to `all`,
+which runs every suite except the new plugin's), and `PLUGIN_SERVICE_MAP`.
+CI's tool-file step loops over `plugins/` and needs nothing.
 
 ## Adding or changing a tool
 

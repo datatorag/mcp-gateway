@@ -1,0 +1,22 @@
+{
+  "status": 400,
+  "request": {
+    "method": "POST",
+    "path": "/v1/data_sources/fcfeab17-74c9-4fac-8026-8fdff653c6c5/query",
+    "body": {
+      "filter": {
+        "property": "NoSuchProperty",
+        "checkbox": {
+          "equals": true
+        }
+      }
+    }
+  },
+  "body": {
+    "object": "error",
+    "status": 400,
+    "code": "validation_error",
+    "message": "Could not find property with name or id: NoSuchProperty",
+    "request_id": "be111c6c-f392-4c4b-80f6-5402006faf18"
+  }
+}
