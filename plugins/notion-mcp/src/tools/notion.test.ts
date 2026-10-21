@@ -267,6 +267,69 @@ describe("notion_query_data_source", () => {
   });
 });
 
+describe("notion_query_data_source with view_id", () => {
+  const VIEW = "1a2b3c4d-5e6f-47a8-b9c0-d1e2f3a4b5c6";
+  const QUERY = "9f8e7d6c-5b4a-4392-8170-6f5e4d3c2b1a";
+  const NEXT = "7c6b5a49-3827-4165-a4b3-c2d1e0f9a8b7";
+  const ROW = "eec14aaa-f8cb-4ef3-82ff-68f50ca52380";
+  /* Shape from Notion's API reference (create a view query, get view query
+   * results), not recorded. */
+  const FIRST = {
+    object: "view_query",
+    id: QUERY,
+    view_id: VIEW,
+    expires_at: "2026-10-21T04:15:00.000Z",
+    total_count: 3,
+    results: [{ object: "page", id: ROW }],
+    next_cursor: NEXT,
+    has_more: true,
+  };
+  const REST = {
+    object: "list",
+    type: "page",
+    page: {},
+    results: [{ object: "page", id: PAGE }],
+    next_cursor: null,
+    has_more: false,
+    request_status: { type: "incomplete", incomplete_reason: "query_result_limit_reached" },
+  };
+
+  it("POSTs /v1/views/{id}/queries and returns the rows as ids, with a cursor that carries the query", async () => {
+    const f = fakeFetch([{ status: 200, body: FIRST }]);
+    const out = await call("notion_query_data_source", { view_id: VIEW, page_size: 1 });
+    expect(f.sent).toHaveLength(1);
+    expect(f.sent[0].method).toBe("POST");
+    expect(f.sent[0].url.pathname).toBe(`/v1/views/${VIEW}/queries`);
+    expect(f.sent[0].body).toEqual({ page_size: 1 });
+    expect(f.sent[0].headers["Notion-Version"]).toBe("2026-03-11");
+    expect(out).toEqual({ results: [{ id: ROW }], has_more: true, next_cursor: `${QUERY}:${NEXT}`, total_count: 3 });
+  });
+
+  it("a cursor GETs the cached results of that query", async () => {
+    const f = fakeFetch([{ status: 200, body: REST }]);
+    const out = await call("notion_query_data_source", { view_id: VIEW, cursor: `${QUERY}:${NEXT}` });
+    expect(f.sent[0].method).toBe("GET");
+    expect(f.sent[0].url.pathname).toBe(`/v1/views/${VIEW}/queries/${QUERY}`);
+    expect(Object.fromEntries(f.sent[0].url.searchParams)).toEqual({ start_cursor: NEXT, page_size: "25" });
+    expect(out).toEqual({ results: [{ id: PAGE }], has_more: false, next_cursor: null, incomplete: true });
+  });
+
+  it("an expired query reads as expired, not as an unshared page", async () => {
+    fakeFetch([{ status: 404, body: { object: "error", status: 404, code: "object_not_found", message: "x" } }]);
+    await expect(call("notion_query_data_source", { view_id: VIEW, cursor: `${QUERY}:${NEXT}` })).rejects.toThrow(
+      /expire 15 minutes/
+    );
+  });
+
+  it("refuses view_id with data_source_id, filter, sorts or properties, and neither", async () => {
+    fakeFetch([]);
+    await expect(call("notion_query_data_source", { view_id: VIEW, data_source_id: DS })).rejects.toThrow(/one of data_source_id or view_id/);
+    await expect(call("notion_query_data_source", {})).rejects.toThrow(/one of data_source_id or view_id/);
+    await expect(call("notion_query_data_source", { view_id: VIEW, filter: {} })).rejects.toThrow(/view's own filter and sorts/);
+    await expect(call("notion_query_data_source", { view_id: VIEW, cursor: "garbage" })).rejects.toThrow(/next_cursor/);
+  });
+});
+
 describe("notion_get_comments", () => {
   it("sends GET /v1/comments with block_id, page size and cursor", async () => {
     const f = fakeFetch([ok("comments")]);

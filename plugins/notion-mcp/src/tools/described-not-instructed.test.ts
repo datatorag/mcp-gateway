@@ -13,6 +13,18 @@ const DESCRIBED = [
   "notion_query_data_source",
   "notion_get_comments",
   "notion_list_users",
+  "notion_create_page",
+  "notion_update_page",
+  "notion_update_page_content",
+  "notion_move_page",
+  "notion_duplicate_page",
+  "notion_create_comment",
+  "notion_update_comment",
+  "notion_delete_comment",
+  "notion_create_database",
+  "notion_update_data_source",
+  "notion_create_view",
+  "notion_update_view",
 ];
 
 /** Words that address the reader's behaviour instead of the tool's. */

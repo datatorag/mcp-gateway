@@ -3,9 +3,11 @@
  * drifted at eight of 55 call sites.
  *
  *   READ    cannot modify anything, anywhere. Reads, searches, lists, gets.
+ *   WRITE   creates, changes, moves, trashes or deletes something in Notion.
  *
- * Stage 1 of this plugin is reads only, so READ is the one preset. The hint
- * also decides retry: notion-client.ts retries a refusal for rate only for a
+ * Every write is WRITE, destructive included: a page write can overwrite
+ * content and a schema change can make a column's values unreadable, and
+ * Notion's API has no undo for either. The hint also decides retry: notion-client.ts retries a refusal for rate only for a
  * tool whose `readOnlyHint` is true. The MCP specification is explicit that
  * these are hints to a client, never a security control; the gateway's
  * approval gate classifies independently, by name.
@@ -36,4 +38,10 @@ export const READ = (title: string): ToolAnnotations => ({
   title,
   readOnlyHint: true,
   destructiveHint: false,
+});
+
+export const WRITE = (title: string): ToolAnnotations => ({
+  title,
+  readOnlyHint: false,
+  destructiveHint: true,
 });

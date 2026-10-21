@@ -467,12 +467,25 @@ is used because it is the one both sides could take the same way.
 |---|---|---|---|
 | Notion's hosted server, `mcp.notion.com`, authenticated | 65 | 261,086 | about 65,000 |
 | The hosted server's `query-data-sources` alone | 1 | 80,116 | about 20,000 |
+| The hosted server's parity set: the 21 content tools plus get-self and get-users (section 3) | 23 | 163,240 | about 40,800 |
 | Ours, `notion-mcp` as built: the six stage 1 reads | 6 | 8,537 | about 2,100 |
+| Ours, `notion-mcp` with stage 2 built (2026-10-20, local build): six reads and twelve writes | 18 | 26,843 | about 6,700 |
 
-Ours is the read set only; the stage 2 tools are not built yet, so this row
-grows. The parity comparison is the whole surface against the hosted
-server's content tools, and it is re-taken when stage 2 is built. Neither
-row includes the gateway's `account` parameter or its slug prefix.
+The stage 2 row was taken the same way from the plugin's local build, before
+any deploy: the reads are 9,088 bytes of it (the query tool's `view_id` mode
+added about 550) and the twelve writes 17,756.
+
+**The comparison that holds:** ours, 18 tools and 26,843 bytes, against the
+hosted server's parity set, 23 tools and 163,240 bytes, about one sixth.
+The parity set is like for like in scope, not in capability: three of its
+tools have no REST equivalent (query-multiple-data-sources,
+set-comment-reaction, set-discussion-resolved), several fold into one of
+ours (delete-pages and restore-pages into `notion_update_page`, get-self
+into `notion_list_users`), and ours carries the gaps named in section 3. Comparing ours against
+all 65 hosted tools would overstate the difference, since most of those
+are Notion AI, Calendar and agent tools we do not offer. Neither row
+includes the gateway's `account` parameter or its slug prefix, and ours is
+re-taken from the deployed plugin.
 
 Not measured, and why:
 

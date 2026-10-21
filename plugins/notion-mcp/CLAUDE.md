@@ -2,9 +2,9 @@
 
 ## Project
 
-Notion MCP plugin for the DataToRAG gateway (SCRUM-366). Exposes six
-read-only Notion tools via MCP over HTTP. Design and stages:
-`docs/architecture/2026-10-02-scrum-366-notion-connector-design.md` and
+Notion MCP plugin for the DataToRAG gateway (SCRUM-366). Exposes six read
+tools (stage 1) and twelve write tools (stage 2) via MCP over HTTP. Design
+and stages: `docs/architecture/2026-10-02-scrum-366-notion-connector-design.md` and
 `docs/plans/2026-10-02-scrum-366-notion-connector.md`.
 
 ## Commands
@@ -29,13 +29,24 @@ read-only Notion tools via MCP over HTTP. Design and stages:
   three attempts, Retry-After as whole seconds or an HTTP date, 8 s budget),
   keyed on the TOOL being read-only, not on HTTP method, because
   `POST /v1/search` and `POST /v1/data_sources/{id}/query` are reads. A
-  write is never retried
-- `src/notion-id.ts`: an id or a Notion URL to the dashed id
+  write is never retried; a write that got no answer at all is reported as
+  possibly applied and not sent again
+- `src/notion-id.ts`: an id or a Notion URL to the dashed id; `viewId` reads
+  a view from a database URL's `?v=`
 - `src/properties.ts`: one decoder per property type to a plain value;
   unknown types pass through by type name, never thrown
-- `src/tools/notion.ts`: the six tool schemas and the `handleNotion()`
-  switch; `src/tools/annotations.ts` the `READ` preset; `src/tools/response.ts`
-  the shared response helpers
+- `src/encode.ts`: the write side of `properties.ts`. One encoder per
+  writable property type, plain value to Notion's envelope, checked against
+  the data source schema (unknown name, wrong type, missing select or status
+  option: refused in words, all problems in one message). Rich text chunked
+  at 2,000 characters, arrays capped at 100. Also the schema maps for
+  `notion_create_database` and `notion_update_data_source`, and
+  `copyableValue` for the imitated duplicate
+- `src/tools/notion.ts`: the six read schemas and `handleNotion()`;
+  `src/tools/notion-write.ts` the twelve writes and `handleNotionWrite()`;
+  `src/tools/annotations.ts` the `READ` and `WRITE` presets (every write is
+  `WRITE`: destructive, not read-only); `src/tools/response.ts` the shared
+  response helpers
 - `src/fixtures/`: test support, excluded from the build. The `.json` files
   are recorded responses (stage 0, 2026-10-21), scrubbed of names, emails,
   avatar and file URLs and the workspace name. The `.ts` files marked "shape
@@ -53,6 +64,15 @@ read-only Notion tools via MCP over HTTP. Design and stages:
   observed refusal: 429 `rate_limited`, `Retry-After: 16`. That wait is past
   the retry budget, so it comes back in words
 - Search matches titles only
+- Notion's API has no hard delete for pages: `notion_update_page` with
+  `in_trash` is the delete and the restore. No native duplicate either:
+  `notion_duplicate_page` reads and re-creates, and says what it did not carry
+- Comments can be edited and deleted only by the connection that created
+  them; Notion answers 404 for any other, and the tools word that
+- A view query (`notion_query_data_source` with `view_id`) returns page ids
+  only, cached by Notion for 15 minutes; its cursor carries the query id
+- A data source PATCH has no `description` field in 2026-03-11, so
+  `notion_update_data_source` does not offer one
 - Every list tool returns `{results, has_more, next_cursor}` and takes
   `cursor`; descriptions describe and do not instruct, held by
   `src/tools/described-not-instructed.test.ts` for every tool

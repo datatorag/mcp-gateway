@@ -42,3 +42,17 @@ export function notionId(value: unknown, argName: string): string {
     `${argName} does not contain a Notion id. It takes a 32-character id (with or without dashes) or a Notion URL that ends in one.`
   );
 }
+
+/** The dashed id of a database view: a bare id, or the `?v=` of a database
+ * URL. A URL without `?v=` names the database, not a view, and is refused. */
+export function viewId(value: unknown, argName: string): string {
+  if (typeof value === "string" && /[?#]/.test(value)) {
+    const v = /[?&]v=([0-9a-f-]{32,36})(?![0-9a-f])/i.exec(value);
+    if (v && BARE.test(v[1])) return dashed(v[1]);
+    throw new Error(`${argName} takes a view id, or a database URL whose ?v= names the view; this URL has no ?v=.`);
+  }
+  if (typeof value === "string" && /^https?:/i.test(value.trim())) {
+    throw new Error(`${argName} takes a view id, or a database URL whose ?v= names the view; this URL has no ?v=.`);
+  }
+  return notionId(value, argName);
+}
