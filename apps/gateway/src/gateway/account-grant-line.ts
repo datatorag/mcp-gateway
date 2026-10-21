@@ -6,6 +6,11 @@ export type ConnectedAccountLine = {
   label: string | null;
   is_default: boolean;
   connected_at: string;
+  /** The Notion workspace this grant covers, by name and id (SCRUM-366).
+   * Either can be passed as `account` where the email names more than one
+   * workspace. Absent on accounts that have no workspace. */
+  workspace?: string | null;
+  workspace_id?: string;
   /** The Google services this account granted, by name; "not recorded" for
    * a grant stored before grants were recorded. Absent for a connector whose
    * consent has no per-service choice. */

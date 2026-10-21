@@ -290,6 +290,51 @@ describe("built-in tools", () => {
     expect(text).not.toContain("googleapis.com");
   });
 
+  it("list_connected_accounts names the workspace of each Notion account, and nothing new on the others (SCRUM-366)", async () => {
+    listConnectedAccounts.mockResolvedValue([
+      {
+        connectorType: "notion",
+        accountEmail: "person@example.com",
+        label: "Acme",
+        externalAccountId: "ws-a",
+        isDefault: true,
+        connectedAt: new Date("2026-10-21T12:00:00Z"),
+        scopes: null,
+      },
+      {
+        connectorType: "notion",
+        accountEmail: "person@example.com",
+        label: "Beta",
+        externalAccountId: "ws-b",
+        isDefault: false,
+        connectedAt: new Date("2026-10-21T13:00:00Z"),
+        scopes: null,
+      },
+      {
+        connectorType: "atlassian",
+        accountEmail: "person@example.com",
+        label: null,
+        externalAccountId: null,
+        isDefault: true,
+        connectedAt: new Date("2026-10-03T12:00:00Z"),
+        scopes: "read:jira-work",
+      },
+    ]);
+    const client = await connectedClient();
+    const result = await client.callTool({ name: "list_connected_accounts", arguments: {} });
+    const grouped = JSON.parse((result.content as Array<{ text: string }>)[0]!.text) as Record<
+      string,
+      Array<Record<string, unknown>>
+    >;
+    expect(grouped.notion).toEqual([
+      expect.objectContaining({ email: "person@example.com", workspace: "Acme", workspace_id: "ws-a", is_default: true }),
+      expect.objectContaining({ email: "person@example.com", workspace: "Beta", workspace_id: "ws-b", is_default: false }),
+    ]);
+    expect(grouped.notion![0]).not.toHaveProperty("granted_services");
+    expect(grouped.atlassian![0]).not.toHaveProperty("workspace");
+    expect(grouped.atlassian![0]).not.toHaveProperty("workspace_id");
+  });
+
   it("plugin-tool calls do NOT carry builtin — the boundary pinned from the other side", async () => {
     // The mirror of the emit-but-unmetered assertions above, per the
     // pin-boundaries-in-both-directions rule: if every call became

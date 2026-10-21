@@ -19,7 +19,12 @@ export function sourceResolversFor(
   userId: string
 ): Pick<CrossFileOptions, "resolveToken" | "resolvePluginUrl"> {
   return {
-    resolveToken: (service, account) => resolveServiceToken(db, userId, service, account),
+    // An account value naming more than one account resolves to nothing
+    // here; no file source today has more than one account per email.
+    resolveToken: async (service, account) => {
+      const resolved = await resolveServiceToken(db, userId, service, account);
+      return resolved && "ambiguous" in resolved ? null : resolved;
+    },
     resolvePluginUrl: async (slug) => {
       const [row] = await db
         .select({

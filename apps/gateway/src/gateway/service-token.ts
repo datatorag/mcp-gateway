@@ -2,11 +2,13 @@ import { eq, and, desc, sql } from "drizzle-orm";
 import type { Database } from "@datatorag-mcp/db";
 import { serviceConnections, connectedAccounts } from "@datatorag-mcp/db";
 import { revokeGoogleToken } from "@/lib/google-revoke";
+import { NOTION_REVOKE_URL, NOTION_TOKEN_URL, notionBasicAuth } from "./notion-oauth";
 
 /** Mapping from plugin slug to the service connection it needs. */
 export const PLUGIN_SERVICE_MAP: Record<string, string> = {
   "gws-mcp": "google-workspace",
   "atlassian-mcp": "atlassian",
+  "notion-mcp": "notion",
 };
 
 /** Reverse mapping: service name to plugin slug. */
@@ -119,6 +121,131 @@ async function refreshAtlassianToken(
   }
 }
 
+/** How long a Notion token call may hold the row lock before giving up. */
+const NOTION_TOKEN_TIMEOUT_MS = 10_000;
+
+/**
+ * Refresh a Notion access token (SCRUM-366), under a row lock.
+ *
+ * Notion rotates BOTH tokens on every refresh, and stage 0 observed the rule
+ * that makes an unlocked refresh dangerous: the old pair stays valid until the
+ * new access token is first used, and until then presenting the old refresh
+ * token again SUCCEEDS and invalidates the newer, unused pair. Two calls
+ * refreshing at once with the same refresh token therefore both succeed, and
+ * one caller walks away with a token Notion has already killed. So:
+ *
+ * - The row is read `FOR UPDATE` inside a transaction, and the stored refresh
+ *   token is compared with the one this caller presented. If another caller
+ *   already rotated it, the stored access token is the answer and Notion is
+ *   not asked again.
+ * - Notion is called while the lock is held, and the new pair is written in
+ *   the same transaction, so it is persisted before anyone is handed the new
+ *   access token. If the commit fails, the old pair still stands at Notion,
+ *   because the new access token was never used.
+ * - On `invalid_grant` the row is read again (locked, so a writer queued
+ *   behind this one, such as a reconnect, lands first) before the grant is
+ *   called dead: if its refresh token has moved, the stored access token is
+ *   used.
+ *
+ * Exported for its tests. Reached through REFRESH_FN only when a stored
+ * expiry has passed, and Notion rows store none (Notion sends no
+ * `expires_in`, and stage 0 has not yet observed one), so this does not run
+ * on any call path today.
+ */
+export async function refreshNotionToken(
+  db: Database,
+  connectionId: string,
+  presentedRefreshToken: string
+): Promise<string | null> {
+  const clientId = process.env.NOTION_OAUTH_CLIENT_ID;
+  const clientSecret = process.env.NOTION_OAUTH_CLIENT_SECRET;
+  if (!clientId || !clientSecret) return null;
+
+  type Outcome = { token: string } | { rejected: true } | { failed: true };
+  let outcome: Outcome;
+  try {
+    outcome = await db.transaction(async (tx): Promise<Outcome> => {
+      const [row] = await tx
+        .select({
+          accessToken: serviceConnections.accessToken,
+          refreshToken: serviceConnections.refreshToken,
+        })
+        .from(serviceConnections)
+        .where(eq(serviceConnections.id, connectionId))
+        .for("update");
+      if (!row) return { failed: true };
+      // Someone else rotated while this caller waited: theirs is current.
+      if (row.refreshToken !== presentedRefreshToken) {
+        return { token: row.accessToken };
+      }
+
+      const res = await fetch(NOTION_TOKEN_URL, {
+        method: "POST",
+        headers: {
+          Authorization: notionBasicAuth(clientId, clientSecret),
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          grant_type: "refresh_token",
+          refresh_token: presentedRefreshToken,
+        }),
+        signal: AbortSignal.timeout(NOTION_TOKEN_TIMEOUT_MS),
+      });
+      if (!res.ok) {
+        const body = (await res.json().catch(() => null)) as { error?: unknown } | null;
+        return body?.error === "invalid_grant" ? { rejected: true } : { failed: true };
+      }
+      const data = (await res.json()) as {
+        access_token?: unknown;
+        refresh_token?: unknown;
+      };
+      if (typeof data.access_token !== "string") return { failed: true };
+
+      await tx
+        .update(serviceConnections)
+        .set({
+          accessToken: data.access_token,
+          refreshToken:
+            typeof data.refresh_token === "string"
+              ? data.refresh_token
+              : presentedRefreshToken,
+          // Notion sends no expiry, and none is invented.
+          tokenExpiresAt: null,
+          updatedAt: new Date(),
+        })
+        .where(eq(serviceConnections.id, connectionId));
+      return { token: data.access_token };
+    });
+  } catch {
+    return null;
+  }
+
+  if ("token" in outcome) return outcome.token;
+  if ("failed" in outcome) return null;
+
+  // invalid_grant. Before calling the grant dead, look again: a writer that
+  // does not take this lock (a reconnect) may have been queued behind it.
+  try {
+    const [row] = await db.transaction((tx) =>
+      tx
+        .select({
+          accessToken: serviceConnections.accessToken,
+          refreshToken: serviceConnections.refreshToken,
+        })
+        .from(serviceConnections)
+        .where(eq(serviceConnections.id, connectionId))
+        .for("update")
+    );
+    if (row && row.refreshToken !== presentedRefreshToken) {
+      return row.accessToken;
+    }
+  } catch {
+    return null;
+  }
+  console.warn("[service-token] notion refresh refused (invalid_grant); the workspace needs reconnecting");
+  return null;
+}
+
 /** Service-specific refresh function lookup. */
 const REFRESH_FN: Record<
   string,
@@ -126,7 +253,44 @@ const REFRESH_FN: Record<
 > = {
   "google-workspace": refreshGoogleToken,
   atlassian: refreshAtlassianToken,
+  notion: refreshNotionToken,
 };
+
+/** Revoke one Notion token. Never throws. */
+async function revokeNotionToken(token: string): Promise<boolean> {
+  const clientId = process.env.NOTION_OAUTH_CLIENT_ID;
+  const clientSecret = process.env.NOTION_OAUTH_CLIENT_SECRET;
+  if (!clientId || !clientSecret) return false;
+  try {
+    const res = await fetch(NOTION_REVOKE_URL, {
+      method: "POST",
+      headers: {
+        Authorization: notionBasicAuth(clientId, clientSecret),
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ token }),
+      signal: AbortSignal.timeout(NOTION_TOKEN_TIMEOUT_MS),
+    });
+    return res.ok;
+  } catch {
+    return false;
+  }
+}
+
+/** Revoke BOTH Notion tokens. Stage 0 saw a revoked token die at once, but
+ * not whether revoking one of the pair kills the other, so neither is left
+ * to chance. True when either call was accepted. */
+async function revokeNotionGrant(tokens: {
+  accessToken?: string | null;
+  refreshToken?: string | null;
+}): Promise<boolean> {
+  const results = await Promise.all(
+    [tokens.accessToken, tokens.refreshToken]
+      .filter((t): t is string => typeof t === "string" && t !== "")
+      .map(revokeNotionToken)
+  );
+  return results.some(Boolean);
+}
 
 /** Service-specific upstream revocation, beside REFRESH_FN because this is
  * the same dispatch: per-provider OAuth mechanics keyed by service. A
@@ -135,17 +299,27 @@ const REFRESH_FN: Record<
  *
  * Atlassian is absent deliberately: its revocation story is its own piece of
  * work and guessing at it would be worse than the honest gap. */
-const REVOKE_FN = new Map<string, (token: string) => Promise<boolean>>([
-  ["google-workspace", revokeGoogleToken],
+type RevokeTokens = { accessToken?: string | null; refreshToken?: string | null };
+
+/** Revoking the REFRESH token kills a Google grant including its derived
+ * access tokens, so prefer it and fall back to the access token. */
+async function revokeGoogleGrant(tokens: RevokeTokens): Promise<boolean> {
+  const token = tokens.refreshToken ?? tokens.accessToken;
+  if (!token) return false;
+  return revokeGoogleToken(token);
+}
+
+const REVOKE_FN = new Map<string, (tokens: RevokeTokens) => Promise<boolean>>([
+  ["google-workspace", revokeGoogleGrant],
+  ["notion", revokeNotionGrant],
 ]);
 
 /** Tell the provider to drop a connection's grant before we forget it
  * locally.
  *
  * Deleting only our rows leaves the grant live upstream, where a previously
- * leaked refresh token keeps working. Revoking the REFRESH token kills the
- * whole grant including derived access tokens, so prefer it and fall back to
- * the access token.
+ * leaked refresh token keeps working. Which token(s) each provider is sent
+ * is the provider entry's own decision (see REVOKE_FN).
  *
  * Strictly best effort, and deliberately never throws: a user who clicked
  * disconnect must never stay connected because a provider was slow or down.
@@ -159,9 +333,7 @@ export async function revokeUpstream(
   // to something that is not a revoke function.
   const revoke = REVOKE_FN.get(service);
   if (!revoke) return false;
-  const token = tokens.refreshToken ?? tokens.accessToken;
-  if (!token) return false;
-  return revoke(token);
+  return revoke(tokens);
 }
 
 /** A token together with the ACCOUNT it belongs to.
@@ -183,30 +355,90 @@ export type ResolvedServiceToken = {
   scopes: string | null;
 };
 
+/** One account an ambiguous `account` value could have meant, and the value
+ * that names it alone. */
+export type AccountChoice = {
+  /** What to pass as `account` to reach this one and nothing else. */
+  account: string;
+  email: string;
+  /** The workspace name, for connectors with one (Notion). */
+  workspace: string | null;
+};
+
+/** An `account` value that names more than one connected account. Refused,
+ * never guessed: a guess is a call that may run, or write, as an account the
+ * caller did not mean (SCRUM-366). */
+export type AmbiguousAccount = {
+  ambiguous: true;
+  choices: AccountChoice[];
+  /** Never present, so a caller that reads a token off a refusal without
+   * checking `ambiguous` gets nothing and fails closed, as if no account
+   * matched, rather than failing to compile at every existing call site. */
+  token?: never;
+  accountEmail?: never;
+  scopes?: never;
+};
+
+/** The words for an ambiguous account. `requested` is shown as given, so the
+ * caller passes it already made safe to echo. */
+export function ambiguousAccountMessage(
+  requested: string,
+  choices: AccountChoice[]
+): string {
+  const listed = choices
+    .map((c) =>
+      c.workspace
+        ? `"${c.account}" (${c.email}, workspace ${c.workspace})`
+        : `"${c.account}" (${c.email})`
+    )
+    .join("; ");
+  return `"${requested}" matches more than one connected account. Pass one of these as the account argument: ${listed}.`;
+}
+
+type AccountRow = {
+  email: string;
+  label: string | null;
+  externalAccountId: string | null;
+};
+
+/** Whether `value` names this account. An email always does. A label or
+ * external id does only on a row that carries an external id, which today
+ * means a Notion workspace: a Google or Atlassian label is a display string,
+ * never an address, so their routing is exactly what it was. */
+function accountMatches(row: AccountRow, value: string): boolean {
+  if (row.email === value) return true;
+  if (row.externalAccountId === null) return false;
+  return row.label === value || row.externalAccountId === value;
+}
+
+/** The value that reaches `row` alone among `all`: the workspace name when it
+ * is unique, else the workspace id, else the email. */
+function choiceFor(row: AccountRow, all: AccountRow[]): AccountChoice {
+  const unique = (v: string | null): v is string =>
+    v !== null && all.filter((r) => accountMatches(r, v)).length === 1;
+  const account = [row.label, row.externalAccountId, row.email].find(unique) ??
+    row.externalAccountId ??
+    row.email;
+  return { account, email: row.email, workspace: row.externalAccountId !== null ? row.label : null };
+}
+
 /**
  * Get a valid access token for a user's service connection, together with the
  * account it was resolved for.
  * Routes through connected_accounts when available, with fallback to direct lookup.
  * Refreshes if expired and refresh token is available.
+ *
+ * `account` is matched against the account email; for an account carrying an
+ * external id (a Notion workspace) also against its label (the workspace
+ * name) and the id itself. A value matching more than one account is
+ * refused with the choices (`AmbiguousAccount`), never resolved.
  */
 export async function resolveServiceToken(
   db: Database,
   userId: string,
   service: string,
   accountEmail?: string
-): Promise<ResolvedServiceToken | null> {
-  // Route through connected_accounts via single join
-  const accountConditions = [
-    eq(connectedAccounts.userId, userId),
-    eq(connectedAccounts.connectorType, service),
-  ];
-
-  if (accountEmail) {
-    accountConditions.push(eq(connectedAccounts.accountEmail, accountEmail));
-  } else {
-    accountConditions.push(eq(connectedAccounts.isDefault, true));
-  }
-
+): Promise<ResolvedServiceToken | AmbiguousAccount | null> {
   type ConnRow = {
     id: string;
     accessToken: string;
@@ -218,24 +450,63 @@ export async function resolveServiceToken(
     accountEmail: string | null;
   };
 
-  let conn: ConnRow | undefined = (
-    await db
+  const connColumns = {
+    id: serviceConnections.id,
+    accessToken: serviceConnections.accessToken,
+    refreshToken: serviceConnections.refreshToken,
+    tokenExpiresAt: serviceConnections.tokenExpiresAt,
+    scopes: serviceConnections.scopes,
+    accountEmail: connectedAccounts.accountEmail,
+  };
+  const forUser = [
+    eq(connectedAccounts.userId, userId),
+    eq(connectedAccounts.connectorType, service),
+  ];
+
+  let conn: ConnRow | undefined;
+  if (accountEmail) {
+    // Every account the user holds for this service, so a value can be
+    // judged ambiguous and each choice offered by a value that is not. A
+    // user's accounts for one service are a handful of rows.
+    const rows = await db
       .select({
-        id: serviceConnections.id,
-        accessToken: serviceConnections.accessToken,
-        refreshToken: serviceConnections.refreshToken,
-        tokenExpiresAt: serviceConnections.tokenExpiresAt,
-        scopes: serviceConnections.scopes,
-        accountEmail: connectedAccounts.accountEmail,
+        ...connColumns,
+        label: connectedAccounts.label,
+        externalAccountId: connectedAccounts.externalAccountId,
       })
       .from(connectedAccounts)
       .innerJoin(
         serviceConnections,
         eq(connectedAccounts.serviceConnectionId, serviceConnections.id)
       )
-      .where(and(...accountConditions))
-      .limit(1)
-  )[0];
+      .where(and(...forUser));
+    const asAccount = (r: (typeof rows)[number]): AccountRow => ({
+      email: r.accountEmail,
+      label: r.label,
+      externalAccountId: r.externalAccountId,
+    });
+    const all = rows.map(asAccount);
+    const matches = rows.filter((r) => accountMatches(asAccount(r), accountEmail));
+    if (matches.length > 1) {
+      return {
+        ambiguous: true,
+        choices: matches.map((m) => choiceFor(asAccount(m), all)),
+      };
+    }
+    conn = matches[0];
+  } else {
+    conn = (
+      await db
+        .select(connColumns)
+        .from(connectedAccounts)
+        .innerJoin(
+          serviceConnections,
+          eq(connectedAccounts.serviceConnectionId, serviceConnections.id)
+        )
+        .where(and(...forUser, eq(connectedAccounts.isDefault, true)))
+        .limit(1)
+    )[0];
+  }
 
   // Fallback: direct lookup for un-migrated rows (no explicit account requested)
   if (!conn && !accountEmail) {
@@ -300,5 +571,6 @@ export async function getServiceToken(
   accountEmail?: string
 ): Promise<string | null> {
   const resolved = await resolveServiceToken(db, userId, service, accountEmail);
-  return resolved?.token ?? null;
+  if (!resolved || "ambiguous" in resolved) return null;
+  return resolved.token;
 }
