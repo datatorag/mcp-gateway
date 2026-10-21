@@ -1,0 +1,17 @@
+{
+  "status": 404,
+  "request": {
+    "method": "GET",
+    "path": "/v1/pages/00000000-0000-4000-8000-000000000000"
+  },
+  "body": {
+    "object": "error",
+    "status": 404,
+    "code": "object_not_found",
+    "message": "Could not find page with ID: 00000000-0000-4000-8000-000000000000. Make sure the relevant pages and databases are shared with your integration \"DataToRAG MCP\".",
+    "additional_data": {
+      "integration_id": "4672cb73-ec45-4560-8843-790003b82d5d"
+    },
+    "request_id": "6769db24-2be4-4b8e-864d-bd22e1b85022"
+  }
+}

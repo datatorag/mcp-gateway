@@ -1,0 +1,94 @@
+{
+  "status": 200,
+  "request": {
+    "method": "GET",
+    "path": "/v1/pages/eec14aaa-f8cb-4ef3-82ff-68f50ca52380"
+  },
+  "body": {
+    "object": "page",
+    "id": "eec14aaa-f8cb-4ef3-82ff-68f50ca52380",
+    "created_time": "2026-10-21T03:32:00.000Z",
+    "last_edited_time": "2026-10-21T03:32:00.000Z",
+    "created_by": {
+      "object": "user",
+      "id": "460f4399-740e-44ab-827d-0134421cdedf"
+    },
+    "last_edited_by": {
+      "object": "user",
+      "id": "460f4399-740e-44ab-827d-0134421cdedf"
+    },
+    "cover": null,
+    "icon": null,
+    "parent": {
+      "type": "data_source_id",
+      "data_source_id": "605005f8-d4a8-427b-81f6-788cb7f72781",
+      "database_id": "e6526f80-50c7-438e-8625-e8e78040de6b"
+    },
+    "in_trash": false,
+    "is_archived": false,
+    "is_locked": false,
+    "properties": {
+      "Assignee": {
+        "id": "F%7D%7Bp",
+        "type": "people",
+        "people": [
+          {
+            "object": "user",
+            "id": "460f4399-740e-44ab-827d-0134421cdedf",
+            "name": "Test User",
+            "avatar_url": "https://example.com/avatar.png",
+            "type": "person",
+            "person": {
+              "email": "test-user@example.com",
+              "email_verified": true
+            }
+          }
+        ]
+      },
+      "Status": {
+        "id": "dcfj",
+        "type": "status",
+        "status": {
+          "id": "e6cfe880-2e95-4875-8c6e-3cf09718454b",
+          "name": "Not started",
+          "color": "default"
+        }
+      },
+      "Due date": {
+        "id": "zfqj",
+        "type": "date",
+        "date": {
+          "start": "2026-10-20",
+          "end": null,
+          "time_zone": null
+        }
+      },
+      "Task name": {
+        "id": "title",
+        "type": "title",
+        "title": [
+          {
+            "type": "text",
+            "text": {
+              "content": "Click me to learn how to hide checked items",
+              "link": null
+            },
+            "annotations": {
+              "bold": false,
+              "italic": false,
+              "strikethrough": false,
+              "underline": false,
+              "code": false,
+              "color": "default"
+            },
+            "plain_text": "Click me to learn how to hide checked items",
+            "href": null
+          }
+        ]
+      }
+    },
+    "url": "https://app.notion.com/p/Click-me-to-learn-how-to-hide-checked-items-eec14aaaf8cb4ef382ff68f50ca52380",
+    "public_url": null,
+    "request_id": "3dd28196-1bd7-48da-8520-ec5c01f5392d"
+  }
+}

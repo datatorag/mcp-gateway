@@ -1,0 +1,78 @@
+{
+  "status": 200,
+  "request": {
+    "method": "POST",
+    "path": "/v1/search",
+    "body": {
+      "query": "Getting",
+      "filter": {
+        "property": "object",
+        "value": "page"
+      },
+      "page_size": 5
+    }
+  },
+  "body": {
+    "object": "list",
+    "results": [
+      {
+        "object": "page",
+        "id": "9df6023c-06f4-4bb8-8347-58ae9c910fee",
+        "created_time": "2026-10-21T03:32:00.000Z",
+        "last_edited_time": "2026-10-21T03:37:00.000Z",
+        "created_by": {
+          "object": "user",
+          "id": "460f4399-740e-44ab-827d-0134421cdedf"
+        },
+        "last_edited_by": {
+          "object": "user",
+          "id": "460f4399-740e-44ab-827d-0134421cdedf"
+        },
+        "cover": null,
+        "icon": {
+          "type": "emoji",
+          "emoji": "👋"
+        },
+        "parent": {
+          "type": "workspace",
+          "workspace": true
+        },
+        "in_trash": false,
+        "is_archived": false,
+        "is_locked": false,
+        "properties": {
+          "title": {
+            "id": "title",
+            "type": "title",
+            "title": [
+              {
+                "type": "text",
+                "text": {
+                  "content": "Getting Started",
+                  "link": null
+                },
+                "annotations": {
+                  "bold": false,
+                  "italic": false,
+                  "strikethrough": false,
+                  "underline": false,
+                  "code": false,
+                  "color": "default"
+                },
+                "plain_text": "Getting Started",
+                "href": null
+              }
+            ]
+          }
+        },
+        "url": "https://app.notion.com/p/Getting-Started-9df6023c06f44bb8834758ae9c910fee",
+        "public_url": null
+      }
+    ],
+    "next_cursor": null,
+    "has_more": false,
+    "type": "page_or_data_source",
+    "page_or_data_source": {},
+    "request_id": "2c183c84-fd1c-4502-8ef0-64e5fbc831ed"
+  }
+}

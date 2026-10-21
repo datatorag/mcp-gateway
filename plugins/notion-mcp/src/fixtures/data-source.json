@@ -1,0 +1,132 @@
+{
+  "status": 200,
+  "request": {
+    "method": "GET",
+    "path": "/v1/data_sources/fcfeab17-74c9-4fac-8026-8fdff653c6c5"
+  },
+  "body": {
+    "object": "data_source",
+    "id": "fcfeab17-74c9-4fac-8026-8fdff653c6c5",
+    "cover": null,
+    "icon": {
+      "type": "icon",
+      "icon": {
+        "name": "user-circle",
+        "color": "gray"
+      }
+    },
+    "created_time": "2026-10-21T03:32:00.000Z",
+    "created_by": {
+      "object": "user",
+      "id": "00000000-0000-0000-0000-000000000000"
+    },
+    "last_edited_by": {
+      "object": "user",
+      "id": "460f4399-740e-44ab-827d-0134421cdedf"
+    },
+    "last_edited_time": "2026-10-21T03:37:00.000Z",
+    "title": [
+      {
+        "type": "text",
+        "text": {
+          "content": "People",
+          "link": null
+        },
+        "annotations": {
+          "bold": false,
+          "italic": false,
+          "strikethrough": false,
+          "underline": false,
+          "code": false,
+          "color": "default"
+        },
+        "plain_text": "People",
+        "href": null
+      }
+    ],
+    "description": [],
+    "is_inline": false,
+    "database_type": null,
+    "properties": {
+      "Name": {
+        "id": "title",
+        "name": "Name",
+        "description": null,
+        "type": "title",
+        "title": {}
+      },
+      "About": {
+        "id": "people%3Aabout",
+        "name": "About",
+        "description": null,
+        "type": "rich_text",
+        "rich_text": {}
+      },
+      "Person": {
+        "id": "people%3Aperson",
+        "name": "Person",
+        "description": null,
+        "type": "people",
+        "people": {}
+      },
+      "Membership Type": {
+        "id": "people%3Amembership_type",
+        "name": "Membership Type",
+        "description": null,
+        "type": "select",
+        "select": {
+          "options": [
+            {
+              "id": "owner",
+              "name": "Workspace owner",
+              "color": "red",
+              "description": null
+            },
+            {
+              "id": "membership_admin",
+              "name": "Membership admin",
+              "color": "green",
+              "description": null
+            },
+            {
+              "id": "member",
+              "name": "Member",
+              "color": "blue",
+              "description": null
+            },
+            {
+              "id": "restricted_member",
+              "name": "Restricted member",
+              "color": "yellow",
+              "description": null
+            },
+            {
+              "id": "page_guest",
+              "name": "Guest",
+              "color": "yellow",
+              "description": null
+            },
+            {
+              "id": "none",
+              "name": "Deactivated",
+              "color": "gray",
+              "description": null
+            }
+          ]
+        }
+      }
+    },
+    "parent": {
+      "type": "database_id",
+      "database_id": "bdaf45c7-b172-4935-8ae1-4ff92658d855"
+    },
+    "database_parent": {
+      "type": "workspace",
+      "workspace": true
+    },
+    "url": "https://app.notion.com/p/bdaf45c7b17249358ae14ff92658d855",
+    "public_url": null,
+    "in_trash": false,
+    "request_id": "87adab36-f10f-4ac3-861f-c5db8349ca15"
+  }
+}

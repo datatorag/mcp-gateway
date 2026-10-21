@@ -1,0 +1,20 @@
+{
+  "status": 200,
+  "request": {
+    "method": "POST",
+    "path": "/v1/search",
+    "body": {
+      "query": "zzqqxx-no-such-title",
+      "page_size": 5
+    }
+  },
+  "body": {
+    "object": "list",
+    "results": [],
+    "next_cursor": null,
+    "has_more": false,
+    "type": "page_or_data_source",
+    "page_or_data_source": {},
+    "request_id": "6d625877-da6b-49a7-877d-4362e02ebd7d"
+  }
+}
