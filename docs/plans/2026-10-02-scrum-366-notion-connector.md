@@ -26,23 +26,36 @@ Rules that hold in every stage:
 
 ## Open questions for the founder
 
-Blocking stage 0:
+Decided on 2026-10-20:
 
-1. **Register a development Notion connection?** A public connection in
-   Notion's developer portal with the local callback as redirect URI,
-   installation scope "Any workspace" (permanent once chosen), and the
-   capabilities in question 2. Plus a throwaway workspace with a few pages
-   and one database to test against.
-2. **Capabilities: full set at creation, or read-only first?** Recommended:
-   the full set (read, update and insert content; read and insert comments;
-   user information with email), because adding one later forces every
-   connected user to reconnect. The cost is that the read-only stage holds a
-   grant that could write, which the docs would state.
-3. **Sign in to Notion's hosted MCP once, in the test workspace, so its tool
-   list and a page read and a query through it can be measured?** Without
-   this the overhead comparison against the hosted server stays open.
-4. **Terms review.** Tracked privately; it has to close before the
-   production connection is registered.
+1. ~~Register a Notion connection?~~ Done: one public connection, OAuth,
+   installation scope "Any workspace", with two redirect URIs, the
+   production callback and the local dev callback, both on
+   `/auth/notion/connect/callback`. One connection serves both environments
+   rather than the two the design recommended; revoke is per token, so a
+   local disconnect cannot end a production grant, but if the rate limit
+   proves global, local testing spends production's budget. The secrets are
+   `NOTION_OAUTH_CLIENT_ID` and `NOTION_OAUTH_CLIENT_SECRET`, and the config
+   keys take those names.
+2. ~~Capabilities?~~ The full set: read, update and insert content; read
+   and insert comments; user information with email. The read-only stage
+   holds a grant that could write, and the docs page says so.
+3. ~~Measure the hosted MCP?~~ Yes. A signed-in client exists outside this
+   repository; its tool list is taken from there for stage 0's item 8.
+
+Still open before stage 0 can run:
+
+- The client id and secret in this checkout's local environment, by a
+  route the founder chooses. Never printed, never committed.
+- A dedicated test workspace and a second one, both under the same
+  connection: a database, nested pages and comments in the first, so the
+  parity cases have something to read.
+
+Open, not blocking the build:
+
+4. **Terms review.** Tracked privately. It was to close before the
+   production connection was registered; it now gates the first production
+   deploy.
 
 Blocking a later stage, not stage 0:
 
@@ -55,17 +68,16 @@ Blocking a later stage, not stage 0:
    grows the list a user with all three services sees to about 125.
    Recommended: decide the migration on its own ticket, before Notion's
    stage 2 ships.
-7. **Does the first release need one Notion login in several workspaces?**
-   Different Notion logins work from stage 1. The same login in two
-   workspaces needs the schema change in stage 3; until then the second
-   connect is refused with words.
+7. ~~Does the first release need one Notion login in several workspaces?~~
+   Yes, decided 2026-10-20: the connection installs in any workspace, so
+   the schema change that was stage 3 moves into stage 1 (task 3a).
 8. ~~A new public repo for the plugin?~~ Answered by SCRUM-390: a workspace
    package, `plugins/notion-mcp`, the same shape as the other two.
 
 ## Stage 0: proof. Ships nothing.
 
-Needs: questions 1 to 3 answered, and the dev connection's client id and
-secret in the local environment only.
+Needs: the connection's client id and secret in the local environment
+only, and the two test workspaces. Questions 1 to 3 are answered.
 
 Tasks, each ending in a dated observation written into the design doc's
 section 8:
@@ -110,13 +122,19 @@ merges.
 What a user gets: connect a Notion workspace from the dashboard, then
 search, read pages as markdown, read database schemas, query rows, read
 comments and list people, from any MCP client and from the dashboard agent,
-with several Notion logins under one account.
+with several Notion workspaces under one account, including one Notion
+login in two workspaces.
 
-Order matters and is fixed: provider registration, secrets, plugin, registry
-rows, gateway, checks, docs.
+Order matters and is fixed: provider registration, secrets, migration,
+plugin, registry rows, gateway, checks, docs. The registry path for a new
+plugin (stage 0's item 9) is still open; nothing before task 5 depends on
+it. A plugin with no `mcp_servers` row is never started, so the plugin and
+the gateway's auth and surfaces can merge before the rows exist; what waits
+on them is the classification commit and the launch.
 
-1. **Production connection registered** by the founder; both secrets in the
-   parameter store; the two keys in the config schema, `.env.example`, both
+1. **Connection registered** (done 2026-10-20); both secrets in the
+   parameter store (the founder's); `NOTION_OAUTH_CLIENT_ID` and
+   `NOTION_OAUTH_CLIENT_SECRET` in the config schema, `.env.example`, both
    compose files and the README table. Rebuild the config package before
    trusting a local test of a new key. Verify on the host that the running
    container has both.
@@ -139,15 +157,26 @@ rows, gateway, checks, docs.
    - Tests: a fake client cannot show a missing response, so each tool also
      has one recorded-response test, and the stage ends with a live run
      against the test workspace.
+3a. **Migration: several workspaces under one login** (was stage 3).
+   Nullable `external_account_id` (the workspace id) on
+   `connected_accounts`, the unique key widened to include it. Migration
+   before code; the founder runs it on production through HQ.
+   `upsertServiceAccount`, token resolution and default selection take the
+   workspace into account for Notion and are unchanged for the other two,
+   pinned by the existing default-account suite on real Postgres.
+   `list_connected_accounts` shows the workspace name; the `account`
+   parameter accepts a workspace name where the email is ambiguous, and an
+   ambiguous value is refused with the choices, never guessed.
 3. **Gateway: auth.** The connect pair, `PLUGIN_SERVICE_MAP`, `PROVIDERS`,
    `ATTRIBUTED_PATHS`, `refreshNotionToken` with a row lock and persisted
-   rotation, the Notion entry in `REVOKE_FN`, the refusal of a second
-   workspace under the same email. Whether refresh is driven by expiry or by
-   a 401 follows stage 0.
+   rotation, the Notion entry in `REVOKE_FN`, a second workspace stored
+   beside the first, keyed by workspace id. Whether refresh is driven by
+   expiry or by a 401 follows stage 0.
    - Tests: the CSRF and callback-ordering suites gain the Notion routes;
      a concurrent-refresh test on real Postgres that fails without the lock;
-     a test that the second-workspace connect leaves the first grant's
-     tokens untouched.
+     a test that connecting a second workspace under the same email leaves
+     the first grant's tokens untouched, and that reconnecting the same
+     workspace replaces only its own.
 4. **Gateway: surfaces.** `CONNECTABLE_SERVICES` and its presentation row,
    the icon and its provenance, the server logo, the agent's connection
    copy, the skills service names and connector lookup, the docs connector
@@ -207,20 +236,11 @@ live.
 Gate: as stage 1, plus the send-guard proof and a clean fixture after the
 run.
 
-## Stage 3: several workspaces under one Notion login
+## Stage 3: folded into stage 1
 
-Scheduled only if question 7 says it is needed, and coordinated with
-SCRUM-363, which reads the same key.
-
-1. Migration: nullable `external_account_id` on `connected_accounts`, the
-   unique key widened to include it. Migration before code.
-2. `upsertServiceAccount`, token resolution and default selection take the
-   workspace into account for Notion and are unchanged for the other two,
-   pinned by the existing default-account suite on real Postgres.
-3. `list_connected_accounts` shows the workspace; the `account` parameter
-   accepts a workspace name where the email is ambiguous, and an ambiguous
-   value is refused with the choices, never guessed.
-4. The second-workspace refusal from stage 1 is removed.
+Several workspaces under one Notion login was decided in scope on
+2026-10-20 and is stage 1's task 3a. SCRUM-363 left the key unchanged, so
+nothing else reads the widened key yet.
 
 ## Stage 4: later tools
 

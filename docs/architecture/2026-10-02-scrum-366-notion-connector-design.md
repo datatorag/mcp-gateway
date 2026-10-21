@@ -38,6 +38,14 @@ Each item was read from the code on 2026-10-20, not from memory.
 - **Retry-After (SCRUM-364)** landed in gws-mcp, and **SCRUM-363** landed as
   copy and docs, leaving `connected_accounts` unchanged (section 9).
 
+- **Decided on 2026-10-20.** The connection is registered (OAuth, any
+  workspace, full capabilities, one connection for both environments until
+  stage 0 shows the rate limit is global); the hosted MCP's tool list can be
+  measured from a signed-in client; and one Notion login in several
+  workspaces is in the first release, so that work moves from stage 3 into
+  stage 1 (section 2). Positioning and the registry path for a new plugin
+  are still open, and stage 1 is ordered so neither blocks the build.
+
 The recommendation is unchanged: our own plugin on Notion's REST API, with a
 proof stage first.
 
@@ -200,23 +208,33 @@ requires the "user information with email" capability.
   connected account, routed by email, like two Google accounts.
 - One Notion login in two workspaces: both grants carry the same email and
   collide on the unique key. Left alone, the second connect would overwrite
-  the first one's tokens. The first release refuses the second connect with
-  words rather than overwrite a working grant.
-- Lifting that limit is its own stage (stage 3): a nullable
-  `external_account_id` (the workspace id) on `connected_accounts`, the
-  unique key widened to include it, `label` set to the workspace name,
-  `list_connected_accounts` showing the workspace, and the `account`
-  parameter accepting a workspace name where an email is ambiguous. It is
-  held back because it touches account routing for every connector, and
-  because the identity work in SCRUM-363 reads the same key (section 9).
+  the first one's tokens.
+- Decided in scope for the first release on 2026-10-20, so the fix ships in
+  stage 1: a nullable `external_account_id` (the workspace id) on
+  `connected_accounts`, the unique key widened to include it, `label` set to
+  the workspace name, `list_connected_accounts` showing the workspace, and
+  the `account` parameter accepting a workspace name where an email is
+  ambiguous. It touches account routing for every connector, so the other
+  two keep a null workspace id and their behaviour is pinned unchanged by
+  the default-account suite. SCRUM-363 left the key alone (section 9).
 
 ### What has to be registered, and by whom
 
 Registering an OAuth app is the founder's action, not this session's.
+Registered on 2026-10-20: one public connection, OAuth, installation scope
+"Any workspace", the full capability set below, and two redirect URIs, the
+production callback and the local dev callback. The secrets are
+`NOTION_OAUTH_CLIENT_ID` and `NOTION_OAUTH_CLIENT_SECRET`. What follows is
+the recommendation as written, kept for the reasoning.
 
 - Where: Notion's developer portal, under public connections.
 - Two connections, one for production and one for development, so a local
-  disconnect can never revoke a production grant.
+  disconnect can never revoke a production grant. As registered, one
+  connection serves both. Revoke is per token, so that risk is small; the
+  cost that remains is that if the rate limit is global per connection,
+  local testing spends production's budget. One connection stands until
+  stage 0 shows the limit is global; if it does, a separate development
+  connection is registered.
 - Fields: name, logo, redirect URIs (the gateway's
   `/auth/notion/connect/callback` on the production host; the same path on
   the local dev origin for the dev connection), installation scope,
@@ -227,8 +245,8 @@ Registering an OAuth app is the founder's action, not this session's.
   and insert content; read and insert comments; user information with email)
   at creation, because adding one later forces every connected user to
   reconnect. This means the read-only first stage holds a grant that could
-  write. The docs page says so. Open question 2.
-- Two secrets per environment, `NOTION_CLIENT_ID` and `NOTION_CLIENT_SECRET`,
+  write. The docs page says so. Registered with the full set.
+- Two secrets, `NOTION_OAUTH_CLIENT_ID` and `NOTION_OAUTH_CLIENT_SECRET`,
   through all four hops: the config schema, the parameter store, the host
   render, and the production compose file's environment list.
 - Registration comes before any code that requests the grant.
@@ -503,7 +521,7 @@ ships to users who connect all three.
 ## 7. Terms
 
 The review of Notion's developer terms is tracked privately and has to close
-before the production connection is registered. This document records only
+before the first production deploy. This document records only
 the engineering choices that do not depend on it: OAuth is the only way in,
 and the connector never asks for or accepts a pasted integration token; the
 published request limits are respected (sections 3 and 4).
@@ -552,7 +570,7 @@ What would make us not build this:
   sign-in email, and what to do when an app is on the wrong one. It did not
   change `connected_accounts`: the unique key is still
   `(user_id, connector_type, account_email)`, so section 2's analysis of
-  several workspaces stands, and stage 3 is the only change to that key on
+  several workspaces stands, and stage 1's task 3a is the only change to that key on
   the table.
 - SCRUM-364 (retry on Google rate refusals) has landed in gws-mcp. The
   Notion plugin takes the same rule, keyed on read-only tools rather than on
@@ -564,9 +582,11 @@ The plan is `docs/plans/2026-10-02-scrum-366-notion-connector.md`.
 
 0. Proof: a dev connection and a test workspace, the six unknowns answered,
    the overhead comparison completed. Ships nothing. Ends in go or no-go.
-1. Read-only connector: connect, six reads, docs, changelog. Useful alone.
+1. Read-only connector: connect, several workspaces under one login (moved
+   here from stage 3 on 2026-10-20), six reads, docs, changelog. Useful
+   alone.
 2. Writes: five tools, the send-guard rule, launch copy.
-3. Several workspaces under one Notion login.
+3. Folded into stage 1.
 4. The later tools, each on a concrete request.
 
 ## Open questions
