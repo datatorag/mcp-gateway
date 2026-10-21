@@ -39,14 +39,21 @@ export const a4ThreeWay: TestCase = {
 
       const liveButUnregistered = [...live].filter((n) => !registry.has(n));
       const registeredButAbsent = [...registry].filter((n) => !live.has(n));
-      const registeredButUnserved = [...registry].filter((n) => !served.has(n));
+      const servedHere = [...served].filter((n) => n.startsWith(`${plugin.slug}__`));
+      // A plugin gated by a service this identity has not connected is served
+      // nothing, by design (the listing hides it). Then the third leg is the
+      // gate itself: anything served would be a leak, and nothing is drift.
+      const gatedOff = plugin.gate !== undefined && !plugin.gate.connected;
+      const registeredButUnserved = gatedOff ? [] : [...registry].filter((n) => !served.has(n));
 
       ctx.evidence(
-        `${plugin.slug}: plugin ${live.size}, registry ${registry.size}, served ${[...served].filter((n) => n.startsWith(`${plugin.slug}__`)).length}`
+        `${plugin.slug}: plugin ${live.size}, registry ${registry.size}, served ${servedHere.length}` +
+          (gatedOff ? ` (no ${plugin.gate!.service} connection on this identity, so none expected)` : "")
       );
       if (liveButUnregistered.length) problems.push(`${plugin.slug} serves but the registry lacks: ${liveButUnregistered.join(", ")}`);
       if (registeredButAbsent.length) problems.push(`${plugin.slug} is registered but does not serve: ${registeredButAbsent.join(", ")}`);
       if (registeredButUnserved.length) problems.push(`${plugin.slug} registered but not advertised to this identity: ${registeredButUnserved.join(", ")}`);
+      if (gatedOff && servedHere.length) problems.push(`${plugin.slug} advertised to an identity with no ${plugin.gate!.service} connection: ${servedHere.join(", ")}`);
     }
 
     if (surface.plugins.length === 0) {
