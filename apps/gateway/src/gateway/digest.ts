@@ -86,9 +86,7 @@ const UUID_RE =
 // Only UUID-shaped ids can bind against uuid columns — a PostHog-only
 // distinct_id in the env list would make Postgres throw 22P02 and take the
 // whole Neon section down. Non-UUID ids still apply in the HogQL filter.
-// Shared with the usage snapshot (SCRUM-430) so the dashboard and the
-// digest leave out the same people.
-export function notInternalUserId(db: Database, userIdCol: PgColumn): SQL[] {
+function notInternalUserId(db: Database, userIdCol: PgColumn): SQL[] {
   const ids = internalExclusion().ids.filter((id) => UUID_RE.test(id));
   const internalUsers = db
     .select({ id: users.id })
