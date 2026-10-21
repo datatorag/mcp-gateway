@@ -1,6 +1,6 @@
 import type { TestCase } from "../types";
 import { resultJson, resultText } from "../result-json";
-import { countSignatureBlocks, deliveredFromSearch, partText, type MailPart } from "../mail-parts";
+import { countSignatureBlocks, deliveredFromSearch, partText, type MailPart, arrivalQuery } from "../mail-parts";
 
 /**
  * E15 (smoke row E15): a draft is signed WHEN WRITTEN, and sending
@@ -115,7 +115,7 @@ export const e15DraftSignature: TestCase = {
         async () => {
           const found = await ctx.call(
             "gws-mcp__gmail_search",
-            { query: `subject:"${ctx.stamp}"`, max_results: 10 },
+            { query: arrivalQuery(`subject:"${ctx.stamp}"`), max_results: 10 },
             { as: "reader" }
           );
           // DELIVERED only: with one mailbox, the other draft still waiting

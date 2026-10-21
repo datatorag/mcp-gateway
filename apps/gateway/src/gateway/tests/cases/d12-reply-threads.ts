@@ -1,6 +1,6 @@
 import type { TestCase } from "../types";
 import { firstArray, resultJson } from "../result-json";
-import { deliveredFromSearch } from "../mail-parts";
+import { deliveredFromSearch, arrivalQuery, searchHits } from "../mail-parts";
 
 /**
  * D12 (smoke row D12): a reply lands in the SAME THREAD.
@@ -69,10 +69,10 @@ export const d12ReplyThreads: TestCase = {
     ctx.defer("trash any reply this case sent", async () => {
       const found = await ctx.call(
         "gws-mcp__gmail_search",
-        { query: `"${from.runStamp}" ${token}`, max_results: 10 },
+        { query: arrivalQuery(`"${from.runStamp}" ${token}`), max_results: 10 },
         { as: "sender" }
       );
-      const listed = firstArray(resultJson("gmail_search", found));
+      const listed = searchHits(found);
       if (listed === null) {
         ctx.evidence("RESIDUE: the sweep could not read its own search, so any reply this run sent is still in both mailboxes");
         throw new Error("gmail_search answered without a list anywhere in it, so the reply sweep could not run");
@@ -91,7 +91,7 @@ export const d12ReplyThreads: TestCase = {
       async () => {
         const found = await ctx.call(
           "gws-mcp__gmail_search",
-          { query: `"${from.runStamp}"`, max_results: 25 },
+          { query: arrivalQuery(`"${from.runStamp}"`), max_results: 25 },
           { as: "sender" }
         );
         // DELIVERED hits only, and the decoded body: see D10.

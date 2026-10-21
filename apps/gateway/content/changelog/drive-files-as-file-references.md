@@ -21,3 +21,5 @@ content is not returned and does not enter the conversation.
 A folder, a shortcut, a file in Trash, and a Google file asked for as a stored one are refused
 before anything is read. [Moving files between services](/docs/file-references) lists the
 formats each kind of Google file exports to.
+
+Why these, and what the table says now: [The Gaps in the Comparison Table Were Ours. They Are Closed.](/blog/the-gaps-in-the-table-were-ours).

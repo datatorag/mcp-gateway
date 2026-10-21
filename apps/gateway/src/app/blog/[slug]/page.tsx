@@ -167,7 +167,7 @@ export default async function BlogArticlePage({ params }: Props) {
     <>
       <Navbar />
       <main className="flex-1">
-        <article className="mx-auto max-w-2xl px-6 pb-12 pt-28 sm:pb-16 sm:pt-32">
+        <article className="mx-auto max-w-3xl px-6 pb-12 pt-28 sm:pb-16 sm:pt-32">
           <JsonLd nodes={jsonLd} />
 
           <Link

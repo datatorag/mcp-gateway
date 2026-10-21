@@ -175,5 +175,12 @@ export interface TestCase {
    * scenario, and there are none left once the regroup finishes.
    */
   serial?: string;
+  /**
+   * Further lock names, held together with `serial` for the whole case.
+   * Set by the runner, never by a case: a lock derived from what a case does
+   * cannot be forgotten. Today that is the file-transfer lock (SCRUM-428),
+   * which holds across scenarios where the scenario lock cannot.
+   */
+  locks?: readonly string[];
   run(ctx: CaseContext): Promise<void>;
 }

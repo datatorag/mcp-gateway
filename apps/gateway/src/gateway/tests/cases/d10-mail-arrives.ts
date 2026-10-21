@@ -1,6 +1,6 @@
 import type { TestCase } from "../types";
 import { resultJson } from "../result-json";
-import { deliveredFromSearch } from "../mail-parts";
+import { deliveredFromSearch, arrivalQuery } from "../mail-parts";
 
 /**
  * D10 (smoke row D10): mail actually leaves us and arrives.
@@ -46,7 +46,7 @@ export const d10MailArrives: TestCase = {
       async () => {
         const found = await ctx.call(
           "gws-mcp__gmail_search",
-          { query: `subject:"${ctx.stamp}"`, max_results: 5 },
+          { query: arrivalQuery(`subject:"${ctx.stamp}"`), max_results: 5 },
           { as: "reader" }
         );
         return deliveredFromSearch(found)[0];

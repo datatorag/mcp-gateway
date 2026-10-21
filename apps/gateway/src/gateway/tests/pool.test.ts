@@ -267,3 +267,54 @@ describe("a case waits for what it needs", () => {
     expect(out[0].skipped).toBeUndefined();
   });
 });
+
+/** SCRUM-428: a case can hold more than one lock. The file-transfer lock
+ * has to hold between cases of DIFFERENT scenarios, whose scenario locks
+ * differ, which a single `serial` cannot express. */
+describe("cases holding several locks", () => {
+  const withLocks = (id: string, serial: string, locks: string[]): TestCase => ({ ...c(id, serial), locks });
+
+  it("NEVER overlaps two cases that share any one lock, whatever their serials", async () => {
+    let inFlight = 0;
+    let overlapped = false;
+    await runPool(
+      [
+        withLocks("FD3", "scenario:drive", ["file-transfer"]),
+        withLocks("FD1", "scenario:gmail", ["file-transfer"]),
+        withLocks("JR8", "scenario:jira", ["file-transfer"]),
+      ],
+      async () => {
+        inFlight += 1;
+        if (inFlight > 1) overlapped = true;
+        await new Promise((r) => setTimeout(r, 5));
+        inFlight -= 1;
+      },
+      { size: 4, clock: clock() }
+    );
+    expect(overlapped).toBe(false);
+  });
+
+  it("still runs a case that shares neither lock alongside them", async () => {
+    let peak = 0;
+    let inFlight = 0;
+    await runPool(
+      [withLocks("FD3", "scenario:drive", ["file-transfer"]), c("SH1", "scenario:sheets")],
+      async () => {
+        inFlight += 1;
+        peak = Math.max(peak, inFlight);
+        await new Promise((r) => setTimeout(r, 5));
+        inFlight -= 1;
+      },
+      { size: 4, clock: clock() }
+    );
+    expect(peak).toBe(2);
+  });
+
+  it("lists every lock a run holds", () => {
+    expect(locksOf([withLocks("A", "scenario:drive", ["file-transfer"]), c("B", "scenario:gmail")])).toEqual([
+      "scenario:drive",
+      "file-transfer",
+      "scenario:gmail",
+    ]);
+  });
+});
