@@ -111,7 +111,7 @@ export const PUBLIC_TITLES: Readonly<Record<string, string>> = {
   "JR11": "Log time on an issue and read back what was logged",
   "JR12": "Link two issues, such as one blocking the other",
   "JR13": "Attach a Google Doc to a Jira issue as a PDF",
-  "NT1": "Your Notion connection answers for its own workspace",
+  "NT1": "Your Notion connection answers for the workspace you connected",
   "NT2": "Read a Notion page as markdown, with its properties",
   "NT3": "Find a Notion page by its title",
   "NT4": "See a Notion database and its properties",
