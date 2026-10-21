@@ -41,6 +41,17 @@ export function DocsSidebar({ topLevel, groups, onNavigate }: Props) {
         </Link>
       ))}
 
+      {/* Not a docs page: the latest end-to-end check, as a status page
+          (SCRUM-431). Listed here so a reader of the docs can see what
+          works today. */}
+      <Link
+        href="/status"
+        onClick={onNavigate}
+        className="flex items-center gap-2 rounded-lg px-3 py-1.5 text-sm text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
+      >
+        Status
+      </Link>
+
       {groups.map((group) => (
         <ConnectorGroupNav
           key={group.connector.id}
