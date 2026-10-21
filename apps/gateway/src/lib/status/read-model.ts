@@ -183,7 +183,9 @@ export function buildStatusModel(
   }
   const days = stripDays(now);
 
-  const surfaces = SURFACES.map(({ key, name }) => {
+  const surfaces = SURFACES.map((surface) => {
+    const { key, name } = surface;
+    const servedOnly = "servedOnly" in surface && surface.servedOnly;
     const mine = known
       .filter((r) => surfaceOfCase(r.caseId) === key)
       .map((r) => ({ id: r.caseId, title: PUBLIC_TITLES[r.caseId] ?? CATALOG.get(r.caseId)?.title ?? r.caseId, state: caseState(r.status), durationMs: r.durationMs }))
@@ -202,8 +204,10 @@ export function buildStatusModel(
       if (own.some((r) => r.status === "pass")) return { day, state: "pass" as DayState };
       return { day, state: "none" as DayState };
     });
-    return { key, name, state: (failing ? "failing" : working ? "working" : "not_run") as CaseState, cases: mine, tools, strip };
-  }).filter((s) => s.cases.length > 0 || s.tools.length > 0);
+    return { key, name, servedOnly, state: (failing ? "failing" : working ? "working" : "not_run") as CaseState, cases: mine, tools, strip };
+  })
+    .filter((s) => s.tools.length > 0 || (!s.servedOnly && s.cases.length > 0))
+    .map(({ servedOnly: _servedOnly, ...s }) => s);
 
   const allCases = surfaces.flatMap((s) => s.cases);
   const allTools = surfaces.flatMap((s) => s.tools);

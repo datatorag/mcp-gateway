@@ -61,6 +61,31 @@ describe("what the page reads (SCRUM-431)", () => {
   });
 });
 
+describe("a surface shown only once its tools are served (SCRUM-366)", () => {
+  // Before Notion's registry rows exist the runner records its cases as
+  // skipped and serves none of its tools; a "not run" Notion section would
+  // announce a connector nobody can connect yet.
+  const skipped = [row("A0", "case", "pass"), row("NT2", "case", "skip"), row("NT9", "case", "skip")];
+
+  it("hides Notion while none of its tools is served, even with case rows", () => {
+    const model = buildStatusModel(RUN, skipped, [], NOW);
+    expect(model.surfaces.map((s) => s.key)).not.toContain("notion");
+    expect(model.surfaces.map((s) => s.key)).toContain("gateway");
+  });
+
+  it("shows Notion once one of its tools is served", () => {
+    const model = buildStatusModel(RUN, [...skipped, row("contract:notion-mcp__notion_get_page", "contract", "pass")], [], NOW);
+    const notion = model.surfaces.find((s) => s.key === "notion");
+    expect(notion?.cases.map((c) => c.id).sort()).toEqual(["NT2", "NT9"]);
+    expect(notion?.tools.map((t) => t.name)).toEqual(["notion_get_page"]);
+  });
+
+  it("leaves every other surface as before: cases alone still show it", () => {
+    const model = buildStatusModel(RUN, [row("CA5", "case", "skip")], [], NOW);
+    expect(model.surfaces.map((s) => s.key)).toContain("calendar");
+  });
+});
+
 describe("the model", () => {
   const results = [
     row("A0", "case", "pass"), // the runner's gate: Platform, not retired
