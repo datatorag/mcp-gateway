@@ -8,8 +8,18 @@
 -- that point at `mcp_servers`, so the rollback can refuse while either holds a
 -- row for the server: their cascade would otherwise delete env vars and a
 -- user's plugin connection with it. Nothing else: no other table, no schema
--- change, no role or database rights. So even a file that got past the check
--- in scripts/registry-file-check.mjs could only change registry rows.
+-- change, no role or database rights.
+--
+-- One limit the role does NOT enforce: Postgres runs ON DELETE CASCADE as the
+-- table's owner, so a DELETE on mcp_servers issued as this role outside a
+-- checked file would also remove that server's env vars and users' plugin
+-- connections. The refusal while those rows exist is in the generated
+-- rollback and is enforced by scripts/registry-file-check.mjs, not by this
+-- grant. Before SCRUM-366 a file that got past the check could only change
+-- registry rows; with the DELETE grant, that holds only for files the check
+-- accepted. Two new-plugin files must also never run at the same time: the
+-- port is re-checked after the insert, but container_port carries no unique
+-- constraint, and the workflow's concurrency group is what serialises runs.
 --
 -- PROPOSAL, NOT APPLIED (SCRUM-366). The four lines marked SCRUM-366 below are
 -- new. The role already exists on production, so this file is not re-run:
