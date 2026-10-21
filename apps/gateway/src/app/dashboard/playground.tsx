@@ -47,6 +47,10 @@ import { Spinner } from "@/components/ui/spinner";
 import Link from "next/link";
 import { ConnectGrantContext, ConnectPart, ConnectReturnContext, RunControlContext } from "./agent-parts";
 import { SERVICES } from "./connections/services";
+import {
+  ALWAYS_OFFERED_SERVICE_IDS,
+  offeredServices,
+} from "./connections/service-registry";
 import { buttonVariants } from "@/components/ui/button";
 import {
   AGENT_CAP_BODY,
@@ -91,14 +95,18 @@ const CAP_EXCEEDED = "cap_exceeded";
 export const RATE_LIMITED =
   "That was a lot of requests in a short time. Wait a moment, then send it again.";
 
-/** The connectable services, in the shape the connect control takes. Derived
- * from the one SERVICES list rather than restated, so a new connector appears
- * in the thread without anyone remembering to add it here. */
-const CONNECTABLE_SERVICES = SERVICES.map((service) => ({
-  id: service.id,
-  name: service.name,
-  connectHref: service.connectUrl,
-}));
+/** The connectable services this gateway may offer, in the shape the connect
+ * control takes. Derived from the one SERVICES list rather than restated, so a
+ * new connector appears in the thread without anyone remembering to add it
+ * here, and filtered by the launched set (SCRUM-366), so a service whose
+ * plugin has not launched is never offered. */
+function connectControlServices(launched: readonly string[]) {
+  return offeredServices(SERVICES, launched).map((service) => ({
+    id: service.id,
+    name: service.name,
+    connectHref: service.connectUrl,
+  }));
+}
 
 /* -------------------------------------------------------------------------- */
 /* Layout                                                                      */
@@ -263,6 +271,9 @@ interface PlaygroundProps {
    * the composer is rendered: a page with nothing to type in is
    * indistinguishable from a broken one. */
   connectionsLoaded: boolean;
+  /** The service ids the connect control may offer (SCRUM-366), from the
+   * same connections view as `accounts`. Defaults to the ungated services. */
+  launchedServices?: readonly string[];
   /** Which shape to render. Defaults to the embedded dashboard widget, so an
    * existing caller keeps exactly what it had. */
   layout?: PlaygroundLayout;
@@ -321,6 +332,7 @@ export const Playground = forwardRef<PlaygroundHandle, PlaygroundProps>(
       hasConnectedAccount,
       accounts,
       connectionsLoaded,
+      launchedServices = ALWAYS_OFFERED_SERVICE_IDS,
       loadSuggestions,
       layout = "panel",
       threadId = null,
@@ -986,7 +998,7 @@ export const Playground = forwardRef<PlaygroundHandle, PlaygroundProps>(
                         </p>
                       )}
                       <ConnectPart
-                        services={CONNECTABLE_SERVICES}
+                        services={connectControlServices(launchedServices)}
                         source="empty_state"
                       />
                       {locked && (

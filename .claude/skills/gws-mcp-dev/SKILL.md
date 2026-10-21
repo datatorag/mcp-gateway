@@ -82,16 +82,24 @@ Notion version changes nothing until the header moves. Rate refusals
 (429, Notion's 529) are retried only for tools marked read-only, never by
 HTTP method, because search and data-source queries are POSTs. Notion
 answers an unshared page and a missing one with the same 404
-`object_not_found`; the client words both. Property values go in and out
-as plain values through `src/properties.ts`. It was born in this
-repository (SCRUM-366), so it has no imported history.
+`object_not_found`; the client words both. 18 tools: six reads
+(`src/tools/notion.ts`) and twelve writes (`src/tools/notion-write.ts`),
+every write annotated destructive and never retried. Content goes in as
+Notion's markdown; property values go in and out as plain values
+(`src/properties.ts` reads, `src/encode.ts` writes against the data
+source schema). Deleting a page is `notion_update_page` with `in_trash`,
+and a duplicate is a read plus a create. Its writes have rules in the
+runner's send guard (see Conventions). It was born in this repository
+(SCRUM-366), so it has no imported history.
 
 **Adding a plugin.** Three places name each plugin one by one and refuse or
 skip an unknown one: the gateway `Dockerfile` (its files and a
 `plugin-<slug>` account, without which it is never started),
 `scripts/gate.sh`'s path table (an unlisted plugin path falls to `all`,
 which runs every suite except the new plugin's), and `PLUGIN_SERVICE_MAP`.
-CI's tool-file step loops over `plugins/` and needs nothing.
+CI's tool-file step loops over `plugins/` and needs nothing. Its
+`mcp_servers` row, without which the manager never starts it, comes from
+the registry pair like its first tools (Ship tail), never by hand.
 
 ## Adding or changing a tool
 
@@ -140,6 +148,23 @@ gateway deploy carries it. What goes with it:
    commits must have been built on main after tool files were kept. The
    order against the deploy is in the spec's section 5. Prove the result
    from `tools/list` through the gateway, not from the plugin's source.
+
+   **A new plugin goes through the same command** (SCRUM-366). When
+   `plugins/<slug>` does not exist at the running sha, the missing tool
+   file is read as an empty set and the forward file also inserts the
+   plugin's `mcp_servers` row, first, in the same transaction: name and
+   manifest from `datatorag.json`, description from it or `package.json`,
+   license from `package.json`, a source link into this repository (the
+   call path needs it set), status `active`, and the lowest port from
+   40000 that no row holds, chosen and checked by the statement. It raises
+   if the slug has a row; the rollback deletes the tools and then that
+   row, md5-guarded, and refuses while an env var or plugin connection
+   row points at it. When the running image already carries the plugin,
+   pass `--new-plugin` to force the same files; the insert's slug guard
+   makes that safe. The registry role needs a grant change (drafted in
+   `registry/roles/`, applied by HQ) before the workflow can run such a
+   file, and a new plugin's order against the deploy is not a tool's:
+   `registry/README.md` has both.
 2. **Gateway docs + changelog + tool-count check**: if the change is
    user-visible, add a changelog entry, update the relevant
    `apps/gateway/content/docs/*.md` page, and recheck tool-count claims in
@@ -179,7 +204,11 @@ gateway deploy carries it. What goes with it:
   to mail the run itself sent. The same holds past mail (SCRUM-428): a
   thread move needs every message in the thread to carry the run's stamp,
   a share goes only to a fixture account and with notify false, and an
-  RSVP needs send_updates none.
+  RSVP needs send_updates none. Notion (SCRUM-366): a write reaches only the
+  fixture page, data source and database and what the run created (known by
+  the id each create answered with, not by title), every create is titled
+  with the smoke prefix and run stamp, and a comment or page content may not
+  mention a person. A new `notion_` write tool is refused until it has a rule.
 
 ## Gotchas
 

@@ -7,8 +7,9 @@ import { disconnectService } from "@/gateway/connected-accounts";
 import { scopeDelta } from "@/gateway/scope-grant";
 import { trackConnectCardShown } from "@/gateway/track";
 import {
+  ALWAYS_OFFERED_SERVICE_IDS,
   CONNECTABLE_SERVICES,
-  getConnectableService,
+  offeredServices,
 } from "@/app/dashboard/connections/service-registry";
 
 /**
@@ -45,7 +46,15 @@ import {
  * model to say about WHOSE account this is. */
 const NO_ARGS = z.object({});
 
-export type IntrospectionDeps = { db: Database; userId: string };
+export type IntrospectionDeps = {
+  db: Database;
+  userId: string;
+  /** The services `request_connection` may offer (SCRUM-366), from
+   * `launchedServiceIds`. Read by the caller, which is already async, so
+   * building the tools stays synchronous. Absent means the ungated services
+   * only: a caller that forgot to ask never offers a service with no tools. */
+  launchedServices?: Iterable<string>;
+};
 
 /** Deep links, defined here so the agent points at a place rather than at
  * "the dashboard". A link to a specific view is the difference between an
@@ -61,7 +70,16 @@ export const DASHBOARD_LINKS = {
  * the v7 client line and the agent runtime bridges v5, so a v7 tool object
  * carries fields the runtime's tool type rejects. The structural shape below
  * is what it accepts. */
-export function buildIntrospectionTools({ db, userId }: IntrospectionDeps) {
+export function buildIntrospectionTools({
+  db,
+  userId,
+  launchedServices = ALWAYS_OFFERED_SERVICE_IDS,
+}: IntrospectionDeps) {
+  // What request_connection may offer: its enum, its description and its
+  // lookup are all this list, so a service that has not launched is not
+  // named to the model at all and cannot be asked for.
+  const connectable = offeredServices(CONNECTABLE_SERVICES, launchedServices);
+  const connectableIds = connectable.map((s) => s.id);
   // account_status is GONE (SCRUM-188), deliberately deleted rather than
   // patched: it was a second, older copy of "what am I connected to" that
   // collapsed accounts to service names and reported the default account's
@@ -123,15 +141,13 @@ export function buildIntrospectionTools({ db, userId }: IntrospectionDeps) {
       description:
         "Show the user an inline Connect control for a service they have not " +
         "connected, right here in the conversation. Call this whenever their " +
-        "request needs a service (google-workspace or atlassian) you have no " +
+        `request needs a service (${connectableIds.join(" or ")}) you have no ` +
         "tools for. After calling it, tell the user plainly what you cannot do " +
         "until they connect, and that once they connect you will continue " +
         "their request. Do not send them to any other page.",
       inputSchema: z.object({
         service: z
-          .enum(
-            CONNECTABLE_SERVICES.map((s) => s.id) as [string, ...string[]]
-          )
+          .enum(connectableIds as [string, ...string[]])
           .describe("The service the user's request needs."),
       }),
       execute: async (
@@ -145,7 +161,7 @@ export function buildIntrospectionTools({ db, userId }: IntrospectionDeps) {
           };
         }
       ) => {
-        const entry = getConnectableService(service);
+        const entry = connectable.find((s) => s.id === service);
         if (!entry) {
           return { error: `Unknown service: ${service}` };
         }

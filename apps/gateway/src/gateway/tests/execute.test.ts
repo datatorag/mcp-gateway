@@ -417,6 +417,98 @@ describe("the context a case is handed", () => {
 });
 
 /**
+ * Notion calls run as a WORKSPACE (SCRUM-366). One email can hold several
+ * Notion workspaces, so the account the runner injects for `notion` and
+ * `notionSecond` is the mapped workspace id, which the gateway matches
+ * exactly. The second form, routing by the workspace's NAME, is what a user
+ * types; the runner resolves that name from the gateway's own
+ * `list_connected_accounts` answer for the mapped id, so a case still never
+ * chooses an account, and refuses when the name would not pick exactly one.
+ */
+describe("a Notion call", () => {
+  const W1 = "0000aaaa-bbbb-4ccc-8ddd-eeeeffff0001";
+  const W2 = "0000aaaa-bbbb-4ccc-8ddd-eeeeffff0002";
+  const fixtures = parseFixtureMap(
+    JSON.stringify({ accounts: { sender: "s@example.test", notion: W1, notionSecond: W2 } })
+  );
+  const accountsAnswer = (rows: Record<string, unknown>[]) => ({
+    content: [{ type: "text", text: JSON.stringify({ notion: rows }) }],
+  });
+  const both = [
+    { email: "one@example.test", workspace: "Workspace One", workspace_id: W1 },
+    { email: "one@example.test", workspace: "Workspace Two", workspace_id: W2 },
+  ];
+  const makeClient = (accounts: { content: { type: string; text: string }[] }) => ({
+    listTools: vi.fn().mockResolvedValue([]),
+    callTool: vi.fn(async (name: string) =>
+      name === "list_connected_accounts" ? accounts : { content: [{ type: "text", text: "{}" }] }
+    ),
+    close: vi.fn(),
+  });
+
+  it("runs as the mapped workspace id for each Notion role", async () => {
+    const client = makeClient(accountsAnswer(both));
+    const parts = makeContextParts({ client, fixtures, called: [] });
+    await parts.call("notion-mcp__notion_search", { query: "x" }, { as: "notion" });
+    await parts.call("notion-mcp__notion_search", { query: "x" }, { as: "notionSecond" });
+    expect(client.callTool.mock.calls).toEqual([
+      ["notion-mcp__notion_search", { query: "x", account: W1 }],
+      ["notion-mcp__notion_search", { query: "x", account: W2 }],
+    ]);
+  });
+
+  it("REFUSES a Notion tool run as a Google role, and a Google tool run as a Notion role", async () => {
+    const client = makeClient(accountsAnswer(both));
+    const parts = makeContextParts({ client, fixtures, called: [] });
+    await expect(parts.call("notion-mcp__notion_search", {}, { as: "sender" })).rejects.toThrow(/never as sender/);
+    await expect(parts.call("gws-mcp__sheets_read", {}, { as: "notion" })).rejects.toThrow(/never as notion/);
+    expect(client.callTool).not.toHaveBeenCalled();
+  });
+
+  it("routed by workspace name, sends the name the gateway lists for the mapped id", async () => {
+    const client = makeClient(accountsAnswer(both));
+    const called: string[] = [];
+    const parts = makeContextParts({ client, fixtures, called });
+    await parts.call("notion-mcp__notion_get_page", { page_id: "p" }, { as: "notionSecond", route: "workspace-name" });
+    expect(client.callTool).toHaveBeenLastCalledWith("notion-mcp__notion_get_page", {
+      page_id: "p",
+      account: "Workspace Two",
+    });
+    // The lookup is the runner's, not the case's: it is not coverage.
+    expect(called).toEqual(["notion-mcp__notion_get_page"]);
+  });
+
+  it("REFUSES a name route when no connected account carries the mapped workspace", async () => {
+    const client = makeClient(accountsAnswer([both[0]]));
+    const parts = makeContextParts({ client, fixtures, called: [] });
+    await expect(
+      parts.call("notion-mcp__notion_get_page", { page_id: "p" }, { as: "notionSecond", route: "workspace-name" })
+    ).rejects.toThrow(/no connected account carries the workspace mapped for notionSecond/);
+    expect(client.callTool.mock.calls.map(([name]) => name)).toEqual(["list_connected_accounts"]);
+  });
+
+  it("REFUSES a name route when the name would match more than one account", async () => {
+    const client = makeClient(
+      accountsAnswer([both[0], { email: "two@example.test", workspace: "Workspace One", workspace_id: W2 }])
+    );
+    const parts = makeContextParts({ client, fixtures, called: [] });
+    await expect(
+      parts.call("notion-mcp__notion_get_page", { page_id: "p" }, { as: "notion", route: "workspace-name" })
+    ).rejects.toThrow(/names 2 connected accounts/);
+    expect(client.callTool.mock.calls.map(([name]) => name)).toEqual(["list_connected_accounts"]);
+  });
+
+  it("REFUSES a name route for a role that names no workspace", async () => {
+    const client = makeClient(accountsAnswer(both));
+    const parts = makeContextParts({ client, fixtures, called: [] });
+    await expect(
+      parts.call("gws-mcp__sheets_read", {}, { as: "sender", route: "workspace-name" })
+    ).rejects.toThrow(/sender names no workspace/);
+    expect(client.callTool).not.toHaveBeenCalled();
+  });
+});
+
+/**
  * A tool this run does not serve is a missing prerequisite, not a product
  * finding. Written after `sheets_query` shipped and the dev branch's
  * registry never got the row: every run there would have reported a working

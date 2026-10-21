@@ -77,6 +77,8 @@ beforeAll(async () => {
       gwsClientSecret: "gws-secret",
       atlassianClientId: "atl-cid",
       atlassianClientSecret: "atl-secret",
+      notionClientId: "notion-cid",
+      notionClientSecret: "notion-secret",
       baseUrl: "http://127.0.0.1", // http => non-secure cookies, fine for a test
     })
   );

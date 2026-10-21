@@ -30,7 +30,11 @@ import { mcpServers, pluginConnections, tools } from "@datatorag-mcp/db";
 import { argumentRefusalText, validateArguments } from "./argument-validation";
 import type { ConnectionPool } from "./pool";
 import { NAMESPACE_SEPARATOR } from "./plugin-manager";
-import { PLUGIN_SERVICE_MAP, resolveServiceToken } from "./service-token";
+import {
+  PLUGIN_SERVICE_MAP,
+  ambiguousAccountMessage,
+  resolveServiceToken,
+} from "./service-token";
 import {
   listUserToolRows,
   buildPluginServerUrl,
@@ -51,6 +55,7 @@ import {
   MISSING_SCOPE_ERROR_MARKER,
 } from "./scope-grant";
 import { grantLine, type ConnectedAccountLine } from "./account-grant-line";
+import { cleanWorkspaceName } from "./untrusted-text";
 import { crossFile, fileCrossingFor } from "./file-crossing";
 import { createDownloadLink, DOWNLOAD_TOOL, revokeLinksCarriedIn } from "./file-download";
 import { downloadDepsFor } from "./file-download-route";
@@ -576,7 +581,7 @@ export const BUILT_IN_TOOLS: {
     definition: {
       name: "list_connected_accounts",
       description:
-        "List the user's connected accounts grouped by service. Use this to discover which accounts are available before passing the 'account' parameter to other tools. Each Google Workspace account also says which services it granted (granted_services) and which it did not (missing_services). A call that fails for a missing permission is explained here, and the account is reconnected at /dashboard/connections.",
+        "List the user's connected accounts grouped by service. Use this to discover which accounts are available before passing the 'account' parameter to other tools. Each Google Workspace account also says which services it granted (granted_services) and which it did not (missing_services). Each Notion account names its workspace (workspace, workspace_id); when one email holds several Notion workspaces, pass the workspace name or id as 'account' instead of the email. A call that fails for a missing permission is explained here, and the account is reconnected at /dashboard/connections.",
       inputSchema: {
         type: "object" as const,
         properties: {},
@@ -600,11 +605,19 @@ export const BUILT_IN_TOOLS: {
       for (const row of rows) {
         const key = row.connectorType;
         if (!grouped[key]) grouped[key] = [];
+        // A label is a display name: for a Notion account it is the
+        // workspace name, set by whoever administers that workspace
+        // (SCRUM-366). Cleaned again here, not trusted from the store, and
+        // only ever a value inside this JSON.
+        const label = cleanWorkspaceName(row.label);
         grouped[key].push({
           email: row.accountEmail,
-          label: row.label,
+          label,
           is_default: row.isDefault,
           connected_at: row.connectedAt.toISOString().split("T")[0],
+          ...(row.externalAccountId
+            ? { workspace: label, workspace_id: row.externalAccountId }
+            : {}),
           // What the account granted, by service name (SCRUM-412).
           ...grantLine(row.connectorType, row.scopes),
         });
@@ -1152,12 +1165,30 @@ export function createMcpServer(
       const requestedAccount = args.account as string | undefined;
       delete args.account;
 
-      const resolved = await resolveServiceToken(
+      const resolution = await resolveServiceToken(
         db,
         userId,
         requiredService,
         requestedAccount
       );
+      // SCRUM-366: a value naming more than one account (one Notion login in
+      // two workspaces, addressed by its email) is refused with the choices,
+      // never resolved to one of them. Nothing is dispatched.
+      if (resolution && "ambiguous" in resolution) {
+        return {
+          content: [
+            {
+              type: "text" as const,
+              text: ambiguousAccountMessage(
+                echoName(requestedAccount),
+                resolution.choices
+              ),
+            },
+          ],
+          isError: true,
+        };
+      }
+      const resolved = resolution;
       userToken = resolved?.token ?? null;
       // The account STAMPED on the usage event is the one the resolution
       // actually chose, not the caller's argument:

@@ -6,7 +6,7 @@ import {
   LIVE_REGISTRY_DATABASE_URL,
   NEEDS_LIVE_REGISTRY,
 } from "@/test-utils/live-registry";
-import { classifyWrite, KNOWN_READ_TOOLS } from "./tools";
+import { classifyWrite, isWriteTool, KNOWN_READ_TOOLS } from "./tools";
 import { REGISTRY_CLASSIFICATION } from "./registry-snapshot";
 
 /**
@@ -77,6 +77,45 @@ describe("registry write/read classification snapshot", () => {
     expect(names.has("gws-mcp__gmail_create_filter")).toBe(false);
     expect(names.has("gws-mcp__gmail_delete_filter")).toBe(false);
     expect(names.has("gws-mcp__gmail_list_filters")).toBe(true);
+  });
+
+  /** The Notion connector (SCRUM-366) ships eighteen tools: six reads, each
+   * declared `readOnlyHint: true` by the plugin, and twelve writes. The gate
+   * agrees on its own, by name. Pinned as a set so a nineteenth notion tool
+   * arrives here as a question rather than as a silent prompt, and so a write
+   * cannot be added to the read half of this list by habit.
+   *
+   * Every write is caught by the VERB FLOOR, not by the fail-closed default:
+   * a write that is a write only because nothing recognised it is one
+   * KNOWN_READ_TOOLS entry away from running unprompted, and the floor is the
+   * one thing that entry cannot dig under. `duplicate` joined the verb list
+   * for `notion_duplicate_page`, which creates a page. */
+  it("records the six Notion reads as reads and the twelve writes as writes, each write caught by a verb", () => {
+    const notion = REGISTRY_CLASSIFICATION.filter(([name]) => name.startsWith("notion-mcp__"));
+    expect(notion).toEqual([
+      ["notion-mcp__notion_create_comment", "write"],
+      ["notion-mcp__notion_create_database", "write"],
+      ["notion-mcp__notion_create_page", "write"],
+      ["notion-mcp__notion_create_view", "write"],
+      ["notion-mcp__notion_delete_comment", "write"],
+      ["notion-mcp__notion_duplicate_page", "write"],
+      ["notion-mcp__notion_get_comments", "read"],
+      ["notion-mcp__notion_get_database", "read"],
+      ["notion-mcp__notion_get_page", "read"],
+      ["notion-mcp__notion_list_users", "read"],
+      ["notion-mcp__notion_move_page", "write"],
+      ["notion-mcp__notion_query_data_source", "read"],
+      ["notion-mcp__notion_search", "read"],
+      ["notion-mcp__notion_update_comment", "write"],
+      ["notion-mcp__notion_update_data_source", "write"],
+      ["notion-mcp__notion_update_page", "write"],
+      ["notion-mcp__notion_update_page_content", "write"],
+      ["notion-mcp__notion_update_view", "write"],
+    ]);
+    for (const [name, recorded] of notion) {
+      expect(classifyWrite(name), name).toBe(recorded === "write");
+      expect(isWriteTool(name), `${name} by its verb`).toBe(recorded === "write");
+    }
   });
 
   it("KNOWN_READ_TOOLS is exactly this snapshot's read set", () => {

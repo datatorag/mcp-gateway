@@ -112,6 +112,20 @@ import { sk1SkillsOwn } from "./sk1-skills-own";
 import { sk2SkillsFork } from "./sk2-skills-fork";
 import { r1FrontDoor } from "./r1-front-door";
 import { r2AdminOnly } from "./r2-admin-only";
+import { nt1NotionUsersMe } from "./nt1-notion-users-me";
+import { nt2NotionGetPage } from "./nt2-notion-get-page";
+import { nt3NotionSearch } from "./nt3-notion-search";
+import { nt4NotionGetDatabase } from "./nt4-notion-get-database";
+import { nt5NotionQuery } from "./nt5-notion-query";
+import { nt6NotionComments } from "./nt6-notion-comments";
+import { nt7NotionTwoWorkspaces } from "./nt7-notion-two-workspaces";
+import { nt8NotionDuplicate } from "./nt8-notion-duplicate";
+import { nt9NotionPageContent } from "./nt9-notion-page-content";
+import { nt10NotionMove } from "./nt10-notion-move";
+import { nt11NotionCommentLifecycle } from "./nt11-notion-comment-lifecycle";
+import { nt12NotionDatabase } from "./nt12-notion-database";
+import { nt13NotionRowProperties } from "./nt13-notion-row-properties";
+import { nt14NotionView } from "./nt14-notion-view";
 
 /**
  * Every registered case (SCRUM-303).
@@ -260,6 +274,20 @@ export const CASES: TestCase[] = [
   cf5ConfluenceThreads,
   sk1SkillsOwn,
   sk2SkillsFork,
+  nt1NotionUsersMe,
+  nt2NotionGetPage,
+  nt3NotionSearch,
+  nt4NotionGetDatabase,
+  nt5NotionQuery,
+  nt6NotionComments,
+  nt7NotionTwoWorkspaces,
+  nt8NotionDuplicate,
+  nt9NotionPageContent,
+  nt10NotionMove,
+  nt11NotionCommentLifecycle,
+  nt12NotionDatabase,
+  nt13NotionRowProperties,
+  nt14NotionView,
   r1FrontDoor,
   r2AdminOnly,
 ];

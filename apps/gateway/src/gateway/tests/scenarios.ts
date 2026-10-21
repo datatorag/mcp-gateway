@@ -43,6 +43,7 @@ export const SCENARIO_KEYS = [
   "slides",
   "confluence",
   "skills",
+  "notion",
 ] as const;
 
 export type ScenarioKey = (typeof SCENARIO_KEYS)[number];
@@ -311,6 +312,38 @@ export const SCENARIOS: Scenario[] = [
       "C13", // search returns a skill and get loads it
       "SK1", // a skill of your own is created, revised and deleted
       "SK2", // forking a published skill shadows it; deleting restores it
+    ],
+  },
+  {
+    key: "notion",
+    title: "find a page, read it, read a database and its rows, keep two workspaces apart, then write and take back",
+    steps: [
+      /* THE READS FIRST, then the writes (SCRUM-366, stage 2). NT1 needs no
+       * fixture, so it runs first and a red there is the token or the
+       * workspace rather than a fixture. The reads see the fixtures before
+       * any write has touched them.
+       *
+       * Every write is a restoring pair on something this run created and
+       * labelled with the smoke prefix and the run stamp, under the fixture
+       * page: created then trashed (read back in_trash), changed then
+       * restored (read back). The send guard holds a test run's Notion
+       * writes to the fixtures and what the run created; see send-guard.ts.
+       * NT8 copies the fixture page, so it runs before any write has given
+       * the fixture page a child. */
+      "NT1", // list_users with me answers the connection's own bot
+      "NT2", // the fixture page reads back with markdown and plain properties
+      "NT3", // a search by that page's title finds it
+      "NT4", // the fixture database lists the fixture data source, with a schema
+      "NT5", // rows come back plain, and the cursor returns a different row
+      "NT6", // the fixture page's comments answer the list shape
+      "NT7", // each workspace sees only its own page; a workspace name routes to it
+      "NT8", // the fixture page duplicated under its own label, the copy trashed
+      "NT9", // a page created, its content edited and restored, its title changed and restored, trashed
+      "NT10", // a created page moved under another and back, both trashed
+      "NT11", // a comment on the fixture page created, edited, deleted
+      "NT12", // a database created, a property added and removed, its data source and page trashed
+      "NT13", // a row's properties set as plain values and restored
+      "NT14", // a view created, queried through, renamed
     ],
   },
 ];

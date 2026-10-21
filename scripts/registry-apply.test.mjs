@@ -104,3 +104,26 @@ test("nothing it prints, on success, contains the connection string or its parts
   const text = out.join("\n");
   for (const secret of ["secret-fixture", "db.example.test", URL_FIXTURE]) assert.ok(!text.includes(secret), secret);
 });
+
+test("shows a new plugin's server-row guard messages too, and only the generator's", async () => {
+  for (const message of [
+    "forward mcp_servers notion-mcp: expected 1 row, inserted 0",
+    "forward mcp_servers notion-mcp: expected 1 row on its port, found 2",
+    "rollback mcp_servers notion-mcp: expected 1 row, deleted 0",
+  ]) {
+    const err = Object.assign(new Error(message), { code: "P0001" });
+    const { code, out } = await run({}, fakeDb({ fail: err }));
+    assert.equal(code, 1);
+    assert.ok(out.join("\n").includes(`rolled back: ${message}`), message);
+  }
+  // Known-bad: a raise shaped like one but not the generator's is not shown.
+  for (const message of [
+    `forward mcp_servers notion-mcp: expected 1 row on its port, found 2 ${URL_FIXTURE}`,
+    "forward mcp_servers Not A Slug: expected 1 row, inserted 0",
+    "rollback mcp_servers notion-mcp: expected 1 row on its port, found 2",
+  ]) {
+    const err = Object.assign(new Error(message), { code: "P0001" });
+    const { out } = await run({}, fakeDb({ fail: err }));
+    assert.ok(!out.join("\n").includes(message), message);
+  }
+});

@@ -177,6 +177,8 @@ async function main() {
       gwsClientSecret: env.GOOGLE_GWS_CLIENT_SECRET,
       atlassianClientId: env.ATLASSIAN_CLIENT_ID,
       atlassianClientSecret: env.ATLASSIAN_CLIENT_SECRET,
+      notionClientId: env.NOTION_OAUTH_CLIENT_ID,
+      notionClientSecret: env.NOTION_OAUTH_CLIENT_SECRET,
       baseUrl,
     })
   );

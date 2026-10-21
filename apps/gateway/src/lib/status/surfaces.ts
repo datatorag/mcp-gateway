@@ -22,6 +22,10 @@ export const SURFACES = [
   { key: "contacts", name: "Contacts" },
   { key: "jira", name: "Jira" },
   { key: "confluence", name: "Confluence" },
+  // Shown only once one of its tools is served: until the registry rows
+  // exist the runner records Notion's cases as skipped, and a "not run"
+  // section would announce a connector nobody can connect yet (SCRUM-366).
+  { key: "notion", name: "Notion", servedOnly: true },
   { key: "skills", name: "Skills" },
   { key: "gateway", name: "Platform" },
 ] as const;

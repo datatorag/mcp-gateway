@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import type { ConnectedAccount, LegacyConnection } from "./connections/types";
+import { ALWAYS_OFFERED_SERVICE_IDS } from "./connections/service-registry";
 
 /**
  * Which accounts this user has connected.
@@ -24,6 +25,7 @@ export function useConnections(
   initial?: {
     accounts: ConnectedAccount[];
     connections: LegacyConnection[];
+    launchedServices?: string[];
   } | null
 ) {
   const [accounts, setAccounts] = useState<ConnectedAccount[]>(
@@ -31,6 +33,12 @@ export function useConnections(
   );
   const [legacyConnections, setLegacyConnections] = useState<LegacyConnection[]>(
     initial?.connections ?? []
+  );
+  /** Which services a connect surface may offer (SCRUM-366). Until the
+   * server says otherwise, only the ungated ones: a gated service never
+   * flashes up before its launch is known. */
+  const [launchedServices, setLaunchedServices] = useState<readonly string[]>(
+    initial?.launchedServices ?? ALWAYS_OFFERED_SERVICE_IDS
   );
   const [loaded, setLoaded] = useState(initial != null);
   const seeded = initial != null;
@@ -48,6 +56,7 @@ export function useConnections(
         const data = await res.json();
         setAccounts(data.accounts ?? []);
         setLegacyConnections(data.connections ?? []);
+        setLaunchedServices(data.launchedServices ?? ALWAYS_OFFERED_SERVICE_IDS);
       }
     } catch (err) {
       // STATUS ONLY, NEVER THE BODY. A silent catch here is what turned a
@@ -78,6 +87,7 @@ export function useConnections(
     legacyConnections,
     setAccounts,
     setLegacyConnections,
+    launchedServices,
     loaded,
     refetch,
     hasConnectedAccount: accounts.length > 0 || legacyConnections.length > 0,

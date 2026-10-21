@@ -25,6 +25,11 @@
 // letter. A backslash, a block comment, a quoted identifier or a carriage
 // return outside a literal is refused outright.
 //
+// A NEW PLUGIN'S FILE (SCRUM-366) has one more statement of each kind: the
+// forward file opens with the guarded insert of the plugin's mcp_servers row
+// and then holds tool inserts only; the rollback holds tool deletes only and
+// ends with the guarded delete of that row. Anywhere else, either is refused.
+//
 // It opens no connection and runs nothing.
 import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
@@ -148,6 +153,38 @@ const DELETE = T(
   `  IF n <> 1 THEN RAISE EXCEPTION ${S}, n; END IF;`,
   ``
 );
+// A new plugin's server row. The port is the statement's own choice, by the
+// one rule the generator writes; a literal port is refused.
+const SERVER_INSERT = T(
+  `  ${C}`,
+  `  INSERT INTO mcp_servers \\(slug, name, description, github_repo_url, github_repo_owner, github_repo_name, license_spdx, manifest_json, status, container_port\\)`,
+  `  SELECT ${S}, ${S},`,
+  `    (${S}|NULL),`,
+  `    ${S}, ${S}, ${S},`,
+  `    (${S}|NULL),`,
+  `    ${S}::jsonb,`,
+  `    ${S},`,
+  `    \\(SELECT min\\(p\\.port\\) FROM generate_series\\(40000, 40999\\) AS p\\(port\\) WHERE NOT EXISTS \\(SELECT 1 FROM mcp_servers o WHERE o\\.container_port = p\\.port\\)\\)`,
+  `  WHERE NOT EXISTS \\(SELECT 1 FROM mcp_servers s WHERE s\\.slug = ${S}\\);`,
+  `  GET DIAGNOSTICS n = ROW_COUNT;`,
+  `  IF n <> 1 THEN RAISE EXCEPTION ${S}, n; END IF;`,
+  `  SELECT count\\(\\*\\) INTO n FROM mcp_servers s JOIN mcp_servers o ON o\\.container_port = s\\.container_port WHERE s\\.slug = ${S};`,
+  `  IF n <> 1 THEN RAISE EXCEPTION ${S}, n; END IF;`,
+  ``
+);
+const SERVER_DELETE = T(
+  `  ${C}`,
+  `  DELETE FROM mcp_servers s`,
+  `  WHERE s\\.slug = ${S}`,
+  `    AND md5\\(jsonb_build_array\\(s\\.name, s\\.description, s\\.github_repo_url, s\\.github_repo_owner, s\\.github_repo_name, s\\.license_spdx, s\\.manifest_json, s\\.status\\)::text\\) = ${S}`,
+  `    AND NOT EXISTS \\(SELECT 1 FROM tools t WHERE t\\.mcp_server_id = s\\.id\\)`,
+  `    AND NOT EXISTS \\(SELECT 1 FROM mcp_server_env_vars e WHERE e\\.mcp_server_id = s\\.id\\)`,
+  `    AND NOT EXISTS \\(SELECT 1 FROM plugin_connections c WHERE c\\.mcp_server_id = s\\.id\\);`,
+  `  GET DIAGNOSTICS n = ROW_COUNT;`,
+  `  IF n <> 1 THEN RAISE EXCEPTION ${S}, n; END IF;`,
+  ``
+);
+const REPO_PART = /^[A-Za-z0-9_.-]+$/;
 // Header comments, a blank line, then the transaction and the block opening.
 const HEAD_RE = new RegExp(`(?:${C}\\n)+\\nBEGIN;\\nSET LOCAL standard_conforming_strings = on;\\nDO ${esc(TAG)}\\nDECLARE n int;\\nBEGIN\\n`, "y");
 const TAIL = new RegExp(
@@ -185,6 +222,7 @@ export function checkRegistryFile(text) {
   let pos = HEAD_RE.lastIndex;
 
   const ops = [];
+  let server = null;
   let slug = null;
   const sameSlug = (s) => {
     if (!SLUG.test(s)) refuse(`${JSON.stringify(s)} is not a plugin slug`);
@@ -211,6 +249,44 @@ export function checkRegistryFile(text) {
     const m = /^(forward|rollback) ([A-Za-z0-9_.-]+): expected 1 row, (updated|inserted|deleted) %$/.exec(s);
     if (!m || m[2] !== name || m[3] !== verb) refuse(`the guard's message for ${name} is not the generator's`);
   };
+
+  SERVER_INSERT.lastIndex = pos;
+  const ins = SERVER_INSERT.exec(skeleton);
+  if (ins) {
+    pos += ins[0].length;
+    const comment = (takeComment() ?? "").trim();
+    // The description and the license are each a literal or NULL; a literal
+    // is any text, so it is skipped.
+    const hasDescription = ins[1] === STR;
+    const hasLicense = ins[2] === STR;
+    const values = take(2 + (hasDescription ? 1 : 0) + 3 + (hasLicense ? 1 : 0) + 6);
+    const [slugS, name] = values;
+    let k = hasDescription ? 3 : 2;
+    const [url, owner, repo] = values.slice(k, k + 3);
+    k += hasLicense ? 4 : 3;
+    const [manifestText, status, guardSlug, insertMsg, portSlug, portMsg] = values.slice(k);
+    sameSlug(slugS);
+    sameSlug(guardSlug);
+    sameSlug(portSlug);
+    if (comment !== `${slugS}: a new plugin, its server row`) refuse(`the comment above the server row of ${slugS} does not name it`);
+    if (status !== "active") refuse(`the server row's status is ${JSON.stringify(status)}; a new plugin's row is active`);
+    if (!REPO_PART.test(owner) || !REPO_PART.test(repo) || url !== `https://github.com/${owner}/${repo}/tree/main/plugins/${slugS}`) {
+      refuse("the server row's source link is not this repository's plugins/<slug> directory");
+    }
+    let manifest;
+    try {
+      manifest = JSON.parse(manifestText);
+    } catch {
+      refuse("the server row's manifest is not JSON");
+    }
+    if (manifest === null || typeof manifest !== "object" || Array.isArray(manifest) || manifest.name !== name) {
+      refuse("the server row's manifest is not a JSON object whose name is the row's name");
+    }
+    if (insertMsg !== `forward mcp_servers ${slugS}: expected 1 row, inserted %` || portMsg !== `forward mcp_servers ${slugS}: expected 1 row on its port, found %`) {
+      refuse(`the guard's message for the server row of ${slugS} is not the generator's`);
+    }
+    server = "insert";
+  }
 
   for (;;) {
     let matched = null;
@@ -267,6 +343,21 @@ export function checkRegistryFile(text) {
   }
   if (ops.length === 0) refuse("the file changes no row, or a statement in it is not one the generator writes");
 
+  SERVER_DELETE.lastIndex = pos;
+  const del = SERVER_DELETE.exec(skeleton);
+  if (del) {
+    pos += del[0].length;
+    const comment = (takeComment() ?? "").trim();
+    const [slugS, guard, msg] = take(3);
+    sameSlug(slugS);
+    md5(guard);
+    if (comment !== `${slugS}: the new plugin's server row goes`) refuse(`the comment above the server row of ${slugS} does not name it`);
+    if (msg !== `rollback mcp_servers ${slugS}: expected 1 row, deleted %`) refuse(`the guard's message for the server row of ${slugS} is not the generator's`);
+    server = "delete";
+  }
+  if (server === "insert" && ops.some((o) => o.op !== "adds")) refuse("a file that adds a server row holds only tool inserts");
+  if (server === "delete" && ops.some((o) => o.op !== "removes")) refuse("a file that removes a server row holds only tool deletes");
+
   TAIL.lastIndex = pos;
   const tail = TAIL.exec(skeleton);
   if (!tail) refuse("after the row statements the file does not close as the generator closes it (the row count, END, the read, COMMIT, nothing after)");
@@ -280,7 +371,10 @@ export function checkRegistryFile(text) {
     refuse("the closing read does not name exactly the rows the file touches");
   }
   if (ops.length !== touched.length) refuse("a row is touched twice in one file");
-  return { slug, ops, expectedRows: expected };
+  // A new plugin starts from no rows and a rollback of one ends at none.
+  if (server === "insert" && expected !== ops.length) refuse("a new plugin's row count is not the number of tools it inserts");
+  if (server === "delete" && expected !== 0) refuse("a rollback that removes the server row must end at a row count of 0");
+  return { slug, ops, expectedRows: expected, server };
 }
 
 export const sha256Of = (text) => createHash("sha256").update(text, "utf8").digest("hex");
@@ -292,7 +386,9 @@ export function requestLines(path, text, result) {
     `File: ${path}`,
     `sha256: ${sha256Of(text)}`,
     `Plugin: ${result.slug}, ${result.expectedRows} rows after the change`,
+    ...(result.server === "insert" ? [`  adds the mcp_servers row ${result.slug} (status active, port chosen by the statement)`] : []),
     ...result.ops.map((o) => `  ${o.op} ${o.name}`),
+    ...(result.server === "delete" ? [`  removes the mcp_servers row ${result.slug}`] : []),
   ];
 }
 

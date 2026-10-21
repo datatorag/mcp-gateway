@@ -35,9 +35,12 @@ vi.mock("./billing/enforce", () => ({
   checkCallAllowance: vi.fn().mockResolvedValue({ allowed: true }),
 }));
 const resolveServiceToken = vi.fn();
-vi.mock("./service-token", () => ({
-  PLUGIN_SERVICE_MAP: { "gws-mcp": "google-workspace" },
+vi.mock("./service-token", async () => ({
+  PLUGIN_SERVICE_MAP: { "gws-mcp": "google-workspace", "notion-mcp": "notion" },
   resolveServiceToken: (...args: unknown[]) => resolveServiceToken(...args),
+  ambiguousAccountMessage: (
+    await vi.importActual<typeof import("./service-token")>("./service-token")
+  ).ambiguousAccountMessage,
 }));
 
 // SCRUM-419: gws_run is served only to allowlisted login emails.
@@ -346,5 +349,38 @@ describe("gws_run service and method reach the tracker (SCRUM-227)", () => {
     expect(props.method).toBeNull();
     expect(props.resource).toBeNull();
     expect(props.paramNames).toBeNull();
+  });
+});
+
+describe("an account value naming more than one account (SCRUM-366)", () => {
+  it("is refused with the choices, before any dispatch", async () => {
+    selectLimit.mockResolvedValue([
+      { id: "srv-n", slug: "notion-mcp", containerPort: 40002, githubRepoUrl: null },
+    ]);
+    resolveServiceToken.mockResolvedValue({
+      ambiguous: true,
+      choices: [
+        { account: "Acme", email: "person@example.com", workspace: "Acme" },
+        { account: "Beta", email: "person@example.com", workspace: "Beta" },
+      ],
+    });
+    const client = await connectedClient();
+    const result = await client.callTool({
+      name: "notion-mcp__notion_search",
+      arguments: { query: "q", account: "person@example.com" },
+    });
+    expect(result.isError).toBe(true);
+    const text = textOf(result);
+    expect(text).toContain("person@example.com");
+    expect(text).toContain('"Acme"');
+    expect(text).toContain('"Beta"');
+    expect(text).toContain("more than one connected account");
+    expect(callPluginToolOnce).not.toHaveBeenCalled();
+    expect(resolveServiceToken).toHaveBeenCalledWith(
+      expect.anything(),
+      "user-1",
+      "notion",
+      "person@example.com"
+    );
   });
 });

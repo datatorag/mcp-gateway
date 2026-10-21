@@ -399,3 +399,66 @@ describe("request_connection (SCRUM-78)", () => {
     });
   });
 });
+
+/* SCRUM-366: Notion's connect flow ships before its tools are registered.
+ * request_connection names, accepts and offers only launched services, and
+ * with no launched set given it offers the ungated ones alone. */
+describe("request_connection and the launch gate (SCRUM-366)", () => {
+  type Built = {
+    description: string;
+    inputSchema: z.ZodTypeAny;
+    execute: (
+      input: { service: string },
+      context?: { writer?: { custom: (chunk: unknown) => Promise<void> } }
+    ) => Promise<Record<string, unknown>>;
+  };
+  const build = (launchedServices?: string[]) =>
+    buildIntrospectionTools({
+      db: {
+        select: () => ({
+          from: () => ({ where: () => ({ limit: async () => [] }) }),
+        }),
+      } as never,
+      userId: "user-1",
+      launchedServices,
+    }).request_connection as unknown as Built;
+
+  it("neither names nor accepts notion before launch, and Google and Atlassian are unaffected", () => {
+    for (const tool of [build(), build(["google-workspace", "atlassian"])]) {
+      expect(tool.description).not.toContain("notion");
+      expect(tool.description).toContain("google-workspace");
+      expect(tool.description).toContain("atlassian");
+      expect(tool.inputSchema.safeParse({ service: "notion" }).success).toBe(false);
+      expect(tool.inputSchema.safeParse({ service: "google-workspace" }).success).toBe(true);
+      expect(tool.inputSchema.safeParse({ service: "atlassian" }).success).toBe(true);
+    }
+  });
+
+  it("refuses notion when executed directly, writing no connect part", async () => {
+    const written: unknown[] = [];
+    const result = await build(["google-workspace", "atlassian"]).execute(
+      { service: "notion" },
+      { writer: { custom: async (c) => void written.push(c) } }
+    );
+    // The runtime validates against the enum before execute runs; either
+    // way the answer is a refusal and nothing reaches the thread.
+    expect(result).toHaveProperty("error");
+    expect(result).not.toHaveProperty("controlShown");
+    expect(written).toHaveLength(0);
+  });
+
+  it("names, accepts and offers notion once launched", async () => {
+    const tool = build(["google-workspace", "atlassian", "notion"]);
+    expect(tool.description).toContain("notion");
+    expect(tool.inputSchema.safeParse({ service: "notion" }).success).toBe(true);
+    const written: Array<{ data: { services: Array<{ id: string; connectHref: string }> } }> = [];
+    await tool.execute(
+      { service: "notion" },
+      { writer: { custom: async (c) => void written.push(c as never) } }
+    );
+    expect(written).toHaveLength(1);
+    expect(written[0]!.data.services).toEqual([
+      { id: "notion", name: "Notion", connectHref: "/auth/notion/connect" },
+    ]);
+  });
+});

@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { readSkillFiles, skillRunMessage } from "@/lib/skills";
 import {
   echoName,
+  serviceName,
   searchSkills,
   skillApplyText,
   skillNeeds,
@@ -107,5 +108,15 @@ describe("skillApplyText: the connection preface, then the run message byte for 
     });
     expect(stranger).toContain("This run will use work@example.com");
     expect(stranger).not.toContain("stranger@example.org");
+  });
+});
+
+/* SCRUM-366: the catalogue names every connectable service in words. */
+describe("serviceName", () => {
+  it("names the three connectors and passes an unknown id through", () => {
+    expect(serviceName("google-workspace")).toBe("Google Workspace");
+    expect(serviceName("atlassian")).toBe("Atlassian");
+    expect(serviceName("notion")).toBe("Notion");
+    expect(serviceName("dropbox")).toBe("dropbox");
   });
 });

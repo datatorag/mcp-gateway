@@ -155,6 +155,33 @@ export const REGISTRY_CLASSIFICATION: ReadonlyArray<readonly [string, "read" | "
   ["gws-mcp__tasks_list", "read"],
   ["gws-mcp__tasks_list_tasks", "read"],
   ["gws-mcp__tasks_update", "write"],
+  // The Notion connector (SCRUM-366): six reads, each declared
+  // `readOnlyHint: true` by the plugin, and twelve writes, each declared
+  // destructive. `query_data_source` is a POST to Notion and still a read; the
+  // gate judges the name, not the HTTP method. Every write carries a verb the
+  // floor knows, `duplicate` included.
+  ["notion-mcp__notion_create_comment", "write"],
+  // Creates a database, with its one data source, under a page.
+  ["notion-mcp__notion_create_database", "write"],
+  ["notion-mcp__notion_create_page", "write"],
+  ["notion-mcp__notion_create_view", "write"],
+  ["notion-mcp__notion_delete_comment", "write"],
+  // Reads the source page and creates a new one; Notion has no duplicate.
+  ["notion-mcp__notion_duplicate_page", "write"],
+  ["notion-mcp__notion_get_comments", "read"],
+  ["notion-mcp__notion_get_database", "read"],
+  ["notion-mcp__notion_get_page", "read"],
+  ["notion-mcp__notion_list_users", "read"],
+  ["notion-mcp__notion_move_page", "write"],
+  ["notion-mcp__notion_query_data_source", "read"],
+  ["notion-mcp__notion_search", "read"],
+  ["notion-mcp__notion_update_comment", "write"],
+  // Can remove a property, and its value, from every row.
+  ["notion-mcp__notion_update_data_source", "write"],
+  // Also the delete and the restore: in_trash true or false.
+  ["notion-mcp__notion_update_page", "write"],
+  ["notion-mcp__notion_update_page_content", "write"],
+  ["notion-mcp__notion_update_view", "write"],
 ];
 
 /** The same tools addressed the way a skill file addresses them: bare names,

@@ -84,6 +84,7 @@ describe("AttributionLinks", () => {
   it("covers the service-connect links too", () => {
     expect(paramsOf(clickLink("/auth/google/connect")).get("a_sid")).toBe("session-1");
     expect(paramsOf(clickLink("/auth/atlassian/connect")).get("a_sid")).toBe("session-1");
+    expect(paramsOf(clickLink("/auth/notion/connect")).get("a_sid")).toBe("session-1");
   });
 
   it("reads the session id at click time, not once at mount", () => {

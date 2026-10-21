@@ -1,5 +1,5 @@
 import { dropLinksForUser } from "./file-download";
-import { eq, and } from "drizzle-orm";
+import { eq, and, sql } from "drizzle-orm";
 import type { Database } from "@datatorag-mcp/db";
 import { connectedAccounts, serviceConnections } from "@datatorag-mcp/db";
 import { revokeUpstream } from "./service-token";
@@ -15,6 +15,7 @@ export async function listConnectedAccounts(db: Database, userId: string) {
       connectorType: connectedAccounts.connectorType,
       accountEmail: connectedAccounts.accountEmail,
       label: connectedAccounts.label,
+      externalAccountId: connectedAccounts.externalAccountId,
       isDefault: connectedAccounts.isDefault,
       createdAt: connectedAccounts.createdAt,
       scopes: serviceConnections.scopes,
@@ -29,9 +30,23 @@ export async function listConnectedAccounts(db: Database, userId: string) {
     .where(eq(connectedAccounts.userId, userId));
 }
 
+/** What identifies one grant beyond its email, where one login can hold
+ * several (SCRUM-366): a Notion workspace id, and its name as the label.
+ * Absent for Google and Atlassian, whose rows keep a null external id. */
+export type AccountIdentity = {
+  externalAccountId?: string | null;
+  label?: string | null;
+};
+
 /**
  * Upsert a service account after OAuth callback.
  * Re-auth: updates existing tokens. New account: inserts both rows.
+ *
+ * The existing row is matched on (user, connector, email, external id) with
+ * IS NOT DISTINCT FROM on the external id, the same NULLS NOT DISTINCT the
+ * unique key uses: a null matches a null, so Google and Atlassian find their
+ * row exactly as before, and a second Notion workspace under the same email
+ * is a new row rather than an overwrite of the first one's tokens.
  */
 export async function upsertServiceAccount(
   db: Database,
@@ -43,9 +58,11 @@ export async function upsertServiceAccount(
     refresh_token?: string;
     scope?: string;
   },
-  defaultScopes: string,
-  expiresAt: Date | null
+  defaultScopes: string | null,
+  expiresAt: Date | null,
+  identity: AccountIdentity = {}
 ): Promise<void> {
+  const externalAccountId = identity.externalAccountId ?? null;
   const [existing] = await db
     .select({
       id: connectedAccounts.id,
@@ -56,12 +73,22 @@ export async function upsertServiceAccount(
       and(
         eq(connectedAccounts.userId, userId),
         eq(connectedAccounts.connectorType, connectorType),
-        eq(connectedAccounts.accountEmail, accountEmail)
+        eq(connectedAccounts.accountEmail, accountEmail),
+        sql`${connectedAccounts.externalAccountId} IS NOT DISTINCT FROM ${externalAccountId}`
       )
     )
     .limit(1);
 
   if (existing) {
+    // A workspace can be renamed between connects; its label follows, so the
+    // name `account` accepts is the current one. Nothing else about the row
+    // moves, and no other row is touched.
+    if (identity.label !== undefined) {
+      await db
+        .update(connectedAccounts)
+        .set({ label: identity.label })
+        .where(eq(connectedAccounts.id, existing.id));
+    }
     await db
       .update(serviceConnections)
       .set({
@@ -100,6 +127,8 @@ export async function upsertServiceAccount(
       userId,
       connectorType,
       accountEmail,
+      externalAccountId,
+      label: identity.label ?? null,
       serviceConnectionId: newConn.id,
       isDefault: !hasExisting,
     });

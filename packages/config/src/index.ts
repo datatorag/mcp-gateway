@@ -16,6 +16,10 @@ const envSchema = z.object({
   // Atlassian OAuth — Jira + Confluence
   ATLASSIAN_CLIENT_ID: z.string().default(""),
   ATLASSIAN_CLIENT_SECRET: z.string().default(""),
+  // Notion OAuth (SCRUM-366). Optional like the Atlassian pair, so a deploy
+  // without them still boots.
+  NOTION_OAUTH_CLIENT_ID: z.string().default(""),
+  NOTION_OAUTH_CLIENT_SECRET: z.string().default(""),
   // PostHog
   POSTHOG_API_KEY: z.string().default(""),
   /** SCRUM-228: analytics is off outside production unless this is "1". */

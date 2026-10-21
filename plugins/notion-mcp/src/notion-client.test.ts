@@ -67,6 +67,46 @@ describe("what the client sends", () => {
     expect(f.sent).toHaveLength(0);
   });
 
+  it("PATCH and DELETE go out with the token, the version and (for PATCH) a JSON body", async () => {
+    const f = fakeFetch([
+      { status: 200, body: {} },
+      { status: 200, body: {} },
+    ]);
+    const c = new NotionClient({ accessToken: TOKEN });
+    await c.patch("/v1/pages/p1", { in_trash: true });
+    await c.delete("/v1/comments/c1");
+    expect(f.sent[0]).toMatchObject({ method: "PATCH", body: { in_trash: true } });
+    expect(f.sent[0].headers["Content-Type"]).toBe("application/json");
+    expect(f.sent[1].method).toBe("DELETE");
+    expect(f.sent[1].url.pathname).toBe("/v1/comments/c1");
+    expect(f.sent[1].body).toBeUndefined();
+    for (const r of f.sent) {
+      expect(r.headers.Authorization).toBe(`Bearer ${TOKEN}`);
+      expect(r.headers["Notion-Version"]).toBe("2026-03-11");
+    }
+  });
+
+  it("a write that got no answer says the change may have happened and was not sent again", async () => {
+    let calls = 0;
+    vi.stubGlobal("fetch", vi.fn(async () => {
+      calls++;
+      throw new TypeError("fetch failed");
+    }));
+    const err = await caught(new NotionClient({ accessToken: TOKEN }).forTool(false).post("/v1/pages", {}));
+    expect(calls).toBe(1);
+    expect(err.message).toMatch(/No answer came back from Notion for POST \/v1\/pages \(fetch failed\)/);
+    expect(err.message).toMatch(/may or may not have been applied/);
+    expect(err.message).toMatch(/not sent again/);
+  });
+
+  it("a read that got no answer is thrown as it is", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => {
+      throw new TypeError("fetch failed");
+    }));
+    const err = await caught(new NotionClient({ accessToken: TOKEN }).forTool(true).get("/v1/users"));
+    expect(err.message).toBe("fetch failed");
+  });
+
   it("withToken keeps the token for the tool-scoped copy", async () => {
     const f = fakeFetch([{ status: 200, body: {} }]);
     await new NotionClient().withToken(TOKEN).forTool(true).get("/v1/users/me");

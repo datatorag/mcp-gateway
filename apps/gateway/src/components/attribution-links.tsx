@@ -24,6 +24,7 @@ const ATTRIBUTED_PATHS = new Set([
   "/auth/google",
   "/auth/google/connect",
   "/auth/atlassian/connect",
+  "/auth/notion/connect",
 ]);
 
 /**

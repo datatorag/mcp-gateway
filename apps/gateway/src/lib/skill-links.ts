@@ -28,6 +28,7 @@ export function signInAndRunHref(slug: string): string {
 const SERVICE_ID_BY_CONNECTOR: Record<string, string> = {
   "Google Workspace": "google-workspace",
   Atlassian: "atlassian",
+  Notion: "notion",
 };
 
 /** The service ids a skill needs connected, in `connectorsFor` order. */
@@ -105,6 +106,8 @@ export function connectorsFor(tools: string[]): string[] {
       out.add("Google Workspace");
     } else if (/^(jira|confluence)_/.test(tool)) {
       out.add("Atlassian");
+    } else if (/^notion_/.test(tool)) {
+      out.add("Notion");
     }
   }
   return [...out];

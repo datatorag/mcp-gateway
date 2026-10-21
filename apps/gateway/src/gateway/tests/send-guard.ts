@@ -18,6 +18,9 @@ import { AddressParseError, parseAddressList } from "./address-list";
  * about a document's contents, so a Docs comment body that @-mentions
  * someone is outside it. The mitigation there is that no case creates such a
  * comment, not that this function would stop one.
+ *
+ * Notion writes have rules of their own, at the end of this file: the
+ * fixtures and what the run created, and nothing else (SCRUM-366).
  */
 
 export const SUBJECT_PREFIX = "[smoke]";
@@ -326,9 +329,14 @@ export async function checkSend(
      * message whose stored subject carries it, read at the moment of the
      * call. Absent means no message qualifies. */
     runStamp?: string;
+    /** What a Notion write may reach (SCRUM-366). Absent refuses every
+     * Notion write; Notion reads pass either way. */
+    notion?: NotionScope;
   }
 ): Promise<SendCheck> {
   const name = toolSuffix(tool);
+
+  if (name.startsWith("notion_")) return checkNotion(name, args, opts.notion, opts.runStamp ?? "");
   const reader = opts.readerEmail?.trim().toLowerCase() ?? null;
   const sender = opts.senderEmail?.trim().toLowerCase() ?? null;
 
@@ -693,4 +701,319 @@ export async function checkSend(
     return { ok: false, reason: `send refused: the original's subject does not carry ${SUBJECT_PREFIX}` };
   }
   return { ok: true };
+}
+
+/* ---------------------------------------------------------------------------
+ * NOTION (SCRUM-366, stage 2)
+ *
+ * A Notion write puts nothing in an inbox, but it changes a workspace other
+ * people read, and two of its shapes do reach a person: a comment or a page
+ * that mentions someone notifies them, and a person property names them. So
+ * the rule has the same shape as the mail rule, an allowlist of what a run
+ * may touch, and is checked here before dispatch:
+ *
+ *  - the configured fixtures: the page `notionPage` (as a parent or a
+ *    target), the data source `notionDataSource` and the database
+ *    `notionDatabase`;
+ *  - what THIS RUN created, recognised by id: the dispatch records the id
+ *    each create returned (`recordNotionCreated`), so an object counts as
+ *    the run's only when a create through this same guarded dispatch
+ *    answered with it. Every create is also required to carry the smoke
+ *    prefix and the run stamp in its title or name, so what a run leaves
+ *    behind can be found by a search; the label is not what grants access,
+ *    because anyone in the workspace can type a title;
+ *  - comments: new ones only on the fixture page (or in a discussion the run
+ *    started there), edited or deleted only when the run created them.
+ *
+ * On the fixtures themselves the write is narrowed further: the fixture page
+ * is never trashed, templated, moved, wholly replaced or stripped of child
+ * pages, and the fixture data source is never trashed or renamed, and only
+ * properties whose name carries the run stamp are added, changed or removed
+ * on it. A mention of a user in markdown, an "@" in a comment, and a Notion
+ * id outside the scope inside a property value or schema (people, relations,
+ * templates) are refused.
+ *
+ * Ids are compared bare: 32 hex digits, dashed or not, any case. A URL is
+ * refused rather than parsed, so the guard can never read a different id
+ * out of an argument than the plugin does.
+ *
+ * WHAT IT CANNOT SEE: the content a duplicate copies (it reads the source
+ * page at call time; the case checks the fixture page has no child page
+ * first), and what Notion does with a filter or a view configuration, which
+ * are passed through unread because they write to nothing but the view.
+ * ------------------------------------------------------------------------- */
+
+/** The reads. Every other `notion_` tool is a write and needs a rule below,
+ * or it is refused: a new write tool fails closed until it has one. */
+const NOTION_READS = new Set([
+  "notion_search",
+  "notion_get_page",
+  "notion_get_database",
+  "notion_query_data_source",
+  "notion_get_comments",
+  "notion_list_users",
+]);
+
+/** Ids of what this run created, bare (undashed, lower case). One set per
+ * kind, because a page id is not a data source id even where Notion would
+ * resolve one to the other. */
+export type NotionCreated = {
+  pages: Set<string>;
+  databases: Set<string>;
+  dataSources: Set<string>;
+  views: Set<string>;
+  comments: Set<string>;
+  discussions: Set<string>;
+};
+
+export function newNotionCreated(): NotionCreated {
+  return {
+    pages: new Set(),
+    databases: new Set(),
+    dataSources: new Set(),
+    views: new Set(),
+    comments: new Set(),
+    discussions: new Set(),
+  };
+}
+
+/** What a run may write to in Notion. A fixture of null is not configured,
+ * and every Notion write is refused while the page is not. */
+export type NotionScope = {
+  page: string | null;
+  dataSource: string | null;
+  database: string | null;
+  created: NotionCreated;
+};
+
+const BARE_NOTION_ID = /^(?:[0-9a-f]{32}|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/i;
+const NOTION_ID_ANYWHERE =
+  /(?<![0-9a-f])(?:[0-9a-f]{32}|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})(?![0-9a-f])/gi;
+
+/** A bare Notion id, undashed and lower case, or null for anything else. */
+function notionKey(value: unknown): string | null {
+  if (typeof value !== "string" || !BARE_NOTION_ID.test(value)) return null;
+  return value.replace(/-/g, "").toLowerCase();
+}
+
+/**
+ * Record what a Notion create answered with, so later writes in the run may
+ * reach it. Reads the plugin's answer for the five tools that create, and
+ * nothing else; an answer with no id (an async task, prose, an error) adds
+ * nothing. Never throws: a create the guard cannot read is a create the run
+ * cannot touch again, which leaves residue and is reported as such.
+ */
+export function recordNotionCreated(created: NotionCreated, tool: string, text: string): void {
+  const name = toolSuffix(tool);
+  let body: Record<string, unknown>;
+  try {
+    const parsed: unknown = JSON.parse(text);
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return;
+    body = parsed as Record<string, unknown>;
+  } catch {
+    return;
+  }
+  const add = (set: Set<string>, value: unknown) => {
+    const key = notionKey(value);
+    if (key) set.add(key);
+  };
+  switch (name) {
+    case "notion_create_page":
+    case "notion_duplicate_page":
+      add(created.pages, body.id);
+      return;
+    case "notion_create_database":
+      add(created.databases, body.id);
+      for (const ds of Array.isArray(body.data_sources) ? body.data_sources : []) {
+        add(created.dataSources, (ds as Record<string, unknown> | null)?.id);
+      }
+      return;
+    case "notion_create_view":
+      add(created.views, body.id);
+      return;
+    case "notion_create_comment":
+      add(created.comments, body.id);
+      add(created.discussions, body.discussion_id);
+      return;
+  }
+}
+
+/** Set as the plugin reads it: present, and not null. */
+const given = (args: Record<string, unknown>, key: string) => args[key] !== undefined && args[key] !== null;
+
+/** A user mention in Notion's enhanced markdown notifies the person. */
+const MARKDOWN_MENTION = /<mention-user|user:\/\//i;
+/** A comment takes plain text today; "@" is refused as well, so a plugin
+ * that starts reading mentions from the text cannot start notifying. */
+const COMMENT_MENTION = /@|<mention|user:\/\//i;
+
+function checkNotion(name: string, args: Record<string, unknown>, scope: NotionScope | undefined, runStamp: string): SendCheck {
+  if (NOTION_READS.has(name)) return { ok: true };
+  const refuse = (why: string): SendCheck => ({ ok: false, reason: `send refused: ${name} ${why}` });
+
+  if (!scope) return refuse("is a Notion write, and this run was given no Notion scope");
+  const fixturePage = notionKey(scope.page);
+  if (!fixturePage) return refuse("is a Notion write, and no fixture page is configured for this run");
+  if (runStamp === "") return refuse("needs this run's stamp to label what it creates, and none was given");
+  const fixtureDs = notionKey(scope.dataSource);
+  const fixtureDb = notionKey(scope.database);
+  const { created } = scope;
+
+  const labelled = (value: unknown) =>
+    typeof value === "string" && value.includes(SUBJECT_PREFIX) && value.includes(runStamp);
+  const isPage = (k: string | null) => k !== null && (k === fixturePage || created.pages.has(k));
+  const isDs = (k: string | null) => k !== null && (k === fixtureDs || created.dataSources.has(k));
+  const isDb = (k: string | null) => k !== null && (k === fixtureDb || created.databases.has(k));
+  const inScope = new Set<string>([
+    fixturePage,
+    ...(fixtureDs ? [fixtureDs] : []),
+    ...(fixtureDb ? [fixtureDb] : []),
+    ...created.pages,
+    ...created.dataSources,
+    ...created.databases,
+  ]);
+  /** An id anywhere in a free-form value (a property value, a schema) that
+   * the run may not point at: a person, a stranger's page or data source. */
+  const strangerIdIn = (value: unknown): boolean => {
+    if (value === undefined || value === null) return false;
+    const found = JSON.stringify(value).match(NOTION_ID_ANYWHERE) ?? [];
+    return found.some((id) => !inScope.has(id.replace(/-/g, "").toLowerCase()));
+  };
+  /** The parent of a page write: exactly one, and in scope. */
+  const parentOk = (): SendCheck | null => {
+    const page = given(args, "parent_page_id");
+    const ds = given(args, "parent_data_source_id");
+    if (page === ds) return refuse("must name exactly one parent");
+    if (page && !isPage(notionKey(args.parent_page_id))) {
+      return refuse("may only put a page under the fixture page or a page this run created, named by a bare id");
+    }
+    if (ds && !isDs(notionKey(args.parent_data_source_id))) {
+      return refuse("may only put a page in the fixture data source or one this run created, named by a bare id");
+    }
+    return null;
+  };
+  const templateOk = (): SendCheck | null =>
+    given(args, "template") && args.template !== "default"
+      ? refuse("may only apply the data source's default template from a test run")
+      : null;
+
+  switch (name) {
+    case "notion_create_page": {
+      const parent = parentOk();
+      if (parent) return parent;
+      if (!labelled(args.title)) return refuse(`must title what it creates with ${SUBJECT_PREFIX} and this run's stamp`);
+      if (typeof args.content === "string" && MARKDOWN_MENTION.test(args.content)) return refuse("may not mention a user");
+      if (strangerIdIn(args.properties)) return refuse("may not set a property to a person or to an object outside the fixtures");
+      return templateOk() ?? { ok: true };
+    }
+
+    case "notion_update_page": {
+      const page = notionKey(args.page_id);
+      if (!isPage(page)) return refuse("may only change the fixture page or a page this run created, named by a bare id");
+      if (page === fixturePage) {
+        if (args.in_trash === true) return refuse("may not move the fixture page to the trash");
+        if (given(args, "template")) return refuse("may not apply a template to the fixture page");
+      } else if (args.title !== undefined && !labelled(args.title)) {
+        return refuse(`must keep ${SUBJECT_PREFIX} and this run's stamp in the title of what the run created`);
+      }
+      if (strangerIdIn(args.properties)) return refuse("may not set a property to a person or to an object outside the fixtures");
+      return templateOk() ?? { ok: true };
+    }
+
+    case "notion_update_page_content": {
+      const page = notionKey(args.page_id);
+      if (!isPage(page)) return refuse("may only edit the fixture page or a page this run created, named by a bare id");
+      const markdown = [
+        args.replace_with,
+        args.insert,
+        ...(Array.isArray(args.edits) ? args.edits.map((e) => (e as Record<string, unknown> | null)?.new_str) : []),
+      ];
+      if (markdown.some((m) => typeof m === "string" && MARKDOWN_MENTION.test(m))) return refuse("may not mention a user");
+      if (page === fixturePage) {
+        if (given(args, "replace_with")) return refuse("may not replace the fixture page's whole content; an edit is undone by its inverse");
+        if (args.allow_deleting_content === true) return refuse("may not remove child pages or databases from the fixture page");
+      }
+      return { ok: true };
+    }
+
+    case "notion_move_page": {
+      if (!created.pages.has(notionKey(args.page_id) ?? "")) return refuse("may only move a page this run created");
+      return parentOk() ?? { ok: true };
+    }
+
+    case "notion_duplicate_page": {
+      if (!isPage(notionKey(args.page_id))) return refuse("may only copy the fixture page or a page this run created");
+      const parent = parentOk();
+      if (parent) return parent;
+      if (!labelled(args.title)) return refuse(`must title the copy with ${SUBJECT_PREFIX} and this run's stamp`);
+      return { ok: true };
+    }
+
+    case "notion_create_comment": {
+      const targets = ["page_id", "block_id", "discussion_id"].filter((k) => given(args, k));
+      if (targets.length !== 1) return refuse("must name exactly one of page_id, block_id and discussion_id");
+      const target = targets[0];
+      const key = notionKey(args[target]);
+      const ok = target === "discussion_id" ? created.discussions.has(key ?? "") : key === fixturePage;
+      if (!ok) return refuse("may only comment on the fixture page, or reply in a discussion this run started");
+      if (typeof args.text !== "string" || COMMENT_MENTION.test(args.text)) return refuse("may not mention anyone");
+      return { ok: true };
+    }
+
+    case "notion_update_comment":
+    case "notion_delete_comment": {
+      if (!created.comments.has(notionKey(args.comment_id) ?? "")) return refuse("may only reach a comment this run created");
+      if (name === "notion_update_comment" && (typeof args.text !== "string" || COMMENT_MENTION.test(args.text))) {
+        return refuse("may not mention anyone");
+      }
+      return { ok: true };
+    }
+
+    case "notion_create_database": {
+      if (!isPage(notionKey(args.parent_page_id))) {
+        return refuse("may only create a database under the fixture page or a page this run created");
+      }
+      if (!labelled(args.title)) return refuse(`must title what it creates with ${SUBJECT_PREFIX} and this run's stamp`);
+      if (strangerIdIn(args.properties)) return refuse("may not relate a property to a data source outside the fixtures");
+      return { ok: true };
+    }
+
+    case "notion_update_data_source": {
+      const ds = notionKey(args.data_source_id);
+      if (!isDs(ds)) return refuse("may only change the fixture data source or one this run created, named by a bare id");
+      if (strangerIdIn(args.properties)) return refuse("may not relate a property to a data source outside the fixtures");
+      if (ds === fixtureDs && !created.dataSources.has(ds ?? "")) {
+        if (args.in_trash === true) return refuse("may not move the fixture data source to the trash");
+        if (given(args, "title")) return refuse("may not rename the fixture data source");
+        const props = args.properties;
+        if (props !== undefined && props !== null) {
+          if (typeof props !== "object" || Array.isArray(props)) return refuse("properties must be a map of property names");
+          for (const [prop, change] of Object.entries(props as Record<string, unknown>)) {
+            if (!prop.includes(runStamp)) return refuse("may only change properties of the fixture data source whose name carries this run's stamp");
+            const rename = change && typeof change === "object" ? (change as Record<string, unknown>).name : undefined;
+            if (rename !== undefined && !(typeof rename === "string" && rename.includes(runStamp))) {
+              return refuse("may not rename a property of the fixture data source to a name without this run's stamp");
+            }
+          }
+        }
+      }
+      return { ok: true };
+    }
+
+    case "notion_create_view": {
+      if (!isDb(notionKey(args.database_id))) return refuse("may only add a view to the fixture database or one this run created");
+      if (!isDs(notionKey(args.data_source_id))) return refuse("may only show the fixture data source or one this run created");
+      if (!labelled(args.name)) return refuse(`must name the view with ${SUBJECT_PREFIX} and this run's stamp`);
+      return { ok: true };
+    }
+
+    case "notion_update_view": {
+      if (!created.views.has(notionKey(args.view_id) ?? "")) return refuse("may only change a view this run created, named by a bare id");
+      if (args.name !== undefined && !labelled(args.name)) return refuse(`must keep ${SUBJECT_PREFIX} and this run's stamp in the view's name`);
+      return { ok: true };
+    }
+
+    default:
+      return refuse("is a Notion write with no rule in the send guard, so a test run may not call it");
+  }
 }

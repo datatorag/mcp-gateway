@@ -2,7 +2,7 @@
 // Generate the registry change file for a plugin between two gateway commits
 // (SCRUM-390).
 //
-//   pnpm registry:diff <slug> --from <sha> --to <sha> [--out <dir>]
+//   pnpm registry:diff <slug> --from <sha> --to <sha> [--out <dir>] [--new-plugin]
 //   node scripts/registry-diff.mjs --self-test
 //
 // <sha> is a full gateway commit on main. --from is the gateway that is
@@ -21,6 +21,20 @@
 // and the transaction rolls back. So the one hard part is jsonbText below: it
 // must reproduce Postgres's jsonb output exactly, or every guard misses and
 // the file safely does nothing. The self-test holds it to known md5s.
+//
+// A NEW PLUGIN (SCRUM-366). When the --from commit has no plugins/<slug>
+// directory, its build record holds no tool file for the slug and that is
+// read as an empty tool set. The forward file then also inserts the plugin's
+// mcp_servers row, first, in the same transaction, from the plugin's
+// datatorag.json and package.json at --to (serverRow below), and refuses if a
+// row with that slug exists. The rollback deletes the tool rows and then that
+// row, guarded by the md5 of what the forward wrote. A missing tool file for
+// a plugin that DID exist at --from, or a record from before tool files were
+// kept, still refuses. --new-plugin forces the same files whatever --from
+// holds (a main image carrying the plugin can be running before its rows
+// exist); it refuses only a --to with no plugins/<slug>. Forcing is safe
+// because the insert raises, and the file writes nothing, if the slug has a
+// row.
 import { createHash } from "node:crypto";
 import { execFileSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
@@ -94,9 +108,12 @@ function checkFile(file, label) {
 
 const hashes = (t) => ({ description: md5(t.description), schema: md5(jsonbText(t.inputSchema)) });
 
-/** Which rows change between two tool files of one plugin. */
+/** Which rows change between two tool files of one plugin. `from` is null for
+ * a new plugin (chooseBaseToolFile decides that, never a tool file): every
+ * tool is added and the result says newPlugin. */
 export function diffTools(from, to) {
-  const [a, b] = [checkFile(from, "--from"), checkFile(to, "--to")];
+  const newPlugin = from === null;
+  const [a, b] = [newPlugin ? new Map() : checkFile(from, "--from"), checkFile(to, "--to")];
   const changed = [];
   const added = [];
   const removed = [];
@@ -112,7 +129,7 @@ export function diffTools(from, to) {
       if (fields.length > 0) changed.push({ name, from: ta, to: tb, fields });
     }
   }
-  return { changed, added, removed, fromCount: a.size, toCount: b.size };
+  return { changed, added, removed, fromCount: a.size, toCount: b.size, newPlugin };
 }
 
 const sqlBool = (v) => (v === null ? "NULL" : v ? "true" : "false");
@@ -167,6 +184,104 @@ function deleteBlock(slug, tool, label) {
   ];
 }
 
+const REPO_NAME = /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/;
+
+/**
+ * The mcp_servers row of a new plugin, from its datatorag.json and
+ * package.json at the --to commit. The values are the ones the manager's own
+ * install path wrote (plugin-manager.ts, installAsync), and the ones it needs
+ * to start the plugin from the image and route calls to it:
+ *   name, description  manifest name; manifest description, else package.json's
+ *   manifest_json      the manifest as it is (the legacy connect routes read it)
+ *   license_spdx       package.json's license, else NULL
+ *   github_repo_*      this repository and the plugin's directory in it. NOT
+ *                      decorative: buildPluginServerUrl (user-tools.ts) calls
+ *                      localhost:<port> only when github_repo_url is set, and
+ *                      otherwise a container hostname that does not exist
+ *   status             active: startAll() starts only active rows, and the tool
+ *                      listing and the public pages read only active rows
+ *   container_port     not here: the statement picks it (see serverInsertBlock)
+ * Everything else is the column's default (NULL, or now() for timestamps).
+ */
+export function serverRow(slug, manifest, pkg, repo = REPO) {
+  if (!SLUG.test(slug)) throw new Error("not a plugin slug");
+  if (!REPO_NAME.test(repo ?? "")) throw new Error(`not a repository name: ${JSON.stringify(repo)}`);
+  if (manifest === null || typeof manifest !== "object" || Array.isArray(manifest)) {
+    throw new Error(`plugins/${slug}/datatorag.json is missing or not a JSON object; a new plugin's server row is made from it`);
+  }
+  if (typeof manifest.name !== "string" || manifest.name.trim() === "") throw new Error(`plugins/${slug}/datatorag.json has no name`);
+  const p = pkg ?? {};
+  const description = manifest.description ?? p.description ?? null;
+  if (description !== null && typeof description !== "string") throw new Error(`plugins/${slug}: the description is not a string`);
+  const license = p.license ?? null;
+  if (license !== null && typeof license !== "string") throw new Error(`plugins/${slug}/package.json: the license is not a string`);
+  jsonbText(manifest); // refuses what the guard could not render exactly
+  const [owner, name] = repo.split("/");
+  return {
+    slug,
+    name: manifest.name,
+    description,
+    githubRepoUrl: `https://github.com/${owner}/${name}/tree/main/plugins/${slug}`,
+    githubRepoOwner: owner,
+    githubRepoName: name,
+    licenseSpdx: license,
+    manifest,
+    status: "active",
+  };
+}
+
+const sqlText = (v) => (v === null ? "NULL" : sqlString(v));
+/** The columns the rollback's guard covers, in this order, as Postgres prints
+ * jsonb_build_array of them. Everything the forward wrote except the port. */
+const serverGuard = (row) =>
+  md5(jsonbText([row.name, row.description, row.githubRepoUrl, row.githubRepoOwner, row.githubRepoName, row.licenseSpdx, row.manifest, row.status]));
+
+/** The port rule: the lowest port from 40000 (the manager's BASE_PORT) that no
+ * mcp_servers row holds, which is the database half of the manager's own
+ * nextAvailablePort. Chosen by the statement, so the file needs no database
+ * to be written; checked after the insert, so a port another row took in the
+ * meantime raises instead of being shared. */
+function serverInsertBlock(row) {
+  const slug = sqlString(row.slug);
+  return [
+    `  -- ${row.slug}: a new plugin, its server row`,
+    `  INSERT INTO mcp_servers (slug, name, description, github_repo_url, github_repo_owner, github_repo_name, license_spdx, manifest_json, status, container_port)`,
+    `  SELECT ${slug}, ${sqlString(row.name)},`,
+    `    ${sqlText(row.description)},`,
+    `    ${sqlString(row.githubRepoUrl)}, ${sqlString(row.githubRepoOwner)}, ${sqlString(row.githubRepoName)},`,
+    `    ${sqlText(row.licenseSpdx)},`,
+    `    ${sqlString(JSON.stringify(row.manifest))}::jsonb,`,
+    `    ${sqlString(row.status)},`,
+    `    (SELECT min(p.port) FROM generate_series(40000, 40999) AS p(port) WHERE NOT EXISTS (SELECT 1 FROM mcp_servers o WHERE o.container_port = p.port))`,
+    `  WHERE NOT EXISTS (SELECT 1 FROM mcp_servers s WHERE s.slug = ${slug});`,
+    `  GET DIAGNOSTICS n = ROW_COUNT;`,
+    `  IF n <> 1 THEN RAISE EXCEPTION 'forward mcp_servers ${row.slug}: expected 1 row, inserted %', n; END IF;`,
+    `  SELECT count(*) INTO n FROM mcp_servers s JOIN mcp_servers o ON o.container_port = s.container_port WHERE s.slug = ${slug};`,
+    `  IF n <> 1 THEN RAISE EXCEPTION 'forward mcp_servers ${row.slug}: expected 1 row on its port, found %', n; END IF;`,
+    ``,
+  ];
+}
+
+/** Runs after the tool rows are deleted. Three tables point at mcp_servers
+ * with ON DELETE CASCADE: tools, mcp_server_env_vars and plugin_connections
+ * (a user's row). The delete refuses while any of them holds a row for the
+ * server, so the cascade can never remove one. The registry role reads only
+ * the mcp_server_id column of the last two (registry/roles). */
+function serverDeleteBlock(row) {
+  return [
+    `  -- ${row.slug}: the new plugin's server row goes`,
+    `  DELETE FROM mcp_servers s`,
+    `  WHERE s.slug = ${sqlString(row.slug)}`,
+    `    AND md5(jsonb_build_array(s.name, s.description, s.github_repo_url, s.github_repo_owner, s.github_repo_name, s.license_spdx, s.manifest_json, s.status)::text) = '${serverGuard(row)}'`,
+    `    AND NOT EXISTS (SELECT 1 FROM tools t WHERE t.mcp_server_id = s.id)`,
+    `    AND NOT EXISTS (SELECT 1 FROM mcp_server_env_vars e WHERE e.mcp_server_id = s.id)`,
+    `    AND NOT EXISTS (SELECT 1 FROM plugin_connections c WHERE c.mcp_server_id = s.id);`,
+    `  GET DIAGNOSTICS n = ROW_COUNT;`,
+    `  IF n <> 1 THEN RAISE EXCEPTION 'rollback mcp_servers ${row.slug}: expected 1 row, deleted %', n; END IF;`,
+    ``,
+  ];
+}
+
 /** The tag that quotes the DO block. The block's body holds text from a tool
  * file, and a dollar-quoted body ends at the first copy of its own tag. A bare
  * `$$` would let a description that contains `$$` end the block and put the
@@ -203,12 +318,18 @@ function wrap(header, blocks, slug, names, expectedCount) {
   ].join("\n");
 }
 
-/** forward.sql and rollback.sql for a diff, or null when nothing changes. */
-export function changeFiles(slug, fromSha, toSha, diff) {
+/** forward.sql and rollback.sql for a diff, or null when nothing changes.
+ * `server` is the serverRow of a new plugin, and is given exactly when the
+ * diff is a new plugin's. */
+export function changeFiles(slug, fromSha, toSha, diff, server = null, { forced = false } = {}) {
   if (!SLUG.test(slug)) throw new Error("not a plugin slug");
   // Both go into the file's header lines.
   for (const sha of [fromSha, toSha]) if (!/^[0-9a-f]{40}$/.test(sha)) throw new Error("a commit must be a full 40-character sha");
-  const { changed, added, removed, fromCount, toCount } = diff;
+  const { changed, added, removed, fromCount, toCount, newPlugin = false } = diff;
+  if (newPlugin && server === null) throw new Error("a new plugin needs its server row");
+  if (!newPlugin && server !== null) throw new Error("a server row is written only for a new plugin");
+  if (server !== null && server.slug !== slug) throw new Error(`the server row is for ${server.slug}, not ${slug}`);
+  if (forced && !newPlugin) throw new Error("--new-plugin needs a new plugin's diff");
   if (changed.length + added.length + removed.length === 0) return null;
   const names = [...changed.map((c) => c.name), ...added.map((t) => t.name), ...removed.map((t) => t.name)].sort();
   const summary = [
@@ -225,14 +346,35 @@ export function changeFiles(slug, fromSha, toSha, diff) {
     `One transaction. Run by a person, on a confirmation that names the database. See the`,
     `SCRUM-390 spec for the order against the deploy.`,
   ];
+  const newForward = newPlugin
+    ? [
+        forced
+          ? `A NEW plugin, by --new-plugin: the tool file kept for ${fromSha} is not read, whatever it holds.`
+          : `A NEW plugin: ${slug} is not a directory under plugins/ at ${fromSha}.`,
+        `Its mcp_servers row is inserted first, from plugins/${slug}/datatorag.json and package.json at ${toSha}:`,
+        `  name, description, the manifest as manifest_json, the license, a source link in this repository,`,
+        `  status active, and container_port the lowest port from 40000 that no mcp_servers row holds,`,
+        `  chosen by the statement itself. It raises if a row for ${slug} already exists.`,
+      ]
+    : [];
+  const newRollback = newPlugin
+    ? [
+        `A NEW plugin: the rollback deletes its tool rows and then its mcp_servers row, which is`,
+        `guarded by the md5 of every column the forward file wrote except the port it chose, and`,
+        `refuses while any tool, env var or plugin connection row still points at it, so the`,
+        `foreign keys' cascade can never remove one.`,
+      ]
+    : [];
   const forward = wrap(
     [
       `Registry change for ${slug}. PROPOSAL: NOT RUN.`,
       `Generated from the tool files CI kept for gateway ${fromSha} (what is running) and ${toSha}.`,
+      ...newForward,
       ...summary,
       ...guardNote,
     ],
     [
+      ...(newPlugin ? serverInsertBlock(server) : []),
       ...changed.flatMap((c) => updateBlock(slug, c.name, c.from, c.to, "forward")),
       ...added.flatMap((t) => insertBlock(slug, t, "forward")),
       ...removed.flatMap((t) => deleteBlock(slug, t, "forward")),
@@ -244,7 +386,10 @@ export function changeFiles(slug, fromSha, toSha, diff) {
   const rollback = wrap(
     [
       `ROLLBACK of the registry change for ${slug}. PROPOSAL: NOT RUN.`,
-      `Returns the rows to what gateway ${fromSha} served, from what ${toSha} served.`,
+      forced
+        ? `Returns the registry to no row for ${slug}, from what ${toSha} served.`
+        : `Returns the rows to what gateway ${fromSha} served, from what ${toSha} served.`,
+      ...newRollback,
       ...summary.map((l) => l.replace(/^(\s*)changes /, "$1restores ").replace(/^(\s*)adds /, "$1deletes ").replace(/^(\s*)removes /, "$1re-inserts ")),
       `A re-inserted row is a NEW row: its id, enabled flag and counters are the table's defaults,`,
       `not what the deleted row had.`,
@@ -254,6 +399,7 @@ export function changeFiles(slug, fromSha, toSha, diff) {
       ...changed.flatMap((c) => updateBlock(slug, c.name, c.to, c.from, "rollback")),
       ...added.flatMap((t) => deleteBlock(slug, t, "rollback")),
       ...removed.flatMap((t) => insertBlock(slug, t, "rollback")),
+      ...(newPlugin ? serverDeleteBlock(server) : []),
     ],
     slug,
     names,
@@ -274,10 +420,12 @@ const gh = (args, opts = {}) => execFileSync("gh", args, { encoding: "utf8", max
  * push a branch can edit the workflow there and upload a record under any
  * name. Records that pass must then all hold the same tool file.
  *
- * `records` is [{ runPath, event, repo, headOnMain, line, toolText }], where
- * toolText is null when that record holds no tool file for the plugin.
+ * `records` is [{ runPath, event, repo, headOnMain, line, toolText,
+ * keptToolFiles }], where toolText is null when that record holds no tool
+ * file for the plugin and keptToolFiles says whether it holds any tool file
+ * at all (a record from before they were kept holds none).
  */
-export function chooseToolFile(records, wantedLine, slug, sha) {
+function believedTexts(records, wantedLine, slug, sha) {
   const believed = records.filter(
     (r) =>
       r.runPath === BUILD_WORKFLOW &&
@@ -288,15 +436,45 @@ export function chooseToolFile(records, wantedLine, slug, sha) {
   );
   if (believed.length === 0) throw new Error(`no build record on main for ${sha} names the image the registry holds for it`);
   const texts = believed.map((r) => r.toolText);
-  if (texts.some((t) => t === null)) {
-    throw new Error(`the build record of ${sha} holds no tool file for ${slug}. It was built before tool files were kept, or ${slug} is not a plugin in that commit.`);
-  }
-  const canonical = texts.map((t) => JSON.stringify(JSON.parse(t)));
+  const canonical = texts.map((t) => (t === null ? null : JSON.stringify(JSON.parse(t))));
   if (new Set(canonical).size !== 1) {
     throw new Error(`two build records on main hold different tool files for ${slug} at ${sha}. Not usable until a person has looked.`);
   }
-  return JSON.parse(texts[0]);
+  return { believed, text: texts[0] };
 }
+
+const beforeToolFiles = (slug, sha) =>
+  `the build record of ${sha} holds no tool file for ${slug}. It was built before tool files were kept, or ${slug} is not a plugin in that commit.`;
+
+/** The --to commit's tool file. It must exist. */
+export function chooseToolFile(records, wantedLine, slug, sha) {
+  const { text } = believedTexts(records, wantedLine, slug, sha);
+  if (text === null) throw new Error(beforeToolFiles(slug, sha));
+  return JSON.parse(text);
+}
+
+/**
+ * The --from commit's tool file, or null for a NEW plugin. A record with no
+ * tool file for the slug is a new plugin only when every believed record kept
+ * tool files at all AND plugins/<slug> did not exist at that commit
+ * (`pluginDirAtBase`, from git, never from the record). Otherwise it refuses:
+ * a record from before tool files were kept says nothing about the plugin,
+ * and a plugin that existed with no tool file is a broken record, not an
+ * empty one.
+ */
+export function chooseBaseToolFile(records, wantedLine, slug, sha, pluginDirAtBase) {
+  const { believed, text } = believedTexts(records, wantedLine, slug, sha);
+  if (text !== null) return JSON.parse(text);
+  if (believed.some((r) => r.keptToolFiles !== true)) throw new Error(beforeToolFiles(slug, sha));
+  if (pluginDirAtBase !== false) {
+    throw new Error(`${slug} existed at ${sha} but its build record holds no tool file for it. Not read as a new plugin.`);
+  }
+  return null;
+}
+
+const sha40 = (sha) => {
+  if (!/^[0-9a-f]{40}$/.test(sha)) throw new Error("a commit must be a full 40-character sha");
+};
 
 const onMain = (sha) => {
   if (!/^[0-9a-f]{40}$/.test(sha ?? "")) return false;
@@ -310,13 +488,14 @@ const onMain = (sha) => {
 };
 
 /**
- * The tool file CI kept for <slug> beside the image it published for <sha>.
- * scripts/published-digest.sh first decides whether a trustworthy record of
- * the image exists and names its digest; chooseToolFile then applies the same
- * rule to the records themselves.
+ * The build records CI kept beside the image it published for <sha>, each with
+ * its tool file for <slug>. scripts/published-digest.sh first decides whether
+ * a trustworthy record of the image exists and names its digest;
+ * chooseToolFile and chooseBaseToolFile then apply the same rule to the
+ * records themselves.
  */
-function fetchToolFile(slug, sha) {
-  if (!/^[0-9a-f]{40}$/.test(sha)) throw new Error("a commit must be a full 40-character sha");
+function fetchRecords(slug, sha) {
+  sha40(sha);
   const here = new URL(".", import.meta.url).pathname;
   const digest = execFileSync("bash", [join(here, "published-digest.sh"), "gateway", sha], { encoding: "utf8" }).trim();
   const wanted = `gateway ${sha} ${digest}`;
@@ -333,6 +512,7 @@ function fetchToolFile(slug, sha) {
       headOnMain: onMain(art.workflow_run.head_sha),
       line: null,
       toolText: null,
+      keptToolFiles: false,
     };
     // Only a record that could be believed is downloaded at all.
     if (record.runPath === BUILD_WORKFLOW && record.repo === REPO && record.headOnMain && ["push", "workflow_dispatch"].includes(record.event)) {
@@ -341,6 +521,8 @@ function fetchToolFile(slug, sha) {
         const zip = join(dir, "a.zip");
         writeFileSync(zip, execFileSync("gh", ["api", `repos/${REPO}/actions/artifacts/${art.id}/zip`], { maxBuffer: 256 * 1024 * 1024 }));
         record.line = execFileSync("unzip", ["-p", zip, "image.txt"], { encoding: "utf8" }).trim();
+        const names = execFileSync("unzip", ["-Z1", zip], { encoding: "utf8" }).split("\n");
+        record.keptToolFiles = names.some((n) => /^tools-[a-z0-9][a-z0-9-]*\.json$/.test(n.trim()));
         try {
           record.toolText = execFileSync("unzip", ["-p", zip, `tools-${slug}.json`], { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] });
         } catch {
@@ -352,7 +534,63 @@ function fetchToolFile(slug, sha) {
     }
     records.push(record);
   }
+  return { records, wanted };
+}
+
+/** Whether plugins/<slug> exists at <sha>. The commit itself must be here: an
+ * unfetched commit must never read as "no such directory", which would make
+ * every plugin look new. */
+function commitHere(sha) {
+  sha40(sha);
+  try {
+    execFileSync("git", ["cat-file", "-e", `${sha}^{commit}`], { stdio: "ignore" });
+  } catch {
+    throw new Error(`${sha} is not a commit in this checkout. Fetch it first.`);
+  }
+}
+
+function pluginDirAt(sha, slug) {
+  commitHere(sha);
+  try {
+    execFileSync("git", ["cat-file", "-e", `${sha}:plugins/${slug}`], { stdio: "ignore" });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** A JSON file at a commit, or null when the commit has no such file. */
+function jsonAt(sha, path) {
+  sha40(sha);
+  let text;
+  try {
+    text = execFileSync("git", ["show", `${sha}:${path}`], { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] });
+  } catch {
+    return null;
+  }
+  return JSON.parse(text);
+}
+
+function fetchToolFile(slug, sha) {
+  const { records, wanted } = fetchRecords(slug, sha);
   return chooseToolFile(records, wanted, slug, sha);
+}
+
+/**
+ * The base tool set: null for a new plugin. Forced by --new-plugin, which
+ * reads nothing of --from and refuses only a --to with no plugins/<slug>;
+ * otherwise the automatic rule over --from's build records. The two reads are
+ * passed in so this decision is tested without git or GitHub.
+ */
+export function baseToolFile({ forced, slug, from, to, pluginDirAt: dirAt, fetchBase }) {
+  if (!forced) return fetchBase(slug, from);
+  if (dirAt(to, slug) !== true) throw new Error(`--new-plugin: ${to} has no plugins/${slug}, so there is no plugin to add`);
+  return null;
+}
+
+function fetchBaseToolFile(slug, sha) {
+  const { records, wanted } = fetchRecords(slug, sha);
+  return chooseBaseToolFile(records, wanted, slug, sha, pluginDirAt(sha, slug));
 }
 
 // ---- Self-test ---------------------------------------------------------
@@ -400,12 +638,18 @@ function main(argv) {
     return i === -1 ? undefined : argv[i + 1];
   };
   const [from, to, out] = [opt("--from"), opt("--to"), opt("--out") ?? "."];
+  const forced = argv.includes("--new-plugin");
   if (!slug || !SLUG.test(slug) || !from || !to) {
-    console.error("usage: registry-diff.mjs <slug> --from <sha> --to <sha> [--out <dir>]");
+    console.error("usage: registry-diff.mjs <slug> --from <sha> --to <sha> [--out <dir>] [--new-plugin]");
     process.exit(2);
   }
-  const diff = diffTools(fetchToolFile(slug, from), fetchToolFile(slug, to));
-  const files = changeFiles(slug, from, to, diff);
+  if (forced) commitHere(from); // only a header line under --new-plugin, but a real commit
+  const base = baseToolFile({ forced, slug, from, to, pluginDirAt, fetchBase: fetchBaseToolFile });
+  const diff = diffTools(base, fetchToolFile(slug, to));
+  const server = diff.newPlugin
+    ? serverRow(slug, jsonAt(to, `plugins/${slug}/datatorag.json`), jsonAt(to, `plugins/${slug}/package.json`))
+    : null;
+  const files = changeFiles(slug, from, to, diff, server, { forced });
   if (!files) {
     console.log(`${slug}: no registry row changes between ${from} and ${to} (${diff.toCount} tools). No file written.`);
     return;
@@ -413,6 +657,7 @@ function main(argv) {
   mkdirSync(out, { recursive: true });
   writeFileSync(join(out, "forward.sql"), files.forward);
   writeFileSync(join(out, "rollback.sql"), files.rollback);
+  if (diff.newPlugin) console.log(`${slug}: a NEW plugin${forced ? " (--new-plugin)" : ""}. The forward file inserts its mcp_servers row first.`);
   console.log(`${slug}: ${diff.changed.length} changed, ${diff.added.length} added, ${diff.removed.length} removed.`);
   console.log(`Wrote ${join(out, "forward.sql")} and ${join(out, "rollback.sql")}. NOT RUN. This command opened no database connection.`);
 }

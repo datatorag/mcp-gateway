@@ -105,13 +105,41 @@ function sanitizeEnvelopeObject(obj: unknown, depth: number): Sanitized | null {
   return Object.keys(out).length > 0 ? out : null;
 }
 
+/** A Notion error code: a snake_case word from Notion's own vocabulary
+ * ("object_not_found", "internal_server_error"). Kept whole rather than
+ * scrubbed, because the id pattern would mask any code of twenty characters
+ * or more; anything not of this shape is dropped. */
+const NOTION_CODE_RE = /^[a-z][a-z_]{0,63}$/;
+
+/** Notion's envelope, `{object: "error", status: <number>, code: <string>,
+ * message}` (SCRUM-366). Its own case because its typing is the reverse of
+ * Google's (numeric status, string code), which the shared allowlist would
+ * drop. Recognised only on that exact shape, so Google's handling and the
+ * bare-object path are untouched. */
+function sanitizeNotionEnvelope(asRecord: Record<string, unknown>): Sanitized | null {
+  if (asRecord.object !== "error" || typeof asRecord.status !== "number") {
+    return null;
+  }
+  const out: Sanitized = { object: "error", status: asRecord.status };
+  if (typeof asRecord.code === "string" && NOTION_CODE_RE.test(asRecord.code)) {
+    out.code = asRecord.code;
+  }
+  if (typeof asRecord.message === "string") {
+    out.message = scrubText(asRecord.message);
+  }
+  return out;
+}
+
 /** True when the parsed object looks like an error envelope we understand:
- * either `{ error: {...} }` or a bare object carrying diagnostic fields. */
+ * either `{ error: {...} }`, Notion's `{ object: "error", ... }`, or a bare
+ * object carrying diagnostic fields. */
 function sanitizeRecognisedEnvelope(parsed: unknown): Sanitized | null {
   if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
     return null;
   }
   const asRecord = parsed as Record<string, unknown>;
+  const notion = sanitizeNotionEnvelope(asRecord);
+  if (notion) return notion;
   if (typeof asRecord.error === "object" && asRecord.error !== null) {
     const inner = sanitizeEnvelopeObject(asRecord.error, 1);
     return inner ? { error: inner } : null;

@@ -2,7 +2,7 @@
 // (SCRUM-390). Run with: node --test scripts/registry-diff.test.mjs
 import test from "node:test";
 import assert from "node:assert/strict";
-import { changeFiles, chooseToolFile, diffTools, FIXTURES, jsonbText, md5, selfTest, sqlString } from "./registry-diff.mjs";
+import { baseToolFile, changeFiles, chooseBaseToolFile, chooseToolFile, diffTools, FIXTURES, jsonbText, md5, selfTest, serverRow, sqlString } from "./registry-diff.mjs";
 import { compareToolFiles, toToolFile } from "./plugin-tools.mjs";
 
 const tool = (name, over = {}) => ({
@@ -213,3 +213,258 @@ test("two believed records that disagree are refused; a record with no tool file
   assert.throws(() => chooseToolFile([good({ toolText: null })], LINE, "p", A), /built before tool files were kept/);
 });
 
+
+/* A NEW plugin (SCRUM-366). The base commit's build record holds no tool file
+ * for the slug. That is read as an empty tool set ONLY when the plugin's
+ * directory did not exist at the base commit; the two other ways a tool file
+ * can be missing still refuse. */
+const kept = (over = {}) => good({ keptToolFiles: true, ...over });
+
+test("a base with no tool file for a plugin that did not exist at that commit is an empty tool set", () => {
+  assert.equal(chooseBaseToolFile([kept({ toolText: null })], LINE, "p", A, false), null);
+  // A plugin that did exist reads its tool file as before.
+  assert.deepEqual(chooseBaseToolFile([kept()], LINE, "p", A, true), file(tool("a")));
+});
+
+test("a base record from before tool files were kept still refuses, even with no plugin directory", () => {
+  assert.throws(() => chooseBaseToolFile([kept({ toolText: null, keptToolFiles: false })], LINE, "p", A, false), /built before tool files were kept/);
+});
+
+test("a plugin that existed at the base commit but has no tool file there still refuses", () => {
+  assert.throws(() => chooseBaseToolFile([kept({ toolText: null })], LINE, "p", A, true), /p existed at a{40} but its build record holds no tool file for it/);
+});
+
+test("the base applies the same rule to which records are believed", () => {
+  // A forged record with no tool file must not make a plugin look new.
+  assert.throws(() => chooseBaseToolFile([kept({ toolText: null, headOnMain: false })], LINE, "p", A, false), /no build record on main/);
+  assert.throws(() => chooseBaseToolFile([kept(), kept({ toolText: null })], LINE, "p", A, false), /different tool files/);
+});
+
+const MANIFEST = {
+  name: "Some Plugin",
+  description: "Some plugin: it's for tests",
+  oauth: { provider: "some", scopes: [], clientIdEnv: "$SOME_CLIENT_ID" },
+};
+const PKG = { name: "@datatorag-mcp/some-plugin", description: "from package.json", license: "MIT" };
+const ROW = serverRow("some-plugin", MANIFEST, PKG, "datatorag/mcp-gateway");
+
+test("the server row of a new plugin comes from its manifest and package.json", () => {
+  assert.deepEqual(ROW, {
+    slug: "some-plugin",
+    name: "Some Plugin",
+    description: "Some plugin: it's for tests",
+    githubRepoUrl: "https://github.com/datatorag/mcp-gateway/tree/main/plugins/some-plugin",
+    githubRepoOwner: "datatorag",
+    githubRepoName: "mcp-gateway",
+    licenseSpdx: "MIT",
+    manifest: MANIFEST,
+    status: "active",
+  });
+  // The manager's own fallbacks: a description from package.json, no license.
+  const bare = serverRow("some-plugin", { name: "X" }, { description: "pkg says" }, "datatorag/mcp-gateway");
+  assert.equal(bare.description, "pkg says");
+  assert.equal(bare.licenseSpdx, null);
+  assert.equal(serverRow("some-plugin", { name: "X" }, {}, "datatorag/mcp-gateway").description, null);
+});
+
+test("a server row is refused when its sources cannot say what it is", () => {
+  assert.throws(() => serverRow("some-plugin", null, PKG, "datatorag/mcp-gateway"), /datatorag\.json/);
+  assert.throws(() => serverRow("some-plugin", { description: "no name" }, PKG, "datatorag/mcp-gateway"), /no name/);
+  assert.throws(() => serverRow("some-plugin", MANIFEST, { license: 1 }, "datatorag/mcp-gateway"), /license/);
+  assert.throws(() => serverRow("some-plugin", { name: "X", description: 3 }, PKG, "datatorag/mcp-gateway"), /description/);
+  assert.throws(() => serverRow("some-plugin", MANIFEST, PKG, "not a repo"), /repository/);
+  assert.throws(() => serverRow("Bad Slug", MANIFEST, PKG, "datatorag/mcp-gateway"), /not a plugin slug/);
+  assert.throws(() => serverRow("some-plugin", { name: "X", n: 1.5 }, PKG, "datatorag/mcp-gateway"), /cannot render exactly/);
+});
+
+const NEW_TOOL = tool("read_it", { description: "Reads it." });
+const NEW = changeFiles("some-plugin", A, B, diffTools(null, file(NEW_TOOL)), ROW);
+const ROW_MD5 = md5(jsonbText([ROW.name, ROW.description, ROW.githubRepoUrl, ROW.githubRepoOwner, ROW.githubRepoName, ROW.licenseSpdx, ROW.manifest, ROW.status]));
+const NEW_SCHEMA = `'{"type":"object","properties":{"id":{"type":"string"}},"required":["id"]}'::jsonb`;
+const MANIFEST_SQL = `'{"name":"Some Plugin","description":"Some plugin: it''s for tests","oauth":{"provider":"some","scopes":[],"clientIdEnv":"$SOME_CLIENT_ID"}}'::jsonb`;
+
+test("a new plugin's forward file: the server row first, then its tools, one transaction (golden)", () => {
+  assert.equal(
+    NEW.forward,
+    `-- Registry change for some-plugin. PROPOSAL: NOT RUN.
+-- Generated from the tool files CI kept for gateway ${A} (what is running) and ${B}.
+-- A NEW plugin: some-plugin is not a directory under plugins/ at ${A}.
+-- Its mcp_servers row is inserted first, from plugins/some-plugin/datatorag.json and package.json at ${B}:
+--   name, description, the manifest as manifest_json, the license, a source link in this repository,
+--   status active, and container_port the lowest port from 40000 that no mcp_servers row holds,
+--   chosen by the statement itself. It raises if a row for some-plugin already exists.
+-- 0 row(s) change, 1 added, 0 removed.
+-- Rows for some-plugin: 0 before, 1 after.
+--   adds read_it
+-- Each statement is guarded by the md5 of the row's description and of input_schema_json::text
+-- as the other commit's plugin served them. If the live row differs, the statement touches
+-- nothing, the block raises and the transaction rolls back.
+-- One transaction. Run by a person, on a confirmation that names the database. See the
+-- SCRUM-390 spec for the order against the deploy.
+
+BEGIN;
+SET LOCAL standard_conforming_strings = on;
+DO $registry_change$
+DECLARE n int;
+BEGIN
+  -- some-plugin: a new plugin, its server row
+  INSERT INTO mcp_servers (slug, name, description, github_repo_url, github_repo_owner, github_repo_name, license_spdx, manifest_json, status, container_port)
+  SELECT 'some-plugin', 'Some Plugin',
+    'Some plugin: it''s for tests',
+    'https://github.com/datatorag/mcp-gateway/tree/main/plugins/some-plugin', 'datatorag', 'mcp-gateway',
+    'MIT',
+    ${MANIFEST_SQL},
+    'active',
+    (SELECT min(p.port) FROM generate_series(40000, 40999) AS p(port) WHERE NOT EXISTS (SELECT 1 FROM mcp_servers o WHERE o.container_port = p.port))
+  WHERE NOT EXISTS (SELECT 1 FROM mcp_servers s WHERE s.slug = 'some-plugin');
+  GET DIAGNOSTICS n = ROW_COUNT;
+  IF n <> 1 THEN RAISE EXCEPTION 'forward mcp_servers some-plugin: expected 1 row, inserted %', n; END IF;
+  SELECT count(*) INTO n FROM mcp_servers s JOIN mcp_servers o ON o.container_port = s.container_port WHERE s.slug = 'some-plugin';
+  IF n <> 1 THEN RAISE EXCEPTION 'forward mcp_servers some-plugin: expected 1 row on its port, found %', n; END IF;
+
+  -- read_it: a new row
+  INSERT INTO tools (mcp_server_id, name, namespaced_name, description, input_schema_json, read_only_hint)
+  SELECT s.id, 'read_it', 'some-plugin__read_it',
+    'Reads it.',
+    ${NEW_SCHEMA},
+    true
+  FROM mcp_servers s
+  WHERE s.slug = 'some-plugin'
+    AND NOT EXISTS (SELECT 1 FROM tools t WHERE t.namespaced_name = 'some-plugin__read_it');
+  GET DIAGNOSTICS n = ROW_COUNT;
+  IF n <> 1 THEN RAISE EXCEPTION 'forward read_it: expected 1 row, inserted %', n; END IF;
+
+  SELECT count(*) INTO n FROM tools t JOIN mcp_servers s ON s.id = t.mcp_server_id WHERE s.slug = 'some-plugin';
+  IF n <> 1 THEN RAISE EXCEPTION 'rows for some-plugin: expected 1, found %', n; END IF;
+END
+$registry_change$;
+SELECT t.name, md5(t.description) AS description_md5, md5(t.input_schema_json::text) AS schema_md5, t.read_only_hint, t.updated_at
+FROM mcp_servers s JOIN tools t ON s.id = t.mcp_server_id
+WHERE s.slug = 'some-plugin' AND t.name IN ('read_it');
+COMMIT;
+`
+  );
+});
+
+test("a new plugin's rollback file: its tools go, then the server row, each guarded (golden)", () => {
+  assert.equal(
+    NEW.rollback,
+    `-- ROLLBACK of the registry change for some-plugin. PROPOSAL: NOT RUN.
+-- Returns the rows to what gateway ${A} served, from what ${B} served.
+-- A NEW plugin: the rollback deletes its tool rows and then its mcp_servers row, which is
+-- guarded by the md5 of every column the forward file wrote except the port it chose, and
+-- refuses while any tool, env var or plugin connection row still points at it, so the
+-- foreign keys' cascade can never remove one.
+-- 0 row(s) change, 1 added, 0 removed.
+-- Rows for some-plugin: 0 before, 1 after.
+--   deletes read_it
+-- A re-inserted row is a NEW row: its id, enabled flag and counters are the table's defaults,
+-- not what the deleted row had.
+-- Each statement is guarded by the md5 of the row's description and of input_schema_json::text
+-- as the other commit's plugin served them. If the live row differs, the statement touches
+-- nothing, the block raises and the transaction rolls back.
+-- One transaction. Run by a person, on a confirmation that names the database. See the
+-- SCRUM-390 spec for the order against the deploy.
+
+BEGIN;
+SET LOCAL standard_conforming_strings = on;
+DO $registry_change$
+DECLARE n int;
+BEGIN
+  -- read_it: the row goes
+  DELETE FROM tools t USING mcp_servers s
+  WHERE s.id = t.mcp_server_id AND s.slug = 'some-plugin' AND t.name = 'read_it'
+    AND md5(t.description) = '${md5("Reads it.")}'
+    AND md5(t.input_schema_json::text) = '${md5(jsonbText(NEW_TOOL.inputSchema))}';
+  GET DIAGNOSTICS n = ROW_COUNT;
+  IF n <> 1 THEN RAISE EXCEPTION 'rollback read_it: expected 1 row, deleted %', n; END IF;
+
+  -- some-plugin: the new plugin's server row goes
+  DELETE FROM mcp_servers s
+  WHERE s.slug = 'some-plugin'
+    AND md5(jsonb_build_array(s.name, s.description, s.github_repo_url, s.github_repo_owner, s.github_repo_name, s.license_spdx, s.manifest_json, s.status)::text) = '${ROW_MD5}'
+    AND NOT EXISTS (SELECT 1 FROM tools t WHERE t.mcp_server_id = s.id)
+    AND NOT EXISTS (SELECT 1 FROM mcp_server_env_vars e WHERE e.mcp_server_id = s.id)
+    AND NOT EXISTS (SELECT 1 FROM plugin_connections c WHERE c.mcp_server_id = s.id);
+  GET DIAGNOSTICS n = ROW_COUNT;
+  IF n <> 1 THEN RAISE EXCEPTION 'rollback mcp_servers some-plugin: expected 1 row, deleted %', n; END IF;
+
+  SELECT count(*) INTO n FROM tools t JOIN mcp_servers s ON s.id = t.mcp_server_id WHERE s.slug = 'some-plugin';
+  IF n <> 0 THEN RAISE EXCEPTION 'rows for some-plugin: expected 0, found %', n; END IF;
+END
+$registry_change$;
+SELECT t.name, md5(t.description) AS description_md5, md5(t.input_schema_json::text) AS schema_md5, t.read_only_hint, t.updated_at
+FROM mcp_servers s JOIN tools t ON s.id = t.mcp_server_id
+WHERE s.slug = 'some-plugin' AND t.name IN ('read_it');
+COMMIT;
+`
+  );
+});
+
+test("the server row's guard is the md5 of the jsonb array Postgres prints, not of compact JSON", () => {
+  const values = [ROW.name, ROW.description, ROW.githubRepoUrl, ROW.githubRepoOwner, ROW.githubRepoName, ROW.licenseSpdx, ROW.manifest, ROW.status];
+  assert.ok(NEW.rollback.includes(`= '${md5(jsonbText(values))}'`));
+  // Known-bad: the compact rendering is a different md5, so a guard built from it would never match.
+  assert.notEqual(md5(JSON.stringify(values)), md5(jsonbText(values)));
+  assert.ok(!NEW.rollback.includes(md5(JSON.stringify(values))));
+  // A null description and license are JSON nulls in the array, not the string "null".
+  const bare = serverRow("some-plugin", { name: "X" }, {}, "datatorag/mcp-gateway");
+  const bareFiles = changeFiles("some-plugin", A, B, diffTools(null, file(NEW_TOOL)), bare);
+  assert.ok(bareFiles.forward.includes("'https://github.com/datatorag/mcp-gateway/tree/main/plugins/some-plugin', 'datatorag', 'mcp-gateway',\n    NULL,\n"));
+  assert.match(bareFiles.forward, /SELECT 'some-plugin', 'X',\n    NULL,\n/);
+  assert.ok(bareFiles.rollback.includes(md5(jsonbText(["X", null, bare.githubRepoUrl, "datatorag", "mcp-gateway", null, { name: "X" }, "active"]))));
+});
+
+test("a server row only with a new plugin, and a new plugin only with a server row", () => {
+  assert.throws(() => changeFiles("some-plugin", A, B, diffTools(null, file(NEW_TOOL))), /new plugin needs its server row/);
+  assert.throws(() => changeFiles("some-plugin", A, B, diffTools(file(tool("a")), file(tool("a"), NEW_TOOL)), ROW), /only for a new plugin/);
+  assert.throws(() => changeFiles("other-plugin", A, B, diffTools(null, file(NEW_TOOL)), ROW), /server row is for some-plugin/);
+  assert.equal(diffTools(null, file(NEW_TOOL)).newPlugin, true);
+  assert.equal(diffTools(file(tool("a")), file(tool("a"))).newPlugin, false);
+  // An empty base is not something a tool FILE can say; only the absent-directory rule says it.
+  assert.throws(() => diffTools({ tools: [] }, file(NEW_TOOL)), /lists no tools/);
+});
+
+test("the server row's text is inside the block too, so its own tag in a manifest is refused", () => {
+  const nasty = serverRow("some-plugin", { name: "x $registry_change$ y" }, {}, "datatorag/mcp-gateway");
+  assert.throws(() => changeFiles("some-plugin", A, B, diffTools(null, file(NEW_TOOL)), nasty), /would end the statement block early/);
+});
+
+/* --new-plugin (SCRUM-366): the base is forced empty whatever the base commit
+ * holds, because a main image holding the plugin can be running before its
+ * rows exist. The insert's NOT EXISTS guard on the slug is what makes forcing
+ * safe; the one thing still refused is a --to with no plugin to add. */
+const fakeGit = (dirs) => (sha, slug) => dirs.includes(`${sha}:${slug}`);
+const noFetch = () => {
+  throw new Error("the base commit's records must not be read under --new-plugin");
+};
+
+test("--new-plugin forces an empty base without reading the base commit's records", () => {
+  // The base commit holds the plugin AND a tool file for it; neither matters.
+  assert.equal(baseToolFile({ forced: true, slug: "p", from: A, to: B, pluginDirAt: fakeGit([`${A}:p`, `${B}:p`]), fetchBase: noFetch }), null);
+});
+
+test("--new-plugin refuses when the --to commit has no plugin directory", () => {
+  assert.throws(
+    () => baseToolFile({ forced: true, slug: "p", from: A, to: B, pluginDirAt: fakeGit([`${A}:p`]), fetchBase: noFetch }),
+    /--new-plugin: b{40} has no plugins\/p/
+  );
+});
+
+test("without --new-plugin the automatic rule decides, from the base commit's records", () => {
+  let asked = null;
+  const fetchBase = (slug, sha) => ((asked = [slug, sha]), file(tool("a")));
+  assert.deepEqual(baseToolFile({ forced: false, slug: "p", from: A, to: B, pluginDirAt: fakeGit([]), fetchBase }), file(tool("a")));
+  assert.deepEqual(asked, ["p", A]);
+});
+
+test("a forced file says so in its header, and is otherwise the same file", () => {
+  const forced = changeFiles("some-plugin", A, B, diffTools(null, file(NEW_TOOL)), ROW, { forced: true });
+  assert.match(forced.forward, /^-- A NEW plugin, by --new-plugin: the tool file kept for a{40} is not read, whatever it holds\.$/m);
+  assert.ok(!forced.forward.includes("is not a directory under plugins/"), "a forced header does not claim the directory was absent");
+  assert.match(forced.rollback, /^-- Returns the registry to no row for some-plugin, from what b{40} served\.$/m);
+  const body = (s) => s.slice(s.indexOf("\nBEGIN;\n"));
+  assert.equal(body(forced.forward), body(NEW.forward));
+  assert.equal(body(forced.rollback), body(NEW.rollback));
+  assert.throws(() => changeFiles("some-plugin", A, B, diffTools(file(tool("a")), file(tool("a"), NEW_TOOL)), null, { forced: true }), /--new-plugin needs a new plugin's diff/);
+});

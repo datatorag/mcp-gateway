@@ -161,3 +161,59 @@ describe("redactErrorMessage masks API keys (SCRUM-245)", () => {
     expect(redactErrorMessage("saw sk-dtrmcp_abc here")).toBe("saw [redacted-key] here");
   });
 });
+
+/* SCRUM-366: Notion's error envelope types the two fields the other way
+ * round from Google's: `status` is the HTTP number and `code` is a string
+ * ("object_not_found"). The Google allowlist keeps a NUMBER code and a STRING
+ * status, so a Notion envelope lost both and kept only the message. Its own
+ * case keeps them, for that shape only. */
+describe("redactErrorMessage keeps a Notion error envelope's code and status (SCRUM-366)", () => {
+  const NOTION_404 =
+    'Notion API error: {"object":"error","status":404,"code":"object_not_found","message":"Could not find page with ID: 0a1b2c3d-0000-4000-8000-00000000abcd. Make sure the relevant pages and databases are shared with your integration.","request_id":"5e6f7a8b-0000-4000-8000-000000000001"}';
+
+  it("keeps code as a string and status as a number", () => {
+    const out = redactErrorMessage(NOTION_404)!;
+    const parsed = JSON.parse(out.slice(out.indexOf("{"), out.lastIndexOf("}") + 1)) as Record<string, unknown>;
+    expect(parsed.object).toBe("error");
+    expect(parsed.status).toBe(404);
+    expect(parsed.code).toBe("object_not_found");
+    expect(String(parsed.message)).toContain("Make sure the relevant pages and databases are shared");
+  });
+
+  it("keeps a long code whole, which the id pattern would otherwise mask", () => {
+    const out = redactErrorMessage(
+      '{"object":"error","status":500,"code":"internal_server_error","message":"Unexpected error occurred."}'
+    )!;
+    expect(out).toContain('"code":"internal_server_error"');
+    expect(out).toContain('"status":500');
+  });
+
+  it("still scrubs the message and drops unknown fields", () => {
+    const out = redactErrorMessage(NOTION_404)!;
+    // The page id inside the message is masked by the usual patterns.
+    expect(out).not.toContain("0a1b2c3d-0000-4000-8000-00000000abcd");
+    // request_id is not a diagnostic we keep.
+    expect(out).not.toContain("request_id");
+  });
+
+  it("drops a code that is not a plain snake_case word", () => {
+    const out = redactErrorMessage(
+      '{"object":"error","status":400,"code":"the user typed this whole sentence","message":"Bad."}'
+    )!;
+    expect(out).not.toContain("the user typed this whole sentence");
+    expect(out).toContain('"status":400');
+  });
+
+  it("leaves Google's envelope exactly as before: a string code is still dropped there", () => {
+    const google = 'Error: API error: {"error":{"code":400,"message":"Bad request.","status":"INVALID_ARGUMENT"}}';
+    expect(redactErrorMessage(google)).toBe(
+      'Error: API error: {"error":{"code":400,"message":"Bad request.","status":"INVALID_ARGUMENT"}}'
+    );
+    // A bare object WITHOUT object:"error" keeps the Google typing.
+    const bare = '{"status":404,"code":"object_not_found","message":"Gone."}';
+    const out = redactErrorMessage(bare)!;
+    expect(out).not.toContain("object_not_found");
+    expect(out).not.toContain("404");
+    expect(out).toContain("Gone.");
+  });
+});

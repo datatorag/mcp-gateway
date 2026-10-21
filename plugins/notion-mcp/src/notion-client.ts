@@ -159,13 +159,22 @@ export class NotionClient {
     return this.request("POST", path, { body });
   }
 
+  patch(path: string, body: unknown): Promise<unknown> {
+    return this.request("PATCH", path, { body });
+  }
+
+  delete(path: string): Promise<unknown> {
+    return this.request("DELETE", path);
+  }
+
   /** Send, and hand back the parsed JSON of an answer that succeeded.
    *
    * A refusal for rate from a read-only tool is sent again, up to
    * MAX_ATTEMPTS requests in all, waiting what rate-limit-retry.ts allows.
    * Anything else is thrown as a NotionApiError. A request that never got an
-   * answer (a dropped connection, the timeout) is thrown as it is and never
-   * retried. The log line names the method, the path's shape and the numbers
+   * answer (a dropped connection, the timeout) is never retried: a read's
+   * error is thrown as it is, a write's in words saying the change may have
+   * been applied. The log line names the method, the path's shape and the numbers
    * and nothing else from the request. */
   async request(
     method: "GET" | "POST" | "PATCH" | "DELETE",
@@ -191,12 +200,23 @@ export class NotionClient {
 
     let waited = 0;
     for (let attempt = 1; ; attempt++) {
-      const res = await fetch(url, {
-        method,
-        headers,
-        body,
-        signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
-      });
+      let res: Response;
+      try {
+        res = await fetch(url, {
+          method,
+          headers,
+          body,
+          signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+        });
+      } catch (err) {
+        // A write with no answer may have been applied before the connection
+        // dropped; it is not sent again, and the words say so.
+        if (this.readOnlyTool) throw err;
+        const reason = err instanceof Error ? err.message : String(err);
+        throw new Error(
+          `No answer came back from Notion for ${method} ${url.pathname} (${reason}). The change may or may not have been applied; it was not sent again.`
+        );
+      }
       const text = await res.text();
       if (res.ok) return text.trim() === "" ? {} : JSON.parse(text);
 

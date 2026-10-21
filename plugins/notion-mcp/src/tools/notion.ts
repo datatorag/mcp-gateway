@@ -1,5 +1,5 @@
-import type { NotionClient } from "../notion-client.js";
-import { notionId } from "../notion-id.js";
+import { NotionApiError, type NotionClient } from "../notion-client.js";
+import { notionId, viewId } from "../notion-id.js";
 import { decodeProperties, pageTitle, plainText, userName } from "../properties.js";
 import { READ, type ToolDef } from "./annotations.js";
 import { jsonResponse } from "./response.js";
@@ -18,7 +18,7 @@ const list = (v: unknown): unknown[] => (Array.isArray(v) ? v : []);
 /** Notion's page size ceiling. */
 const MAX_PAGE_SIZE = 100;
 
-const idArg = (what: string) => ({
+export const idArg = (what: string) => ({
   type: "string",
   description: `The ${what}'s Notion id, with or without dashes, or a Notion URL that contains it (the id is read from the URL).`,
 });
@@ -99,11 +99,17 @@ export const notionTools: ToolDef[] = [
     name: "notion_query_data_source",
     description:
       "Reads the rows of one Notion data source (a table inside a database), with an optional filter, sort order, property allowlist, page size and cursor. Each row is {id, url, created_time, last_edited_time, properties}, with properties as plain values keyed by property name. Filter and sorts are passed to Notion as written, in Notion's query JSON; notion_get_database lists the property names and types they refer to. " +
-      LIST_SHAPE,
+      LIST_SHAPE +
+      " With view_id in place of data_source_id, the rows are a saved view's, in its own filter and sort order, and each row is its id alone, which is what Notion's view query returns; notion_get_page reads a row's properties. A view query's results stay cached for 15 minutes; total_count is the number of rows it matched, and incomplete true means Notion's 10,000-row cache cut them short.",
     inputSchema: {
       type: "object",
       properties: {
         data_source_id: idArg("data source"),
+        view_id: {
+          type: "string",
+          description:
+            "A database view's id, or a database URL whose ?v= names the view. Takes the place of data_source_id; filter, sorts and properties are not taken with it.",
+        },
         filter: {
           type: "object",
           description:
@@ -124,7 +130,6 @@ export const notionTools: ToolDef[] = [
         cursor: cursorArg,
         page_size: pageSizeArg(25),
       },
-      required: ["data_source_id"],
     },
     annotations: READ("Query Notion data source"),
   },
@@ -225,7 +230,7 @@ function rowResult(item: unknown, keep: Set<string> | undefined): Obj {
 }
 
 /** A property schema entry as {name, type, options?}. */
-function schemaProperty(name: string, prop: unknown): Obj {
+export function schemaProperty(name: string, prop: unknown): Obj {
   const p = isObj(prop) ? prop : {};
   const type = str(p.type);
   const out: Obj = { name, type };
@@ -236,7 +241,7 @@ function schemaProperty(name: string, prop: unknown): Obj {
   return out;
 }
 
-function commentResult(item: unknown): Obj {
+export function commentResult(item: unknown): Obj {
   const c = isObj(item) ? item : {};
   return {
     id: c.id ?? null,
@@ -264,6 +269,52 @@ function stringList(value: unknown, argName: string): Set<string> | undefined {
     throw new Error(`${argName} takes a list of property names.`);
   }
   return new Set(value as string[]);
+}
+
+const VIEW_QUERY_EXPIRED =
+  "Notion did not find this view query's results. A view query's results expire 15 minutes after the call that started it, so a cursor older than that no longer works; a call without cursor starts the query again. Notion gives the same answer for a view that does not exist or is not shared with the DataToRAG connection.";
+
+/** A saved view's rows: POST /v1/views/{id}/queries starts the query and
+ * returns its opening page; a cursor, which carries the query id, GETs the
+ * next page from Notion's cache. Rows are ids alone, as Notion returns them. */
+async function queryView(client: NotionClient, args: Record<string, unknown>): Promise<Obj> {
+  const id = viewId(args.view_id, "view_id");
+  if (args.filter !== undefined || args.sorts !== undefined || args.properties !== undefined) {
+    throw new Error("With view_id, the view's own filter and sorts apply, and rows are ids; filter, sorts and properties are not taken.");
+  }
+  const size = pageSize(args.page_size, 25);
+  const start = cursor(args.cursor);
+  let res: unknown;
+  let queryId: string;
+  if (start === undefined) {
+    res = await client.post(`/v1/views/${id}/queries`, { page_size: size });
+    queryId = isObj(res) && typeof res.id === "string" ? res.id : "";
+  } else {
+    const at = start.indexOf(":");
+    if (at <= 0 || at === start.length - 1) {
+      throw new Error("cursor takes the next_cursor string an earlier call with this view_id returned.");
+    }
+    queryId = start.slice(0, at);
+    try {
+      res = await client.get(`/v1/views/${id}/queries/${encodeURIComponent(queryId)}`, {
+        start_cursor: start.slice(at + 1),
+        page_size: size,
+      });
+    } catch (err) {
+      if (err instanceof NotionApiError && err.status === 404) throw new NotionApiError(VIEW_QUERY_EXPIRED, 404, err.code);
+      throw err;
+    }
+  }
+  const b = isObj(res) ? res : {};
+  const next = str(b.next_cursor);
+  const out: Obj = {
+    results: list(b.results).map((r) => ({ id: isObj(r) ? (r.id ?? null) : null })),
+    has_more: b.has_more === true,
+    next_cursor: next && queryId ? `${queryId}:${next}` : null,
+  };
+  if (typeof b.total_count === "number") out.total_count = b.total_count;
+  if (isObj(b.request_status) && b.request_status.type === "incomplete") out.incomplete = true;
+  return out;
 }
 
 export async function handleNotion(client: NotionClient, name: string, args: Record<string, unknown>) {
@@ -331,6 +382,10 @@ export async function handleNotion(client: NotionClient, name: string, args: Rec
     }
 
     case "notion_query_data_source": {
+      const byView = args.view_id !== undefined && args.view_id !== null;
+      const byDataSource = args.data_source_id !== undefined && args.data_source_id !== null;
+      if (byView === byDataSource) throw new Error("Set exactly one of data_source_id or view_id.");
+      if (byView) return jsonResponse(await queryView(client, args));
       const id = notionId(args.data_source_id, "data_source_id");
       const keep = stringList(args.properties, "properties");
       const body: Obj = { page_size: pageSize(args.page_size, 25) };

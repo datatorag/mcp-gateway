@@ -18,8 +18,13 @@
 
 /** Named by ROLE, never by address. A case in this public repo cannot
  * contain a mailbox, and `nonAdmin` names a USER of ours rather than a
- * connected account (it is the identity case `R2` lists as). */
-export const ACCOUNT_ROLES = ["sender", "reader", "atlassian", "nonAdmin"] as const;
+ * connected account (it is the identity case `R2` lists as).
+ *
+ * `notion` and `notionSecond` (SCRUM-366) name two Notion WORKSPACES, and
+ * what is mapped for each is the workspace id, not an email: one email can
+ * hold both workspaces, and the gateway refuses an email that matches two
+ * accounts rather than picking one. */
+export const ACCOUNT_ROLES = ["sender", "reader", "atlassian", "nonAdmin", "notion", "notionSecond"] as const;
 export type AccountRole = (typeof ACCOUNT_ROLES)[number];
 
 /** Named by KEY, never by id, for the same reason. */
@@ -64,6 +69,19 @@ export const FIXTURE_KEYS = [
    * sends is trashed by the case that sent it, so the search can come back
    * empty with nothing wrong. Pinned, as the attachment message is. */
   "smokeMessage",
+  /** A page in the `notion` workspace, shared with the DataToRAG
+   * connection, with a title, some body text and at least one property;
+   * the data source (a database's table) that page's workspace holds for
+   * the query and schema steps, with two rows or more so a page of one has
+   * more after it; and that data source's database. The database is a key
+   * of its own rather than derived from the data source, so the schema step
+   * checks two independently configured ids against each other. */
+  "notionPage",
+  "notionDataSource",
+  "notionDatabase",
+  /** A page in the `notionSecond` workspace, shared with that workspace's
+   * connection, for the step proving each workspace sees only its own. */
+  "notionSecondPage",
 ] as const;
 export type FixtureKey = (typeof FIXTURE_KEYS)[number];
 
@@ -93,7 +111,15 @@ export interface CaseContext {
   /** Unique per run and case. Everything a case creates carries it, so the
    * next run can find what an interrupted one left behind. */
   stamp: string;
-  call(tool: string, args: Record<string, unknown>, opts?: { as?: AccountRole }): Promise<ToolResult>;
+  /** `route: "workspace-name"` sends the mapped workspace's NAME as the
+   * account instead of its id, the way a user would type it. Only for a
+   * workspace role; the name is read from the gateway's own
+   * `list_connected_accounts` for the mapped id, never chosen by the case. */
+  call(
+    tool: string,
+    args: Record<string, unknown>,
+    opts?: { as?: AccountRole; route?: "workspace-name" }
+  ): Promise<ToolResult>;
   rpc(method: string, params?: Record<string, unknown>): Promise<unknown>;
   /** Loopback only, path only, and NO credential. See `http.ts`. A surface
    * behind the admin guard is therefore unreachable here by construction;

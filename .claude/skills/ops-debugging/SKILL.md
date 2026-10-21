@@ -60,6 +60,13 @@ change. What to do instead depends on what changed:
   workflow after the `production` environment's approval, as a role that can
   change only registry rows. `registry/README.md` has the commands. Until the
   role and its secret exist, a person runs the file as before.
+- **A new plugin** (SCRUM-366): the same generated pair, whose forward file
+  also inserts the plugin's `mcp_servers` row (status `active`, port chosen
+  by the statement) before its tools, and whose rollback deletes it last.
+  `--new-plugin` forces it when the running image already carries the
+  plugin. Derivation of every column, the order against the deploy and the
+  role's grant change (HQ applies it): `registry/README.md`. No hand-written
+  server row.
 - **Never a full re-discovery.** If the registry and the plugin disagree by
   more than the change you are shipping, stop and diff them; a wholesale
   rewrite hides the discrepancy instead of explaining it.

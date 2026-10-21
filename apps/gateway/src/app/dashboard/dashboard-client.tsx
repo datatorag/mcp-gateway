@@ -8,6 +8,7 @@ import { EVENTS } from "@/lib/analytics";
 import { CasaBadge } from "@/components/casa-badge";
 import { ConnectOutcomeNotice } from "./connect-outcome-notice";
 import { SERVICES } from "./connections/services";
+import { offeredServices } from "./connections/service-registry";
 import { ServiceIcon } from "@/components/service-icon";
 import { useRouter } from "next/navigation";
 import {
@@ -56,6 +57,7 @@ export function DashboardClient() {
     loaded,
     refetch,
     hasConnectedAccount,
+    launchedServices,
   } = useConnections();
   const loading = !loaded;
   const [disconnecting, setDisconnecting] = useState<string | null>(null);
@@ -160,7 +162,8 @@ export function DashboardClient() {
             </Card>
           ))
         ) : (
-          SERVICES.map((service) => {
+          // SCRUM-366: a service whose plugin has not launched gets no card.
+          offeredServices(SERVICES, launchedServices).map((service) => {
             const serviceAccounts = accounts.filter(
               (a) => a.connectorType === service.id
             );

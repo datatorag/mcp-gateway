@@ -179,6 +179,8 @@ pnpm dev:gateway
 | `GOOGLE_GWS_CLIENT_SECRET` | — | For GWS tools | — |
 | `ATLASSIAN_CLIENT_ID` | — | For Atlassian tools | Atlassian OAuth client ID |
 | `ATLASSIAN_CLIENT_SECRET` | — | For Atlassian tools | — |
+| `NOTION_OAUTH_CLIENT_ID` | — | For Notion tools | Notion public connection (OAuth) client ID |
+| `NOTION_OAUTH_CLIENT_SECRET` | — | For Notion tools | — |
 | `POSTHOG_API_KEY` | — | No | PostHog project key for server-side analytics (tool calls, signups, OAuth) |
 | `NEXT_PUBLIC_POSTHOG_KEY` | — | No | Same value as `POSTHOG_API_KEY`, exposed to the browser. Inlined at build time — must be set when running `next build` or `docker build`. PostHog project keys are safe to expose publicly. |
 

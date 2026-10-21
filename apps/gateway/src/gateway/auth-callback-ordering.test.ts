@@ -46,21 +46,36 @@ function stripComments(src: string): string {
  * slice runs to the next `router.get(` — the connect callback is followed by
  * the Atlassian connect route, so that boundary captures exactly this one. */
 function handlerBody(pathLiteral: string): string {
-  const src = stripComments(AUTH_SRC);
-  const start = src.indexOf(`router.get("${pathLiteral}"`);
+  // Sliced from the RAW source, then stripped: the regex stripper reads a
+  // `/*` inside a line comment elsewhere in the file (the Atlassian scope
+  // list has `// Confluence — /wiki/api/v2/*`) as a block opener and eats
+  // whole handlers, so it only ever sees the one handler's text. A comment in
+  // the handler that mentions the next-route marker would cut the slice
+  // short; the extraction guard in the test (every consumer present) catches
+  // that.
+  const start = AUTH_SRC.indexOf(`router.get("${pathLiteral}"`);
   if (start === -1) throw new Error(`handler not found: ${pathLiteral}`);
-  const rest = src.slice(start + pathLiteral.length);
+  const rest = AUTH_SRC.slice(start + pathLiteral.length);
   const nextRoute = rest.indexOf("router.get(");
-  return nextRoute === -1 ? rest : rest.slice(0, nextRoute);
+  return stripComments(nextRoute === -1 ? rest : rest.slice(0, nextRoute));
 }
 
-/** The one-shot consumers, by call shape (not bare name, so a mention in a
- * string or a renamed local cannot pass for the call). */
-const CONSUMERS = [
-  "res.clearCookie(GWS_CONNECT_NONCE_COOKIE",
-  "takeAttribution(",
-  "takeConnectNext(",
+/** The one-shot consumers shared by every connect callback, by call shape
+ * (not bare name, so a mention in a string or a renamed local cannot pass for
+ * the call). Each callback adds its own nonce clear, below. */
+const SHARED_CONSUMERS = ["takeAttribution(", "takeConnectNext("];
+
+/** Every service-connect callback, with the call that retires its own CSRF
+ * nonce (SCRUM-366 added Notion and, with it, the Atlassian pair, which had
+ * the same three consumers and no guard). */
+const CALLBACKS: Array<{ path: string; nonceClear: string }> = [
+  { path: "/auth/google/connect/callback", nonceClear: "res.clearCookie(GWS_CONNECT_NONCE_COOKIE" },
+  { path: "/auth/atlassian/connect/callback", nonceClear: 'res.clearCookie("atl_connect_nonce"' },
+  { path: "/auth/notion/connect/callback", nonceClear: "res.clearCookie(NOTION_CONNECT_NONCE_COOKIE" },
 ];
+
+/** The Google consumers, kept as the self-check's reference set. */
+const CONSUMERS = [CALLBACKS[0].nonceClear, ...SHARED_CONSUMERS];
 
 /** Anything that issues a response and can end the handler. The connect
  * callback only uses redirect today; the rest are here so that adding one
@@ -81,13 +96,16 @@ function firstResponseIndex(body: string): number {
 
 /** Assert every consumer runs before the first response. Returned rather than
  * asserted inline so the self-check can call it on a known-bad body. */
-function consumersRunBeforeFirstResponse(body: string): {
+function consumersRunBeforeFirstResponse(
+  body: string,
+  consumers: string[] = CONSUMERS
+): {
   ok: boolean;
   offender?: string;
 } {
   const firstResponse = firstResponseIndex(body);
   if (firstResponse === -1) return { ok: true }; // no response = nothing to beat
-  for (const consumer of CONSUMERS) {
+  for (const consumer of consumers) {
     const at = body.indexOf(consumer);
     if (at === -1 || at > firstResponse) return { ok: false, offender: consumer };
   }
@@ -95,16 +113,17 @@ function consumersRunBeforeFirstResponse(body: string): {
 }
 
 describe("connect callback: one-shot cookie consumers run before any response", () => {
-  it("every consumer precedes the first response in the live handler", () => {
-    const body = handlerBody("/auth/google/connect/callback");
+  it.each(CALLBACKS)("every consumer precedes the first response in $path", ({ path, nonceClear }) => {
+    const consumers = [nonceClear, ...SHARED_CONSUMERS];
+    const body = handlerBody(path);
     // Guard against a silent extraction failure: if the slice missed the body,
     // the consumers would be 'absent' and the test could pass vacuously.
-    for (const consumer of CONSUMERS) {
+    for (const consumer of consumers) {
       expect(body, `handler body should contain ${consumer}`).toContain(consumer);
     }
     expect(firstResponseIndex(body), "handler should issue a response").toBeGreaterThan(-1);
 
-    const result = consumersRunBeforeFirstResponse(body);
+    const result = consumersRunBeforeFirstResponse(body, consumers);
     expect(
       result.ok,
       `${result.offender ?? "a consumer"} must run before the first response — ` +

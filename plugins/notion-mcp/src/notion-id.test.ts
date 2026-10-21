@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { notionId } from "./notion-id.js";
+import { notionId, viewId } from "./notion-id.js";
 
 const ID = "122f53f3-d53e-4072-842d-9891b983e4e0";
 
@@ -34,5 +34,23 @@ describe("notionId", () => {
     ["a run of more than 32 hex digits", "https://www.notion.so/a122f53f3d53e4072842d9891b983e4e0"],
   ])("refuses %s, naming the argument", (_what, input) => {
     expect(() => notionId(input, "page_id")).toThrow(/page_id/);
+  });
+});
+
+describe("viewId", () => {
+  const V = "1a2b3c4d5e6f47a8b9c0d1e2f3a4b5c6";
+  const DASHED = "1a2b3c4d-5e6f-47a8-b9c0-d1e2f3a4b5c6";
+
+  it("reads the view from a database URL's ?v=, not the database id", () => {
+    expect(viewId(`https://www.notion.so/ws/bdaf45c7b17249358ae14ff92658d855?v=${V}`, "view_id")).toBe(DASHED);
+    expect(viewId(`https://www.notion.so/bdaf45c7b17249358ae14ff92658d855?pvs=4&v=${V}`, "view_id")).toBe(DASHED);
+  });
+
+  it("takes a bare id as it is", () => {
+    expect(viewId(V, "view_id")).toBe(DASHED);
+  });
+
+  it("refuses a URL with no view in it", () => {
+    expect(() => viewId("https://www.notion.so/bdaf45c7b17249358ae14ff92658d855", "view_id")).toThrow(/view_id .*\?v=/);
   });
 });

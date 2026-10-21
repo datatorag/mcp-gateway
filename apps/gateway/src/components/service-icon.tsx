@@ -5,8 +5,8 @@ import { cn } from "@/lib/utils";
  * One shared component for per-service brand marks (Gmail, Drive, Jira, …).
  *
  * The assets are the official full-colour product icons, self-hosted under
- * public/icons/services (never hotlinked from Google/Atlassian CDNs — see
- * SOURCES.md there for provenance). Per both vendors' brand guidelines the
+ * public/icons/services (never hotlinked from a vendor CDN — see SOURCES.md
+ * there for provenance). Per each vendor's brand guidelines the
  * marks are used as-is: no recolouring, no restyling, no theme variants —
  * the full-colour marks are legible on light and dark grounds, which is
  * verified in the ship checks rather than assumed.
@@ -26,6 +26,7 @@ const KNOWN_SERVICES = new Set([
   "tasks",
   "jira",
   "confluence",
+  "notion",
 ]);
 
 /** The service key for a docs/page slug ("gmail" → "gmail"), or null when the

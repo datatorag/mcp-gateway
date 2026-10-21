@@ -49,6 +49,10 @@ const WRITE_VERBS = new Set([
   "respond", "move", "copy", "edit", "remove", "upload", "batch",
   "run", "exec", "execute", "publish", "share", "grant", "revoke",
   "archive", "trash", "rename", "submit", "restore", "cancel", "clear",
+  // SCRUM-366: `notion_duplicate_page` creates a page. Without this it was a
+  // write only by the fail-closed default, one allowlist entry from running
+  // unprompted.
+  "duplicate",
 ]);
 
 /** The floor of the write classification: whether a namespaced tool mutates
@@ -148,6 +152,12 @@ export const KNOWN_READ_TOOLS: ReadonlySet<string> = new Set<string>([
   "gws-mcp__slides_get",
   "gws-mcp__tasks_list",
   "gws-mcp__tasks_list_tasks",
+  "notion-mcp__notion_get_comments",
+  "notion-mcp__notion_get_database",
+  "notion-mcp__notion_get_page",
+  "notion-mcp__notion_list_users",
+  "notion-mcp__notion_query_data_source",
+  "notion-mcp__notion_search",
 ]);
 
 /**
