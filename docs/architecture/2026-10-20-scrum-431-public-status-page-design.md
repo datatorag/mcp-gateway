@@ -190,29 +190,22 @@ The page does not assume it ran: the 36-hour banner is what keeps a missed
 day from showing as green. Whether the gateway should schedule its own
 daily full run is open question 2.
 
-## Open questions
+## Rulings (HQ, 2026-10-20)
 
-For HQ, and for Manuel where it is copy.
+All four as recommended.
 
-1. **Public titles.** Render the engineering titles as they are, or add a
-   `publicTitle` to each case, written as a capability ("Send an email with
-   your signature", "Attach an email to a Jira issue")?
-   - The second is what makes the page a feature list, at 113 lines of copy.
-     It is Manuel's voice and HQ's claims to sign off.
-   - A required field with a test would keep a new case from shipping without
-     one.
-   - Recommended: `publicTitle`, drafted by the product session, reviewed by
-     HQ and Manuel before the page ships.
-2. **Who runs the daily check.** Keep HQ's routine, or add a gateway cron?
-   - A run lists and calls as the admin who triggered it, with that admin's
-     connected accounts. A cron has no such user.
-   - A cron would need a named runner user, which is a decision, not code.
-   - Recommended: keep the routine, and let the banner carry a missed day.
-3. **Per-tool contract rows.** Show each tool's contract probe as part of
-   its state, as above, or show tools only through the cases that cover
-   them? Recommended: as above, since it is the only signal for a tool no
-   case covers yet.
-4. **Platform.** Show the gateway scenario (front door, registry agreement,
-   admin-only guards) as Platform, or leave it off a page for users?
-   Recommended: show it last. It is where an outage of the front door would
-   appear.
+1. **Public titles.** Every case gets a public title in capability language
+   ("Send an email with your signature"), required by a test. They live in
+   one file, `apps/gateway/src/lib/status/public-titles.ts`, a map from case
+   id to title, rather than on 113 case objects, so the approved text drops
+   in as one file. The product session drafts them; HQ runs the voice and
+   claims passes and Manuel reviews them before the page ships. Until then
+   the map holds the engineering titles, and the page is not linked or
+   deployed on them. No title names an exact tool count.
+2. **The daily run stays HQ's routine.** No gateway cron and no runner user;
+   the 36-hour banner is the safety.
+3. **Each tool's contract probe is part of its state**, as described above.
+4. **Platform is shown, last.**
+
+The agent surface is a follow-up ticket for agent cases; the page shows it
+once they exist.

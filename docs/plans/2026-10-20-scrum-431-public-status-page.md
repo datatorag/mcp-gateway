@@ -2,8 +2,8 @@
 
 Date: 2026-10-20. Design:
 `docs/architecture/2026-10-20-scrum-431-public-status-page-design.md`.
-Status: plan only. The build starts after HQ and Manuel have reviewed the
-design and answered its open questions.
+Status: plan, rulings in (see the design's Rulings section). The build is
+its own pull request.
 
 Rules for every step:
 - This repo is public: the rule, never the evidence.
@@ -47,13 +47,14 @@ Tests:
   day's newest run counts.
 - **The cache:** a second request with the same newest run id builds nothing.
 
-## 3. Public titles (if question 1 says so)
+## 3. Public titles
 
-- A required `publicTitle` on `TestCase`, filled in for every case in one
-  commit, drafted in capability language and sent to HQ and Manuel as text
-  before it merges.
-- Test: every case has one, and no rendered title carries a ticket id, an
-  email, an em dash or a fixture key name.
+- `apps/gateway/src/lib/status/public-titles.ts`: case id to public title,
+  one entry per registered case. It is built against the engineering titles
+  first, and the approved capability titles replace the file in one commit.
+- Test: every registered case has a title and no title names a retired
+  case; no title carries a ticket id, an email, an em dash, a fixture key
+  name or an exact tool count.
 
 ## 4. The page
 
