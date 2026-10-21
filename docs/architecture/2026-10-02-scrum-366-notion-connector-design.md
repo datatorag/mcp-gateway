@@ -456,9 +456,29 @@ What these rows are and are not:
   cost too many tokens. It is here because it is the only Notion tool list
   that can be read without a Notion login.
 
+### The hosted server against ours, 2026-10-20
+
+A second method, used for both rows below: the `tools` array of one
+authenticated `tools/list`, serialised as compact JSON, bytes divided by
+four for an approximate token count. It is coarser than the count above and
+is used because it is the one both sides could take the same way.
+
+| Tool list | Tools | Bytes, compact | Tokens, bytes/4 |
+|---|---|---|---|
+| Notion's hosted server, `mcp.notion.com`, authenticated | 65 | 261,086 | about 65,000 |
+| The hosted server's `query-data-sources` alone | 1 | 80,116 | about 20,000 |
+| Ours, `notion-mcp` as built: the six stage 1 reads | 6 | 8,537 | about 2,100 |
+
+Ours is the read set only; the stage 2 tools are not built yet, so this row
+grows. The parity comparison is the whole surface against the hosted
+server's content tools, and it is re-taken when stage 2 is built. Neither
+row includes the gateway's `account` parameter or its slug prefix.
+
 Not measured, and why:
 
-- **The hosted server's `tools/list`.** It answers 401 without a token
+- **The hosted server's `tools/list`.** Measured on 2026-10-20 from an
+  authenticated client (the table above); the note below records why it
+  could not be read on 2026-10-03. It answers 401 without a token
   (`initialize` against `https://mcp.notion.com/mcp`, 2026-10-03 04:08 UTC).
   Measuring it needs a Notion account to sign in and consent, which this
   session does not have and should not create.
