@@ -22,6 +22,7 @@ export const SURFACES = [
   { key: "contacts", name: "Contacts" },
   { key: "jira", name: "Jira" },
   { key: "confluence", name: "Confluence" },
+  { key: "notion", name: "Notion" },
   { key: "skills", name: "Skills" },
   { key: "gateway", name: "Platform" },
 ] as const;
