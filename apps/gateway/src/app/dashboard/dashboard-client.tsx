@@ -352,8 +352,12 @@ export function DashboardClient() {
                   </CardContent>
                 )}
 
-                {/* Actions footer */}
-                <CardFooter className="gap-2">
+                {/* Actions footer. The Google card's connect note sits in it,
+                    under the buttons (SCRUM-434): it explains the button above
+                    it, so it shares the footer's band and corners rather than
+                    hanging below the card as a strip of its own. */}
+                <CardFooter className="flex-col items-stretch gap-2">
+                  <div className="flex gap-2">
                   {isConnected ? (
                     <>
                       <Button
@@ -403,14 +407,11 @@ export function DashboardClient() {
                       Connect
                     </Button>
                   )}
+                  </div>
+                  {/* SCRUM-410: under the Google card's connect button, on
+                      every device, until the user hides it. */}
+                  {service.id === "google-workspace" && <ConnectHelper />}
                 </CardFooter>
-                {/* SCRUM-410: under the Google card's connect button, on
-                    every device, until the user hides it. */}
-                {service.id === "google-workspace" && (
-                  <CardContent className="pt-0">
-                    <ConnectHelper />
-                  </CardContent>
-                )}
               </Card>
             );
           })

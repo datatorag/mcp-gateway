@@ -867,6 +867,8 @@ export default async function HomePage() {
           {" "}&middot;{" "}
           <a href="/changelog" className="underline hover:text-foreground">Changelog</a>
           {" "}&middot;{" "}
+          <a href="/status" className="underline hover:text-foreground">Status</a>
+          {" "}&middot;{" "}
           <a
             href="https://github.com/datatorag/mcp-gateway"
             target="_blank"

@@ -26,6 +26,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     { url: `${BASE}/docs`, changeFrequency: "weekly", priority: 0.8 },
     { url: `${BASE}/skills`, changeFrequency: "weekly", priority: 0.8 },
     { url: `${BASE}/changelog`, changeFrequency: "weekly", priority: 0.6 },
+    { url: `${BASE}/status`, changeFrequency: "daily", priority: 0.5 },
     { url: `${BASE}/pricing`, changeFrequency: "monthly", priority: 0.8 },
     { url: `${BASE}/faq`, changeFrequency: "monthly", priority: 0.6 },
     // /demo still serves (ad destinations, analytics history) but canonicalizes
