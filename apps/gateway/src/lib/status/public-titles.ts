@@ -62,7 +62,7 @@ export const PUBLIC_TITLES: Readonly<Record<string, string>> = {
   "DR3": "See a file's name, type and folder without opening it",
   "DR4": "Move a file to another folder, or to the trash",
   "DR5": "Share a folder with someone, see who it is shared with, and list your recent files",
-  "DR6": "Copy a file from one of your Google accounts into another, checksum intact",
+  "DR6": "Copy a Google Doc as a PDF from one of your Google accounts into another",
   "E1": "Create a label and remove it",
   "E2": "List your mail filters, even when you have none",
   "E3": "Write text that starts with = or + and keep it as text",
