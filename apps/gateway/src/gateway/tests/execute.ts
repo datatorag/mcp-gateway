@@ -532,6 +532,7 @@ async function driveRun(opts: {
             called,
             db: opts.db,
             pool: opts.pool,
+            userId: opts.userId,
             runStamp: runId.slice(0, 8),
             shared,
             caseId,
@@ -781,6 +782,9 @@ export function makeContextParts(opts: {
    * rather than reading a made-up answer. */
   db?: Database;
   pool?: ConnectionPool;
+  /** The identity the run lists tools as, so A4 knows which services gate
+   * what it is served. */
+  userId?: string;
   /**
    * What each case shared, keyed by case id, and WHICH case is asking.
    *
@@ -1000,7 +1004,7 @@ export function makeContextParts(opts: {
     http: createHttpFetcher(loopbackBase(getEnv().GATEWAY_PORT)),
     gateway: {
       registrySurface: () =>
-        opts.db && opts.pool ? registrySurface(opts.db, opts.pool) : needs("registrySurface"),
+        opts.db && opts.pool ? registrySurface(opts.db, opts.pool, opts.userId) : needs("registrySurface"),
       classify: (names) => classifyTools(names),
       nonAdminView: () =>
         opts.db ? nonAdminView(opts.db, fixtures.user("nonAdmin") ?? undefined) : needs("nonAdminView"),
