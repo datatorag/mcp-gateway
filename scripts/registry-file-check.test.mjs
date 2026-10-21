@@ -9,7 +9,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
-import { changeFiles, diffTools } from "./registry-diff.mjs";
+import { changeFiles, diffTools, serverRow } from "./registry-diff.mjs";
 import { checkRegistryFile, MAX_ROW_STATEMENTS, Refusal, requestLines, sha256Of, tokenize } from "./registry-file-check.mjs";
 
 const A = "a".repeat(40);
@@ -188,4 +188,93 @@ test("every committed pair is a forward and its exact inverse, on the same rows 
     assert.equal(fwd.expectedRows - delta(fwd), rev.expectedRows, f);
     assert.equal(rev.expectedRows - delta(rev), fwd.expectedRows, f);
   }
+});
+
+/* A NEW plugin (SCRUM-366): the forward file inserts the plugin's mcp_servers
+ * row before its tools, the rollback deletes it after them. The check accepts
+ * exactly those two statements in exactly those places. */
+const ROW = serverRow("notion-like", { name: "Notion-like", description: nasty, oauth: { scopes: [], clientIdEnv: "$X" } }, { license: "MIT" }, "datatorag/mcp-gateway");
+const NEW = changeFiles("notion-like", A, B, diffTools(null, file(tool("search"), tool("read_page", { description: nasty }))), ROW);
+
+test("passes a new plugin's pair: the server row first forward, last back", () => {
+  const fwd = checkRegistryFile(NEW.forward);
+  assert.equal(fwd.server, "insert");
+  assert.equal(fwd.expectedRows, 2);
+  assert.deepEqual(fwd.ops.map((o) => `${o.op} ${o.name}`), ["adds read_page", "adds search"]);
+  const back = checkRegistryFile(NEW.rollback);
+  assert.equal(back.server, "delete");
+  assert.equal(back.expectedRows, 0);
+  assert.deepEqual(back.ops.map((o) => `${o.op} ${o.name}`), ["removes read_page", "removes search"]);
+  // A tool change file has no server statement.
+  assert.equal(checkRegistryFile(base).server, null);
+  // And a NULL description and license are accepted where a string would be.
+  const bare = serverRow("notion-like", { name: "X" }, {}, "datatorag/mcp-gateway");
+  const bareFiles = changeFiles("notion-like", A, B, diffTools(null, file(tool("search"))), bare);
+  assert.equal(checkRegistryFile(bareFiles.forward).server, "insert");
+  assert.equal(checkRegistryFile(bareFiles.rollback).server, "delete");
+});
+
+test("the request a reviewer reads says a server row is added or removed", () => {
+  assert.ok(requestLines("registry/x.sql", NEW.forward, checkRegistryFile(NEW.forward)).includes("  adds the mcp_servers row notion-like (status active, port chosen by the statement)"));
+  assert.ok(requestLines("registry/x.sql", NEW.rollback, checkRegistryFile(NEW.rollback)).includes("  removes the mcp_servers row notion-like"));
+});
+
+const fwdNew = NEW.forward;
+const backNew = NEW.rollback;
+const serverNearMisses = [
+  // The forward insert's own guards.
+  ["a server insert without its slug guard", fwdNew, (s) => s.replace(/\n  WHERE NOT EXISTS \(SELECT 1 FROM mcp_servers s WHERE s\.slug = 'notion-like'\);/, ";"), /not one the generator|does not open|changes no row/],
+  ["a server insert without its port check", fwdNew, (s) => s.replace(/  SELECT count\(\*\) INTO n FROM mcp_servers s JOIN mcp_servers o[^\n]*\n  IF n <> 1 THEN RAISE EXCEPTION 'forward mcp_servers notion-like: expected 1 row on its port, found %', n; END IF;\n/, ""), /not one the generator|changes no row/],
+  ["a server insert with a port of its own choosing", fwdNew, (s) => s.replace(/\(SELECT min\(p\.port\)[^\n]*\)\)\n/, "40000\n"), /not one the generator|changes no row/],
+  ["a server insert from another port range", fwdNew, (s) => s.replace("generate_series(40000, 40999)", "generate_series(1, 40999)"), /not one the generator|changes no row/],
+  ["a server row that is not active", fwdNew, (s) => s.replace("    'active',\n", "    'disabled',\n"), /status/],
+  ["a server row for another plugin than its tools", fwdNew, (s) => s.replace("SELECT 'notion-like', 'Notion-like',", "SELECT 'other-plugin', 'Notion-like',"), /two plugins/],
+  ["a server row's slug guard on another plugin", fwdNew, (s) => s.replace("WHERE s.slug = 'notion-like');\n", "WHERE s.slug = 'other-plugin');\n"), /two plugins/],
+  ["a source link outside the plugin's directory", fwdNew, (s) => s.replace("/tree/main/plugins/notion-like'", "/tree/main/apps'"), /source link/],
+  ["a source link on another host", fwdNew, (s) => s.replace("'https://github.com/datatorag/mcp-gateway/tree", "'https://example.test/datatorag/mcp-gateway/tree"), /source link/],
+  ["a manifest that is not a JSON object", fwdNew, (s) => s.replace(/'\{"name":"Notion-like"[^\n]*'::jsonb,\n/, "'[1]'::jsonb,\n"), /manifest/],
+  ["a manifest whose name is not the row's", fwdNew, (s) => s.replace('\'{"name":"Notion-like"', '\'{"name":"Other"'), /manifest/],
+  ["a server insert after a tool insert", fwdNew, (s) => {
+    const server = s.slice(s.indexOf("  -- notion-like: a new plugin"), s.indexOf("  -- read_page: a new row"));
+    const tools = s.slice(s.indexOf("  -- read_page: a new row"), s.indexOf("  SELECT count(*) INTO n FROM tools"));
+    return s.replace(server + tools, tools + server);
+  }, /does not close|not one the generator/],
+  ["a server insert beside a change to an existing tool", fwdNew, (s) => s.replace("  -- read_page: a new row", base.slice(base.indexOf("  -- a\n"), base.indexOf("  -- b: a new row")).replaceAll("gws-mcp", "notion-like") + "  -- read_page: a new row"), /only tool inserts/],
+  ["a new plugin whose row count is not its inserts", fwdNew, (s) => s.replace("IF n <> 2 THEN RAISE EXCEPTION 'rows for notion-like: expected 2,", "IF n <> 3 THEN RAISE EXCEPTION 'rows for notion-like: expected 3,"), /row count/],
+  ["a server guard message that is not the generator's", fwdNew, (s) => s.replace("forward mcp_servers notion-like: expected 1 row, inserted %", "forward mcp_servers notion-like: fine %"), /guard's message/],
+  ["a port guard message that is not the generator's", fwdNew, (s) => s.replace("expected 1 row on its port, found %", "expected 1 row, found %"), /guard's message/],
+  ["a comment above the server insert that names another plugin", fwdNew, (s) => s.replace("  -- notion-like: a new plugin, its server row", "  -- other: a new plugin, its server row"), /comment above the server/],
+  // The rollback delete's own guards.
+  ["a server delete without its md5 guard", backNew, (s) => s.replace(/\n    AND md5\(jsonb_build_array\([^\n]*/, ""), /not one the generator|does not close/],
+  ["a server delete guarded on fewer columns", backNew, (s) => s.replace("s.manifest_json, s.status)::text", "s.status)::text"), /not one the generator|does not close/],
+  ["a server delete without its tools guard", backNew, (s) => s.replace("\n    AND NOT EXISTS (SELECT 1 FROM tools t WHERE t.mcp_server_id = s.id)", ""), /not one the generator|does not close/],
+  ["a server delete without its env var guard", backNew, (s) => s.replace("\n    AND NOT EXISTS (SELECT 1 FROM mcp_server_env_vars e WHERE e.mcp_server_id = s.id)", ""), /not one the generator|does not close/],
+  ["a server delete without its plugin connection guard", backNew, (s) => s.replace("\n    AND NOT EXISTS (SELECT 1 FROM plugin_connections c WHERE c.mcp_server_id = s.id);", ";"), /not one the generator|does not close/],
+  ["a server delete whose md5 is not one", backNew, (s) => s.replace(/::text\) = '[0-9a-f]{32}'/, "::text) = 'nope'"), /not an md5/],
+  ["a server delete before the tool deletes", backNew, (s) => {
+    const tools = s.slice(s.indexOf("  -- read_page: the row goes"), s.indexOf("  -- notion-like: the new plugin's"));
+    const server = s.slice(s.indexOf("  -- notion-like: the new plugin's"), s.indexOf("  SELECT count(*) INTO n FROM tools"));
+    return s.replace(tools + server, server + tools);
+  }, /does not close|not one the generator|changes no row/],
+  ["a server delete for another plugin", backNew, (s) => s.replace("  WHERE s.slug = 'notion-like'\n    AND md5(jsonb", "  WHERE s.slug = 'other-plugin'\n    AND md5(jsonb"), /two plugins/],
+  ["a rollback that leaves rows behind", backNew, (s) => s.replace("IF n <> 0 THEN RAISE EXCEPTION 'rows for notion-like: expected 0,", "IF n <> 1 THEN RAISE EXCEPTION 'rows for notion-like: expected 1,"), /row count/],
+  ["a server delete guard message that is not the generator's", backNew, (s) => s.replace("rollback mcp_servers notion-like: expected 1 row, deleted %", "forward mcp_servers notion-like: expected 1 row, deleted %"), /guard's message/],
+  ["a server delete beside a tool insert", backNew, (s) => s.replace("  -- notion-like: the new plugin's", fwdNew.slice(fwdNew.indexOf("  -- search: a new row"), fwdNew.indexOf("  SELECT count(*) INTO n FROM tools")) + "  -- notion-like: the new plugin's"), /only tool deletes|closing read|row count/],
+  // A server statement where no tool file says a plugin is new.
+  ["a server delete in a forward file of an existing plugin", base, (s) => s.replace("  SELECT count(*) INTO n FROM tools", backNew.slice(backNew.indexOf("  -- notion-like: the new plugin's"), backNew.indexOf("  SELECT count(*) INTO n FROM tools")).replaceAll("notion-like", "gws-mcp") + "  SELECT count(*) INTO n FROM tools"), /only tool deletes|row count/],
+];
+
+for (const [label, start, edit, why] of serverNearMisses) {
+  test(`refuses ${label}`, () => {
+    const text = edit(start);
+    assert.notEqual(text, start, "the edit changed nothing, so this case proves nothing");
+    assert.throws(() => checkRegistryFile(text), (err) => err instanceof Refusal && why.test(err.message), label);
+  });
+}
+
+test("a new plugin's pair is a forward and its exact inverse, server row included", () => {
+  const fwd = checkRegistryFile(NEW.forward);
+  const rev = checkRegistryFile(NEW.rollback);
+  assert.deepEqual([fwd.server, rev.server], ["insert", "delete"]);
+  assert.deepEqual(rev.ops.map((o) => o.name).sort(), fwd.ops.map((o) => o.name).sort());
 });

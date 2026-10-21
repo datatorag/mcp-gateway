@@ -2,9 +2,20 @@
 -- on production by a person, on a confirmation that names the database.
 --
 -- It can read the two registry tables, add and remove rows of `tools`, and
--- change four columns of a row. Nothing else: no other table, no schema
+-- change four columns of a row. Since SCRUM-366 it can also add a new
+-- plugin's `mcp_servers` row (the ten columns a new-plugin file writes) and
+-- remove one, and read the one column, mcp_server_id, of the two other tables
+-- that point at `mcp_servers`, so the rollback can refuse while either holds a
+-- row for the server: their cascade would otherwise delete env vars and a
+-- user's plugin connection with it. Nothing else: no other table, no schema
 -- change, no role or database rights. So even a file that got past the check
 -- in scripts/registry-file-check.mjs could only change registry rows.
+--
+-- PROPOSAL, NOT APPLIED (SCRUM-366). The four lines marked SCRUM-366 below are
+-- new. The role already exists on production, so this file is not re-run:
+-- HQ applies those four GRANT lines to the existing role, as an administrator,
+-- and re-runs the checks at the end, before the workflow can run a
+-- new-plugin file. Until then a person runs such a file.
 --
 -- CREATED HERE BY SQL, NEVER IN THE PROVIDER'S CONSOLE: a role made in the
 -- console is given membership of the provider's administrative role, which
@@ -29,6 +40,12 @@ GRANT SELECT ON mcp_servers TO registry_writer;
 GRANT SELECT, DELETE ON tools TO registry_writer;
 GRANT INSERT (mcp_server_id, name, namespaced_name, description, input_schema_json, read_only_hint) ON tools TO registry_writer;
 GRANT UPDATE (description, input_schema_json, read_only_hint, updated_at) ON tools TO registry_writer;
+-- SCRUM-366: a new plugin's server row, its insert and its rollback's delete.
+GRANT INSERT (slug, name, description, github_repo_url, github_repo_owner, github_repo_name, license_spdx, manifest_json, status, container_port) ON mcp_servers TO registry_writer;
+GRANT DELETE ON mcp_servers TO registry_writer;
+-- SCRUM-366: the rollback's cascade guards read this one column, and no other.
+GRANT SELECT (mcp_server_id) ON mcp_server_env_vars TO registry_writer;
+GRANT SELECT (mcp_server_id) ON plugin_connections TO registry_writer;
 
 -- The check reads string literals with standard_conforming_strings on; the
 -- server must read them the same way. The workflow also sets it on connect
@@ -51,7 +68,7 @@ WHERE m.member = 'registry_writer'::regrole;
 SELECT rolsuper, rolcreaterole, rolcreatedb, rolreplication, rolbypassrls, rolinherit
 FROM pg_roles WHERE rolname = 'registry_writer';
 --
--- Table rights are exactly these (expected: mcp_servers SELECT; tools DELETE, SELECT):
+-- Table rights are exactly these (expected: mcp_servers DELETE, SELECT; tools DELETE, SELECT):
 SELECT table_name, privilege_type FROM information_schema.role_table_grants
 WHERE grantee = 'registry_writer' ORDER BY table_name, privilege_type;
 --
@@ -62,11 +79,23 @@ SELECT privilege_type, column_name FROM information_schema.column_privileges
 WHERE grantee = 'registry_writer' AND table_name = 'tools' AND privilege_type IN ('INSERT', 'UPDATE')
 ORDER BY privilege_type, column_name;
 --
+-- And on mcp_servers (expected: INSERT on exactly the ten columns of the
+-- SCRUM-366 grant above, and no UPDATE):
+SELECT privilege_type, column_name FROM information_schema.column_privileges
+WHERE grantee = 'registry_writer' AND table_name = 'mcp_servers' AND privilege_type IN ('INSERT', 'UPDATE')
+ORDER BY privilege_type, column_name;
+--
+-- On the two tables the cascade guards read (expected: two rows, SELECT on
+-- mcp_server_id of each; no other column, so no token or env var value):
+SELECT table_name, privilege_type, column_name FROM information_schema.column_privileges
+WHERE grantee = 'registry_writer' AND table_name IN ('mcp_server_env_vars', 'plugin_connections')
+ORDER BY table_name, column_name;
+--
 -- No right to create in the schema (expected: false):
 SELECT has_schema_privilege('registry_writer', 'public', 'CREATE');
 --
--- No right on any other table in the schema, by any route, PUBLIC included
--- (expected: no rows):
+-- No table-wide right on any other table in the schema, by any route, PUBLIC
+-- included (expected: no rows; the column grants above are not table-wide):
 SELECT c.relname FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
 WHERE n.nspname = 'public' AND c.relkind IN ('r', 'p', 'v', 'm')
   AND c.relname NOT IN ('tools', 'mcp_servers')

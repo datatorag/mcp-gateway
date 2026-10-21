@@ -16,7 +16,8 @@
 //      not split, not through the command-line client, which acts on
 //      backslash commands of its own.
 //   4. Prints the rows the file's closing read returns, and nothing else
-//      from the database except the generator's own guard messages.
+//      from the database except the generator's own guard messages (a new
+//      plugin's file has three more, for its mcp_servers row).
 //
 // NOTHING ABOUT THE CONNECTION IS PRINTED: not the string, not the host, not
 // a raw server or network error, which can quote either. A failure prints a
@@ -37,6 +38,17 @@ function loadDriver() {
 
 /** Raised by the file's own guards (plpgsql RAISE EXCEPTION). */
 const RAISED = "P0001";
+
+/** The messages the generator's guards raise, filled in. A tool row's; a new
+ * plugin's server row (SCRUM-366): its insert, its port check, its delete;
+ * and the row count. */
+const GUARD_MESSAGES = [
+  /^(forward|rollback) [A-Za-z0-9_.-]+: expected 1 row, (updated|inserted|deleted) \d+$/,
+  /^forward mcp_servers [a-z0-9][a-z0-9-]*: expected 1 row, inserted \d+$/,
+  /^forward mcp_servers [a-z0-9][a-z0-9-]*: expected 1 row on its port, found \d+$/,
+  /^rollback mcp_servers [a-z0-9][a-z0-9-]*: expected 1 row, deleted \d+$/,
+  /^rows for [a-z0-9-]+: expected \d+, found \d+$/,
+];
 
 /**
  * The whole run, with the database injected so it can be tested without
@@ -77,7 +89,7 @@ export async function applyRegistryFile({ path, text, sha256, url, connect }) {
     return { code: 0, out };
   } catch (err) {
     const code = typeof err?.code === "string" && /^[0-9A-Z]{5}$/.test(err.code) ? err.code : "none";
-    if (code === RAISED && typeof err.message === "string" && /^(forward|rollback) [A-Za-z0-9_.-]+: expected 1 row, (updated|inserted|deleted) \d+$|^rows for [a-z0-9-]+: expected \d+, found \d+$/.test(err.message)) {
+    if (code === RAISED && typeof err.message === "string" && GUARD_MESSAGES.some((re) => re.test(err.message))) {
       return { code: 1, out: [...out, `A guard stopped the change and the whole transaction rolled back: ${err.message}`] };
     }
     return { code: 1, out: [...out, `The change did not run to the end and was not committed (SQLSTATE ${code}). The error itself is not printed, because it can quote the connection.`] };
