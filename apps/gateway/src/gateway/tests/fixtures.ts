@@ -26,8 +26,8 @@ export type FixtureMap = {
   /** The id behind a fixture key, or null. */
   fixture(key: FixtureKey): string | null;
   /** Every address this run was configured with, for the evidence scrub to
-   * hold back. Addresses only: a user id or a file id is exactly what the
-   * scrub exists to eat. */
+   * hold back. Addresses only: a user id, a workspace id or a file id is
+   * exactly what the scrub exists to eat. */
   configuredAddresses(): string[];
   /** What a case needs but this run does not have, for the skip reason. */
   missingFor(needs: { accounts?: readonly AccountRole[]; fixtures?: readonly FixtureKey[] }): string[];
@@ -48,6 +48,18 @@ const USER_ROLES = new Set<AccountRole>(["nonAdmin"]);
 
 export function isUserRole(role: AccountRole): role is "nonAdmin" {
   return USER_ROLES.has(role);
+}
+
+/**
+ * The roles whose mapped value is a Notion WORKSPACE ID rather than an
+ * address (SCRUM-366). The gateway matches a workspace id exactly, so it is
+ * kept as written rather than lowercased, and it is not an address, so the
+ * evidence scrub is not told to hold it back.
+ */
+const WORKSPACE_ROLES = new Set<AccountRole>(["notion", "notionSecond"]);
+
+export function isWorkspaceRole(role: AccountRole): boolean {
+  return WORKSPACE_ROLES.has(role);
 }
 
 /**
@@ -76,7 +88,8 @@ export function parseFixtureMap(raw: string | undefined): FixtureMap {
   const account = (role: AccountRole): string | null => {
     if (!ACCOUNT_ROLES.includes(role)) return null;
     const value = parsed.accounts[role];
-    return typeof value === "string" && value.trim() !== "" ? value.trim().toLowerCase() : null;
+    if (typeof value !== "string" || value.trim() === "") return null;
+    return isWorkspaceRole(role) ? value.trim() : value.trim().toLowerCase();
   };
   const user = (name: "nonAdmin"): string | null => {
     const value = parsed.users[name];
@@ -94,7 +107,7 @@ export function parseFixtureMap(raw: string | undefined): FixtureMap {
     fixture,
     empty,
     configuredAddresses() {
-      return ACCOUNT_ROLES.filter((r) => !isUserRole(r))
+      return ACCOUNT_ROLES.filter((r) => !isUserRole(r) && !isWorkspaceRole(r))
         .map((r) => account(r))
         .filter((a): a is string => a !== null);
     },

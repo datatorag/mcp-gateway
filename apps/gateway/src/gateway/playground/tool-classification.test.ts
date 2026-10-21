@@ -79,6 +79,24 @@ describe("registry write/read classification snapshot", () => {
     expect(names.has("gws-mcp__gmail_list_filters")).toBe(true);
   });
 
+  /** The Notion connector (SCRUM-366) ships six tools, every one a read: the
+   * plugin declares each `readOnlyHint: true`, and the gate agrees on its
+   * own, by name. Pinned as a set so a seventh notion tool arrives here as a
+   * question rather than as a silent prompt, and so a later write tool
+   * cannot be added to the read half of this list by habit. */
+  it("records the six Notion read tools as reads, and the gate runs them unprompted", () => {
+    const notion = REGISTRY_CLASSIFICATION.filter(([name]) => name.startsWith("notion-mcp__"));
+    expect(notion).toEqual([
+      ["notion-mcp__notion_get_comments", "read"],
+      ["notion-mcp__notion_get_database", "read"],
+      ["notion-mcp__notion_get_page", "read"],
+      ["notion-mcp__notion_list_users", "read"],
+      ["notion-mcp__notion_query_data_source", "read"],
+      ["notion-mcp__notion_search", "read"],
+    ]);
+    for (const [name] of notion) expect(classifyWrite(name), name).toBe(false);
+  });
+
   it("KNOWN_READ_TOOLS is exactly this snapshot's read set", () => {
     // The gate's allowlist and this review record must be the same list, or
     // one of them is lying: an entry only here would fail closed at runtime

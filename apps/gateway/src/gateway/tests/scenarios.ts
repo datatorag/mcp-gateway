@@ -43,6 +43,7 @@ export const SCENARIO_KEYS = [
   "slides",
   "confluence",
   "skills",
+  "notion",
 ] as const;
 
 export type ScenarioKey = (typeof SCENARIO_KEYS)[number];
@@ -311,6 +312,24 @@ export const SCENARIOS: Scenario[] = [
       "C13", // search returns a skill and get loads it
       "SK1", // a skill of your own is created, revised and deleted
       "SK2", // forking a published skill shadows it; deleting restores it
+    ],
+  },
+  {
+    key: "notion",
+    title: "find a page, read it, read a database and its rows, keep two workspaces apart",
+    steps: [
+      /* READ ONLY (SCRUM-366, stage 1): nothing here creates, changes or
+       * deletes anything in Notion, so there is no cleanup and no send
+       * guard rule. Every step reads standing fixtures shared with the
+       * connection; NT1 needs none, so it runs first and a red there is the
+       * token or the workspace rather than a fixture. */
+      "NT1", // list_users with me answers the connection's own bot
+      "NT2", // the fixture page reads back with markdown and plain properties
+      "NT3", // a search by that page's title finds it
+      "NT4", // the fixture database lists the fixture data source, with a schema
+      "NT5", // rows come back plain, and the cursor returns a different row
+      "NT6", // the fixture page's comments answer the list shape
+      "NT7", // each workspace sees only its own page; a workspace name routes to it
     ],
   },
 ];

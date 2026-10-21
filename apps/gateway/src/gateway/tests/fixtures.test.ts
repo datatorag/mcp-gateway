@@ -129,3 +129,42 @@ describe("a role that names a user rather than an account", () => {
     expect(mapped.configuredAddresses()).toEqual(["sender@example.test"]);
   });
 });
+
+/**
+ * A Notion role names a WORKSPACE, not an address (SCRUM-366).
+ *
+ * One email can hold several Notion workspaces, so the email cannot pick
+ * one: the gateway refuses it as ambiguous. The value mapped for `notion`
+ * and `notionSecond` is the workspace id, which the gateway's `account`
+ * argument matches exactly. Lowercasing it, as an address is, would make a
+ * value that matches nothing, so it is kept as written; and it is not an
+ * address, so it is not one of the values the evidence scrub holds back.
+ */
+describe("a role that names a Notion workspace", () => {
+  const mapped = parseFixtureMap(
+    JSON.stringify({
+      accounts: {
+        sender: "sender@example.test",
+        notion: " 0000aaaa-Bbbb-4ccc-8ddd-eeeeffff0001 ",
+        notionSecond: "0000aaaa-bbbb-4ccc-8ddd-eeeeffff0002",
+      },
+    })
+  );
+
+  it("resolves the workspace id trimmed and exactly as written, never lowercased", () => {
+    expect(mapped.account("notion")).toBe("0000aaaa-Bbbb-4ccc-8ddd-eeeeffff0001");
+    expect(mapped.account("notionSecond")).toBe("0000aaaa-bbbb-4ccc-8ddd-eeeeffff0002");
+  });
+
+  it("is missing like any other account when it is not mapped", () => {
+    const bare = parseFixtureMap(JSON.stringify({ accounts: { sender: "s@example.test" } }));
+    expect(bare.missingFor({ accounts: ["notion", "notionSecond"] })).toEqual([
+      "account:notion",
+      "account:notionSecond",
+    ]);
+  });
+
+  it("is not listed among the configured addresses", () => {
+    expect(mapped.configuredAddresses()).toEqual(["sender@example.test"]);
+  });
+});

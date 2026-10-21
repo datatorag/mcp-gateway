@@ -112,6 +112,13 @@ import { sk1SkillsOwn } from "./sk1-skills-own";
 import { sk2SkillsFork } from "./sk2-skills-fork";
 import { r1FrontDoor } from "./r1-front-door";
 import { r2AdminOnly } from "./r2-admin-only";
+import { nt1NotionUsersMe } from "./nt1-notion-users-me";
+import { nt2NotionGetPage } from "./nt2-notion-get-page";
+import { nt3NotionSearch } from "./nt3-notion-search";
+import { nt4NotionGetDatabase } from "./nt4-notion-get-database";
+import { nt5NotionQuery } from "./nt5-notion-query";
+import { nt6NotionComments } from "./nt6-notion-comments";
+import { nt7NotionTwoWorkspaces } from "./nt7-notion-two-workspaces";
 
 /**
  * Every registered case (SCRUM-303).
@@ -260,6 +267,13 @@ export const CASES: TestCase[] = [
   cf5ConfluenceThreads,
   sk1SkillsOwn,
   sk2SkillsFork,
+  nt1NotionUsersMe,
+  nt2NotionGetPage,
+  nt3NotionSearch,
+  nt4NotionGetDatabase,
+  nt5NotionQuery,
+  nt6NotionComments,
+  nt7NotionTwoWorkspaces,
   r1FrontDoor,
   r2AdminOnly,
 ];

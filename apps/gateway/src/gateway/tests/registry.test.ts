@@ -83,6 +83,39 @@ describe("the real registry", () => {
   });
 });
 
+/**
+ * The Notion connector arrived with a case per tool (SCRUM-366), not with a
+ * run full of `uncovered` rows to close later. Its tool list is the reviewed
+ * snapshot rather than a run's tools/list, so this holds without a database.
+ */
+describe("the Notion connector's coverage", () => {
+  it("has a case for every notion-mcp tool in the reviewed snapshot, all in the notion scenario", async () => {
+    const { REGISTRY_CLASSIFICATION } = await import("../playground/registry-snapshot");
+    const { scenarioOf } = await import("./scenarios");
+    const tools = REGISTRY_CLASSIFICATION.map(([name]) => name).filter((n) => n.startsWith("notion-mcp__"));
+    expect(tools.length).toBe(6);
+    const covered = new Set(CASES.flatMap((c) => c.covers));
+    expect(tools.filter((t) => !covered.has(t))).toEqual([]);
+    const notionCases = CASES.filter((c) => c.covers.some((t) => t.startsWith("notion-mcp__")));
+    expect(notionCases.filter((c) => scenarioOf(c.id)?.key !== "notion").map((c) => c.id)).toEqual([]);
+  });
+
+  it("runs every Notion case as a Notion role and nothing else", () => {
+    const notionCases = CASES.filter((c) => c.covers.some((t) => t.startsWith("notion-mcp__")));
+    for (const c of notionCases) {
+      expect(c.accounts.every((r) => r === "notion" || r === "notionSecond"), c.id).toBe(true);
+    }
+  });
+
+  it("has a two-workspace case that cannot run on one workspace", () => {
+    const pair = CASES.filter(
+      (c) => c.accounts.includes("notion") && c.accounts.includes("notionSecond")
+    );
+    expect(pair.length).toBeGreaterThan(0);
+    for (const c of pair) expect(c.distinctAccounts, c.id).toBe(true);
+  });
+});
+
 describe("what it rejects", () => {
   it("accepts a well-formed set, so the rejections below are not blanket", () => {
     expect(checkRegistry([c({ id: "D10" }), c({ id: "D11", needs: ["D10"] })])).toEqual([]);

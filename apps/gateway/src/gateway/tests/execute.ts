@@ -16,7 +16,7 @@ import { classifyTools, isWriteTool, nonAdminView, registrySurface } from "./sur
 import { CASES } from "./cases";
 import { orderByNeeds, runOneCase, type ContextParts } from "./runner";
 import { runPool } from "./pool";
-import { parseFixtureMap } from "./fixtures";
+import { isWorkspaceRole, parseFixtureMap } from "./fixtures";
 import { checkSend, SUBJECT_PREFIX, type GuardLookups } from "./send-guard";
 import type { AccountRole, FixtureKey, TestCase, ToolResult } from "./types";
 import { finishRun, recordResult, startRun } from "./store";
@@ -72,6 +72,9 @@ const PROBE_CONCURRENCY = 4;
 export const PLUGIN_ROLES: Record<string, readonly AccountRole[]> = {
   "gws-mcp": ["sender", "reader"],
   "atlassian-mcp": ["atlassian"],
+  /* Two workspaces, mapped by workspace id (SCRUM-366). The first is the one
+   * a contract probe runs as. */
+  "notion-mcp": ["notion", "notionSecond"],
 };
 
 /** The plugin a namespaced tool belongs to, or null for a built-in. */
@@ -862,14 +865,78 @@ export function makeContextParts(opts: {
    * what it did at first. A second path is a second set of rules. */
   const trashable = new Set<string>();
 
+  /**
+   * The NAME of the workspace mapped for `role`, as the gateway lists it
+   * (SCRUM-366), for a call routed the way a user would type the account.
+   *
+   * Read from the gateway's own `list_connected_accounts` for the mapped
+   * workspace id, so the case still never chooses an account: the mapping
+   * does, and only the spelling changes. Refused, never guessed, when no
+   * listed account carries that id, or when the name would match more than
+   * one account (the gateway would refuse it too, and a red that reads as
+   * the connector's would be a configuration fact). The name never goes
+   * into an error: a workspace name is set by whoever administers it.
+   */
+  const workspaceNameFor = async (role: AccountRole, workspaceId: string): Promise<string> => {
+    const listed = await client.callTool(
+      "list_connected_accounts",
+      accountArgs(fixtures, "list_connected_accounts", {}, role)
+    );
+    let rows: Record<string, unknown>[] = [];
+    try {
+      const grouped: unknown = JSON.parse(resultText(listed));
+      if (grouped && typeof grouped === "object" && !Array.isArray(grouped)) {
+        rows = Object.values(grouped as Record<string, unknown>)
+          .flatMap((v) => (Array.isArray(v) ? v : []))
+          .filter((r): r is Record<string, unknown> => !!r && typeof r === "object");
+      }
+    } catch {
+      rows = [];
+    }
+    const name = rows.find((r) => r.workspace_id === workspaceId)?.workspace;
+    if (typeof name !== "string" || name === "") {
+      throw new Error(`no connected account carries the workspace mapped for ${role}, so it has no name to route by`);
+    }
+    const matching = rows.filter((r) => r.email === name || r.workspace === name || r.workspace_id === name);
+    if (matching.length !== 1) {
+      throw new Error(
+        `the workspace name mapped for ${role} names ${matching.length} connected accounts, so routing by it would be refused`
+      );
+    }
+    return name;
+  };
+
   /** The ONE place a tool is dispatched: account injection, then the send
    * guard, then the call. Everything the context offers goes through it. */
-  const dispatch = async (tool: string, args: Record<string, unknown>, role: AccountRole) => {
+  const dispatch = async (
+    tool: string,
+    args: Record<string, unknown>,
+    role: AccountRole,
+    route?: "workspace-name"
+  ) => {
+    let workspaceName: string | null = null;
+    if (route === "workspace-name") {
+      if (!isWorkspaceRole(role)) {
+        throw new Error(`${tool}: ${role} names no workspace, so it cannot be routed by a workspace name`);
+      }
+      // The same refusals as any call (plugin, role, mapping) BEFORE the
+      // lookup, so a call that could never be sent costs nothing.
+      const workspaceId = accountArgs(fixtures, tool, {}, role).account;
+      if (typeof workspaceId !== "string") throw new Error(`${tool}: a gateway built-in takes no account to route`);
+      workspaceName = await workspaceNameFor(role, workspaceId);
+    }
+    const routedName = workspaceName;
     /* BUILT ONCE, and the same object is checked and sent. Built twice, a
      * caller changing its own `args` while the guard awaited a lookup
      * would send something the guard never saw. Deep-copied so a nested
-     * `params` cannot be changed underneath it either. */
-    const sent = accountArgs(fixtures, tool, structuredClone(args), role);
+     * `params` cannot be changed underneath it either. A name route swaps
+     * only what the mapping answers for this role. */
+    const sent = accountArgs(
+      routedName === null ? fixtures : { account: () => routedName },
+      tool,
+      structuredClone(args),
+      role
+    );
     const verdict = await checkSend(tool, sent, {
       readerEmail: fixtures.account("reader"),
       senderEmail: fixtures.account("sender"),
@@ -894,7 +961,7 @@ export function makeContextParts(opts: {
       // notion, and handing one an argument its schema never declared is
       // both a rejection waiting to happen and an address in a call that
       // had no business carrying one. Built-ins are the unnamespaced names.
-      const result = await dispatch(tool, args, role);
+      const result = await dispatch(tool, args, role, callOpts?.route);
       called.push(tool);
       return result;
     },

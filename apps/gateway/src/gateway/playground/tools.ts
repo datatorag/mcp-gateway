@@ -148,6 +148,12 @@ export const KNOWN_READ_TOOLS: ReadonlySet<string> = new Set<string>([
   "gws-mcp__slides_get",
   "gws-mcp__tasks_list",
   "gws-mcp__tasks_list_tasks",
+  "notion-mcp__notion_get_comments",
+  "notion-mcp__notion_get_database",
+  "notion-mcp__notion_get_page",
+  "notion-mcp__notion_list_users",
+  "notion-mcp__notion_query_data_source",
+  "notion-mcp__notion_search",
 ]);
 
 /**
