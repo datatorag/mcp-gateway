@@ -15,6 +15,14 @@ export interface ConnectableService {
   name: string;
   /** The Express OAuth route that starts this service's connect flow. */
   connectUrl: string;
+  /** The plugin whose registry row launches this service (SCRUM-366). Absent
+   * means the service is always offered. Present means every connect surface
+   * hides it, and its connect route refuses, until that plugin's
+   * `mcp_servers` row exists with status active: a gateway can ship the
+   * connect flow before the registry holds the plugin's tools, and a user
+   * must never be able to connect a service that has nothing to call. The
+   * check is `launchedServiceIds` in `src/gateway/service-launch.ts`. */
+  launchPluginSlug?: string;
 }
 
 export const CONNECTABLE_SERVICES: ConnectableService[] = [
@@ -28,7 +36,31 @@ export const CONNECTABLE_SERVICES: ConnectableService[] = [
     name: "Atlassian",
     connectUrl: "/auth/atlassian/connect",
   },
+  {
+    id: "notion",
+    name: "Notion",
+    connectUrl: "/auth/notion/connect",
+    launchPluginSlug: "notion-mcp",
+  },
 ];
+
+/** The services offered with no registry check: what a surface shows before
+ * it knows which gated services have launched. Never a gated one, so a
+ * surface that has not heard back yet fails closed. */
+export const ALWAYS_OFFERED_SERVICE_IDS: readonly string[] =
+  CONNECTABLE_SERVICES.filter((s) => !s.launchPluginSlug).map((s) => s.id);
+
+/** The entries of `services` a surface may offer, given the launched ids
+ * (`launchedServiceIds` on the server, `launchedServices` in the connections
+ * view in the browser). Generic so it filters the dashboard's decorated list
+ * as well as this one. */
+export function offeredServices<T extends ConnectableService>(
+  services: readonly T[],
+  launched: Iterable<string>
+): T[] {
+  const ids = new Set(launched);
+  return services.filter((s) => !s.launchPluginSlug || ids.has(s.id));
+}
 
 export function getConnectableService(
   id: string

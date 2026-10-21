@@ -6,6 +6,12 @@ import { resolveNextPath } from "./post-login-destination";
  * string repeated three times is a typo away from a refusal nobody sees. */
 export const CONNECT_ERROR_NO_SERVICES = "no_services_granted";
 
+/** SCRUM-366: the error code for a connect started on a service whose plugin
+ * has not launched (`service-launch.ts`). The connect route refuses before
+ * any provider round trip; no surface offers the connect, so a user reaches
+ * this only through a typed or stale URL. */
+export const CONNECT_ERROR_NOT_LAUNCHED = "service_not_available";
+
 /**
  * Where the retired `/dashboard/connections` index forwards to (SCRUM-149).
  *

@@ -3,6 +3,7 @@ import type { Database } from "@datatorag-mcp/db";
 import { serviceConnections, connectedAccounts } from "@datatorag-mcp/db";
 import { listConnectedAccounts } from "./connected-accounts";
 import { scopeDelta, serviceGrantStates } from "./scope-grant";
+import { launchedServiceIds } from "./service-launch";
 import type {
   ConnectedAccount,
   LegacyConnection,
@@ -14,6 +15,10 @@ import type {
 export interface ConnectionsView {
   accounts: ConnectedAccount[];
   connections: LegacyConnection[];
+  /** The connectable service ids this gateway may offer right now
+   * (SCRUM-366, `service-launch.ts`). Every client surface that lists
+   * services to connect filters by it, through `offeredServices`. */
+  launchedServices: string[];
 }
 
 /** The finished grant answer for one row, in the shape consumers render
@@ -51,7 +56,7 @@ export async function loadConnectionsView(
   // and the page's first byte pays for the slower one, not the sum. The
   // service-id column is NOT NULL, so NOT IN over the subquery is safe (a
   // NULL in a NOT IN list would empty the result).
-  const [rawAccounts, legacyConnections] = await Promise.all([
+  const [rawAccounts, legacyConnections, launched] = await Promise.all([
     listConnectedAccounts(db, userId),
     db
       .select({
@@ -75,6 +80,7 @@ export async function loadConnectionsView(
           )
         )
       ),
+    launchedServiceIds(db),
   ]);
 
   // SCRUM-136 (the SCRUM-105 shape): callers get the finished DELTA, not a
@@ -89,5 +95,7 @@ export async function loadConnectionsView(
     scopeStatus: scopeStatusFor(c.service, c.scopes),
   }));
 
-  return JSON.parse(JSON.stringify({ accounts, connections })) as ConnectionsView;
+  return JSON.parse(
+    JSON.stringify({ accounts, connections, launchedServices: [...launched] })
+  ) as ConnectionsView;
 }

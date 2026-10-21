@@ -59,6 +59,12 @@ vi.mock("@/gateway/connected-accounts", () => ({
   disconnectService: vi.fn(),
 }));
 
+// SCRUM-366: which services request_connection may offer.
+const launchedServiceIds = vi.fn();
+vi.mock("@/gateway/service-launch", () => ({
+  launchedServiceIds: (...args: unknown[]) => launchedServiceIds(...args),
+}));
+
 const selectLimit = vi.fn();
 const dbMock = {
   select: () => ({ from: () => ({ where: () => ({ limit: selectLimit }) }) }),
@@ -84,6 +90,8 @@ type ResolvedTool = {
 };
 
 beforeEach(() => {
+  launchedServiceIds.mockReset();
+  launchedServiceIds.mockResolvedValue(new Set(["google-workspace", "atlassian"]));
   trackToolCall.mockClear();
   selectLimit.mockReset();
   listUserToolRows.mockReset();
@@ -304,5 +312,26 @@ describe("the model-facing tool count (SCRUM-255)", () => {
     await resolveUserPluginTools({ requestContext });
     expect(requestContext.get(SKILL_TOOL_COUNT_KEY)).toBeUndefined();
     expect(requestContext.get(SKILL_BUILTIN_COUNT_KEY)).toBeUndefined();
+  });
+});
+
+/* SCRUM-366: the agent is handed request_connection built from the launched
+ * set, read once per resolve from the registry, so it never names Notion to
+ * the model before Notion's server row is active. */
+describe("request_connection and the launch gate (SCRUM-366)", () => {
+  type WithSchema = { inputSchema: { safeParse: (v: unknown) => { success: boolean } } };
+
+  it("does not accept notion while it has not launched", async () => {
+    const tools = (await resolve()) as unknown as Record<string, WithSchema>;
+    expect(launchedServiceIds).toHaveBeenCalledWith(dbMock);
+    const schema = tools.request_connection.inputSchema;
+    expect(schema.safeParse({ service: "notion" }).success).toBe(false);
+    expect(schema.safeParse({ service: "atlassian" }).success).toBe(true);
+  });
+
+  it("accepts notion once launched", async () => {
+    launchedServiceIds.mockResolvedValue(new Set(["google-workspace", "atlassian", "notion"]));
+    const tools = (await resolve()) as unknown as Record<string, WithSchema>;
+    expect(tools.request_connection.inputSchema.safeParse({ service: "notion" }).success).toBe(true);
   });
 });

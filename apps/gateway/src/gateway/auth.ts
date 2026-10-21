@@ -26,11 +26,14 @@ import {
 } from "./post-login-destination";
 import {
   CONNECT_ERROR_NO_SERVICES,
+  CONNECT_ERROR_NOT_LAUNCHED,
   postConnectDestination,
 } from "./post-connect-destination";
 import { googleConnectRefusedUrl, renderConnectInterstitial } from "./connect-interstitial";
 import { GWS_SCOPE_LIST, grantedServiceCount, scopeDelta, serviceGrantStates } from "./scope-grant";
 import { NOTION_AUTHORIZE_URL, NOTION_TOKEN_URL, notionBasicAuth } from "./notion-oauth";
+import { isServiceLaunched } from "./service-launch";
+import { cleanWorkspaceName } from "./untrusted-text";
 import { getEnv } from "@datatorag-mcp/config";
 import { dropLinksForUser } from "./file-download";
 
@@ -939,10 +942,23 @@ export function createAuthRouter(
   // workspace id is stored as the account's external id and its name as the
   // label; a second workspace under the same email is a second account.
 
-  router.get("/auth/notion/connect", (req, res) => {
+  router.get("/auth/notion/connect", async (req, res) => {
     const sessionToken = req.cookies?.dtrmcp_session;
     if (!sessionToken) {
       res.redirect("/auth/login");
+      return;
+    }
+
+    // The launch gate (SCRUM-366): until the notion-mcp server row is active
+    // there are no Notion tools, so nothing is connected. Refused before any
+    // cookie is set or Notion is contacted.
+    if (!(await isServiceLaunched(db, PROVIDERS.NOTION))) {
+      res.redirect(
+        postConnectDestination({
+          requestedPath: req.query.next,
+          error: CONNECT_ERROR_NOT_LAUNCHED,
+        })
+      );
       return;
     }
 
@@ -1073,10 +1089,9 @@ export function createAuthRouter(
       );
       return;
     }
-    const workspaceName =
-      typeof tokens.workspace_name === "string" && tokens.workspace_name !== ""
-        ? tokens.workspace_name
-        : null;
+    // Set by whoever administers the workspace, and shown to the model and
+    // in the dashboard: cleaned and capped before it is stored.
+    const workspaceName = cleanWorkspaceName(tokens.workspace_name);
 
     // No expiry: Notion's token response carries none, and none is invented.
     await upsertServiceAccount(

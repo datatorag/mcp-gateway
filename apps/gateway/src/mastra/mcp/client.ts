@@ -13,6 +13,7 @@ import { EPHEMERAL_CACHE_OPTIONS } from "@/mastra/agents/datatorag";
 import { getDb } from "@/lib/db";
 import { getEnv } from "@datatorag-mcp/config";
 import { buildIntrospectionTools } from "@/mastra/tools/introspection";
+import { launchedServiceIds } from "@/gateway/service-launch";
 import { skillRunApproval } from "./skill-run-gate";
 
 /**
@@ -261,7 +262,13 @@ export async function resolveUserPluginTools({
   // own account, no identity argument, approval DECLARED rather than
   // classified. Added after the MCP set so the prompt-cache breakpoint stays
   // on an MCP tool schema, which is the large invariant block worth caching.
-  const handed = { ...wrapped, ...buildIntrospectionTools({ db, userId }) };
+  // SCRUM-366: request_connection offers only services whose plugin has
+  // launched.
+  const launchedServices = await launchedServiceIds(db);
+  const handed = {
+    ...wrapped,
+    ...buildIntrospectionTools({ db, userId, launchedServices }),
+  };
   if (skillRun) {
     // SCRUM-255: the number the skill filter exists to reduce, written where
     // it is decided so the generation telemetry can carry it. Counted on the

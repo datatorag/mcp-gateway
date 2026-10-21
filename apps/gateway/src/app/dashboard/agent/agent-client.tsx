@@ -75,6 +75,7 @@ export function AgentClient({
     legacyConnections,
     hasConnectedAccount,
     loaded: connectionsLoaded,
+    launchedServices,
   } = useConnections(initialConnections);
   const ref = useRef<PlaygroundHandle>(null);
 
@@ -356,6 +357,7 @@ export function AgentClient({
             accounts={accounts}
             connectionsLoaded={connectionsLoaded}
             hasConnectedAccount={hasConnectedAccount}
+            launchedServices={launchedServices}
             initialMessages={thread.history}
             key={`${thread.id ?? "new"}:${thread.epoch}`}
             layout="page"

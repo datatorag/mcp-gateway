@@ -3,6 +3,7 @@ import type { Database } from "@datatorag-mcp/db";
 import { serviceConnections, connectedAccounts } from "@datatorag-mcp/db";
 import { revokeGoogleToken } from "@/lib/google-revoke";
 import { NOTION_REVOKE_URL, NOTION_TOKEN_URL, notionBasicAuth } from "./notion-oauth";
+import { cleanWorkspaceName } from "./untrusted-text";
 
 /** Mapping from plugin slug to the service connection it needs. */
 export const PLUGIN_SERVICE_MAP: Record<string, string> = {
@@ -380,19 +381,28 @@ export type AmbiguousAccount = {
 };
 
 /** The words for an ambiguous account. `requested` is shown as given, so the
- * caller passes it already made safe to echo. */
+ * caller passes it already made safe to echo.
+ *
+ * A workspace name is set by whoever administers that workspace (SCRUM-366),
+ * so it is cleaned and capped (`cleanWorkspaceName`) and only ever appears as
+ * a JSON-quoted value: a quote inside it is escaped and cannot close the
+ * value, and no newline survives to start a line of its own. */
 export function ambiguousAccountMessage(
   requested: string,
   choices: AccountChoice[]
 ): string {
+  const quoted = (v: string) => JSON.stringify(v);
   const listed = choices
-    .map((c) =>
-      c.workspace
-        ? `"${c.account}" (${c.email}, workspace ${c.workspace})`
-        : `"${c.account}" (${c.email})`
-    )
+    .map((c) => {
+      if (c.workspace === null) return `${quoted(c.account)} (${c.email})`;
+      const workspace = cleanWorkspaceName(c.workspace) ?? "";
+      // The value to pass is the workspace name itself when that is what
+      // names the account alone; show it exactly as it is shown above.
+      const account = c.account === c.workspace ? workspace : c.account;
+      return `${quoted(account)} (${c.email}, workspace ${quoted(workspace)})`;
+    })
     .join("; ");
-  return `"${requested}" matches more than one connected account. Pass one of these as the account argument: ${listed}.`;
+  return `${quoted(requested)} matches more than one connected account. Pass one of these as the account argument: ${listed}.`;
 }
 
 type AccountRow = {

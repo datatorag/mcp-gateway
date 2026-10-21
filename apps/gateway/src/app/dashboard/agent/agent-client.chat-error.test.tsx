@@ -66,7 +66,7 @@ function mount(): void {
   act(() => {
     root.render(
       <AgentClient
-        initialConnections={{ accounts: [], connections: [] }}
+        initialConnections={{ accounts: [], connections: [], launchedServices: [] }}
         isDefaultView={false}
         landedFrom="login"
       />

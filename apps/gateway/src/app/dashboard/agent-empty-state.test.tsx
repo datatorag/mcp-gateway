@@ -657,3 +657,43 @@ describe("server-supplied connection state and the signup landing (SCRUM-206)", 
     expect(text()).not.toContain(INSTRUCTION);
   });
 });
+
+/* SCRUM-366: Notion's connect flow ships before its registry rows. The empty
+ * state's connect control offers only what the connections view says has
+ * launched, so no user meets a Notion connect while Notion has no tools. */
+describe("the empty state's connect control and the launch gate (SCRUM-366)", () => {
+  const neverResolves = () => new Promise<Response>(() => {});
+
+  it("does not offer Notion while it has not launched", async () => {
+    mountWith(neverResolves, [], null, {
+      initialConnections: {
+        ...UNCONNECTED,
+        launchedServices: ["google-workspace", "atlassian"],
+      } as Initial,
+    });
+    await flush();
+    expect(text()).toContain("Connect Google Workspace");
+    expect(text()).toContain("Connect Atlassian");
+    expect(text()).not.toContain("Notion");
+    expect(container.querySelector('a[href^="/auth/notion/connect"]')).toBeNull();
+  });
+
+  it("does not offer Notion when the view carries no launched set at all", async () => {
+    mountWith(neverResolves, [], null, { initialConnections: UNCONNECTED });
+    await flush();
+    expect(text()).toContain("Connect Google Workspace");
+    expect(text()).not.toContain("Notion");
+  });
+
+  it("offers Notion once launched", async () => {
+    mountWith(neverResolves, [], null, {
+      initialConnections: {
+        ...UNCONNECTED,
+        launchedServices: ["google-workspace", "atlassian", "notion"],
+      } as Initial,
+    });
+    await flush();
+    expect(text()).toContain("Connect Notion");
+    expect(container.querySelector('a[href^="/auth/notion/connect"]')).not.toBeNull();
+  });
+});

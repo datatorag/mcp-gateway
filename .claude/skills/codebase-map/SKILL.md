@@ -195,6 +195,8 @@ edit means the design-time check was skipped.
 | Agent in-thread data parts (connect control, account state) + return-path context | `apps/gateway/src/app/dashboard/agent-parts.tsx` |
 | Agent introspection tools incl. `request_connection` (emits `data-connect`) | `apps/gateway/src/mastra/tools/introspection.ts` |
 | Connectable-service registry (server-safe ids/names/connect URLs) | `apps/gateway/src/app/dashboard/connections/service-registry.ts` |
+| Launch gate for a connectable service (`launchPluginSlug` on the registry entry; `launchedServiceIds`/`isServiceLaunched`: hidden on every connect surface and refused by its connect route with `connect_error=service_not_available` until that plugin's `mcp_servers` row is active; fails closed; SCRUM-366) | `apps/gateway/src/gateway/service-launch.ts` |
+| Untrusted display names from another system (a Notion workspace name): cleaned and capped where stored and where rendered to the model, `WORKSPACE_NAME_MAX` | `apps/gateway/src/gateway/untrusted-text.ts` |
 | Per-user service token resolution + refresh (`PLUGIN_SERVICE_MAP`, `REFRESH_FN`) | `apps/gateway/src/gateway/service-token.ts` |
 | Multi-account list/default/disconnect | `apps/gateway/src/gateway/connected-accounts.ts` |
 | Dashboard page gating (`dtrmcp_session`) | `apps/gateway/src/proxy.ts` |

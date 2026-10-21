@@ -212,6 +212,41 @@ deploy, a real client connects a real workspace and each of the six tools
 returns real content; the admin test run is green; the changelog entry is
 live.
 
+## Release checklist for stage 1 (decided 2026-10-21)
+
+A new plugin's first release has an order the other two plugins never
+needed, because its server row does not exist yet. HQ's deploy follows
+these steps in this order; each names its check.
+
+1. **Prod database, one sitting, the founder confirming twice.** Run
+   migration 0022 with `pnpm --filter @datatorag-mcp/db db:migrate` (dev
+   branch first, verified, then production), and apply
+   `registry/roles/registry-writer.sql` to the registry role. Check: the
+   verify query shows the column, the `NULLS NOT DISTINCT` key, the journal
+   row, and an unchanged row count; the role holds INSERT and DELETE on
+   `mcp_servers`.
+2. **Merge and deploy the gateway image** carrying the connect routes, the
+   service map entry and the launch gate. Check: `/health` is ok;
+   `docker exec … printenv` shows both `NOTION_OAUTH_*` keys; no Notion
+   connect card is shown and `/auth/notion/connect` refuses, because no
+   `notion-mcp` server row exists yet.
+3. **Registry rows through the pipeline.** Generate with
+   `pnpm registry:diff notion-mcp --new-plugin --from <running sha> --to
+   <that image's sha>`, commit the pair under `registry/`, and run it with
+   the `registry` workflow on approval. Check: one `mcp_servers` row for
+   `notion-mcp`, active, on a free port, and its tool rows.
+4. **Restart the gateway**, since plugins start only at boot. Check:
+   `/health` lists `notion-mcp: up`; `tools/list` through the gateway for a
+   user with Notion connected matches the plugin's tool file field by
+   field; the connect card is now shown.
+5. **Smoke:** connect a test workspace through the product, call each tool,
+   connect a second workspace under the same login, and route by
+   workspace name.
+
+Rollback runs the other way: the registry pair's rollback, a restart, the
+previous image, and only then the migration's rollback, which refuses
+while a second workspace under one email exists.
+
 ## Stage 2: writes
 
 0. Scope (2026-10-20): parity with the hosted server's content tools is the

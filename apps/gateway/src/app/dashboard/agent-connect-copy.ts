@@ -52,6 +52,7 @@ export function connectErrorNotice(code: string | null | undefined): string {
 export const ALL_CONNECT_COPY = [
   connectContinuationMessage("Google Workspace"),
   connectContinuationMessage("Atlassian"),
+  connectContinuationMessage("Notion"),
   CONNECT_ERROR_NOTICE,
   CONNECT_ZERO_GRANT_NOTICE,
   CONNECT_RETRY_LABEL,

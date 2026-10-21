@@ -27,6 +27,9 @@ describe("the catalogue's run and deep-link helpers (SCRUM-223)", () => {
       "atlassian",
       "google-workspace",
     ]);
+    // SCRUM-366: a Notion tool names the Notion service.
+    expect(connectorsFor(["notion_search", "gmail_read"])).toEqual(["Notion", "Google Workspace"]);
+    expect(servicesFor({ ...skill, tools: ["notion_get_page"] })).toEqual(["notion"]);
   });
 
   it("builds the deep link and the sign-in link from the slug alone", () => {

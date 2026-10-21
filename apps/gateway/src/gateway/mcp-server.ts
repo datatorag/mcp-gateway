@@ -55,6 +55,7 @@ import {
   MISSING_SCOPE_ERROR_MARKER,
 } from "./scope-grant";
 import { grantLine, type ConnectedAccountLine } from "./account-grant-line";
+import { cleanWorkspaceName } from "./untrusted-text";
 import { crossFile, fileCrossingFor } from "./file-crossing";
 import { createDownloadLink, DOWNLOAD_TOOL, revokeLinksCarriedIn } from "./file-download";
 import { downloadDepsFor } from "./file-download-route";
@@ -604,13 +605,18 @@ export const BUILT_IN_TOOLS: {
       for (const row of rows) {
         const key = row.connectorType;
         if (!grouped[key]) grouped[key] = [];
+        // A label is a display name: for a Notion account it is the
+        // workspace name, set by whoever administers that workspace
+        // (SCRUM-366). Cleaned again here, not trusted from the store, and
+        // only ever a value inside this JSON.
+        const label = cleanWorkspaceName(row.label);
         grouped[key].push({
           email: row.accountEmail,
-          label: row.label,
+          label,
           is_default: row.isDefault,
           connected_at: row.connectedAt.toISOString().split("T")[0],
           ...(row.externalAccountId
-            ? { workspace: row.label, workspace_id: row.externalAccountId }
+            ? { workspace: label, workspace_id: row.externalAccountId }
             : {}),
           // What the account granted, by service name (SCRUM-412).
           ...grantLine(row.connectorType, row.scopes),
