@@ -22,6 +22,7 @@ import {
 import { useCurrentUser, type CurrentUser } from "@/lib/use-current-user";
 import { useDismissable } from "@/lib/use-dismissable";
 import { PromoBanner } from "@/components/promo-banner";
+import { GoogleConnectModalHost } from "./google-connect-modal";
 import { cn } from "@/lib/utils";
 
 const navItems: Array<{ href: string; label: string; icon: LucideIcon }> = [
@@ -479,6 +480,9 @@ export default function DashboardLayout({
         )}
       </main>
     </div>
+    {/* SCRUM-435: a Google connect link anywhere in the dashboard opens the
+        consent instructions here instead of navigating to the route page. */}
+    <GoogleConnectModalHost />
     </>
   );
 }

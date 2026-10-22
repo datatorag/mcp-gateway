@@ -4,9 +4,13 @@
  * auth-connect-csrf.test.ts; this file pins the words and the link contract.
  */
 
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import {
   ALL_INTERSTITIAL_COPY,
+  CONSENT_STEPS,
+  INTERSTITIAL_ANNOTATION,
   INTERSTITIAL_EXPLANATION,
   INTERSTITIAL_INSTRUCTION,
   INTERSTITIAL_SELECT_ALL,
@@ -64,5 +68,31 @@ describe("the proceed link", () => {
     expect(renderConnectInterstitial(null)).toContain(
       'href="/auth/google/connect?proceed=1"'
     );
+  });
+});
+
+describe("the steps of Google's screen (SCRUM-435)", () => {
+  it("shows the real captures with their size, in both forms of the page", () => {
+    for (const html of [
+      renderConnectInterstitial(null),
+      renderConnectInterstitial(null, { services: ["Gmail"], cancelHref: "/dashboard" }),
+    ]) {
+      for (const step of CONSENT_STEPS) {
+        expect(html).toContain(`<img src="${step.src}" width="${step.width}" height="${step.height}"`);
+      }
+      expect(html).toContain(`<span class="callout"`);
+      expect(html).toContain(INTERSTITIAL_ANNOTATION);
+      expect(html).not.toContain("and the rest of the list");
+    }
+  });
+
+  it("each capture's declared size matches the file, so the box reserved is the box drawn", () => {
+    for (const step of CONSENT_STEPS) {
+      const bytes = readFileSync(join(__dirname, "../../public", step.src));
+      // WebP VP8 header: width and height are 14-bit little-endian at 26 and 28.
+      expect(bytes.subarray(12, 16).toString("ascii")).toBe("VP8 ");
+      expect(bytes.readUInt16LE(26) & 0x3fff).toBe(step.width);
+      expect(bytes.readUInt16LE(28) & 0x3fff).toBe(step.height);
+    }
   });
 });

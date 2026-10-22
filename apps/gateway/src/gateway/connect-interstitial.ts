@@ -13,12 +13,18 @@
  * retry path a refused zero-grant connect lands on.
  *
  * Served by Express, so the styling is self-contained: light and dark via
- * prefers-color-scheme, system fonts, no dependency on the Next bundle. The
- * consent illustration is a deliberately schematic drawing, not a screenshot
- * of Google's UI — a mocked-up Google screen would be a fabricated asset that
- * drifts the first time Google repaints, and the two facts that matter (the
- * boxes come unticked; "Select all" fixes that in one tap) survive any
- * repaint of the real screen.
+ * prefers-color-scheme, system fonts, no dependency on the Next bundle.
+ *
+ * SCRUM-435 supersedes this page's original choice of a schematic drawing
+ * over a screenshot. The steps are now real captures of Google's screen
+ * (cropped, the account address redacted), because the real screen teaches
+ * better than a drawing of it, and a dated capture is drift we accept: when
+ * Google repaints, the captures are retaken. They are dark-mode captures
+ * shown inside their own dark frame, so they read the same on a light page.
+ * On the dashboard the same steps open as a modal over the page the connect
+ * started from (`google-connect-modal.tsx`); this route-level page stays as
+ * the fallback for every entry outside the dashboard and for the refused
+ * retry, so the choke point still holds there.
  *
  * Atlassian deliberately has no interstitial: its consent screen has no
  * per-scope opt-out, so there is nothing to teach.
@@ -36,6 +42,52 @@ export const INTERSTITIAL_ANNOTATION = "tick this first";
 export const INTERSTITIAL_SELECT_ALL = "Select all";
 export const INTERSTITIAL_CTA = "Continue to Google";
 export const INTERSTITIAL_CANCEL = "Back to the dashboard";
+/** The modal's dismiss button. The page's is a link back; the modal's
+ * closes over the page you are already on. */
+export const MODAL_DISMISS = "Not now";
+
+/** One step of Google's screen: a capture served from `public/connect`, with
+ * its intrinsic size so the image box is reserved before it loads and the
+ * modal does not jump. */
+export type ConsentStep = {
+  src: string;
+  width: number;
+  height: number;
+  alt: string;
+  caption: string;
+};
+
+export const CONSENT_STEPS: ConsentStep[] = [
+  {
+    src: "/connect/consent-1-wants-access.webp",
+    width: 896,
+    height: 623,
+    alt: "Google's screen: DataToRAG MCP wants access to your Google Account",
+    caption: "Google asks to connect your account.",
+  },
+  {
+    src: "/connect/consent-2-select-all.webp",
+    width: 896,
+    height: 516,
+    alt: "Google's screen: Select what DataToRAG MCP can access, with a Select all box above unticked boxes for each service",
+    caption: "Tick Select all. Every box below it starts unticked.",
+  },
+  {
+    src: "/connect/consent-3-continue.webp",
+    width: 896,
+    height: 555,
+    alt: "Google's screen: Make sure you trust DataToRAG MCP, with Cancel and Continue",
+    caption: "Then press Continue.",
+  },
+];
+
+/** Index of the step that carries the "tick this first" mark. */
+export const SELECT_ALL_STEP = 1;
+
+/** Where the Select all row sits in that capture, in percent of the image,
+ * measured off the crop. The mark is drawn over the image rather than into
+ * it, so its words stay text and stay in the copy list below. */
+export const SELECT_ALL_ROW = { top: 17, left: 4.3, width: 27.1, height: 13.6 };
 
 /** The same page after Google came back having granted nothing (SCRUM-410).
  * It says what happened, names what to tick, and its one button tries
@@ -63,6 +115,8 @@ export const ALL_INTERSTITIAL_COPY = [
   INTERSTITIAL_SELECT_ALL,
   INTERSTITIAL_CTA,
   INTERSTITIAL_CANCEL,
+  MODAL_DISMISS,
+  ...CONSENT_STEPS.flatMap((step) => [step.alt, step.caption]),
 ];
 
 /** The proceed URL: same route, `proceed=1`, the validated-downstream `next`
@@ -82,6 +136,18 @@ export function googleConnectRefusedUrl(next: string | null): string {
 
 const escapeHtml = (text: string): string =>
   text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+
+/** One step as page markup. Every value here is a module constant, none is
+ * user input; escaped anyway so the page has one rule. */
+function renderStep(step: ConsentStep, index: number): string {
+  const r = SELECT_ALL_ROW;
+  const mark =
+    index === SELECT_ALL_STEP
+      ? `<span class="mark" style="top:${r.top}%;left:${r.left}%;width:${r.width}%;height:${r.height}%"></span>` +
+        `<span class="callout" style="top:${r.top + r.height / 2}%;left:${r.left + r.width + 2}%">${INTERSTITIAL_ANNOTATION}</span>`
+      : "";
+  return `<li><p class="step-caption"><b>${index + 1}.</b>${escapeHtml(step.caption)}</p><div class="shot"><img src="${step.src}" width="${step.width}" height="${step.height}" alt="${escapeHtml(step.alt)}">${mark}</div></li>`;
+}
 
 /** The full page. Takes the raw `next` value and builds the proceed URL
  * itself, so the encoding is structural rather than a contract a future
@@ -143,25 +209,22 @@ export function renderConnectInterstitial(
   }
   h1 { font-size: 19px; margin: 0 0 10px; }
   p { margin: 0 0 14px; color: var(--muted); }
-  .consent {
-    border: 1px solid var(--border); border-radius: 12px;
-    padding: 14px 16px; margin: 18px 0; font-size: 13px;
+  .steps { list-style: none; margin: 18px 0; padding: 0; display: grid; gap: 16px; }
+  .step-caption { font-size: 13px; color: var(--fg); margin: 0 0 6px; }
+  .step-caption b { color: var(--muted); font-weight: 600; margin-right: 4px; }
+  .shot {
+    position: relative; background: #0e0e0e; border: 1px solid var(--border);
+    border-radius: 12px; overflow: hidden; line-height: 0;
   }
-  .consent-title { color: var(--muted); margin-bottom: 10px; font-size: 12px; }
-  .row { display: flex; align-items: center; gap: 10px; padding: 5px 0; color: var(--muted); }
-  .box {
-    width: 16px; height: 16px; border: 2px solid var(--muted);
-    border-radius: 4px; flex: none;
+  .shot img { width: 100%; height: auto; display: block; }
+  .mark {
+    position: absolute; border: 2px solid #fbbf24; border-radius: 8px;
   }
-  .row.select-all { color: var(--fg); font-weight: 600; }
-  .row.select-all .box { border-color: var(--accent); }
   .callout {
-    display: inline-block; margin-left: 6px; padding: 2px 8px;
-    border-radius: 999px; font-size: 11px; font-weight: 600;
-    color: var(--accent); background: var(--accent-bg);
-    border: 1px solid var(--accent-border);
+    position: absolute; transform: translateY(-50%); line-height: 1.4;
+    padding: 2px 8px; border-radius: 999px; font-size: 11px; font-weight: 600;
+    color: #1c1917; background: #fbbf24; white-space: nowrap;
   }
-  .dim { opacity: 0.65; }
   .instruction {
     color: var(--fg); background: var(--accent-bg);
     border: 1px solid var(--accent-border); border-radius: 10px;
@@ -186,14 +249,7 @@ export function renderConnectInterstitial(
   <div class="card">
     <h1>${title}</h1>
     <p>${explanation}</p>
-    <div class="consent" aria-hidden="true">
-      <div class="consent-title">On Google's screen you will see permission checkboxes:</div>
-      <div class="row select-all"><span class="box"></span>${INTERSTITIAL_SELECT_ALL}<span class="callout">${INTERSTITIAL_ANNOTATION}</span></div>
-      <div class="row dim"><span class="box"></span>Read, compose and send emails</div>
-      <div class="row dim"><span class="box"></span>See and manage files in Drive</div>
-      <div class="row dim"><span class="box"></span>See and edit calendar events</div>
-      <div class="row dim"><span class="box"></span>&hellip; and the rest of the list</div>
-    </div>
+    <ol class="steps">${CONSENT_STEPS.map((step, i) => renderStep(step, i)).join("")}</ol>
     ${services}
     <p class="instruction">${instruction}</p>
     <a class="cta" href="${proceedUrl}">${cta}</a>
