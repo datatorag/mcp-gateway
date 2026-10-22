@@ -21,7 +21,7 @@ import {
  */
 export const LIFECYCLE_LAUNCH = new Date("2026-07-17T22:00:00Z");
 
-const FOLLOWUP_DELAY_MS = 3 * 24 * 60 * 60 * 1000;
+const FOLLOWUP_DELAY_MS = 24 * 60 * 60 * 1000;
 
 export function firstNameOf(name: string | null): string {
   const first = name?.trim().split(/\s+/)[0];
@@ -161,7 +161,7 @@ async function connectionsByUser(
 }
 
 /**
- * Daily no-activation follow-up: users 3+ days old with no successful tool
+ * Daily no-activation follow-up: users 24+ hours old with no successful tool
  * call get ONE of three templates once, chosen by `followupBranch` from their
  * connection state. The atomic claim (UPDATE ... WHERE
  * no_activation_followup_sent_at IS NULL) runs BEFORE the send, so a crash
