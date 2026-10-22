@@ -54,3 +54,29 @@ export function ConnectHelper({ className }: { className?: string }) {
     </p>
   );
 }
+
+/** The line under a Notion connect or Add account button (SCRUM-436). Draft
+ * wording, to be checked against Notion's live authorize page: kept in this
+ * one constant so a change is one line. */
+export const NOTION_CONNECT_HELPER_TEXT =
+  "Notion asks which workspace to connect. To use a different Notion login, log out on Notion's page first.";
+
+/**
+ * The note under a Notion connect button: where Google's note sits, in the
+ * same type, but NOT dismissible. Google's dismissal is a per-user column
+ * (`users.connect_helper_dismissed_at`) that a refused Google connect clears;
+ * it means "the Google note", so it is not reused here, and a second column
+ * is not worth one line. This sentence is also needed most by people who
+ * already have a workspace connected and are looking for the next one, which
+ * is exactly who would have dismissed it.
+ */
+export function NotionConnectHelper({ className }: { className?: string }) {
+  return (
+    <p
+      className={cn("text-left text-xs text-muted-foreground", className)}
+      data-notion-connect-helper=""
+    >
+      {NOTION_CONNECT_HELPER_TEXT}
+    </p>
+  );
+}

@@ -2,6 +2,7 @@
 
 import { getConnector } from "@/lib/docs-connectors";
 import type { ConnectedAccount } from "./connections/types";
+import { accountName } from "./connections/account-display";
 
 /** What the meter knows about the run allowance. `cap: null` means the
  * account is EXEMPT (runs counted, never refused) — a real state, rendered
@@ -41,7 +42,9 @@ function connectorSummaries(accounts: ConnectedAccount[]) {
     key: type,
     label:
       (getConnector(type)?.title ?? type) + (list.length > 1 ? ` x${list.length}` : ""),
-    emails: list.map((a) => a.accountEmail).join(", "),
+    // SCRUM-436: a Notion workspace is named with its email, because one
+    // email covers every workspace of the same login.
+    emails: list.map(accountName).join(", "),
   }));
 }
 

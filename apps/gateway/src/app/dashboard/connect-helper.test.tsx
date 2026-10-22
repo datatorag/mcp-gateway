@@ -5,7 +5,13 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 
 import { resetCurrentUserForTests } from "@/lib/use-current-user";
-import { CONNECT_HELPER_DISMISS, CONNECT_HELPER_TEXT, ConnectHelper } from "./connect-helper";
+import {
+  CONNECT_HELPER_DISMISS,
+  CONNECT_HELPER_TEXT,
+  ConnectHelper,
+  NOTION_CONNECT_HELPER_TEXT,
+  NotionConnectHelper,
+} from "./connect-helper";
 import { ConnectPart } from "./agent-parts";
 
 let container: HTMLDivElement;
@@ -27,6 +33,7 @@ const note = () => container.querySelector("[data-connect-helper]");
 const USER = { id: "user-1", email: "a@example.com", name: null, avatarUrl: null };
 const GOOGLE = { id: "google-workspace", name: "Google Workspace", connectHref: "/auth/google/connect" };
 const ATLASSIAN = { id: "atlassian", name: "Atlassian", connectHref: "/auth/atlassian/connect" };
+const NOTION = { id: "notion", name: "Notion", connectHref: "/auth/notion/connect" };
 
 beforeEach(() => {
   resetCurrentUserForTests();
@@ -141,5 +148,44 @@ describe("where the note appears on the connect card", () => {
     act(() => root.render(<ConnectPart services={[ATLASSIAN]} />));
     await settle();
     expect(note()).toBeNull();
+  });
+});
+
+describe("the note under a Notion connect button (SCRUM-436)", () => {
+  const notionNote = () => container.querySelector("[data-notion-connect-helper]");
+
+  it("says Notion asks for the workspace, and how to use another login", () => {
+    act(() => root.render(<NotionConnectHelper />));
+    expect(notionNote()?.textContent).toBe(NOTION_CONNECT_HELPER_TEXT);
+    expect(NOTION_CONNECT_HELPER_TEXT).toBe(
+      "Notion asks which workspace to connect. To use a different Notion login, log out on Notion's page first."
+    );
+    expect(NOTION_CONNECT_HELPER_TEXT).not.toContain(String.fromCharCode(0x2014));
+    expect(NOTION_CONNECT_HELPER_TEXT).not.toMatch(/\d/);
+  });
+
+  it("has no dismiss control and stores nothing: it is not the Google note's preference", async () => {
+    act(() => root.render(<NotionConnectHelper />));
+    await settle();
+    expect(notionNote()!.querySelector("button")).toBeNull();
+    expect(posts).toEqual([]);
+  });
+
+  it("is under the agent's connect card when it offers Notion, below the buttons", async () => {
+    act(() => root.render(<ConnectPart services={[GOOGLE, NOTION]} />));
+    await settle();
+    const lastButton = Array.from(container.querySelectorAll("a")).pop()!;
+    expect(lastButton.compareDocumentPosition(notionNote()!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    // Google's own note is still there, for Google's button.
+    expect(note()).not.toBeNull();
+  });
+
+  it("is not under a card that offers only Atlassian or only Google", async () => {
+    act(() => root.render(<ConnectPart services={[ATLASSIAN]} />));
+    await settle();
+    expect(notionNote()).toBeNull();
+    act(() => root.render(<ConnectPart services={[GOOGLE]} />));
+    await settle();
+    expect(notionNote()).toBeNull();
   });
 });

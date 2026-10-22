@@ -2,7 +2,7 @@ import { eq, and, notInArray } from "drizzle-orm";
 import type { Database } from "@datatorag-mcp/db";
 import { serviceConnections, connectedAccounts } from "@datatorag-mcp/db";
 import { listConnectedAccounts } from "./connected-accounts";
-import { scopeDelta, serviceGrantStates } from "./scope-grant";
+import { connectorGrantsScopes, scopeDelta, serviceGrantStates } from "./scope-grant";
 import { launchedServiceIds } from "./service-launch";
 import type {
   ConnectedAccount,
@@ -27,7 +27,12 @@ export interface ConnectionsView {
  * different ways. */
 function scopeStatusFor(service: string, scopes: string | null) {
   const { missing, complete } = scopeDelta(service, scopes);
-  return { missing, complete, services: serviceGrantStates(service, scopes) };
+  return {
+    missing,
+    complete,
+    services: serviceGrantStates(service, scopes),
+    scoped: connectorGrantsScopes(service),
+  };
 }
 
 /**

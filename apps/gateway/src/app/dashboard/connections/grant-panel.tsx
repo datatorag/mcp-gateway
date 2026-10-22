@@ -91,6 +91,11 @@ export function GrantPanel({
   nextPath?: string | null;
   className?: string;
 }) {
+  // SCRUM-436: a connector with no scopes (Notion) has no grant to report.
+  // Its null scopes are not a grant that predates recording, and no
+  // reconnect would change them, so every surface says nothing at all.
+  if (scopeStatus?.scoped === false) return null;
+
   const state = grantState(scopeStatus, isConnected);
 
   // Nothing to say when the connection is absent or whole: the card's own

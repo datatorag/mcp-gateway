@@ -72,15 +72,15 @@ export const SET_DEFAULT_CONSEQUENCE =
   "Tool calls that do not name an account will use it from now on.";
 export const SET_DEFAULT_ERROR =
   "Could not change the default account. Try again.";
-export function setDefaultConfirm(email: string): string {
-  return `Make ${email} the default account?`;
+export function setDefaultConfirm(account: string): string {
+  return `Make ${account} the default account?`;
 }
 
 /** SCRUM-147: the suggestion over the same control when the default account
  * granted nothing and a sibling holds the recorded full grant — the one case
  * where switching beats re-consenting. */
-export function suggestDefaultLine(email: string): string {
-  return `Your account ${email} already granted full access.`;
+export function suggestDefaultLine(account: string): string {
+  return `Your account ${account} already granted full access.`;
 }
 export const SUGGEST_DEFAULT_ACTION = "Make it the default";
 
