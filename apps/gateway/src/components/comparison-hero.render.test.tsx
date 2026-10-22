@@ -90,7 +90,7 @@ describe("the comparison hero", () => {
       return i;
     };
     expect(at("<h1")).toBeLessThan(at("<ComparisonHero"));
-    expect(at("<ComparisonHero")).toBeLessThan(at("Workspace and Atlassian behind one URL, in Claude, Claude Code,"));
+    expect(at("<ComparisonHero")).toBeLessThan(at("Workspace, Atlassian and Notion behind one URL, in Claude, Claude"));
     expect(at("<ComparisonHero")).toBeLessThan(at("Get Started"));
     expect(at("Get Started")).toBeLessThan(at("Google-verified since June 2026"));
     // The agreement line left the hero on Manuel's word; it is shown on the

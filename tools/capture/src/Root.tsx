@@ -1,9 +1,10 @@
 import { Composition, Still } from "remotion";
 import "./style.css";
 import "./lib/fonts";
-import { FORMATS } from "./lib/formats";
+import { AGENT_COVER, FORMATS } from "./lib/formats";
 import { ConnectorCardShot } from "./shots/connector-card";
 import { DocsDemoShot } from "./shots/docs-demo";
+import { NotionAgentCoverShot } from "./shots/notion-agent-cover";
 import { SOCIAL_CARD, SocialCardShot } from "./shots/social-card";
 
 /**
@@ -54,6 +55,14 @@ export function Root() {
         component={SocialCardShot}
         width={SOCIAL_CARD.width}
         height={SOCIAL_CARD.height}
+      />
+      {/* Blog cover for the Notion launch post. One size only: it is a
+          link-preview shape, see AGENT_COVER. */}
+      <Still
+        id="notion-agent-cover"
+        component={NotionAgentCoverShot}
+        width={AGENT_COVER.width}
+        height={AGENT_COVER.height}
       />
       <Composition
         id="connector-card-video"

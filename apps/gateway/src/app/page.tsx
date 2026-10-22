@@ -214,8 +214,8 @@ export default async function HomePage() {
                   did not just read is how a wrong one ships. Matches the
                   pricing page and the lead page. */}
               {totalTools > 0 ? totalTools : "70+"} tools across Google
-              Workspace and Atlassian behind one URL, in Claude, Claude Code,
-              Cursor or your own app.
+              Workspace, Atlassian and Notion behind one URL, in Claude, Claude
+              Code, Cursor or your own app.
             </p>
 
             <div

@@ -61,3 +61,25 @@ export const FORMATS: Record<CaptureFormat, FormatSpec> = {
     authorWidth: DOCS_AUTHOR_WIDTH,
   },
 };
+
+/**
+ * Blog cover for a post about the Agent (1200x628, the landscape size and
+ * the 1.91:1 link-preview shape). NOT a FORMATS entry: every shot registers
+ * one still per FORMATS key, and this size only makes sense for a thread.
+ *
+ * Authored at 600px: inside the Agent page's own measure (`max-w-3xl`,
+ * 768px) and wide enough that the closed tool cards keep their argument
+ * summaries on one row, which at phone width they lose. The full 768px
+ * measure renders the text too small for a preview card, and a wider
+ * measure leaves the answer on two lines with dead space under it. Zoom is
+ * derived so the measure plus its padding fills exactly 1200px.
+ */
+const COVER_PAD = 16;
+const COVER_AUTHOR_WIDTH = 600;
+export const AGENT_COVER: FormatSpec = {
+  width: 1200,
+  height: 628,
+  zoom: 1200 / (COVER_AUTHOR_WIDTH + 2 * COVER_PAD),
+  pad: COVER_PAD,
+  authorWidth: COVER_AUTHOR_WIDTH,
+};

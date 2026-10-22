@@ -85,7 +85,7 @@ The `account` argument takes the email, or, when one email has several workspace
 | `notion_update_view` | Change a database view |
 | `notion_duplicate_page` | Copy a page's content and the properties that match the destination. Comments, page history and some block types are not copied |
 
-In the dashboard Agent, every write asks for approval before it runs, as it does for the other connectors.
+In a dashboard Agent conversation, every write asks for approval before it runs, as it does for the other connectors. A skill you start runs its writes without stopping to ask.
 
 ## Limits
 

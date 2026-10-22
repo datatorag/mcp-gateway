@@ -15,8 +15,8 @@ properties as plain values and its content as markdown, and `notion_query_data_s
 sorts and pages through a database, or runs one of its saved views.
 
 **Writing.** Create pages and database rows, edit content in markdown, change properties, move,
-duplicate, trash and restore pages, write comments, and create databases and views. In the Agent,
-every write asks for approval before it runs.
+duplicate, trash and restore pages, write comments, and create databases and views. In an Agent
+conversation, every write asks for approval before it runs.
 
 **Workspaces.** Each Notion workspace is its own connected account. `account` takes the email, or
 the workspace name or id when one email has several.
