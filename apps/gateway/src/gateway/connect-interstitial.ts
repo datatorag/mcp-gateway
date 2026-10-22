@@ -17,8 +17,9 @@
  *
  * SCRUM-435 supersedes this page's original choice of a schematic drawing
  * over a screenshot. The steps are now real captures of Google's screen
- * (cropped, the account address redacted), because the real screen teaches
- * better than a drawing of it, and a dated capture is drift we accept: when
+ * (cropped, the account address and the grant's expiry date redacted),
+ * because the real screen teaches better than a drawing of it, and a
+ * capture that ages is drift we accept: when
  * Google repaints, the captures are retaken. They are dark-mode captures
  * shown inside their own dark frame, so they read the same on a light page.
  * On the dashboard the same steps open as a modal over the page the connect
@@ -120,10 +121,23 @@ export const ALL_INTERSTITIAL_COPY = [
 ];
 
 /** The proceed URL: same route, `proceed=1`, the validated-downstream `next`
- * carried through encoded. Built here so route and page cannot drift. */
-export function googleConnectProceedUrl(next: string | null, retry = false): string {
+ * carried through encoded. Built here so route and page cannot drift.
+ *
+ * `carry` is the attribution snapshot the click put on the link, already
+ * parsed to its known wire names by the route. It is read only on the
+ * proceed leg, so the page has to hand it on or a connect made through the
+ * page arrives with no source. */
+export function googleConnectProceedUrl(
+  next: string | null,
+  retry = false,
+  carry: Record<string, string> = {}
+): string {
   const base = retry ? "/auth/google/connect?proceed=1&retry=1" : "/auth/google/connect?proceed=1";
-  return next ? `${base}&next=${encodeURIComponent(next)}` : base;
+  const withNext = next ? `${base}&next=${encodeURIComponent(next)}` : base;
+  const extra = Object.entries(carry)
+    .map(([name, value]) => `&${encodeURIComponent(name)}=${encodeURIComponent(value)}`)
+    .join("");
+  return withNext + extra;
 }
 
 /** Where a refused connect is sent: this page, in its refused form, with the
@@ -163,9 +177,10 @@ export function renderConnectInterstitial(
      * refusal so that page can still say what happened. Composed by the
      * caller from a validated path; escaped here regardless. */
     cancelHref: string;
-  }
+  },
+  carry: Record<string, string> = {}
 ): string {
-  const proceedUrl = googleConnectProceedUrl(next, Boolean(refused));
+  const proceedUrl = googleConnectProceedUrl(next, Boolean(refused), carry);
   const title = refused ? REFUSED_TITLE : INTERSTITIAL_TITLE;
   const explanation = refused ? REFUSED_EXPLANATION : INTERSTITIAL_EXPLANATION;
   const instruction = refused ? REFUSED_INSTRUCTION : INTERSTITIAL_INSTRUCTION;

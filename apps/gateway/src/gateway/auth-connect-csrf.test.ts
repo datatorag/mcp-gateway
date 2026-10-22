@@ -233,6 +233,30 @@ describe("the interstitial: GET /auth/google/connect without proceed", () => {
     );
   });
 
+  it("carries the attribution snapshot through to the proceed leg, by its known names only", async () => {
+    // The snapshot the click put on the link is read on the proceed leg
+    // alone, so the page has to hand it on.
+    const res = await rawGet(
+      "/auth/google/connect?next=%2Fdashboard&a_sid=s1&a_utm_source=news%20letter&junk=1",
+      SESSION
+    );
+    const html = await res.text();
+    expect(html).toContain(
+      "/auth/google/connect?proceed=1&next=%2Fdashboard&a_sid=s1&a_utm_source=news%20letter"
+    );
+    expect(html).not.toContain("junk");
+  });
+
+  it("an attribution value cannot escape the attribute", async () => {
+    const res = await rawGet(
+      `/auth/google/connect?a_utm_source=${encodeURIComponent('"><script>x</script>')}`,
+      SESSION
+    );
+    const html = await res.text();
+    expect(html).not.toContain("<script>x</script>");
+    expect(html).toContain("%3Cscript%3E");
+  });
+
   it("still requires a session, exactly like the redirect leg", async () => {
     const res = await rawGet("/auth/google/connect");
     expect(res.status).toBe(302);

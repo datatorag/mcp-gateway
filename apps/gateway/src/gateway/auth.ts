@@ -20,6 +20,7 @@ import {
 import { sendWelcomeEmail } from "./lifecycle";
 import { notifySignup } from "./signup-alert";
 import { skillSlugFromPath } from "../lib/skills";
+import { parseAttribution, toWireParams } from "../lib/attribution";
 import {
   postLoginDestination,
   resolveNextPath,
@@ -425,6 +426,9 @@ export function createAuthRouter(
     // nothing one-shot (nonce, attribution, next) is stashed for a page view.
     if (req.query.proceed !== "1") {
       const next = typeof req.query.next === "string" ? req.query.next : null;
+      // The attribution snapshot on the clicked link, by its known names
+      // only, handed on to the proceed leg where `stashAttribution` reads it.
+      const carry = toWireParams(parseAttribution(req.query as Record<string, unknown>, { ownHost: req.hostname }));
       // SCRUM-410: the same page in its refused form, where a connect that
       // came back from Google with nothing granted is sent. It names what to
       // tick and its button tries again. "Back" returns to wherever the
@@ -442,11 +446,11 @@ export function createAuthRouter(
                 requestedPath: validNext,
                 error: CONNECT_ERROR_NO_SERVICES,
               }),
-            })
+            }, carry)
           );
         return;
       }
-      res.status(200).type("html").send(renderConnectInterstitial(next));
+      res.status(200).type("html").send(renderConnectInterstitial(next, undefined, carry));
       return;
     }
 
