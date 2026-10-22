@@ -8,7 +8,8 @@ import { BetterDefaultSuggestion, SetDefaultControl } from "../default-control";
 import { ServiceIcon, serviceFromToolName } from "@/components/service-icon";
 import { CasaBadge } from "@/components/casa-badge";
 import { formatConnectedDate } from "@/lib/utils";
-import { ConnectHelper } from "../../connect-helper";
+import { ConnectHelper, NotionConnectHelper } from "../../connect-helper";
+import { accountDisplay, accountName } from "../account-display";
 
 interface Tool {
   name: string;
@@ -187,6 +188,7 @@ export function ConnectionDetailClient({
           Connect
         </a>
         {service === "google-workspace" && <ConnectHelper className="mx-auto mt-3 max-w-sm" />}
+        {service === "notion" && <NotionConnectHelper className="mx-auto mt-3 max-w-sm" />}
         {/* Shown before the consent-screen step Connect leads to. */}
         <CasaBadge className="mt-5 justify-center" />
       </div>
@@ -216,25 +218,37 @@ export function ConnectionDetailClient({
             Add account
           </a>
         </div>
+        {/* SCRUM-436: which workspace, and how to reach another Notion
+            login, under the button that does it. */}
+        {service === "notion" && <NotionConnectHelper className="px-3" />}
 
-        {accounts.map((account) => (
-          <div key={account.id} className="rounded-lg hover:bg-secondary/50">
+        {accounts.map((account) => {
+          // SCRUM-436: a Notion row leads with its workspace name (the
+          // string the account argument takes), the email on its own line
+          // beneath, and no label chip, which would say the name twice.
+          // Every other row is exactly as before.
+          const name = accountDisplay(account);
+          return (
+          <div key={account.id} className="rounded-lg hover:bg-secondary/50" data-account-row="">
             <div className="flex flex-wrap items-center justify-between gap-2 px-3 py-2.5">
-            <div className="flex items-center gap-3">
-              <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary/10 text-xs font-medium text-primary">
-                {account.accountEmail[0].toUpperCase()}
+            <div className="flex min-w-0 items-center gap-3">
+              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary/10 text-xs font-medium text-primary">
+                {[...name.primary][0].toUpperCase()}
               </div>
-              <div>
-                <div className="flex items-center gap-2">
-                  <span className="text-sm font-medium text-foreground">
-                    {account.accountEmail}
+              <div className="min-w-0">
+                <div className="flex min-w-0 items-center gap-2">
+                  <span
+                    className="truncate text-sm font-medium text-foreground"
+                    data-account-primary=""
+                  >
+                    {name.primary}
                   </span>
                   {account.isDefault && (
-                    <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-medium text-primary">
+                    <span className="shrink-0 rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-medium text-primary">
                       Default
                     </span>
                   )}
-                  {account.label && (
+                  {!name.secondary && account.label && (
                     <span className="rounded-full bg-secondary px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
                       {account.label}
                     </span>
@@ -245,6 +259,14 @@ export function ConnectionDetailClient({
                     it does not say WHICH services work, and the commonest
                     short grant reads as a perfectly healthy "2 scopes". The
                     per-service panel below says what the count could not. */}
+                {name.secondary && (
+                  <p
+                    className="truncate text-xs text-muted-foreground"
+                    data-account-secondary=""
+                  >
+                    {name.secondary}
+                  </p>
+                )}
                 <p className="text-xs text-muted-foreground">
                   Connected {formatConnectedDate(account.connectedAt)}
                 </p>
@@ -254,7 +276,7 @@ export function ConnectionDetailClient({
               {!account.isDefault && accounts.length > 1 && (
                 <SetDefaultControl
                   accountId={account.id}
-                  accountEmail={account.accountEmail}
+                  accountName={accountName(account)}
                   service={service}
                   source="service_detail"
                   onChanged={fetchConnection}
@@ -294,7 +316,8 @@ export function ConnectionDetailClient({
               />
             )}
           </div>
-        ))}
+          );
+        })}
 
         {/* Legacy connection fallback */}
         {accounts.length === 0 && legacyConnection && (

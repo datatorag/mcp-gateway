@@ -103,6 +103,29 @@ describe("AgentMeter", () => {
     expect(gws?.getAttribute("title")).toBe("a@example.com, b@example.com");
   });
 
+  it("names Notion workspaces in the tooltip, since their email is shared (SCRUM-436)", () => {
+    const notion = (label: string | null, ws: string): ConnectedAccount => ({
+      ...account("notion", "person@example.com"),
+      id: ws,
+      label,
+      externalAccountId: ws,
+    });
+    render({ used: 1, cap: 25, remaining: 24 }, [
+      notion("Acme Team", "ws-1"),
+      notion("Personal Space", "ws-2"),
+      notion(null, "ws-3"),
+      { ...account("google-workspace", "a@example.com"), label: "Work" },
+    ]);
+    const tip = (name: string) =>
+      Array.from(container.querySelectorAll("span[title]"))
+        .find((s) => s.textContent?.toLowerCase().includes(name.toLowerCase()))
+        ?.getAttribute("title");
+    expect(tip("Notion")).toBe(
+      "Acme Team (person@example.com), Personal Space (person@example.com), person@example.com"
+    );
+    expect(tip("Google Workspace")).toBe("a@example.com");
+  });
+
   it("says so when nothing is connected", () => {
     render({ used: 0, cap: 25, remaining: 25 }, []);
     expect(container.textContent).toContain("No connectors connected");

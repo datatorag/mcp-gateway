@@ -10,10 +10,12 @@ import { getService } from "./connections/services";
 import { GrantPanel } from "./connections/grant-panel";
 import { grantState } from "./connections/grant-state";
 import type { ScopeStatus } from "./connections/types";
-import { ConnectHelper } from "./connect-helper";
+import { ConnectHelper, NotionConnectHelper } from "./connect-helper";
 
 /** The connector whose consent screen has boxes to tick. */
 const GOOGLE = "google-workspace";
+/** The connector whose authorize page picks the workspace (SCRUM-436). */
+const NOTION = "notion";
 
 /** Where the connect flow should RETURN to — the thread the user is looking
  * at (SCRUM-78). A context rather than a prop because ConnectPart renders
@@ -272,6 +274,11 @@ export function ConnectPart({
       {/* What the Google button opens and the one thing to do there
           (SCRUM-410). Only where a Google button is on offer. */}
       {services.some((service) => service.id === GOOGLE) && <ConnectHelper className="mt-2" />}
+      {/* Which workspace, and how to reach another Notion login (SCRUM-436).
+          Only where a Notion button is on offer. */}
+      {services.some((service) => service.id === NOTION) && (
+        <NotionConnectHelper className="mt-2" />
+      )}
     </div>
   );
 }
