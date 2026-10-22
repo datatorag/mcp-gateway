@@ -1,6 +1,6 @@
 ---
 title: "Notion, in the Same Conversation as Your Gmail, Drive and Jira"
-excerpt: "DataToRAG now connects Notion. The agent that reads your inbox and files Jira tickets can search, read and edit the Notion pages you share with it, with each workspace as its own account. Eighteen tools, six of them read-only, and a tool list that costs about 6,700 tokens."
+excerpt: "DataToRAG now connects Notion. The agent that reads your inbox and files Jira tickets can search, read and edit the Notion pages you share with it, with each workspace as its own account, and a tool list that costs about 6,700 tokens."
 date: "2026-10-22"
 author: "Manuel Yang"
 category: "Product"
@@ -8,7 +8,7 @@ coverImage: "/blog/notion-in-the-agent.png"
 tags: ["notion", "notion-mcp", "connections", "agent", "context-window"]
 ---
 
-A customer on the yearly plan asked for Notion in September. He already ran Gmail, Drive and Jira through DataToRAG and wanted the pages his team keeps in Notion in the same conversation, without a second connector doing its own thing. It is live today.
+A customer asked for Notion in September. He already ran Gmail, Drive and Jira through DataToRAG and wanted the pages his team keeps in Notion in the same conversation, without a second connector doing its own thing. It is live today.
 
 ## What it does
 
