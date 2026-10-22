@@ -35,7 +35,7 @@ faqs:
       each of these asks for approval before it runs.
 ---
 
-The Notion connector gives your AI assistant the Notion pages and databases you choose to share: searching titles, reading pages as markdown, querying databases, editing content and properties, and working with comments.
+The Notion connector gives your AI assistant the Notion pages and databases you choose to share: searching titles, reading pages as markdown, querying databases, editing content and properties, and working with comments. It works in the same conversation as your Gmail, Drive and Jira connections, in the DataToRAG agent or any MCP client.
 
 ## Connecting
 

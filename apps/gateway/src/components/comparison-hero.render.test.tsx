@@ -114,11 +114,10 @@ describe("the comparison hero", () => {
     for (const name of ["Salesforce", "Databricks", "Slack", "HubSpot", "PostgreSQL", "Snowflake"]) {
       expect(page, name).not.toContain(name);
     }
-    // "Coming soon" names only what has a ticket: Notion. GitHub is checked
-    // here, in the list, because the page rightly links our own repo on GitHub.
-    const soon = page.slice(page.indexOf("{/* Coming soon connectors */}"));
-    const chips = soon.slice(soon.indexOf("{["), soon.indexOf("].map((name)"));
-    expect([...chips.matchAll(/"([^"]+)"/g)].map((m) => m[1])).toEqual(["Notion"]);
+    // The "Coming soon" list held only Notion, which shipped (SCRUM-366), so
+    // the block is gone; a connector that comes back here needs a ticket.
+    expect(page).not.toContain("Coming soon connectors");
+    expect(page).not.toMatch(/>\s*Coming soon\s*</);
     // The pill above the headline is gone, and so is the old long sentence.
     expect(hero).not.toContain("MCP gateway for Google Workspace and Jira");
     expect(hero).not.toContain("File the email on the Jira issue");

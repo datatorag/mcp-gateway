@@ -1,11 +1,12 @@
 ---
 title: "Notion connector"
-date: "2026-10-21"
+date: "2026-10-22"
 tags: ["notion", "notion-mcp", "connections"]
 connector: "notion"
 ---
 
-You can now connect Notion from the [connections page](https://datatorag.com/dashboard/connections).
+Notion now works inside your DataToRAG agent, with Gmail, Drive and Jira in the same conversation.
+Connect it from the [connections page](https://datatorag.com/dashboard/connections).
 Notion asks which pages to share, and the connector sees only those, children included. You can
 share more later from a page's ••• menu, under Connections, without reconnecting.
 
@@ -21,4 +22,5 @@ every write asks for approval before it runs.
 the workspace name or id when one email has several.
 
 Notion's API searches titles, not page content, so search here does too. The full list of tools,
-limits and what is not possible is on the [Notion docs page](/docs/notion).
+limits and what is not possible is on the [Notion docs page](/docs/notion), and the
+[launch post](/blog/notion-in-the-same-conversation) walks through it.

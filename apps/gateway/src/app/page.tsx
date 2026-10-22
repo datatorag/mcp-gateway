@@ -522,24 +522,6 @@ export default async function HomePage() {
             </div>
           </div>
 
-          {/* Coming soon connectors */}
-          <div className="animate-fade-in-up mt-10" style={{ animationDelay: "0.2s" }}>
-            <p className="text-sm font-medium text-muted-foreground">
-              Coming soon
-            </p>
-            <div className="mt-3 flex flex-wrap gap-2">
-              {[
-                "Notion",
-              ].map((name) => (
-                <span
-                  key={name}
-                  className="rounded-full border border-border bg-background px-3 py-1.5 text-xs font-medium text-muted-foreground"
-                >
-                  {name}
-                </span>
-              ))}
-            </div>
-          </div>
         </section>
 
         {/* Custom Hosted LLMs */}

@@ -3,6 +3,7 @@ import { getConnectorGroups } from "@/lib/docs";
 import {
   GOOGLE_SERVICE_LOGOS,
   ATLASSIAN_SERVICE_LOGOS,
+  SERVER_LOGOS,
 } from "@/components/server-logos";
 
 /** Home-page catalog: one card per integration, sourced from the docs
@@ -11,11 +12,14 @@ import {
 const LOGOS: Record<string, React.ReactNode> = {
   ...GOOGLE_SERVICE_LOGOS,
   ...ATLASSIAN_SERVICE_LOGOS,
+  Notion: SERVER_LOGOS["notion-mcp"],
 };
 
 export function IntegrationCatalog() {
+  // A connector documented on one page (Notion) has no service pages under
+  // it, so its overview is its card; the others list a card per service.
   const integrations = getConnectorGroups().flatMap((group) =>
-    group.pages.map((page) => ({
+    (group.pages.length > 0 ? group.pages : group.overview ? [group.overview] : []).map((page) => ({
       slug: page.slug,
       name: page.title,
       connector: group.connector.title,
