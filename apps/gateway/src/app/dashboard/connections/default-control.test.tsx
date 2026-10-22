@@ -51,7 +51,7 @@ function render(props: Partial<Parameters<typeof SetDefaultControl>[0]> = {}) {
     root.render(
       <SetDefaultControl
         accountId="acct-1"
-        accountEmail="target@example.com"
+        accountName="target@example.com"
         onChanged={onChanged}
         {...props}
       />

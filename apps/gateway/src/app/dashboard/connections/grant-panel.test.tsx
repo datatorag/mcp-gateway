@@ -296,3 +296,53 @@ describe("GrantPanel, compact density for the agent card", () => {
     expect(container.textContent).toBe("");
   });
 });
+
+/* SCRUM-436: Notion grants no scopes (its access is page shares), so the
+ * callback stores null. That is not a row predating grant recording, and
+ * reconnecting would change nothing, so the panel says nothing at all. */
+describe("GrantPanel, a connector with no scopes", () => {
+  const NOTION: ScopeStatus = { missing: [], complete: true, services: [], scoped: false };
+
+  it("renders nothing for a Notion row with null scopes, even on the audit surface", () => {
+    const text = render({
+      service: "notion",
+      connectUrl: "/auth/notion/connect",
+      scopeStatus: NOTION,
+      rawScopes: null,
+      reassureWhenComplete: true,
+    });
+    expect(text).toBe("");
+    expect(container.innerHTML).toBe("");
+  });
+
+  it("renders nothing in the compact agent card either", () => {
+    const text = render({
+      service: "notion",
+      scopeStatus: NOTION,
+      rawScopes: null,
+      density: "compact",
+      reassureWhenComplete: true,
+    });
+    expect(text).toBe("");
+  });
+
+  it("still says GRANT_UNRECORDED for a Google row with null scopes", () => {
+    const text = render({
+      scopeStatus: { ...status(ALL), scoped: true },
+      rawScopes: null,
+      reassureWhenComplete: true,
+    });
+    expect(text).toContain(GRANT_UNRECORDED);
+  });
+
+  it("leaves Atlassian as it was: a recorded grant reads as all granted", () => {
+    const text = render({
+      service: "atlassian",
+      connectUrl: "/auth/atlassian/connect",
+      scopeStatus: { missing: [], complete: true, services: [], scoped: true },
+      rawScopes: "read:jira-work write:jira-work",
+      reassureWhenComplete: true,
+    });
+    expect(text).toContain(GRANT_ALL_GRANTED);
+  });
+});

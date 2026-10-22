@@ -45,7 +45,8 @@ import {
 import { AGENT_PROMPTS } from "./agent-prompts";
 import { useSignupConversion } from "./use-signup-conversion";
 import { useConnections } from "./use-connections";
-import { ConnectHelper } from "./connect-helper";
+import { ConnectHelper, NotionConnectHelper } from "./connect-helper";
+import { accountDisplay, accountName } from "./connections/account-display";
 
 
 export function DashboardClient() {
@@ -252,18 +253,43 @@ export function DashboardClient() {
                 {/* Connected accounts (compact) */}
                 {hasAccounts && (
                   <CardContent className="space-y-3 border-t pt-4">
-                    {serviceAccounts.map((account) => (
-                      <div key={account.id} className="space-y-2">
+                    {serviceAccounts.map((account) => {
+                      // SCRUM-436: a Notion row leads with its workspace
+                      // name, the email beneath; every other row is the
+                      // email alone, as before.
+                      const name = accountDisplay(account);
+                      return (
+                      <div key={account.id} className="space-y-2" data-account-row="">
                       <div
                         className="flex flex-wrap items-center justify-between gap-2"
                       >
                         <div className="flex min-w-0 items-center gap-2">
                           <div className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-primary/10 text-[10px] font-medium text-primary">
-                            {account.accountEmail[0].toUpperCase()}
+                            {[...name.primary][0].toUpperCase()}
                           </div>
-                          <span className="truncate text-xs text-foreground">
-                            {account.accountEmail}
-                          </span>
+                          {name.secondary ? (
+                            <span className="flex min-w-0 flex-col">
+                              <span
+                                className="truncate text-xs text-foreground"
+                                data-account-primary=""
+                              >
+                                {name.primary}
+                              </span>
+                              <span
+                                className="truncate text-[11px] text-muted-foreground"
+                                data-account-secondary=""
+                              >
+                                {name.secondary}
+                              </span>
+                            </span>
+                          ) : (
+                            <span
+                              className="truncate text-xs text-foreground"
+                              data-account-primary=""
+                            >
+                              {name.primary}
+                            </span>
+                          )}
                           {account.isDefault && (
                             <Badge
                               variant="secondary"
@@ -279,7 +305,7 @@ export function DashboardClient() {
                           {!account.isDefault && serviceAccounts.length > 1 && (
                             <SetDefaultControl
                               accountId={account.id}
-                              accountEmail={account.accountEmail}
+                              accountName={accountName(account)}
                               service={service.id}
                               source="connections_page"
                               onChanged={refetch}
@@ -318,7 +344,8 @@ export function DashboardClient() {
                         />
                       )}
                       </div>
-                    ))}
+                      );
+                    })}
                   </CardContent>
                 )}
 
@@ -411,6 +438,9 @@ export function DashboardClient() {
                   {/* SCRUM-410: under the Google card's connect button, on
                       every device, until the user hides it. */}
                   {service.id === "google-workspace" && <ConnectHelper />}
+                  {/* SCRUM-436: which workspace, and how to reach another
+                      Notion login, said where the button that does it is. */}
+                  {service.id === "notion" && <NotionConnectHelper />}
                 </CardFooter>
               </Card>
             );

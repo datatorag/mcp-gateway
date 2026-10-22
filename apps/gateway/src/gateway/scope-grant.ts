@@ -96,6 +96,19 @@ function normalize(scope: string): string {
   return GRANTED_ALIASES[scope] ?? scope;
 }
 
+/** Connectors whose access is not an OAuth scope grant at all (SCRUM-436).
+ * Notion's is the pages a workspace shares with the integration: its connect
+ * requests no scopes and stores none, so a null there is not a grant that
+ * went unrecorded, and reconnecting would record nothing either. */
+const CONNECTORS_WITHOUT_SCOPES = new Set(["notion"]);
+
+/** Whether `service` grants access by OAuth scope, so that a stored grant
+ * (or its absence) means something. True for anything not listed above,
+ * which keeps every existing connector exactly as it was. */
+export function connectorGrantsScopes(service: string): boolean {
+  return !CONNECTORS_WITHOUT_SCOPES.has(service);
+}
+
 /**
  * Every service the product asks for, each marked granted or not (SCRUM-106).
  *

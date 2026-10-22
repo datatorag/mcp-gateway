@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import {
   GWS_SCOPE_LIST,
   GOOGLE_WORKSPACE_SERVICE,
+  connectorGrantsScopes,
   scopeDelta,
   serviceGrantStates,
 } from "./scope-grant";
@@ -107,5 +108,19 @@ describe("serviceGrantStates", () => {
     );
     expect(serialized).not.toContain("googleapis.com");
     expect(serialized).not.toContain("https://");
+  });
+});
+
+/* SCRUM-436: Notion's access is the pages a workspace shares, never an OAuth
+ * scope, so its connect stores no scopes and there is no grant to record. */
+describe("connectorGrantsScopes", () => {
+  it("is false for Notion only", () => {
+    expect(connectorGrantsScopes("notion")).toBe(false);
+    expect(connectorGrantsScopes(GOOGLE_WORKSPACE_SERVICE)).toBe(true);
+    expect(connectorGrantsScopes("atlassian")).toBe(true);
+  });
+
+  it("is true for a connector it does not know, so nothing changes for it", () => {
+    expect(connectorGrantsScopes("something-new")).toBe(true);
   });
 });

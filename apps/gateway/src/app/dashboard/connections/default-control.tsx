@@ -16,6 +16,7 @@ import {
   suggestDefaultLine,
   SUGGEST_DEFAULT_ACTION,
 } from "./grant-copy";
+import { accountName as nameOfAccount } from "./account-display";
 import { suggestBetterDefault } from "./grant-state";
 import type { ConnectedAccount } from "./types";
 
@@ -41,14 +42,17 @@ import type { ConnectedAccount } from "./types";
  */
 export function SetDefaultControl({
   accountId,
-  accountEmail,
+  accountName,
   service,
   source,
   label = SET_DEFAULT_LABEL,
   onChanged,
 }: {
   accountId: string;
-  accountEmail: string;
+  /** How the confirmation names the account: `accountName` from
+   * account-display.ts, the email, or a Notion workspace with its email
+   * (SCRUM-436). */
+  accountName: string;
   /** Connector id, for the analytics event only. */
   service?: string;
   /** Which surface offered the control, for the analytics event only. */
@@ -101,7 +105,7 @@ export function SetDefaultControl({
   return (
     <div className="flex flex-wrap items-center gap-2 text-xs">
       <span className="text-foreground">
-        {setDefaultConfirm(accountEmail)}{" "}
+        {setDefaultConfirm(accountName)}{" "}
         <span className="text-muted-foreground">{SET_DEFAULT_CONSEQUENCE}</span>
       </span>
       <Button variant="outline" size="xs" onClick={apply} disabled={busy}>
@@ -150,11 +154,11 @@ export function BetterDefaultSuggestion({
       )}
     >
       <span className="text-foreground">
-        {suggestDefaultLine(suggestion.accountEmail)}
+        {suggestDefaultLine(nameOfAccount(suggestion))}
       </span>
       <SetDefaultControl
         accountId={suggestion.id}
-        accountEmail={suggestion.accountEmail}
+        accountName={nameOfAccount(suggestion)}
         service={service}
         source={source}
         label={SUGGEST_DEFAULT_ACTION}

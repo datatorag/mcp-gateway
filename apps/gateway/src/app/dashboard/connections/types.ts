@@ -18,12 +18,22 @@ export interface ScopeStatus {
   missing: Array<{ scope: string; displayName: string }>;
   complete: boolean;
   services: ServiceGrantState[];
+  /** False for a connector whose access is not an OAuth scope grant at all
+   * (Notion: page shares; SCRUM-436, `connectorGrantsScopes`). Such a row has
+   * no grant to show, so no surface says anything about one. Absent reads as
+   * true, which is every connector before this field existed. */
+  scoped?: boolean;
 }
 
 export interface ConnectedAccount {
   id: string;
   connectorType: string;
   label: string | null;
+  /** A Notion workspace id, null for Google and Atlassian (SCRUM-366). The
+   * API has always sent it (`listConnectedAccounts` selects it); typed here
+   * for SCRUM-436, which names a row by its workspace when it has one.
+   * Optional because fixtures and older callers omit it. */
+  externalAccountId?: string | null;
   accountEmail: string;
   isDefault: boolean;
   createdAt: string;
