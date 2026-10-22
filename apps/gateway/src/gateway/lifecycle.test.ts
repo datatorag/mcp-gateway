@@ -1,5 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import type { Database } from "@datatorag-mcp/db";
+import type { SQL } from "drizzle-orm";
+import { PgDialect } from "drizzle-orm/pg-core";
 
 // isInternalEmail (used unmocked via importOriginal below) reads
 // INTERNAL_EXCLUDE_EMAILS from env — real getEnv() would exit on missing
@@ -231,6 +233,16 @@ describe("runNoActivationFollowup", () => {
     selectWhere.mockResolvedValue([]);
     returning.mockReset();
     returning.mockResolvedValue([{ id: "u1" }]);
+  });
+
+  it("selects users who signed up at least 24 hours ago", async () => {
+    await runNoActivationFollowup(dbMock, { now: NOW });
+    const where = selectWhere.mock.calls[0][0] as SQL;
+    const { sql, params } = new PgDialect().sqlToQuery(where);
+    expect(sql).toMatch(/"created_at" <= \$1/);
+    expect(new Date(params[0] as string).getTime()).toBe(
+      NOW.getTime() - 24 * 60 * 60 * 1000
+    );
   });
 
   it("exits before touching the db when the key is missing", async () => {
