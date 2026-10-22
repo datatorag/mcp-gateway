@@ -3,6 +3,8 @@ import type { Database } from "@datatorag-mcp/db";
 import { mcpServers, tools, users } from "@datatorag-mcp/db";
 import type { ConnectionPool } from "../pool";
 import { buildPluginServerUrl } from "../user-tools";
+import { PLUGIN_SERVICE_MAP } from "../service-token";
+import { listConnectedServiceIds } from "../connected-services";
 import { classifyWrite } from "../playground/tools";
 import { isUuid } from "./read";
 import { visibleBuiltins, findVisibleBuiltin, BUILT_IN_TOOLS } from "../mcp-server";
@@ -30,6 +32,12 @@ export type PluginSurface = {
   live: string[] | null;
   registry: string[];
   error?: string;
+  /** The service whose connection gates this plugin's tools in the listing
+   * (PLUGIN_SERVICE_MAP), and whether the asking identity has connected it.
+   * Absent for a plugin no service gates. Read from the same two sources the
+   * listing itself uses (user-tools.ts), so A4 cannot disagree with it about
+   * what this identity should be served. */
+  gate?: { service: string; connected: boolean };
 };
 
 /**
@@ -42,8 +50,10 @@ export type PluginSurface = {
  */
 export async function registrySurface(
   db: Database,
-  pool: ConnectionPool
+  pool: ConnectionPool,
+  userId?: string
 ): Promise<{ plugins: PluginSurface[] }> {
+  const connected = userId ? await listConnectedServiceIds(db, userId) : null;
   const servers = await db
     .select({
       slug: mcpServers.slug,
@@ -87,7 +97,9 @@ export async function registrySurface(
         error = err instanceof Error ? err.constructor.name : "unknown failure";
       }
 
-      return { slug: server.slug, live, registry: registry.sort(), error };
+      const service = PLUGIN_SERVICE_MAP[server.slug];
+      const gate = service && connected ? { service, connected: connected.has(service) } : undefined;
+      return { slug: server.slug, live, registry: registry.sort(), error, ...(gate ? { gate } : {}) };
     })
   );
 

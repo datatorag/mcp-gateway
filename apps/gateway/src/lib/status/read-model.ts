@@ -170,6 +170,9 @@ export function buildStatusModel(
     if (p === "uncovered") return "not_exercised";
     const states = coveringStates.get(name) ?? [];
     if (p === "fail" || states.includes("failing")) return "failing";
+    // A probe the runner skipped (no account mapped) proves nothing; never
+    // show that tool as working on the strength of it.
+    if (p === "skip") return "not_run";
     if (states.length > 0 && states.every((s) => s === "not_run")) return "not_run";
     return "working";
   };

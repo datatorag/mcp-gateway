@@ -13,7 +13,7 @@
  */
 
 import { describe, expect, it } from "vitest";
-import { makeContextParts, startTestRun, contractSubjectFor, coverageMismatch, missingMappingsFor, selectCases, unservedToolsFor, pluginsBlocking, sharedAccountsFor } from "./execute";
+import { makeContextParts, startTestRun, contractSubjectFor, unmappedProbeRole, coverageMismatch, missingMappingsFor, selectCases, unservedToolsFor, pluginsBlocking, sharedAccountsFor } from "./execute";
 import { parseFixtureMap } from "./fixtures";
 import { vi } from "vitest";
 import type { TestCase } from "./types";
@@ -668,5 +668,30 @@ describe("sharing between cases", () => {
       called: [],
     });
     expect(() => orphan.share({ a: 1 })).toThrow(/not available/);
+  });
+});
+
+describe("a contract probe with no account mapped is skipped, not failed (SCRUM-366)", () => {
+  // The probe needs an account and a plugin call never falls back to the
+  // default; the same absence skips a case. Prod run 84636836 failed three
+  // Notion probes on exactly this before the Notion roles were mapped.
+  const none = parseFixtureMap(JSON.stringify({ accounts: { sender: "s@example.test" } }));
+  const mapped = parseFixtureMap(JSON.stringify({ accounts: { sender: "s@example.test", notion: "ws-1" } }));
+
+  it("names the unmapped role for a plugin tool whose role has no account", () => {
+    expect(unmappedProbeRole(none, "notion-mcp__notion_get_page")).toBe("notion");
+  });
+
+  it("lets the probe run once the role is mapped", () => {
+    expect(unmappedProbeRole(mapped, "notion-mcp__notion_get_page")).toBeNull();
+    expect(unmappedProbeRole(none, "gws-mcp__gmail_read")).toBeNull();
+  });
+
+  it("does not excuse a tool from a plugin no role may run: that probe still fails", () => {
+    expect(unmappedProbeRole(none, "mystery-mcp__do_thing")).toBeNull();
+  });
+
+  it("leaves built-ins alone", () => {
+    expect(unmappedProbeRole(none, "echo")).toBeNull();
   });
 });

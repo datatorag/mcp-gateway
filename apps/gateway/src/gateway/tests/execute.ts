@@ -98,6 +98,23 @@ function pluginOf(tool: string): string | null {
  * case call. A built-in (an unnamespaced name) takes no account and gets
  * `args` back unchanged.
  */
+/**
+ * The role a contract probe of `tool` would run as, when that role has NO
+ * account mapped; null when the probe can run, and null for a tool whose
+ * plugin no role may run, so `accountArgs` still refuses that one and the
+ * probe fails as before: an unknown plugin's served tool is a real finding.
+ */
+export function unmappedProbeRole(
+  fixtures: Pick<ReturnType<typeof parseFixtureMap>, "account">,
+  tool: string
+): AccountRole | null {
+  const slug = pluginOf(tool);
+  if (slug === null) return null;
+  const role = PLUGIN_ROLES[slug]?.[0];
+  if (!role) return null;
+  return fixtures.account(role) ? null : role;
+}
+
 export function accountArgs(
   fixtures: Pick<ReturnType<typeof parseFixtureMap>, "account">,
   tool: string,
@@ -532,6 +549,7 @@ async function driveRun(opts: {
             called,
             db: opts.db,
             pool: opts.pool,
+            userId: opts.userId,
             runStamp: runId.slice(0, 8),
             shared,
             caseId,
@@ -585,6 +603,21 @@ async function driveRun(opts: {
           const tool = queue.shift();
           if (!tool) return;
           const started = Date.now();
+          const unmapped = unmappedProbeRole(fixtures, tool.name);
+          if (unmapped) {
+            // NOT RUN, not failed: the probe would need an account, none is
+            // mapped for the role, and a plugin call never falls back to the
+            // default. The same absence skips a case (SCRUM-366).
+            await record({
+              caseId: `contract:${tool.name}`,
+              kind: "contract",
+              status: "skip",
+              cleanup: "none_needed",
+              durationMs: 0,
+              evidence: [`skipped: no account is mapped for ${unmapped}, so the probe was not sent`],
+            });
+            continue;
+          }
           const outcome = await checkContract(contractSubjectFor(tool), async (name) => {
             /* `{}` apart from the account. A read handler that ignores its
              * required argument would otherwise run on the default account. */
@@ -781,6 +814,9 @@ export function makeContextParts(opts: {
    * rather than reading a made-up answer. */
   db?: Database;
   pool?: ConnectionPool;
+  /** The identity the run lists tools as, so A4 knows which services gate
+   * what it is served. */
+  userId?: string;
   /**
    * What each case shared, keyed by case id, and WHICH case is asking.
    *
@@ -1000,7 +1036,7 @@ export function makeContextParts(opts: {
     http: createHttpFetcher(loopbackBase(getEnv().GATEWAY_PORT)),
     gateway: {
       registrySurface: () =>
-        opts.db && opts.pool ? registrySurface(opts.db, opts.pool) : needs("registrySurface"),
+        opts.db && opts.pool ? registrySurface(opts.db, opts.pool, opts.userId) : needs("registrySurface"),
       classify: (names) => classifyTools(names),
       nonAdminView: () =>
         opts.db ? nonAdminView(opts.db, fixtures.user("nonAdmin") ?? undefined) : needs("nonAdminView"),
