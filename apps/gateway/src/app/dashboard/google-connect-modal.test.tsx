@@ -34,7 +34,12 @@ vi.mock("posthog-js", () => ({ default: { capture: (name: string) => state.captu
 import { resetCurrentUserForTests } from "@/lib/use-current-user";
 import { DashboardClient } from "./dashboard-client";
 import { GoogleConnectModalHost, googleConnectModalTarget } from "./google-connect-modal";
-import { CONSENT_STEPS, INTERSTITIAL_ANNOTATION, INTERSTITIAL_CTA } from "@/gateway/connect-interstitial";
+import {
+  CONSENT_STEPS,
+  INTERSTITIAL_ANNOTATION,
+  INTERSTITIAL_ANNOTATION_ONGOING,
+  INTERSTITIAL_CTA,
+} from "@/gateway/connect-interstitial";
 
 const ORIGIN = "http://localhost:3000";
 const PLAIN = { button: 0, metaKey: false, ctrlKey: false, shiftKey: false, altKey: false, defaultPrevented: false };
@@ -137,7 +142,12 @@ describe("the modal on the dashboard", () => {
       expect(Number(img.getAttribute("width"))).toBeGreaterThan(0);
       expect(Number(img.getAttribute("height"))).toBeGreaterThan(0);
     }
-    expect(modal!.querySelector("[data-select-all-mark]")?.textContent).toBe(INTERSTITIAL_ANNOTATION);
+    // Both boxes to tick are named: ongoing access on the first screen,
+    // Select all on the second.
+    expect([...modal!.querySelectorAll("[data-consent-mark]")].map((m) => m.textContent)).toEqual([
+      INTERSTITIAL_ANNOTATION_ONGOING,
+      INTERSTITIAL_ANNOTATION,
+    ]);
 
     const cont = [...modal!.querySelectorAll<HTMLAnchorElement>("a")].find(
       (a) => a.textContent === INTERSTITIAL_CTA

@@ -38,8 +38,11 @@ export const INTERSTITIAL_EXPLANATION =
   "Google will now ask which services DataToRAG can use. The checkboxes " +
   "come unticked, and continuing without ticking them connects nothing.";
 export const INTERSTITIAL_INSTRUCTION =
-  'Tick "Select all" on Google\'s screen, then continue there.';
+  'On Google\'s screen, tick the ongoing access box and "Select all", then continue there.';
 export const INTERSTITIAL_ANNOTATION = "tick this first";
+/** The mark on Google's ongoing access box: unticked, the grant expires at
+ * Google's six-month review and the connection stops working. */
+export const INTERSTITIAL_ANNOTATION_ONGOING = "tick this too";
 export const INTERSTITIAL_SELECT_ALL = "Select all";
 export const INTERSTITIAL_CTA = "Continue to Google";
 export const INTERSTITIAL_CANCEL = "Back to the dashboard";
@@ -56,15 +59,40 @@ export type ConsentStep = {
   height: number;
   alt: string;
   caption: string;
+  /** A box to tick on this screen: a ring around it and a pill naming it,
+   * both in percent of the image, measured off the crop. Drawn over the
+   * image rather than into it, so the words stay text and stay in the copy
+   * list below. */
+  mark?: ConsentMark;
+};
+
+export type ConsentMark = {
+  label: string;
+  top: number;
+  left: number;
+  width: number;
+  height: number;
+  /** Where the pill's vertical centre and left edge sit. */
+  pillTop: number;
+  pillLeft: number;
 };
 
 export const CONSENT_STEPS: ConsentStep[] = [
   {
     src: "/connect/consent-1-wants-access.webp",
     width: 896,
-    height: 623,
-    alt: "Google's screen: DataToRAG MCP wants access to your Google Account",
-    caption: "Google asks to connect your account.",
+    height: 1070,
+    alt: "Google's screen: DataToRAG MCP wants access to your Google Account, with a notice about reviewing access every six months and an unticked box to allow ongoing access",
+    caption: "Tick the ongoing access box, or Google drops the connection at its six-month review.",
+    mark: {
+      label: INTERSTITIAL_ANNOTATION_ONGOING,
+      top: 80.1,
+      left: 16.3,
+      width: 72.2,
+      height: 13.5,
+      pillTop: 96.6,
+      pillLeft: 18,
+    },
   },
   {
     src: "/connect/consent-2-select-all.webp",
@@ -72,6 +100,15 @@ export const CONSENT_STEPS: ConsentStep[] = [
     height: 516,
     alt: "Google's screen: Select what DataToRAG MCP can access, with a Select all box above unticked boxes for each service",
     caption: "Tick Select all. Every box below it starts unticked.",
+    mark: {
+      label: INTERSTITIAL_ANNOTATION,
+      top: 17,
+      left: 4.3,
+      width: 27.1,
+      height: 13.6,
+      pillTop: 23.8,
+      pillLeft: 33.4,
+    },
   },
   {
     src: "/connect/consent-3-continue.webp",
@@ -81,14 +118,6 @@ export const CONSENT_STEPS: ConsentStep[] = [
     caption: "Then press Continue.",
   },
 ];
-
-/** Index of the step that carries the "tick this first" mark. */
-export const SELECT_ALL_STEP = 1;
-
-/** Where the Select all row sits in that capture, in percent of the image,
- * measured off the crop. The mark is drawn over the image rather than into
- * it, so its words stay text and stay in the copy list below. */
-export const SELECT_ALL_ROW = { top: 17, left: 4.3, width: 27.1, height: 13.6 };
 
 /** The same page after Google came back having granted nothing (SCRUM-410).
  * It says what happened, names what to tick, and its one button tries
@@ -113,6 +142,7 @@ export const ALL_INTERSTITIAL_COPY = [
   INTERSTITIAL_EXPLANATION,
   INTERSTITIAL_INSTRUCTION,
   INTERSTITIAL_ANNOTATION,
+  INTERSTITIAL_ANNOTATION_ONGOING,
   INTERSTITIAL_SELECT_ALL,
   INTERSTITIAL_CTA,
   INTERSTITIAL_CANCEL,
@@ -154,12 +184,11 @@ const escapeHtml = (text: string): string =>
 /** One step as page markup. Every value here is a module constant, none is
  * user input; escaped anyway so the page has one rule. */
 function renderStep(step: ConsentStep, index: number): string {
-  const r = SELECT_ALL_ROW;
-  const mark =
-    index === SELECT_ALL_STEP
-      ? `<span class="mark" style="top:${r.top}%;left:${r.left}%;width:${r.width}%;height:${r.height}%"></span>` +
-        `<span class="callout" style="top:${r.top + r.height / 2}%;left:${r.left + r.width + 2}%">${INTERSTITIAL_ANNOTATION}</span>`
-      : "";
+  const m = step.mark;
+  const mark = m
+    ? `<span class="mark" style="top:${m.top}%;left:${m.left}%;width:${m.width}%;height:${m.height}%"></span>` +
+      `<span class="callout" style="top:${m.pillTop}%;left:${m.pillLeft}%">${escapeHtml(m.label)}</span>`
+    : "";
   return `<li><p class="step-caption"><b>${index + 1}.</b>${escapeHtml(step.caption)}</p><div class="shot"><img src="${step.src}" width="${step.width}" height="${step.height}" alt="${escapeHtml(step.alt)}">${mark}</div></li>`;
 }
 

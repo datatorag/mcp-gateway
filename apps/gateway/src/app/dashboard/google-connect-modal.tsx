@@ -12,14 +12,11 @@ import {
 import { Button } from "@/components/ui/button";
 import {
   CONSENT_STEPS,
-  INTERSTITIAL_ANNOTATION,
   INTERSTITIAL_CTA,
   INTERSTITIAL_EXPLANATION,
   INTERSTITIAL_INSTRUCTION,
   INTERSTITIAL_TITLE,
   MODAL_DISMISS,
-  SELECT_ALL_ROW,
-  SELECT_ALL_STEP,
 } from "@/gateway/connect-interstitial";
 
 const CONNECT_PATH = "/auth/google/connect";
@@ -60,9 +57,8 @@ export function googleConnectModalTarget(
   return `${url.pathname}${url.search}`;
 }
 
-/** The steps of Google's screen, with the mark on the Select all row. */
+/** The steps of Google's screen, each box to tick ringed and named. */
 function ConsentSteps() {
-  const r = SELECT_ALL_ROW;
   return (
     <ol className="grid gap-4 sm:grid-cols-3 sm:gap-3">
       {CONSENT_STEPS.map((step, i) => (
@@ -83,19 +79,24 @@ function ConsentSteps() {
               alt={step.alt}
               className="block h-auto w-full"
             />
-            {i === SELECT_ALL_STEP && (
+            {step.mark && (
               <>
                 <span
                   aria-hidden="true"
                   className="absolute rounded-md border-2 border-amber-400"
-                  style={{ top: `${r.top}%`, left: `${r.left}%`, width: `${r.width}%`, height: `${r.height}%` }}
+                  style={{
+                    top: `${step.mark.top}%`,
+                    left: `${step.mark.left}%`,
+                    width: `${step.mark.width}%`,
+                    height: `${step.mark.height}%`,
+                  }}
                 />
                 <span
-                  data-select-all-mark
+                  data-consent-mark
                   className="absolute -translate-y-1/2 whitespace-nowrap rounded-full bg-amber-400 px-2 py-0.5 text-[11px] font-semibold leading-snug text-stone-900"
-                  style={{ top: `${r.top + r.height / 2}%`, left: `${r.left + r.width + 2}%` }}
+                  style={{ top: `${step.mark.pillTop}%`, left: `${step.mark.pillLeft}%` }}
                 >
-                  {INTERSTITIAL_ANNOTATION}
+                  {step.mark.label}
                 </span>
               </>
             )}

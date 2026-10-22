@@ -11,6 +11,7 @@ import {
   ALL_INTERSTITIAL_COPY,
   CONSENT_STEPS,
   INTERSTITIAL_ANNOTATION,
+  INTERSTITIAL_ANNOTATION_ONGOING,
   INTERSTITIAL_EXPLANATION,
   INTERSTITIAL_INSTRUCTION,
   INTERSTITIAL_SELECT_ALL,
@@ -41,6 +42,7 @@ describe("interstitial copy rules", () => {
     expect(INTERSTITIAL_EXPLANATION.toLowerCase()).toContain("connects nothing");
     expect(INTERSTITIAL_SELECT_ALL).toBe("Select all");
     expect(INTERSTITIAL_INSTRUCTION).toContain("Select all");
+    expect(INTERSTITIAL_INSTRUCTION).toContain("ongoing access");
   });
 });
 
@@ -80,8 +82,9 @@ describe("the steps of Google's screen (SCRUM-435)", () => {
       for (const step of CONSENT_STEPS) {
         expect(html).toContain(`<img src="${step.src}" width="${step.width}" height="${step.height}"`);
       }
-      expect(html).toContain(`<span class="callout"`);
+      expect(html.match(/<span class="callout"/g)).toHaveLength(2);
       expect(html).toContain(INTERSTITIAL_ANNOTATION);
+      expect(html).toContain(INTERSTITIAL_ANNOTATION_ONGOING);
       expect(html).not.toContain("and the rest of the list");
     }
   });
