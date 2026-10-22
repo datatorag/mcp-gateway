@@ -15,6 +15,11 @@ export const CONNECTORS: Connector[] = [
     title: "Atlassian",
     slug: "atlassian",
   },
+  {
+    id: "notion",
+    title: "Notion",
+    slug: "notion",
+  },
 ];
 
 export function getConnector(id: string): Connector | undefined {

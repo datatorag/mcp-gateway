@@ -88,20 +88,20 @@ const SERVICE_PRESENTATION: Record<
       </svg>
     ),
   },
-  // Stage 1 is read-only (SCRUM-366): the copy names reads and nothing else.
+  // Reads and writes (SCRUM-366); the copy names what the tools do, never a count.
   notion: {
     description: "Pages, databases, comments, and people",
     capabilities: [
       {
-        text: "Search pages and databases shared with DataToRAG",
+        text: "Search, read and query the pages and databases you share",
         services: ["notion"],
       },
       {
-        text: "Read pages, database schemas, and database rows",
+        text: "Create and edit pages, rows and content in markdown",
         services: ["notion"],
       },
       {
-        text: "Read comments and list the people in a workspace",
+        text: "Read and write comments, and create databases and views",
         services: ["notion"],
       },
     ],

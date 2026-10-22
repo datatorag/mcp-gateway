@@ -639,9 +639,12 @@ no token was recorded.
 1. **Token response.** Fields: `access_token`, `refresh_token`, `bot_id`,
    `workspace_id`, `workspace_name`, `workspace_icon`, `owner`,
    `duplicated_template_id`, `token_type`, `request_id`. No `expires_in`.
-   `owner.type` is `user` and carries the person's email. Whether access
-   tokens expire at all: a token left unrefreshed is being called every 30
-   minutes for 24 hours; result pending.
+   `owner.type` is `user` and carries the person's email. Access tokens do
+   not expire within a day: a token left unrefreshed answered 200 on all 48
+   calls made every 30 minutes, the last at 23 hours 43 minutes after its
+   refresh (2026-10-21 03:40 to 2026-10-22 03:22 UTC). That is a lower bound,
+   not a lifetime. It is why the gateway stores no expiry and its Notion
+   refresh stays idle until a 401 says otherwise.
 2. **Refresh rotates both tokens, and the old pair is not dead at once.**
    The old pair stays valid until the new access token is first used.
    Before that, presenting the old refresh token again succeeds, mints a

@@ -214,8 +214,8 @@ export default async function HomePage() {
                   did not just read is how a wrong one ships. Matches the
                   pricing page and the lead page. */}
               {totalTools > 0 ? totalTools : "70+"} tools across Google
-              Workspace and Atlassian behind one URL, in Claude, Claude Code,
-              Cursor or your own app.
+              Workspace, Atlassian and Notion behind one URL, in Claude, Claude
+              Code, Cursor or your own app.
             </p>
 
             <div
@@ -522,24 +522,6 @@ export default async function HomePage() {
             </div>
           </div>
 
-          {/* Coming soon connectors */}
-          <div className="animate-fade-in-up mt-10" style={{ animationDelay: "0.2s" }}>
-            <p className="text-sm font-medium text-muted-foreground">
-              Coming soon
-            </p>
-            <div className="mt-3 flex flex-wrap gap-2">
-              {[
-                "Notion",
-              ].map((name) => (
-                <span
-                  key={name}
-                  className="rounded-full border border-border bg-background px-3 py-1.5 text-xs font-medium text-muted-foreground"
-                >
-                  {name}
-                </span>
-              ))}
-            </div>
-          </div>
         </section>
 
         {/* Custom Hosted LLMs */}
