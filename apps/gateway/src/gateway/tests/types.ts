@@ -208,5 +208,13 @@ export interface TestCase {
    * which holds across scenarios where the scenario lock cannot.
    */
   locks?: readonly string[];
+  /**
+   * The case hands a file reference to a tool that also runs without one,
+   * such as an email whose attachments name files (SCRUM-437). A fact about
+   * what the case does, not a lock: the runner reads it, with `covers`, to
+   * decide whether the case holds the file-transfer lock. A tool that only
+   * ever takes a file needs no flag, because `covers` already says so.
+   */
+  crossesFiles?: true;
   run(ctx: CaseContext): Promise<void>;
 }

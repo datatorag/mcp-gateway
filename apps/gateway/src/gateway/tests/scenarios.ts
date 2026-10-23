@@ -183,6 +183,8 @@ export const SCENARIOS: Scenario[] = [
        * sent, moved or trashed by either step. */
       "FD1", // a download link shows a page, saves once, and the bytes match
       "FD2", // a call carrying a live link is refused and the link cancelled
+      "FD10", // a draft carries two files sent as content references beside a Drive file
+      "FD11", // an email carries an attachment from another mailbox and a file sent in the call
     ],
   },
   {

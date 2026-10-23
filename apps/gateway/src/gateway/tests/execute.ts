@@ -150,8 +150,11 @@ export function accountArgs(
  */
 export const FILE_TRANSFER_LOCK = "file-transfer";
 
-export function movesAFile(testCase: Pick<TestCase, "covers">): boolean {
-  return testCase.covers.some((tool) => tool === DOWNLOAD_TOOL || Object.hasOwn(FILE_CONSUMING_TOOLS, tool));
+export function movesAFile(testCase: Pick<TestCase, "covers" | "crossesFiles">): boolean {
+  return (
+    testCase.crossesFiles === true ||
+    testCase.covers.some((tool) => tool === DOWNLOAD_TOOL || Object.hasOwn(FILE_CONSUMING_TOOLS, tool))
+  );
 }
 
 export type RunnerClient = {

@@ -73,23 +73,30 @@ const emailFields = {
   },
 };
 
-/** SCRUM-279. Every tool that writes a message can carry files from Drive. */
+/** SCRUM-279. Every tool that writes a message can carry files from Drive,
+ * and, since SCRUM-437, files named by a file reference, which the gateway
+ * resolves and hands over with the call. */
 const attachmentsField = {
   attachments: {
     type: "array",
     maxItems: 10,
     description:
-      "Drive files to send with the message, at most 10, 25 MB in total. Each entry is a Drive file id as a string, or " +
-      '{"file_id": "<id>", "as": "<format>"} to send a Google Doc, Sheet or Slides deck as a file. ' +
+      "Files to send with the message, at most 10, 25 MB in total. Each entry is a Drive file id as a string, or " +
+      '{"file_id": "<id>", "as": "<format>"} to send a Google Doc, Sheet or Slides deck as a file, or a file reference. ' +
       "Formats: Docs pdf, docx, txt, html, md, rtf, odt, epub; Sheets pdf, xlsx, csv, tsv, html, ods; Slides pdf, pptx, txt, odp. " +
       'csv and tsv export one tab: add "tab": "<title>" to choose it, otherwise the first tab goes, and the response says which. ' +
       "A Sheet as html arrives as a .zip of pages, one per tab; Slides as txt is the slides' visible text only. " +
       "Google Docs, Sheets and Slides passed by id alone are sent as links in the message, the way Gmail does, not as files. " +
-      "Other Drive files are attached as they are. Files come from Drive only: to send a file, put it in Drive and pass its id. " +
+      "Other Drive files are attached as they are. " +
+      'A file reference is an object with a "type": {"type": "gmail_message", "message_id": "<id>"} attaches an email as its original .eml, ' +
+      '{"type": "gmail_attachment", "message_id": "<id>", "part_id": "<part id>"} one attachment of an email, ' +
+      '{"type": "drive_file", "file_id": "<id>"} a Drive file as stored, {"type": "drive_export", "file_id": "<id>", "format": "pdf"} a Google file exported, ' +
+      'and {"type": "content", "name": "<file name>", "base64": "<standard base64, one unbroken string>"} a file the caller already holds, at most 1 MB. ' +
+      'A reference may carry an "account" naming the connected Google account that holds the email or file. Several entries may be references. ' +
       "Two attachments may not share a filename. " +
       'To show an image in the body rather than at the bottom, reference it in html_body as <img src="cid:FILENAME">, where FILENAME is its Drive filename with any character other than letters, digits, dot, dash and underscore replaced by an underscore. ' +
       "Sharing a Drive link is the sender's responsibility; nothing here changes who can open a file. " +
-      "The response's attachments field reports each file as attached, inline, linked or exported.",
+      "The response's attachments field reports each file as attached, inline, linked or exported, with its size and the SHA-256 of the bytes that went into the message; a file sent as a link has neither.",
     items: {
       anyOf: [
         { type: "string", description: "A Drive file id." },
@@ -105,6 +112,26 @@ const attachmentsField = {
             tab: { type: "string", description: "For a Sheet as csv or tsv: the tab to export, by title. Defaults to the first tab." },
           },
           required: ["file_id"],
+        },
+        {
+          type: "object",
+          description: "A file reference, resolved by the gateway and attached in this entry's place.",
+          properties: {
+            type: {
+              type: "string",
+              enum: ["gmail_message", "gmail_attachment", "drive_file", "drive_export", "content"],
+              description: "The kind of file reference.",
+            },
+            message_id: { type: "string", description: "With gmail_message and gmail_attachment: the Gmail message id." },
+            part_id: { type: "string", description: "With gmail_attachment: the attachment's part id as gmail_read lists it." },
+            file_id: { type: "string", description: "With drive_file and drive_export: the Drive file id." },
+            format: { type: "string", description: "With drive_export: the format to export to, such as pdf." },
+            account: { type: "string", description: "Which connected Google account holds the email or file. Not taken with content." },
+            name: { type: "string", description: "With content: the file's name, with its extension." },
+            base64: { type: "string", description: "With content: the file in standard base64 as one unbroken string, at most 1 MB decoded." },
+            mime_type: { type: "string", description: "With content, optional: the file's type; omitted, it comes from the name's extension." },
+          },
+          required: ["type"],
         },
       ],
     },
@@ -321,7 +348,7 @@ export const gmailTools: ToolDef[] = [
   {
     name: "gmail_update_draft",
     description:
-      "Update an existing draft email in Gmail. This fully replaces the draft's message content (Gmail API does not support partial edits), attachments included: files the draft held are dropped unless they are passed again in attachments. If thread_id is omitted, the tool preserves the existing thread automatically." +
+      "Update an existing draft email in Gmail. This fully replaces the draft's message content (Gmail API does not support partial edits), attachments included: files the draft held, including any attached by a file reference, are dropped unless they are passed again in attachments. If thread_id is omitted, the tool preserves the existing thread automatically." +
       DRAFT_SIGNATURE_NOTE,
     inputSchema: {
       type: "object",
