@@ -4,6 +4,7 @@
  * the refusals that come before any Google call, and the one tool it serves.
  */
 
+import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { CONSUME_PATH, handleConsume } from "./consume.js";
 
@@ -82,5 +83,13 @@ describe("POST /internal/consume", () => {
       const res = await handleConsume({ method: "POST", headers: headers(h.contentType, { "x-tool-name": name }), body: body(h.bytes) });
       expect(res.status, name).toBe(404);
     }
+  });
+});
+
+describe("the handoff parser", () => {
+  it("is the same file in both plugins, so their field rules cannot drift apart", () => {
+    const here = readFileSync(new URL("./handoff.ts", import.meta.url), "utf8");
+    const there = readFileSync(new URL("../../../atlassian-mcp/src/internal/handoff.ts", import.meta.url), "utf8");
+    expect(there).toBe(here);
   });
 });
