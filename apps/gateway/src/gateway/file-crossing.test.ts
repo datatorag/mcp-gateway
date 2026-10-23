@@ -9,6 +9,7 @@ import { describe, it, expect, vi } from "vitest";
 import {
   crossFile,
   fileCrossingFor,
+  filePathsFor,
   transfersInFlight,
   FILE_CONSUMING_TOOLS,
   FILE_REFERENCE_TYPES,
@@ -847,6 +848,120 @@ describe("a content reference crosses with no source read (SCRUM-437)", () => {
     const h = harness({ args: { issue_key: "FIX-1", file: { type: "upload", upload_id: "u1" } } });
     const result = await h.run();
     expect(result.isError).toBe(true);
+    expect(h.calls).toHaveLength(0);
+  });
+});
+
+describe("an email carries several file references (SCRUM-437)", () => {
+  const GMAIL = "gws-mcp__gmail_create_draft";
+  const PNG = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 9, 9]);
+  const content = { type: "content", name: "chart.png", base64: PNG.toString("base64") };
+  const driveRef = { type: "drive_file", file_id: "drv-1" };
+  const DRIVE_BYTES = Buffer.from("%PDF-1.4 fixture");
+
+  function gmailHarness(attachments: unknown[], over: Parameters<typeof harness>[0] = {}) {
+    const h = harness({
+      args: { to: "a@example.com", subject: "s", body: "b", attachments },
+      source: () =>
+        new Response(new Uint8Array(DRIVE_BYTES), {
+          status: 200,
+          headers: { "Content-Type": "application/pdf", "X-File-Name": encodeURIComponent("report.pdf") },
+        }),
+      resolveToken: async () => ({ token: SOURCE_TOKEN, accountEmail: "a@example.com", scopes: "openid https://www.googleapis.com/auth/drive" }),
+      ...over,
+    });
+    h.options.tool = GMAIL;
+    h.options.toolName = "gmail_create_draft";
+    return h;
+  }
+
+  it("finds every reference among an email's attachments, and nothing else", () => {
+    const attachments = ["drive-id-1", content, { file_id: "x", as: "pdf" }, driveRef];
+    expect(filePathsFor(GMAIL, { attachments })).toEqual(["attachments[1]", "attachments[3]"]);
+    for (const tool of ["gmail_send", "gmail_reply", "gmail_forward", "gmail_update_draft"]) {
+      expect(filePathsFor(`gws-mcp__${tool}`, { attachments: [content] }), tool).toEqual(["attachments[0]"]);
+    }
+  });
+
+  it("is no crossing for an email whose attachments are Drive ids alone", () => {
+    expect(filePathsFor(GMAIL, { attachments: ["drive-id-1", { file_id: "x", as: "pdf" }] })).toBeNull();
+    expect(filePathsFor(GMAIL, {})).toBeNull();
+    expect(filePathsFor("gws-mcp__gmail_search", { attachments: [content] })).toBeNull();
+  });
+
+  it("answers the file field for the one-file tools, whatever the arguments hold", () => {
+    expect(filePathsFor(TOOL, {})).toEqual(["file"]);
+    expect(filePathsFor("gws-mcp__drive_upload_file", { file: content })).toEqual(["file"]);
+  });
+
+  it("resolves each reference in order and hands every file over in one request", async () => {
+    const h = gmailHarness(["drive-id-1", content, { file_id: "x", as: "pdf" }, driveRef]);
+    const result = await h.run();
+    expect(result).toEqual(RECEIPT);
+    expect(h.calls.map((c) => c.url)).toEqual([
+      "http://localhost:40001/internal/file-bytes",
+      "http://localhost:40002/internal/consume",
+    ]);
+    // The read is asked for what is left of 25 MB after the content file.
+    expect(JSON.parse(h.calls[0].init.body as string).max_bytes).toBe(MAX_FILE_BYTES - PNG.length);
+    const handoff = await handoffOf(h.calls[1]);
+    expect(handoff.files.map((f) => [f.field, f.name])).toEqual([
+      ["attachments[1]", "chart.png"],
+      ["attachments[3]", "report.pdf"],
+    ]);
+    expect(handoff.files[0].bytes).toEqual(PNG);
+    expect(handoff.files[1].bytes).toEqual(DRIVE_BYTES);
+    expect(handoff.args.attachments).toEqual(["drive-id-1", { type: "content" }, { file_id: "x", as: "pdf" }, driveRef]);
+    expect(JSON.stringify(handoff.args)).not.toContain(content.base64);
+  });
+
+  it("is one transfer, holding one slot for every file in the call", async () => {
+    let during: unknown;
+    const h = gmailHarness([content, driveRef], {
+      dest: () => {
+        during = transfersInFlight();
+        return Response.json(RECEIPT);
+      },
+    });
+    await h.run();
+    expect(during).toEqual({ host: 1, users: 1 });
+    expect(transfersInFlight()).toEqual(idle);
+  });
+
+  it("refuses files that pass 25 MB together, before anything is handed over", async () => {
+    const h = gmailHarness([content, driveRef], {
+      source: () => new Response(new Uint8Array(MAX_FILE_BYTES), { status: 200, headers: { "X-File-Name": "big.pdf" } }),
+    });
+    const result = await h.run();
+    expect(result).toEqual({
+      content: [{ type: "text", text: "The files in this call come to more than 25 MB together, the most one call can carry. Nothing was sent." }],
+      isError: true,
+    });
+    expect(h.calls.map((c) => c.url)).toEqual(["http://localhost:40001/internal/file-bytes"]);
+    expect(transfersInFlight()).toEqual(idle);
+  });
+
+  it("refuses the whole call when any one reference is malformed, before any request", async () => {
+    const h = gmailHarness([content, { type: "drive_file" }]);
+    const result = await h.run();
+    expect(result.isError).toBe(true);
+    expect(textOf(result)).toContain("attachments[1]");
+    expect(h.calls).toHaveLength(0);
+  });
+
+  it("makes no request when a later reference's source cannot be read", async () => {
+    const h = gmailHarness([content, driveRef], { resolveToken: async () => null });
+    const result = await h.run();
+    expect(result.isError).toBe(true);
+    expect(h.calls).toHaveLength(0);
+  });
+
+  it("refuses an email with a content attachment in the dashboard Agent", async () => {
+    const h = gmailHarness([driveRef, content]);
+    h.options.surface = "agent";
+    const result = await h.run();
+    expect(result.isError).toBe(true);
+    expect(textOf(result)).toContain("dashboard Agent");
     expect(h.calls).toHaveLength(0);
   });
 });

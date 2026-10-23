@@ -106,6 +106,30 @@ describe("drive_upload_file (SCRUM-421)", () => {
   });
 });
 
+describe("a Gmail compose tool (SCRUM-437)", () => {
+  beforeEach(() => {
+    selectLimit.mockResolvedValue([{ id: "srv-1", slug: "gws-mcp", containerPort: 40000, githubRepoUrl: null }]);
+    resolveServiceToken.mockResolvedValue({ token: "gmail-token-fixture", accountEmail: "me@example.com", scopes: null });
+  });
+
+  it("goes through the crossing when an attachment is a file reference", async () => {
+    const client = await connectedClient();
+    const args = { to: "a@example.com", subject: "s", body: "b", attachments: ["drive-id-1", FILE] };
+    await client.callTool({ name: "gws-mcp__gmail_send", arguments: args });
+    expect(callPluginToolOnce).not.toHaveBeenCalled();
+    expect(crossFile).toHaveBeenCalledTimes(1);
+    expect((crossFile.mock.calls[0][0] as CrossFileOptions).args).toEqual(args);
+  });
+
+  it("takes the ordinary plugin call when every attachment is a Drive file", async () => {
+    const client = await connectedClient();
+    const args = { to: "a@example.com", subject: "s", body: "b", attachments: ["drive-id-1", { file_id: "x", as: "pdf" }] };
+    await client.callTool({ name: "gws-mcp__gmail_send", arguments: args });
+    expect(crossFile).not.toHaveBeenCalled();
+    expect(callPluginToolOnce).toHaveBeenCalledTimes(1);
+  });
+});
+
 describe("a tool that takes a file", () => {
   it("goes through the crossing, not the plugin call, with the destination's own token", async () => {
     const client = await connectedClient();
