@@ -813,7 +813,7 @@ describe("a content reference crosses with no source read (SCRUM-437)", () => {
       content: [
         {
           type: "text",
-          text: "A content reference cannot be used in the dashboard Agent. Ask for an upload link instead with file_upload_link. Nothing was uploaded.",
+          text: "A content reference cannot be used in the dashboard Agent, which keeps the arguments of every tool call. Nothing was uploaded.",
         },
       ],
       isError: true,

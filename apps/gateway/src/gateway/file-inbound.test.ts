@@ -58,13 +58,13 @@ describe("resolveContent", () => {
     expect(out.ok && out.file.bytes.byteLength).toBe(MAX_CONTENT_BYTES);
   });
 
-  it("refuses one byte over the cap, naming the upload link and the cap", () => {
+  it("refuses one byte over the cap, naming the cap", () => {
     const base64 = Buffer.alloc(MAX_CONTENT_BYTES + 1, 1).toString("base64");
     const out = resolveContent(ref({ name: "a.bin", base64 }));
-    expect(out.ok).toBe(false);
-    if (out.ok) return;
-    expect(out.text).toContain("file_upload_link");
-    expect(out.text).toContain("1 MB");
+    expect(out).toEqual({
+      ok: false,
+      text: "The file is larger than 1 MB, the most a content reference carries. Nothing was uploaded.",
+    });
   });
 
   it("refuses base64 too long for the cap before decoding any of it", () => {

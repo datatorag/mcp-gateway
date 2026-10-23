@@ -29,6 +29,13 @@ faqs:
       button that saves the file. The receipt gives the size and the SHA-256,
       so you can check the saved copy. The file's content never enters the
       conversation.
+  - q: Can Claude put a file I already have into Drive or onto a Jira issue?
+    a: >-
+      Yes, for a file of up to 1 MB that Claude already holds in the
+      conversation, such as an image or a PDF you shared with it. It sends
+      the file as a content reference, and DataToRAG hands it to Drive or
+      Jira in the same call and answers with the SHA-256 and size of what it
+      received. The file is never written to our disks.
   - q: Is the attached email the original?
     a: >-
       It is the message exactly as Gmail returns it in raw form, unchanged by
@@ -39,7 +46,7 @@ Some jobs need a file to go from one connected service to another: an email file
 
 ## File references
 
-A tool that takes a file takes a **file reference**: a small object that says where the file lives in one of your connected services. It is a name for the file, not the file.
+A tool that takes a file takes a **file reference**. Most references are a small object that says where the file lives in one of your connected services: a name for the file, not the file. A `content` reference is the exception: it carries a file Claude already holds, in the call itself.
 
 | Reference | Fields | The file |
 |-----------|--------|----------|
@@ -47,6 +54,7 @@ A tool that takes a file takes a **file reference**: a small object that says wh
 | `gmail_attachment` | `message_id`, `part_id`, optional `account` | One attachment of an email, under the sender's file name and type |
 | `drive_file` | `file_id`, optional `account` | A Google Drive file as stored, under its Drive name |
 | `drive_export` | `file_id`, `format`, optional `account` | A Google Docs, Sheets or Slides file exported to a format, named with its extension |
+| `content` | `name`, `base64`, optional `mime_type` | A file Claude already holds, carried in the call as base64, at most 1 MB |
 
 A Google Docs, Sheets or Slides file has no stored file to send as it is, so as a `drive_file` it is refused with the `drive_export` reference to use instead. The formats are:
 
@@ -87,6 +95,26 @@ One attachment of that message, by its part id:
 ```
 
 Each call moves one file. To attach three PDFs from one email, make three calls, one part id each.
+
+## Sending a file you have
+
+When the file is already in the conversation, for example an image or a PDF you shared with Claude, a `content` reference carries it to `drive_upload_file` or `jira_add_attachment` directly:
+
+```json
+{
+  "issue_key": "PROJ-123",
+  "file": { "type": "content", "name": "screenshot.png", "mime_type": "image/png", "base64": "<base64>" }
+}
+```
+
+- `base64` is the file in standard base64, as one unbroken string. Base64 broken across lines, or in the URL-safe alphabet, is refused rather than decoded into a damaged file.
+- The file can be at most 1 MB.
+- `mime_type` is optional. Without it, the type comes from the name's extension.
+- A `content` reference takes no `account`, because the file comes with the call.
+
+The receipt is the same as for any other reference: the SHA-256 and byte count of what DataToRAG received and handed on, and, for Drive, whether what Drive stored matches it.
+
+A `content` reference cannot be used in the DataToRAG dashboard agent, and a download link cannot be made from one: the file is already on your side.
 
 ## The receipt
 
@@ -183,18 +211,21 @@ The file is held in the gateway's memory only while the transfer runs, and is ne
 
 It is read from the service it lives in and sent to the service you named, inside the one call. It is not copied to Google Drive or to any other place on the way.
 
+A file sent as a `content` reference is decoded in the gateway's memory and handed to the service you named inside the same call, and is never written to our disks.
+
 For a download link, the file is read into the gateway's memory twice, once to compute the receipt and once when the Save button on the link's page is used, is sent from memory to the browser that used it, and is never written to our disks. Between the two, and for up to twenty minutes after the link is made, we hold what identifies the file (the message it names and the account it is in, its name, size and SHA-256), and not its content.
 
 ## Limits
 
 - One file per call, at most 25 MB. A larger file is refused.
+- A `content` reference carries at most 1 MB.
 - One transfer at a time per account on DataToRAG. A second one started while the first is running is refused; run it again when the first has finished.
 - A download link counts as one tool call when it is made, whether or not it is used, and is refused like any other call once your plan's calls are used up.
 - A transfer is never retried. If one fails, look at the destination before running it again, so a file is not attached twice.
 
 ## Who is asked first
 
-In a chat with the DataToRAG agent, attaching a file or making a download link is treated as a write and you are asked before it runs. A skill run cannot make a download link, because nobody is there to use it. A skill run does not stop to ask, and other MCP clients apply their own approval rules, so in those the receipt is the check. Name the destination yourself: an assistant should never take an issue key from the content of an email.
+In a chat with the DataToRAG agent, attaching a file or making a download link is treated as a write and you are asked before it runs. A skill run cannot make a download link, because nobody is there to use it, and the agent does not take a `content` reference, because a chat keeps the arguments of every tool call. A skill run does not stop to ask, and other MCP clients apply their own approval rules, so in those the receipt is the check. Name the destination yourself: an assistant should never take an issue key from the content of an email.
 
 ## Example prompts
 
@@ -202,3 +233,4 @@ In a chat with the DataToRAG agent, attaching a file or making a download link i
 - "File this message on OPS-88 and add a comment with the file's name and SHA-256"
 - "Give me a link to save the original of Dana's email to my computer, with its SHA-256"
 - "Attach the PDFs from Dana's email to PROJ-123" (one call per PDF, each naming its part id)
+- "Put this screenshot in my Receipts folder in Drive" (a file you shared in the chat, up to 1 MB)

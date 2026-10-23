@@ -16,10 +16,10 @@ import type { FileReference, SourceFile } from "./file-crossing";
 
 /** The largest `content` file, decoded. The model has to write every
  * character of the base64 itself, so this sits well above any file a model
- * carries in practice and well below what the transport allows; a larger
- * file is what an upload link is for. */
+ * carries in practice and well below what the transport allows. */
 export const MAX_CONTENT_BYTES = 1024 * 1024;
 const CAP_WORDS = `${MAX_CONTENT_BYTES / (1024 * 1024)} MB`;
+const TOO_LARGE = `The file is larger than ${CAP_WORDS}, the most a content reference carries. Nothing was uploaded.`;
 
 /** The longest base64 a file of the cap can be, padding included. Anything
  * longer is refused before a byte is decoded. */
@@ -89,7 +89,7 @@ export function resolveContent(ref: FileReference): { ok: true; file: SourceFile
   if (base64.length > MAX_BASE64_CHARS) {
     return {
       ok: false,
-      text: `The file is larger than ${CAP_WORDS}, the most a content reference carries. For a larger file, ask for an upload link with file_upload_link. Nothing was uploaded.`,
+      text: TOO_LARGE,
     };
   }
   const unpadded = base64.replace(/=+$/, "");
@@ -106,7 +106,7 @@ export function resolveContent(ref: FileReference): { ok: true; file: SourceFile
   if (bytes.byteLength > MAX_CONTENT_BYTES) {
     return {
       ok: false,
-      text: `The file is larger than ${CAP_WORDS}, the most a content reference carries. For a larger file, ask for an upload link with file_upload_link. Nothing was uploaded.`,
+      text: TOO_LARGE,
     };
   }
   const name = cleanInboundName(typeof ref.name === "string" ? ref.name : "");

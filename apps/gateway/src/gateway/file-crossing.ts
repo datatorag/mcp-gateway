@@ -735,7 +735,7 @@ async function crossLocalFile(
   // its approval card, so a content reference there would store a file.
   if (ref.type === "content" && opts.surface === "agent") {
     return refuse(
-      "A content reference cannot be used in the dashboard Agent. Ask for an upload link instead with file_upload_link. Nothing was uploaded."
+      "A content reference cannot be used in the dashboard Agent, which keeps the arguments of every tool call. Nothing was uploaded."
     );
   }
   return withTransferSlot(opts.userId, async () => {

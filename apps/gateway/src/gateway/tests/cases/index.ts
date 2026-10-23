@@ -99,6 +99,9 @@ import { fd2DownloadLinkNotCarried } from "./fd2-download-link-not-carried";
 import { fd3DownloadDriveFile } from "./fd3-download-drive-file";
 import { fd4DownloadDocPdf } from "./fd4-download-doc-pdf";
 import { fd5DriveReferenceRefusals } from "./fd5-drive-reference-refusals";
+import { fd6ContentIntoDrive } from "./fd6-content-into-drive";
+import { fd7ContentOntoJira } from "./fd7-content-onto-jira";
+import { fd8ContentNotADownload } from "./fd8-content-not-a-download";
 import { tk1TasksLifecycle } from "./tk1-tasks-lifecycle";
 import { co1ContactsLifecycle } from "./co1-contacts-lifecycle";
 import { co2ContactsSearch } from "./co2-contacts-search";
@@ -263,6 +266,9 @@ export const CASES: TestCase[] = [
   fd3DownloadDriveFile,
   fd4DownloadDocPdf,
   fd5DriveReferenceRefusals,
+  fd6ContentIntoDrive,
+  fd7ContentOntoJira,
+  fd8ContentNotADownload,
   tk1TasksLifecycle,
   co1ContactsLifecycle,
   co2ContactsSearch,
