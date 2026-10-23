@@ -103,11 +103,28 @@ export const EXPORTS: Record<string, { label: string; formats: Record<string, Ex
 /** Every format any source accepts, for the schema's enum. */
 export const EXPORT_FORMATS = [...new Set(Object.values(EXPORTS).flatMap((s) => Object.keys(s.formats)))];
 
-export interface ParsedEntry {
+export interface DriveEntry {
   fileId: string;
   as?: string;
   tab?: string;
 }
+
+/** A file the gateway handed over with the call (SCRUM-437): an entry of
+ * `attachments` that was a file reference, resolved by the gateway into
+ * bytes, a name and a type. */
+export interface SuppliedAttachment {
+  bytes: Uint8Array;
+  name: string;
+  type: string;
+}
+
+export interface SuppliedEntry {
+  supplied: SuppliedAttachment;
+}
+
+export type ParsedEntry = DriveEntry | SuppliedEntry;
+
+const isSupplied = (entry: ParsedEntry): entry is SuppliedEntry => "supplied" in entry;
 
 /** A part of a message being forwarded that carries a filename. */
 export interface OriginalPart {
@@ -126,9 +143,12 @@ export type Mode = "attached" | "inline" | "linked" | "exported";
 export interface ReportEntry {
   name: string;
   mode: Mode;
-  source: "drive" | "original";
+  source: "drive" | "original" | "supplied";
   file_id?: string;
   size?: number;
+  /** The SHA-256 of the bytes that went into the message, hex. Set once a
+   * file has streamed in full; a link has none. */
+  sha256?: string;
   link?: string;
   cid?: string;
   /** For a one-tab export, which tab went: "exported tab Sheet1 of 3". */
@@ -157,12 +177,28 @@ function refuse(message: string): never {
   throw new Error(`${message} Nothing was sent.`);
 }
 
-/** Every shape rule, synchronously, so a malformed call costs no request. */
-export function parseAttachments(value: unknown): ParsedEntry[] {
+/** Every shape rule, synchronously, so a malformed call costs no request.
+ *
+ * An entry that is a file reference (an object with a `type`) is a file the
+ * gateway resolves and hands over: it takes the supplied file at its index,
+ * and is refused when none came, because only the gateway can turn a
+ * reference into bytes. */
+export function parseAttachments(value: unknown, supplied?: ReadonlyMap<number, SuppliedAttachment>): ParsedEntry[] {
   if (value === undefined || value === null) return [];
   if (!Array.isArray(value)) refuse("attachments must be an array.");
   if (value.length > MAX_ENTRIES) refuse(`attachments holds ${value.length} entries; one message takes at most ${MAX_ENTRIES}.`);
+  for (const index of supplied?.keys() ?? []) {
+    const entry = value[index];
+    if (!entry || typeof entry !== "object" || typeof (entry as { type?: unknown }).type !== "string") {
+      refuse(`A file was handed over for attachments[${index}], which is not a file reference.`);
+    }
+  }
   return value.map((entry, i): ParsedEntry => {
+    if (entry && typeof entry === "object" && typeof (entry as { type?: unknown }).type === "string") {
+      const file = supplied?.get(i);
+      if (!file) refuse(`attachments[${i}] is a file reference and has to come through the gateway.`);
+      return { supplied: file };
+    }
     if (typeof entry === "string") {
       if (!DRIVE_ID.test(entry)) refuse(`attachments[${i}] is not a Drive file id: ${JSON.stringify(entry.slice(0, 80))}.`);
       return { fileId: entry };
@@ -266,7 +302,7 @@ export async function resolveAttachments(
   // A forward passes its originals as the pending fetch, so the Drive
   // metadata and the original message are read together.
   const [metas, originals] = await Promise.all([
-    Promise.all(entries.map((e) => driveMetadata(client, e.fileId))),
+    Promise.all(entries.map((e) => (isSupplied(e) ? Promise.resolve(null) : driveMetadata(client, e.fileId)))),
     originalsIn,
   ]);
 
@@ -283,6 +319,7 @@ export async function resolveAttachments(
   const tabs = await Promise.all(
     entries.map((entry, i) => {
       const meta = metas[i];
+      if (isSupplied(entry) || !meta) return Promise.resolve(undefined);
       const format = entry.as ? EXPORTS[meta.mimeType ?? ""]?.formats[entry.as] : undefined;
       return format && typeof format.exportAs === "object"
         ? sheetTabs(client, entry.fileId, safeFilename(meta.name ?? entry.fileId))
@@ -291,7 +328,20 @@ export async function resolveAttachments(
   );
 
   entries.forEach((entry, i) => {
-    const meta = metas[i];
+    if (isSupplied(entry)) {
+      const name = safeFilename(entry.supplied.name);
+      const bytes = Buffer.from(entry.supplied.bytes.buffer, entry.supplied.bytes.byteOffset, entry.supplied.bytes.byteLength);
+      plan({
+        filename: name,
+        mimeType: safeMimeType(entry.supplied.type),
+        contentId: contentIdFor(name),
+        source: bytes,
+        known: bytes.length,
+        report: { name, mode: "attached", source: "supplied", size: bytes.length },
+      });
+      return;
+    }
+    const meta = metas[i]!;
     const name = safeFilename(meta.name ?? entry.fileId);
     const type = meta.mimeType ?? "";
     if (type === FOLDER) refuse(`"${name}" (${entry.fileId}) is a folder; only files can be attached.`);
@@ -411,8 +461,9 @@ export async function resolveAttachments(
         }
       : opener(client, p.source);
     const entryReport = p.report;
-    const open = budget.meter(p.filename, raw, (bytes) => {
+    const open = budget.meter(p.filename, raw, (bytes, sha256) => {
       entryReport.size = bytes;
+      entryReport.sha256 = sha256;
     });
     return { filename: p.filename, mimeType: p.mimeType, contentId: p.contentId, report: entryReport, open };
   });

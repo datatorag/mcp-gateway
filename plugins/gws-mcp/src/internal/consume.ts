@@ -16,6 +16,7 @@
  */
 
 import { GwsClient } from "../gws-client.js";
+import { handleGmail } from "../tools/gmail.js";
 import {
   BadHandoff,
   isMultipart,
@@ -43,6 +44,37 @@ type ConsumingTool = (
   files: Map<string, HandedFile>
 ) => Promise<ToolResult>;
 
+const ATTACHMENT_FIELD = /^attachments\[(\d)\]$/;
+
+/** The five Gmail tools that write a message: their files arrive as
+ * entries of `attachments` (SCRUM-437). */
+const EMAIL_TOOLS = ["gmail_send", "gmail_create_draft", "gmail_reply", "gmail_forward", "gmail_update_draft"];
+
+/** The files of an email by the index of their `attachments` entry, or null
+ * when any arrived in a field an email does not take. */
+export function suppliedFrom(files: Map<string, HandedFile>): Map<number, HandedFile> | null {
+  const out = new Map<number, HandedFile>();
+  for (const [field, file] of files) {
+    const m = ATTACHMENT_FIELD.exec(field);
+    if (!m) return null;
+    out.set(Number(m[1]), file);
+  }
+  return out;
+}
+
+function emailTool(name: string): ConsumingTool {
+  return async (client, args, files) => {
+    const supplied = suppliedFrom(files);
+    if (!supplied) {
+      return {
+        content: [{ type: "text", text: "An email's files arrive as entries of its attachments. Nothing was sent." }],
+        isError: true,
+      };
+    }
+    return (await handleGmail(client, name, args, supplied)) as ToolResult;
+  };
+}
+
 /** A tool that takes exactly one file, in the `file` field. */
 function oneFile(
   tool: (client: GwsClient, args: Record<string, unknown>, file: SuppliedFile) => Promise<ToolResult>
@@ -63,6 +95,7 @@ function oneFile(
  * bytes; everything else is reachable through /mcp alone. */
 const consumingTools = new Map<string, ConsumingTool>([
   ["drive_upload_file", oneFile(uploadReferencedFile)],
+  ...EMAIL_TOOLS.map((name): [string, ConsumingTool] => [name, emailTool(name)]),
 ]);
 
 /** The whole body, at most: the files' cap, the arguments' cap, and room for

@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { MockAgent, getGlobalDispatcher, setGlobalDispatcher, type Dispatcher } from "undici";
 import { simpleParser } from "mailparser";
@@ -98,7 +99,7 @@ describe("a large attachment through the real transport", () => {
       attachments: [FILE_ID],
     });
     expect(JSON.parse(res.content[0].text).attachments).toEqual([
-      { name: "video.mp4", mode: "attached", source: "drive", file_id: FILE_ID, size },
+      { name: "video.mp4", mode: "attached", source: "drive", file_id: FILE_ID, size, sha256: createHash("sha256").update(file).digest("hex") },
     ]);
     // More than one chunk, so the 308 path ran.
     expect(received.length).toBeGreaterThan(1);

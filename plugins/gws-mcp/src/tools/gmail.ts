@@ -21,6 +21,7 @@ import {
   parseAttachments,
   placeFiles,
   resolveAttachments,
+  type SuppliedAttachment,
   type OriginalPart,
   type ParsedEntry,
   type PlannedFile,
@@ -1276,12 +1277,15 @@ async function sendWithAttachments(
 export async function handleGmail(
   client: GwsClient,
   toolName: string,
-  args: Record<string, unknown>
+  args: Record<string, unknown>,
+  /** Files the gateway resolved from file references among `attachments`,
+   * by entry index; only the consume route passes them (SCRUM-437). */
+  supplied?: ReadonlyMap<number, SuppliedAttachment>
 ) {
   switch (toolName) {
     case "gmail_send": {
       assertHeadersSingleLine(args);
-      const entries = parseAttachments(args.attachments);
+      const entries = parseAttachments(args.attachments, supplied);
       if (entries.length > 0) return sendWithAttachments(client, toolName, args, entries);
       // The signature is applied to the RESOLVED body, before anything builds
       // MIME, so no send path can be reached without it having been offered.
@@ -1304,7 +1308,7 @@ export async function handleGmail(
       // returns a value containing CRLF verbatim.
       assertHeadersSingleLine(args);
       assertBodyContract(toolName, args, { requireBody: true });
-      const entries = parseAttachments(args.attachments);
+      const entries = parseAttachments(args.attachments, supplied);
       let signed: Awaited<ReturnType<typeof signSingleSlotBody>>;
       let fetched: Awaited<ReturnType<typeof fetchOriginal>>;
       let resolved: Resolved | undefined;
@@ -1381,7 +1385,7 @@ export async function handleGmail(
     case "gmail_forward": {
       assertHeadersSingleLine(args);
       assertBodyContract(toolName, args);
-      const entries = parseAttachments(args.attachments);
+      const entries = parseAttachments(args.attachments, supplied);
       const carry = !suppressionRequested(args.include_original_attachments);
       let signed: Awaited<ReturnType<typeof signSingleSlotBody>>;
       let fetched: Awaited<ReturnType<typeof fetchOriginal>>;
@@ -1482,7 +1486,7 @@ export async function handleGmail(
       // Same order as gmail_send: refuse a bad header before the lookup costs
       // a call, sign the RESOLVED body, then build MIME from what came back.
       assertHeadersSingleLine(args);
-      const entries = parseAttachments(args.attachments);
+      const entries = parseAttachments(args.attachments, supplied);
       if (entries.length > 0) return sendWithAttachments(client, toolName, args, entries);
       const signed = await applySignature(client, args, resolveBody(toolName, args));
       const result = await client.api("gmail", "users.drafts", "create", {
@@ -1494,7 +1498,7 @@ export async function handleGmail(
 
     case "gmail_update_draft": {
       assertHeadersSingleLine(args);
-      const entries = parseAttachments(args.attachments);
+      const entries = parseAttachments(args.attachments, supplied);
       const bodies = resolveBody(toolName, args);
       const threadOf = () =>
         args.thread_id
