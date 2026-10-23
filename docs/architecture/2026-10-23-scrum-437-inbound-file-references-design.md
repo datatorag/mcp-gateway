@@ -12,7 +12,7 @@ a file that already lives in a connected service. There is no way in.
 Two ways in, matching the two shapes MCP clients already use for files:
 
 1. **A `content` reference**: the bytes ride in the tool call as base64. For
-   a client whose model holds the file (claude.ai, Desktop). Capped at 5 MB.
+   a client whose model holds the file (claude.ai, Desktop). Capped at 1 MB.
 2. **`file_upload_link`**: a built-in tool that answers a single-use link
    and one curl line. The file goes from the user's browser or terminal to
    the gateway without passing through the model, and the next tool call
@@ -170,8 +170,11 @@ unchanged destination leg.
   the alphabet is checked first, as `consume.ts` already does for its
   header.
 - **Size.**
-  - The decoded size is at most 5 MB (`MAX_CONTENT_BYTES`), and the encoded
-    length is checked BEFORE decoding.
+  - The decoded size is at most 1 MB (`MAX_CONTENT_BYTES`), and the encoded
+    length is checked BEFORE decoding. The model has to write every
+    character of the base64 itself, so the cap sits well above any file a
+    model can carry in practice and well below what the transport allows;
+    a larger file is what the upload link is for.
   - Above the cap the refusal names `file_upload_link`.
   - An empty file is refused.
 - **Name.** `name` is cleaned on the gateway side, because the plugin's
@@ -202,12 +205,15 @@ form, `{"type":"content"}`, and the bytes as the request body. This is
 required anyway: the args go in an 8 KB header (see 5), and neither consume
 route reads `file`.
 
-**The transport has to carry it** (see "What the code requires"). 5 MB is about 7 MB of base64. `/mcp` must take a request of that
-size, but only from an authenticated caller:
+**The transport has to carry it** (see "What the code requires"). A small
+file fits the 100 KB `/mcp` body limit that exists today, so step 1 proves
+the mechanism with no transport change. 1 MB is about 1.4 MB of base64, and
+the limit change ships as its own task, with the oversize case as its proof,
+and only for an authenticated caller:
 
-- The bearer check moves into a middleware that runs BEFORE the body
-  parser, and the result is kept on `res.locals` for the handler.
-- The parser on `/mcp` then takes `limit: "8mb"`.
+- A bearer gate runs BEFORE the body parser on `/mcp`
+  (`app.use("/mcp", bearerGate, express.json({ limit: "2mb" }))`), and keeps
+  its result on `res.locals` for the handler.
 - An unauthenticated request is answered 401 without its body being parsed.
   Today it is parsed, at up to 100 KB, before the 401.
 
@@ -274,8 +280,10 @@ Its handler:
 **One receipt per attachment.** The response's `attachments` report already
 has one entry per file. Each entry gains `bytes` and `sha256`:
 - for a supplied file, computed on the bytes handed over;
-- for a Drive or original part, computed as it streams into the message, by
-  a hashing pass-through on `open`, so nothing is buffered to hash it.
+- for a Drive or original part, computed as it streams into the message,
+  inside `ByteBudget.meter` (`attachments/fetch.ts`), which already wraps
+  every planned file's `open` and counts its bytes, so nothing is buffered
+  to hash it.
 
 A link (a Google file sent as a link) has no bytes and carries neither.
 
@@ -288,7 +296,7 @@ so.
 `jira_add_attachment`; that is a later ticket, not this one. The protocol
 below is already multi-file, so Jira needs no protocol change then.
 
-### 5. The handoff carries the arguments and the files in one framed body
+### 5. The handoff is a multipart body
 
 **Why it has to change.**
 - `X-Tool-Args` is capped at 8 KB because it is a header. A Jira or Drive
@@ -297,46 +305,39 @@ below is already multi-file, so Jira needs no protocol change then.
   refuse most emails with a file.
 - Today's body carries exactly one file, and an email may now carry several.
 
-**The shape: a framed body, gateway to plugin.** The considered alternative
-was the plugin pulling each file by id from an internal gateway route while
-it streams the message. It was rejected:
-- **Memory.** It saves nothing: the gateway must resolve, and so hold, every
-  referenced file before the send either way, because a refusal on the last
-  reference must stop the call before the first byte goes out. Pulling would
-  spare only the plugin's copy, which the Gmail cap bounds at 25 MB, the
-  same bound the one-file handoff has today.
-- **New machinery.** It costs things that do not exist:
-  - plugins hold no gateway address (their environment is `PATH`,
-    `NODE_ENV` and `PORT`) and make no calls back to it;
-  - a route the plugins call would need its own per-call credential;
-  - and a guarantee that it answers only on the loopback interface, on a
-    server that also takes public traffic.
-- **Reuse.** A framed body is the args-in-body change step 2 needs anyway,
-  generalised to N files.
+**The shape: `multipart/form-data`, gateway to plugin.**
+- **Building it.** The gateway builds the body with the `FormData` built
+  into Node 20, which the image runs: one `args` field holding the JSON
+  arguments, and one file field per reference.
+  - Each file field is named by where the reference sat in the arguments:
+    `file`, or `attachments[i]`.
+  - Each carries the file's name and type in its own part headers.
+- **Parsing it.** Each plugin reads the body with its existing capped
+  reader, then parses it with `new Response(bytes, { headers }).formData()`,
+  also built in.
+- **Checks.** A field name other than `args`, `file` or `attachments[i]`
+  (with `i` from 0 to 9), a name used twice, or an `args` field over 1 MB is
+  a 400, and nothing is sent to the service.
+- **Retired.** `X-Tool-Args`, `X-File-Name` and `X-File-Type` are no longer
+  sent or read.
 
-The request:
-
-- **Header.** `X-Consume-Manifest-Length: <n>`, the byte length of the
-  manifest, at most 1 MB. `X-Tool-Args`, `X-File-Name` and `X-File-Type`
-  are retired.
-- **Body.**
-  - First, n bytes of UTF-8 JSON, the manifest: `{"args": {...}, "files":
-    [{"path": [...], "name": "...", "type": "...", "bytes": <int>}]}`.
-    `path` is where the reference sat in `args` (`["file"]`, or
-    `["attachments", 2]`), and `args` carries each reference in its closed
-    form (`{"type": "..."}`, no base64, no ids).
-  - Then the files' bytes, concatenated in manifest order, each exactly its
-    declared `bytes`.
-- **Reading.** Both plugins read the manifest capped at 1 MB, then each file
-  by its declared length, with the declared total capped at 25 MB. A body
-  that ends early, or runs past the declared total, is a 400, and nothing is
-  sent to the service.
+Why not the alternatives:
+- **A framing of our own** would need its own reader and its own edge
+  cases. Multipart costs no dependency and no parser of ours.
+- **The plugin pulling each file by id** saves no memory, because the
+  gateway must hold every referenced file before the send either way: a
+  refusal on the last reference must stop the first byte. It would also
+  need machinery that does not exist:
+  - a gateway address in the plugins, whose environment is `PATH`,
+    `NODE_ENV` and `PORT`;
+  - a plugin-to-gateway credential;
+  - a route that answers only on loopback.
 
 The plugin holds the supplied files in memory for the call, at most 25 MB,
-which is today's single-file bound. The gateway and both plugins ship in one
-image, so there is no mixed-version window and no fallback is kept. The
-gateway-side refusal "the arguments are too large to send with a file" moves
-from 8 KB to 1 MB of manifest.
+which is today's single-file bound. The parse is proven on the production
+base image before anything else in the step, including non-ASCII file
+names. The gateway and both plugins ship in one image, so no fallback is
+kept.
 
 ### 6. `file_upload_link`
 
@@ -347,25 +348,25 @@ minted, never on a skill run. Its arguments are both optional:
 - `name`: a display hint for the drop page;
 - `max_bytes`: an integer, at most and by default 25 MB.
 
-**The store**, `file-upload.ts`, mirrors `file-download.ts`:
-- one store per process off `globalThis` under its own registered symbol;
-- a per-process HMAC key;
-- tokens `nonce.tag`, with the tag over `nonce`, `userId`, `max_bytes` and
-  the link's expiry;
-- a sweeper.
+**The store is the download link's store.** `file-download.ts`'s record
+gains `kind: "download" | "upload"` and the upload fields. The sweeper,
+`dropLinksForUser`, `revokeLinksCarriedIn`, the host record cap, the
+per-process key and the `globalThis` symbol are shared. The tag covers each
+kind's own fields: for an upload, `nonce`, `userId`, `max_bytes` and the
+link's expiry.
 
-Each record:
+The upload fields:
 
 | field | meaning |
 |---|---|
-| `nonce` | the link's identity; the URL carries it |
 | `uploadId` | a SEPARATE random id, what the `upload` reference carries |
-| `userId` | the user who minted it; consumption is refused for anyone else |
 | `maxBytes` | the cap for this link |
-| `linkExpiresAt` | mint + 10 minutes; a PUT after this is refused |
 | `heldUntil` | receipt + 10 minutes; the bytes are dropped after this |
-| `state` | `open` → `receiving` → `received` → `consuming` → `consumed`, or `expired` / `cancelled` |
+| `state` | for an upload: `open` → `receiving` → `received` → `consuming` → `consumed`, or `expired` / `cancelled` |
 | `file` | `{bytes, name, type, sha256}` while `received` or `consuming`, never otherwise |
+
+The link's own expiry (mint + 10 minutes, after which a PUT is refused) is
+the record's existing `expiresAt`.
 
 **Why the upload id is not the nonce.** The carried-link rule cancels any
 link whose nonce appears in a tool call's arguments, and a call that
@@ -376,17 +377,18 @@ user's own session: consumption checks `userId` against the session.
 
 | limit | value | whose number |
 |---|---|---|
-| open or held uploads per user | 3 | decided |
+| open or held uploads per user | 3, counted per kind in `capRefusal` | decided |
 | records per user | 40 | reused |
 | records per host | 10,000 | reused |
-| held bytes per host | 256 MB | proposed, see below |
+| held bytes per host | 256 MB | decided |
 
 The held-bytes ceiling covers the files held in `received` plus the
 `maxBytes` reserved by every `receiving` upload. A PUT that would pass it is
 refused before any byte is read: "The service is holding as many uploaded
 files as it can right now. Nothing was uploaded; try again in a few
-minutes." 256 MB is ten users holding full-size files at once; the host's free
-memory is measured before step 3 ships and the number is checked against it.
+minutes." 256 MB is ten users holding full-size files at once. The gateway
+refuses to start if `MAX_HELD_UPLOAD_BYTES` is more than a quarter of
+`os.totalmem()`, so the number cannot outgrow the machine it runs on.
 
 **The route.** `/files/u/<token>[/<name>]`, in the same router that owns
 `/files`, which matters because it already answers every unknown path under
@@ -424,9 +426,9 @@ curl -fsS -T <path-to-file> "https://<host>/files/u/<token>/"
 - `-T` is a PUT with no extra flags.
 - The trailing slash makes curl append the file's own name.
 - `-f` exits non-zero on a refusal.
-- Whether the appended name is escaped by curl on macOS and Linux (spaces,
-  non-ASCII) is verified in step 3 before the line is fixed. If it is not,
-  the line adds `-H "X-File-Name: <name>"`.
+- The route decodes the appended name, and a unit test feeds it the
+  percent-encoded forms curl sends (`a%20b.png`, `r%C3%A9sum%C3%A9.pdf`).
+  One real `curl -T` run is recorded in the PR.
 
 **Consuming an upload.** The local resolver:
 - looks the record up by `uploadId`;
@@ -438,21 +440,11 @@ What happens to the upload depends on where the call ends:
 
 | outcome | state after | bytes |
 |---|---|---|
-| refused before any byte goes to the destination plugin: no destination token, args too large, slot busy, a bad reference elsewhere in the call | back to `received`, reference still live | kept |
-| the destination plugin refused before calling its service: folder not a folder, issue not visible, total over 25 MB | back to `received`, reference still live | kept |
-| bytes reached the service, or the outcome cannot be known (timeout, transport failure, an answer that cannot be read) | `consumed` | dropped |
+| refused in the gateway before the destination request: no destination token, a bad reference, slot busy, over the cap | back to `received`, reference still live | kept |
+| any destination request made, whatever it answered | `consumed` | dropped |
 
 A call carrying several `upload` references (an email) takes them all
-before the send, and settles every one the same way: all back to `received`
-on a refusal before the send, all `consumed` once the send has started.
-
-The middle row needs something the code does not have today. The consume
-routes answer `isError` for a refusal and for a failure alike. They gain one
-field, `sent: false`, on a result returned before the tool called its
-service, and every existing refusal in `uploadReferencedFile` and
-`addJiraAttachment` is marked. The gateway treats a missing `sent` as
-`true`, so the safe reading (consumed, check the destination) is the
-default.
+before the send, and settles every one the same way.
 
 **Expiry and revocation.**
 - An upload that is not consumed within ten minutes of receipt loses its
@@ -463,11 +455,13 @@ default.
 - A restart loses every held file, and the refusal says to upload again. The
   download link made the same trade, and its code comment is extended to
   cover uploads.
-- `dropLinksForUser` drops the user's uploads too, held bytes included, on
-  sign-out, a revoked key or grant, or a disconnect.
+- `dropLinksForUser` drops the user's uploads with their held bytes, since
+  they share its store, on sign-out, a revoked key or grant, or a
+  disconnect.
 
-**The carried-link rule.** `revokeLinksCarriedIn` also scans for this user's
-upload link nonces in state `open`, and cancels them. Once a file is
+**The carried-link rule.** `revokeLinksCarriedIn` covers upload links by
+sharing the store: an upload link in state `open` is live, and is cancelled
+when carried. Once a file is
 received the link is spent, and the upload id is not a link.
 
 **Logging.** One line per request, with the method, the outcome and a byte
@@ -510,15 +504,15 @@ the download page's styling tokens and base headers.
   - Gmail attachments by reference;
   - "Where the file is" states the ten-minute hold for uploads in plain
     words;
-  - "Limits" gains 5 MB and 25 MB.
+  - "Limits" gains 1 MB and 25 MB.
 - A changelog entry per deployed step.
 
 **Plugin descriptions and the registry.**
 - `drive_upload_file`, `jira_add_attachment` and the five compose tools gain
   the new reference types in their `file` and `attachments` descriptions
   and schemas.
-- Each changed row ships through `pnpm registry:diff`, as a registry pair
-  committed with the step.
+- The changed rows reach the registry at release, through the release
+  process; this ticket commits no registry files.
 - `file_upload_link` is a built-in, outside the registry. The download
   link's tests enumerate built-ins, and the new tool joins them.
 
@@ -528,8 +522,9 @@ the download page's styling tokens and base headers.
 - every upload state transition and refusal;
 - the held-bytes ceiling;
 - the carried-link scan for upload nonces;
-- the consume protocol's prefix framing;
-- `sent: false` on each refusal;
+- the multipart parse on Node 20, non-ASCII names included, and the field
+  name rules;
+- the held-bytes boot check;
 - the drop page's headers.
 
 **Runner cases** in the `fd` family, beside each step, not after:
@@ -537,8 +532,8 @@ the download page's styling tokens and base headers.
 | step | cases |
 |---|---|
 | 1 | `content` into Drive, with the receipt SHA-256 equal to the hash of the bytes sent; `content` onto a Jira issue, likewise; `content` refused on `file_download_link`; oversize `content` refused, naming `file_upload_link` |
-| 2 | a draft with two `content` attachments and a Drive id, read back through `gmail_read`, with each report entry's `sha256` equal to the hash of the part read back; three references totalling over 25 MB refused before anything is sent |
-| 3 | mint, PUT, consume into Drive; mint, PUT, consume onto Jira; a second use refused; expiry refused; a pre-send refusal (bad folder) leaves the upload usable, and the retry succeeds; carried link cancelled; oversize PUT refused |
+| 2 | a draft with two `content` attachments and a Drive id, read back through `gmail_read`, with each report entry's `sha256` equal to the hash of the part read back; a reply carrying a `drive_file` and a `content` reference, read on the recipient's side (the 25 MB combined refusal is a unit test) |
+| 3 | mint, PUT, consume into Drive; mint, PUT, consume onto Jira; a second use refused; carried link cancelled; oversize PUT refused (expiry is a unit test) |
 | 4 | the page served with its CSP; a PUT the way the page sends it |
 
 The existing Jira and Drive crossing tests pass unchanged in every step.
@@ -551,22 +546,23 @@ Each step deploys on its own.
    - `LOCAL_REFERENCE_TYPES` and `file-inbound.ts` (content only).
    - The closed file argument to the destination.
    - The refusal on `file_download_link`.
-   - Auth before the body parser on `/mcp`, with the 8 MB limit.
    - The Agent-surface rule.
-   - Descriptions and registry pair, docs, and FD cases.
+   - Descriptions, docs and FD cases, proven with files under today's
+     100 KB body limit.
+   - Then, as its own task, auth before the body parser on `/mcp` with the
+     2 MB limit, with the oversize case as its proof.
 2. **Gmail attachments by reference, several per email.**
-   - The framed multi-file handoff (section 5), both plugins, with Jira and
-     Drive moved onto it carrying one file.
+   - The multipart handoff (section 5), both plugins, with Jira and Drive
+     moved onto it carrying one file.
    - The gateway resolving every reference of a call in one slot under the
      25 MB running total.
    - Gmail on the consume route, with a receipt per attachment.
-   - Descriptions and registry pair, docs, and FD cases.
+   - Descriptions, docs and FD cases.
 3. **`file_upload_link`.**
-   - The store, the PUT route and the `upload` slot pool.
-   - The `upload` reference and the consume semantics, including `sent:
-     false` in both plugins.
-   - Expiry, revocation and the carried-link scan.
-   - The curl line verified on macOS and Linux.
+   - The upload kind in the download store, the PUT route, and the `upload`
+     slot pool.
+   - The `upload` reference and its two-row consume rule.
+   - The held-bytes boot check.
    - Docs and FD cases. The GET answers a plain sentence until step 4.
 4. **The drop page.** Page, CSP, a phone check at 390 px, docs and FD cases.
 5. **Changelog and blog** per deploy, through the content process.
@@ -575,30 +571,25 @@ Each step deploys on its own.
 
 1. **The transport cannot carry the `content` cap today.** `/mcp` parses
    JSON with Express's default 100 KB limit, so anything over about 70 KB
-   decoded would be refused at the door, not at 5 MB. The fix is in step 1
-   (auth before the parser, then 8 MB). The MCP protocol could carry 25 MB;
+   decoded would be refused at the door, not at 1 MB. The fix is in step 1
+   (auth before the parser, then 2 MB). The MCP protocol could carry more;
    this server as configured cannot.
 2. **The tool's arguments travel in an 8 KB header.**
    - For `content`, the base64 is in the arguments, so it must be taken out
      before they are sent. The plan does that in step 1.
    - For Gmail, the email body is in the arguments, so ordinary emails
      would be refused, and the body carries one file where an email may
-     carry several. Step 2 replaces the handoff with a framed body that
+     carry several. Step 2 replaces the handoff with a multipart body that
      carries the arguments and N files (section 5), and that is the largest
      part of the step.
-3. **"A refusal before any byte moves" is not visible to the gateway
-   today.** The folder and issue checks run in the plugins after the bytes
-   reached them, and their answers look the same as a failure. Telling the
-   two apart needs a `sent: false` field on the consume routes' refusals
-   (step 3).
-4. **The upload reference's id cannot be the link's nonce.** The
+3. **The upload reference's id cannot be the link's nonce.** The
    carried-link rule would cancel the link on the very call meant to use
    it, so the id is separate.
-5. **Name cleaning cannot be shared with the plugin.** `file-bytes`'s rule
+4. **Name cleaning cannot be shared with the plugin.** `file-bytes`'s rule
    lives in the plugin package. `content` uses the gateway's
    `safeDownloadName`, which is stricter, with the 200-unit fit.
-6. **"PUT or multipart":** PUT only. The page uses an XHR PUT, so the
-   gateway needs no multipart parser and no new dependency. The cost is
+5. **"PUT or multipart":** PUT only for uploads. The page uses an XHR PUT,
+   so the gateway needs no multipart parser on the public route. The cost is
    that the page does not work without scripts, and the curl line is the
    fallback.
 
@@ -606,5 +597,16 @@ Each step deploys on its own.
 
 1. **`content` on the dashboard Agent** is refused in the first ship.
    `upload` is allowed on every surface.
-2. **The held-bytes ceiling** is 256 MB per host, measured against the
-   host's free memory before step 3 ships.
+2. **The held-bytes ceiling** is 256 MB per host, held to at most a quarter
+   of the machine's memory by a check at start-up.
+3. **The `content` cap** is 1 MB decoded, and the `/mcp` body limit 2 MB.
+
+## Not addressed
+
+- **A refusal inside the destination plugin consumes an upload.** A bad
+  folder id or an issue the account cannot see is found by the plugin after
+  the bytes reached it, and today its answer looks the same as a failure
+  mid-send. Telling the two apart needs the plugins to mark refusals made
+  before their service call. That is left to a later ticket: until then,
+  such a refusal costs a re-upload, and never a duplicate file.
+
