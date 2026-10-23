@@ -27,7 +27,7 @@ import { createRevokeRouter } from "./src/gateway/oauth/revoke";
 import { oauthRateLimit } from "./src/gateway/oauth/rate-limit";
 import { createAuthRouter } from "./src/gateway/auth";
 import { getPluginManager } from "./src/lib/plugin-manager";
-import { resolveBearer, touchApiKey } from "./src/gateway/bearer-auth";
+import { mcpBearerGate, resolveBearer, touchApiKey, type McpAuthState } from "./src/gateway/bearer-auth";
 import { shutdownPosthog, trackFileDownload } from "./src/gateway/track";
 import {
   extractClientInfo,
@@ -166,7 +166,6 @@ async function main() {
     express.json(),
     express.urlencoded({ extended: true })
   );
-  app.use("/mcp", express.json());
 
   // Dashboard auth (Google login -> session cookie)
   app.use(
@@ -259,8 +258,13 @@ async function main() {
       .json({ error, resource_metadata: resourceMetadataUrl });
   }
 
+  // The bearer is checked before the body is parsed, so only an
+  // authenticated caller gets the larger limit a file in a tool call needs
+  // (SCRUM-437). Everyone else is parsed at the default, as before.
+  app.use("/mcp", mcpBearerGate(validateBearer, { authed: express.json({ limit: "2mb" }), unauthed: express.json() }));
+
   app.all("/mcp", async (req, res) => {
-    const authHeader = req.headers.authorization;
+    const authState = res.locals.mcpAuth as McpAuthState;
     // Client name/version only ride on initialize POSTs; {} otherwise. The
     // body itself is never captured — see mcp-analytics.ts.
     const clientInfo = extractClientInfo(req.body);
@@ -281,7 +285,7 @@ async function main() {
     const unauthAction = () =>
       classifyMcpRequest({ method: req.method, sessionId, known: false });
 
-    if (!authHeader?.startsWith("Bearer ")) {
+    if (authState.header === "missing") {
       receiveRequest(null, unauthAction());
       void trackMcpAuthFailed(db, {
         userId: null,
@@ -292,8 +296,7 @@ async function main() {
       return;
     }
 
-    const rawToken = authHeader.slice(7);
-    const auth = await validateBearer(rawToken);
+    const auth = authState.auth;
     if (!auth.ok) {
       receiveRequest(auth.userId, unauthAction());
       void trackMcpAuthFailed(db, {

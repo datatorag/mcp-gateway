@@ -1,4 +1,5 @@
 import { and, eq, isNull, sql } from "drizzle-orm";
+import type { RequestHandler } from "express";
 import type { Database } from "@datatorag-mcp/db";
 import { apiKeys, oauthAccessTokens } from "@datatorag-mcp/db";
 import { generateApiKey, getKeyPrefix, hashApiKey } from "@datatorag-mcp/auth";
@@ -96,6 +97,42 @@ export async function resolveBearer(db: Database, rawToken: string): Promise<Bea
     return { ok: true, userId: token.userId, clientId: token.clientId, authKind: "oauth" };
   }
   return { ok: false, reason: classifyAuthFailure(token), userId: token?.userId ?? null };
+}
+
+/** What the /mcp gate found, for the handler after it. */
+export type McpAuthState = { header: "missing" } | { header: "present"; auth: BearerAuth };
+
+/**
+ * The bearer check on /mcp, run BEFORE the body is parsed (SCRUM-437).
+ *
+ * A tool call can carry a file as base64, so an authenticated caller's body
+ * may be far larger than the parser's default. That larger limit is for an
+ * authenticated caller only: a request with no bearer, or one that fails, is
+ * parsed exactly as before, at the default limit, so it can still say which
+ * client it was when it is refused. The handler reads the outcome from
+ * `res.locals.mcpAuth` and does not validate again.
+ */
+export function mcpBearerGate(
+  validate: (rawToken: string) => Promise<BearerAuth>,
+  parsers: { authed: RequestHandler; unauthed: RequestHandler }
+): RequestHandler {
+  return async (req, res, next) => {
+    const header = req.headers.authorization;
+    let state: McpAuthState;
+    if (!header?.startsWith("Bearer ")) {
+      state = { header: "missing" };
+    } else {
+      try {
+        state = { header: "present", auth: await validate(header.slice(7)) };
+      } catch (err) {
+        next(err);
+        return;
+      }
+    }
+    res.locals.mcpAuth = state;
+    const parse = state.header === "present" && state.auth.ok ? parsers.authed : parsers.unauthed;
+    parse(req, res, next);
+  };
 }
 
 /** Records that a key opened a session. Fire-and-forget by callers; a

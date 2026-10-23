@@ -214,6 +214,7 @@ export const SCENARIOS: Scenario[] = [
       "FD5", // a folder, a Doc as a stored file, and a format a Doc cannot take are refused
       "FD6", // a file sent as a content reference lands in Drive as the bytes that were sent
       "FD8", // a download link is refused for a file sent as a content reference
+      "FD9", // a content reference over 1 MB is refused, and nothing reaches Drive
       "DR6", // a Doc in one account's Drive is copied as a PDF into another's
     ],
   },
