@@ -44,7 +44,7 @@ Both give the same receipts as the outbound tools.
 2. **The same upload consumed by two calls racing.** Exactly one may move bytes; the other is told "already in use" and nothing is sent. Test: Task 9.
 3. **A held upload expiring while its consuming call is mid-send.** The send finishes, the upload ends `consumed` and never `expired`, and the bytes are dropped once. Test: Task 9.
 4. **A curl PUT with no name** (no slash, no header) and a file whose name is all disallowed characters. It is stored as `upload` plus the extension, never as an empty name. Test: Task 10.
-5. **An email whose args pass 8 KB with a referenced attachment.** It goes through, and an email whose args pass 1 MB is refused before any byte moves. Test: Task 5.
+5. **An email whose args pass 8 KB with referenced attachments, and one whose references pass 25 MB together.** The first goes through. The second is refused before any byte reaches the plugin, and no draft is made. Test: Tasks 5 and 6.
 
 ---
 
@@ -168,101 +168,117 @@ Both give the same receipts as the outbound tools.
 
 ---
 
-## Phase 2: Gmail attachments by reference
+## Phase 2: Gmail attachments by reference, several per email
 
-### Task 5: The consume protocol carries arguments in the body
+### Task 5: The framed multi-file handoff
 
 **Files:**
-- Modify: `apps/gateway/src/gateway/file-crossing.ts`. `sendToDestination` sends `X-Tool-Args-Length` and a body of args then bytes. `MAX_ENCODED_ARGS_CHARS` becomes `MAX_ARGS_BYTES = 1024 * 1024`.
-- Modify: `plugins/gws-mcp/src/internal/consume.ts` and `plugins/atlassian-mcp/src/internal/consume.ts`: read the framed body.
+- Modify: `apps/gateway/src/gateway/file-crossing.ts`. `sendToDestination` takes `files: SourceFile[]` and the closed args, and sends the manifest framing. `MAX_ENCODED_ARGS_CHARS` becomes `MAX_MANIFEST_BYTES = 1024 * 1024`.
+- Modify: `plugins/gws-mcp/src/internal/consume.ts` and `plugins/atlassian-mcp/src/internal/consume.ts`. Each reads the framed body, and the consuming tool gets `files: SuppliedFile[]`. `drive_upload_file` and `jira_add_attachment` take `files[0]` and refuse any other count with "This tool takes one file a call. Nothing was uploaded."
 - Test: `file-crossing.test.ts`, both plugins' `consume.test.ts`.
 
 **Interfaces:**
-- Produces, in each plugin's `consume.ts` (a small function duplicated in both, because the plugins share no package):
-  ```
-  readFramedBody(body: AsyncIterable<Uint8Array>, argsLength: number, argsCap: number, fileCap: number): Promise<{ args: Record<string, unknown>; bytes: Buffer }>
-  ```
-  It throws `BodyTooLarge` or `BadArgs`.
-- Header contract: `X-Tool-Args-Length` is a decimal string, 1 to 1,048,576. `X-Tool-Args` is no longer read.
+- **Header:** `X-Consume-Manifest-Length`, a decimal string from 1 to 1,048,576. `X-Tool-Args`, `X-File-Name` and `X-File-Type` are no longer sent or read.
+- **Manifest:** `type ConsumeManifest = { args: Record<string, unknown>; files: Array<{ path: (string | number)[]; name: string; type: string; bytes: number }> }`, followed by the files' bytes in manifest order.
+- **Gateway:** `encodeManifest(args: Record<string, unknown>, files: Array<SourceFile & { path: (string | number)[] }>): { header: string; body: Buffer[] }`.
+- **Each plugin** (a small function duplicated in both, because the plugins share no package): `readFramedBody(body: AsyncIterable<Uint8Array>, manifestLength: number, caps: { manifest: number; total: number }): Promise<{ args: Record<string, unknown>; files: SuppliedFile[] }>`. It throws `BodyTooLarge` or `BadFrame`.
 
 - [ ] **Step 1: Write the failing tests.**
-  - **Gateway.** The destination request carries `X-Tool-Args-Length`, and its body starts with exactly that many bytes of JSON args. Args of 20 KB (an HTML body) are accepted. Args of 1 MB + 1 are refused with "The arguments to <tool> are too large to send with a file. Shorten them and try again." and no request is made.
+  - **Gateway.**
+    - A one-file crossing (Jira, Drive) sends a manifest with one file whose `bytes` equals the body's file length, and `args.file` is closed.
+    - A 20 KB `html_body` fits.
+    - A manifest over 1 MB is refused with "The arguments to <tool> are too large to send with a file. Shorten them and try again." and no request is made.
   - **Plugins, each.**
-    - A framed body splits into the same args and bytes;
-    - a missing or non-numeric length is 400 `bad_request`;
-    - a length past 1 MB is 400;
-    - args that are not a JSON object are 400;
-    - a file past 25 MB is 413;
-    - a body shorter than the declared length is 400.
+    - A framed body with two files splits into the same args and the two byte arrays, in order.
+    - A missing or non-numeric length is 400 `bad_request`, and so is a manifest over 1 MB or one that is not JSON with `args` an object.
+    - A declared total over 25 MB is 413, before reading the files.
+    - A body shorter than the declared total is 400, and so is one longer.
+    - A negative or non-integer `bytes` is 400.
+    - A `path` other than `["file"]` or `["attachments", i]`, with `i` an integer from 0 to 9, is 400, and so is the same path twice. A supplied file is only ever placed at one of those two shapes.
+    - Jira and Drive with two files answer the one-file sentence.
 - [ ] **Step 2: Run them.** Expected: FAIL.
-- [ ] **Step 3: Implement.** The frame split is the one non-obvious algorithm. Accumulate chunks until `argsLength` bytes are in hand, slice the remainder of that chunk into the file chunks, then continue with the existing capped read.
-- [ ] **Step 4: Run gateway `file-crossing*` and both plugins' tests.** Expected: PASS. The existing Jira and Drive crossing tests are updated only for the new header.
-- [ ] **Step 5: Commit.** `refactor: consume routes take tool arguments in the body`
+- [ ] **Step 3: Implement.** The frame reader is the one non-obvious algorithm. Accumulate chunks until the manifest's length is in hand. Then cut the stream into the declared lengths, carrying the remainder of a chunk into the next file. Check the total against the declared sum before reading past the manifest.
+- [ ] **Step 4: Run gateway `file-crossing*` and both plugins' suites.** Expected: PASS. The existing Jira and Drive crossing tests are updated only for the framing.
+- [ ] **Step 5: Commit.** `refactor: consume routes take the arguments and N files in one framed body`
 
-### Task 6: Gateway finds a reference entry in a Gmail call
+### Task 6: The gateway resolves every reference of a call
 
 **Files:**
-- Modify: `apps/gateway/src/gateway/file-crossing.ts`. `FILE_CONSUMING_TOOLS` is replaced by `fileArgFor`.
-- Modify: `apps/gateway/src/gateway/mcp-server.ts`, where `fileCrossingFor(name)` becomes `fileArgFor(name, args)`.
+- Modify: `apps/gateway/src/gateway/file-crossing.ts`. `FILE_CONSUMING_TOOLS` is replaced by `filePathsFor`, and `crossFile` resolves all paths inside one `transfer` slot.
+- Modify: `apps/gateway/src/gateway/mcp-server.ts`, where `fileCrossingFor(name)` becomes `filePathsFor(name, args)`.
 - Test: `file-crossing.test.ts`, `mcp-server.file-crossing.test.ts`.
 
 **Interfaces:**
-- Produces:
-  - `type FileArgPath = readonly [string] | readonly ["attachments", number]`;
-  - `fileArgFor(tool: string, args: Record<string, unknown>): { path: FileArgPath } | { refusal: string } | null`.
-    - The Jira and Drive tools answer `["file"]`.
-    - The five Gmail compose tools (`gws-mcp__gmail_send`, `__gmail_create_draft`, `__gmail_reply`, `__gmail_forward`, `__gmail_update_draft`) answer the index of the one `attachments` entry that is an object with a string `type`. With none they answer `null`. With two or more they answer `{refusal}`.
-  - `crossFile` reads and closes the reference at `path`.
+- Consumes: `encodeManifest` (Task 5); `resolveContent` (Task 2).
+- Produces: `filePathsFor(tool: string, args: Record<string, unknown>): Array<(string | number)[]> | null`.
+  - The Jira and Drive tools answer `[["file"]]`.
+  - The five Gmail compose tools (`gws-mcp__gmail_send`, `__gmail_create_draft`, `__gmail_reply`, `__gmail_forward`, `__gmail_update_draft`) answer `["attachments", i]` for every entry that is an object with a string `type`. With none they answer `null`.
+  - Any other tool answers `null`.
+- **Resolving.** `crossFile` resolves the paths in array order and keeps a running total against `MAX_FILE_BYTES`.
+  - A plugin source read is sent `max_bytes = MAX_FILE_BYTES - total`.
+  - The over-cap sentence for several files is "The files in this call come to more than 25 MB together, the most one call can carry. Nothing was sent."
+  - A refusal on any reference refuses the call, and no destination request is made.
 
 - [ ] **Step 1: Write the failing tests.**
-  - A Gmail call with only Drive ids is not a crossing (`null`), and `mcp-server` calls the plugin as today.
-  - One `{type:"content"}` entry at index 1 answers `{path:["attachments",1]}`.
-  - Two reference entries answer `{refusal: "One attachment per message can be a file reference; the rest must be Drive files. Nothing was sent."}`.
-  - `{file_id:"x", as:"pdf"}` is not a reference.
-  - `crossFile` sends args whose `attachments[1]` is `{type:"content"}`.
+  - A Gmail call with only Drive ids answers `null`, and `mcp-server` calls the plugin as today.
+  - Entries `[ "driveid", {type:"content",...}, {file_id:"x",as:"pdf"}, {type:"drive_file",file_id:"y"} ]` answer `[["attachments",1],["attachments",3]]`. The `{file_id, as}` entry is not a reference.
+  - `crossFile` with those two references:
+    - makes one source read (for `drive_file`) and one destination request;
+    - the manifest lists two files with paths `[attachments,1]` and `[attachments,3]`;
+    - both entries in `args` are closed.
+  - The over-cap refusal comes when the second file's read would pass 25 MB, with `max_bytes` on that read equal to the remaining budget.
+  - A refusal on the second reference makes no destination request.
+  - `transfersInFlight().host` is 1 for the whole multi-file call.
 - [ ] **Step 2: Run them.** Expected: FAIL.
 - [ ] **Step 3: Implement.**
-- [ ] **Step 4: Run them.** Expected: PASS.
-- [ ] **Step 5: Commit.** `feat(gateway): a Gmail compose call can carry one file reference`
+- [ ] **Step 4: Run them, and all `file-*` and `mcp-server*` tests.** Expected: PASS.
+- [ ] **Step 5: Commit.** `feat(gateway): a compose call can carry several file references`
 
-### Task 7: gws-mcp composes with a supplied file
+### Task 7: gws-mcp composes with supplied files, one receipt per attachment
 
 **Files:**
 - Modify: `plugins/gws-mcp/src/internal/consume.ts`: register the five Gmail tools.
-- Modify: `plugins/gws-mcp/src/tools/gmail.ts`. `handleGmail` takes an optional `supplied?: SuppliedFile`, and the five cases pass it to attachment resolution.
+- Modify: `plugins/gws-mcp/src/tools/gmail.ts`. `handleGmail` takes an optional `supplied?: Array<SuppliedFile & { path: (string | number)[] }>`, and the five cases pass it to attachment resolution.
 - Modify: `plugins/gws-mcp/src/attachments/resolve.ts`:
-  - `parseAttachments` skips the entry `{type: ...}` only when a supplied file is given, and refuses it otherwise;
-  - `resolveAttachments(client, entries, supplied?)` adds a `PlannedFile`;
-  - `ReportEntry.source` gains `"supplied"`.
+  - `parseAttachments` accepts a `{type: ...}` entry only at an index that has a supplied file, and refuses it otherwise;
+  - `resolveAttachments(client, entries, supplied?)` plans each supplied file in its entry's position;
+  - `ReportEntry` gains `bytes?: number` and `sha256?: string`, and `source` gains `"supplied"`.
+- Modify: `plugins/gws-mcp/src/attachments/fetch.ts`: a hashing pass-through `hashing(open: Opener, onDone: (bytes: number, sha256: string) => void): Opener`, wrapped around every planned file's `open` so each report entry is filled as it streams.
 - Test: `plugins/gws-mcp/src/tools/gmail*.test.ts`, `src/attachments/*.test.ts`, `src/internal/consume.test.ts`.
 
 **Interfaces:**
-- Consumes: `SuppliedFile` from `drive-upload.ts` and the framed consume request from Task 5.
-- Produces: `resolveAttachments(client: GwsClient, entries: ParsedEntry[], supplied?: SuppliedFile): Promise<Resolved>`. The supplied file is planned with `contentId: contentIdFor(name)` and `open: async function*(){ yield bytes }`, and counted in `TOTAL_CAP` before any Drive read.
+- Consumes: `SuppliedFile` from `drive-upload.ts`, and `readFramedBody` (Task 5).
+- Produces: `resolveAttachments(client: GwsClient, entries: ParsedEntry[], supplied?: Map<number, SuppliedFile>): Promise<Resolved>`. Supplied files are planned with `contentId: contentIdFor(name)` and `open: async function*(){ yield bytes }`, and counted in `TOTAL_CAP` before any Drive read.
 
 - [ ] **Step 1: Write the failing tests.**
-  - **Drafts.**
-    - `gmail_create_draft` through consume, with a supplied 70-byte PNG and one Drive id, streams a `message/rfc822` whose parts include the PNG under its name. The report lists it as `{source:"supplied", mode:"attached"}`.
-    - With `html_body` containing `<img src="cid:a.png">` it is `inline`.
-    - Supplied 24 MB plus a 2 MB Drive file is refused before any Drive download with the existing 25 MB sentence.
-  - **Forward.** `gmail_forward` counts the original's parts plus the supplied file.
+  - **A draft with three files.** `gmail_create_draft` through consume, with two supplied files (a 70-byte PNG and a 1 KB PDF) and one Drive id:
+    - streams one `message/rfc822` with all three parts in entry order;
+    - the report has three entries, each with `bytes` and a `sha256` equal to the SHA-256 of that part's bytes;
+    - the supplied ones carry `source:"supplied"`.
+  - **Inline.** `html_body` with `<img src="cid:a.png">` makes the supplied PNG `inline`.
+  - **The cap.** Supplied 20 MB + 3 MB plus a 3 MB Drive file is refused before any Drive download, with the existing 25 MB sentence.
+  - **Forward.** `gmail_forward` counts the original's parts plus every supplied file.
   - **No supplied file.** A `{type:"content"}` entry reaching `handleGmail` over plain `/mcp` (no supplied file) is refused with "This attachment is a file reference and has to come through the gateway. Nothing was sent."
+  - **A link has no bytes.** A Google Doc passed by id alone (sent as a link) has no `bytes` or `sha256` in its report entry.
 - [ ] **Step 2: Run them.** Expected: FAIL.
 - [ ] **Step 3: Implement.**
-- [ ] **Step 4: Run the gws-mcp suite.** Expected: PASS, with every existing Gmail test unchanged.
-- [ ] **Step 5: Commit.** `feat(gws-mcp): Gmail compose takes one file handed over by the gateway`
+- [ ] **Step 4: Run the gws-mcp suite.** Expected: PASS. The existing Gmail tests change only for the two new report fields.
+- [ ] **Step 5: Commit.** `feat(gws-mcp): Gmail compose takes files handed over by the gateway, with a receipt per attachment`
 
 ### Task 8: Gmail descriptions, docs, registry pair, FD9 and FD10
 
 **Files:**
-- Modify: `plugins/gws-mcp/src/tools/gmail.ts`. The `attachmentsField` description and schema `items.anyOf` gain a file-reference object (`type` required, the six types), one per call. The `gmail_update_draft` description says a referenced file is dropped on the next update unless given again.
-- Modify: `apps/gateway/content/docs/file-references.md`: a section "Attaching a file to an email".
-- Create: `apps/gateway/src/gateway/tests/cases/fd9-content-on-a-draft.ts`, `fd10-two-references-refused.ts`, and register them.
+- Modify: `plugins/gws-mcp/src/tools/gmail.ts`.
+  - The `attachmentsField` description and schema `items.anyOf` gain a file-reference object (`type` required, the six types), which any entry may be, within ten entries and 25 MB combined.
+  - The report description names `bytes` and `sha256`.
+  - The `gmail_update_draft` description says referenced files are dropped on the next update unless given again.
+- Modify: `apps/gateway/content/docs/file-references.md`: a section "Attaching files to an email".
+- Create: `apps/gateway/src/gateway/tests/cases/fd9-content-on-a-draft.ts` and `fd10-reply-with-two-references.ts`, and register them.
 - Create: the registry pair for the five Gmail rows (generated after merge, as in Task 4, Step 5).
 
 **Interfaces:**
-- **FD9** creates a draft as the sender with a 1 KB PNG `content` attachment and one fixture Drive file id. It reads the draft back with `gmail_read` and asserts a part of that size and name, then deletes the draft.
-- **FD10** asserts the refusal text from Task 6.
+- **FD9** creates a draft as the sender with two 1 KB `content` attachments (PNG, TXT) and one fixture Drive file id. It reads the draft back with `gmail_read` and asserts three parts whose sizes match the report. Each supplied part's report `sha256` equals the hash the case computed. Then it deletes the draft.
+- **FD10** replies, as the sender, to the standing fixture message with two references: a `drive_file` (the fixture Drive file) and a 1 KB `content`. As the reader, it finds the reply (`in:anywhere`) and asserts two attachment parts whose sizes match the report. The 25 MB combined refusal is pinned by Task 6's unit test, not a runner case, since no fixture is large enough to reach it.
 
 - [ ] **Step 1: Descriptions.** gws-mcp suite. Expected: PASS.
 - [ ] **Step 2: Cases and docs.** Cases unit tests and the content checks. Expected: PASS.
@@ -362,6 +378,7 @@ Both give the same receipts as the outbound tools.
   - **Bad folder.** Consuming an upload into Drive with a bad folder (plugin answers `sent:false`) leaves the upload takeable, and the second call with a good folder consumes it (Review Focus 2's sequential half).
   - **Unknown outcome.** A destination timeout consumes it.
   - **Busy slot.** A busy slot leaves it held.
+  - **Several uploads in one email.** A `gmail_create_draft` with two `upload` references: a refusal before the send (a bad Drive id among the other entries) returns both to `received`, and a send that has started consumes both.
   - **Carried links.** A tool call carrying the upload LINK is refused with "This call carries an upload link made by this service, and an upload link cannot be passed to another tool. The call was not run and the link has been cancelled."
   - **Sign-out.** It drops held uploads.
   - **Plugins.** Each pre-service refusal in `uploadReferencedFile` and `addJiraAttachment` carries `sent:false`, and a successful upload carries none.

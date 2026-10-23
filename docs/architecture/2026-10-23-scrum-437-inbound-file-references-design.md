@@ -211,8 +211,8 @@ size, but only from an authenticated caller:
 - An unauthenticated request is answered 401 without its body being parsed.
   Today it is parsed, at up to 100 KB, before the 401.
 
-**The Agent surface** (an open decision, see the end). Recommended: the
-`agent` surface refuses `content` in the first ship. The Agent persists
+**The Agent surface** (decided, see the end). The `agent` surface refuses
+`content` in the first ship. The Agent persists
 tool-call arguments in its thread history and renders them on the approval
 card, so a `content` call there would store a file and draw megabytes of
 base64 on a card. The Agent has no file input, so the only `content` it
@@ -229,59 +229,114 @@ No link was made."
 
 ### 4. Gmail attachments by reference
 
-**Shape.** In the five compose tools, ONE entry of `attachments` per call
-may be a file reference: any of the six types, recognised by a string
-`type` key. The other entries stay Drive ids or `{file_id, as, tab}`. Two
-reference entries in one call are refused before anything runs.
+**Shape.** In the five compose tools, any entry of `attachments` may be a
+file reference: any of the six types, recognised by a string `type` key.
+Several references may ride in one call, mixed with Drive ids and
+`{file_id, as, tab}` entries. The limits stay Gmail's: ten entries and
+25 MB combined, checked before anything is sent.
 
 **Gateway side.**
 - `FILE_CONSUMING_TOOLS` grows from a name-to-argument map into a lookup
-  that takes the args. For Jira and Drive it answers `file`; for the five
-  Gmail tools it answers the reference entry's index in `attachments`, or
-  nothing.
+  that takes the args and answers the PATHS of every reference in them. For
+  Jira and Drive that is `["file"]`; for the five Gmail tools it is each
+  reference entry's index in `attachments`, possibly none.
 - With no reference entry, the call goes to the plugin exactly as today, and
   the Drive-id path is untouched.
-- With a reference entry, the call crosses. The source leg is the same as
-  for any reference: a plugin read or the local resolver. The destination
-  is the Gmail plugin's consume route.
+- With one or more, the call crosses. The gateway resolves every reference
+  in order, inside ONE `transfer` slot: the call is one transfer, whatever
+  it carries.
+  - Each reference resolves as any reference does: a plugin read, a decoded
+    `content`, or a held `upload`.
+  - A running total is kept against 25 MB, and each plugin read is asked for
+    at most what is left (`max_bytes`), so the combined cap is enforced
+    while reading, never after.
+  - A refusal on any reference refuses the whole call before any byte goes
+    to the destination plugin, and every `upload` taken so far goes back to
+    `received`.
+- The gateway does not know the sizes of the Drive-id entries; the plugin
+  adds them in, as it does today.
 
-**Plugin side.** `gws-mcp` `/internal/consume` gains the five tool names. Its
-handler:
-1. Replaces the reference entry with a supplied file.
-2. Parses the remaining entries with `parseAttachments`.
-3. Plans the supplied file as one more `PlannedFile`:
+**Plugin side.** `gws-mcp` `/internal/consume` gains the five tool names.
+Its handler:
+1. Reads the supplied files from the handoff (section 5), in the order of
+   their entries.
+2. Puts each supplied file in its entry's place, and parses the remaining
+   entries with `parseAttachments`.
+3. Plans each supplied file as one more `PlannedFile`:
    - `open` yields the bytes it already holds;
    - `contentId` comes from `contentIdFor(name)`, so `cid:` works for it as
      for a Drive file;
    - the report's `source` is `"supplied"`, a new value.
-4. Checks the 25 MB total BEFORE any Drive read, with the supplied file's
-   size added to the Drive sizes and, for a forward, to the original's
-   parts.
-5. Runs the existing compose path.
+4. Checks the 25 MB total BEFORE any Drive read: the supplied sizes, plus
+   the Drive sizes, plus, for a forward, the original's parts.
+5. Runs the existing compose path, which streams the Drive entries as today.
+
+**One receipt per attachment.** The response's `attachments` report already
+has one entry per file. Each entry gains `bytes` and `sha256`:
+- for a supplied file, computed on the bytes handed over;
+- for a Drive or original part, computed as it streams into the message, by
+  a hashing pass-through on `open`, so nothing is buffered to hash it.
+
+A link (a Google file sent as a link) has no bytes and carries neither.
 
 **`gmail_update_draft`** replaces attachments wholesale (existing
-behaviour). A draft built with an `upload` reference loses that file on the
-next update unless it is uploaded again. The docs say so.
+behaviour). A draft built with `upload` references loses those files on the
+next update unless they are uploaded again and passed again. The docs say
+so.
 
-### 5. The consume protocol carries args in the body
+**Jira later.** The same handoff carries several files to
+`jira_add_attachment`; that is a later ticket, not this one. The protocol
+below is already multi-file, so Jira needs no protocol change then.
 
-**Why it has to change.** `X-Tool-Args` is capped at 8 KB because it is a
-header. A Jira or Drive call's arguments are small, but an email's are not:
-`html_body` alone passes 8 KB in an ordinary message. Without this change,
-step 2 would refuse most emails with a file.
+### 5. The handoff carries the arguments and the files in one framed body
 
-**Change.** The destination request body becomes the args followed by the
-file:
+**Why it has to change.**
+- `X-Tool-Args` is capped at 8 KB because it is a header. A Jira or Drive
+  call's arguments are small, but an email's are not: `html_body` alone
+  passes 8 KB in an ordinary message. Without this change, step 2 would
+  refuse most emails with a file.
+- Today's body carries exactly one file, and an email may now carry several.
 
-- **Headers.** `X-Tool-Args-Length: <n>`, where n is the byte length of the
-  UTF-8 JSON args, at most 1 MB. The `X-Tool-Args` header is retired.
-- **Body.** n bytes of JSON args, then the file bytes.
-- **Reading.** Both plugins read the prefix capped at 1 MB, parse it as one
-  JSON object, then read the rest capped at 25 MB as before.
+**The shape: a framed body, gateway to plugin.** The considered alternative
+was the plugin pulling each file by id from an internal gateway route while
+it streams the message. It was rejected:
+- **Memory.** It saves nothing: the gateway must resolve, and so hold, every
+  referenced file before the send either way, because a refusal on the last
+  reference must stop the call before the first byte goes out. Pulling would
+  spare only the plugin's copy, which the Gmail cap bounds at 25 MB, the
+  same bound the one-file handoff has today.
+- **New machinery.** It costs things that do not exist:
+  - plugins hold no gateway address (their environment is `PATH`,
+    `NODE_ENV` and `PORT`) and make no calls back to it;
+  - a route the plugins call would need its own per-call credential;
+  - and a guarantee that it answers only on the loopback interface, on a
+    server that also takes public traffic.
+- **Reuse.** A framed body is the args-in-body change step 2 needs anyway,
+  generalised to N files.
 
-The gateway and both plugins ship in one image, so there is no mixed-version
-window and no fallback is kept. The gateway-side refusal "the arguments are
-too large to send with a file" moves from 8 KB to 1 MB.
+The request:
+
+- **Header.** `X-Consume-Manifest-Length: <n>`, the byte length of the
+  manifest, at most 1 MB. `X-Tool-Args`, `X-File-Name` and `X-File-Type`
+  are retired.
+- **Body.**
+  - First, n bytes of UTF-8 JSON, the manifest: `{"args": {...}, "files":
+    [{"path": [...], "name": "...", "type": "...", "bytes": <int>}]}`.
+    `path` is where the reference sat in `args` (`["file"]`, or
+    `["attachments", 2]`), and `args` carries each reference in its closed
+    form (`{"type": "..."}`, no base64, no ids).
+  - Then the files' bytes, concatenated in manifest order, each exactly its
+    declared `bytes`.
+- **Reading.** Both plugins read the manifest capped at 1 MB, then each file
+  by its declared length, with the declared total capped at 25 MB. A body
+  that ends early, or runs past the declared total, is a 400, and nothing is
+  sent to the service.
+
+The plugin holds the supplied files in memory for the call, at most 25 MB,
+which is today's single-file bound. The gateway and both plugins ship in one
+image, so there is no mixed-version window and no fallback is kept. The
+gateway-side refusal "the arguments are too large to send with a file" moves
+from 8 KB to 1 MB of manifest.
 
 ### 6. `file_upload_link`
 
@@ -387,6 +442,10 @@ What happens to the upload depends on where the call ends:
 | the destination plugin refused before calling its service: folder not a folder, issue not visible, total over 25 MB | back to `received`, reference still live | kept |
 | bytes reached the service, or the outcome cannot be known (timeout, transport failure, an answer that cannot be read) | `consumed` | dropped |
 
+A call carrying several `upload` references (an email) takes them all
+before the send, and settles every one the same way: all back to `received`
+on a refusal before the send, all `consumed` once the send has started.
+
 The middle row needs something the code does not have today. The consume
 routes answer `isError` for a refusal and for a failure alike. They gain one
 field, `sent: false`, on a result returned before the tool called its
@@ -478,7 +537,7 @@ the download page's styling tokens and base headers.
 | step | cases |
 |---|---|
 | 1 | `content` into Drive, with the receipt SHA-256 equal to the hash of the bytes sent; `content` onto a Jira issue, likewise; `content` refused on `file_download_link`; oversize `content` refused, naming `file_upload_link` |
-| 2 | a draft with one `content` attachment and a Drive id, read back through `gmail_read`; two references in one call refused |
+| 2 | a draft with two `content` attachments and a Drive id, read back through `gmail_read`, with each report entry's `sha256` equal to the hash of the part read back; three references totalling over 25 MB refused before anything is sent |
 | 3 | mint, PUT, consume into Drive; mint, PUT, consume onto Jira; a second use refused; expiry refused; a pre-send refusal (bad folder) leaves the upload usable, and the retry succeeds; carried link cancelled; oversize PUT refused |
 | 4 | the page served with its CSP; a PUT the way the page sends it |
 
@@ -495,10 +554,12 @@ Each step deploys on its own.
    - Auth before the body parser on `/mcp`, with the 8 MB limit.
    - The Agent-surface rule.
    - Descriptions and registry pair, docs, and FD cases.
-2. **Gmail attachments by reference.**
-   - The consume protocol's args-in-body framing, both plugins.
-   - Gmail on the consume route, and the reference-entry lookup in the
-     gateway.
+2. **Gmail attachments by reference, several per email.**
+   - The framed multi-file handoff (section 5), both plugins, with Jira and
+     Drive moved onto it carrying one file.
+   - The gateway resolving every reference of a call in one slot under the
+     25 MB running total.
+   - Gmail on the consume route, with a receipt per attachment.
    - Descriptions and registry pair, docs, and FD cases.
 3. **`file_upload_link`.**
    - The store, the PUT route and the `upload` slot pool.
@@ -521,8 +582,10 @@ Each step deploys on its own.
    - For `content`, the base64 is in the arguments, so it must be taken out
      before they are sent. The plan does that in step 1.
    - For Gmail, the email body is in the arguments, so ordinary emails
-     would be refused. The consume protocol moves the args into the body in
-     step 2, and that is the largest part of the step.
+     would be refused, and the body carries one file where an email may
+     carry several. Step 2 replaces the handoff with a framed body that
+     carries the arguments and N files (section 5), and that is the largest
+     part of the step.
 3. **"A refusal before any byte moves" is not visible to the gateway
    today.** The folder and issue checks run in the plugins after the bytes
    reached them, and their answers look the same as a failure. Telling the
@@ -539,10 +602,9 @@ Each step deploys on its own.
    that the page does not work without scripts, and the curl line is the
    fallback.
 
-## Open decisions
+## Decided
 
-1. **The Agent surface and `content`.** Recommended: refused on `agent` in
-   the first ship. The Agent stores tool arguments in thread history and
-   shows them on the approval card, which would make a `content` call there
-   a stored file. `upload` is allowed everywhere.
-2. **The held-bytes ceiling.** 256 MB per host, proposed above.
+1. **`content` on the dashboard Agent** is refused in the first ship.
+   `upload` is allowed on every surface.
+2. **The held-bytes ceiling** is 256 MB per host, measured against the
+   host's free memory before step 3 ships.
