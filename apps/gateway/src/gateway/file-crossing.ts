@@ -142,9 +142,10 @@ export const MAX_DOWNLOADS_HOST = 2;
 export const MAX_TRANSFERS_PER_USER = 1;
 export const TRANSFER_TIMEOUT_MS = 60_000;
 
-/** The arguments travel in a request header, and the plugin's HTTP server
- * caps the size of all headers together. Refused before any byte moves. */
-const MAX_ENCODED_ARGS_CHARS = 8 * 1024;
+/** The arguments travel as one field of the multipart body handed to the
+ * plugin (SCRUM-437), so an email's body fits; the plugins refuse a larger
+ * field. Refused here before any byte moves. */
+export const MAX_ARGS_BYTES = 1024 * 1024;
 /** A route's JSON answer (an error, or the tool result) is small. */
 const MAX_ROUTE_ANSWER_BYTES = 1024 * 1024;
 const MAX_ROUTE_MESSAGE_CHARS = 500;
@@ -464,7 +465,10 @@ export type SourceFile = { bytes: Buffer<ArrayBuffer>; name: string; type: strin
 async function fetchSourceFile(
   source: ResolvedSource,
   io: { fetchFn: typeof fetch; controller: AbortController },
-  words: RefusalWords = UPLOAD_WORDS
+  words: RefusalWords = UPLOAD_WORDS,
+  /** The most this file may be: the cap, less what the call's other files
+   * already hold (SCRUM-437), and the refusal when it is passed. */
+  budget: { bytes: number; overText?: string } = { bytes: MAX_FILE_BYTES }
 ): Promise<{ ok: true; file: SourceFile } | { ok: false; result: CrossingResult }> {
   const sourceRes = await io.fetchFn(routeUrl(source.mcpUrl, SOURCE_ROUTE), {
     method: "POST",
@@ -475,7 +479,7 @@ async function fetchSourceFile(
     // Only the type and the fields that type declares go to the plugin.
     // `account` was used here to choose the token, and anything else the
     // caller put on the reference is dropped rather than passed through.
-    body: JSON.stringify({ ref: closedReference(source.ref), max_bytes: MAX_FILE_BYTES }),
+    body: JSON.stringify({ ref: closedReference(source.ref), max_bytes: budget.bytes }),
     signal: io.controller.signal,
   });
 
@@ -488,14 +492,14 @@ async function fetchSourceFile(
   }
 
   const overCap = refuse(
-    `The file is larger than ${CAP_WORDS}, the most that can be moved in one call. ${words.sentence}`
+    budget.overText ?? `The file is larger than ${CAP_WORDS}, the most that can be moved in one call. ${words.sentence}`
   );
   const declared = Number(sourceRes.headers.get("content-length"));
-  if (Number.isFinite(declared) && declared > MAX_FILE_BYTES) {
+  if (Number.isFinite(declared) && declared > budget.bytes) {
     io.controller.abort();
     return { ok: false, result: overCap };
   }
-  const body = await readCapped(sourceRes, MAX_FILE_BYTES);
+  const body = await readCapped(sourceRes, budget.bytes);
   if (body.over) {
     io.controller.abort();
     return { ok: false, result: overCap };
@@ -586,13 +590,30 @@ export async function withReferencedFile<T>(
   }
 }
 
+/** A file on its way to a plugin, under the name of the field it fills:
+ * `file`, or `attachments[i]` for an email's i-th attachment. */
+export type HandedFile = SourceFile & { field: string };
+
 /**
- * THE DESTINATION LEG: hands a file to the plugin that stores it, with the
- * tool's arguments, and answers that tool's own result.
+ * The body the destination plugin reads (SCRUM-437): `multipart/form-data`
+ * with the tool's arguments as JSON in an `args` field and one field per
+ * file, each carrying its own name and type. Built with the runtime's own
+ * FormData, so there is no framing of ours to get wrong.
+ */
+export function buildHandoff(argsJson: string, files: readonly HandedFile[]): FormData {
+  const form = new FormData();
+  form.append("args", argsJson);
+  for (const file of files) form.append(file.field, new Blob([file.bytes], { type: file.type }), file.name);
+  return form;
+}
+
+/**
+ * THE DESTINATION LEG: hands the files to the plugin that stores them, with
+ * the tool's arguments, and answers that tool's own result.
  */
 async function sendToDestination(
-  file: SourceFile,
-  dest: { url: string; token: string; toolName: string; encodedArgs: string },
+  files: readonly HandedFile[],
+  dest: { url: string; token: string; toolName: string; argsJson: string },
   io: { fetchFn: typeof fetch; controller: AbortController }
 ): Promise<CrossingResult> {
   const destRes = await io.fetchFn(routeUrl(dest.url, DESTINATION_ROUTE), {
@@ -600,12 +621,8 @@ async function sendToDestination(
     headers: {
       "X-User-Token": dest.token,
       "X-Tool-Name": dest.toolName,
-      "X-Tool-Args": dest.encodedArgs,
-      "X-File-Name": encodeURIComponent(file.name),
-      "X-File-Type": file.type,
-      "Content-Type": "application/octet-stream",
     },
-    body: file.bytes,
+    body: buildHandoff(dest.argsJson, files),
     signal: io.controller.signal,
   });
 
@@ -631,44 +648,136 @@ async function sendToDestination(
   return parsed;
 }
 
+/** The five Gmail tools that write a message, whose `attachments` may hold
+ * file references among Drive ids (SCRUM-437). */
+const GMAIL_COMPOSE_TOOLS: ReadonlySet<string> = new Set(
+  ["gmail_send", "gmail_create_draft", "gmail_reply", "gmail_forward", "gmail_update_draft"].map((t) => `gws-mcp__${t}`)
+);
+
+/** Gmail takes at most ten attachments, so a reference past the tenth has
+ * no field to travel in. */
+const MAX_ATTACHMENT_INDEX = 9;
+
+const ATTACHMENT_FIELD = /^attachments\[(\d+)\]$/;
+
+const isReferenceShaped = (value: unknown): boolean =>
+  typeof value === "object" && value !== null && !Array.isArray(value) && typeof (value as { type?: unknown }).type === "string";
+
 /**
- * Runs a consuming tool: resolves its file reference to bytes from the source
- * plugin and hands them to the destination plugin, inside the one call.
+ * Where a tool call carries file references, as the field names they travel
+ * in, or null when it is not a crossing. A one-file tool always answers its
+ * argument, so a missing or malformed reference is refused in words. An
+ * email answers one field per `attachments` entry that is an object with a
+ * type; one with Drive ids alone is no crossing and goes to the plugin as
+ * before.
+ */
+export function filePathsFor(tool: string, args: Record<string, unknown>): string[] | null {
+  const consuming = fileCrossingFor(tool);
+  if (consuming) return [consuming.fileArg];
+  if (!GMAIL_COMPOSE_TOOLS.has(tool) || !Array.isArray(args.attachments)) return null;
+  const fields = args.attachments.flatMap((entry, i) => (isReferenceShaped(entry) ? [`attachments[${i}]`] : []));
+  return fields.length > 0 ? fields : null;
+}
+
+function valueAt(args: Record<string, unknown>, field: string): unknown {
+  const m = ATTACHMENT_FIELD.exec(field);
+  if (!m) return args[field];
+  return Array.isArray(args.attachments) ? args.attachments[Number(m[1])] : undefined;
+}
+
+function withValueAt(args: Record<string, unknown>, field: string, value: unknown): Record<string, unknown> {
+  const m = ATTACHMENT_FIELD.exec(field);
+  if (!m) return { ...args, [field]: value };
+  const attachments = [...(args.attachments as unknown[])];
+  attachments[Number(m[1])] = value;
+  return { ...args, attachments };
+}
+
+const SEND_WORDS: RefusalWords = {
+  clause: "nothing was sent",
+  sentence: "Nothing was sent.",
+  busy: "Nothing was read or sent",
+};
+
+/** One reference of the call, read and, for a plugin type, its source found. */
+type PlannedReference =
+  | { field: string; ref: FileReference; local: true }
+  | { field: string; ref: FileReference; local: false; source: ResolvedSource };
+
+/**
+ * Runs a consuming tool: resolves each of its file references to bytes and
+ * hands them all to the destination plugin, inside the one call.
+ *
+ * Every reference is read and every source found before a slot is taken, so
+ * a call refused for any one of them reads nothing. Then, inside ONE
+ * transfer slot, the files are resolved in order under a running total, so
+ * the cap holds for the call as a whole; each plugin read is asked for no
+ * more than what is left.
  *
  * Answers a tool result in every case it can describe. It THROWS only when a
  * plugin could not be spoken to at all, as an ordinary plugin call does, so
  * the dispatch shapes and tracks that the way it does for any other tool.
  */
 export async function crossFile(opts: CrossFileOptions): Promise<CrossingResult> {
-  const consuming = fileCrossingFor(opts.tool);
-  if (!consuming) {
+  const fields = filePathsFor(opts.tool, opts.args);
+  if (!fields) {
     return refuse(`${opts.toolName} does not take a file.`);
   }
+  const email = GMAIL_COMPOSE_TOOLS.has(opts.tool);
+  const words = email ? SEND_WORDS : UPLOAD_WORDS;
 
-  const read = readReference(opts.args, consuming.fileArg, opts.toolName);
-  if (!read.ok) return refuse(read.text);
+  const read: Array<{ field: string; ref: FileReference }> = [];
+  for (const field of fields) {
+    const m = ATTACHMENT_FIELD.exec(field);
+    if (m && Number(m[1]) > MAX_ATTACHMENT_INDEX) {
+      return refuse(`An email takes at most ${MAX_ATTACHMENT_INDEX + 1} attachments. ${words.sentence}`);
+    }
+    const one = readReference({ [field]: valueAt(opts.args, field) }, field, opts.toolName);
+    if (!one.ok) return refuse(one.text);
+    read.push({ field, ref: one.ref });
+  }
 
   const destinationToken = opts.destinationToken;
   if (!destinationToken) {
     return refuse(`${opts.toolName} needs a connected account before it can take a file.`);
   }
 
+  // The Agent keeps tool arguments in its thread history and draws them on
+  // its approval card, so a content reference there would store a file.
+  if (opts.surface === "agent" && read.some((r) => r.ref.type === "content")) {
+    return refuse(
+      `A content reference cannot be used in the dashboard Agent, which keeps the arguments of every tool call. ${words.sentence}`
+    );
+  }
+
   // A local reference's content never leaves the gateway: the plugin gets
-  // its type alone, and the bytes as the body. No consume route reads the
-  // file argument, and base64 in it would not fit the header anyway.
-  const local = isLocalReference(read.ref);
-  const sentArgs = local ? { ...opts.args, [consuming.fileArg]: closedFileArg(read.ref) } : opts.args;
-  const encodedArgs = Buffer.from(JSON.stringify(sentArgs), "utf8").toString("base64url");
-  if (encodedArgs.length > MAX_ENCODED_ARGS_CHARS) {
+  // its type alone, and the bytes in the body.
+  let sentArgs = opts.args;
+  for (const r of read) {
+    if (isLocalReference(r.ref)) sentArgs = withValueAt(sentArgs, r.field, closedFileArg(r.ref));
+  }
+  const argsJson = JSON.stringify(sentArgs);
+  if (Buffer.byteLength(argsJson, "utf8") > MAX_ARGS_BYTES) {
     return refuse(
       `The arguments to ${opts.toolName} are too large to send with a file. Shorten them and try again.`
     );
   }
 
-  if (local) return crossLocalFile(opts, read.ref, { url: opts.destinationUrl, token: destinationToken, encodedArgs });
+  const planned: PlannedReference[] = [];
+  for (const r of read) {
+    if (isLocalReference(r.ref)) {
+      planned.push({ ...r, local: true });
+      continue;
+    }
+    const resolved = await resolveSource(opts, r.ref);
+    if (!resolved.ok) return resolved.result;
+    planned.push({ ...r, local: false, source: resolved.source });
+  }
 
-  const resolved = await resolveSource(opts, read.ref);
-  if (!resolved.ok) return resolved.result;
+  const overText =
+    planned.length > 1
+      ? `The files in this call come to more than ${CAP_WORDS} together, the most one call can carry. ${words.sentence}`
+      : undefined;
 
   return withTransferSlot(opts.userId, async () => {
     const fetchFn = opts.fetchFn ?? fetch;
@@ -684,13 +793,33 @@ export async function crossFile(opts: CrossFileOptions): Promise<CrossingResult>
     let leg: "source" | "destination" = "source";
 
     try {
-      const fetched = await fetchSourceFile(resolved.source, { fetchFn, controller });
-      if (!fetched.ok) return fetched.result;
+      const files: HandedFile[] = [];
+      let total = 0;
+      for (const p of planned) {
+        let file: SourceFile;
+        if (p.local) {
+          const decoded = resolveContent(p.ref);
+          if (!decoded.ok) return refuse(decoded.text);
+          file = decoded.file;
+          if (total + file.bytes.byteLength > MAX_FILE_BYTES) {
+            return refuse(overText ?? `The file is larger than ${CAP_WORDS}, the most that can be moved in one call. ${words.sentence}`);
+          }
+        } else {
+          const fetched = await fetchSourceFile(p.source, { fetchFn, controller }, words, {
+            bytes: MAX_FILE_BYTES - total,
+            overText,
+          });
+          if (!fetched.ok) return fetched.result;
+          file = fetched.file;
+        }
+        total += file.bytes.byteLength;
+        files.push({ ...file, field: p.field });
+      }
 
       leg = "destination";
       return await sendToDestination(
-        fetched.file,
-        { url: opts.destinationUrl, token: destinationToken, toolName: opts.toolName, encodedArgs },
+        files,
+        { url: opts.destinationUrl, token: destinationToken, toolName: opts.toolName, argsJson },
         { fetchFn, controller }
       );
     } catch {
@@ -700,13 +829,13 @@ export async function crossFile(opts: CrossFileOptions): Promise<CrossingResult>
       if (timedOut) {
         return refuse(
           leg === "source"
-            ? `The transfer was abandoned after ${seconds} seconds, while the file was still being read from its source. Nothing was uploaded.`
+            ? `The transfer was abandoned after ${seconds} seconds, while the file was still being read from its source. ${words.sentence}`
             : `The transfer was abandoned after ${seconds} seconds, while the file was being handed to ${opts.toolName}. The file may or may not have been uploaded; check the destination before trying again.`
         );
       }
       throw new Error(
         leg === "source"
-          ? "the file's source could not be reached. Nothing was uploaded."
+          ? `the file's source could not be reached. ${words.sentence}`
           : `the connection to ${opts.toolName} failed while the file was being handed over. The file may or may not have been uploaded; check the destination before trying again.`
       );
     } finally {
@@ -719,54 +848,6 @@ export async function crossFile(opts: CrossFileOptions): Promise<CrossingResult>
  * The content, or an upload's id, stays in the gateway. */
 export function closedFileArg(ref: FileReference): Record<string, unknown> {
   return { type: ref.type };
-}
-
-/**
- * A consuming tool whose file the caller holds (SCRUM-437). The same
- * destination leg as `crossFile`, with no source read: the file is decoded
- * here, inside the transfer slot, so it is in memory only while one is held.
- */
-async function crossLocalFile(
-  opts: CrossFileOptions,
-  ref: FileReference,
-  dest: { url: string; token: string; encodedArgs: string }
-): Promise<CrossingResult> {
-  // The Agent keeps tool arguments in its thread history and draws them on
-  // its approval card, so a content reference there would store a file.
-  if (ref.type === "content" && opts.surface === "agent") {
-    return refuse(
-      "A content reference cannot be used in the dashboard Agent, which keeps the arguments of every tool call. Nothing was uploaded."
-    );
-  }
-  return withTransferSlot(opts.userId, async () => {
-    const decoded = resolveContent(ref);
-    if (!decoded.ok) return refuse(decoded.text);
-
-    const fetchFn = opts.fetchFn ?? fetch;
-    const timeoutMs = opts.timeoutMs ?? TRANSFER_TIMEOUT_MS;
-    const controller = new AbortController();
-    let timedOut = false;
-    const timer = setTimeout(() => {
-      timedOut = true;
-      controller.abort();
-    }, timeoutMs);
-    try {
-      return await sendToDestination(decoded.file, { ...dest, toolName: opts.toolName }, { fetchFn, controller });
-    } catch {
-      // As in crossFile: a transport detail of a request that carried a
-      // token is not echoed.
-      if (timedOut) {
-        return refuse(
-          `The transfer was abandoned after ${Math.round(timeoutMs / 1000)} seconds, while the file was being handed to ${opts.toolName}. The file may or may not have been uploaded; check the destination before trying again.`
-        );
-      }
-      throw new Error(
-        `the connection to ${opts.toolName} failed while the file was being handed over. The file may or may not have been uploaded; check the destination before trying again.`
-      );
-    } finally {
-      clearTimeout(timer);
-    }
-  });
 }
 
 /** The reference as the source plugin gets it: its type and the string

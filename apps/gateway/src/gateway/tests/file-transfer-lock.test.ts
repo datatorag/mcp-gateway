@@ -13,7 +13,7 @@ describe("the file-transfer lock", () => {
     // The four that met the gateway's one-transfer refusal in run 103bb1d2,
     // and the others that move a file, across the Gmail, Drive and Jira
     // scenarios.
-    for (const id of ["DR6", "FD3", "FD4", "FD5", "FD1", "JR8", "JR10", "JR13"]) {
+    for (const id of ["DR6", "FD3", "FD4", "FD5", "FD1", "JR8", "JR10", "JR13", "FD10", "FD11"]) {
       expect(held, id).toContain(id);
     }
   });

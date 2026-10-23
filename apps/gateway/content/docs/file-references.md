@@ -77,6 +77,7 @@ An attachment is named by its **part id**, not its attachment id. Gmail issues a
 | `jira_add_attachment` | Adds the referenced file to a Jira issue as an attachment |
 | `file_download_link` | Makes a link that saves the referenced file to your own computer, once |
 | `drive_upload_file` | Puts the referenced file in Google Drive under its own name, and checks what Drive stored |
+| `gmail_send`, `gmail_create_draft`, `gmail_reply`, `gmail_forward`, `gmail_update_draft` | Attach referenced files to an email, beside Drive files |
 
 ```json
 {
@@ -115,6 +116,29 @@ When the file is already in the conversation, for example an image or a PDF you 
 The receipt is the same as for any other reference: the SHA-256 and byte count of what DataToRAG received and handed on, and, for Drive, whether what Drive stored matches it.
 
 A `content` reference cannot be used in the DataToRAG dashboard agent, and a download link cannot be made from one: the file is already on your side.
+
+## Attaching files to an email
+
+The tools that write an email take `attachments`: up to ten entries, 25 MB together. An entry can be a Drive file id, as before, or a file reference of any type, and one email can carry several:
+
+```json
+{
+  "to": "dana@example.com",
+  "subject": "The files you asked for",
+  "body": "Both attached.",
+  "attachments": [
+    { "type": "gmail_attachment", "message_id": "<message id>", "part_id": "1" },
+    { "type": "content", "name": "chart.png", "base64": "<base64>" },
+    "<Drive file id>"
+  ]
+}
+```
+
+DataToRAG reads every referenced file first, in one transfer, and checks the 25 MB against all of them together before anything is sent. If any one reference cannot be read, nothing is sent. An image can be shown in the body by referencing its name in `html_body` as `<img src="cid:chart.png">`, as with a Drive file.
+
+The response lists every attachment: its name, how it went (attached, inline, linked or exported), its size, and the SHA-256 of the bytes that went into the message. A Google Docs, Sheets or Slides file passed by id alone goes as a link, and has no size or hash.
+
+`gmail_update_draft` replaces a draft's attachments. Files attached by a reference have to be passed again on an update, or the draft loses them.
 
 ## The receipt
 
@@ -217,7 +241,8 @@ For a download link, the file is read into the gateway's memory twice, once to c
 
 ## Limits
 
-- One file per call, at most 25 MB. A larger file is refused.
+- One file per call for Jira and Drive, at most 25 MB. A larger file is refused.
+- An email takes up to ten attachments, at most 25 MB together, counting Drive files and referenced files alike.
 - A `content` reference carries at most 1 MB.
 - One transfer at a time per account on DataToRAG. A second one started while the first is running is refused; run it again when the first has finished.
 - A download link counts as one tool call when it is made, whether or not it is used, and is refused like any other call once your plan's calls are used up.

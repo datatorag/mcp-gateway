@@ -17,6 +17,14 @@
 
 import { AtlassianClient } from "../atlassian-client.js";
 import {
+  BadHandoff,
+  isMultipart,
+  MAX_ARGS_BYTES,
+  parseHandoff,
+  totalBytes,
+  type HandedFile,
+} from "./handoff.js";
+import {
   addJiraAttachment,
   isIssueKey,
   MAX_ATTACHMENT_BYTES,
@@ -33,14 +41,35 @@ type ToolResult = {
 type ConsumingTool = (
   client: AtlassianClient,
   args: Record<string, unknown>,
-  file: SuppliedFile
+  files: Map<string, HandedFile>
 ) => Promise<ToolResult>;
+
+/** A tool that takes exactly one file, in the `file` field. */
+function oneFile(
+  tool: (client: AtlassianClient, args: Record<string, unknown>, file: SuppliedFile) => Promise<ToolResult>
+): ConsumingTool {
+  return async (client, args, files) => {
+    const file = files.get("file");
+    if (!file || files.size !== 1) {
+      return {
+        content: [{ type: "text", text: "This tool takes one file a call. Nothing was uploaded." }],
+        isError: true,
+      };
+    }
+    return tool(client, args, file);
+  };
+}
 
 /** The tools this route serves. A tool is listed here only if it takes
  * bytes; everything else is reachable through /mcp alone. */
 const consumingTools = new Map<string, ConsumingTool>([
-  ["jira_add_attachment", addJiraAttachment],
+  ["jira_add_attachment", oneFile(addJiraAttachment)],
 ]);
+
+/** The whole body, at most: the files' cap, the arguments' cap, and room for
+ * the multipart framing around them. The files alone are held to
+ * MAX_ATTACHMENT_BYTES once the body is parsed. */
+const MAX_BODY_BYTES = MAX_ATTACHMENT_BYTES + MAX_ARGS_BYTES + 64 * 1024;
 
 export interface ConsumeRequest {
   method?: string;
@@ -111,73 +140,48 @@ export async function handleConsume(
     return refuse(404, "unknown_tool", "This route does not serve that tool.");
   }
 
-  const rawArgs = header("x-tool-args");
-  if (!rawArgs) {
-    return refuse(400, "bad_request", "Missing X-Tool-Args.");
-  }
-  let args: Record<string, unknown>;
-  try {
-    // Buffer's base64url decoder never throws, it skips what it does not
-    // recognise, so the alphabet is checked first.
-    if (!/^[A-Za-z0-9_-]+$/.test(rawArgs)) throw new Error("not base64url");
-    const parsed: unknown = JSON.parse(
-      Buffer.from(rawArgs, "base64url").toString("utf8")
-    );
-    if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) {
-      throw new Error("not an object");
-    }
-    args = parsed as Record<string, unknown>;
-  } catch {
-    return refuse(
-      400,
-      "bad_request",
-      "X-Tool-Args must be the base64url of a JSON object."
-    );
-  }
-
-  const rawName = header("x-file-name");
-  if (!rawName) {
-    return refuse(400, "bad_request", "Missing X-File-Name.");
-  }
-  let fileName: string;
-  try {
-    fileName = decodeURIComponent(rawName);
-  } catch {
-    return refuse(400, "bad_request", "X-File-Name is not URI-encoded.");
-  }
-
-  const fileType = header("x-file-type");
-  if (!fileType) {
-    return refuse(400, "bad_request", "Missing X-File-Type.");
+  // The body is the tool's arguments and its file as multipart (SCRUM-437):
+  // the arguments outgrew a header once an email could carry a file.
+  const contentType = header("content-type");
+  if (!isMultipart(contentType)) {
+    return refuse(400, "bad_request", "The body must be multipart/form-data.");
   }
 
   // Content-Length is only a shortcut for an honest caller. The read below
   // enforces the cap whatever this header says.
   const declared = Number(header("content-length"));
-  if (Number.isFinite(declared) && declared > MAX_ATTACHMENT_BYTES) {
+  if (Number.isFinite(declared) && declared > MAX_BODY_BYTES) {
     return refuse(413, "too_large", tooLargeMessage());
   }
 
-  let bytes: Buffer;
+  let body: Buffer;
   try {
-    bytes = await readCapped(req.body, MAX_ATTACHMENT_BYTES);
+    body = await readCapped(req.body, MAX_BODY_BYTES);
   } catch (err) {
     if (err instanceof BodyTooLarge) {
       return refuse(413, "too_large", tooLargeMessage());
     }
     return refuse(400, "bad_request", "The body could not be read.");
   }
-  if (bytes.byteLength === 0) {
+  if (body.byteLength === 0) {
     return refuse(400, "bad_request", "The body is empty.");
+  }
+
+  let args: Record<string, unknown>;
+  let files: Map<string, HandedFile>;
+  try {
+    ({ args, files } = await parseHandoff(body, contentType as string));
+  } catch (err) {
+    return refuse(400, "bad_request", err instanceof BadHandoff ? err.message : "The body could not be read.");
+  }
+  const bytes = totalBytes(files);
+  if (bytes > MAX_ATTACHMENT_BYTES) {
+    return refuse(413, "too_large", tooLargeMessage());
   }
 
   let result: ToolResult;
   try {
-    result = await tool(new AtlassianClient({ accessToken: token }), args, {
-      bytes,
-      name: fileName,
-      type: fileType,
-    });
+    result = await tool(new AtlassianClient({ accessToken: token }), args, files);
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     result = {
@@ -191,7 +195,7 @@ export async function handleConsume(
   // content: no filename, no summary. The key is logged only once it has the
   // shape of a key, so the line cannot be made to say anything else.
   console.error(
-    `[consume] ${toolName} outcome=${isError ? "error" : "ok"} bytes=${bytes.byteLength} issue=${
+    `[consume] ${toolName} outcome=${isError ? "error" : "ok"} bytes=${bytes} issue=${
       isIssueKey(args.issue_key) ? args.issue_key : "invalid"
     }`
   );

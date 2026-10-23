@@ -90,6 +90,8 @@ export const PUBLIC_TITLES: Readonly<Record<string, string>> = {
   "FD7": "Attach a file you already have to a Jira issue, byte for byte",
   "FD8": "Asking for a download link to a file you already have is refused with the reason",
   "FD9": "A file too large to send in the call is refused with the limit, and nothing is uploaded",
+  "FD10": "Attach files you already have to an email, beside a Drive file",
+  "FD11": "Send an email with an attachment from another mailbox and a file you already have",
   "G1": "A read of a spreadsheet that does not exist says why",
   "G2": "A missing or unknown argument is refused by name before anything runs",
   "GM1": "Rename a label",

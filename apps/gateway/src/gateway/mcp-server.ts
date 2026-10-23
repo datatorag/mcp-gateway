@@ -56,7 +56,7 @@ import {
 } from "./scope-grant";
 import { grantLine, type ConnectedAccountLine } from "./account-grant-line";
 import { cleanWorkspaceName } from "./untrusted-text";
-import { crossFile, fileCrossingFor } from "./file-crossing";
+import { crossFile, filePathsFor } from "./file-crossing";
 import { createDownloadLink, DOWNLOAD_TOOL, revokeLinksCarriedIn } from "./file-download";
 import { downloadDepsFor } from "./file-download-route";
 import { sourceResolversFor } from "./file-source";
@@ -1299,7 +1299,7 @@ export function createMcpServer(
 
     try {
       let result;
-      if (fileCrossingFor(name)) {
+      if (filePathsFor(name, (args ?? {}) as Record<string, unknown>)) {
         // SCRUM-384: a tool that takes a file reference. The crossing stands
         // exactly where the plugin call would, so the gates above and the
         // tracking below treat it as the one tool call it is. The source

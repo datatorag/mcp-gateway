@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { describe, expect, it } from "vitest";
 import { simpleParser, type ParsedMail } from "mailparser";
 import { gmailTools, handleGmail } from "./gmail.js";
@@ -35,6 +36,10 @@ async function mailOf(call: Record<string, unknown>): Promise<ParsedMail> {
   const body = call.jsonBody as { raw?: string; message?: { raw?: string } };
   return simpleParser(Buffer.from((body.raw ?? body.message?.raw) as string, "base64url"));
 }
+
+/** The SHA-256 each attachment's report gives for the bytes that went into
+ * the message (SCRUM-437). */
+const sha = (bytes: Uint8Array | string) => createHash("sha256").update(bytes).digest("hex");
 
 const methods = (calls: Array<Record<string, unknown>>) =>
   calls.map((c) => `${c.upload ? "upload " : c.download ? "download " : ""}${c.service} ${c.resource}.${c.method}`);
@@ -120,7 +125,7 @@ describe("a Drive file", () => {
     expect(mail.attachments[0].contentType).toBe("application/pdf");
     expect(mail.attachments[0].content.toString()).toBe("PDF-BYTES-1");
     expect(payload(res).attachments).toEqual([
-      { name: "report.pdf", mode: "attached", source: "drive", file_id: ID_A, size: 11 },
+      { name: "report.pdf", mode: "attached", source: "drive", file_id: ID_A, size: 11, sha256: sha("PDF-BYTES-1") },
     ]);
   });
 
@@ -199,7 +204,7 @@ describe("a Drive file", () => {
     expect(mail.attachments[0].filename).toBe("Plan.pdf");
     expect(mail.attachments[0].contentType).toBe("application/pdf");
     expect(payload(res).attachments).toEqual([
-      { name: "Plan.pdf", mode: "exported", source: "drive", file_id: ID_B, size: 8 },
+      { name: "Plan.pdf", mode: "exported", source: "drive", file_id: ID_B, size: 8, sha256: sha("EXPORTED") },
     ]);
   });
 
@@ -436,8 +441,8 @@ describe("inline images by cid", () => {
     expect(byName["notes.pdf"].contentDisposition).toBe("attachment");
     expect(mail.attachments).toHaveLength(2);
     expect(payload(res).attachments).toEqual([
-      { name: "chart.png", mode: "inline", source: "drive", file_id: ID_A, size: png.length, cid: "chart.png" },
-      { name: "notes.pdf", mode: "attached", source: "drive", file_id: ID_B, size: 3 },
+      { name: "chart.png", mode: "inline", source: "drive", file_id: ID_A, size: png.length, sha256: sha(png), cid: "chart.png" },
+      { name: "notes.pdf", mode: "attached", source: "drive", file_id: ID_B, size: 3, sha256: sha("PDF") },
     ]);
   });
 

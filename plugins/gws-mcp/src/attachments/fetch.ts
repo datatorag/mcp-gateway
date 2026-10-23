@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import type { GwsClient } from "../gws-client.js";
 import { gmailAttachmentBytes } from "../google-api/direct-upload.js";
 
@@ -95,14 +96,18 @@ export class ByteBudget {
 
   /** Wrap a source so its bytes count against the budget, and so a failure
    * names the file it happened on. `counted` receives the file's own total
-   * once it has been read in full. */
-  meter(name: string, open: Opener, counted?: (bytes: number) => void): Opener {
+   * and the SHA-256 of what streamed, once it has been read in full: the
+   * receipt for each attachment, computed on the way past, never by holding
+   * the file (SCRUM-437). */
+  meter(name: string, open: Opener, counted?: (bytes: number, sha256: string) => void): Opener {
     const budget = this;
     return async function* () {
       let own = 0;
+      const hash = createHash("sha256");
       try {
         for await (const chunk of open()) {
           own += chunk.length;
+          hash.update(chunk);
           budget.used += chunk.length;
           if (budget.used > budget.cap) {
             throw new Error(
@@ -116,7 +121,7 @@ export class ByteBudget {
         if (message.startsWith("Attachments are over")) throw err;
         throw new Error(`Could not read attachment "${name}": ${message}. Nothing was sent.`);
       }
-      counted?.(own);
+      counted?.(own, hash.digest("hex"));
     };
   }
 }

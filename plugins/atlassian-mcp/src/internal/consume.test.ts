@@ -108,8 +108,44 @@ const DEFAULT_ARGS = {
   file: { type: "gmail_message", message_id: "18c0ffee" },
 };
 
-function encodeArgs(args: unknown): string {
-  return Buffer.from(JSON.stringify(args), "utf8").toString("base64url");
+type Part = { field: string; name: string; type: string; bytes: Uint8Array } | { field: string; text: string };
+
+const BOUNDARY = "----datatorag-test-boundary";
+
+/** A multipart body as the gateway sends it (SCRUM-437), written out by hand
+ * so a test can also write one the gateway never would. */
+function multipart(parts: Part[]): Uint8Array {
+  const enc = new TextEncoder();
+  const out: Uint8Array[] = [];
+  for (const part of parts) {
+    if ("text" in part) {
+      out.push(enc.encode(`--${BOUNDARY}\r\nContent-Disposition: form-data; name="${part.field}"\r\n\r\n${part.text}\r\n`));
+    } else {
+      out.push(
+        enc.encode(
+          `--${BOUNDARY}\r\nContent-Disposition: form-data; name="${part.field}"; filename="${part.name}"\r\nContent-Type: ${part.type}\r\n\r\n`
+        )
+      );
+      out.push(part.bytes);
+      out.push(enc.encode("\r\n"));
+    }
+  }
+  out.push(enc.encode(`--${BOUNDARY}--\r\n`));
+  return Buffer.concat(out);
+}
+
+const argsPart = (args: unknown): Part => ({ field: "args", text: JSON.stringify(args) });
+const filePart = (bytes: Uint8Array = BYTES, over: Partial<{ field: string; name: string; type: string }> = {}): Part => ({
+  field: "file",
+  name: FILE_NAME,
+  type: "message/rfc822",
+  bytes,
+  ...over,
+});
+
+/** A body in pieces of at most `size` bytes. */
+async function* inPieces(body: Uint8Array, size: number) {
+  for (let i = 0; i < body.length; i += size) yield body.subarray(i, i + size);
 }
 
 async function* chunksOf(...chunks: Uint8Array[]) {
@@ -119,23 +155,24 @@ async function* chunksOf(...chunks: Uint8Array[]) {
 function request(
   over: {
     args?: unknown;
+    parts?: Part[];
+    file?: Uint8Array;
     headers?: Record<string, string | undefined>;
     method?: string;
     body?: AsyncIterable<Uint8Array>;
+    pieces?: number;
   } = {}
 ): ConsumeRequest {
+  const body = multipart(over.parts ?? [argsPart(over.args ?? DEFAULT_ARGS), filePart(over.file)]);
   return {
     method: over.method ?? "POST",
     headers: {
       "x-user-token": TOKEN,
       "x-tool-name": "jira_add_attachment",
-      "x-tool-args": encodeArgs(over.args ?? DEFAULT_ARGS),
-      "x-file-name": encodeURIComponent(FILE_NAME),
-      "x-file-type": "message/rfc822",
-      "content-type": "application/octet-stream",
+      "content-type": `multipart/form-data; boundary=${BOUNDARY}`,
       ...over.headers,
     },
-    body: over.body ?? chunksOf(BYTES),
+    body: over.body ?? (over.pieces ? inPieces(body, over.pieces) : chunksOf(body)),
   };
 }
 
@@ -226,7 +263,7 @@ describe("jira_add_attachment with bytes", () => {
   it("hashes the bytes it received, across chunk boundaries", async () => {
     const res = toolResult(
       await handleConsume(
-        request({ body: chunksOf(BYTES.subarray(0, 5), BYTES.subarray(5)) })
+        request({ pieces: 5 })
       )
     );
     const receipt = JSON.parse(res.text);
@@ -306,7 +343,7 @@ describe("jira_add_attachment with bytes", () => {
     }
   );
 
-  it("uses the filename argument over X-File-Name", async () => {
+  it("uses the filename argument over the file's own name", async () => {
     const res = toolResult(
       await handleConsume(
         request({ args: { ...DEFAULT_ARGS, filename: "dispute.eml" } })
@@ -501,21 +538,38 @@ describe("POST /internal/consume refusals", () => {
 
   it.each([
     ["no tool name", { "x-tool-name": undefined }],
-    ["no tool args", { "x-tool-args": undefined }],
-    ["args that are not base64url", { "x-tool-args": "{not base64}" }],
-    [
-      "args that are not JSON",
-      { "x-tool-args": Buffer.from("not json").toString("base64url") },
-    ],
-    ["args that are a JSON array", { "x-tool-args": encodeArgs(["PROJ-7"]) }],
-    ["no file name", { "x-file-name": undefined }],
-    ["a file name that is not URI-encoded", { "x-file-name": "%E0%A4%A" }],
-    ["no file type", { "x-file-type": undefined }],
+    ["a body that is not multipart", { "content-type": "application/octet-stream" }],
+    ["multipart with no boundary", { "content-type": "multipart/form-data" }],
   ])("answers 400 bad_request for %s", async (_name, headers) => {
     expect(await refusal(request({ headers }))).toEqual({
       status: 400,
       code: "bad_request",
     });
+  });
+
+  it.each<[string, Part[]]>([
+    ["no args field", [filePart()]],
+    ["args that are not JSON", [{ field: "args", text: "not json" }, filePart()]],
+    ["args that are a JSON array", [argsPart(["PROJ-7"]), filePart()]],
+    ["args over 1 MB", [argsPart({ ...DEFAULT_ARGS, pad: "x".repeat(1024 * 1024) }), filePart()]],
+    ["args sent as a file", [{ field: "args", name: "a.json", type: "application/json", bytes: new TextEncoder().encode("{}") }, filePart()]],
+    ["a field the gateway never sends", [argsPart(DEFAULT_ARGS), filePart(), { field: "x-evil", text: "1" }]],
+    ["an attachment index past nine", [argsPart(DEFAULT_ARGS), filePart(BYTES, { field: "attachments[10]" })]],
+    ["the same field twice", [argsPart(DEFAULT_ARGS), filePart(), filePart()]],
+    ["a file field that is text", [argsPart(DEFAULT_ARGS), { field: "file", text: "not a file" }]],
+    ["a file with no name", [argsPart(DEFAULT_ARGS), filePart(BYTES, { name: "" })]],
+    ["an empty file", [argsPart(DEFAULT_ARGS), filePart(new Uint8Array(0))]],
+  ])("answers 400 bad_request for %s, and sends nothing", async (_name, parts) => {
+    expect(await refusal(request({ parts }))).toEqual({ status: 400, code: "bad_request" });
+  });
+
+  it("takes one file a call: a second file is refused as a tool error, with nothing sent to Jira", async () => {
+    const res = toolResult(
+      await handleConsume(request({ parts: [argsPart(DEFAULT_ARGS), filePart(), filePart(BYTES, { field: "attachments[0]" })] }))
+    );
+    expect(res.isError).toBe(true);
+    expect(res.text).toBe("This tool takes one file a call. Nothing was uploaded.");
+    expect(calls).toHaveLength(0);
   });
 
   it("answers 400 bad_request for an empty body", async () => {
@@ -564,8 +618,10 @@ describe("POST /internal/consume body cap", () => {
     const res = await handleConsume(request({ body: endless() }));
     expect(res.status).toBe(413);
     expect(res.body).toMatchObject({ code: "too_large" });
-    // 25 chunks fit exactly; the 26th crosses the line and is the last pulled.
-    expect(pulled).toBe(26);
+    // The body cap is the files' 25 MB, the arguments' 1 MB and 64 KB of
+    // framing: 26 chunks fit, and the 27th crosses the line and is the last
+    // pulled.
+    expect(pulled).toBe(27);
     expect(finished).toBe(true);
     expect(calls).toHaveLength(0);
   });
@@ -578,7 +634,7 @@ describe("POST /internal/consume body cap", () => {
     }
     const res = await handleConsume(
       request({
-        headers: { "content-length": String(MAX_ATTACHMENT_BYTES + 1) },
+        headers: { "content-length": String(MAX_ATTACHMENT_BYTES + 2 * 1024 * 1024) },
         body: body(),
       })
     );
@@ -591,11 +647,15 @@ describe("POST /internal/consume body cap", () => {
     installFetch({
       meta: () => json({ enabled: true, uploadLimit: MAX_ATTACHMENT_BYTES }),
     });
-    const chunk = new Uint8Array(MB);
-    const res = await handleConsume(
-      request({ body: chunksOf(...Array.from({ length: 25 }, () => chunk)) })
-    );
+    const res = await handleConsume(request({ file: new Uint8Array(MAX_ATTACHMENT_BYTES) }));
     const receipt = JSON.parse(toolResult(res).text);
     expect(receipt.sent.bytes).toBe(MAX_ATTACHMENT_BYTES);
+  });
+
+  it("answers 413 for a file one byte over, inside a body under the body cap", async () => {
+    const res = await handleConsume(request({ file: new Uint8Array(MAX_ATTACHMENT_BYTES + 1) }));
+    expect(res.status).toBe(413);
+    expect(res.body).toMatchObject({ code: "too_large" });
+    expect(calls).toHaveLength(0);
   });
 });
