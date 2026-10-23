@@ -92,11 +92,38 @@ export const FILE_REFERENCE_TYPES: Readonly<
   },
 };
 
+/**
+ * Reference types whose bytes the gateway resolves itself (SCRUM-437): the
+ * caller already holds the file, so there is no source plugin, no source
+ * token and no `account`. `content` carries the file as base64 in the call;
+ * `upload` names a file received through an upload link.
+ */
+export const LOCAL_REFERENCE_TYPES: Readonly<
+  Record<"content" | "upload", { requiredStrings: readonly string[]; describes: string }>
+> = {
+  content: { requiredStrings: ["name", "base64"], describes: "a file carried in the call" },
+  upload: { requiredStrings: ["upload_id"], describes: "a file received through an upload link" },
+};
+
+/** The fields a reference of either kind must carry, or undefined for a type
+ * that is neither. */
+function requiredFieldsOf(type: string): readonly string[] | undefined {
+  if (Object.hasOwn(FILE_REFERENCE_TYPES, type)) return FILE_REFERENCE_TYPES[type].requiredStrings;
+  if (Object.hasOwn(LOCAL_REFERENCE_TYPES, type)) {
+    return LOCAL_REFERENCE_TYPES[type as keyof typeof LOCAL_REFERENCE_TYPES].requiredStrings;
+  }
+  return undefined;
+}
+
+export function isLocalReference(ref: FileReference): boolean {
+  return Object.hasOwn(LOCAL_REFERENCE_TYPES, ref.type);
+}
+
 /** The example a refusal shows for a reference type: its type and every
- * field the type requires, values elided. Built from the table so the words
+ * field the type requires, values elided. Built from the tables so the words
  * and the check cannot disagree. */
 export function referenceExample(type: string): string {
-  const fields = FILE_REFERENCE_TYPES[type].requiredStrings.map((field) => `,"${field}":"..."`).join("");
+  const fields = (requiredFieldsOf(type) ?? []).map((field) => `,"${field}":"..."`).join("");
   return `{"type":"${type}"${fields}}`;
 }
 
@@ -200,12 +227,20 @@ const CAP_WORDS = `${MAX_FILE_BYTES / MB} MB`;
 
 export type FileReference = { type: string; account?: string; [key: string]: unknown };
 
+/**
+ * Reads the file reference in `fileArg`. `local: false` is for a tool that
+ * re-reads its source later and so cannot take a file the caller holds (the
+ * download link): the local types are then unknown and go unlisted.
+ */
 export function readReference(
   args: Record<string, unknown>,
   fileArg: string,
-  toolName: string
+  toolName: string,
+  opts: { local?: boolean } = {}
 ): { ok: true; ref: FileReference } | { ok: false; text: string } {
-  const examples = Object.keys(FILE_REFERENCE_TYPES).map(referenceExample).join(" or ");
+  const local = opts.local ?? true;
+  const types = [...Object.keys(FILE_REFERENCE_TYPES), ...(local ? Object.keys(LOCAL_REFERENCE_TYPES) : [])];
+  const examples = types.map(referenceExample).join(" or ");
   const shape = `${toolName} takes a file reference in "${fileArg}", an object such as ${examples}.`;
   const raw = args[fileArg];
   if (raw === undefined || raw === null) {
@@ -218,19 +253,24 @@ export function readReference(
   if (typeof ref.type !== "string") {
     return { ok: false, text: `The "${fileArg}" argument has no type. ${shape}` };
   }
-  if (!Object.hasOwn(FILE_REFERENCE_TYPES, ref.type)) {
+  const required = types.includes(ref.type) ? requiredFieldsOf(ref.type) : undefined;
+  if (!required) {
     return {
       ok: false,
       text: `Unknown file reference type ${JSON.stringify(echoName(ref.type))}. ${shape}`,
     };
   }
-  for (const field of FILE_REFERENCE_TYPES[ref.type].requiredStrings) {
+  for (const field of required) {
     if (typeof ref[field] !== "string" || ref[field] === "") {
       return {
         ok: false,
         text: `A ${ref.type} reference needs a ${field} that is a non-empty string. ${shape}`,
       };
     }
+  }
+  if (Object.hasOwn(LOCAL_REFERENCE_TYPES, ref.type) && ref.account !== undefined) {
+    const article = /^[aeiou]/.test(ref.type) ? "An" : "A";
+    return { ok: false, text: `${article} ${ref.type} reference names no account: the file comes with the call.` };
   }
   if (ref.account !== undefined && typeof ref.account !== "string") {
     return {

@@ -12,6 +12,9 @@ import {
   transfersInFlight,
   FILE_CONSUMING_TOOLS,
   FILE_REFERENCE_TYPES,
+  LOCAL_REFERENCE_TYPES,
+  isLocalReference,
+  readReference,
   referenceExample,
   MAX_FILE_BYTES,
   MAX_TRANSFERS_HOST,
@@ -676,5 +679,69 @@ describe("the deadline", () => {
     await h.run();
     expect(h.calls[0].init.signal).toBeDefined();
     expect(h.calls[0].init.signal).toBe(h.calls[1].init.signal);
+  });
+});
+
+describe("local reference types (SCRUM-437)", () => {
+  it("are listed apart from the plugin types, with their required fields", () => {
+    expect(Object.keys(LOCAL_REFERENCE_TYPES).sort()).toEqual(["content", "upload"]);
+    expect(LOCAL_REFERENCE_TYPES.content.requiredStrings).toEqual(["name", "base64"]);
+    expect(LOCAL_REFERENCE_TYPES.upload.requiredStrings).toEqual(["upload_id"]);
+    expect(Object.keys(FILE_REFERENCE_TYPES)).not.toContain("content");
+  });
+
+  it("build their examples from the same table", () => {
+    expect(referenceExample("content")).toBe('{"type":"content","name":"...","base64":"..."}');
+    expect(referenceExample("upload")).toBe('{"type":"upload","upload_id":"..."}');
+  });
+
+  it("are read as references by a tool that takes them", () => {
+    const read = readReference({ file: { type: "content", name: "a.png", base64: "iVBO" } }, "file", "drive_upload_file");
+    expect(read.ok).toBe(true);
+    if (read.ok) expect(isLocalReference(read.ref)).toBe(true);
+    const plugin = readReference({ file: { type: "drive_file", file_id: "f" } }, "file", "drive_upload_file");
+    expect(plugin.ok && isLocalReference(plugin.ref)).toBe(false);
+  });
+
+  it("name every type, plugin and local, in a refusal", () => {
+    const read = readReference({}, "file", "drive_upload_file");
+    expect(read.ok).toBe(false);
+    if (read.ok) return;
+    for (const type of [...Object.keys(FILE_REFERENCE_TYPES), ...Object.keys(LOCAL_REFERENCE_TYPES)]) {
+      expect(read.text).toContain(referenceExample(type));
+    }
+  });
+
+  it("refuse an account, because the file comes with the call", () => {
+    const read = readReference(
+      { file: { type: "content", name: "a.png", base64: "iVBO", account: "a@example.com" } },
+      "file",
+      "drive_upload_file"
+    );
+    expect(read).toEqual({
+      ok: false,
+      text: "A content reference names no account: the file comes with the call.",
+    });
+  });
+
+  it("refuse a content reference with no base64 or no name", () => {
+    for (const file of [{ type: "content", name: "a.png" }, { type: "content", base64: "iVBO" }]) {
+      const read = readReference({ file }, "file", "drive_upload_file");
+      expect(read.ok).toBe(false);
+    }
+  });
+
+  it("are unknown, and unlisted, where only plugin types are taken", () => {
+    const read = readReference(
+      { file: { type: "content", name: "a.png", base64: "iVBO" } },
+      "file",
+      "file_download_link",
+      { local: false }
+    );
+    expect(read.ok).toBe(false);
+    if (read.ok) return;
+    expect(read.text).toContain("Unknown file reference type");
+    expect(read.text).not.toContain(referenceExample("content"));
+    expect(read.text).toContain(referenceExample("drive_file"));
   });
 });
