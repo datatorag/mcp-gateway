@@ -140,6 +140,20 @@ describe("the tool call", () => {
     expect(downloadLinksHeld()).toBe(0);
   });
 
+  it.each([
+    ["content", { type: "content", name: "a.png", base64: "iVBO" }],
+    ["upload", { type: "upload", upload_id: "u1" }],
+  ])("refuses a %s reference without a read: the file is already on the caller's side", async (_label, file) => {
+    const w = world();
+    const result = await w.mint("user-1", { file });
+    expect(result.isError).toBe(true);
+    expect(textOf(result)).toBe(
+      "This file is already on your side; a download link is for files in a connected service. No link was made."
+    );
+    expect(w.state.reads).toBe(0);
+    expect(downloadLinksHeld()).toBe(0);
+  });
+
   it("refuses when this service does not know its own address", async () => {
     const w = world();
     const result = await createDownloadLink({ userId: "u", args: { file: { type: "gmail_message", message_id: "m1" } }, baseUrl: "", deps: w.deps });

@@ -29,6 +29,7 @@ import { safeStringEqual } from "@datatorag-mcp/auth";
 import { forgetValue, redactValue } from "./log-redaction";
 import {
   FILE_REFERENCE_TYPES,
+  LOCAL_REFERENCE_TYPES,
   readReference,
   refuse,
   withReferencedFile,
@@ -352,7 +353,13 @@ export async function createDownloadLink(opts: {
   now?: () => number;
 }): Promise<CrossingResult> {
   const now = opts.now ?? Date.now;
-  const read = readReference(opts.args ?? {}, "file", DOWNLOAD_TOOL);
+  // A link re-reads its source at the click; a file the caller holds has no
+  // source to re-read (SCRUM-437).
+  const given = (opts.args ?? {}).file as { type?: unknown } | undefined;
+  if (given && typeof given === "object" && typeof given.type === "string" && Object.hasOwn(LOCAL_REFERENCE_TYPES, given.type)) {
+    return refuse("This file is already on your side; a download link is for files in a connected service. No link was made.");
+  }
+  const read = readReference(opts.args ?? {}, "file", DOWNLOAD_TOOL, { local: false });
   if (!read.ok) return refuse(read.text);
   if (!/^https?:\/\//.test(opts.baseUrl)) {
     return refuse("A download link cannot be made here: this service does not know its own address. No link was made.");

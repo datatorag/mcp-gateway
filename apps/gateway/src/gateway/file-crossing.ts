@@ -22,6 +22,7 @@
 import type { ResolvedServiceToken } from "./service-token";
 import { checkScopeForTool, type Surface } from "./scope-grant";
 import { echoName } from "./skills-catalogue";
+import { resolveContent } from "./file-inbound";
 
 /** Tools that take a file reference, by namespaced name, and the argument
  * that carries it. */
@@ -104,6 +105,11 @@ export const LOCAL_REFERENCE_TYPES: Readonly<
   content: { requiredStrings: ["name", "base64"], describes: "a file carried in the call" },
   upload: { requiredStrings: ["upload_id"], describes: "a file received through an upload link" },
 };
+
+/** The local types a tool takes today. `upload` is declared above for the
+ * upload link and joins this list when that link exists; until then it is
+ * neither taken nor offered in a refusal's examples. */
+export const ACCEPTED_LOCAL_TYPES: readonly string[] = ["content"];
 
 /** The fields a reference of either kind must carry, or undefined for a type
  * that is neither. */
@@ -239,7 +245,7 @@ export function readReference(
   opts: { local?: boolean } = {}
 ): { ok: true; ref: FileReference } | { ok: false; text: string } {
   const local = opts.local ?? true;
-  const types = [...Object.keys(FILE_REFERENCE_TYPES), ...(local ? Object.keys(LOCAL_REFERENCE_TYPES) : [])];
+  const types = [...Object.keys(FILE_REFERENCE_TYPES), ...(local ? ACCEPTED_LOCAL_TYPES : [])];
   const examples = types.map(referenceExample).join(" or ");
   const shape = `${toolName} takes a file reference in "${fileArg}", an object such as ${examples}.`;
   const raw = args[fileArg];
@@ -647,12 +653,19 @@ export async function crossFile(opts: CrossFileOptions): Promise<CrossingResult>
     return refuse(`${opts.toolName} needs a connected account before it can take a file.`);
   }
 
-  const encodedArgs = Buffer.from(JSON.stringify(opts.args), "utf8").toString("base64url");
+  // A local reference's content never leaves the gateway: the plugin gets
+  // its type alone, and the bytes as the body. No consume route reads the
+  // file argument, and base64 in it would not fit the header anyway.
+  const local = isLocalReference(read.ref);
+  const sentArgs = local ? { ...opts.args, [consuming.fileArg]: closedFileArg(read.ref) } : opts.args;
+  const encodedArgs = Buffer.from(JSON.stringify(sentArgs), "utf8").toString("base64url");
   if (encodedArgs.length > MAX_ENCODED_ARGS_CHARS) {
     return refuse(
       `The arguments to ${opts.toolName} are too large to send with a file. Shorten them and try again.`
     );
   }
+
+  if (local) return crossLocalFile(opts, read.ref, { url: opts.destinationUrl, token: destinationToken, encodedArgs });
 
   const resolved = await resolveSource(opts, read.ref);
   if (!resolved.ok) return resolved.result;
@@ -695,6 +708,60 @@ export async function crossFile(opts: CrossFileOptions): Promise<CrossingResult>
         leg === "source"
           ? "the file's source could not be reached. Nothing was uploaded."
           : `the connection to ${opts.toolName} failed while the file was being handed over. The file may or may not have been uploaded; check the destination before trying again.`
+      );
+    } finally {
+      clearTimeout(timer);
+    }
+  });
+}
+
+/** What a destination plugin is told about a local reference: its type.
+ * The content, or an upload's id, stays in the gateway. */
+export function closedFileArg(ref: FileReference): Record<string, unknown> {
+  return { type: ref.type };
+}
+
+/**
+ * A consuming tool whose file the caller holds (SCRUM-437). The same
+ * destination leg as `crossFile`, with no source read: the file is decoded
+ * here, inside the transfer slot, so it is in memory only while one is held.
+ */
+async function crossLocalFile(
+  opts: CrossFileOptions,
+  ref: FileReference,
+  dest: { url: string; token: string; encodedArgs: string }
+): Promise<CrossingResult> {
+  // The Agent keeps tool arguments in its thread history and draws them on
+  // its approval card, so a content reference there would store a file.
+  if (ref.type === "content" && opts.surface === "agent") {
+    return refuse(
+      "A content reference cannot be used in the dashboard Agent. Ask for an upload link instead with file_upload_link. Nothing was uploaded."
+    );
+  }
+  return withTransferSlot(opts.userId, async () => {
+    const decoded = resolveContent(ref);
+    if (!decoded.ok) return refuse(decoded.text);
+
+    const fetchFn = opts.fetchFn ?? fetch;
+    const timeoutMs = opts.timeoutMs ?? TRANSFER_TIMEOUT_MS;
+    const controller = new AbortController();
+    let timedOut = false;
+    const timer = setTimeout(() => {
+      timedOut = true;
+      controller.abort();
+    }, timeoutMs);
+    try {
+      return await sendToDestination(decoded.file, { ...dest, toolName: opts.toolName }, { fetchFn, controller });
+    } catch {
+      // As in crossFile: a transport detail of a request that carried a
+      // token is not echoed.
+      if (timedOut) {
+        return refuse(
+          `The transfer was abandoned after ${Math.round(timeoutMs / 1000)} seconds, while the file was being handed to ${opts.toolName}. The file may or may not have been uploaded; check the destination before trying again.`
+        );
+      }
+      throw new Error(
+        `the connection to ${opts.toolName} failed while the file was being handed over. The file may or may not have been uploaded; check the destination before trying again.`
       );
     } finally {
       clearTimeout(timer);

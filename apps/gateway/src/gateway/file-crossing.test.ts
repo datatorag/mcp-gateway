@@ -13,6 +13,7 @@ import {
   FILE_CONSUMING_TOOLS,
   FILE_REFERENCE_TYPES,
   LOCAL_REFERENCE_TYPES,
+  ACCEPTED_LOCAL_TYPES,
   isLocalReference,
   readReference,
   referenceExample,
@@ -707,9 +708,11 @@ describe("local reference types (SCRUM-437)", () => {
     const read = readReference({}, "file", "drive_upload_file");
     expect(read.ok).toBe(false);
     if (read.ok) return;
-    for (const type of [...Object.keys(FILE_REFERENCE_TYPES), ...Object.keys(LOCAL_REFERENCE_TYPES)]) {
+    for (const type of [...Object.keys(FILE_REFERENCE_TYPES), ...ACCEPTED_LOCAL_TYPES]) {
       expect(read.text).toContain(referenceExample(type));
     }
+    // Declared for the upload link, not offered until it exists.
+    expect(read.text).not.toContain(referenceExample("upload"));
   });
 
   it("refuse an account, because the file comes with the call", () => {
@@ -743,5 +746,85 @@ describe("local reference types (SCRUM-437)", () => {
     expect(read.text).toContain("Unknown file reference type");
     expect(read.text).not.toContain(referenceExample("content"));
     expect(read.text).toContain(referenceExample("drive_file"));
+  });
+});
+
+describe("a content reference crosses with no source read (SCRUM-437)", () => {
+  const PNG = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 1, 2, 3]);
+  const content = { type: "content", name: "card.png", mime_type: "image/png", base64: PNG.toString("base64") };
+
+  const decodedArgs = (call: Call) =>
+    JSON.parse(Buffer.from(headersOf(call).get("x-tool-args") ?? "", "base64url").toString("utf8"));
+
+  it("hands the decoded bytes to Jira, and the arguments carry no base64", async () => {
+    const h = harness({ args: { issue_key: "FIX-1", file: content } });
+    const result = await h.run();
+    expect(result).toEqual(RECEIPT);
+    expect(h.calls.map((c) => c.url)).toEqual([`http://localhost:40002/internal/consume`]);
+    expect(h.resolveToken).not.toHaveBeenCalled();
+    expect(h.resolvePluginUrl).not.toHaveBeenCalled();
+    const [dest] = h.calls;
+    expect(await bodyBytes(dest)).toEqual(PNG);
+    expect(decodedArgs(dest)).toEqual({ issue_key: "FIX-1", file: { type: "content" } });
+    expect(everyHeaderValue(dest)).not.toContain(content.base64);
+    expect(headersOf(dest).get("x-file-name")).toBe("card.png");
+    expect(headersOf(dest).get("x-file-type")).toBe("image/png");
+    expect(transfersInFlight()).toEqual(idle);
+  });
+
+  it("does the same for drive_upload_file", async () => {
+    const h = harness({ args: { folder_id: "fold-1", file: content } });
+    h.options.tool = "gws-mcp__drive_upload_file";
+    h.options.toolName = "drive_upload_file";
+    await h.run();
+    expect(h.calls).toHaveLength(1);
+    expect(headersOf(h.calls[0]).get("x-tool-name")).toBe("drive_upload_file");
+    expect(decodedArgs(h.calls[0])).toEqual({ folder_id: "fold-1", file: { type: "content" } });
+  });
+
+  it("holds a transfer slot while the file is handed over", async () => {
+    let during: unknown;
+    const h = harness({
+      args: { issue_key: "FIX-1", file: content },
+      dest: () => {
+        during = transfersInFlight();
+        return Response.json(RECEIPT);
+      },
+    });
+    await h.run();
+    expect(during).toEqual({ host: 1, users: 1 });
+    expect(transfersInFlight()).toEqual(idle);
+  });
+
+  it("refuses damaged base64 before any request", async () => {
+    const h = harness({ args: { issue_key: "FIX-1", file: { ...content, base64: "aG k=" } } });
+    const result = await h.run();
+    expect(result.isError).toBe(true);
+    expect(textOf(result)).toContain("one unbroken string");
+    expect(h.calls).toHaveLength(0);
+    expect(transfersInFlight()).toEqual(idle);
+  });
+
+  it("is refused in the dashboard Agent, which stores tool arguments in its threads", async () => {
+    const h = harness({ args: { issue_key: "FIX-1", file: content } });
+    h.options.surface = "agent";
+    const result = await h.run();
+    expect(result).toEqual({
+      content: [
+        {
+          type: "text",
+          text: "A content reference cannot be used in the dashboard Agent. Ask for an upload link instead with file_upload_link. Nothing was uploaded.",
+        },
+      ],
+      isError: true,
+    });
+    expect(h.calls).toHaveLength(0);
+  });
+
+  it("refuses an upload reference until upload links exist", async () => {
+    const h = harness({ args: { issue_key: "FIX-1", file: { type: "upload", upload_id: "u1" } } });
+    const result = await h.run();
+    expect(result.isError).toBe(true);
+    expect(h.calls).toHaveLength(0);
   });
 });
