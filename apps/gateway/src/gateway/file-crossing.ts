@@ -22,6 +22,7 @@
 import type { ResolvedServiceToken } from "./service-token";
 import { checkScopeForTool, type Surface } from "./scope-grant";
 import { echoName } from "./skills-catalogue";
+import { resolveContent } from "./file-inbound";
 
 /** Tools that take a file reference, by namespaced name, and the argument
  * that carries it. */
@@ -92,11 +93,43 @@ export const FILE_REFERENCE_TYPES: Readonly<
   },
 };
 
+/**
+ * Reference types whose bytes the gateway resolves itself (SCRUM-437): the
+ * caller already holds the file, so there is no source plugin, no source
+ * token and no `account`. `content` carries the file as base64 in the call;
+ * `upload` names a file received through an upload link.
+ */
+export const LOCAL_REFERENCE_TYPES: Readonly<
+  Record<"content" | "upload", { requiredStrings: readonly string[]; describes: string }>
+> = {
+  content: { requiredStrings: ["name", "base64"], describes: "a file carried in the call" },
+  upload: { requiredStrings: ["upload_id"], describes: "a file received through an upload link" },
+};
+
+/** The local types a tool takes today. `upload` is declared above for the
+ * upload link and joins this list when that link exists; until then it is
+ * neither taken nor offered in a refusal's examples. */
+export const ACCEPTED_LOCAL_TYPES: readonly string[] = ["content"];
+
+/** The fields a reference of either kind must carry, or undefined for a type
+ * that is neither. */
+function requiredFieldsOf(type: string): readonly string[] | undefined {
+  if (Object.hasOwn(FILE_REFERENCE_TYPES, type)) return FILE_REFERENCE_TYPES[type].requiredStrings;
+  if (Object.hasOwn(LOCAL_REFERENCE_TYPES, type)) {
+    return LOCAL_REFERENCE_TYPES[type as keyof typeof LOCAL_REFERENCE_TYPES].requiredStrings;
+  }
+  return undefined;
+}
+
+export function isLocalReference(ref: FileReference): boolean {
+  return Object.hasOwn(LOCAL_REFERENCE_TYPES, ref.type);
+}
+
 /** The example a refusal shows for a reference type: its type and every
- * field the type requires, values elided. Built from the table so the words
+ * field the type requires, values elided. Built from the tables so the words
  * and the check cannot disagree. */
 export function referenceExample(type: string): string {
-  const fields = FILE_REFERENCE_TYPES[type].requiredStrings.map((field) => `,"${field}":"..."`).join("");
+  const fields = (requiredFieldsOf(type) ?? []).map((field) => `,"${field}":"..."`).join("");
   return `{"type":"${type}"${fields}}`;
 }
 
@@ -200,12 +233,20 @@ const CAP_WORDS = `${MAX_FILE_BYTES / MB} MB`;
 
 export type FileReference = { type: string; account?: string; [key: string]: unknown };
 
+/**
+ * Reads the file reference in `fileArg`. `local: false` is for a tool that
+ * re-reads its source later and so cannot take a file the caller holds (the
+ * download link): the local types are then unknown and go unlisted.
+ */
 export function readReference(
   args: Record<string, unknown>,
   fileArg: string,
-  toolName: string
+  toolName: string,
+  opts: { local?: boolean } = {}
 ): { ok: true; ref: FileReference } | { ok: false; text: string } {
-  const examples = Object.keys(FILE_REFERENCE_TYPES).map(referenceExample).join(" or ");
+  const local = opts.local ?? true;
+  const types = [...Object.keys(FILE_REFERENCE_TYPES), ...(local ? ACCEPTED_LOCAL_TYPES : [])];
+  const examples = types.map(referenceExample).join(" or ");
   const shape = `${toolName} takes a file reference in "${fileArg}", an object such as ${examples}.`;
   const raw = args[fileArg];
   if (raw === undefined || raw === null) {
@@ -218,19 +259,24 @@ export function readReference(
   if (typeof ref.type !== "string") {
     return { ok: false, text: `The "${fileArg}" argument has no type. ${shape}` };
   }
-  if (!Object.hasOwn(FILE_REFERENCE_TYPES, ref.type)) {
+  const required = types.includes(ref.type) ? requiredFieldsOf(ref.type) : undefined;
+  if (!required) {
     return {
       ok: false,
       text: `Unknown file reference type ${JSON.stringify(echoName(ref.type))}. ${shape}`,
     };
   }
-  for (const field of FILE_REFERENCE_TYPES[ref.type].requiredStrings) {
+  for (const field of required) {
     if (typeof ref[field] !== "string" || ref[field] === "") {
       return {
         ok: false,
         text: `A ${ref.type} reference needs a ${field} that is a non-empty string. ${shape}`,
       };
     }
+  }
+  if (Object.hasOwn(LOCAL_REFERENCE_TYPES, ref.type) && ref.account !== undefined) {
+    const article = /^[aeiou]/.test(ref.type) ? "An" : "A";
+    return { ok: false, text: `${article} ${ref.type} reference names no account: the file comes with the call.` };
   }
   if (ref.account !== undefined && typeof ref.account !== "string") {
     return {
@@ -607,12 +653,19 @@ export async function crossFile(opts: CrossFileOptions): Promise<CrossingResult>
     return refuse(`${opts.toolName} needs a connected account before it can take a file.`);
   }
 
-  const encodedArgs = Buffer.from(JSON.stringify(opts.args), "utf8").toString("base64url");
+  // A local reference's content never leaves the gateway: the plugin gets
+  // its type alone, and the bytes as the body. No consume route reads the
+  // file argument, and base64 in it would not fit the header anyway.
+  const local = isLocalReference(read.ref);
+  const sentArgs = local ? { ...opts.args, [consuming.fileArg]: closedFileArg(read.ref) } : opts.args;
+  const encodedArgs = Buffer.from(JSON.stringify(sentArgs), "utf8").toString("base64url");
   if (encodedArgs.length > MAX_ENCODED_ARGS_CHARS) {
     return refuse(
       `The arguments to ${opts.toolName} are too large to send with a file. Shorten them and try again.`
     );
   }
+
+  if (local) return crossLocalFile(opts, read.ref, { url: opts.destinationUrl, token: destinationToken, encodedArgs });
 
   const resolved = await resolveSource(opts, read.ref);
   if (!resolved.ok) return resolved.result;
@@ -655,6 +708,60 @@ export async function crossFile(opts: CrossFileOptions): Promise<CrossingResult>
         leg === "source"
           ? "the file's source could not be reached. Nothing was uploaded."
           : `the connection to ${opts.toolName} failed while the file was being handed over. The file may or may not have been uploaded; check the destination before trying again.`
+      );
+    } finally {
+      clearTimeout(timer);
+    }
+  });
+}
+
+/** What a destination plugin is told about a local reference: its type.
+ * The content, or an upload's id, stays in the gateway. */
+export function closedFileArg(ref: FileReference): Record<string, unknown> {
+  return { type: ref.type };
+}
+
+/**
+ * A consuming tool whose file the caller holds (SCRUM-437). The same
+ * destination leg as `crossFile`, with no source read: the file is decoded
+ * here, inside the transfer slot, so it is in memory only while one is held.
+ */
+async function crossLocalFile(
+  opts: CrossFileOptions,
+  ref: FileReference,
+  dest: { url: string; token: string; encodedArgs: string }
+): Promise<CrossingResult> {
+  // The Agent keeps tool arguments in its thread history and draws them on
+  // its approval card, so a content reference there would store a file.
+  if (ref.type === "content" && opts.surface === "agent") {
+    return refuse(
+      "A content reference cannot be used in the dashboard Agent, which keeps the arguments of every tool call. Nothing was uploaded."
+    );
+  }
+  return withTransferSlot(opts.userId, async () => {
+    const decoded = resolveContent(ref);
+    if (!decoded.ok) return refuse(decoded.text);
+
+    const fetchFn = opts.fetchFn ?? fetch;
+    const timeoutMs = opts.timeoutMs ?? TRANSFER_TIMEOUT_MS;
+    const controller = new AbortController();
+    let timedOut = false;
+    const timer = setTimeout(() => {
+      timedOut = true;
+      controller.abort();
+    }, timeoutMs);
+    try {
+      return await sendToDestination(decoded.file, { ...dest, toolName: opts.toolName }, { fetchFn, controller });
+    } catch {
+      // As in crossFile: a transport detail of a request that carried a
+      // token is not echoed.
+      if (timedOut) {
+        return refuse(
+          `The transfer was abandoned after ${Math.round(timeoutMs / 1000)} seconds, while the file was being handed to ${opts.toolName}. The file may or may not have been uploaded; check the destination before trying again.`
+        );
+      }
+      throw new Error(
+        `the connection to ${opts.toolName} failed while the file was being handed over. The file may or may not have been uploaded; check the destination before trying again.`
       );
     } finally {
       clearTimeout(timer);

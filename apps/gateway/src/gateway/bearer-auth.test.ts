@@ -163,3 +163,79 @@ describe("listing and revoking (SCRUM-245)", () => {
     expect(await revokeApiKey(db, "user-1", "key-9")).toBe(false);
   });
 });
+
+describe("the /mcp body gate (SCRUM-437)", () => {
+  /** A real express app with the gate and a handler that reports what it
+   * saw, on an ephemeral port. */
+  async function serve(validate: (token: string) => Promise<import("./bearer-auth").BearerAuth>) {
+    const express = (await import("express")).default;
+    const { mcpBearerGate } = await import("./bearer-auth");
+    const app = express();
+    app.use("/mcp", mcpBearerGate(validate, { authed: express.json({ limit: "2mb" }), unauthed: express.json() }));
+    app.all("/mcp", (req, res) => {
+      res.json({ state: res.locals.mcpAuth, bodyKeys: req.body && typeof req.body === "object" ? Object.keys(req.body) : null });
+    });
+    const server = await new Promise<import("node:http").Server>((resolve) => {
+      const s = app.listen(0, () => resolve(s));
+    });
+    const { port } = server.address() as import("node:net").AddressInfo;
+    return { url: `http://127.0.0.1:${port}/mcp`, close: () => new Promise((r) => server.close(r)) };
+  }
+  const valid = async () => ({ ok: true as const, userId: "u1", clientId: "c1", authKind: "oauth" as const });
+  const invalid = async () => ({ ok: false as const, reason: "invalid" as AuthFailureReasonForTest, userId: null });
+  type AuthFailureReasonForTest = Extract<import("./bearer-auth").BearerAuth, { ok: false }>["reason"];
+  const body = (bytes: number) => JSON.stringify({ jsonrpc: "2.0", method: "tools/call", params: { pad: "x".repeat(bytes) } });
+
+  it("parses a 1.4 MB body for a valid bearer", async () => {
+    const s = await serve(valid);
+    try {
+      const res = await fetch(s.url, { method: "POST", headers: { authorization: "Bearer good", "content-type": "application/json" }, body: body(1_400_000) });
+      expect(res.status).toBe(200);
+      const seen = await res.json();
+      expect(seen.state).toEqual({ header: "present", auth: { ok: true, userId: "u1", clientId: "c1", authKind: "oauth" } });
+      expect(seen.bodyKeys).toEqual(["jsonrpc", "method", "params"]);
+    } finally {
+      await s.close();
+    }
+  });
+
+  it("refuses a body over 2 MB for a valid bearer", async () => {
+    const s = await serve(valid);
+    try {
+      const res = await fetch(s.url, { method: "POST", headers: { authorization: "Bearer good", "content-type": "application/json" }, body: body(2_200_000) });
+      expect(res.status).toBe(413);
+    } finally {
+      await s.close();
+    }
+  });
+
+  it.each([
+    ["no bearer", {}],
+    ["a bearer that fails validation", { authorization: "Bearer bad" }],
+  ])("keeps today's 100 KB limit with %s, so the larger limit is only ever an authenticated caller's", async (_label, auth) => {
+    const s = await serve(invalid);
+    try {
+      const small = await fetch(s.url, { method: "POST", headers: { ...auth, "content-type": "application/json" }, body: body(1_000) });
+      expect(small.status).toBe(200);
+      // Still parsed, so a refused request can say which client it was.
+      expect((await small.json()).bodyKeys).toEqual(["jsonrpc", "method", "params"]);
+      const large = await fetch(s.url, { method: "POST", headers: { ...auth, "content-type": "application/json" }, body: body(200_000) });
+      expect(large.status).toBe(413);
+    } finally {
+      await s.close();
+    }
+  });
+
+  it("records a missing header apart from a failed one", async () => {
+    const s = await serve(invalid);
+    try {
+      const none = await (await fetch(s.url, { method: "GET" })).json();
+      expect(none.state).toEqual({ header: "missing" });
+      const bad = await (await fetch(s.url, { method: "GET", headers: { authorization: "Bearer bad" } })).json();
+      expect(bad.state.header).toBe("present");
+      expect(bad.state.auth.ok).toBe(false);
+    } finally {
+      await s.close();
+    }
+  });
+});
