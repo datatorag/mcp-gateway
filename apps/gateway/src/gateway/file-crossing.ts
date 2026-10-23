@@ -142,9 +142,10 @@ export const MAX_DOWNLOADS_HOST = 2;
 export const MAX_TRANSFERS_PER_USER = 1;
 export const TRANSFER_TIMEOUT_MS = 60_000;
 
-/** The arguments travel in a request header, and the plugin's HTTP server
- * caps the size of all headers together. Refused before any byte moves. */
-const MAX_ENCODED_ARGS_CHARS = 8 * 1024;
+/** The arguments travel as one field of the multipart body handed to the
+ * plugin (SCRUM-437), so an email's body fits; the plugins refuse a larger
+ * field. Refused here before any byte moves. */
+export const MAX_ARGS_BYTES = 1024 * 1024;
 /** A route's JSON answer (an error, or the tool result) is small. */
 const MAX_ROUTE_ANSWER_BYTES = 1024 * 1024;
 const MAX_ROUTE_MESSAGE_CHARS = 500;
@@ -586,13 +587,30 @@ export async function withReferencedFile<T>(
   }
 }
 
+/** A file on its way to a plugin, under the name of the field it fills:
+ * `file`, or `attachments[i]` for an email's i-th attachment. */
+export type HandedFile = SourceFile & { field: string };
+
 /**
- * THE DESTINATION LEG: hands a file to the plugin that stores it, with the
- * tool's arguments, and answers that tool's own result.
+ * The body the destination plugin reads (SCRUM-437): `multipart/form-data`
+ * with the tool's arguments as JSON in an `args` field and one field per
+ * file, each carrying its own name and type. Built with the runtime's own
+ * FormData, so there is no framing of ours to get wrong.
+ */
+export function buildHandoff(argsJson: string, files: readonly HandedFile[]): FormData {
+  const form = new FormData();
+  form.append("args", argsJson);
+  for (const file of files) form.append(file.field, new Blob([file.bytes], { type: file.type }), file.name);
+  return form;
+}
+
+/**
+ * THE DESTINATION LEG: hands the files to the plugin that stores them, with
+ * the tool's arguments, and answers that tool's own result.
  */
 async function sendToDestination(
-  file: SourceFile,
-  dest: { url: string; token: string; toolName: string; encodedArgs: string },
+  files: readonly HandedFile[],
+  dest: { url: string; token: string; toolName: string; argsJson: string },
   io: { fetchFn: typeof fetch; controller: AbortController }
 ): Promise<CrossingResult> {
   const destRes = await io.fetchFn(routeUrl(dest.url, DESTINATION_ROUTE), {
@@ -600,12 +618,8 @@ async function sendToDestination(
     headers: {
       "X-User-Token": dest.token,
       "X-Tool-Name": dest.toolName,
-      "X-Tool-Args": dest.encodedArgs,
-      "X-File-Name": encodeURIComponent(file.name),
-      "X-File-Type": file.type,
-      "Content-Type": "application/octet-stream",
     },
-    body: file.bytes,
+    body: buildHandoff(dest.argsJson, files),
     signal: io.controller.signal,
   });
 
@@ -658,14 +672,14 @@ export async function crossFile(opts: CrossFileOptions): Promise<CrossingResult>
   // file argument, and base64 in it would not fit the header anyway.
   const local = isLocalReference(read.ref);
   const sentArgs = local ? { ...opts.args, [consuming.fileArg]: closedFileArg(read.ref) } : opts.args;
-  const encodedArgs = Buffer.from(JSON.stringify(sentArgs), "utf8").toString("base64url");
-  if (encodedArgs.length > MAX_ENCODED_ARGS_CHARS) {
+  const argsJson = JSON.stringify(sentArgs);
+  if (Buffer.byteLength(argsJson, "utf8") > MAX_ARGS_BYTES) {
     return refuse(
       `The arguments to ${opts.toolName} are too large to send with a file. Shorten them and try again.`
     );
   }
 
-  if (local) return crossLocalFile(opts, read.ref, { url: opts.destinationUrl, token: destinationToken, encodedArgs });
+  if (local) return crossLocalFile(opts, read.ref, { url: opts.destinationUrl, token: destinationToken, argsJson });
 
   const resolved = await resolveSource(opts, read.ref);
   if (!resolved.ok) return resolved.result;
@@ -689,8 +703,8 @@ export async function crossFile(opts: CrossFileOptions): Promise<CrossingResult>
 
       leg = "destination";
       return await sendToDestination(
-        fetched.file,
-        { url: opts.destinationUrl, token: destinationToken, toolName: opts.toolName, encodedArgs },
+        [{ ...fetched.file, field: consuming.fileArg }],
+        { url: opts.destinationUrl, token: destinationToken, toolName: opts.toolName, argsJson },
         { fetchFn, controller }
       );
     } catch {
@@ -729,7 +743,7 @@ export function closedFileArg(ref: FileReference): Record<string, unknown> {
 async function crossLocalFile(
   opts: CrossFileOptions,
   ref: FileReference,
-  dest: { url: string; token: string; encodedArgs: string }
+  dest: { url: string; token: string; argsJson: string }
 ): Promise<CrossingResult> {
   // The Agent keeps tool arguments in its thread history and draws them on
   // its approval card, so a content reference there would store a file.
@@ -751,7 +765,8 @@ async function crossLocalFile(
       controller.abort();
     }, timeoutMs);
     try {
-      return await sendToDestination(decoded.file, { ...dest, toolName: opts.toolName }, { fetchFn, controller });
+      const field = fileCrossingFor(opts.tool)?.fileArg ?? "file";
+      return await sendToDestination([{ ...decoded.file, field }], { ...dest, toolName: opts.toolName }, { fetchFn, controller });
     } catch {
       // As in crossFile: a transport detail of a request that carried a
       // token is not echoed.

@@ -141,6 +141,21 @@ async function bodyBytes(call: Call): Promise<Buffer> {
   return Buffer.from(await new Response(call.init.body as BodyInit).arrayBuffer());
 }
 
+/** The destination request read the way a plugin reads it (SCRUM-437): a
+ * multipart body with an `args` field and one field per file. */
+async function handoffOf(call: Call): Promise<{
+  args: Record<string, unknown>;
+  files: Array<{ field: string; name: string; type: string; bytes: Buffer }>;
+}> {
+  const form = await new Response(call.init.body as BodyInit).formData();
+  const files: Array<{ field: string; name: string; type: string; bytes: Buffer }> = [];
+  for (const [field, value] of form.entries()) {
+    if (typeof value === "string") continue;
+    files.push({ field, name: value.name, type: value.type, bytes: Buffer.from(await value.arrayBuffer()) });
+  }
+  return { args: JSON.parse(String(form.get("args"))), files };
+}
+
 const idle = { host: 0, users: 0 };
 
 describe("the registry", () => {
@@ -224,21 +239,19 @@ describe("the happy path", () => {
     expect(second.url).toBe("http://localhost:40002/internal/consume");
     expect(second.init.method).toBe("POST");
     const h2 = Object.fromEntries(headersOf(second).entries());
-    expect(Object.keys(h2).sort()).toEqual([
-      "content-type",
-      "x-file-name",
-      "x-file-type",
-      "x-tool-args",
-      "x-tool-name",
-      "x-user-token",
-    ]);
-    expect(h2["content-type"]).toBe("application/octet-stream");
+    // The arguments and the file travel in the body, not in headers
+    // (SCRUM-437): only the token and the tool name are headers.
+    expect(Object.keys(h2).sort()).toEqual(["x-tool-name", "x-user-token"]);
     expect(h2["x-user-token"]).toBe(DEST_TOKEN);
     expect(h2["x-tool-name"]).toBe("jira_add_attachment");
-    expect(h2["x-file-type"]).toBe("message/rfc822");
-    expect(decodeURIComponent(h2["x-file-name"])).toBe(FILE_NAME);
-    expect(JSON.parse(Buffer.from(h2["x-tool-args"], "base64url").toString("utf8"))).toEqual(h.args);
-    expect((await bodyBytes(second)).equals(FILE_BYTES)).toBe(true);
+    expect(second.init.body).toBeInstanceOf(FormData);
+    const handoff = await handoffOf(second);
+    expect(handoff.args).toEqual(h.args);
+    expect(handoff.files).toHaveLength(1);
+    expect(handoff.files[0].field).toBe("file");
+    expect(handoff.files[0].name).toBe(FILE_NAME);
+    expect(handoff.files[0].type).toBe("message/rfc822");
+    expect(handoff.files[0].bytes.equals(FILE_BYTES)).toBe(true);
 
     expect(result).toEqual(RECEIPT);
     expect(transfersInFlight()).toEqual(idle);
@@ -253,7 +266,7 @@ describe("the happy path", () => {
     expect(String(first.init.body)).not.toContain(DEST_TOKEN);
     expect(everyHeaderValue(second)).toContain(DEST_TOKEN);
     expect(everyHeaderValue(second)).not.toContain(SOURCE_TOKEN);
-    expect(Buffer.from(headersOf(second).get("x-tool-args")!, "base64url").toString()).not.toContain(SOURCE_TOKEN);
+    expect(JSON.stringify((await handoffOf(second)).args)).not.toContain(SOURCE_TOKEN);
   });
 
   it("resolves the source token for the reference's own account, and sends the plugin a closed reference", async () => {
@@ -392,14 +405,24 @@ describe("refusals before any request", () => {
     expect(h.calls).toHaveLength(0);
   });
 
-  it("refuses arguments too large to travel in a header", async () => {
+  it("refuses arguments over 1 MB before any request", async () => {
     const h = harness({
-      args: { comment: "x".repeat(20_000), file: { type: "gmail_message", message_id: "m" } },
+      args: { comment: "x".repeat(1024 * 1024), file: { type: "gmail_message", message_id: "m" } },
     });
     const result = await h.run();
-    expect(result.isError).toBe(true);
+    expect(result).toEqual({
+      content: [{ type: "text", text: "The arguments to jira_add_attachment are too large to send with a file. Shorten them and try again." }],
+      isError: true,
+    });
     expect(h.calls).toHaveLength(0);
     expect(transfersInFlight()).toEqual(idle);
+  });
+
+  it("carries arguments far past what a header holds, such as an email's body", async () => {
+    const comment = `<p>${"é".repeat(20_000)}</p>`;
+    const h = harness({ args: { issue_key: "FIX-1", comment, file: { type: "gmail_message", message_id: "m" } } });
+    expect(await h.run()).toEqual(RECEIPT);
+    expect((await handoffOf(h.calls[1])).args.comment).toBe(comment);
   });
 
   it("refuses a second transfer for a user who has one in flight", async () => {
@@ -557,7 +580,7 @@ describe("the source fails", () => {
     const exact = Buffer.alloc(MAX_FILE_BYTES, 1);
     const h = harness({ source: sourceOk(exact) });
     expect(await h.run()).toEqual(RECEIPT);
-    expect((await bodyBytes(h.calls[1])).length).toBe(MAX_FILE_BYTES);
+    expect((await handoffOf(h.calls[1])).files[0].bytes.length).toBe(MAX_FILE_BYTES);
   });
 
   it("refuses a source answer with no usable file name", async () => {
@@ -753,8 +776,6 @@ describe("a content reference crosses with no source read (SCRUM-437)", () => {
   const PNG = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 1, 2, 3]);
   const content = { type: "content", name: "card.png", mime_type: "image/png", base64: PNG.toString("base64") };
 
-  const decodedArgs = (call: Call) =>
-    JSON.parse(Buffer.from(headersOf(call).get("x-tool-args") ?? "", "base64url").toString("utf8"));
 
   it("hands the decoded bytes to Jira, and the arguments carry no base64", async () => {
     const h = harness({ args: { issue_key: "FIX-1", file: content } });
@@ -764,11 +785,12 @@ describe("a content reference crosses with no source read (SCRUM-437)", () => {
     expect(h.resolveToken).not.toHaveBeenCalled();
     expect(h.resolvePluginUrl).not.toHaveBeenCalled();
     const [dest] = h.calls;
-    expect(await bodyBytes(dest)).toEqual(PNG);
-    expect(decodedArgs(dest)).toEqual({ issue_key: "FIX-1", file: { type: "content" } });
-    expect(everyHeaderValue(dest)).not.toContain(content.base64);
-    expect(headersOf(dest).get("x-file-name")).toBe("card.png");
-    expect(headersOf(dest).get("x-file-type")).toBe("image/png");
+    const handoff = await handoffOf(dest);
+    expect(handoff.files).toHaveLength(1);
+    expect(handoff.files[0]).toMatchObject({ field: "file", name: "card.png", type: "image/png" });
+    expect(handoff.files[0].bytes).toEqual(PNG);
+    expect(handoff.args).toEqual({ issue_key: "FIX-1", file: { type: "content" } });
+    expect(JSON.stringify(handoff.args)).not.toContain(content.base64);
     expect(transfersInFlight()).toEqual(idle);
   });
 
@@ -779,7 +801,7 @@ describe("a content reference crosses with no source read (SCRUM-437)", () => {
     await h.run();
     expect(h.calls).toHaveLength(1);
     expect(headersOf(h.calls[0]).get("x-tool-name")).toBe("drive_upload_file");
-    expect(decodedArgs(h.calls[0])).toEqual({ folder_id: "fold-1", file: { type: "content" } });
+    expect((await handoffOf(h.calls[0])).args).toEqual({ folder_id: "fold-1", file: { type: "content" } });
   });
 
   it("holds a transfer slot while the file is handed over", async () => {
