@@ -46,10 +46,14 @@ import { posthogState } from "./src/lib/posthog-server";
 import { runNoActivationFollowup } from "./src/gateway/lifecycle";
 import { securityHeaders } from "./src/gateway/security-headers";
 import { createFileDownloadRouter, quietDecodeErrors } from "./src/gateway/file-download-route";
+import { assertHeldUploadCeiling } from "./src/gateway/file-download";
 
 const dev = process.env.NODE_ENV !== "production";
 
 async function main() {
+  // Held uploads live in this process's memory (SCRUM-437). A ceiling set
+  // above a quarter of the machine stops the start, not a later upload.
+  assertHeldUploadCeiling();
   const nextApp = next({ dev });
   const handle = nextApp.getRequestHandler();
   await nextApp.prepare();
