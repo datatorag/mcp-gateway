@@ -24,6 +24,7 @@ import type { Request, Response } from "express";
 import { beginReceive, inspectUploadLink, type DeadUpload } from "./file-download";
 import { withSlot, type RefusalWords } from "./file-crossing";
 import { cleanInboundName, typeForName } from "./file-inbound";
+import { FRAME_CSP } from "./security-headers";
 
 /** Most to take the whole file, start to end. */
 export const RECEIVE_DEADLINE_MS = 120_000;
@@ -90,7 +91,9 @@ const sizeWords = (bytes: number) =>
  * anywhere else. It replaces the framing-only CSP every response carries,
  * so it says `frame-ancestors 'none'` itself. */
 export function uploadPageCsp(nonce: string): string {
-  return `default-src 'none'; style-src 'unsafe-inline'; script-src 'nonce-${nonce}'; connect-src 'self'; form-action 'none'; base-uri 'none'; frame-ancestors 'none'`;
+  // The framing part is the one every response carries, so a change there
+  // reaches this page too.
+  return `default-src 'none'; style-src 'unsafe-inline'; script-src 'nonce-${nonce}'; connect-src 'self'; form-action 'none'; base-uri 'none'; ${FRAME_CSP}`;
 }
 
 /**
