@@ -64,8 +64,8 @@ const BASE64 = /^[A-Za-z0-9+/]*={0,2}$/;
  * length the source plugins keep, with its extension, and never with half a
  * character at the cut. The destination plugins clean it again.
  */
-export function cleanInboundName(name: string): string {
-  const cleaned = safeDownloadName(name);
+export function cleanInboundName(name: string, fallback = "download"): string {
+  const cleaned = safeDownloadName(name, fallback);
   if (cleaned.length <= MAX_NAME_UNITS) return cleaned;
   const ext = /\.[A-Za-z0-9]{1,10}$/.exec(cleaned)?.[0] ?? "";
   const head = cleaned.slice(0, MAX_NAME_UNITS - ext.length).toWellFormed().replace(/�$/, "").trimEnd();

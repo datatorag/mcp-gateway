@@ -429,7 +429,7 @@ const RESERVED_DEVICE = /^(con|prn|aux|nul|com[1-9]|lpt[1-9])(\..*)?$/i;
  * spaces, not a reserved device name. What cannot be kept becomes
  * `download` plus the extension.
  */
-export function safeDownloadName(name: string): string {
+export function safeDownloadName(name: string, fallback = "download"): string {
   const cleaned = name
     .replace(/[\p{Cc}\p{Cf}]/gu, "")
     .replace(/["'`\\/:*?<>|]/g, "")
@@ -439,7 +439,7 @@ export function safeDownloadName(name: string): string {
     .toWellFormed();
   if (cleaned && !RESERVED_DEVICE.test(cleaned)) return cleaned;
   const ext = /\.[A-Za-z0-9]{1,10}$/.exec(name.replace(/[. ]+$/, ""))?.[0] ?? "";
-  return `download${ext}`;
+  return `${fallback}${ext}`;
 }
 
 export type DownloadDeps = Pick<
@@ -727,7 +727,13 @@ export function beginReceive(
   token: string,
   now: number = Date.now()
 ):
-  | { ok: true; maxBytes: number; finish: (file: { bytes: Buffer<ArrayBuffer>; name: string; type: string } | null, at?: number) => UploadReceipt | null }
+  | {
+      ok: true;
+      userId: string;
+      nameHint: string | null;
+      maxBytes: number;
+      finish: (file: { bytes: Buffer<ArrayBuffer>; name: string; type: string } | null, at?: number) => UploadReceipt | null;
+    }
   | { ok: false; kind: DeadUpload | "full" } {
   sweep(now);
   const record = uploadFor(token);
@@ -737,6 +743,8 @@ export function beginReceive(
   record.state = "receiving";
   return {
     ok: true,
+    userId: record.userId,
+    nameHint: record.nameHint,
     maxBytes: record.maxBytes,
     finish: (file, at = Date.now()) => {
       // Dropped or cancelled while the file was arriving: nothing is kept.

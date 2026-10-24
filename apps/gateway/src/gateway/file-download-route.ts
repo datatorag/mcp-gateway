@@ -22,6 +22,7 @@ import type { Database } from "@datatorag-mcp/db";
 import { sourceResolversFor } from "./file-source";
 import {
   DOWNLOAD_PATH,
+  UPLOAD_PATH,
   inspectLink,
   percentUnescape,
   redeemDownloadLink,
@@ -30,6 +31,7 @@ import {
   type RedeemOutcome,
 } from "./file-download";
 import type { Surface } from "./scope-grant";
+import { handleUploadRequest } from "./file-upload-route";
 
 /** What a reader of a referenced file needs, for one user. The tool and
  * this route build it the same way, so a link is read on the click exactly
@@ -197,6 +199,8 @@ export function createFileDownloadRouter(opts: {
   onSent?: (event: { userId: string; bytes: number; complete: boolean }) => void;
   depsFor?: (userId: string) => DownloadDeps;
   sendLimits?: Parameters<typeof sendBytes>[2];
+  /** The upload route's stall and deadline (SCRUM-437), for tests. */
+  uploadLimits?: { deadlineMs?: number; stallMs?: number };
 }): Router {
   const router = Router();
   const connectionsUrl = `${opts.baseUrl}/dashboard/connections`;
@@ -215,6 +219,13 @@ export function createFileDownloadRouter(opts: {
   // prefix is decoded, nothing under it reaches the app, and anything that
   // is not exactly a token is the "not valid" answer.
   router.use(DOWNLOAD_PREFIX, async (req: Request, res: Response) => {
+    // Upload links live under the same prefix (SCRUM-437), so this router
+    // owns their paths too and nothing under `/files` reaches the app.
+    if (req.path.startsWith("/u/")) {
+      await handleUploadRequest(req, res, req.path, opts.uploadLimits);
+      return;
+    }
+
     // No rate limit here, on purpose: a limit per client address guards
     // against guessing, which a 128-bit nonce does not need, and it would
     // rest on trusting a client-address header.
@@ -305,12 +316,12 @@ export function looksLikeDownloadPath(rawUrl: string): boolean {
 export function queryCarriesDownloadPath(rawUrl: string): boolean {
   const at = rawUrl.indexOf("?");
   if (at === -1) return false;
-  return percentUnescape(percentUnescape(rawUrl.slice(at + 1)))
+  const path = percentUnescape(percentUnescape(rawUrl.slice(at + 1)))
     .replace(/\\/g, "/")
     .replace(/\/(\.\/)+/g, "/")
     .replace(/\/{2,}/g, "/")
-    .toLowerCase()
-    .includes(DOWNLOAD_PATH);
+    .toLowerCase();
+  return path.includes(DOWNLOAD_PATH) || path.includes(UPLOAD_PATH);
 }
 
 /**

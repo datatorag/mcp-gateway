@@ -139,6 +139,10 @@ export const MAX_TRANSFERS_HOST = 2;
  * is the one transfer whose speed the other end controls, so in a shared
  * pool two slow readers could keep every attachment waiting. */
 export const MAX_DOWNLOADS_HOST = 2;
+/** Uploads arriving by PUT have their own host slots (SCRUM-437): the other
+ * end sets the pace, as with a download, and a slow phone upload must not
+ * hold a slot the Jira and Drive crossings need. */
+export const MAX_UPLOADS_HOST = 2;
 export const MAX_TRANSFERS_PER_USER = 1;
 export const TRANSFER_TIMEOUT_MS = 60_000;
 
@@ -194,6 +198,7 @@ type SlotPool = { inFlight: number; readonly max: number };
 const POOLS = {
   transfer: { inFlight: 0, max: MAX_TRANSFERS_HOST } as SlotPool,
   download: { inFlight: 0, max: MAX_DOWNLOADS_HOST } as SlotPool,
+  upload: { inFlight: 0, max: MAX_UPLOADS_HOST } as SlotPool,
 };
 export type SlotPoolName = keyof typeof POOLS;
 const userInFlight = new Map<string, number>();
@@ -438,6 +443,32 @@ function claimSlot(
       else userInFlight.set(userId, left);
     },
   };
+}
+
+/** The same for the upload pool. */
+export function uploadsInFlight(): number {
+  return POOLS.upload.inFlight;
+}
+
+/**
+ * Runs `run` inside a slot of the named pool and one of the user's, or
+ * answers the refusal; the slot is freed however `run` ends. For a consumer
+ * outside this module that holds a file in memory without reading a
+ * reference: an upload arriving.
+ */
+export async function withSlot<T>(
+  userId: string,
+  pool: SlotPoolName,
+  words: RefusalWords,
+  run: () => Promise<T>
+): Promise<{ ok: true; value: T } | { ok: false; result: CrossingResult }> {
+  const slot = claimSlot(userId, POOLS[pool], words);
+  if (!slot.ok) return slot;
+  try {
+    return { ok: true, value: await run() };
+  } finally {
+    slot.release();
+  }
 }
 
 /** Runs `run` inside a transfer slot; the slot is freed however it ends. */
