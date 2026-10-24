@@ -42,7 +42,7 @@ function mintPath(userId = "user-1", args: Record<string, unknown> = {}): string
   return String(JSON.parse(result.content[0].text as string).link.url).replace(BASE, "");
 }
 
-const put = (path: string, body: Uint8Array, headers: Record<string, string> = {}) =>
+const put = (path: string, body: Uint8Array<ArrayBuffer>, headers: Record<string, string> = {}) =>
   fetch(`${origin}${path}`, { method: "PUT", body, headers });
 
 const PNG = new Uint8Array(70).fill(7);
