@@ -166,57 +166,68 @@ export async function handleUploadRequest(
     log("PUT", begun.kind);
     return say(res, SENTENCES[begun.kind].status, SENTENCES[begun.kind].text, true);
   }
-  const mb = `${Math.round((begun.maxBytes / (1024 * 1024)) * 10) / 10} MB`;
-  const tooLarge = `The file is larger than ${mb}, the most this link takes. Nothing was uploaded.`;
+  // The link is claimed from here: whatever happens below, it is either
+  // holding the file or given back, never left claimed. A claim left behind
+  // would keep its room reserved against the host's ceiling for good.
+  try {
+    const mb = `${Math.round((begun.maxBytes / (1024 * 1024)) * 10) / 10} MB`;
+    const tooLarge = `The file is larger than ${mb}, the most this link takes. Nothing was uploaded.`;
 
-  // Content-Length is only a shortcut for an honest sender; the read below
-  // holds the cap whatever it says.
-  const declared = Number(header(req, "content-length"));
-  if (Number.isFinite(declared) && declared > begun.maxBytes) {
-    begun.finish(null);
-    log("PUT", "too_large");
-    return say(res, 413, tooLarge, true);
-  }
+    // Content-Length is only a shortcut for an honest sender; the read below
+    // holds the cap whatever it says.
+    const declared = Number(header(req, "content-length"));
+    if (Number.isFinite(declared) && declared > begun.maxBytes) {
+      begun.finish(null);
+      log("PUT", "too_large");
+      return say(res, 413, tooLarge, true);
+    }
 
-  const slot = await withSlot(begun.userId, "upload", RECEIVE_WORDS, () =>
-    receive(req, begun.maxBytes, {
-      deadlineMs: limits.deadlineMs ?? RECEIVE_DEADLINE_MS,
-      stallMs: limits.stallMs ?? RECEIVE_STALL_MS,
-    })
-  );
-  if (!slot.ok) {
-    begun.finish(null);
-    log("PUT", "busy");
-    return say(res, 503, slot.result.content.map((c) => c.text ?? "").join(" "), true);
-  }
-  const got = slot.value;
-  if (got.kind !== "ok") {
-    begun.finish(null);
-    log("PUT", got.kind);
-    if (got.kind === "over") return say(res, 413, tooLarge, true);
-    if (got.kind === "aborted") return void res.destroy();
-    return say(res, 408, "The file stopped arriving, so nothing was uploaded. The link still works; try again.", true);
-  }
-  if (got.bytes.byteLength === 0) {
-    begun.finish(null);
-    log("PUT", "empty");
-    return say(res, 400, "The upload is empty. Nothing was uploaded.");
-  }
+    const slot = await withSlot(begun.userId, "upload", RECEIVE_WORDS, () =>
+      receive(req, begun.maxBytes, {
+        deadlineMs: limits.deadlineMs ?? RECEIVE_DEADLINE_MS,
+        stallMs: limits.stallMs ?? RECEIVE_STALL_MS,
+      })
+    );
+    if (!slot.ok) {
+      begun.finish(null);
+      log("PUT", "busy");
+      return say(res, 503, slot.result.content.map((c) => c.text ?? "").join(" "), true);
+    }
+    const got = slot.value;
+    if (got.kind !== "ok") {
+      begun.finish(null);
+      log("PUT", got.kind);
+      if (got.kind === "over") return say(res, 413, tooLarge, true);
+      if (got.kind === "aborted") return void res.destroy();
+      return say(res, 408, "The file stopped arriving, so nothing was uploaded. The link still works; try again.", true);
+    }
+    if (got.bytes.byteLength === 0) {
+      begun.finish(null);
+      log("PUT", "empty");
+      return say(res, 400, "The upload is empty. Nothing was uploaded.");
+    }
 
-  // The name: what the page declares, else what curl appended, else the
-  // link's hint. The type: declared, unless it is a generic one a client
-  // sends by habit, else from the name.
-  const name = cleanInboundName(decoded(header(req, "x-file-name")) || decoded(pathName) || begun.nameHint || "", "upload");
-  const contentType = header(req, "content-type");
-  const declaredType =
-    header(req, "x-file-type") ??
-    (contentType && !/^application\/(?:octet-stream|x-www-form-urlencoded)\b/i.test(contentType) ? contentType : undefined);
-  const receipt = begun.finish({ bytes: got.bytes, name, type: typeForName(name, declaredType) });
-  if (!receipt) {
-    log("PUT", "cancelled");
-    return say(res, SENTENCES.cancelled.status, SENTENCES.cancelled.text);
+    // The name: what the page declares, else what curl appended, else the
+    // link's hint. The type: declared, unless it is a generic one a client
+    // sends by habit, else from the name.
+    const name = cleanInboundName(decoded(header(req, "x-file-name")) || decoded(pathName) || begun.nameHint || "", "upload");
+    const contentType = header(req, "content-type");
+    const declaredType =
+      header(req, "x-file-type") ??
+      (contentType && !/^application\/(?:octet-stream|x-www-form-urlencoded)\b/i.test(contentType) ? contentType : undefined);
+    const receipt = begun.finish({ bytes: got.bytes, name, type: typeForName(name, declaredType) });
+    if (!receipt) {
+      log("PUT", "cancelled");
+      return say(res, SENTENCES.cancelled.status, SENTENCES.cancelled.text);
+    }
+    log("PUT", "received", got.bytes.byteLength);
+    baseHeaders(res);
+    res.status(200).type("application/json").send(`${JSON.stringify(receipt, null, 2)}\n`);
+
+  } catch {
+    begun.finish(null);
+    log("PUT", "error");
+    if (!res.headersSent) say(res, 500, "The upload could not be taken. Nothing was uploaded; try again.", true);
+    else res.destroy();
   }
-  log("PUT", "received", got.bytes.byteLength);
-  baseHeaders(res);
-  res.status(200).type("application/json").send(`${JSON.stringify(receipt, null, 2)}\n`);
 }
