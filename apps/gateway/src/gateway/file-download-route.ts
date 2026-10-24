@@ -222,7 +222,7 @@ export function createFileDownloadRouter(opts: {
     // Upload links live under the same prefix (SCRUM-437), so this router
     // owns their paths too and nothing under `/files` reaches the app.
     if (req.path.startsWith("/u/")) {
-      await handleUploadRequest(req, res, req.path, opts.uploadLimits);
+      await handleUploadRequest(req, res, req.path, opts.uploadLimits, opts.baseUrl);
       return;
     }
 

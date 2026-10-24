@@ -98,6 +98,7 @@ export const PUBLIC_TITLES: Readonly<Record<string, string>> = {
   "FD15": "An upload link pasted back into a chat is cancelled, so it stays yours",
   "FD16": "A file over an upload link's limit is refused, and the link still works",
   "FD17": "Attach a file from your computer to an email",
+  "FD18": "Open an upload link in a browser and send the file from a page",
   "G1": "A read of a spreadsheet that does not exist says why",
   "G2": "A missing or unknown argument is refused by name before anything runs",
   "GM1": "Rename a label",

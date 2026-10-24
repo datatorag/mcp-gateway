@@ -120,7 +120,11 @@ A `content` reference cannot be used in the DataToRAG dashboard agent, and a dow
 
 ## Uploading a file from your computer
 
-When the file is on your computer, `file_upload_link` makes a link that takes it, so the file never passes through the conversation. The answer carries a one-line command that sends the file:
+When the file is on your computer, `file_upload_link` makes a link that takes it, so the file never passes through the conversation.
+
+Open the link in a browser and it shows a page with one place to choose or drop the file and an Upload button. When the file has arrived, the page shows its size and SHA-256 and the reference to paste back into your conversation. It works on a phone too.
+
+From a terminal, the answer also carries a one-line command that sends the file:
 
 ```
 curl -fsS -T ./report.pdf "https://datatorag.com/files/u/<token>/"
