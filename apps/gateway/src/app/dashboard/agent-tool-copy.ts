@@ -35,6 +35,7 @@ import {
   ClipboardListIcon,
   CodeIcon,
   DownloadIcon,
+  UploadIcon,
   PlayIcon,
   Link2Icon,
   PlugIcon,
@@ -66,6 +67,11 @@ export const INTERNAL_TOOL_DISPLAY: Record<
   file_download_link: {
     label: "Making a download link",
     icon: DownloadIcon,
+  },
+  // SCRUM-437: a way in for a file on the user's own computer.
+  file_upload_link: {
+    label: "Making an upload link",
+    icon: UploadIcon,
   },
   // The skill catalogue over MCP (SCRUM-224), reachable from the agent too.
   // The test runner (SCRUM-303). Admin-only, so most readers never see
