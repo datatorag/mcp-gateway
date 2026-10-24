@@ -187,10 +187,14 @@ describe("built-in tools", () => {
     }
   });
 
-  it("exactly one built-in is metered, and it says so on the event with its own outcome (SCRUM-420)", async () => {
-    // The exception is declared on the entry. If a second entry ever
+  it("exactly the two file links are metered, and the download link says so on the event with its own outcome (SCRUM-420)", async () => {
+    // The exception is declared on the entry. If another entry ever
     // declares it, this fails and somebody decides that on purpose.
-    expect(BUILT_IN_TOOLS.filter((t) => t.metered).map((t) => t.definition.name)).toEqual(["file_download_link"]);
+    // The two that move a file through the gateway's memory: the download
+    // link, and the upload link (SCRUM-437), each one call when made.
+    expect(BUILT_IN_TOOLS.filter((t) => t.metered).map((t) => t.definition.name)).toEqual(["file_download_link", "file_upload_link"]);
+    const upload = BUILT_IN_TOOLS.find((t) => t.definition.name === "file_upload_link")!;
+    expect({ approval: upload.approval, attended: upload.attended }).toEqual({ approval: "write", attended: true });
 
     const client = await connectedClient();
     trackToolCall.mockClear();
@@ -457,5 +461,21 @@ describe("echo holds its own schema", () => {
     const result = await client.callTool({ name: "echo", arguments: { message: "hi" } });
     expect(result.isError ?? false).toBe(false);
     expect(JSON.stringify(result.content)).toContain("hi");
+  });
+});
+
+describe("an upload link carried in a call (SCRUM-437)", () => {
+  it("refuses the call in the upload link's words and cancels the link", async () => {
+    const { createUploadLink, inspectUploadLink, resetDownloadLinks, UPLOAD_PATH } = await import("./file-download");
+    resetDownloadLinks();
+    const minted = createUploadLink({ userId: "user-1", args: {}, baseUrl: "https://gw.example.test" });
+    const url = String(JSON.parse(minted.content[0].text as string).link.url);
+    const client = await connectedClient();
+    const result = await client.callTool({ name: "echo", arguments: { message: `send it to ${url}` } });
+    expect(result.isError).toBe(true);
+    expect((result.content as Array<{ text: string }>)[0].text).toBe(
+      "This call carries an upload link made by this service, and an upload link cannot be passed to another tool. The call was not run and the link has been cancelled."
+    );
+    expect(inspectUploadLink(url.split(UPLOAD_PATH)[1]).kind).toBe("cancelled");
   });
 });

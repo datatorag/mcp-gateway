@@ -6,6 +6,7 @@
  */
 
 import { describe, it, expect, vi } from "vitest";
+import { beginReceive, createUploadLink, resetDownloadLinks, takeUpload, UPLOAD_PATH } from "./file-download";
 import {
   crossFile,
   fileCrossingFor,
@@ -735,8 +736,7 @@ describe("local reference types (SCRUM-437)", () => {
     for (const type of [...Object.keys(FILE_REFERENCE_TYPES), ...ACCEPTED_LOCAL_TYPES]) {
       expect(read.text).toContain(referenceExample(type));
     }
-    // Declared for the upload link, not offered until it exists.
-    expect(read.text).not.toContain(referenceExample("upload"));
+
   });
 
   it("refuse an account, because the file comes with the call", () => {
@@ -836,7 +836,7 @@ describe("a content reference crosses with no source read (SCRUM-437)", () => {
       content: [
         {
           type: "text",
-          text: "A content reference cannot be used in the dashboard Agent, which keeps the arguments of every tool call. Nothing was uploaded.",
+          text: "A content reference cannot be used in the dashboard Agent, which keeps the arguments of every tool call. Ask for an upload link with file_upload_link instead. Nothing was uploaded.",
         },
       ],
       isError: true,
@@ -844,10 +844,10 @@ describe("a content reference crosses with no source read (SCRUM-437)", () => {
     expect(h.calls).toHaveLength(0);
   });
 
-  it("refuses an upload reference until upload links exist", async () => {
+  it("refuses an upload reference no upload link made", async () => {
     const h = harness({ args: { issue_key: "FIX-1", file: { type: "upload", upload_id: "u1" } } });
     const result = await h.run();
-    expect(result.isError).toBe(true);
+    expect(textOf(result)).toBe("This upload is not valid. Upload the file again.");
     expect(h.calls).toHaveLength(0);
   });
 });
@@ -963,5 +963,97 @@ describe("an email carries several file references (SCRUM-437)", () => {
     expect(result.isError).toBe(true);
     expect(textOf(result)).toContain("dashboard Agent");
     expect(h.calls).toHaveLength(0);
+  });
+});
+
+describe("an uploaded file crosses by its upload reference (SCRUM-437)", () => {
+  const PDF = Buffer.from("%PDF-1.4 uploaded by curl");
+
+  /** Mint a link for the user and receive PDF on it, as a PUT would. */
+  function uploadFor(userId = "user-1") {
+    const minted = createUploadLink({ userId, args: {}, baseUrl: "https://gw.example.test" });
+    const token = String(JSON.parse(textOf(minted)).link.url).split(UPLOAD_PATH)[1];
+    const begun = beginReceive(token);
+    if (!begun.ok) throw new Error(begun.kind);
+    const receipt = begun.finish({ bytes: PDF as Buffer<ArrayBuffer>, name: "report.pdf", type: "application/pdf" });
+    return { type: "upload", upload_id: receipt!.reference.upload_id };
+  }
+
+  it("hands the held file to Jira, and the plugin is told only the type", async () => {
+    resetDownloadLinks();
+    const ref = uploadFor();
+    const h = harness({ args: { issue_key: "FIX-1", file: ref } });
+    expect(await h.run()).toEqual(RECEIPT);
+    expect(h.calls.map((c) => c.url)).toEqual(["http://localhost:40002/internal/consume"]);
+    const handoff = await handoffOf(h.calls[0]);
+    expect(handoff.files[0]).toMatchObject({ field: "file", name: "report.pdf", type: "application/pdf" });
+    expect(handoff.files[0].bytes.equals(PDF)).toBe(true);
+    expect(handoff.args).toEqual({ issue_key: "FIX-1", file: { type: "upload" } });
+  });
+
+  it("is used once the destination is asked, whatever it answered", async () => {
+    resetDownloadLinks();
+    const ref = uploadFor();
+    const refused = harness({
+      args: { issue_key: "FIX-1", file: ref },
+      dest: () => Response.json({ content: [{ type: "text", text: "no such issue" }], isError: true }),
+    });
+    expect((await refused.run()).isError).toBe(true);
+    const again = harness({ args: { issue_key: "FIX-1", file: ref } });
+    const result = await again.run();
+    expect(textOf(result)).toContain("already been used");
+    expect(again.calls).toHaveLength(0);
+  });
+
+  it("is kept when the call stops in the gateway before the destination, and works after", async () => {
+    resetDownloadLinks();
+    const ref = uploadFor();
+    const gate = deferred<Response>();
+    const busy = harness({ source: () => gate.promise });
+    const holding = busy.run();
+    await vi.waitFor(() => expect(busy.calls).toHaveLength(1));
+    try {
+      const refused = harness({ args: { issue_key: "FIX-1", file: ref } });
+      expect(textOf(await refused.run())).toContain("already in progress");
+    } finally {
+      gate.resolve(new Response("x", { status: 200, headers: { "X-File-Name": "a.eml" } }));
+      await holding;
+    }
+    expect(await harness({ args: { issue_key: "FIX-1", file: ref } }).run()).toEqual(RECEIPT);
+  });
+
+  it("is kept when another reference in the same email is refused", async () => {
+    resetDownloadLinks();
+    const ref = uploadFor();
+    const h = harness({ args: { to: "a@example.com", subject: "s", body: "b", attachments: [ref, { type: "drive_file" }] } });
+    h.options.tool = "gws-mcp__gmail_create_draft";
+    h.options.toolName = "gmail_create_draft";
+    expect((await h.run()).isError).toBe(true);
+    expect(h.calls).toHaveLength(0);
+    const taken = takeUpload(ref.upload_id, "user-1");
+    expect(taken.ok).toBe(true);
+  });
+
+  it("is not valid for another user's call, and stays theirs", async () => {
+    resetDownloadLinks();
+    const ref = uploadFor("user-1");
+    const h = harness({ userId: "user-2", args: { issue_key: "FIX-1", file: ref } });
+    const result = await h.run();
+    expect(textOf(result)).toBe("This upload is not valid. Upload the file again.");
+    expect(h.calls).toHaveLength(0);
+    expect(takeUpload(ref.upload_id, "user-1").ok).toBe(true);
+  });
+
+  it("may be used in the dashboard Agent: the reference is an id, not the file", async () => {
+    resetDownloadLinks();
+    const ref = uploadFor();
+    const h = harness({ args: { issue_key: "FIX-1", file: ref } });
+    h.options.surface = "agent";
+    expect(await h.run()).toEqual(RECEIPT);
+  });
+
+  it("is offered in refusals now that upload links exist", async () => {
+    const h = harness({ args: { issue_key: "FIX-1" } });
+    expect(textOf(await h.run())).toContain(referenceExample("upload"));
   });
 });

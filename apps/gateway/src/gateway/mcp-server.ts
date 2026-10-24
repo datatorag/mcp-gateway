@@ -57,7 +57,7 @@ import {
 import { grantLine, type ConnectedAccountLine } from "./account-grant-line";
 import { cleanWorkspaceName } from "./untrusted-text";
 import { crossFile, filePathsFor } from "./file-crossing";
-import { createDownloadLink, DOWNLOAD_TOOL, revokeLinksCarriedIn } from "./file-download";
+import { createDownloadLink, createUploadLink, DOWNLOAD_TOOL, revokeCarriedLinks, UPLOAD_TOOL } from "./file-download";
 import { downloadDepsFor } from "./file-download-route";
 import { sourceResolversFor } from "./file-source";
 import type { Surface } from "./scope-grant";
@@ -660,6 +660,34 @@ export const BUILT_IN_TOOLS: {
         deps: downloadDepsFor(ctx.db, ctx.userId, ctx.surface, ctx.connectionsUrl),
       }) as Promise<BuiltinResult>,
   },
+  /* SCRUM-437: a way in for a file on the user's own machine. A write,
+   * because it makes a way to put a file into the account; metered, as the
+   * download link is; attended, because a link nobody is there to use is
+   * only a way for a file to arrive unasked. */
+  {
+    approval: "write",
+    metered: true,
+    attended: true,
+    definition: {
+      name: UPLOAD_TOOL,
+      description:
+        "Makes a link that takes one file from the user's own computer, so it can be put into Drive, attached to a Jira issue or attached to an email without passing through the conversation. The answer is a link on this service and a one-line command, curl -T with the file's path, that sends the file to it. The link takes one file, once, within ten minutes. Sending the file answers a receipt with its name, size and SHA-256, and a file reference, {\"type\":\"upload\",\"upload_id\":\"...\"}, which drive_upload_file, jira_add_attachment and the email tools' attachments take. The file is held in memory for ten minutes after it arrives, goes to one call and is never written to disk. A call to any tool on this service that carries the link itself is refused and the link is cancelled. At most 25 MB, and three upload links or uploaded files waiting at a time.",
+      inputSchema: {
+        type: "object" as const,
+        properties: {
+          name: {
+            type: "string",
+            description: "The file's name, used when the upload itself carries none. Optional.",
+          },
+          max_bytes: {
+            type: "integer",
+            description: "The largest file the link takes, in bytes. Optional; at most and by default 26214400 (25 MB).",
+          },
+        },
+      },
+    },
+    handler: async (args, ctx) => createUploadLink({ userId: ctx.userId, args, baseUrl: ctx.baseUrl }) as BuiltinResult,
+  },
   {
     approval: "read",
     definition: {
@@ -947,9 +975,11 @@ export function createMcpServer(
     // any tool, built-in or plugin: arguments that hold a live link of this
     // user's are refused and the link is cancelled, so a link cannot be
     // mailed, posted or written anywhere through us.
-    if (rawArgs && revokeLinksCarriedIn(userId, () => JSON.stringify(rawArgs))) {
-      const text =
-        "This call carries a download link made by this service, and a download link cannot be passed to another tool. The call was not run and the link has been cancelled.";
+    const carried = rawArgs ? revokeCarriedLinks(userId, () => JSON.stringify(rawArgs)) : new Set();
+    if (carried.size > 0) {
+      const text = carried.has("download")
+        ? "This call carries a download link made by this service, and a download link cannot be passed to another tool. The call was not run and the link has been cancelled."
+        : "This call carries an upload link made by this service, and an upload link cannot be passed to another tool. The call was not run and the link has been cancelled.";
       void trackToolCall(db, {
         userId,
         clientId,

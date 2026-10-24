@@ -403,19 +403,29 @@ function base64Needles(nonce: string): string[] {
  * anything a client sends with a tool that is not ours.
  */
 export function revokeLinksCarriedIn(userId: string, serialise: () => string, now: number = Date.now()): boolean {
+  return revokeCarriedLinks(userId, serialise, now).size > 0;
+}
+
+/** The same check, answering which kinds of link it cancelled, so the
+ * refusal can name the one the call carried. */
+export function revokeCarriedLinks(
+  userId: string,
+  serialise: () => string,
+  now: number = Date.now()
+): Set<LinkRecord["kind"]> {
+  const cancelled = new Set<LinkRecord["kind"]>();
   const live = userRecords(userId).filter((r) => isLive(r, now));
-  if (live.length === 0) return false;
+  if (live.length === 0) return cancelled;
   const text = serialise();
   const haystacks = text.includes("%") ? [text, percentUnescape(text)] : [text];
-  let carried = false;
   for (const record of live) {
     const needles = [record.nonce, ...base64Needles(record.nonce)];
     if (haystacks.some((h) => needles.some((n) => h.includes(n)))) {
       record.state = "cancelled";
-      carried = true;
+      cancelled.add(record.kind);
     }
   }
-  return carried;
+  return cancelled;
 }
 
 const RESERVED_DEVICE = /^(con|prn|aux|nul|com[1-9]|lpt[1-9])(\..*)?$/i;

@@ -22,7 +22,7 @@
 import type { ResolvedServiceToken } from "./service-token";
 import { checkScopeForTool, type Surface } from "./scope-grant";
 import { echoName } from "./skills-catalogue";
-import { resolveContent } from "./file-inbound";
+import { resolveContent, resolveUpload } from "./file-inbound";
 
 /** Tools that take a file reference, by namespaced name, and the argument
  * that carries it. */
@@ -109,7 +109,7 @@ export const LOCAL_REFERENCE_TYPES: Readonly<
 /** The local types a tool takes today. `upload` is declared above for the
  * upload link and joins this list when that link exists; until then it is
  * neither taken nor offered in a refusal's examples. */
-export const ACCEPTED_LOCAL_TYPES: readonly string[] = ["content"];
+export const ACCEPTED_LOCAL_TYPES: readonly string[] = ["content", "upload"];
 
 /** The fields a reference of either kind must carry, or undefined for a type
  * that is neither. */
@@ -730,9 +730,10 @@ const SEND_WORDS: RefusalWords = {
   busy: "Nothing was read or sent",
 };
 
-/** One reference of the call, read and, for a plugin type, its source found. */
+/** One reference of the call, read and, for a plugin type, its source found;
+ * for an upload, the held file taken for this call. */
 type PlannedReference =
-  | { field: string; ref: FileReference; local: true }
+  | { field: string; ref: FileReference; local: true; held?: SourceFile }
   | { field: string; ref: FileReference; local: false; source: ResolvedSource };
 
 /**
@@ -777,7 +778,7 @@ export async function crossFile(opts: CrossFileOptions): Promise<CrossingResult>
   // its approval card, so a content reference there would store a file.
   if (opts.surface === "agent" && read.some((r) => r.ref.type === "content")) {
     return refuse(
-      `A content reference cannot be used in the dashboard Agent, which keeps the arguments of every tool call. ${words.sentence}`
+      `A content reference cannot be used in the dashboard Agent, which keeps the arguments of every tool call. Ask for an upload link with file_upload_link instead. ${words.sentence}`
     );
   }
 
@@ -794,8 +795,38 @@ export async function crossFile(opts: CrossFileOptions): Promise<CrossingResult>
     );
   }
 
+  // Uploads taken for this call are settled once it ends: spent if the
+  // destination was asked, whatever it answered; held again if the call
+  // stopped in the gateway first (SCRUM-437).
+  const settlers: Array<(requested: boolean) => void> = [];
+  let requested = false;
+  try {
+    return await crossPlanned(opts, read, words, destinationToken, argsJson, settlers, () => {
+      requested = true;
+    });
+  } finally {
+    for (const settle of settlers) settle(requested);
+  }
+}
+
+async function crossPlanned(
+  opts: CrossFileOptions,
+  read: Array<{ field: string; ref: FileReference }>,
+  words: RefusalWords,
+  destinationToken: string,
+  argsJson: string,
+  settlers: Array<(requested: boolean) => void>,
+  markRequested: () => void
+): Promise<CrossingResult> {
   const planned: PlannedReference[] = [];
   for (const r of read) {
+    if (r.ref.type === "upload") {
+      const taken = resolveUpload(r.ref, opts.userId);
+      if (!taken.ok) return refuse(taken.text);
+      settlers.push(taken.settle);
+      planned.push({ ...r, local: true, held: taken.file });
+      continue;
+    }
     if (isLocalReference(r.ref)) {
       planned.push({ ...r, local: true });
       continue;
@@ -829,9 +860,13 @@ export async function crossFile(opts: CrossFileOptions): Promise<CrossingResult>
       for (const p of planned) {
         let file: SourceFile;
         if (p.local) {
-          const decoded = resolveContent(p.ref);
-          if (!decoded.ok) return refuse(decoded.text);
-          file = decoded.file;
+          if (p.held) {
+            file = p.held;
+          } else {
+            const decoded = resolveContent(p.ref);
+            if (!decoded.ok) return refuse(decoded.text);
+            file = decoded.file;
+          }
           if (total + file.bytes.byteLength > MAX_FILE_BYTES) {
             return refuse(overText ?? `The file is larger than ${CAP_WORDS}, the most that can be moved in one call. ${words.sentence}`);
           }
@@ -848,6 +883,7 @@ export async function crossFile(opts: CrossFileOptions): Promise<CrossingResult>
       }
 
       leg = "destination";
+      markRequested();
       return await sendToDestination(
         files,
         { url: opts.destinationUrl, token: destinationToken, toolName: opts.toolName, argsJson },

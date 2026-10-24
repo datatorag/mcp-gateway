@@ -63,7 +63,7 @@ describe("resolveContent", () => {
     const out = resolveContent(ref({ name: "a.bin", base64 }));
     expect(out).toEqual({
       ok: false,
-      text: "The file is larger than 1 MB, the most a content reference carries. Nothing was uploaded.",
+      text: "The file is larger than 1 MB, the most a content reference carries. For a larger file, ask for an upload link with file_upload_link. Nothing was uploaded.",
     });
   });
 
