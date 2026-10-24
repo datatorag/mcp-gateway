@@ -55,6 +55,7 @@ A tool that takes a file takes a **file reference**. Most references are a small
 | `drive_file` | `file_id`, optional `account` | A Google Drive file as stored, under its Drive name |
 | `drive_export` | `file_id`, `format`, optional `account` | A Google Docs, Sheets or Slides file exported to a format, named with its extension |
 | `content` | `name`, `base64`, optional `mime_type` | A file Claude already holds, carried in the call as base64, at most 1 MB |
+| `upload` | `upload_id` | A file you sent from your computer through an upload link, at most 25 MB |
 
 A Google Docs, Sheets or Slides file has no stored file to send as it is, so as a `drive_file` it is refused with the `drive_export` reference to use instead. The formats are:
 
@@ -109,13 +110,36 @@ When the file is already in the conversation, for example an image or a PDF you 
 ```
 
 - `base64` is the file in standard base64, as one unbroken string. Base64 broken across lines, or in the URL-safe alphabet, is refused rather than decoded into a damaged file.
-- The file can be at most 1 MB.
+- The file can be at most 1 MB. For a larger file, or one Claude does not hold, use an upload link.
 - `mime_type` is optional. Without it, the type comes from the name's extension.
 - A `content` reference takes no `account`, because the file comes with the call.
 
 The receipt is the same as for any other reference: the SHA-256 and byte count of what DataToRAG received and handed on, and, for Drive, whether what Drive stored matches it.
 
 A `content` reference cannot be used in the DataToRAG dashboard agent, and a download link cannot be made from one: the file is already on your side.
+
+## Uploading a file from your computer
+
+When the file is on your computer, `file_upload_link` makes a link that takes it, so the file never passes through the conversation. The answer carries a one-line command that sends the file:
+
+```
+curl -fsS -T ./report.pdf "https://datatorag.com/files/u/<token>/"
+```
+
+The trailing slash lets the file keep its own name. Sending it answers a receipt with the file's name, size and SHA-256, and a reference:
+
+```json
+{ "type": "upload", "upload_id": "<id>" }
+```
+
+Pass that reference as the file of `drive_upload_file` or `jira_add_attachment`, or as an entry of an email's `attachments`.
+
+- The link takes one file, once, and stops working ten minutes after it is made.
+- The file can be at most 25 MB.
+- The uploaded file is kept for ten minutes after it arrives, for one call. After that it is gone, and you upload it again.
+- If the call stops before anything is sent on (the service is busy, or another reference in the same email is wrong), the uploaded file is kept and the reference still works. Once the call reaches Drive, Jira or Gmail, the file is used, even if that service then says no (a folder id that is not a folder, an issue you cannot see): upload it again.
+- You can have three upload links or uploaded files waiting at a time.
+- An upload link, like a download link, is for you: a call that carries one is refused, and the link is cancelled.
 
 ## Attaching files to an email
 
@@ -231,11 +255,13 @@ A folder owned by someone else is reported in the receipt, not refused. Name the
 
 ## Where the file is
 
-The file is held in the gateway's memory only while the transfer runs, and is never written to our disks.
+The file is held in the gateway's memory only while the transfer runs, and is never written to our disks. The one exception is a file you upload, described below.
 
 It is read from the service it lives in and sent to the service you named, inside the one call. It is not copied to Google Drive or to any other place on the way.
 
 A file sent as a `content` reference is decoded in the gateway's memory and handed to the service you named inside the same call, and is never written to our disks.
+
+A file you upload through an upload link is kept in the gateway's memory from the moment it arrives until one call uses it, for ten minutes at most. Then it is gone. It is never written to our disks, and if the gateway restarts in those ten minutes, it is gone too and you upload it again.
 
 For a download link, the file is read into the gateway's memory twice, once to compute the receipt and once when the Save button on the link's page is used, is sent from memory to the browser that used it, and is never written to our disks. Between the two, and for up to twenty minutes after the link is made, we hold what identifies the file (the message it names and the account it is in, its name, size and SHA-256), and not its content.
 
@@ -244,13 +270,14 @@ For a download link, the file is read into the gateway's memory twice, once to c
 - One file per call for Jira and Drive, at most 25 MB. A larger file is refused.
 - An email takes up to ten attachments, at most 25 MB together, counting Drive files and referenced files alike.
 - A `content` reference carries at most 1 MB.
+- An upload link takes one file of at most 25 MB, within ten minutes. You can have three upload links or uploaded files waiting at a time.
 - One transfer at a time per account on DataToRAG. A second one started while the first is running is refused; run it again when the first has finished.
-- A download link counts as one tool call when it is made, whether or not it is used, and is refused like any other call once your plan's calls are used up.
+- A download link or an upload link counts as one tool call when it is made, whether or not it is used, and is refused like any other call once your plan's calls are used up.
 - A transfer is never retried. If one fails, look at the destination before running it again, so a file is not attached twice.
 
 ## Who is asked first
 
-In a chat with the DataToRAG agent, attaching a file or making a download link is treated as a write and you are asked before it runs. A skill run cannot make a download link, because nobody is there to use it, and the agent does not take a `content` reference, because a chat keeps the arguments of every tool call. A skill run does not stop to ask, and other MCP clients apply their own approval rules, so in those the receipt is the check. Name the destination yourself: an assistant should never take an issue key from the content of an email.
+In a chat with the DataToRAG agent, attaching a file or making a download or upload link is treated as a write and you are asked before it runs. A skill run cannot make a download link or an upload link, because nobody is there to use it, and the agent does not take a `content` reference, because a chat keeps the arguments of every tool call. A skill run does not stop to ask, and other MCP clients apply their own approval rules, so in those the receipt is the check. Name the destination yourself: an assistant should never take an issue key from the content of an email.
 
 ## Example prompts
 

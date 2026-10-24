@@ -185,6 +185,7 @@ export const SCENARIOS: Scenario[] = [
       "FD2", // a call carrying a live link is refused and the link cancelled
       "FD10", // a draft carries two files sent as content references beside a Drive file
       "FD11", // an email carries an attachment from another mailbox and a file sent in the call
+      "FD17", // a file sent through an upload link is attached to an email draft
     ],
   },
   {
@@ -217,6 +218,10 @@ export const SCENARIOS: Scenario[] = [
       "FD6", // a file sent as a content reference lands in Drive as the bytes that were sent
       "FD8", // a download link is refused for a file sent as a content reference
       "FD9", // a content reference over 1 MB is refused, and nothing reaches Drive
+      "FD12", // a file sent through an upload link lands in Drive as the bytes that were sent
+      "FD14", // an uploaded file goes to one call, and its link takes one file
+      "FD15", // a call that carries a live upload link is refused and the link is cancelled
+      "FD16", // a file over an upload link's limit is refused, and the link still works
       "DR6", // a Doc in one account's Drive is copied as a PDF into another's
     ],
   },
@@ -260,6 +265,7 @@ export const SCENARIOS: Scenario[] = [
       "JR12", // a link between two issues reads the right way round from each
       "JR13", // a Doc exported as a PDF is attached to an issue, and the issue lists it
       "FD7", // a file sent as a content reference is attached to an issue as the bytes that were sent
+      "FD13", // a file sent through an upload link is attached to an issue as the bytes that were sent
     ],
   },
   {

@@ -5,7 +5,7 @@ import type { Database, TestRunScope, TestRunTotals } from "@datatorag-mcp/db";
 import { getEnv } from "@datatorag-mcp/config";
 import { createMcpServer } from "../mcp-server";
 import { FILE_CONSUMING_TOOLS } from "../file-crossing";
-import { DOWNLOAD_TOOL } from "../file-download";
+import { DOWNLOAD_TOOL, UPLOAD_TOOL } from "../file-download";
 import { NAMESPACE_SEPARATOR, PLUGINS_DIR, PLUGINS_FROM_IMAGE } from "../plugin-manager";
 import { resultText } from "./result-json";
 import type { ConnectionPool } from "../pool";
@@ -153,7 +153,7 @@ export const FILE_TRANSFER_LOCK = "file-transfer";
 export function movesAFile(testCase: Pick<TestCase, "covers" | "crossesFiles">): boolean {
   return (
     testCase.crossesFiles === true ||
-    testCase.covers.some((tool) => tool === DOWNLOAD_TOOL || Object.hasOwn(FILE_CONSUMING_TOOLS, tool))
+    testCase.covers.some((tool) => tool === DOWNLOAD_TOOL || tool === UPLOAD_TOOL || Object.hasOwn(FILE_CONSUMING_TOOLS, tool))
   );
 }
 

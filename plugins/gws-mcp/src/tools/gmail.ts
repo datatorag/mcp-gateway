@@ -91,7 +91,8 @@ const attachmentsField = {
       'A file reference is an object with a "type": {"type": "gmail_message", "message_id": "<id>"} attaches an email as its original .eml, ' +
       '{"type": "gmail_attachment", "message_id": "<id>", "part_id": "<part id>"} one attachment of an email, ' +
       '{"type": "drive_file", "file_id": "<id>"} a Drive file as stored, {"type": "drive_export", "file_id": "<id>", "format": "pdf"} a Google file exported, ' +
-      'and {"type": "content", "name": "<file name>", "base64": "<standard base64, one unbroken string>"} a file the caller already holds, at most 1 MB. ' +
+      '{"type": "content", "name": "<file name>", "base64": "<standard base64, one unbroken string>"} a file the caller already holds, at most 1 MB, ' +
+      'and {"type": "upload", "upload_id": "<id>"} a file the user sent through file_upload_link. ' +
       'A reference may carry an "account" naming the connected Google account that holds the email or file. Several entries may be references. ' +
       "Two attachments may not share a filename. " +
       'To show an image in the body rather than at the bottom, reference it in html_body as <img src="cid:FILENAME">, where FILENAME is its Drive filename with any character other than letters, digits, dot, dash and underscore replaced by an underscore. ' +
@@ -119,7 +120,7 @@ const attachmentsField = {
           properties: {
             type: {
               type: "string",
-              enum: ["gmail_message", "gmail_attachment", "drive_file", "drive_export", "content"],
+              enum: ["gmail_message", "gmail_attachment", "drive_file", "drive_export", "content", "upload"],
               description: "The kind of file reference.",
             },
             message_id: { type: "string", description: "With gmail_message and gmail_attachment: the Gmail message id." },
@@ -130,6 +131,7 @@ const attachmentsField = {
             name: { type: "string", description: "With content: the file's name, with its extension." },
             base64: { type: "string", description: "With content: the file in standard base64 as one unbroken string, at most 1 MB decoded." },
             mime_type: { type: "string", description: "With content, optional: the file's type; omitted, it comes from the name's extension." },
+            upload_id: { type: "string", description: "With upload: the id from the receipt of a file sent through file_upload_link." },
           },
           required: ["type"],
         },

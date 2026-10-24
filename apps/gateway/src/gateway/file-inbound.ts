@@ -11,7 +11,7 @@
  * the decoded bytes live only as long as the crossing that holds them.
  */
 
-import { safeDownloadName } from "./file-download";
+import { safeDownloadName, takeUpload } from "./file-download";
 import type { FileReference, SourceFile } from "./file-crossing";
 
 /** The largest `content` file, decoded. The model has to write every
@@ -19,7 +19,7 @@ import type { FileReference, SourceFile } from "./file-crossing";
  * carries in practice and well below what the transport allows. */
 export const MAX_CONTENT_BYTES = 1024 * 1024;
 const CAP_WORDS = `${MAX_CONTENT_BYTES / (1024 * 1024)} MB`;
-const TOO_LARGE = `The file is larger than ${CAP_WORDS}, the most a content reference carries. Nothing was uploaded.`;
+const TOO_LARGE = `The file is larger than ${CAP_WORDS}, the most a content reference carries. For a larger file, ask for an upload link with file_upload_link. Nothing was uploaded.`;
 
 /** The longest base64 a file of the cap can be, padding included. Anything
  * longer is refused before a byte is decoded. */
@@ -64,8 +64,8 @@ const BASE64 = /^[A-Za-z0-9+/]*={0,2}$/;
  * length the source plugins keep, with its extension, and never with half a
  * character at the cut. The destination plugins clean it again.
  */
-export function cleanInboundName(name: string): string {
-  const cleaned = safeDownloadName(name);
+export function cleanInboundName(name: string, fallback = "download"): string {
+  const cleaned = safeDownloadName(name, fallback);
   if (cleaned.length <= MAX_NAME_UNITS) return cleaned;
   const ext = /\.[A-Za-z0-9]{1,10}$/.exec(cleaned)?.[0] ?? "";
   const head = cleaned.slice(0, MAX_NAME_UNITS - ext.length).toWellFormed().replace(/�$/, "").trimEnd();
@@ -111,4 +111,18 @@ export function resolveContent(ref: FileReference): { ok: true; file: SourceFile
   }
   const name = cleanInboundName(typeof ref.name === "string" ? ref.name : "");
   return { ok: true, file: { bytes, name, type: typeForName(name, ref.mime_type) } };
+}
+
+/**
+ * An `upload` reference: the file an upload link received, for its owner
+ * only. The file is held as being used until `settle` says whether the
+ * destination was asked (spent) or the call stopped first (held again).
+ */
+export function resolveUpload(
+  ref: FileReference,
+  userId: string
+): { ok: true; file: SourceFile; settle: (requested: boolean) => void } | { ok: false; text: string } {
+  const taken = takeUpload(typeof ref.upload_id === "string" ? ref.upload_id : "", userId);
+  if (!taken.ok) return taken;
+  return { ok: true, file: taken.file, settle: taken.settle };
 }
