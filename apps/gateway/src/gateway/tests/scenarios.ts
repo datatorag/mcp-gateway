@@ -222,6 +222,7 @@ export const SCENARIOS: Scenario[] = [
       "FD14", // an uploaded file goes to one call, and its link takes one file
       "FD15", // a call that carries a live upload link is refused and the link is cancelled
       "FD16", // a file over an upload link's limit is refused, and the link still works
+      "FD18", // an upload link opens a page that takes the file, with its script locked to that page
       "DR6", // a Doc in one account's Drive is copied as a PDF into another's
     ],
   },

@@ -721,7 +721,7 @@ export function createUploadLink(opts: {
     },
     max_bytes: maxBytes,
     note:
-      "The link takes one file, once, within ten minutes: run the command with the path of the file in place of <path-to-file>. " +
+      "The link takes one file, once, within ten minutes: open it in a browser to choose or drop the file, or run the command with the path of the file in place of <path-to-file>. " +
       'It answers a receipt with the file\'s size and SHA-256 and a reference, {"type":"upload","upload_id":"..."}, to pass to drive_upload_file, jira_add_attachment or an email\'s attachments. ' +
       "The file is held for ten minutes after it arrives and goes to one call. It is not placed in this conversation.",
   };

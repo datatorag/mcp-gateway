@@ -111,6 +111,7 @@ import { fd14UploadSecondUse } from "./fd14-upload-second-use";
 import { fd15UploadLinkNotCarried } from "./fd15-upload-link-not-carried";
 import { fd16UploadOversize } from "./fd16-upload-oversize";
 import { fd17UploadOnADraft } from "./fd17-upload-on-a-draft";
+import { fd18UploadPage } from "./fd18-upload-page";
 import { tk1TasksLifecycle } from "./tk1-tasks-lifecycle";
 import { co1ContactsLifecycle } from "./co1-contacts-lifecycle";
 import { co2ContactsSearch } from "./co2-contacts-search";
@@ -287,6 +288,7 @@ export const CASES: TestCase[] = [
   fd15UploadLinkNotCarried,
   fd16UploadOversize,
   fd17UploadOnADraft,
+  fd18UploadPage,
   tk1TasksLifecycle,
   co1ContactsLifecycle,
   co2ContactsSearch,
