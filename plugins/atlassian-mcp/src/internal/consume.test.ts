@@ -431,7 +431,7 @@ describe("jira_add_attachment through the MCP path", () => {
     // Only the type is required: a Gmail reference carries a message id, a
     // Drive one a file id, and each property's text says which it goes with.
     expect(file.required).toEqual(["type"]);
-    expect(file.properties.type.enum).toEqual(["gmail_message", "gmail_attachment", "drive_file", "drive_export", "content"]);
+    expect(file.properties.type.enum).toEqual(["gmail_message", "gmail_attachment", "drive_file", "drive_export", "content", "upload"]);
     expect(tool?.description).not.toContain(String.fromCharCode(0x2014));
   });
 
@@ -460,6 +460,7 @@ describe("jira_add_attachment through the MCP path", () => {
       "name",
       "part_id",
       "type",
+      "upload_id",
     ]);
     // A file the caller holds (SCRUM-437): its name and base64 travel in the
     // call, and the cap is stated where the caller reads the shape.
