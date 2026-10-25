@@ -37,7 +37,9 @@ import {
   insertTestUser,
   isDockerAvailable,
 } from "../test-utils/db";
+import { randomUUID } from "node:crypto";
 import { disconnectAccount, upsertServiceAccount } from "./connected-accounts";
+import { sealedColumns } from "./token-crypto";
 import { resolveServiceToken } from "./service-token";
 import { checkScopeForTool } from "./scope-grant";
 
@@ -207,25 +209,28 @@ describe.skipIf(!isDockerAvailable())(
       expect(await defaultEmailOf(userId)).toBe("full-new@example.com");
     });
 
+    /** An un-migrated row, written as every write is since SCRUM-442:
+     * plain and sealed. */
+    async function legacyRow(userId: string, token: string, scopes: string, connectedAt: Date) {
+      const id = randomUUID();
+      await db.insert(serviceConnections).values({
+        id,
+        userId,
+        service: GWS,
+        accessToken: token,
+        ...sealedColumns("service_connections", { userId, rowId: id }, { accessToken: token }),
+        scopes,
+        connectedAt,
+      });
+    }
+
     it("legacy fallback (no connected_accounts rows) is deterministic: widest grant first, then most recent", async () => {
       const userId = await insertTestUser(db);
 
       // Two un-migrated rows: identity-only inserted FIRST, so an unordered
       // limit(1) returns it by heap order and the assertion below goes red.
-      await db.insert(serviceConnections).values({
-        userId,
-        service: GWS,
-        accessToken: "legacy-identity",
-        scopes: IDENTITY_ONLY,
-        connectedAt: new Date("2026-01-01T00:00:00Z"),
-      });
-      await db.insert(serviceConnections).values({
-        userId,
-        service: GWS,
-        accessToken: "legacy-full",
-        scopes: FULL_GRANT,
-        connectedAt: new Date("2026-02-01T00:00:00Z"),
-      });
+      await legacyRow(userId, "legacy-identity", IDENTITY_ONLY, new Date("2026-01-01T00:00:00Z"));
+      await legacyRow(userId, "legacy-full", FULL_GRANT, new Date("2026-02-01T00:00:00Z"));
 
       const resolved = await resolveServiceToken(db, userId, GWS);
       expect(resolved?.token).toBe("legacy-full");
@@ -235,20 +240,8 @@ describe.skipIf(!isDockerAvailable())(
       // Equal width: the most recently connected row wins, so the pick can
       // never flap between two calls.
       const tieUser = await insertTestUser(db);
-      await db.insert(serviceConnections).values({
-        userId: tieUser,
-        service: GWS,
-        accessToken: "tie-older",
-        scopes: FULL_GRANT,
-        connectedAt: new Date("2026-01-01T00:00:00Z"),
-      });
-      await db.insert(serviceConnections).values({
-        userId: tieUser,
-        service: GWS,
-        accessToken: "tie-newer",
-        scopes: FULL_GRANT,
-        connectedAt: new Date("2026-02-01T00:00:00Z"),
-      });
+      await legacyRow(tieUser, "tie-older", FULL_GRANT, new Date("2026-01-01T00:00:00Z"));
+      await legacyRow(tieUser, "tie-newer", FULL_GRANT, new Date("2026-02-01T00:00:00Z"));
       const tied = await resolveServiceToken(db, tieUser, GWS);
       expect(tied?.token).toBe("tie-newer");
     });

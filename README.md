@@ -121,7 +121,7 @@ In text:
 pnpm install
 pnpm -r --filter "./packages/*" run build    # the gateway reads these packages' built output
 
-cp .env.example .env                          # then fill in DATABASE_URL and the OAuth clients
+cp .env.example .env                          # then fill in DATABASE_URL, CONNECTION_TOKEN_KEYS and the OAuth clients
 pnpm --filter @datatorag-mcp/db db:migrate    # schema changes are never applied on start
 
 pnpm dev:gateway
@@ -146,6 +146,7 @@ The full list, with comments, is in [`.env.example`](.env.example), and the sche
 | Variable | Purpose |
 |---|---|
 | `DATABASE_URL` | Postgres connection string. Required |
+| `CONNECTION_TOKEN_KEYS` | Keys the provider tokens are encrypted with: `<id>:<base64 of 32 bytes>`, comma separated, the first encrypts and all decrypt. Required; make one with `openssl rand -base64 32` |
 | `GATEWAY_PORT`, `GATEWAY_BASE_URL` | Port, and the public URL OAuth redirects are built from |
 | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | Google sign-in for the dashboard |
 | `GOOGLE_GWS_CLIENT_ID`, `GOOGLE_GWS_CLIENT_SECRET` | Google Workspace connections |

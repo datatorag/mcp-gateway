@@ -375,15 +375,18 @@ export async function disconnectAccount(
   // because a user who clicked disconnect must never stay connected just
   // because Google was slow. Revoking the refresh token (when present) kills
   // the whole grant including derived access tokens.
+  // Sealed, and handed on unopened: only revokeUpstream opens them.
   const [conn] = await db
     .select({
-      accessToken: serviceConnections.accessToken,
-      refreshToken: serviceConnections.refreshToken,
+      accessTokenSealed: serviceConnections.accessTokenSealed,
+      refreshTokenSealed: serviceConnections.refreshTokenSealed,
     })
     .from(serviceConnections)
     .where(eq(serviceConnections.id, account.serviceConnectionId))
     .limit(1);
-  if (conn) await revokeUpstream(account.connectorType, conn);
+  if (conn) {
+    await revokeUpstream(account.connectorType, conn, { userId, rowId: account.serviceConnectionId });
+  }
 
   await db.transaction(async (tx) => {
     // Delete connected_accounts row
@@ -420,10 +423,12 @@ export async function disconnectService(
   userId: string,
   service: string
 ): Promise<{ disconnected: number }> {
+  // Sealed, and handed on unopened: only revokeUpstream opens them.
   const rows = await db
     .select({
-      accessToken: serviceConnections.accessToken,
-      refreshToken: serviceConnections.refreshToken,
+      id: serviceConnections.id,
+      accessTokenSealed: serviceConnections.accessTokenSealed,
+      refreshTokenSealed: serviceConnections.refreshTokenSealed,
     })
     .from(serviceConnections)
     .where(
@@ -432,7 +437,9 @@ export async function disconnectService(
   dropLinksForUser(userId);
   // Tell the provider before forgetting locally. Never blocks the delete: a
   // provider that is down must not leave the user unable to disconnect.
-  await Promise.all(rows.map((row) => revokeUpstream(service, row)));
+  await Promise.all(
+    rows.map((row) => revokeUpstream(service, row, { userId, rowId: row.id }))
+  );
 
   const removed = await db
     .delete(connectedAccounts)

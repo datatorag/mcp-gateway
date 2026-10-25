@@ -30,6 +30,7 @@ import {
 } from "../test-utils/db";
 import { upsertServiceAccount } from "./connected-accounts";
 import { refreshNotionToken, resolveServiceToken, revokeUpstream } from "./service-token";
+import { sealedColumns } from "./token-crypto";
 
 const TOKEN_URL = "https://api.notion.com/v1/oauth/token";
 const REVOKE_URL = "https://api.notion.com/v1/oauth/revoke";
@@ -191,11 +192,15 @@ describe.skipIf(!isDockerAvailable())("SCRUM-366: refreshNotionToken", () => {
     // takes no lock) rotates it. Its UPDATE waits behind the lock; Notion
     // meanwhile refuses the token this caller presented.
     let rotation: Promise<unknown> | null = null;
+    const reconnected = { accessToken: "access-reconnected", refreshToken: "refresh-reconnected" };
     notion.forceInvalidGrant = true;
     notion.beforeAnswer = async () => {
       rotation = db
         .update(serviceConnections)
-        .set({ accessToken: "access-reconnected", refreshToken: "refresh-reconnected" })
+        .set({
+          ...reconnected,
+          ...sealedColumns("service_connections", { userId, rowId: connId }, reconnected),
+        })
         .where(eq(serviceConnections.id, connId))
         .then(() => undefined);
       // Answer only once that UPDATE is genuinely queued on the row lock.
@@ -252,7 +257,9 @@ describe.skipIf(!isDockerAvailable())("SCRUM-366: refreshNotionToken", () => {
         return new Response("{}", { status: 200 });
       })
     );
-    const ok = await revokeUpstream("notion", { accessToken: "access-1", refreshToken: "refresh-1" });
+    const row = { userId: "user-1", rowId: "row-1" };
+    const sealed = sealedColumns("service_connections", row, { accessToken: "access-1", refreshToken: "refresh-1" });
+    const ok = await revokeUpstream("notion", sealed, row);
     expect(ok).toBe(true);
     expect(revokes.map((r) => r.token).sort()).toEqual(["access-1", "refresh-1"]);
     for (const r of revokes) {
