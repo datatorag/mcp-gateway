@@ -4,16 +4,30 @@ import { serviceConnections, connectedAccounts, pluginConnections } from "@datat
 import { revokeGoogleToken } from "@/lib/google-revoke";
 import { NOTION_REVOKE_URL, NOTION_TOKEN_URL, notionBasicAuth } from "./notion-oauth";
 import { cleanWorkspaceName } from "./untrusted-text";
-import { openToken, sealedColumns, TokenOpenError } from "./token-crypto";
+import { openToken, sealedColumns, TokenOpenError, type TokenRow } from "./token-crypto";
 
 /** The row a refresh writes, and the user it belongs to: what each sealed
  * value it writes is bound to (SCRUM-442). */
 type ConnectionRef = { id: string; userId: string };
 
 /** The sealed columns for a service_connections write, beside the plain
- * ones while release 1 writes both. */
+ * ones while releases 1 and 2 write both. */
 function sealedFor(conn: ConnectionRef, tokens: { accessToken?: string | null; refreshToken?: string | null }) {
   return sealedColumns("service_connections", { userId: conn.userId, rowId: conn.id }, tokens);
+}
+
+/** A service_connections row's tokens as stored. */
+type SealedPair = { accessTokenSealed?: string | null; refreshTokenSealed?: string | null };
+
+/** Open a row's sealed pair. Throws `TokenOpenError` on a value that does
+ * not open; a null stays null. */
+function openPair(row: TokenRow, sealed: SealedPair): { accessToken: string | null; refreshToken: string | null } {
+  const open = (value: string | null | undefined, column: "access_token" | "refresh_token") =>
+    value ? openToken(value, { table: "service_connections", column, ...row }) : null;
+  return {
+    accessToken: open(sealed.accessTokenSealed, "access_token"),
+    refreshToken: open(sealed.refreshTokenSealed, "refresh_token"),
+  };
 }
 
 /** Mapping from plugin slug to the service connection it needs. */
@@ -183,15 +197,19 @@ export async function refreshNotionToken(
   let outcome: Outcome;
   try {
     outcome = await db.transaction(async (tx): Promise<Outcome> => {
-      const [row] = await tx
+      const [locked] = await tx
         .select({
-          accessToken: serviceConnections.accessToken,
-          refreshToken: serviceConnections.refreshToken,
+          accessTokenSealed: serviceConnections.accessTokenSealed,
+          refreshTokenSealed: serviceConnections.refreshTokenSealed,
         })
         .from(serviceConnections)
         .where(eq(serviceConnections.id, connectionId))
         .for("update");
-      if (!row) return { failed: true };
+      if (!locked) return { failed: true };
+      // Compared opened: a fresh nonce on every seal means two seals of one
+      // token never match as text (SCRUM-442).
+      const row = openPair({ userId: conn.userId, rowId: conn.id }, locked);
+      if (!row.accessToken) return { failed: true };
       // Someone else rotated while this caller waited: theirs is current.
       if (row.refreshToken !== presentedRefreshToken) {
         return { token: row.accessToken };
@@ -246,17 +264,18 @@ export async function refreshNotionToken(
   // invalid_grant. Before calling the grant dead, look again: a writer that
   // does not take this lock (a reconnect) may have been queued behind it.
   try {
-    const [row] = await db.transaction((tx) =>
+    const [locked] = await db.transaction((tx) =>
       tx
         .select({
-          accessToken: serviceConnections.accessToken,
-          refreshToken: serviceConnections.refreshToken,
+          accessTokenSealed: serviceConnections.accessTokenSealed,
+          refreshTokenSealed: serviceConnections.refreshTokenSealed,
         })
         .from(serviceConnections)
         .where(eq(serviceConnections.id, connectionId))
         .for("update")
     );
-    if (row && row.refreshToken !== presentedRefreshToken) {
+    const row = locked && openPair({ userId: conn.userId, rowId: conn.id }, locked);
+    if (row && row.accessToken && row.refreshToken !== presentedRefreshToken) {
       return row.accessToken;
     }
   } catch {
@@ -346,13 +365,24 @@ const REVOKE_FN = new Map<string, (tokens: RevokeTokens) => Promise<boolean>>([
  * The caller deletes regardless of what this returns. */
 export async function revokeUpstream(
   service: string,
-  tokens: { accessToken?: string | null; refreshToken?: string | null }
+  sealed: SealedPair,
+  row: TokenRow
 ): Promise<boolean> {
   // A Map, not an object literal: `service` reaches here from a query
   // parameter, and a plain object would resolve "__proto__" or "constructor"
   // to something that is not a revoke function.
   const revoke = REVOKE_FN.get(service);
   if (!revoke) return false;
+  // Opened here and nowhere on the way (SCRUM-442). A value that does not
+  // open is not sent; the disconnect goes ahead regardless.
+  let tokens: RevokeTokens;
+  try {
+    tokens = openPair(row, sealed);
+  } catch (e) {
+    if (!(e instanceof TokenOpenError)) throw e;
+    console.warn(`[service-token] ${e.message}; not revoked upstream`);
+    return false;
+  }
   return revoke(tokens);
 }
 
@@ -470,8 +500,8 @@ export async function resolveServiceToken(
 ): Promise<ResolvedServiceToken | AmbiguousAccount | null> {
   type ConnRow = {
     id: string;
-    accessToken: string;
-    refreshToken: string | null;
+    accessTokenSealed: string | null;
+    refreshTokenSealed: string | null;
     tokenExpiresAt: Date | null;
     scopes: string | null;
     /** Null only on the legacy path, where no connected_accounts row exists
@@ -481,8 +511,8 @@ export async function resolveServiceToken(
 
   const connColumns = {
     id: serviceConnections.id,
-    accessToken: serviceConnections.accessToken,
-    refreshToken: serviceConnections.refreshToken,
+    accessTokenSealed: serviceConnections.accessTokenSealed,
+    refreshTokenSealed: serviceConnections.refreshTokenSealed,
     tokenExpiresAt: serviceConnections.tokenExpiresAt,
     scopes: serviceConnections.scopes,
     accountEmail: connectedAccounts.accountEmail,
@@ -542,8 +572,8 @@ export async function resolveServiceToken(
     const [legacy] = await db
       .select({
         id: serviceConnections.id,
-        accessToken: serviceConnections.accessToken,
-        refreshToken: serviceConnections.refreshToken,
+        accessTokenSealed: serviceConnections.accessTokenSealed,
+        refreshTokenSealed: serviceConnections.refreshTokenSealed,
         tokenExpiresAt: serviceConnections.tokenExpiresAt,
         scopes: serviceConnections.scopes,
       })
@@ -569,20 +599,38 @@ export async function resolveServiceToken(
   if (!conn) return null;
   const resolvedEmail = conn.accountEmail;
 
+  // Read sealed, never plain (SCRUM-442). A row with no sealed token would
+  // be a defect, since the backfill gate keeps any from reaching this
+  // release; it is refused rather than served from the plain column, which
+  // would hide it.
+  let tokens: { accessToken: string | null; refreshToken: string | null };
+  try {
+    tokens = openPair({ userId, rowId: conn.id }, conn);
+  } catch (e) {
+    if (!(e instanceof TokenOpenError)) throw e;
+    console.warn(`[service-token] ${e.message}`);
+    return null;
+  }
+  const accessToken = tokens.accessToken;
+  if (!accessToken) {
+    console.warn(`[service-token] ${service} connection has no sealed token`);
+    return null;
+  }
+
   const isExpired =
     conn.tokenExpiresAt && conn.tokenExpiresAt.getTime() < Date.now();
 
   if (!isExpired)
     return {
-      token: conn.accessToken,
+      token: accessToken,
       accountEmail: resolvedEmail,
       scopes: conn.scopes,
     };
 
-  if (conn.refreshToken) {
+  if (tokens.refreshToken) {
     const refreshFn = REFRESH_FN[service];
     if (refreshFn) {
-      const newToken = await refreshFn(db, { id: conn.id, userId }, conn.refreshToken);
+      const newToken = await refreshFn(db, { id: conn.id, userId }, tokens.refreshToken);
       // A refresh never widens the grant, so the stored scopes still hold.
       if (newToken)
         return { token: newToken, accountEmail: resolvedEmail, scopes: conn.scopes };

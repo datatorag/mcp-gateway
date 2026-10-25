@@ -51,6 +51,13 @@ vi.mock("@/lib/db", () => ({
 }));
 
 import { DELETE } from "./route";
+import { sealedColumns } from "@/gateway/token-crypto";
+
+/** A token row as the disconnect reads it: sealed (SCRUM-442), bound to the
+ * session user and the row. */
+function sealed(rowId: string, accessToken: string | null, refreshToken: string | null) {
+  return { id: rowId, ...sealedColumns("service_connections", { userId: "user-1", rowId }, { accessToken, refreshToken }) };
+}
 
 function request(query: string): NextRequest {
   return {
@@ -77,9 +84,7 @@ describe("DELETE ?accountId= (single account)", () => {
         isDefault: false,
       },
     ]);
-    selectResults.push([
-      { accessToken: "access-1", refreshToken: "refresh-1" },
-    ]);
+    selectResults.push([sealed("conn-1", "access-1", "refresh-1")]);
   }
 
   it("revokes the refresh token, then deletes", async () => {
@@ -111,7 +116,7 @@ describe("DELETE ?accountId= (single account)", () => {
         isDefault: false,
       },
     ]);
-    selectResults.push([{ accessToken: "access-1", refreshToken: null }]);
+    selectResults.push([sealed("conn-1", "access-1", null)]);
 
     await DELETE(request("accountId=acct-1"));
 
@@ -137,9 +142,9 @@ describe("DELETE ?accountId= (single account)", () => {
 describe("DELETE ?service= (whole service)", () => {
   it("revokes every row's token before deleting", async () => {
     selectResults.push([
-      { accessToken: "a-1", refreshToken: "r-1" },
-      { accessToken: "a-2", refreshToken: null },
-      { accessToken: null, refreshToken: null },
+      sealed("conn-1", "a-1", "r-1"),
+      sealed("conn-2", "a-2", null),
+      sealed("conn-3", null, null),
     ]);
 
     const res = await DELETE(request("service=google-workspace"));
