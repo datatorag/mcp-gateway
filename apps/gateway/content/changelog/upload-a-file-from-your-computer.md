@@ -25,3 +25,4 @@ For a small file Claude already holds, such as an image you shared in the chat, 
 the file in the call itself, without a link.
 
 How it all works, and what the receipts say, is in [Moving files between services](/docs/file-references).
+The [launch post](/blog/a-file-on-your-computer-into-drive-jira-or-an-email) covers both ways in, and where the file is at each step.

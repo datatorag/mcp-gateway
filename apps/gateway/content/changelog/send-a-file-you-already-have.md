@@ -18,3 +18,4 @@ reference, and DataToRAG puts it into Drive with `drive_upload_file` or onto a J
 - The file is held in memory only while it moves, and is never written to our disks.
 
 How to send one, and what the receipt says, is in [Moving files between services](/docs/file-references).
+The [launch post](/blog/a-file-on-your-computer-into-drive-jira-or-an-email) covers this and the upload link together, and where the file is at each step.
