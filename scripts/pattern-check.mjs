@@ -171,7 +171,6 @@ const RULES = [
       outOfScope: [
         "apps/gateway/vitest.config.ts",
         "apps/gateway/scripts/run-digest.ts",
-        "packages/db/src/backfill-connected-accounts.ts",
       ],
     },
     // Built lazily so the schema is read once, at run time, from packages/config.
@@ -193,11 +192,10 @@ const RULES = [
       "apps/gateway/src/lib/db.ts":
         "The db singleton is imported by packages that must not depend on @datatorag-mcp/config; " +
         "it reads DATABASE_URL directly on purpose.",
-      "packages/db/src/backfill-connected-accounts.ts":
-        "Self-described one-time backfill entrypoint, run directly via tsx. A separate short-lived " +
-        "process that builds its own client on purpose. It lives under src/ rather than scripts/, " +
-        "so no structural signal separates it -- see the boundary note above; if a second one " +
-        "appears, move them under scripts/ rather than growing this list.",
+      "apps/gateway/src/gateway/token-crypto.ts":
+        "CONNECTION_TOKEN_KEYS has no default, so there is no second value to drift, and it is " +
+        "parsed by the same parseConnectionTokenKeys the schema validates it with at start. Read " +
+        "directly so sealing a token does not make every write path depend on the whole config.",
     },
     message:
       "reads a variable directly from process.env that packages/config already declares in the " +

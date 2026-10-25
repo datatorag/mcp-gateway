@@ -1,9 +1,20 @@
 import { eq, and, desc, sql } from "drizzle-orm";
 import type { Database } from "@datatorag-mcp/db";
-import { serviceConnections, connectedAccounts } from "@datatorag-mcp/db";
+import { serviceConnections, connectedAccounts, pluginConnections } from "@datatorag-mcp/db";
 import { revokeGoogleToken } from "@/lib/google-revoke";
 import { NOTION_REVOKE_URL, NOTION_TOKEN_URL, notionBasicAuth } from "./notion-oauth";
 import { cleanWorkspaceName } from "./untrusted-text";
+import { openToken, sealedColumns, TokenOpenError } from "./token-crypto";
+
+/** The row a refresh writes, and the user it belongs to: what each sealed
+ * value it writes is bound to (SCRUM-442). */
+type ConnectionRef = { id: string; userId: string };
+
+/** The sealed columns for a service_connections write, beside the plain
+ * ones while release 1 writes both. */
+function sealedFor(conn: ConnectionRef, tokens: { accessToken?: string | null; refreshToken?: string | null }) {
+  return sealedColumns("service_connections", { userId: conn.userId, rowId: conn.id }, tokens);
+}
 
 /** Mapping from plugin slug to the service connection it needs. */
 export const PLUGIN_SERVICE_MAP: Record<string, string> = {
@@ -22,7 +33,7 @@ export const SERVICE_PLUGIN_MAP: Record<string, string> = Object.fromEntries(
  */
 async function refreshGoogleToken(
   db: Database,
-  connectionId: string,
+  conn: ConnectionRef,
   refreshToken: string
 ): Promise<string | null> {
   const clientId = process.env.GOOGLE_GWS_CLIENT_ID;
@@ -56,10 +67,11 @@ async function refreshGoogleToken(
       .update(serviceConnections)
       .set({
         accessToken: data.access_token,
+        ...sealedFor(conn, { accessToken: data.access_token }),
         tokenExpiresAt: expiresAt,
         updatedAt: new Date(),
       })
-      .where(eq(serviceConnections.id, connectionId));
+      .where(eq(serviceConnections.id, conn.id));
 
     return data.access_token;
   } catch {
@@ -74,7 +86,7 @@ async function refreshGoogleToken(
  */
 async function refreshAtlassianToken(
   db: Database,
-  connectionId: string,
+  conn: ConnectionRef,
   refreshToken: string
 ): Promise<string | null> {
   const clientId = process.env.ATLASSIAN_CLIENT_ID;
@@ -106,15 +118,19 @@ async function refreshAtlassianToken(
       : null;
 
     // Atlassian rotates refresh tokens — store the new one
+    const rotated = {
+      accessToken: data.access_token,
+      refreshToken: data.refresh_token ?? refreshToken,
+    };
     await db
       .update(serviceConnections)
       .set({
-        accessToken: data.access_token,
-        refreshToken: data.refresh_token ?? refreshToken,
+        ...rotated,
+        ...sealedFor(conn, rotated),
         tokenExpiresAt: expiresAt,
         updatedAt: new Date(),
       })
-      .where(eq(serviceConnections.id, connectionId));
+      .where(eq(serviceConnections.id, conn.id));
 
     return data.access_token;
   } catch {
@@ -155,9 +171,10 @@ const NOTION_TOKEN_TIMEOUT_MS = 10_000;
  */
 export async function refreshNotionToken(
   db: Database,
-  connectionId: string,
+  conn: ConnectionRef,
   presentedRefreshToken: string
 ): Promise<string | null> {
+  const connectionId = conn.id;
   const clientId = process.env.NOTION_OAUTH_CLIENT_ID;
   const clientSecret = process.env.NOTION_OAUTH_CLIENT_SECRET;
   if (!clientId || !clientSecret) return null;
@@ -202,14 +219,16 @@ export async function refreshNotionToken(
       };
       if (typeof data.access_token !== "string") return { failed: true };
 
+      const rotated = {
+        accessToken: data.access_token,
+        refreshToken:
+          typeof data.refresh_token === "string" ? data.refresh_token : presentedRefreshToken,
+      };
       await tx
         .update(serviceConnections)
         .set({
-          accessToken: data.access_token,
-          refreshToken:
-            typeof data.refresh_token === "string"
-              ? data.refresh_token
-              : presentedRefreshToken,
+          ...rotated,
+          ...sealedFor(conn, rotated),
           // Notion sends no expiry, and none is invented.
           tokenExpiresAt: null,
           updatedAt: new Date(),
@@ -250,7 +269,7 @@ export async function refreshNotionToken(
 /** Service-specific refresh function lookup. */
 const REFRESH_FN: Record<
   string,
-  (db: Database, connId: string, rt: string) => Promise<string | null>
+  (db: Database, conn: ConnectionRef, rt: string) => Promise<string | null>
 > = {
   "google-workspace": refreshGoogleToken,
   atlassian: refreshAtlassianToken,
@@ -563,7 +582,7 @@ export async function resolveServiceToken(
   if (conn.refreshToken) {
     const refreshFn = REFRESH_FN[service];
     if (refreshFn) {
-      const newToken = await refreshFn(db, conn.id, conn.refreshToken);
+      const newToken = await refreshFn(db, { id: conn.id, userId }, conn.refreshToken);
       // A refresh never widens the grant, so the stored scopes still hold.
       if (newToken)
         return { token: newToken, accountEmail: resolvedEmail, scopes: conn.scopes };
@@ -583,4 +602,33 @@ export async function getServiceToken(
   const resolved = await resolveServiceToken(db, userId, service, accountEmail);
   if (!resolved || "ambiguous" in resolved) return null;
   return resolved.token;
+}
+
+/** The token for a legacy manifest-OAuth plugin (`plugin_connections`),
+ * opened here because this table is sealed-only (SCRUM-442). Null when the
+ * user has no connection, or when the stored value does not open, which is
+ * logged by table and column alone. */
+export async function resolvePluginConnectionToken(
+  db: Database,
+  userId: string,
+  mcpServerId: string
+): Promise<string | null> {
+  const [row] = await db
+    .select({ id: pluginConnections.id, sealed: pluginConnections.accessTokenSealed })
+    .from(pluginConnections)
+    .where(and(eq(pluginConnections.userId, userId), eq(pluginConnections.mcpServerId, mcpServerId)))
+    .limit(1);
+  if (!row?.sealed) return null;
+  try {
+    return openToken(row.sealed, {
+      table: "plugin_connections",
+      column: "access_token",
+      userId,
+      rowId: row.id,
+    });
+  } catch (e) {
+    if (!(e instanceof TokenOpenError)) throw e;
+    console.warn(`[service-token] ${e.message}`);
+    return null;
+  }
 }

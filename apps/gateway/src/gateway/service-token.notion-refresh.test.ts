@@ -149,8 +149,8 @@ describe.skipIf(!isDockerAvailable())("SCRUM-366: refreshNotionToken", () => {
   }
 
   it("rotates and persists the new pair before returning, with Basic auth and no invented expiry", async () => {
-    const { connId } = await connected();
-    const token = await refreshNotionToken(db, connId, "refresh-1");
+    const { connId, userId } = await connected();
+    const token = await refreshNotionToken(db, { id: connId, userId }, "refresh-1");
     expect(token).toBe("access-2");
     expect(await stored(connId)).toEqual({ access: "access-2", refresh: "refresh-2", expires: null });
     expect(notion.calls).toEqual([
@@ -162,10 +162,10 @@ describe.skipIf(!isDockerAvailable())("SCRUM-366: refreshNotionToken", () => {
   });
 
   it("two refreshes at once present the refresh token ONCE, and both callers get the same new access token", async () => {
-    const { connId } = await connected();
+    const { connId, userId } = await connected();
     const [first, second] = await Promise.all([
-      refreshNotionToken(db, connId, "refresh-1"),
-      refreshNotionToken(db, connId, "refresh-1"),
+      refreshNotionToken(db, { id: connId, userId }, "refresh-1"),
+      refreshNotionToken(db, { id: connId, userId }, "refresh-1"),
     ]);
     expect(notion.calls).toHaveLength(1);
     expect(first).toBe("access-2");
@@ -177,16 +177,16 @@ describe.skipIf(!isDockerAvailable())("SCRUM-366: refreshNotionToken", () => {
   });
 
   it("a caller holding a refresh token that was already rotated uses the stored access token and does not refresh again", async () => {
-    const { connId } = await connected();
-    await refreshNotionToken(db, connId, "refresh-1");
+    const { connId, userId } = await connected();
+    await refreshNotionToken(db, { id: connId, userId }, "refresh-1");
     notion.calls = [];
-    const token = await refreshNotionToken(db, connId, "refresh-1");
+    const token = await refreshNotionToken(db, { id: connId, userId }, "refresh-1");
     expect(token).toBe("access-2");
     expect(notion.calls).toHaveLength(0);
   });
 
   it("invalid_grant after a concurrent rotation re-reads the row and does not declare the connection dead", async () => {
-    const { connId } = await connected();
+    const { connId, userId } = await connected();
     // While the refresh holds the row, another writer (a reconnect, which
     // takes no lock) rotates it. Its UPDATE waits behind the lock; Notion
     // meanwhile refuses the token this caller presented.
@@ -209,7 +209,7 @@ describe.skipIf(!isDockerAvailable())("SCRUM-366: refreshNotionToken", () => {
       throw new Error("the rotation never queued on the lock");
     };
 
-    const token = await refreshNotionToken(db, connId, "refresh-1");
+    const token = await refreshNotionToken(db, { id: connId, userId }, "refresh-1");
     await rotation;
     expect(token).toBe("access-reconnected");
     expect(await stored(connId)).toMatchObject({
@@ -219,17 +219,17 @@ describe.skipIf(!isDockerAvailable())("SCRUM-366: refreshNotionToken", () => {
   });
 
   it("invalid_grant with nothing rotated is a dead grant: null, and the stored row is left as it was", async () => {
-    const { connId } = await connected();
+    const { connId, userId } = await connected();
     notion.forceInvalidGrant = true;
-    const token = await refreshNotionToken(db, connId, "refresh-1");
+    const token = await refreshNotionToken(db, { id: connId, userId }, "refresh-1");
     expect(token).toBeNull();
     expect(await stored(connId)).toMatchObject({ access: "access-1", refresh: "refresh-1" });
   });
 
   it("does nothing without the client id and secret", async () => {
-    const { connId } = await connected();
+    const { connId, userId } = await connected();
     delete process.env.NOTION_OAUTH_CLIENT_ID;
-    expect(await refreshNotionToken(db, connId, "refresh-1")).toBeNull();
+    expect(await refreshNotionToken(db, { id: connId, userId }, "refresh-1")).toBeNull();
     expect(notion.calls).toHaveLength(0);
   });
 

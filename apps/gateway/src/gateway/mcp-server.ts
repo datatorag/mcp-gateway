@@ -26,7 +26,7 @@ import { createUserSkill, deleteUserSkill, forkSkill, updateUserSkill, type Writ
 import { eq, and } from "drizzle-orm";
 import type { Database } from "@datatorag-mcp/db";
 import { isAdmin } from "./admin";
-import { mcpServers, pluginConnections, tools } from "@datatorag-mcp/db";
+import { mcpServers, tools } from "@datatorag-mcp/db";
 import { argumentRefusalText, validateArguments } from "./argument-validation";
 import type { ConnectionPool } from "./pool";
 import { NAMESPACE_SEPARATOR } from "./plugin-manager";
@@ -34,6 +34,7 @@ import {
   PLUGIN_SERVICE_MAP,
   ambiguousAccountMessage,
   resolveServiceToken,
+  resolvePluginConnectionToken,
 } from "./service-token";
 import {
   listUserToolRows,
@@ -1305,19 +1306,10 @@ export function createMcpServer(
         };
       }
     } else if (mcpServer.githubRepoUrl) {
-      // Legacy: check pluginConnections table
-      const [conn] = await db
-        .select({ accessToken: pluginConnections.accessToken })
-        .from(pluginConnections)
-        .where(
-          and(
-            eq(pluginConnections.userId, userId),
-            eq(pluginConnections.mcpServerId, mcpServer.id)
-          )
-        )
-        .limit(1);
-      if (conn) {
-        userToken = conn.accessToken;
+      // Legacy: the pluginConnections table, sealed (SCRUM-442).
+      const legacyToken = await resolvePluginConnectionToken(db, userId, mcpServer.id);
+      if (legacyToken) {
+        userToken = legacyToken;
       }
     }
 

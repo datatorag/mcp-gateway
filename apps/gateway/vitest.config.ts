@@ -44,6 +44,8 @@ export default defineConfig({
     // perfectly while showing the user nothing.
     include: ["src/**/*.test.ts", "src/**/*.test.tsx", "e2e/**/*.e2e.test.ts"],
     globals: false,
+    // CONNECTION_TOKEN_KEYS has no default (SCRUM-442); a fixed test key.
+    setupFiles: ["src/test-utils/token-keys-env.ts"],
     testTimeout: 30_000,
     hookTimeout: 60_000,
     fileParallelism: false,

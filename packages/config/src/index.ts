@@ -1,5 +1,41 @@
 import { z } from "zod";
 
+/** The keys provider tokens are sealed with (SCRUM-442), parsed from
+ * `CONNECTION_TOKEN_KEYS`: a comma-separated list of `<id>:<base64 of 32
+ * bytes>`. The first entry seals; every entry opens. */
+export type ConnectionTokenKeys = {
+  sealing: { id: string; key: Buffer };
+  byId: Map<string, Buffer>;
+};
+
+const KEY_ID = /^[a-z0-9]{1,16}$/;
+const BASE64 = /^[A-Za-z0-9+/]+={0,2}$/;
+
+/** Parse the key list, or throw a sentence naming the variable and the entry's
+ * position. Never a value: this is a secret, and the error reaches the log. */
+export function parseConnectionTokenKeys(raw: string): ConnectionTokenKeys {
+  const fail = (why: string): never => {
+    throw new Error(`CONNECTION_TOKEN_KEYS ${why}`);
+  };
+  if (raw.trim() === "") fail("is empty");
+  const byId = new Map<string, Buffer>();
+  raw.split(",").forEach((entry, i) => {
+    const at = `entry ${i + 1}`;
+    const colon = entry.indexOf(":");
+    if (colon < 0) fail(`${at} is not <id>:<base64 key>`);
+    const id = entry.slice(0, colon).trim();
+    const encoded = entry.slice(colon + 1).trim();
+    if (!KEY_ID.test(id)) fail(`${at} has an id that is not 1 to 16 of a-z and 0-9`);
+    if (byId.has(id)) fail(`${at} repeats an id`);
+    if (!BASE64.test(encoded)) fail(`${at} is not base64`);
+    const key = Buffer.from(encoded, "base64");
+    if (key.length !== 32) fail(`${at} is not a 32-byte key`);
+    byId.set(id, key);
+  });
+  const [id, key] = byId.entries().next().value as [string, Buffer];
+  return { sealing: { id, key }, byId };
+}
+
 const envSchema = z.object({
   DATABASE_URL: z.string().url(),
   GATEWAY_PORT: z.coerce.number().default(8285),
@@ -96,6 +132,19 @@ const envSchema = z.object({
   AGENT_DEFAULT_VIEW: z.enum(["on", "off"]).default("off"),
   // Slack channel for playground feedback (Dara bot); empty = disabled
   SLACK_CHANNEL_FEEDBACK: z.string().default(""),
+  /** The keys provider OAuth tokens are sealed with (SCRUM-442). Required,
+   * with no default: a gateway that cannot seal must not start, and one
+   * that cannot open would refuse every connected service. The format is
+   * `parseConnectionTokenKeys`'s; the message names the variable alone. */
+  CONNECTION_TOKEN_KEYS: z
+    .string({ required_error: "CONNECTION_TOKEN_KEYS is required" })
+    .superRefine((raw, ctx) => {
+      try {
+        parseConnectionTokenKeys(raw);
+      } catch (e) {
+        ctx.addIssue({ code: z.ZodIssueCode.custom, message: (e as Error).message });
+      }
+    }),
 });
 
 export type Env = z.infer<typeof envSchema>;
