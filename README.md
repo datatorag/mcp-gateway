@@ -1,36 +1,39 @@
-# DataToRAG MCP
+<p align="center">
+  <img src="docs/readme/hero.png" width="860" alt="DataToRAG: your work tools behind one MCP endpoint. Gmail, Drive, Docs, Sheets, Calendar, Jira, Confluence and Notion connected to datatorag.com/mcp, used from any MCP client.">
+</p>
 
-**Connect your Google Workspace, Jira, and Confluence to Claude — through one MCP endpoint.**
+<p align="center">
+  Google Workspace, Jira, Confluence and Notion for Claude and other MCP clients, through one endpoint.
+</p>
 
-DataToRAG is an open-source [Model Context Protocol](https://modelcontextprotocol.io) gateway that turns your everyday work tools into something your AI assistant can actually use. Gmail, Calendar, Drive, Docs, Sheets, Slides, Tasks, Contacts, Jira, and Confluence — 77 tools across one endpoint, with multi-account support and token-optimized responses.
+<p align="center">
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue" alt="License: MIT"></a>
+  <a href="https://github.com/datatorag/mcp-gateway/actions/workflows/ci.yml"><img src="https://github.com/datatorag/mcp-gateway/actions/workflows/ci.yml/badge.svg?branch=main" alt="CI status on main"></a>
+  <a href="https://github.com/datatorag/mcp-gateway/commits/main"><img src="https://img.shields.io/github/last-commit/datatorag/mcp-gateway/main" alt="Last commit on main"></a>
+  <a href="#connectors"><img src="https://img.shields.io/badge/tools-143-4f46e5" alt="143 tools as of October 2026"></a>
+  <a href="https://datatorag.com/docs/getting-started"><img src="https://img.shields.io/badge/works%20with-Claude%20%7C%20Cursor%20%7C%20ChatGPT-555" alt="Works with Claude, Cursor and ChatGPT"></a>
+</p>
 
-- **Website** → [datatorag.com](https://datatorag.com)
-- **Docs** → [datatorag.com/docs](https://datatorag.com/docs)
-- **Dashboard** → [datatorag.com/dashboard](https://datatorag.com/dashboard)
+DataToRAG is an open-source [Model Context Protocol](https://modelcontextprotocol.io) gateway. You point your AI client at one URL. Each person connects their own Google, Atlassian and Notion accounts, and the gateway hands the client the tools for those accounts, calling the services with the person's own OAuth grant. It runs hosted at [datatorag.com](https://datatorag.com), or on your own infrastructure under the MIT license.
 
----
+[Website](https://datatorag.com) · [Docs](https://datatorag.com/docs/getting-started) · [Status](https://datatorag.com/status) · [Changelog](https://datatorag.com/changelog) · [Skills](https://datatorag.com/skills)
 
-## Why DataToRAG
+## Try it in 60 seconds
 
-**Works with any MCP client.** Claude Desktop, Cursor, Windsurf, custom agents — anything that speaks the Model Context Protocol.
+Setup is two connections, and both are needed:
 
-**Google Workspace, natively.** 55 tools across Gmail, Calendar, Drive, Docs, Sheets, Slides, Contacts, and Tasks. Search threads, draft replies, label and triage mail, update cells, batch-create slides, find files, manage tasks — from a single prompt.
+1. **Connect your accounts.** Sign in at [datatorag.com/dashboard](https://datatorag.com/dashboard) and connect Google, Atlassian or Notion. Google's consent screen arrives with every box unticked: tick "Select all", or the services you want.
+2. **Connect your AI client** to `https://datatorag.com/mcp`, then sign in with the same email when the client asks.
 
-**Atlassian, too.** 22 tools for Jira and Confluence: search by JQL or CQL, create and transition issues, read and edit pages, manage comments and attachments.
+**Claude (web and Desktop).** Customize, then Connectors, then Add, then "Add custom connector". Paste the URL and leave the advanced OAuth fields empty.
 
-**Multi-account out of the box.** Connect personal, shared, and team Google accounts under one endpoint. Your assistant can target a specific account or search across all of them.
+**Claude Code.**
 
-**Token-optimized.** Naive API wrappers dump everything into your context window. DataToRAG tunes tool responses for token efficiency — the same Gmail thread read costs a fraction of the tokens, which means longer conversations and smarter agents.
+```bash
+claude mcp add --transport http datatorag https://datatorag.com/mcp
+```
 
-**OAuth per user.** Each user signs in with Google and Atlassian themselves. No shared service accounts, no tokens in code.
-
-**Self-hostable.** MIT-licensed. Run it on your own infrastructure, or use the hosted version at datatorag.com.
-
----
-
-## Quick Start (hosted)
-
-Add this to your MCP client config:
+**Cursor and other clients that take a JSON config.**
 
 ```json
 {
@@ -42,183 +45,153 @@ Add this to your MCP client config:
 }
 ```
 
-Then sign in at [datatorag.com/dashboard](https://datatorag.com/dashboard) and connect your Google or Atlassian accounts. That's it — your AI assistant now has access to every tool listed in the [docs](https://datatorag.com/docs).
+**ChatGPT.** Settings, then Connectors, enable Developer mode, then Create, and paste the URL.
 
----
+The [getting started guide](https://datatorag.com/docs/getting-started) has screenshots of each step. Scripts and agents can use an API key from the dashboard instead of signing in.
 
-## Available Connectors
+## Screenshots
 
-| Connector | Tools | Services |
-|-----------|-------|----------|
-| [Google Workspace](https://datatorag.com/docs/google-workspace) | 55 | Gmail · Calendar · Drive · Docs · Sheets · Slides · Contacts · Tasks |
-| [Atlassian](https://datatorag.com/docs/atlassian) | 22 | Jira · Confluence |
+<p align="center">
+  <img src="docs/readme/agent.png" width="720" alt="The dashboard agent searching Notion with notion_search, reading the page with notion_get_page, and summarising what it says.">
+</p>
+<p align="center"><sub>The agent in the dashboard runs the same tools against your connected accounts, with no client setup.</sub></p>
 
-Each tool is documented with its operations, required OAuth scopes, and example prompts at [datatorag.com/docs](https://datatorag.com/docs).
+<p align="center">
+  <img src="docs/readme/upload-page.png" width="560" alt="The upload page after a file was sent: the file's name, size and SHA-256, and a short reference to paste back into the conversation.">
+</p>
+<p align="center"><sub>An upload link takes one file from your computer, up to 25 MB, and answers its size and SHA-256.</sub></p>
 
-Both connectors are themselves open-source MCP servers that plug into the gateway: [gws-mcp](https://github.com/datatorag/gws-mcp) and [atlassian-mcp](https://github.com/datatorag/atlassian-mcp).
+<p align="center">
+  <img src="docs/readme/status.png" width="720" alt="The public status page: the latest full check of production, with checks working and failing, tools working, and Gmail's results by check.">
+</p>
+<p align="center"><sub>The status page shows the latest end-to-end run against production, by service.</sub></p>
 
----
+## Connectors
+
+Tool counts are from the code as of October 2026: 133 tools in the three connectors, and 10 built into the gateway.
+
+| Connector | Tools | Services | Docs |
+|---|---|---|---|
+| Google Workspace (`plugins/gws-mcp`) | 87 | Gmail, Calendar, Drive, Docs, Sheets, Slides, Contacts, Tasks | [docs](https://datatorag.com/docs/google-workspace) |
+| Atlassian (`plugins/atlassian-mcp`) | 28 | Jira, Confluence | [docs](https://datatorag.com/docs/atlassian) |
+| Notion (`plugins/notion-mcp`) | 18 | Pages, databases, comments | [docs](https://datatorag.com/docs/notion) |
+| Gateway built-ins | 10 | Connected accounts, skills, file upload and download links, a connectivity check | [docs](https://datatorag.com/docs/file-references) |
+
+The three connectors live in this repository under `plugins/` and ship inside the gateway's image. A client only sees the tools for services its user has connected.
+
+## What makes it different
+
+**Several accounts per service.** Connect a work and a personal Google account, or two Notion workspaces, under one login, and pick a default. Every connector tool takes an `account` argument to choose one ([how we built it](https://datatorag.com/blog/how-we-built-multi-account-for-mcp)).
+
+**Responses sized for a context window.** Tools return what the model needs rather than the raw API response. A two-page Google Doc comes back as 2 to 3 KB of text instead of 50 KB or more of JSON ([the write-up](https://datatorag.com/blog/why-your-mcp-server-is-eating-your-context-window)).
+
+**OAuth per user.** Each person grants access to their own accounts, and the gateway refreshes the grants. A connector receives only the calling user's access token, never a shared credential.
+
+**Files move between services without passing through the chat.** A file reference names an email, an attachment or a Drive file, and the gateway carries it to Jira, Drive or an email in one call, answering with its size and SHA-256. Files from your computer arrive through a single-use upload link ([file references](https://datatorag.com/docs/file-references)).
+
+**Skills.** Ready-made workflows, such as a morning brief or inbox triage, that run in the dashboard, on a schedule, or from any client as MCP prompts ([skills](https://datatorag.com/skills), [announcement](https://datatorag.com/blog/skills-are-live)).
+
+**A public status page.** A test run calls the tools on production the way a user would and publishes what works, by service ([status](https://datatorag.com/status)).
 
 ## Architecture
 
-```
-              ┌──────────────────┐
-              │    MCP Client    │
-              │  Claude Desktop, │
-              │   Cursor, etc.   │
-              └────────┬─────────┘
-                       │
-             POST /mcp │  Bearer <OAuth token>
-                       │
-                       ▼
-              ┌──────────────────┐
-              │    1. Auth       │── OAuth2 token
-              │                  │   validation
-              └────────┬─────────┘   401 if invalid
-                       │
-                       ▼
-              ┌──────────────────┐
-              │   2. Session     │── Streamable HTTP
-              │                  │   Create or reuse
-              └────────┬─────────┘
-                       │
-                       ▼
-              ┌──────────────────┐    ┌────────────┐
-              │  3. tools/list   │───>│ PostgreSQL │
-              │     tools/call   │    │            │
-              └────────┬─────────┘    │ users      │
-                       │              │ tools      │
-                       ▼              │ accounts   │
-              ┌──────────────────┐    │            │
-              │  4. Route by     │<──>│            │
-              │     namespace    │    └────────────┘
-              └────────┬─────────┘
-                       │
-          ┌────────────┼─────────────┐
-          ▼            ▼             ▼
-   ┌────────────┐ ┌────────────┐ ┌──────────┐
-   │  gws-mcp   │ │ atlassian- │ │ plugin-n │
-   │  (Node.js) │ │    mcp     │ │   ...    │
-   │ :40000/mcp │ │ :40001/mcp │ │          │
-   └────────────┘ └────────────┘ └──────────┘
-```
+<p align="center">
+  <img src="docs/readme/architecture.png" width="860" alt="How a tool call travels: an MCP client posts to /mcp with a bearer token; the DataToRAG gateway authenticates it, serves tools/list from the registry and routes tools/call to the plugin that owns the tool; each plugin calls its service's API with the user's OAuth grant; Postgres holds users, accounts, provider tokens and the tool registry.">
+</p>
 
-The gateway is a thin routing layer: it authenticates the client, forwards per-user OAuth tokens to the plugin that owns the tool namespace, and streams the response back. Plugins run as separate Node.js processes — they can be added, removed, or replaced without changing the gateway.
+In text:
 
----
+1. **Client.** Any MCP client sends Streamable HTTP to `POST /mcp` with a bearer token: an OAuth access token from the gateway's own authorization server, or an API key.
+2. **Gateway** (`apps/gateway`, one Node.js process: Express plus Next.js). It authenticates the bearer, opens or reuses the session, and answers `tools/list` from the `tools` table in Postgres, filtered to the services the user has connected. A `tools/call` is split on `__` into the plugin and the tool, the user's token for that service is resolved (and refreshed if expired), and the call is forwarded to the plugin. Every call is metered. The same process serves the dashboard and its agent, the docs, the changelog and the status page.
+3. **Built-ins.** `list_connected_accounts`, `skills_*`, `file_upload_link` and `file_download_link` are answered by the gateway itself, with no plugin and no registry row.
+4. **Plugins.** Each connector is an MCP server under `plugins/`. The gateway starts each one as a child process under its own non-root account, with an environment of `PATH`, `NODE_ENV` and `PORT` only, and passes the user's token on each call in the `X-User-Token` header. A crashing plugin is restarted up to three times a minute, and `/health` reports each plugin as up or down.
+5. **Registry.** Postgres holds users, connected accounts, provider tokens and the tool registry (name, description and input schema for each plugin tool). Changes to the registry in production are SQL files under `registry/`, applied by the `registry` workflow after an approval.
 
-## Self-Hosting
+## Self-hosting
 
 ### Prerequisites
 
-- Docker
-- A PostgreSQL database and its connection string in `DATABASE_URL` — any
-  Postgres works (Neon, RDS, or a container you run yourself). The dev stack
-  does not start one for you.
-- Google OAuth client for login (and a separate one for Google Workspace scopes)
-- Atlassian OAuth client (optional, for Jira + Confluence)
+- Node.js 20 or later and pnpm 9.
+- A Postgres database, and its connection string as `DATABASE_URL`. Any Postgres works; nothing here starts one for you.
+- An OAuth client for each provider you want: Google (one client for sign-in, a second for Workspace scopes), Atlassian, Notion.
 
-### Local Development
-
-```bash
-# Apply the schema to your database (once, and after any schema change)
-pnpm --filter @datatorag-mcp/db db:push
-
-# Boot the gateway
-DATABASE_URL=<your-postgres-url> \
-  docker compose -f docker/docker-compose.dev.yml up -d
-```
-
-Migrations are deliberately not run on startup — the stack never mutates your
-schema as a side effect of booting.
-
-| Service | URL |
-|---------|-----|
-| Gateway | http://localhost:8285 |
-| Dashboard | http://localhost:8285/dashboard |
-| Docs | http://localhost:8285/docs |
-| Health | http://localhost:8285/health |
-| OAuth metadata | http://localhost:8285/.well-known/oauth-authorization-server |
-
-Connect a local MCP client:
-
-```json
-{
-  "mcpServers": {
-    "datatorag": {
-      "url": "http://localhost:8285/mcp"
-    }
-  }
-}
-```
-
-### Development Without Docker
+### Run the gateway
 
 ```bash
 pnpm install
+pnpm -r --filter "./packages/*" run build    # the gateway reads these packages' built output
 
-# Push schema + seed a test user
-DATABASE_URL=<your-postgres-url> \
-  pnpm --filter @datatorag-mcp/db db:push && \
-  pnpm --filter @datatorag-mcp/db db:seed
+cp .env.example .env                          # then fill in DATABASE_URL and the OAuth clients
+pnpm --filter @datatorag-mcp/db db:migrate    # schema changes are never applied on start
 
-# Start gateway (reads DATABASE_URL from the root .env)
 pnpm dev:gateway
 ```
 
-### Environment Variables
+The gateway listens on `http://localhost:8285` (set by `GATEWAY_PORT`):
 
-| Variable | Default | Required | Description |
-|----------|---------|----------|-------------|
-| `DATABASE_URL` | — | Yes | PostgreSQL connection string |
-| `GATEWAY_PORT` | `8285` | No | Gateway server port |
-| `GATEWAY_BASE_URL` | `http://localhost:8285` | No | Public URL for OAuth redirects |
-| `GOOGLE_CLIENT_ID` | — | For login | Google OAuth client ID (dashboard sign-in, minimal scopes) |
-| `GOOGLE_CLIENT_SECRET` | — | For login | Google OAuth client secret |
-| `GOOGLE_GWS_CLIENT_ID` | — | For GWS tools | Separate OAuth client for Google Workspace scopes |
-| `GOOGLE_GWS_CLIENT_SECRET` | — | For GWS tools | — |
-| `ATLASSIAN_CLIENT_ID` | — | For Atlassian tools | Atlassian OAuth client ID |
-| `ATLASSIAN_CLIENT_SECRET` | — | For Atlassian tools | — |
-| `NOTION_OAUTH_CLIENT_ID` | — | For Notion tools | Notion public connection (OAuth) client ID |
-| `NOTION_OAUTH_CLIENT_SECRET` | — | For Notion tools | — |
-| `POSTHOG_API_KEY` | — | No | PostHog project key for server-side analytics (tool calls, signups, OAuth) |
-| `NEXT_PUBLIC_POSTHOG_KEY` | — | No | Same value as `POSTHOG_API_KEY`, exposed to the browser. Inlined at build time — must be set when running `next build` or `docker build`. PostHog project keys are safe to expose publicly. |
+| Path | What it is |
+|---|---|
+| `/mcp` | The MCP endpoint |
+| `/dashboard` | Sign in, connect accounts, the agent, API keys |
+| `/docs/getting-started` | The docs |
+| `/health` | Liveness, and each plugin's state |
+| `/.well-known/oauth-authorization-server` | OAuth metadata for MCP clients |
 
-### Production Deployment
+On a laptop the gateway loads plugins from `~/.datatorag/plugins`, or from `DATATORAG_PLUGINS_DIR` when it is set. Build them with `pnpm --filter @datatorag-mcp/gws-mcp run build` (and the same for `atlassian-mcp` and `notion-mcp`).
 
-Production runs on Docker Compose with a build-arg pipeline for `NEXT_PUBLIC_*` values. See `docker/docker-compose.prod.yml` and `apps/gateway/Dockerfile` for the reference setup.
+### Environment variables
 
----
+The full list, with comments, is in [`.env.example`](.env.example), and the schema that validates it is [`packages/config/src/index.ts`](packages/config/src/index.ts). The ones a self-host needs:
 
-## Project Structure
+| Variable | Purpose |
+|---|---|
+| `DATABASE_URL` | Postgres connection string. Required |
+| `GATEWAY_PORT`, `GATEWAY_BASE_URL` | Port, and the public URL OAuth redirects are built from |
+| `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | Google sign-in for the dashboard |
+| `GOOGLE_GWS_CLIENT_ID`, `GOOGLE_GWS_CLIENT_SECRET` | Google Workspace connections |
+| `ATLASSIAN_CLIENT_ID`, `ATLASSIAN_CLIENT_SECRET` | Jira and Confluence connections |
+| `NOTION_OAUTH_CLIENT_ID`, `NOTION_OAUTH_CLIENT_SECRET` | Notion connections |
+| `ANTHROPIC_API_KEY`, `PLAYGROUND_MODEL` | The dashboard agent; empty turns it off |
+| `STRIPE_*` | Billing; optional |
+| `POSTHOG_API_KEY`, `SLACK_BOT_TOKEN`, `BREVO_API_KEY` | Analytics, notifications and email; each is off when empty |
+
+### Production
+
+Production runs the image built from `apps/gateway/Dockerfile`, which carries the three plugins. A merge to `main` builds and publishes it ([`build.yml`](.github/workflows/build.yml)), and a deploy is dispatched by hand and approved ([`release.yml`](.github/workflows/release.yml)), starting it with [`docker/docker-compose.prod.yml`](docker/docker-compose.prod.yml).
+
+## Project structure
 
 ```
-apps/
-  gateway/             MCP proxy server (Express + MCP SDK) + Next.js dashboard
-    src/
-      app/             Dashboard, docs, landing page (Next.js App Router)
-      gateway/         MCP routing, auth, plugin manager, tool tracking
-      lib/             Shared utilities (docs parser, analytics, hooks)
-    content/
-      blog/            Markdown blog posts
-      docs/            Markdown connector docs
-    server.ts          Custom Express server entry point
+apps/gateway/          The product: MCP gateway, OAuth server, dashboard, site
+  server.ts            Express entry: /mcp, /oauth, /auth, /files, /health
+  src/gateway/         Tool routing, auth, plugin manager, file references, metering
+  src/app/             Next.js app: dashboard, docs, blog, changelog, status, skills
+  src/mastra/          The dashboard agent
+  content/             Markdown for the blog, changelog, docs and skills
 packages/
-  config/              Environment variable parsing (zod schema)
-  db/                  Drizzle ORM schema + database client
-  types/               Shared TypeScript types
-  auth/                OAuth helpers
-docker/
-  docker-compose.dev.yml    Local development stack
-  docker-compose.prod.yml   Production (Lightsail)
+  config/              Environment schema (zod)
+  db/                  Drizzle schema and migrations
+  auth/                API key hashing and constant-time compares
+  types/               Shared types, including the plugin manifest
+plugins/
+  gws-mcp/             Google Workspace connector
+  atlassian-mcp/       Jira and Confluence connector
+  notion-mcp/          Notion connector
+registry/              Reviewed SQL for changes to the tool registry
+docker/                Compose files
+scripts/               The pre-merge gate, leak scan, deploy and registry helpers
+docs/                  Architecture notes and implementation plans
+tools/capture/         Product screenshots and recordings (Remotion)
 ```
-
----
 
 ## Contributing
 
-Issues and pull requests welcome. For substantial changes, open an issue first so we can align on direction.
+Issues and pull requests are welcome. For a substantial change, open an issue first so we can agree on the direction; every pull request runs the gate (typecheck and tests) and a leak scan.
+
+## Security
+
+Please report a vulnerability privately to support@datatorag.com rather than in a public issue.
 
 ## License
 
-MIT
+[MIT](LICENSE)
