@@ -2,7 +2,9 @@ import { dropLinksForUser } from "./file-download";
 import { eq, and, sql } from "drizzle-orm";
 import type { Database } from "@datatorag-mcp/db";
 import { connectedAccounts, serviceConnections } from "@datatorag-mcp/db";
+import { randomUUID } from "node:crypto";
 import { revokeUpstream } from "./service-token";
+import { sealedColumns } from "./token-crypto";
 import { grantedServiceCount, scopeDelta } from "./scope-grant";
 
 /**
@@ -89,28 +91,32 @@ export async function upsertServiceAccount(
         .set({ label: identity.label })
         .where(eq(connectedAccounts.id, existing.id));
     }
+    const plain = { accessToken: tokens.access_token, refreshToken: tokens.refresh_token ?? null };
     await db
       .update(serviceConnections)
       .set({
-        accessToken: tokens.access_token,
-        refreshToken: tokens.refresh_token ?? null,
+        ...plain,
+        // SCRUM-442: sealed beside the plain pair, bound to this row.
+        ...sealedColumns("service_connections", { userId, rowId: existing.serviceConnectionId }, plain),
         scopes: tokens.scope ?? defaultScopes,
         tokenExpiresAt: expiresAt,
         updatedAt: new Date(),
       })
       .where(eq(serviceConnections.id, existing.serviceConnectionId));
   } else {
-    const [newConn] = await db
-      .insert(serviceConnections)
-      .values({
-        userId,
-        service: connectorType,
-        accessToken: tokens.access_token,
-        refreshToken: tokens.refresh_token ?? null,
-        scopes: tokens.scope ?? defaultScopes,
-        tokenExpiresAt: expiresAt,
-      })
-      .returning({ id: serviceConnections.id });
+    // The id is made here, not by the database, because the seal is bound
+    // to it (SCRUM-442).
+    const newConn = { id: randomUUID() };
+    const plain = { accessToken: tokens.access_token, refreshToken: tokens.refresh_token ?? null };
+    await db.insert(serviceConnections).values({
+      id: newConn.id,
+      userId,
+      service: connectorType,
+      ...plain,
+      ...sealedColumns("service_connections", { userId, rowId: newConn.id }, plain),
+      scopes: tokens.scope ?? defaultScopes,
+      tokenExpiresAt: expiresAt,
+    });
 
     const [hasExisting] = await db
       .select({ id: connectedAccounts.id })

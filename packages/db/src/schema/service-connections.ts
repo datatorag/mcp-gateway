@@ -11,6 +11,10 @@ export const serviceConnections = pgTable(
     service: text("service").notNull(), // e.g. "google-workspace"
     accessToken: text("access_token").notNull(),
     refreshToken: text("refresh_token"),
+    // SCRUM-442: the same tokens sealed (apps/gateway token-crypto.ts),
+    // written beside the plain ones until reads move to them.
+    accessTokenSealed: text("access_token_sealed"),
+    refreshTokenSealed: text("refresh_token_sealed"),
     scopes: text("scopes"),
     tokenExpiresAt: timestamp("token_expires_at", { withTimezone: true }),
     connectedAt: timestamp("connected_at", { withTimezone: true })

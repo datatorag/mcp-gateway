@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
-import { eq, and } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { getSessionUserId } from "@/lib/session";
 import { nonceMatches } from "@/gateway/oauth/csrf";
-import { mcpServers, pluginConnections } from "@datatorag-mcp/db";
+import { mcpServers } from "@datatorag-mcp/db";
+import { upsertPluginConnection } from "@/gateway/plugin-connections";
 import type { McpGatewayManifest } from "@datatorag-mcp/types";
 
 interface Props {
@@ -116,40 +117,15 @@ export async function GET(request: NextRequest, { params }: Props) {
     ? new Date(Date.now() + tokens.expires_in * 1000)
     : null;
 
-  // Upsert plugin connection (keyed to the authenticated session user)
-  const existing = await db
-    .select({ id: pluginConnections.id })
-    .from(pluginConnections)
-    .where(
-      and(
-        eq(pluginConnections.userId, userId),
-        eq(pluginConnections.mcpServerId, server.id)
-      )
-    )
-    .limit(1);
-
-  if (existing.length > 0) {
-    await db
-      .update(pluginConnections)
-      .set({
-        accessToken: tokens.access_token,
-        refreshToken: tokens.refresh_token ?? null,
-        tokenExpiresAt,
-        scopes: tokens.scope ?? oauth.scopes.join(" "),
-        updatedAt: new Date(),
-      })
-      .where(eq(pluginConnections.id, existing[0].id));
-  } else {
-    await db.insert(pluginConnections).values({
-      userId,
-      mcpServerId: server.id,
-      provider: oauth.provider,
-      accessToken: tokens.access_token,
-      refreshToken: tokens.refresh_token ?? null,
-      tokenExpiresAt,
-      scopes: tokens.scope ?? oauth.scopes.join(" "),
-    });
-  }
+  // Upsert plugin connection (keyed to the authenticated session user),
+  // stored sealed.
+  await upsertPluginConnection(db, userId, server.id, {
+    provider: oauth.provider,
+    accessToken: tokens.access_token,
+    refreshToken: tokens.refresh_token ?? null,
+    tokenExpiresAt,
+    scopes: tokens.scope ?? oauth.scopes.join(" "),
+  });
 
   // Redirect to dashboard and retire the one-shot connect nonce.
   return withNonceCleared(NextResponse.redirect(`${baseUrl}/dashboard`));

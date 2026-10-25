@@ -6,19 +6,16 @@
  * changed, or carry the token into an error message.
  */
 
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterAll, beforeEach, describe, expect, it } from "vitest";
 import { randomBytes } from "node:crypto";
 
-const env = { CONNECTION_TOKEN_KEYS: "" };
-vi.mock("@datatorag-mcp/config", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("@datatorag-mcp/config")>();
-  return { ...actual, getEnv: () => env };
-});
+const env = process.env;
 
 import {
   TokenOpenError,
   openToken,
   sealToken,
+  sealedColumns,
   sealedKeyId,
   type SealContext,
 } from "./token-crypto";
@@ -43,6 +40,11 @@ function flipSegment(sealed: string, index: number, byte = 0): string {
   parts[index] = raw.toString("base64url");
   return parts.join(".");
 }
+
+const savedKeys = process.env.CONNECTION_TOKEN_KEYS;
+afterAll(() => {
+  process.env.CONNECTION_TOKEN_KEYS = savedKeys;
+});
 
 describe("token-crypto", () => {
   beforeEach(() => {
@@ -161,5 +163,26 @@ describe("token-crypto", () => {
         }
       }
     });
+  });
+});
+
+describe("sealedColumns", () => {
+  beforeEach(() => {
+    env.CONNECTION_TOKEN_KEYS = `a:${keyA}`;
+  });
+  const row = { userId: "user-a", rowId: "row-r" };
+
+  it("seals each token given, for its own column", () => {
+    const cols = sealedColumns("service_connections", row, { accessToken: "at", refreshToken: "rt" });
+    expect(openToken(cols.accessTokenSealed!, { ...ctx, ...row })).toBe("at");
+    expect(openToken(cols.refreshTokenSealed!, { ...ctx, column: "refresh_token" })).toBe("rt");
+  });
+
+  it("keeps a null as null and leaves out a token not given", () => {
+    expect(sealedColumns("service_connections", row, { accessToken: "at", refreshToken: null }))
+      .toMatchObject({ refreshTokenSealed: null });
+    expect(sealedColumns("service_connections", row, { accessToken: "at" })).not.toHaveProperty(
+      "refreshTokenSealed"
+    );
   });
 });

@@ -162,6 +162,13 @@
       "when": 1792556045028,
       "tag": "0022_connected_account_external_id",
       "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "7",
+      "when": 1792897644456,
+      "tag": "0023_provider_tokens_sealed",
+      "breakpoints": true
     }
   ]
 }

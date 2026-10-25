@@ -1,5 +1,5 @@
 import { createCipheriv, createDecipheriv, randomBytes } from "node:crypto";
-import { getEnv, parseConnectionTokenKeys, type ConnectionTokenKeys } from "@datatorag-mcp/config";
+import { parseConnectionTokenKeys, type ConnectionTokenKeys } from "@datatorag-mcp/config";
 
 /**
  * Provider OAuth tokens, sealed at rest (SCRUM-442).
@@ -41,9 +41,12 @@ const SEALED = /^v1\.([a-z0-9]{1,16})\.([A-Za-z0-9_-]+)\.([A-Za-z0-9_-]+)$/;
 
 let cached: { raw: string; keys: ConnectionTokenKeys } | undefined;
 
-/** Parsed once per distinct value of the variable. */
+/** Parsed once per distinct value of the variable. Read from the process
+ * environment rather than `getEnv()`, which would make every token write
+ * depend on the whole configuration; the config schema validates this same
+ * variable with this same parser when the gateway starts. */
 function keys(): ConnectionTokenKeys {
-  const raw = getEnv().CONNECTION_TOKEN_KEYS;
+  const raw = process.env.CONNECTION_TOKEN_KEYS ?? "";
   if (cached?.raw !== raw) cached = { raw, keys: parseConnectionTokenKeys(raw) };
   return cached.keys;
 }
@@ -86,4 +89,27 @@ export function openToken(sealed: string, ctx: SealContext): string {
 /** The key id of a sealed value, or null for anything not in the format. */
 export function sealedKeyId(sealed: string): string | null {
   return SEALED.exec(sealed)?.[1] ?? null;
+}
+
+/** The row a token belongs to: half of its binding. */
+export type TokenRow = { userId: string; rowId: string };
+
+/** The sealed columns for whichever tokens a write sets: a string is sealed,
+ * a null stays null, and an absent token is left out, so a write that sets
+ * one column seals exactly that one. */
+export function sealedColumns(
+  table: SealContext["table"],
+  row: TokenRow,
+  tokens: { accessToken?: string | null; refreshToken?: string | null }
+): { accessTokenSealed?: string | null; refreshTokenSealed?: string | null } {
+  const seal = (value: string | null, column: SealContext["column"]) =>
+    value === null ? null : sealToken(value, { table, column, ...row });
+  return {
+    ...(tokens.accessToken !== undefined && {
+      accessTokenSealed: seal(tokens.accessToken, "access_token"),
+    }),
+    ...(tokens.refreshToken !== undefined && {
+      refreshTokenSealed: seal(tokens.refreshToken, "refresh_token"),
+    }),
+  };
 }

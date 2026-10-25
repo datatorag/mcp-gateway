@@ -13,8 +13,12 @@ export const pluginConnections = pgTable(
       .notNull()
       .references(() => mcpServers.id, { onDelete: "cascade" }),
     provider: text("provider").notNull(),
-    accessToken: text("access_token").notNull(),
+    // SCRUM-442: this legacy table is sealed-only. The plain columns stay
+    // until the contract migration, nullable and written null.
+    accessToken: text("access_token"),
     refreshToken: text("refresh_token"),
+    accessTokenSealed: text("access_token_sealed"),
+    refreshTokenSealed: text("refresh_token_sealed"),
     tokenExpiresAt: timestamp("token_expires_at", { withTimezone: true }),
     scopes: text("scopes"),
     connectedAt: timestamp("connected_at", { withTimezone: true })
