@@ -17,7 +17,7 @@
 
 - **Invisible to users.** No step, and no rollback, logs anyone out or asks anyone to reconnect. No step rotates stored refresh tokens.
 - **Cipher.** AES-256-GCM. A 12-byte nonce from `randomBytes` for every seal. A 16-byte tag.
-- **Format.** `v1.<key id>.<base64url nonce>.<base64url ciphertext and tag>`. AAD is `<table>.<column>:<user_id>:<row_id>`; inserts generate the row id in the application.
+- **Format.** `v1.<key id>.<base64url nonce>.<base64url ciphertext and tag>`. AAD is `<table>.<column>:["<user_id>","<row_id>"]` (the pair as JSON, so no user id can run into a row id); inserts generate the row id in the application.
 - **Key.** `CONNECTION_TOKEN_KEYS` is a comma-separated list of `<id>:<base64 of exactly 32 bytes>`, where `id` matches `[a-z0-9]{1,16}`. The first entry seals, and all entries open.
 - **Never print a token.** No log line, error message, commit message or changelog carries a token, a key or a sealed value. Errors name the table and column only.
 - **Who opens.** Only `apps/gateway/src/gateway/service-token.ts` and `apps/gateway/src/gateway/token-crypto-commands.ts` import `openToken` (tests excepted).

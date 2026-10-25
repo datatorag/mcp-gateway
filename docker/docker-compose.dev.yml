@@ -11,6 +11,7 @@ services:
       - "8285:8285"
     environment:
       DATABASE_URL: ${DATABASE_URL:?DATABASE_URL is required (Neon connection string)}
+      CONNECTION_TOKEN_KEYS: ${CONNECTION_TOKEN_KEYS:?CONNECTION_TOKEN_KEYS is required (see .env.example)}
       GATEWAY_PORT: "8285"
       GATEWAY_BASE_URL: http://localhost:8285
       GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}

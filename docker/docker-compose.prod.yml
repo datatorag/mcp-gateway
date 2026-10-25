@@ -60,6 +60,9 @@ services:
       PLAYGROUND_MODEL: ${PLAYGROUND_MODEL:-claude-sonnet-5-5}
       PLAYGROUND_MESSAGE_CAP: ${PLAYGROUND_MESSAGE_CAP:-20}
       SLACK_CHANNEL_FEEDBACK: ${SLACK_CHANNEL_FEEDBACK:-}
+      # Provider token keys (SCRUM-442). No fallback on purpose: a gateway
+      # without them must refuse to start, and the config schema says why.
+      CONNECTION_TOKEN_KEYS: ${CONNECTION_TOKEN_KEYS:-}
       BREVO_API_KEY: ${BREVO_API_KEY:-}
       # Billing (Stage 1). All four must be present for checkout + webhooks;
       # the webhook route deliberately 503s without its secret rather than
