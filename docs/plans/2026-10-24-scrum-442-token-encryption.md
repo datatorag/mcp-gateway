@@ -112,7 +112,8 @@
 
 **Files:**
 - Create: `apps/gateway/src/gateway/token-crypto-commands.ts`, `apps/gateway/src/gateway/token-crypto-commands.test.ts` (DB-backed, against the test database).
-- Modify: `apps/gateway/tsup.config.ts`. A second entry, `entry: { server: "server.ts", tokens: "src/gateway/token-crypto-commands.ts" }`, so the build writes `dist/tokens.js` beside `dist/server.js`. The image already copies `dist/`.
+- Create: `apps/gateway/src/gateway/token-crypto-cli.ts`, the entry that runs a command; the commands module only exports them (a "started directly" check does not survive the bundler, which empties `import.meta` at this target).
+- Modify: `apps/gateway/tsup.config.ts`. A second entry, `entry: { server: "server.ts", tokens: "src/gateway/token-crypto-cli.ts" }`, so the build writes `dist/tokens.js` beside `dist/server.js`. The image already copies `dist/`.
 
 **Interfaces:**
 - `backfillSealed(db): Promise<{ sealed: number; skipped: number; unsealed: number }>`, on `service_connections`.

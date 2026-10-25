@@ -226,8 +226,9 @@ So the refusal is a zero-row case, not one a user meets.
 
 ### 5. Three commands, one module
 
-These live in `apps/gateway/src/gateway/token-crypto-commands.ts`. It is a
-second `tsup` entry, built to `dist/tokens.js`, so the image carries it. HQ
+These live in `apps/gateway/src/gateway/token-crypto-commands.ts`, run
+through a small entry, `token-crypto-cli.ts`, which is a second `tsup`
+entry built to `dist/tokens.js`, so the image carries it. HQ
 runs it in the gateway container on the production host, on Manuel's
 confirm naming the target:
 

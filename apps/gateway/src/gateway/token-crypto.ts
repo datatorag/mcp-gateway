@@ -86,6 +86,11 @@ export function openToken(sealed: string, ctx: SealContext): string {
   }
 }
 
+/** The id of the key new values are sealed under: the first one listed. */
+export function currentKeyId(): string {
+  return keys().sealing.id;
+}
+
 /** The key id of a sealed value, or null for anything not in the format. */
 export function sealedKeyId(sealed: string): string | null {
   return SEALED.exec(sealed)?.[1] ?? null;
