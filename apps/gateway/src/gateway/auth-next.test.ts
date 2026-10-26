@@ -15,9 +15,6 @@ import cookieParser from "cookie-parser";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Database } from "@datatorag-mcp/db";
 
-vi.mock("@datatorag-mcp/config", () => ({
-  getEnv: () => ({ AGENT_DEFAULT_VIEW: "on" }),
-}));
 vi.mock("./track", () => ({
   trackLogin: vi.fn(),
   trackSignup: vi.fn(),

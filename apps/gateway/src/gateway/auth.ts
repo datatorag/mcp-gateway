@@ -35,7 +35,6 @@ import { GWS_SCOPE_LIST, grantedServiceCount, scopeDelta, serviceGrantStates } f
 import { NOTION_AUTHORIZE_URL, NOTION_TOKEN_URL, notionBasicAuth } from "./notion-oauth";
 import { isServiceLaunched } from "./service-launch";
 import { cleanWorkspaceName } from "./untrusted-text";
-import { getEnv } from "@datatorag-mcp/config";
 import { dropLinksForUser } from "./file-download";
 
 /** Where the requested route (`?next=` on the login URL) survives the trip
@@ -380,7 +379,6 @@ export function createAuthRouter(
     // real domain and lands on the attacker's).
     res.redirect(
       postLoginDestination({
-        agentDefaultView: getEnv().AGENT_DEFAULT_VIEW === "on",
         isNewUser,
         requestedPath,
       })
