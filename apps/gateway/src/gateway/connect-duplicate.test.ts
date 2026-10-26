@@ -13,7 +13,7 @@ const page = (over: Partial<Parameters<typeof renderConnectDuplicate>[0]> = {}) 
 describe("the duplicate-account page (SCRUM-363)", () => {
   it("names the other account only by the masked address it was given", () => {
     const html = page();
-    expect(html).toContain("signed in as j•••@example.com");
+    expect(html).toContain("connected to another DataToRAG account (j•••@example.com).");
     expect(html).toContain("This Google account is already connected");
     expect(page({ provider: "notion" })).toContain("This Notion workspace is already connected");
   });

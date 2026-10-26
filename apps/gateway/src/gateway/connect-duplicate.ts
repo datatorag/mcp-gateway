@@ -27,7 +27,7 @@ const ACCOUNT_NOUN: Record<DuplicateProvider, string> = {
 /** The page's words, in one place for review. */
 export const DUPLICATE_COPY = {
   title: (noun: string, masked: string) =>
-    `This ${noun} is already connected to another DataToRAG account, signed in as ${masked}.`,
+    `This ${noun} is already connected to another DataToRAG account (${masked}).`,
   explanation:
     "Usage and your plan follow the DataToRAG account you sign in with. If you meant to use that one, sign in with it instead.",
   signInOther: "Sign in with the other account",

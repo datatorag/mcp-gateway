@@ -128,7 +128,7 @@ describe("a duplicate account at the Google callback", () => {
     const res = await request("GET", "/auth/google/connect/callback?code=c&state=n1", `${SESSION}; gws_connect_nonce=n1`);
     expect(res.status).toBe(200);
     const html = await res.text();
-    expect(html).toContain("signed in as o•••@example.com");
+    expect(html).toContain("another DataToRAG account (o•••@example.com).");
     // No return path: the legacy error name the dashboard already reads.
     expect(html).toContain("/dashboard/connections?error=connected_elsewhere");
     expect(upsertServiceAccount).not.toHaveBeenCalled();
