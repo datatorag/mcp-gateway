@@ -193,6 +193,12 @@ gateway deploy carries it. What goes with it:
   `src/tools/described-not-instructed.test.ts` holds the rule for the tools
   listed in it by name. A new tool goes on that list; an older description
   is brought under the rule by adding its name and rewording it.
+- **A failure says whose it was** (SCRUM-154). Every error a plugin
+  answers carries `_meta["datatorag.com/error"]` from `src/error-meta.ts`,
+  and the gateway meters on it. So a provider's HTTP refusal is thrown as the
+  plugin's typed error with its status (`GwsApiError`, `AtlassianHttpError`,
+  `NotionApiError`), never as a plain `Error` with the status in the words: a
+  plain `Error` reads as the plugin refusing the request, which is metered.
 - **Bytes do not travel through a tool response.** `gmail_get_attachment`
   returns a text attachment as text, up to a stated size, and for anything
   else a description with the size and the save-to-Drive route. A new tool

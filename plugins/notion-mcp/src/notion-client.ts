@@ -42,6 +42,15 @@ export const NO_TOKEN_MESSAGE =
   "session; the gateway's list_connected_accounts tool shows whether Notion is connected.";
 
 /** A Notion call that was answered, and answered no. */
+/** A write sent to Notion that got no answer: it may or may not have been
+ * applied, and the failure was on the path, not in the request. */
+export class NotionUnreachableError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "NotionUnreachableError";
+  }
+}
+
 export class NotionApiError extends Error {
   constructor(
     message: string,
@@ -213,7 +222,7 @@ export class NotionClient {
         // dropped; it is not sent again, and the words say so.
         if (this.readOnlyTool) throw err;
         const reason = err instanceof Error ? err.message : String(err);
-        throw new Error(
+        throw new NotionUnreachableError(
           `No answer came back from Notion for ${method} ${url.pathname} (${reason}). The change may or may not have been applied; it was not sent again.`
         );
       }

@@ -53,8 +53,11 @@ import {
   checkScopeForTool,
   missingScopeMessage,
   rewriteScopeError,
+  scopeDelta,
+  GOOGLE_WORKSPACE_SERVICE,
   MISSING_SCOPE_ERROR_MARKER,
 } from "./scope-grant";
+import { pluginFailureOf } from "./usage/classify";
 import { grantLine, type ConnectedAccountLine } from "./account-grant-line";
 import { cleanWorkspaceName } from "./untrusted-text";
 import { crossFile, filePathsFor } from "./file-crossing";
@@ -1192,6 +1195,9 @@ export function createMcpServer(
       ? `${connectionsUrl}/${requiredService}`
       : connectionsUrl;
     let accountEmail: string | undefined;
+    // Whether the account holds every scope we request (SCRUM-154): a scope
+    // refusal on a complete grant is for a scope we never asked for.
+    let grantComplete = false;
     if (requiredService) {
       const requestedAccount = args.account as string | undefined;
       delete args.account;
@@ -1230,6 +1236,10 @@ export function createMcpServer(
       // so the two agree; the legacy path has no account and reports the
       // request as made.
       accountEmail = resolved?.accountEmail ?? requestedAccount;
+      grantComplete =
+        requiredService === GOOGLE_WORKSPACE_SERVICE &&
+        resolved?.scopes != null &&
+        scopeDelta(requiredService, resolved.scopes).complete;
       if (!userToken) {
         const msg = requestedAccount
           ? `No connected account found for ${echoName(requestedAccount)}. Please connect it from the dashboard at ${grantFixUrl}.`
@@ -1401,7 +1411,15 @@ export function createMcpServer(
         latencyMs: Date.now() - startTime,
         responseSizeBytes: responseText.length,
         errorMessage,
-        outcome: { thrown: false, isError, errorMessage, source: surface, toolName: name },
+        outcome: {
+          thrown: false,
+          isError,
+          errorMessage,
+          source: surface,
+          toolName: name,
+          failure: isError ? pluginFailureOf(result) : null,
+          grantComplete,
+        },
       });
 
       return result;
