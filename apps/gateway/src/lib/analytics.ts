@@ -97,7 +97,9 @@ export const EVENTS = {
    * else in the funnel.
    *
    * COHORT RULE. This used to fire for new users only, because only a signup
-   * was ever routed here. Every login is now, so the event on its own no
+   * was ever routed here. Every login is now, unconditionally since
+   * SCRUM-207 removed the switch that could route logins elsewhere, so the
+   * event on its own no
    * longer answers "how many NEW users landed on the Agent" — the
    * `landed_from` property does: `"signup"` for a post-signup landing,
    * `"login"` for a returning user's. Break the event out by that property
@@ -105,10 +107,11 @@ export const EVENTS = {
    * `landed_from` at all (emitted before the property existed) as `"signup"`,
    * since that was the only case that could fire then.
    *
-   * The NAME deliberately did not change: it is the join key for everything
-   * already built on this event, and renaming would silently end those series
-   * rather than break them. */
-  AGENT_DEFAULT_VIEW_SHOWN: "agent_default_view_shown",
+   * The event NAME deliberately did not change: it is the join key for
+   * everything already built on this event, and renaming would silently end
+   * those series rather than break them. Only the constant's key was renamed,
+   * with the switch it was named after. */
+  AGENT_LANDING_SHOWN: "agent_default_view_shown",
   PLAYGROUND_MESSAGE_SENT: "playground_message_sent",
   PLAYGROUND_CAP_HIT: "playground_cap_hit",
   /** One run's token ceiling (SCRUM-84). Distinct from PLAYGROUND_CAP_HIT,
