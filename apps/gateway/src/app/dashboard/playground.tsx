@@ -1000,6 +1000,7 @@ export const Playground = forwardRef<PlaygroundHandle, PlaygroundProps>(
                       <ConnectPart
                         services={connectControlServices(launchedServices)}
                         source="empty_state"
+                        reportImpression={locked}
                       />
                       {locked && (
                         <p
