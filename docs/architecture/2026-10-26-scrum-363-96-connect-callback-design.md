@@ -1,7 +1,7 @@
 # The connect callback: a Google account already connected elsewhere, and landing in the agent (SCRUM-363, SCRUM-96)
 
-Status: spec, written from the code at `02e147d`. Nothing here is built. HQ reviews it with
-Manuel before any of it is.
+Status: spec, written from the code at `02e147d`, revised to Manuel's rulings of 2026-10-26
+(the "Ruled" section at the end). Nothing here is built until a go.
 
 Two changes share one place, the end of a service-connect OAuth round trip:
 
@@ -78,12 +78,17 @@ code exchanged, identity known
 
 One helper in `connected-accounts.ts`, used by all three callbacks before the upsert:
 
-`connectedElsewhere(db, userId, connectorType, accountEmail, externalAccountId): Promise<boolean>`
+`connectedElsewhere(db, userId, connectorType, accountEmail, externalAccountId): Promise<{ otherSignIn: string } | null>`
 
-True when a `connected_accounts` row matches (connector, email, external id with `IS NOT
+Not null when a `connected_accounts` row matches (connector, email, external id with `IS NOT
 DISTINCT FROM`, the same match the unique key uses) under a different `user_id`, and no row
 matches under this one. A reconnect of an account this user already holds is never a duplicate.
-It answers a boolean: the other user's id and email never leave the function.
+
+`otherSignIn` is the MASKED sign-in email of the other DataToRAG user (`users.email`), masked
+inside the function by `maskEmail`: the first character of the local part, three dots, then
+`@` and the domain, so `jane.doe@example.com` becomes `j•••@example.com`. When more than one
+other user holds the account, it names the one whose row was connected most recently. The other
+user's id and unmasked email never leave the function.
 
 **Store nothing on this branch.** The tokens from this exchange are dropped. Holding them while
 the user decides would mean parking a live grant somewhere; asking again costs one extra Google
@@ -108,8 +113,8 @@ So:
    the logout POST, so another site cannot submit the form and arm the acknowledgement.
 
 **"Sign in as that account"** signs this session out and starts a sign-in, so the user picks the
-Google login of the other DataToRAG account in Google's chooser. We do not know which login that
-is, and we do not say: see Decision 2.
+Google login of the other DataToRAG account in Google's chooser, recognising it from the masked
+address on the page.
 
 ### The duplicate page
 
@@ -117,7 +122,8 @@ A self-contained Express page in the shape of `connect-interstitial.ts`: light a
 sentence of what happened, two buttons, and a Back link to the old destination with
 `connect_error=connected_elsewhere`. Proposed copy, for HQ and Manuel:
 
-> **This Google account is already connected to another DataToRAG account.**
+> **This Google account is already connected to another DataToRAG account, signed in as
+> j•••@example.com.**
 > Usage and your plan follow the DataToRAG account you sign in with. If you meant to use that
 > one, sign in with it instead.
 > [Sign in with the other account] [Connect it here anyway]
@@ -136,8 +142,8 @@ On the agent page, `connected` with no `thread` and `landing=connect` opens a NE
 the empty state shows a connect-landing block: one line naming the service just connected, then
 two concrete things it can do with that account, from the suggestion generator specified in
 `2026-10-26-scrum-110-321-suggestions-design.md` with `context: "post_connect"`. Not a checklist, not a
-wizard, not a modal: it is the normal empty state, led by what just became possible. What
-happens on landing is Decision 3.
+wizard, not a modal: it is the normal empty state, led by what just became possible. Nothing
+runs until the user picks a suggestion or types: the landing spends no agent run.
 
 The once-only guard that SCRUM-78's continuation uses (a one-shot ref, and
 `history.replaceState` dropping the params after the first render) applies here too, so a
@@ -154,7 +160,7 @@ Kept separable so the connected-to-ran-agent rate can be read for each half:
 | `agent_run` (existing) | a run starts | adds `after_connect_landing: true` on the first run of a thread opened by the landing |
 | `account_connect_duplicate` (new, server) | the duplicate branch is taken | `service`, `resolution`: `"shown"`; then `"signed_in_other"` or `"connected_anyway"` from the button's leg |
 
-None carries the other user's identity, an email, or content.
+None carries the other user's identity, an email (masked or not), or content.
 
 ## Tests
 
@@ -165,7 +171,10 @@ None carries the other user's identity, an email, or content.
   With an acknowledgement cookie whose value equals the matched nonce, it takes the normal path
   once and clears the cookie. With `dup_ack=1` in the start or callback query string and no bound
   acknowledgement, or with an acknowledgement for a different nonce, it still renders the
-  duplicate page. The page names no other user.
+  duplicate page.
+- `maskEmail`: one character, three dots, the domain; a one-character local part still masks;
+  the page and every event carry only the masked form; the unmasked address appears nowhere in
+  the response.
 - `auth-callback-ordering.test.ts` covers the acknowledgement cookie, so clearing it first in
   the callback is enforced like the nonce.
 - The "Connect it here anyway" route refuses a request with no session or a cross-site origin.
@@ -184,36 +193,39 @@ None carries the other user's identity, an email, or content.
 since the table was created, and no write path sets it, in `usage/write.ts` or anywhere else in
 the current code. A call's provenance is recorded elsewhere, as `client_id` and `client_name` on
 the PostHog `tool_call` event (SCRUM-189). So it is not a defect that started recently; it is a
-column nothing writes. Recommendation: either write `client_name` into it from the same place
-the PostHog event gets it, or drop the column. Leaving it suggests a fact the table does not
-hold.
+column nothing writes.
+
+**Decided (left to this spec): write it.** `trackToolCall` already has the session's
+`client_name` for the PostHog event; it passes the same value to `writeUsageEvent`, which sets
+`client`. Null then means only that the client sent no name. Keeping provenance in the table the
+user's own usage page reads is worth one column that is already there; dropping it would need a
+migration to remove something that becomes useful the day it is written. Test: a tool call from
+a named client writes that name; one from a client with no name writes null.
 
 **Is `users.updated_at` meant to be maintained by metering writes?** No write in the metering
 path touches it: `rollAndBump` in `usage/period.ts` updates the period counters and nothing
 else. It is set by the Stripe webhook handlers when the plan or the customer id changes. Read
 as "the last time the account's settings or billing changed", that is consistent.
-Recommendation: keep it that way and say so on the column, rather than bump it on every tool
-call, which would make it a second last-activity timestamp and useless for its own question.
+**Ruled: it stays Stripe-only.** A comment on the column says so, rather than bumping it on
+every tool call, which would make it a second last-activity timestamp and useless for its own
+question.
 
 ## Not done, on purpose
 
 - Options (b) and (c), and any remedy for users already split.
 - Blocking a second DataToRAG user from connecting an account: sharing is legitimate.
-- Naming the other DataToRAG user anywhere on the page.
+- Naming the other DataToRAG user beyond the masked sign-in address.
 - A checklist, wizard or modal after connecting.
 - Any change to what a connect carrying a `next` does.
 
-## Decisions to rule on
+## Ruled (Manuel, 2026-10-26)
 
-1. **Hold or store on the duplicate branch.** This spec stores nothing and asks again on
-   "Connect it here anyway" (one extra Google round trip, no parked tokens). The alternative
-   stores the connection and shows the warning afterwards, which keeps the extra round trip
-   off the table but lets the split happen before the user has read the warning.
-2. **What the page says about the other account.** This spec names nothing. Showing the other
-   DataToRAG user's sign-in email, even masked, tells whoever controls a shared work account
-   which personal login a colleague uses. The cost of naming nothing is that the user has to
-   remember which login they used.
-3. **What happens on the connect landing.** This spec shows two concrete suggestions and runs
-   nothing until the user picks one. The strong version in SCRUM-96 runs a small read
-   immediately and shows the result; it is more convincing and it spends an agent run from
-   the user's allowance without being asked.
+1. **The duplicate branch stores nothing**, warns, and asks Google again on "Connect it here
+   anyway". As specified above.
+2. **The page shows the other account's sign-in email, masked** (`j•••@example.com`), so the user
+   can tell which login to pick. The masking happens inside `connectedElsewhere`.
+3. **The connect landing shows two suggestions and runs nothing.** No agent run is spent on
+   arrival.
+4. **`usage_events.client`: written**, from the client name the PostHog event already carries
+   (this spec's call, above).
+5. **`users.updated_at` stays Stripe-only**, documented on the column.
