@@ -697,3 +697,48 @@ describe("the empty state's connect control and the launch gate (SCRUM-366)", ()
     expect(container.querySelector('a[href^="/auth/notion/connect"]')).not.toBeNull();
   });
 });
+
+/* SCRUM-198: the standing connect control had a click event and no
+ * impression, so the click had no denominator. The impression fires once per
+ * offered service when the control renders to a user KNOWN to be unconnected,
+ * and never to a connected one: asserting only the first lets the SCRUM-114
+ * suppression regress, asserting only the second hides a missing event. */
+describe("the standing connect control's impression (SCRUM-198)", () => {
+  const neverResolves = () => new Promise<Response>(() => {});
+
+  async function impressions() {
+    const posthog = (await import("posthog-js")).default as unknown as {
+      capture: { mock: { calls: unknown[][] } };
+    };
+    return posthog.capture.mock.calls
+      .filter((c) => c[0] === "connect_control_impression")
+      .map((c) => c[1]);
+  }
+
+  it("fires for an unconnected user reaching the agent page, and not for a connected one", async () => {
+    const posthog = (await import("posthog-js")).default as unknown as { capture: ReturnType<typeof vi.fn> };
+    posthog.capture.mockClear();
+    mountWith(neverResolves, [], null, { initialConnections: UNCONNECTED });
+    await flush();
+    expect(await impressions()).toEqual([
+      { service: "google-workspace", source: "empty_state" },
+      { service: "atlassian", source: "empty_state" },
+    ]);
+
+    act(() => root.unmount());
+    root = createRoot(container);
+    posthog.capture.mockClear();
+    mountWith(neverResolves, [], null, { initialConnections: CONNECTED });
+    await flush();
+    expect(await impressions()).toEqual([]);
+  });
+
+  it("does not fire while the lookup is still open, when the user may be connected", async () => {
+    const posthog = (await import("posthog-js")).default as unknown as { capture: ReturnType<typeof vi.fn> };
+    posthog.capture.mockClear();
+    mountWith(neverResolves);
+    await flush();
+    expect(text()).toContain("Connect Google Workspace");
+    expect(await impressions()).toEqual([]);
+  });
+});
