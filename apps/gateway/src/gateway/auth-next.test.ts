@@ -45,9 +45,10 @@ const RETURNING_USER = {
 const selectLimit = vi.fn();
 const insertReturning = vi.fn();
 function insertValues() {
-  // users insert chains .returning(); the token insert is awaited directly.
+  // users insert chains .onConflictDoNothing().returning(); the token insert is awaited directly.
   return Object.assign(Promise.resolve(undefined), {
     returning: insertReturning,
+    onConflictDoNothing: () => ({ returning: insertReturning }),
   });
 }
 const dbMock = {
