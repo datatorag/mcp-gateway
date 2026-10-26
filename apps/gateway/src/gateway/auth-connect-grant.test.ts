@@ -29,9 +29,6 @@ import {
 } from "vitest";
 import type { Database } from "@datatorag-mcp/db";
 
-vi.mock("@datatorag-mcp/config", () => ({
-  getEnv: () => ({ AGENT_DEFAULT_VIEW: "on" }),
-}));
 const trackOAuthCompleted = vi.fn(async (..._args: unknown[]) => undefined);
 const trackConnectRefused = vi.fn(async (..._args: unknown[]) => undefined);
 vi.mock("./track", () => ({
