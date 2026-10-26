@@ -1,20 +1,18 @@
 /**
- * Where a login lands, for every combination of flag and user.
+ * Where a login lands, for every user.
  *
  * Pure and standalone so the whole table below can be pinned by a test without
  * standing up the OAuth callback around it.
  *
- * | AGENT_DEFAULT_VIEW | user      | destination                              |
- * |--------------------|-----------|------------------------------------------|
- * | on                 | new       | `/dashboard/agent?signup=1&welcome=1`    |
- * | on                 | returning | `/dashboard/agent?welcome=1`             |
- * | off                | new       | `/dashboard?signup=1`                    |
- * | off                | returning | `/dashboard`                             |
+ * | user      | destination                              |
+ * |-----------|------------------------------------------|
+ * | new       | `/dashboard/agent?signup=1&welcome=1`    |
+ * | returning | `/dashboard/agent?welcome=1`             |
  *
- * ONE SWITCH. The flag decides the surface for everyone; it is not a
- * new-user-only setting. With it off, every destination is byte-identical to
- * what it was before the agent existed, which is what makes the flag a real
- * rollback rather than a partial one. (Per HQ decision, see SCRUM-70.)
+ * The agent is where every login lands (SCRUM-207). It used to sit behind a
+ * flag that could send logins back to `/dashboard` (SCRUM-70); the flag was on
+ * from the start and never turned off, so it is gone, and the rollback is
+ * redeploying the previous build.
  *
  * THE TWO PARAMS ARE NOT INTERCHANGEABLE, and each is a one-character mistake
  * with a silent consequence in the opposite direction:
@@ -28,8 +26,6 @@
  *   no way to see whether it works.
  */
 export function postLoginDestination(opts: {
-  /** `AGENT_DEFAULT_VIEW === "on"`. */
-  agentDefaultView: boolean;
   isNewUser: boolean;
   /** The RAW `next` value carried through the login flow (SCRUM-71) — the
    * route the user asked for before being bounced to login. Untrusted:
@@ -39,7 +35,7 @@ export function postLoginDestination(opts: {
    * as before; `next` is a case in FRONT of the table, not a change to it. */
   requestedPath?: unknown;
 }): string {
-  const { agentDefaultView, isNewUser } = opts;
+  const { isNewUser } = opts;
 
   const next = resolveNextPath(opts.requestedPath);
   if (next !== null) {
@@ -78,12 +74,9 @@ export function postLoginDestination(opts: {
     // else: the composed path escaped same-origin — fall through to the table.
   }
 
-  if (agentDefaultView) {
-    return isNewUser
-      ? "/dashboard/agent?signup=1&welcome=1"
-      : "/dashboard/agent?welcome=1";
-  }
-  return isNewUser ? "/dashboard?signup=1" : "/dashboard";
+  return isNewUser
+    ? "/dashboard/agent?signup=1&welcome=1"
+    : "/dashboard/agent?welcome=1";
 }
 
 /**

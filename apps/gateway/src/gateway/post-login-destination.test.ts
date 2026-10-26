@@ -1,5 +1,5 @@
 /**
- * The post-login destination table, all four cases, plus the two query-param
+ * The post-login destination table, both cases, plus the two query-param
  * rules as assertions of their own.
  *
  * The param rules are tested separately from the URL equality checks on
@@ -26,7 +26,6 @@ describe("postLoginDestination", () => {
     it("keeps the skill parameter for a new user and adds signup and welcome", () => {
       expect(
         postLoginDestination({
-          agentDefaultView: true,
           isNewUser: true,
           requestedPath: "/dashboard/agent?skill=morning-brief",
         })
@@ -36,7 +35,6 @@ describe("postLoginDestination", () => {
     it("keeps the skill parameter for a returning user and adds welcome", () => {
       expect(
         postLoginDestination({
-          agentDefaultView: false,
           isNewUser: false,
           requestedPath: "/dashboard/agent?skill=morning-brief",
         })
@@ -44,31 +42,17 @@ describe("postLoginDestination", () => {
     });
   });
 
-  describe("AGENT_DEFAULT_VIEW=on", () => {
+  describe("the table (SCRUM-207: the agent for everyone)", () => {
     it("sends a new user to the agent with both params", () => {
       expect(
-        postLoginDestination({ agentDefaultView: true, isNewUser: true })
+        postLoginDestination({ isNewUser: true })
       ).toBe("/dashboard/agent?signup=1&welcome=1");
     });
 
     it("sends a returning user to the agent too", () => {
       expect(
-        postLoginDestination({ agentDefaultView: true, isNewUser: false })
+        postLoginDestination({ isNewUser: false })
       ).toBe("/dashboard/agent?welcome=1");
-    });
-  });
-
-  describe("AGENT_DEFAULT_VIEW=off (unchanged behaviour)", () => {
-    it("sends a new user to the dashboard with the signup param", () => {
-      expect(
-        postLoginDestination({ agentDefaultView: false, isNewUser: true })
-      ).toBe("/dashboard?signup=1");
-    });
-
-    it("sends a returning user to the bare dashboard", () => {
-      expect(
-        postLoginDestination({ agentDefaultView: false, isNewUser: false })
-      ).toBe("/dashboard");
     });
   });
 
@@ -79,7 +63,6 @@ describe("postLoginDestination", () => {
       const emailLinkNext = decodeURIComponent("%2Fdashboard%2Fagent");
       expect(
         postLoginDestination({
-          agentDefaultView: false, // even with the flag OFF — the user asked
           isNewUser: false,
           requestedPath: emailLinkNext,
         })
@@ -89,7 +72,6 @@ describe("postLoginDestination", () => {
     it("still gives a new user signup=1 — the sole gate on the Ads conversion", () => {
       expect(
         postLoginDestination({
-          agentDefaultView: true,
           isNewUser: true,
           requestedPath: "/dashboard/agent",
         })
@@ -99,7 +81,6 @@ describe("postLoginDestination", () => {
     it("attaches welcome=1 only when the destination IS the agent", () => {
       expect(
         postLoginDestination({
-          agentDefaultView: true,
           isNewUser: false,
           requestedPath: "/dashboard/usage",
         })
@@ -109,7 +90,6 @@ describe("postLoginDestination", () => {
     it("keeps the requested path's own query while adding the login params", () => {
       expect(
         postLoginDestination({
-          agentDefaultView: true,
           isNewUser: true,
           requestedPath: "/dashboard/usage?range=30d",
         })
@@ -119,18 +99,16 @@ describe("postLoginDestination", () => {
     it("falls back to the UNCHANGED table when the requested path is rejected", () => {
       expect(
         postLoginDestination({
-          agentDefaultView: true,
           isNewUser: false,
           requestedPath: "//evil.com",
         })
       ).toBe("/dashboard/agent?welcome=1");
       expect(
         postLoginDestination({
-          agentDefaultView: false,
           isNewUser: true,
           requestedPath: "https://evil.com/dashboard",
         })
-      ).toBe("/dashboard?signup=1");
+      ).toBe("/dashboard/agent?signup=1&welcome=1");
     });
 
     it("falls back — never off-origin — when dot-segments collapse to a protocol-relative path", () => {
@@ -145,11 +123,10 @@ describe("postLoginDestination", () => {
         "/..//..//evil.com",
       ]) {
         const dest = postLoginDestination({
-          agentDefaultView: false,
           isNewUser: false,
           requestedPath: evil,
         });
-        expect(dest, evil).toBe("/dashboard");
+        expect(dest, evil).toBe("/dashboard/agent?welcome=1");
         expect(dest.startsWith("//"), evil).toBe(false);
       }
     });
@@ -159,7 +136,6 @@ describe("postLoginDestination", () => {
       // the Ads conversion falsely. Our composition owns those params.
       expect(
         postLoginDestination({
-          agentDefaultView: false,
           isNewUser: false,
           requestedPath: "/dashboard/usage?signup=1&welcome=1",
         })
@@ -169,16 +145,12 @@ describe("postLoginDestination", () => {
 
   describe("query-param rules for a returning user", () => {
     it("never puts signup=1 on a returning user's redirect - it would report every login as a signup conversion", () => {
-      for (const agentDefaultView of [true, false]) {
-        expect(
-          postLoginDestination({ agentDefaultView, isNewUser: false })
-        ).not.toContain("signup=1");
-      }
+      expect(postLoginDestination({ isNewUser: false })).not.toContain("signup=1");
     });
 
     it("always puts welcome=1 on a returning user's agent redirect - without it the landing emits no event", () => {
       expect(
-        postLoginDestination({ agentDefaultView: true, isNewUser: false })
+        postLoginDestination({ isNewUser: false })
       ).toContain("welcome=1");
     });
   });

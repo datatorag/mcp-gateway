@@ -33,9 +33,6 @@ import {
 } from "vitest";
 import type { Database } from "@datatorag-mcp/db";
 
-vi.mock("@datatorag-mcp/config", () => ({
-  getEnv: () => ({ AGENT_DEFAULT_VIEW: "off" }),
-}));
 vi.mock("./track", () => ({
   trackLogin: vi.fn(),
   trackSignup: vi.fn(),
