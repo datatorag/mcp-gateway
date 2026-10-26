@@ -8,6 +8,7 @@ skills:
   - week-ahead
   - morning-brief
   - weekly-capture
+  - google-doc-format
   - gmail-attachments-to-drive
   - edit-a-doc-in-place
   - document-to-deck
