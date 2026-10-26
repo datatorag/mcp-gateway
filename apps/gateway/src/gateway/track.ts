@@ -181,6 +181,7 @@ export async function trackToolCall(
         method: props.method ?? null,
         resource: props.resource ?? null,
         paramNames: props.paramNames ?? null,
+        client: props.clientName ?? null,
       }).then((result) => {
         if (!result.ok) {
           console.warn(
@@ -257,7 +258,7 @@ async function trackFirstToolCall(
  * path the redirect redeems, so an event can never claim a skill the
  * redirect did not carry. Null when the login or connect was not on a skill's
  * behalf. */
-export type SkillContext = { skill?: string | null };
+export type SkillContext = { skill?: string | null; entry?: "agent" | "connect" };
 
 export function trackSignup(
   userId: string,
@@ -410,6 +411,8 @@ export async function trackAgentRun(
      * without a second event. `trigger` says who started it (SCRUM-225). */
     skill?: string | null;
     trigger?: "manual" | "scheduled";
+    /** SCRUM-96: the first run of a thread the connect landing opened. */
+    afterConnectLanding?: boolean;
   }
 ): Promise<void> {
   // Activation for the agent surface, claimed the same idempotent way as the
@@ -426,6 +429,7 @@ export async function trackAgentRun(
     runs_used: props.runsUsed,
     skill: props.skill ?? null,
     ...(props.trigger ? { trigger: props.trigger } : {}),
+    ...(props.afterConnectLanding ? { after_connect_landing: true } : {}),
   });
 }
 
@@ -671,7 +675,32 @@ export async function trackOAuthCompleted(
       ...identityProps(email),
       ...sessionProps(attribution),
       skill: context?.skill ?? null,
+      // SCRUM-96: which half of activation this connect belongs to. "agent"
+      // when the connect carried a return path into the agent (SCRUM-78's
+      // in-thread connect), "connect" otherwise (a connect that started on
+      // its own and now lands in the agent).
+      entry: context?.entry ?? "connect",
     },
+  });
+}
+
+/** The connect found the account already held by another DataToRAG user
+ * (SCRUM-363), and what the user did about it: `shown` when the warning
+ * page rendered, then `signed_in_other` or `connected_anyway` from its
+ * buttons. Never the other user's identity or any email. */
+export async function trackConnectDuplicate(
+  db: Database,
+  userId: string,
+  service: string,
+  resolution: "shown" | "signed_in_other" | "connected_anyway"
+): Promise<void> {
+  const c = getPosthog();
+  if (!c) return;
+  const email = await resolveUserEmail(db, userId);
+  c.capture({
+    distinctId: userId,
+    event: EVENTS.ACCOUNT_CONNECT_DUPLICATE,
+    properties: { service, resolution, ...identityProps(email) },
   });
 }
 

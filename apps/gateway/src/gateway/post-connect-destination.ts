@@ -12,6 +12,10 @@ export const CONNECT_ERROR_NO_SERVICES = "no_services_granted";
  * this only through a typed or stale URL. */
 export const CONNECT_ERROR_NOT_LAUNCHED = "service_not_available";
 
+/** SCRUM-363: the account was already connected to another DataToRAG user and
+ * the user went back from the warning page. Nothing was stored. */
+export const CONNECT_ERROR_CONNECTED_ELSEWHERE = "connected_elsewhere";
+
 /**
  * Where the retired `/dashboard/connections` index forwards to (SCRUM-149).
  *
@@ -108,8 +112,14 @@ export function postConnectDestination(opts: {
   if (opts.error) {
     return `/dashboard/connections?error=${encodeURIComponent(opts.error)}`;
   }
-  const base = `/dashboard/connections?connected=${encodeURIComponent(opts.provider ?? "")}`;
-  return partial
-    ? `${base}&partial=${encodeURIComponent(opts.provider ?? "")}&missing=${encodeURIComponent(partial.join(","))}`
-    : base;
+  const provider = encodeURIComponent(opts.provider ?? "");
+  // A partial grant still lands where its re-consent lives: the dashboard's
+  // grant panel names what is missing and offers to fix it.
+  if (partial) {
+    return `/dashboard/connections?connected=${provider}&partial=${provider}&missing=${encodeURIComponent(partial.join(","))}`;
+  }
+  // SCRUM-96: a complete connect with nowhere to return to lands in the
+  // agent, in a new thread that leads with what the account can now do,
+  // rather than on a dashboard with a tick.
+  return `/dashboard/agent?connected=${provider}&landing=connect`;
 }

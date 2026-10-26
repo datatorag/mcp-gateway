@@ -42,6 +42,7 @@ export function AgentClient({
   resumeThreadId = null,
   connectedService = null,
   connectError = null,
+  connectLanding = null,
   seedPrompt = null,
   seedSkill = null,
   initialConnections = null,
@@ -64,6 +65,9 @@ export function AgentClient({
   connectedService?: string | null;
   /** Error code from a connect that did not finish. */
   connectError?: string | null;
+  /** SCRUM-96: the service a connect with nowhere to return to just
+   * connected; the page sets it only without a thread. */
+  connectLanding?: string | null;
   /** A prompt to run on arrival, RESOLVED SERVER-SIDE from the suggestion
    * catalogue by shape id (SCRUM-118, SCRUM-110): the dashboard cards' Run
    * action. Never raw URL text: the server hands this component either a
@@ -155,12 +159,27 @@ export function AgentClient({
 
   /** Deterministic read, no model call, no run spent. Stable identity so the
    * effect that consumes it does not re-fire on every render. */
+  /** The connect landing (SCRUM-96): the service just connected, resolved
+   * against the registry so an unknown id is a normal landing. */
+  const landingService = connectLanding ? getConnectableService(connectLanding) ?? null : null;
   const loadSuggestions = useCallback(async (): Promise<Suggestion[]> => {
-    const res = await fetch("/api/agent/suggestions?context=first_run");
+    const query = landingService
+      ? `context=post_connect&service=${encodeURIComponent(landingService.id)}`
+      : "context=first_run";
+    const res = await fetch(`/api/agent/suggestions?${query}`);
     if (!res.ok) return [];
     const data = (await res.json()) as { suggestions?: Suggestion[] };
     return data.suggestions ?? [];
-  }, []);
+  }, [landingService]);
+
+  // Once per arrival: the landing rendered (the URL params are stripped by
+  // the effect below, so a reload is an ordinary visit).
+  const landingShown = useRef(false);
+  useEffect(() => {
+    if (!landingService || landingShown.current) return;
+    landingShown.current = true;
+    posthog.capture(EVENTS.CONNECT_LANDING_SHOWN, { service: landingService.id });
+  }, [landingService]);
 
   // Whether the user actually LANDED here, rather than navigating to it, is
   // what separates a "landed on Agent" cohort from everyone else in the funnel.
@@ -266,6 +285,7 @@ export function AgentClient({
     params.delete("thread");
     params.delete("connected");
     params.delete("connect_error");
+    params.delete("landing");
     const rest = params.toString();
     window.history.replaceState(
       null,
@@ -363,6 +383,8 @@ export function AgentClient({
             key={`${thread.id ?? "new"}:${thread.epoch}`}
             layout="page"
             loadSuggestions={loadSuggestions}
+            suggestionContext={landingService ? "post_connect" : "first_run"}
+            landing={landingService && !thread.id ? { serviceName: landingService.name } : null}
             onConversationChanged={refreshList}
             prompts={PREVIEW_SUGGESTIONS}
             ref={ref}

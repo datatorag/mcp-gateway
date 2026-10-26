@@ -49,6 +49,8 @@ vi.mock("./signup-alert", () => ({
 const upsertServiceAccount = vi.fn(async (..._args: unknown[]) => undefined);
 vi.mock("./connected-accounts", () => ({
   upsertServiceAccount: (...args: unknown[]) => upsertServiceAccount(...args),
+  // SCRUM-363: no other DataToRAG user holds the account in these cases.
+  connectedElsewhere: async () => null,
 }));
 
 // SCRUM-366: the Notion connect route asks the launch gate first. Launched by
@@ -328,7 +330,7 @@ describe("the gate: GET /auth/google/connect/callback", () => {
       `${SESSION}; gws_connect_nonce=n1`
     );
     expect(res.headers.get("location")).toBe(
-      "/dashboard/connections?connected=google-workspace"
+      "/dashboard/agent?connected=google-workspace&landing=connect"
     );
     expect(exchangeAttempted()).toBe(true);
     expect(upsertServiceAccount).toHaveBeenCalled();
@@ -445,7 +447,7 @@ describe("Notion: GET /auth/notion/connect/callback", () => {
       `${SESSION}; notion_connect_nonce=n1`
     );
     expect(res.headers.get("location")).toBe(
-      "/dashboard/connections?connected=notion"
+      "/dashboard/agent?connected=notion&landing=connect"
     );
 
     const calls = notionExchangeCalls();

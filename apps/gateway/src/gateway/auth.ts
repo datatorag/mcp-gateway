@@ -1,6 +1,6 @@
 import { randomBytes } from "node:crypto";
 import { Router } from "express";
-import { eq, and } from "drizzle-orm";
+import { eq, and, isNull } from "drizzle-orm";
 import type { Database } from "@datatorag-mcp/db";
 import { oauthAccessTokens, users } from "@datatorag-mcp/db";
 import { nonceMatches, OAUTH_STATE_TTL_MS } from "./oauth/csrf";
@@ -9,9 +9,11 @@ import {
   stashAttribution,
   takeAttribution,
 } from "./attribution";
-import { upsertServiceAccount } from "./connected-accounts";
+import { connectedElsewhere, upsertServiceAccount } from "./connected-accounts";
+import { renderConnectDuplicate, type DuplicateProvider } from "./connect-duplicate";
 import { PROVIDERS } from "../lib/analytics";
 import {
+  trackConnectDuplicate,
   trackConnectRefused,
   trackLogin,
   trackOAuthCompleted,
@@ -26,6 +28,7 @@ import {
   resolveNextPath,
 } from "./post-login-destination";
 import {
+  CONNECT_ERROR_CONNECTED_ELSEWHERE,
   CONNECT_ERROR_NO_SERVICES,
   CONNECT_ERROR_NOT_LAUNCHED,
   postConnectDestination,
@@ -142,6 +145,173 @@ export function createAuthRouter(
   const router = Router();
 
   const cookiesAreSecure = config.baseUrl.startsWith("https");
+
+  // --- "Connect it here anyway" (SCRUM-363) ---
+  //
+  // The duplicate page's button is a POST that parks the provider in
+  // DUP_ACK_PENDING_COOKIE and restarts the connect. The connect start turns
+  // that into DUP_ACK_COOKIE holding the NEW connect's nonce, and the callback
+  // skips the duplicate check only when that value equals the nonce it just
+  // matched. So the acknowledgement is bound to one connect, cannot be carried
+  // by a link (no query parameter skips the check), and is spent either way.
+  const DUP_ACK_PENDING_COOKIE = "dtr_dup_ack_pending";
+  const DUP_ACK_COOKIE = "dtr_dup_ack";
+  const oneShot = {
+    httpOnly: true,
+    secure: cookiesAreSecure,
+    sameSite: "lax" as const,
+    path: "/",
+    maxAge: OAUTH_STATE_TTL_MS,
+  };
+
+  /** At a connect start, after its nonce is minted: arm the acknowledgement
+   * for this nonce if the duplicate page asked for this provider; otherwise
+   * make sure none survives. */
+  function armDuplicateAck(
+    req: { cookies?: Record<string, unknown> },
+    res: { cookie: (n: string, v: string, o: object) => unknown; clearCookie: (n: string, o: object) => unknown },
+    provider: DuplicateProvider,
+    nonce: string
+  ) {
+    const pending = req.cookies?.[DUP_ACK_PENDING_COOKIE];
+    res.clearCookie(DUP_ACK_PENDING_COOKIE, { path: "/" });
+    if (pending === provider) res.cookie(DUP_ACK_COOKIE, nonce, oneShot);
+    else res.clearCookie(DUP_ACK_COOKIE, { path: "/" });
+  }
+
+  /** At the top of a callback, with the other one-shot cookies: read and
+   * clear the acknowledgement, whatever happens next. */
+  function takeDuplicateAck(
+    req: { cookies?: Record<string, unknown> },
+    res: { clearCookie: (n: string, o: object) => unknown }
+  ): string | undefined {
+    const value = req.cookies?.[DUP_ACK_COOKIE];
+    res.clearCookie(DUP_ACK_COOKIE, { path: "/" });
+    return typeof value === "string" ? value : undefined;
+  }
+
+  /** Before the upsert: when the account is already held by another
+   * DataToRAG user and this connect was not acknowledged, store nothing and
+   * answer the warning page. True when the page was sent. */
+  async function refusedAsDuplicate(
+    res: { status: (c: number) => { type: (t: string) => { send: (b: string) => unknown } } },
+    opts: {
+      userId: string;
+      provider: DuplicateProvider;
+      accountEmail: string;
+      externalAccountId: string | null;
+      acknowledged: boolean;
+      requestedPath: unknown;
+    }
+  ): Promise<boolean> {
+    if (opts.acknowledged) return false;
+    const elsewhere = await connectedElsewhere(
+      db,
+      opts.userId,
+      opts.provider,
+      opts.accountEmail,
+      opts.externalAccountId
+    );
+    if (!elsewhere) return false;
+    await trackConnectDuplicate(db, opts.userId, opts.provider, "shown");
+    res
+      .status(200)
+      .type("html")
+      .send(
+        renderConnectDuplicate({
+          provider: opts.provider,
+          maskedSignIn: elsewhere.otherSignIn,
+          backHref: postConnectDestination({
+            requestedPath: opts.requestedPath,
+            error: CONNECT_ERROR_CONNECTED_ELSEWHERE,
+          }),
+          next: resolveNextPath(opts.requestedPath),
+        })
+      );
+    return true;
+  }
+
+  /** Which half of activation a connect belongs to (SCRUM-96): "agent" when
+   * it carried a return path into the agent, "connect" otherwise. */
+  function connectEntry(requestedPath: unknown): "agent" | "connect" {
+    const next = resolveNextPath(requestedPath);
+    return next !== null && /^\/dashboard\/agent(\/|\?|$)/.test(next) ? "agent" : "connect";
+  }
+
+  /** A POST from one of our own pages: no Origin, or ours. The session
+   * cookie is SameSite=Lax, which already keeps another site's POST from
+   * carrying it; this says so explicitly. */
+  function sameOrigin(req: { headers: Record<string, unknown> }): boolean {
+    const origin = req.headers.origin;
+    return origin === undefined || origin === new URL(config.baseUrl).origin;
+  }
+
+  const CONNECT_START: Record<DuplicateProvider, string> = {
+    "google-workspace": "/auth/google/connect?proceed=1",
+    atlassian: "/auth/atlassian/connect",
+    notion: "/auth/notion/connect",
+  };
+  const isDuplicateProvider = (v: unknown): v is DuplicateProvider =>
+    typeof v === "string" && Object.prototype.hasOwnProperty.call(CONNECT_START, v);
+
+  router.post("/auth/connect/anyway", async (req, res) => {
+    if (!sameOrigin(req)) {
+      res.status(403).end();
+      return;
+    }
+    const sessionToken = req.cookies?.dtrmcp_session;
+    const [session] = sessionToken
+      ? await db
+          .select({ userId: oauthAccessTokens.userId })
+          .from(oauthAccessTokens)
+          .where(and(eq(oauthAccessTokens.token, sessionToken), isNull(oauthAccessTokens.revokedAt)))
+          .limit(1)
+      : [];
+    if (!session?.userId) {
+      res.redirect(303, "/auth/login");
+      return;
+    }
+    const provider = req.query.provider;
+    if (!isDuplicateProvider(provider)) {
+      res.status(400).end();
+      return;
+    }
+    res.cookie(DUP_ACK_PENDING_COOKIE, provider, oneShot);
+    await trackConnectDuplicate(db, session.userId, provider, "connected_anyway");
+    const start = new URL(CONNECT_START[provider], "http://placeholder.invalid");
+    const next = resolveNextPath(req.query.next);
+    if (next) start.searchParams.set("next", next);
+    res.redirect(303, start.pathname + start.search);
+  });
+
+  router.post("/auth/connect/switch-account", async (req, res) => {
+    if (!sameOrigin(req)) {
+      res.status(403).end();
+      return;
+    }
+    const sessionToken = req.cookies?.dtrmcp_session;
+    if (sessionToken) {
+      const revoked = await db
+        .update(oauthAccessTokens)
+        .set({ revokedAt: new Date() })
+        .where(eq(oauthAccessTokens.token, sessionToken))
+        .returning({ userId: oauthAccessTokens.userId });
+      for (const row of revoked) {
+        if (!row.userId) continue;
+        dropLinksForUser(row.userId);
+        const provider = req.query.provider;
+        if (isDuplicateProvider(provider)) {
+          await trackConnectDuplicate(db, row.userId, provider, "signed_in_other");
+        }
+      }
+    }
+    res.clearCookie("dtrmcp_session", { path: "/" });
+    res.clearCookie(GWS_CONNECT_HINT_COOKIE, { path: "/" });
+    res.clearCookie(DUP_ACK_PENDING_COOKIE, { path: "/" });
+    res.clearCookie(DUP_ACK_COOKIE, { path: "/" });
+    // Sign-in shows Google's account chooser, where the other login is picked.
+    res.redirect(303, "/auth/google");
+  });
 
   // --- Dashboard login (minimal scopes) ---
 
@@ -403,6 +573,10 @@ export function createAuthRouter(
     // who is signing out; the next person at this browser must not find it
     // preselected on Google's screen.
     res.clearCookie(GWS_CONNECT_HINT_COOKIE, { path: "/" });
+    // A "connect it here anyway" marker belongs to this person too
+    // (SCRUM-363): the next person at this browser must meet the warning.
+    res.clearCookie(DUP_ACK_PENDING_COOKIE, { path: "/" });
+    res.clearCookie(DUP_ACK_COOKIE, { path: "/" });
     res.redirect("/");
   });
 
@@ -476,6 +650,7 @@ export function createAuthRouter(
       path: "/",
       maxAge: OAUTH_STATE_TTL_MS,
     });
+    armDuplicateAck(req, res, PROVIDERS.GOOGLE_WORKSPACE, nonce);
 
     const googleAuthUrl = new URL(
       "https://accounts.google.com/o/oauth2/v2/auth"
@@ -527,6 +702,7 @@ export function createAuthRouter(
     res.clearCookie(GWS_CONNECT_NONCE_COOKIE, { path: "/" });
     const attribution = takeAttribution(req, res);
     const requestedPath = takeConnectNext(req, res);
+    const duplicateAck = takeDuplicateAck(req, res);
 
     if (!sessionToken) {
       res.redirect("/auth/login");
@@ -701,6 +877,20 @@ export function createAuthRouter(
     // surface can offer re-consent (the connect URL already sends
     // prompt=consent with the full set, so Google re-prompts). The ZERO case
     // never reaches this line — the SCRUM-149 gate above refused it.
+    // SCRUM-363: already held by another DataToRAG user? Warn, store nothing.
+    if (
+      await refusedAsDuplicate(res, {
+        userId: session.userId,
+        provider: PROVIDERS.GOOGLE_WORKSPACE,
+        accountEmail,
+        externalAccountId: null,
+        acknowledged: nonceMatches(duplicateAck, cookieNonce),
+        requestedPath,
+      })
+    ) {
+      return;
+    }
+
     await upsertServiceAccount(
       db,
       session.userId,
@@ -720,7 +910,7 @@ export function createAuthRouter(
       grantDelta,
       // SCRUM-223: a connect made on a skill's behalf carries its slug, from
       // the same parked `next` the return redirect redeems.
-      { skill: skillSlugFromPath(requestedPath) }
+      { skill: skillSlugFromPath(requestedPath), entry: connectEntry(requestedPath) }
     );
 
     res.redirect(
@@ -795,6 +985,7 @@ export function createAuthRouter(
       path: "/",
       maxAge: OAUTH_STATE_TTL_MS,
     });
+    armDuplicateAck(req, res, PROVIDERS.ATLASSIAN, nonce);
 
     const url = new URL("https://auth.atlassian.com/authorize");
     url.searchParams.set("audience", "api.atlassian.com");
@@ -820,6 +1011,7 @@ export function createAuthRouter(
     res.clearCookie("atl_connect_nonce", { path: "/" });
     const attribution = takeAttribution(req, res);
     const requestedPath = takeConnectNext(req, res);
+    const duplicateAck = takeDuplicateAck(req, res);
 
     if (!sessionToken) {
       res.redirect("/auth/login");
@@ -909,6 +1101,19 @@ export function createAuthRouter(
       return;
     }
 
+    if (
+      await refusedAsDuplicate(res, {
+        userId: session.userId,
+        provider: PROVIDERS.ATLASSIAN,
+        accountEmail,
+        externalAccountId: null,
+        acknowledged: nonceMatches(duplicateAck, cookieNonce),
+        requestedPath,
+      })
+    ) {
+      return;
+    }
+
     await upsertServiceAccount(
       db,
       session.userId,
@@ -926,7 +1131,7 @@ export function createAuthRouter(
       accountEmail,
       attribution,
       undefined,
-      { skill: skillSlugFromPath(requestedPath) }
+      { skill: skillSlugFromPath(requestedPath), entry: connectEntry(requestedPath) }
     );
 
     res.redirect(
@@ -975,6 +1180,7 @@ export function createAuthRouter(
       path: "/",
       maxAge: OAUTH_STATE_TTL_MS,
     });
+    armDuplicateAck(req, res, PROVIDERS.NOTION, nonce);
 
     const url = new URL(NOTION_AUTHORIZE_URL);
     url.searchParams.set("client_id", config.notionClientId);
@@ -998,6 +1204,7 @@ export function createAuthRouter(
     res.clearCookie(NOTION_CONNECT_NONCE_COOKIE, { path: "/" });
     const attribution = takeAttribution(req, res);
     const requestedPath = takeConnectNext(req, res);
+    const duplicateAck = takeDuplicateAck(req, res);
 
     if (!sessionToken) {
       res.redirect("/auth/login");
@@ -1095,6 +1302,19 @@ export function createAuthRouter(
     // in the dashboard: cleaned and capped before it is stored.
     const workspaceName = cleanWorkspaceName(tokens.workspace_name);
 
+    if (
+      await refusedAsDuplicate(res, {
+        userId: session.userId,
+        provider: PROVIDERS.NOTION,
+        accountEmail,
+        externalAccountId: workspaceId,
+        acknowledged: nonceMatches(duplicateAck, cookieNonce),
+        requestedPath,
+      })
+    ) {
+      return;
+    }
+
     // No expiry: Notion's token response carries none, and none is invented.
     await upsertServiceAccount(
       db,
@@ -1117,7 +1337,7 @@ export function createAuthRouter(
       accountEmail,
       attribution,
       undefined,
-      { skill: skillSlugFromPath(requestedPath) }
+      { skill: skillSlugFromPath(requestedPath), entry: connectEntry(requestedPath) }
     );
 
     res.redirect(

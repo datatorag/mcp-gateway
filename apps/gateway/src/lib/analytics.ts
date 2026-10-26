@@ -18,6 +18,15 @@ export const EVENTS = {
    * that event firing means a connection exists, and a refusal is the
    * opposite claim. */
   CONNECT_REFUSED: "account_connect_refused",
+  /** SCRUM-363: a connect found the account already held by another
+   * DataToRAG user. `service` and `resolution` (`shown`, then
+   * `signed_in_other` or `connected_anyway`), with the acting user's own
+   * identity like every event; never the other user's email or the address
+   * of the account being connected. */
+  ACCOUNT_CONNECT_DUPLICATE: "account_connect_duplicate",
+  /** SCRUM-96: a connect with no return path landed in the agent and the
+   * landing rendered. `service` only. */
+  CONNECT_LANDING_SHOWN: "connect_landing_shown",
   CONNECTOR_ADDED: "connector_added",
   CONNECTOR_REMOVED: "connector_removed",
   /** SCRUM-147: the default-account switch. `service` says which connector,

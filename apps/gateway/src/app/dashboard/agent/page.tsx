@@ -45,6 +45,7 @@ export default async function AgentPage({
     connect_error?: string;
     prompt?: string;
     skill?: string;
+    landing?: string;
   }>;
 }) {
   const params = await searchParams;
@@ -68,7 +69,7 @@ export default async function AgentPage({
   // and find it again after mount is what put a wrong-biased "unknown" state
   // in front of every new user. Same loader as /api/connections, so the
   // shape cannot drift from what a later refetch returns.
-  const { welcome, signup, thread, connected, connect_error, prompt, skill } = params;
+  const { welcome, signup, thread, connected, connect_error, prompt, skill, landing } = params;
   const initialConnections = await loadConnectionsView(db, userId);
 
   // SEED BY IDENTIFIER, NEVER BY CONTENT (SCRUM-118). The dashboard's prompt
@@ -113,6 +114,14 @@ export default async function AgentPage({
       resumeThreadId={typeof thread === "string" && thread !== "" ? thread : null}
       connectedService={
         typeof connected === "string" && connected !== "" ? connected : null
+      }
+      // SCRUM-96: a connect with nowhere to return to lands here, in a NEW
+      // thread, led by what the account can now do. Only without a thread: a
+      // connect that started in one is the SCRUM-78 continuation instead.
+      connectLanding={
+        landing === "connect" && typeof connected === "string" && connected !== "" && !thread
+          ? connected
+          : null
       }
       connectError={
         typeof connect_error === "string" && connect_error !== ""

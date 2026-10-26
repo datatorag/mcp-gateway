@@ -129,3 +129,21 @@ describe("the agent page's prompt seeding", () => {
     expect(await seedFor("1.5")).toBeNull();
   });
 });
+
+/* SCRUM-96: the connect landing is set only for a connect with no thread to
+ * return to; a connect that started in a thread is the SCRUM-78 continuation. */
+describe("the agent page's connect landing", () => {
+  async function landingFor(params: Record<string, string>): Promise<string | null> {
+    const element = (await AgentPage({ searchParams: Promise.resolve(params) })) as {
+      props: { connectLanding: string | null };
+    };
+    return element.props.connectLanding;
+  }
+
+  it("lands a connect with no thread, and only with landing=connect", async () => {
+    expect(await landingFor({ connected: "google-workspace", landing: "connect" })).toBe("google-workspace");
+    expect(await landingFor({ connected: "google-workspace" })).toBeNull();
+    expect(await landingFor({ connected: "google-workspace", landing: "connect", thread: "t1" })).toBeNull();
+    expect(await landingFor({ landing: "connect" })).toBeNull();
+  });
+});

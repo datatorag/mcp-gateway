@@ -3,6 +3,7 @@
 import { skillContinueMessage } from "@/lib/skill-links";
 import posthog from "posthog-js";
 import { EVENTS } from "@/lib/analytics";
+import { connectLandingLine } from "./agent-connect-copy";
 import type {
   Suggestion as SuggestionItem,
   SuggestionContext,
@@ -238,7 +239,12 @@ const CHECKING_ACCOUNTS = "Checking your accounts";
 /** Extra request-body fields a submitted turn carries (SCRUM-223): the
  * published skill it runs and who started it. Attribution and a policy
  * switch on the server, never content; the message is the text. */
-export type RunOptions = { skill?: string; skillTrigger?: "manual" | "scheduled" };
+export type RunOptions = {
+  skill?: string;
+  skillTrigger?: "manual" | "scheduled";
+  /** SCRUM-96: this run starts the thread the connect landing opened. */
+  afterConnectLanding?: boolean;
+};
 
 export interface PlaygroundHandle {
   /** Seed the input with `prompt` and submit it immediately. Used by the
@@ -262,6 +268,10 @@ interface PlaygroundProps {
   loadSuggestions?: () => Promise<SuggestionItem[]>;
   /** Which empty state this is, for the suggestion events. */
   suggestionContext?: SuggestionContext;
+  /** SCRUM-96: the thread a connect with nowhere to return to landed in. The
+   * empty state leads with the service just connected and two things it can
+   * do now, and the first run is marked as coming from the landing. */
+  landing?: { serviceName: string } | null;
   /** Whether the user has at least one connected account (any service). */
   hasConnectedAccount: boolean;
   /** The connected accounts themselves, for the meter's connector half.
@@ -345,6 +355,7 @@ export const Playground = forwardRef<PlaygroundHandle, PlaygroundProps>(
       launchedServices = ALWAYS_OFFERED_SERVICE_IDS,
       loadSuggestions,
       suggestionContext = "first_run",
+      landing = null,
       layout = "panel",
       threadId = null,
       initialMessages,
@@ -411,6 +422,9 @@ export const Playground = forwardRef<PlaygroundHandle, PlaygroundProps>(
      * sees the locked preview. The connected list is never topped up with
      * the preview: those shapes may need a service this user does not have. */
     const suggestions = hasConnectedAccount ? (generated ?? []) : prompts;
+    /** Two on the connect landing, which is about one service; three
+     * elsewhere. */
+    const suggestionCount = landing ? 2 : 3;
 
     useEffect(() => {
       if (!hasConnectedAccount || !loadSuggestions) return;
@@ -431,9 +445,9 @@ export const Playground = forwardRef<PlaygroundHandle, PlaygroundProps>(
       if (!hasConnectedAccount || !generated || generated.length === 0) return;
       posthog.capture(EVENTS.AGENT_SUGGESTION_SHOWN, {
         context: suggestionContext,
-        shape_ids: generated.slice(0, 3).map((s) => s.id),
+        shape_ids: generated.slice(0, suggestionCount).map((s) => s.id),
       });
-    }, [hasConnectedAccount, generated, suggestionContext]);
+    }, [hasConnectedAccount, generated, suggestionContext, suggestionCount]);
 
     const transport = useMemo(
       () =>
@@ -716,7 +730,9 @@ export const Playground = forwardRef<PlaygroundHandle, PlaygroundProps>(
             { text },
             options?.skill
               ? { body: { skill: options.skill, skillTrigger: options.skillTrigger ?? "manual", zone: browserZone() } }
-              : undefined
+              : options?.afterConnectLanding
+                ? { body: { afterConnectLanding: true } }
+                : undefined
           );
           // A turn has gone out, so a thread list is now stale: a brand new
           // conversation did not exist before this and a resumed one just
@@ -746,9 +762,9 @@ export const Playground = forwardRef<PlaygroundHandle, PlaygroundProps>(
           shape_id: suggestion.id,
           position,
         });
-        send(suggestion.text);
+        send(suggestion.text, landing ? { afterConnectLanding: true } : undefined);
       },
-      [send, suggestionContext]
+      [send, suggestionContext, landing]
     );
 
     /** Answer one gated tool call.
@@ -963,8 +979,10 @@ export const Playground = forwardRef<PlaygroundHandle, PlaygroundProps>(
                         isPage ? "text-sm" : "text-xs"
                       )}
                     >
-                      {personalised
-                        ? suggestions.slice(0, 3).length === 1
+                      {landing
+                        ? connectLandingLine(landing.serviceName)
+                        : personalised
+                        ? suggestions.slice(0, suggestionCount).length === 1
                           ? "Here is something I can do with what you have connected."
                           : "Here are a few things I can do with what you have connected."
                         : "Ask something about your connected accounts."}
@@ -1052,7 +1070,7 @@ export const Playground = forwardRef<PlaygroundHandle, PlaygroundProps>(
                       hovering. */}
                   {isPage ? (
                         <div className="space-y-2">
-                          {suggestions.slice(0, 3).map((prompt, i) => (
+                          {suggestions.slice(0, suggestionCount).map((prompt, i) => (
                             <Suggestion
                               className="h-auto w-full justify-start whitespace-normal rounded-xl px-4 py-3 text-left text-sm font-normal disabled:cursor-not-allowed disabled:opacity-60"
                               disabled={locked}
@@ -1073,7 +1091,7 @@ export const Playground = forwardRef<PlaygroundHandle, PlaygroundProps>(
                         </div>
                       ) : (
                         <Suggestions>
-                          {suggestions.slice(0, 3).map((prompt, i) => (
+                          {suggestions.slice(0, suggestionCount).map((prompt, i) => (
                             <Suggestion
                               className="h-auto py-1 text-[11px] disabled:cursor-not-allowed disabled:opacity-60"
                               disabled={locked}
