@@ -1,72 +1,108 @@
 import type { Database } from "@datatorag-mcp/db";
+import { listConnectedAccounts } from "@/gateway/connected-accounts";
 import { executeUserTool } from "@/gateway/playground/tools";
-import { listUserToolRows } from "@/gateway/user-tools";
+import { serviceGrantStates } from "@/gateway/scope-grant";
+import {
+  hasRealCorrespondence,
+  suggestionsFor,
+  withFileSuggestion,
+  type Capability,
+  type Suggestion,
+  type SuggestionContext,
+} from "./suggestion-generator";
 
 /**
- * Three things the user could ask for next, naming their own documents.
+ * The agent's empty-state suggestions for one user (SCRUM-110, SCRUM-321):
+ * the reads that build a `Capability`, then the pure generator.
  *
- * NO MODEL CALL, AND NO RUN SPENT. Two reasons, and the second is the real one.
- * Charging part of someone's allowance for something they did not ask for
- * spends it by our choice rather than theirs. And the moment of recognition
- * this exists to produce does not need a model at all: seeing your own file
- * names come back is the whole effect.
+ * NO MODEL CALL, AND NO RUN SPENT. At most two plugin reads, both through
+ * `executeUserTool`, which neither counts a call nor meters one: the inbox
+ * check (Gmail) and one Drive search for the lowest slot. Charging someone's
+ * allowance for something they did not ask for spends it by our choice.
  *
- * THE LOAD-BEARING PROPERTY IS THAT THE SUGGESTIONS NAME REAL FILES. A
- * templated line about "your documents" is worth nothing here; a line naming
- * the deck you were editing yesterday is the entire point. So when the read
- * returns nothing usable this returns an empty list rather than falling back
- * to generic prompts, because a generic suggestion dressed as a personal one
- * is worse than none.
+ * Nothing read here leaves this function except the suggestions themselves:
+ * the inbox check is reduced to a yes or no, and of the Drive results only one
+ * name survives, into the one slot allowed to name content.
+ *
+ * Never throws. A failure means fewer suggestions, not a broken page.
  */
+export async function buildSuggestions(
+  db: Database,
+  userId: string,
+  opts: { context: SuggestionContext; service?: string; limit?: number }
+): Promise<Suggestion[]> {
+  let cap: Capability;
+  try {
+    cap = await capabilityFor(db, userId);
+  } catch {
+    return [];
+  }
+  if (cap.services.size === 0) return [];
 
-export type AgentSuggestion = {
-  /** What the user sees and can click. Also what gets sent as the prompt. */
-  text: string;
-  /** The item it names, for the caller to key on. */
-  fileName: string;
-};
+  const gmail = cap.googleServices.has("gmail");
+  // The dashboard's cards deep-link by shape id, and the file line has no id
+  // a link could resolve, so it belongs to the agent's empty states only.
+  const drive = cap.googleServices.has("drive") && opts.context !== "dashboard";
+  const [correspondence, fileName] = await Promise.all([
+    gmail ? readCorrespondence(db, userId) : Promise.resolve(false),
+    drive ? readOneDriveFileName(db, userId) : Promise.resolve(null),
+  ]);
+  cap.hasCorrespondence = correspondence;
 
-/**
- * The read to run, per connector.
- *
- * CHOSEN FROM WHAT THE USER ACTUALLY CONNECTED, not hardcoded to one plugin.
- * An earlier version always searched Drive, which meant a user who connected
- * Atlassian first reached this screen and got nothing — silently, because the
- * no-access path correctly returns an empty list, so there was no error and
- * nothing to notice. Half the connector matrix, quietly unserved, on the one
- * screen built to make the product feel like it already knows something.
- *
- * Ordered: the first entry whose tool the user can actually see is used.
- */
-const READS: Array<{ tool: string; args: Record<string, unknown> }> = [
-  { tool: "gws-mcp__drive_search", args: { page_size: 6 } },
-  {
-    tool: "atlassian-mcp__confluence_search",
-    args: { cql: "type=page order by lastmodified desc", limit: 6 },
-  },
-];
+  const shapes = suggestionsFor(cap, opts);
+  if (shapes.length === 0) return [];
+  return withFileSuggestion(shapes, fileName);
+}
 
-/** One phrasing per recognisable kind. The last entry matches anything, so the
- * lookup always resolves. */
-const TEMPLATES: Array<{ match: RegExp; phrase: (name: string) => string }> = [
-  { match: /\.(sheet|xlsx|csv)$|spreadsheet/i, phrase: (n) => `Summarize the data in "${n}"` },
-  { match: /\.(slide|pptx)$|presentation/i, phrase: (n) => `Turn "${n}" into a short summary` },
-  { match: /.*/, phrase: (n) => `Summarize "${n}" for me` },
-];
+/** Connected services, the Google services the grants cover, and accounts per
+ * service, from the user's own connected accounts. A legacy Google row with no
+ * stored scopes reads as every service granted, the same fail-open rule
+ * `scope-grant.ts` applies everywhere else. */
+async function capabilityFor(db: Database, userId: string): Promise<Capability> {
+  const rows = await listConnectedAccounts(db, userId);
+  const services = new Set<string>();
+  const googleServices = new Set<string>();
+  const accountsPer = new Map<string, number>();
+  for (const row of rows) {
+    services.add(row.connectorType);
+    accountsPer.set(row.connectorType, (accountsPer.get(row.connectorType) ?? 0) + 1);
+    for (const state of serviceGrantStates(row.connectorType, row.scopes)) {
+      if (state.granted) googleServices.add(state.iconKey);
+    }
+  }
+  return { services, googleServices, accountsPer, hasCorrespondence: null };
+}
 
-function phraseFor(name: string): string {
-  // Non-null: the final template's regex matches everything. If that ever
-  // stops being true this should fail loudly rather than silently reuse the
-  // last entry for names nobody meant it to cover.
-  return TEMPLATES.find((t) => t.match.test(name))!.phrase(name);
+/** Ten messages from the Primary tab, reduced to whether a person wrote any of
+ * them. Only the answer is kept: no sender, subject or content leaves. */
+async function readCorrespondence(db: Database, userId: string): Promise<boolean> {
+  try {
+    const result = await executeUserTool(db, userId, "gws-mcp__gmail_list", {
+      label: "CATEGORY_PERSONAL",
+      max_results: 10,
+    });
+    return !result.isError && hasRealCorrespondence(result.text);
+  } catch {
+    return false;
+  }
+}
+
+/** The name of one recent Drive file, for the lowest slot, or null. */
+async function readOneDriveFileName(db: Database, userId: string): Promise<string | null> {
+  try {
+    const result = await executeUserTool(db, userId, "gws-mcp__drive_search", { page_size: 6 });
+    if (result.isError) return null;
+    return fileNamesFrom(result.text)[0] ?? null;
+  } catch {
+    return null;
+  }
 }
 
 /** Item names out of a search result, whatever envelope it arrived in.
  *
  * Deliberately forgiving: the plugin's response shape is not ours, and a
- * suggestion list is not worth throwing over. Drive calls it `name`, Confluence
- * calls it `title`; anything unrecognised yields no names, which the caller
- * turns into no suggestions.
+ * suggestion list is not worth throwing over. Anything unrecognised yields no
+ * names, which the caller turns into no file line.
  */
 export function fileNamesFrom(raw: string): string[] {
   let parsed: unknown;
@@ -85,46 +121,4 @@ export function fileNamesFrom(raw: string): string[] {
     })
     .filter((n): n is string => typeof n === "string" && n.trim().length > 0)
     .map((n) => n.trim());
-}
-
-/**
- * Read the user's most recent items and phrase three actions over them.
- *
- * Never throws: this runs right after a connect, on a screen whose job is to
- * make the product feel like it already knows something. A failure here means
- * no suggestions, not a broken page.
- */
-export async function buildSuggestions(
-  db: Database,
-  userId: string,
-  limit = 3
-): Promise<AgentSuggestion[]> {
-  let read: (typeof READS)[number] | undefined;
-  try {
-    // The shared "what can this user see" policy decides, rather than a guess
-    // about what they connected.
-    const visible = new Set((await listUserToolRows(db, userId)).map((r) => r.namespacedName));
-    read = READS.find((candidate) => visible.has(candidate.tool));
-  } catch {
-    return [];
-  }
-  if (!read) return [];
-
-  let result: { text: string; isError: boolean };
-  try {
-    result = await executeUserTool(db, userId, read.tool, read.args);
-  } catch {
-    return [];
-  }
-  if (result.isError) return [];
-
-  const seen = new Set<string>();
-  const suggestions: AgentSuggestion[] = [];
-  for (const fileName of fileNamesFrom(result.text)) {
-    if (seen.has(fileName)) continue;
-    seen.add(fileName);
-    suggestions.push({ text: phraseFor(fileName), fileName });
-    if (suggestions.length === limit) break;
-  }
-  return suggestions;
 }

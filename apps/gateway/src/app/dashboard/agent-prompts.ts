@@ -1,11 +1,13 @@
-/** Quick-start prompts, shared by the dashboard's prompt cards and the Agent's
- * empty state. One list rather than two: they were the same six strings in two
- * files, which is how a change lands in one surface and not the other. */
-export const AGENT_PROMPTS = [
-  "Summarize my unread emails and draft a status update in Google Docs",
-  "Find the latest sales deck in Drive and update the Q2 numbers in Slides",
-  "Search Gmail for meeting notes from last week and create a summary doc",
-  "Check my calendar for tomorrow and find related prep docs in Drive",
-  "Create a Jira ticket from the action items in my last email thread",
-  "Draft replies to my 5 most recent unanswered emails",
-];
+import { SHAPES, type Suggestion } from "@/gateway/agent/suggestion-generator";
+
+/** What the empty states show, locked, before anything is connected: three
+ * shapes from the one catalogue that work on a fresh account, so the preview
+ * promises nothing the generator would not later offer. One list rather than
+ * two, shared by the agent's empty state and the dashboard's cards. */
+const PREVIEW_IDS = ["sheet_from_paste", "doc_from_paste", "week_calendar"] as const;
+
+export const PREVIEW_SUGGESTIONS: Suggestion[] = PREVIEW_IDS.map((id) => {
+  const shape = SHAPES.find((s) => s.id === id);
+  if (!shape) throw new Error(`preview shape ${id} is not in the catalogue`);
+  return { id: shape.id, text: shape.text };
+});

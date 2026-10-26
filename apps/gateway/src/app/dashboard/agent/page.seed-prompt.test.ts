@@ -1,8 +1,8 @@
 /**
  * SEED BY IDENTIFIER, NEVER BY CONTENT (SCRUM-118).
  *
- * The Connections page's Run action links here with an index into the shared
- * AGENT_PROMPTS list, and the server resolves it to text. The seeded prompt
+ * The dashboard cards' Run action links here with a shape id from the
+ * suggestion catalogue (SCRUM-110), and the server resolves it to text. The seeded prompt
  * is AUTO-SUBMITTED to an agent holding write scopes on the user's own
  * accounts, so this parameter must carry no payload: a crafted link mailed
  * to a logged-in user must not be able to put an attacker's instruction into
@@ -33,7 +33,7 @@ vi.mock("@/gateway/connected-accounts", () => ({
 }));
 
 import AgentPage from "./page";
-import { AGENT_PROMPTS } from "../agent-prompts";
+import { SHAPES } from "@/gateway/agent/suggestion-generator";
 
 async function seedFor(prompt?: string): Promise<string | null> {
   const element = (await AgentPage({
@@ -104,14 +104,17 @@ describe("the agent page's skill seeding (SCRUM-223)", () => {
 });
 
 describe("the agent page's prompt seeding", () => {
-  it("resolves a valid index to the SHARED list's text, server-side", async () => {
-    expect(await seedFor("1")).toBe(AGENT_PROMPTS[1]);
-    expect(await seedFor("0")).toBe(AGENT_PROMPTS[0]);
+  it("resolves a catalogue shape id to the catalogue's text, server-side", async () => {
+    expect(await seedFor("week_calendar")).toBe(SHAPES.find((s) => s.id === "week_calendar")!.text);
+    expect(await seedFor(SHAPES[0].id)).toBe(SHAPES[0].text);
   });
 
-  it("seeds nothing for an index that does not resolve, without throwing", async () => {
-    expect(await seedFor("999")).toBeNull();
-    expect(await seedFor(String(AGENT_PROMPTS.length))).toBeNull();
+  it("seeds nothing for an id that does not resolve, without throwing", async () => {
+    expect(await seedFor("no_such_shape")).toBeNull();
+    // The file line names content and has no catalogue entry, so no link can seed it.
+    expect(await seedFor("drive_file_summary")).toBeNull();
+    // The old index form is retired, not reinterpreted.
+    expect(await seedFor("1")).toBeNull();
     expect(await seedFor()).toBeNull();
   });
 

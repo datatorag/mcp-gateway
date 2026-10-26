@@ -65,6 +65,14 @@ export const DATATORAG_AGENT_ID = "datatorag-playground";
  * The text only. What actually reaches the provider is {@link SYSTEM_MESSAGE}
  * below, which wraps this in the message form that can carry a cache
  * breakpoint. */
+/** SCRUM-321: what an off-topic message gets. Its own constant so the rule
+ * can be pinned by a test without matching the whole prompt. */
+export const OFF_TOPIC_RULE =
+  "If a message is not a task for the user's connected accounts, such as a general-knowledge " +
+  "question or small talk, do not answer it. Reply in one or two sentences that you work with " +
+  "their connected accounts, and offer two or three concrete things you can do with what they " +
+  "have connected right now. Do this for every such message, politely, without lecturing.";
+
 export const SYSTEM_PROMPT =
   "You are the DataToRAG agent, working with the user's connected accounts " +
   "(Google Workspace, Atlassian) through the DataToRAG MCP gateway. " +
@@ -116,7 +124,11 @@ export const SYSTEM_PROMPT =
   "mayOfferProactively, or the user has just been told they are out of runs. Never " +
   "mention it in your opening message. " +
   "When you point somewhere, use the specific link from a tool result rather than " +
-  "saying \"the dashboard\".";
+  "saying \"the dashboard\". " +
+  // SCRUM-321: the agent is for work in the user's connected accounts. A
+  // general-knowledge question or small talk gets a short, polite redirect
+  // with concrete things to try, every time, not an essay. Not a refusal.
+  OFF_TOPIC_RULE;
 
 /** Ephemeral prompt-cache breakpoint (Anthropic — the only provider wired up).
  *
