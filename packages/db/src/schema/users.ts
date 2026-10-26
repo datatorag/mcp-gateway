@@ -102,6 +102,9 @@ export const users = pgTable("users", {
   createdAt: timestamp("created_at", { withTimezone: true })
     .notNull()
     .defaultNow(),
+  /** When the account's billing or settings last changed: set by the Stripe
+   * webhook handlers. Deliberately NOT bumped by metering (SCRUM-363), which
+   * would make it a second last-activity time and useless for this question. */
   updatedAt: timestamp("updated_at", { withTimezone: true })
     .notNull()
     .defaultNow(),

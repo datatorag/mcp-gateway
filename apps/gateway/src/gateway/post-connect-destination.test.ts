@@ -41,10 +41,11 @@ describe("postConnectDestination", () => {
     ).toBe("/dashboard/agent?thread=t-1&connect_error=token_exchange_failed");
   });
 
-  it("falls back to the connections page when no path was requested", () => {
-    // Byte-identical to the destinations the flow had before SCRUM-78.
+  it("lands a complete connect with no requested path in the agent, and an error on the dashboard", () => {
+    // SCRUM-96: the success fallback is the agent's connect landing. The
+    // error fallback is byte-identical to the one before SCRUM-78.
     expect(postConnectDestination({ provider: "atlassian" })).toBe(
-      "/dashboard/connections?connected=atlassian"
+      "/dashboard/agent?connected=atlassian&landing=connect"
     );
     expect(postConnectDestination({ error: "missing_code" })).toBe(
       "/dashboard/connections?error=missing_code"
@@ -68,7 +69,7 @@ describe("postConnectDestination", () => {
         requestedPath: "https://evil.example/phish",
         provider: "google-workspace",
       })
-    ).toBe("/dashboard/connections?connected=google-workspace");
+    ).toBe("/dashboard/agent?connected=google-workspace&landing=connect");
   });
 
   it("rejects a protocol-relative path", () => {
@@ -77,7 +78,7 @@ describe("postConnectDestination", () => {
         requestedPath: "//evil.example",
         provider: "google-workspace",
       })
-    ).toBe("/dashboard/connections?connected=google-workspace");
+    ).toBe("/dashboard/agent?connected=google-workspace&landing=connect");
   });
 
   it("rejects a backslash variant", () => {
@@ -86,7 +87,7 @@ describe("postConnectDestination", () => {
         requestedPath: "/\\evil.example",
         provider: "google-workspace",
       })
-    ).toBe("/dashboard/connections?connected=google-workspace");
+    ).toBe("/dashboard/agent?connected=google-workspace&landing=connect");
   });
 
   it("rejects an encoded-slash double-decoding trick", () => {
@@ -95,7 +96,7 @@ describe("postConnectDestination", () => {
         requestedPath: "/%2f%2fevil.example",
         provider: "google-workspace",
       })
-    ).toBe("/dashboard/connections?connected=google-workspace");
+    ).toBe("/dashboard/agent?connected=google-workspace&landing=connect");
   });
 
   it("rejects a dot-segment path whose COMPOSED form escapes origin", () => {
@@ -107,19 +108,19 @@ describe("postConnectDestination", () => {
         requestedPath: "/..//evil.example",
         provider: "google-workspace",
       })
-    ).toBe("/dashboard/connections?connected=google-workspace");
+    ).toBe("/dashboard/agent?connected=google-workspace&landing=connect");
   });
 
   it("rejects a non-string and an oversized value", () => {
     expect(
       postConnectDestination({ requestedPath: 42, provider: "atlassian" })
-    ).toBe("/dashboard/connections?connected=atlassian");
+    ).toBe("/dashboard/agent?connected=atlassian&landing=connect");
     expect(
       postConnectDestination({
         requestedPath: `/${"a".repeat(600)}`,
         provider: "atlassian",
       })
-    ).toBe("/dashboard/connections?connected=atlassian");
+    ).toBe("/dashboard/agent?connected=atlassian&landing=connect");
   });
 });
 

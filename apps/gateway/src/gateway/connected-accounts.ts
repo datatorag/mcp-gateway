@@ -1,7 +1,7 @@
 import { dropLinksForUser } from "./file-download";
-import { eq, and, sql } from "drizzle-orm";
+import { eq, and, ne, sql, desc } from "drizzle-orm";
 import type { Database } from "@datatorag-mcp/db";
-import { connectedAccounts, serviceConnections } from "@datatorag-mcp/db";
+import { connectedAccounts, serviceConnections, users } from "@datatorag-mcp/db";
 import { randomUUID } from "node:crypto";
 import { revokeUpstream } from "./service-token";
 import { sealedColumns } from "./token-crypto";
@@ -39,6 +39,56 @@ export type AccountIdentity = {
   externalAccountId?: string | null;
   label?: string | null;
 };
+
+/** An email address reduced to its first character and its domain:
+ * `jane.doe@example.com` is `j•••@example.com`. Anything that is not an
+ * address comes back fully masked, never as it was. */
+export function maskEmail(email: string): string {
+  const at = email.lastIndexOf("@");
+  if (at < 1 || at === email.length - 1) return "•••";
+  return `${email[0]}•••${email.slice(at)}`;
+}
+
+/**
+ * Whether the account being connected is already held by ANOTHER DataToRAG
+ * user, and not by this one (SCRUM-363).
+ *
+ * The match is the unique key's: connector, email, and the external id with
+ * IS NOT DISTINCT FROM, so a second Notion workspace under one email is a
+ * different account and a Google or Atlassian row matches on email alone. A
+ * reconnect of an account this user already holds is never a duplicate.
+ *
+ * Returns only the other user's sign-in email, MASKED here, so the unmasked
+ * address and the other user's id never leave this function. When several
+ * other users hold it, the most recently connected is named.
+ */
+export async function connectedElsewhere(
+  db: Database,
+  userId: string,
+  connectorType: string,
+  accountEmail: string,
+  externalAccountId: string | null
+): Promise<{ otherSignIn: string } | null> {
+  const sameAccount = and(
+    eq(connectedAccounts.connectorType, connectorType),
+    eq(connectedAccounts.accountEmail, accountEmail),
+    sql`${connectedAccounts.externalAccountId} IS NOT DISTINCT FROM ${externalAccountId}`
+  );
+  const [mine] = await db
+    .select({ id: connectedAccounts.id })
+    .from(connectedAccounts)
+    .where(and(sameAccount, eq(connectedAccounts.userId, userId)))
+    .limit(1);
+  if (mine) return null;
+  const [other] = await db
+    .select({ email: users.email })
+    .from(connectedAccounts)
+    .innerJoin(users, eq(users.id, connectedAccounts.userId))
+    .where(and(sameAccount, ne(connectedAccounts.userId, userId)))
+    .orderBy(desc(connectedAccounts.createdAt))
+    .limit(1);
+  return other ? { otherSignIn: maskEmail(other.email) } : null;
+}
 
 /**
  * Upsert a service account after OAuth callback.

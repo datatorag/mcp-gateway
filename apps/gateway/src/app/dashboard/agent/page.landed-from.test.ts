@@ -61,6 +61,8 @@ const NO_CONNECT_RETURN = {
   resumeThreadId: null,
   connectedService: null,
   connectError: null,
+  // No connect landing (SCRUM-96) on a plain arrival.
+  connectLanding: null,
   // A plain landing seeds nothing (SCRUM-118); the seeding contract itself
   // is pinned in page.seed-prompt.test.ts.
   seedPrompt: null,

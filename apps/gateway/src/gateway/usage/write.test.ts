@@ -96,3 +96,17 @@ describe("writeUsageEvent carries service and method (SCRUM-227)", () => {
     expect(values.mock.calls[1][0]).toMatchObject({ service: null, resource: null, method: null, paramNames: null });
   });
 });
+
+/* SCRUM-363: the client column, which nothing wrote before. */
+describe("writeUsageEvent writes the client name", () => {
+  const values = vi.fn().mockResolvedValue(undefined);
+  const db = { insert: () => ({ values }) } as unknown as Database;
+
+  it("stores the client's name, and null when it sent none", async () => {
+    values.mockClear();
+    await writeUsageEvent(db, { ...baseInput(null), client: "claude-ai" });
+    expect(values.mock.calls[0][0].client).toBe("claude-ai");
+    await writeUsageEvent(db, baseInput(null));
+    expect(values.mock.calls[1][0].client).toBeNull();
+  });
+});

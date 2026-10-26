@@ -45,6 +45,10 @@ export interface UsageEventInput {
   resource?: string | null;
   /** gws_run only (SCRUM-419): comma-joined param and body key names, never values; null otherwise. */
   paramNames?: string | null;
+  /** The MCP client's self-reported name (SCRUM-363), the same value the
+   * PostHog `tool_call` event carries as `client_name`. Null when the client
+   * sent none. The column existed since the table did and nothing wrote it. */
+  client?: string | null;
 }
 
 export type WriteResult =
@@ -93,6 +97,7 @@ export async function writeUsageEvent(
       method: input.method ?? null,
       resource: input.resource ?? null,
       paramNames: input.paramNames ?? null,
+      client: input.client ?? null,
     });
   }, timeoutMs);
 }

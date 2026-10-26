@@ -17,6 +17,12 @@ import { CONNECT_ERROR_NO_SERVICES } from "@/gateway/post-connect-destination";
 /** Posted into the thread when the user lands back from a completed connect.
  * The agent's continuation rule in the system prompt keys off the meaning of
  * this message, not its exact bytes, so rewording it is safe. */
+/** SCRUM-96: the line the connect landing leads with, above what the account
+ * can now do. True for one suggestion or two. */
+export function connectLandingLine(serviceName: string): string {
+  return `${serviceName} is connected. Here is what I can do with it now.`;
+}
+
 export function connectContinuationMessage(serviceName: string): string {
   return `I've just connected my ${serviceName} account. Please continue with my request.`;
 }

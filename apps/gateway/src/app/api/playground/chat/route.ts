@@ -442,7 +442,7 @@ export const POST = withRoute(async (userId, request) => {
 
   const body = (await request.json().catch(() => null)) as {
     messages?: unknown; id?: unknown; trigger?: unknown; threadId?: unknown;
-    skill?: unknown; skillTrigger?: unknown; zone?: unknown;
+    skill?: unknown; skillTrigger?: unknown; zone?: unknown; afterConnectLanding?: unknown;
   } | null;
   const messages = body?.messages;
   if (!Array.isArray(messages) || messages.length === 0) {
@@ -720,6 +720,9 @@ export const POST = withRoute(async (userId, request) => {
         runsUsed,
         skill: skillSlug,
         ...(skillTrigger ? { trigger: skillTrigger } : {}),
+        // SCRUM-96: the first run of a thread opened by the connect landing.
+        // Attribution only, a boolean; it changes nothing about the run.
+        ...(body?.afterConnectLanding === true ? { afterConnectLanding: true } : {}),
       });
     }
 

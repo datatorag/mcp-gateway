@@ -63,7 +63,9 @@ function handlerBody(pathLiteral: string): string {
 /** The one-shot consumers shared by every connect callback, by call shape
  * (not bare name, so a mention in a string or a renamed local cannot pass for
  * the call). Each callback adds its own nonce clear, below. */
-const SHARED_CONSUMERS = ["takeAttribution(", "takeConnectNext("];
+// takeDuplicateAck (SCRUM-363): the "connect it here anyway" acknowledgement,
+// spent on every outcome like the nonce it is bound to.
+const SHARED_CONSUMERS = ["takeAttribution(", "takeConnectNext(", "takeDuplicateAck("];
 
 /** Every service-connect callback, with the call that retires its own CSRF
  * nonce (SCRUM-366 added Notion and, with it, the Atlassian pair, which had
@@ -149,6 +151,7 @@ describe("connect callback: one-shot cookie consumers run before any response", 
       `res.clearCookie(GWS_CONNECT_NONCE_COOKIE, { path: "/" });`,
       `const a = takeAttribution(req, res);`,
       `const p = takeConnectNext(req, res);`,
+      `const d = takeDuplicateAck(req, res);`,
       `if (req.query.evil) { res.redirect("/x"); return; }`,
       `res.redirect("/ok");`,
     ].join("\n");

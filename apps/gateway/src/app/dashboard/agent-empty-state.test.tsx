@@ -73,6 +73,7 @@ function mountWith(
     initialConnections?: Initial | null;
     landedFrom?: "signup" | "login";
     seedSkill?: SeedSkill | null;
+    connectLanding?: string | null;
   } = {}
 ) {
   vi.stubGlobal(
@@ -98,6 +99,8 @@ function mountWith(
         landedFrom={opts.landedFrom ?? "login"}
         seedPrompt={seedPrompt}
         seedSkill={opts.seedSkill ?? null}
+        connectedService={opts.connectLanding ?? null}
+        connectLanding={opts.connectLanding ?? null}
       />
     );
   });
@@ -776,3 +779,52 @@ describe("the standing connect control's impression (SCRUM-198)", () => {
     expect(await impressions()).toEqual([]);
   });
 });
+
+/* SCRUM-96: a connect with nowhere to return to lands here, in a new thread,
+ * led by the service just connected and two things it can do now. Nothing
+ * runs until the user picks one, and that first run is marked. */
+describe("the connect landing (SCRUM-96)", () => {
+  const CONNECTED: Initial = { accounts: [{ id: "a1", connectorType: "google-workspace" }], connections: [] };
+  const neverResolves = () => new Promise<Response>(() => {});
+  const fetchCalls = () =>
+    (globalThis.fetch as unknown as { mock: { calls: unknown[][] } }).mock.calls;
+
+  it("leads with the service, asks the generator for post_connect, shows two, and runs nothing", async () => {
+    const posthog = (await import("posthog-js")).default as unknown as { capture: ReturnType<typeof vi.fn> };
+    posthog.capture.mockClear();
+    mountWith(neverResolves, ["one thing to do", "a second thing to do", "a third thing to do"], null, {
+      initialConnections: CONNECTED,
+      connectLanding: "google-workspace",
+    });
+    await flush();
+    await flush();
+    expect(text()).toContain("Google Workspace is connected. Here is what I can do with it now.");
+    expect(fetchCalls().map((c) => String(c[0]))).toContain(
+      "/api/agent/suggestions?context=post_connect&service=google-workspace"
+    );
+    const buttons = Array.from(container.querySelectorAll("button")).filter((b) =>
+      (b.textContent ?? "").includes("thing to do")
+    );
+    expect(buttons).toHaveLength(2);
+    expect(fetchCalls().filter((c) => String(c[0]).includes("/api/playground/chat"))).toHaveLength(0);
+    expect(posthog.capture.mock.calls.filter((c) => c[0] === "connect_landing_shown")).toEqual([
+      ["connect_landing_shown", { service: "google-workspace" }],
+    ]);
+
+    act(() => buttons[0].click());
+    await flush();
+    const chat = fetchCalls().filter((c) => String(c[0]).includes("/api/playground/chat"));
+    expect(chat).toHaveLength(1);
+    const body = JSON.parse(String((chat[0][1] as { body?: unknown })?.body ?? "{}"));
+    expect(body.afterConnectLanding).toBe(true);
+  });
+
+  it("is an ordinary empty state without the landing", async () => {
+    mountWith(neverResolves, ["one thing to do"], null, { initialConnections: CONNECTED });
+    await flush();
+    await flush();
+    expect(text()).not.toContain("is connected. Here is what I can do");
+    expect(fetchCalls().map((c) => String(c[0]))).toContain("/api/agent/suggestions?context=first_run");
+  });
+});
+

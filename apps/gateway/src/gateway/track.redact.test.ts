@@ -145,3 +145,24 @@ describe("SCRUM-200: raw to Postgres, scrubbed to PostHog, from one call", () =>
     expect(stored).not.toBe(exported);
   });
 });
+
+/* SCRUM-363: usage_events.client carries the same client name the PostHog
+ * event does, from one call, so the two cannot disagree. */
+describe("the client name reaches usage_events", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    clearUserIdentityCache();
+    insertValues.mockResolvedValue(undefined);
+    returning.mockResolvedValue([]);
+    selectLimit.mockResolvedValue([{ email: "user-1@example.com", firstToolCallAt: new Date() }]);
+  });
+
+  it("writes the client's name, and null when it sent none", async () => {
+    await trackToolCall(dbMock, { ...props("failed"), clientName: "claude-ai" });
+    expect(insertValues.mock.calls[0][0].client).toBe("claude-ai");
+    expect(toolCallEvent()?.properties.client_name).toBe("claude-ai");
+    await trackToolCall(dbMock, props("failed"));
+    expect(insertValues.mock.calls[1][0].client).toBeNull();
+  });
+});
+

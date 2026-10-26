@@ -51,6 +51,8 @@ vi.mock("./signup-alert", () => ({
 const upsertServiceAccount = vi.fn(async (..._args: unknown[]) => undefined);
 vi.mock("./connected-accounts", () => ({
   upsertServiceAccount: (...args: unknown[]) => upsertServiceAccount(...args),
+  // SCRUM-363: no other DataToRAG user holds the account in these cases.
+  connectedElsewhere: async () => null,
 }));
 
 import { createAuthRouter } from "./auth";
@@ -397,7 +399,7 @@ describe("the SCRUM-149 gate: a zero-service grant is a failed connect, not a co
     const res = await callback(BOUND);
 
     expect(res.headers.get("location")).toBe(
-      "/dashboard/connections?connected=google-workspace"
+      "/dashboard/agent?connected=google-workspace&landing=connect"
     );
     const grant = trackedGrant();
     expect(grant?.complete).toBe(true);
@@ -408,7 +410,7 @@ describe("the SCRUM-149 gate: a zero-service grant is a failed connect, not a co
     grantedScope = undefined;
     const res = await callback(BOUND);
     expect(res.headers.get("location")).toBe(
-      "/dashboard/connections?connected=google-workspace"
+      "/dashboard/agent?connected=google-workspace&landing=connect"
     );
     expect(trackedGrant()?.complete).toBe(true);
     // The SCRUM-149 gate refuses only a grant POSITIVELY OBSERVED to cover
