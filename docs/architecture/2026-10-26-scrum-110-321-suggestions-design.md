@@ -1,7 +1,8 @@
 # One suggestion generator for the agent's empty states (SCRUM-110, SCRUM-321)
 
-Status: spec, written from the code at `02e147d`. Nothing here is built. The final strings go
-past HQ before they ship.
+Status: spec, written from the code at `02e147d`, revised to Manuel's rulings of 2026-10-26
+(the "Ruled" section at the end). Nothing here is built until a go. The final strings go past
+HQ before they ship.
 
 ## What exists today
 
@@ -85,8 +86,10 @@ Examples of the shapes, for review rather than as final copy:
 4. **The inbox summary only when there is real correspondence.** `mail_to_status_doc` needs
    `hasCorrespondence: true`, which a quick `gmail_list` (ten messages, `in:inbox -category:promotions
    -category:social -category:updates`) answers by finding a message from a person rather than a
-   notification. Until it answers, the shape is not offered. No model call, and no run spent:
-   the existing suggestion route already makes a read like this without charging the allowance.
+   notification. It runs on every empty-state load for a user with Gmail. Until it answers, the
+   shape is not offered. No model call, and no run spent: the existing suggestion route already
+   makes a read like this through `executeUserTool`, which neither counts nor meters. Only the
+   boolean is kept: no sender, subject or content goes into a log, an event or the response.
 5. **Writes and cross-service chains lead.** Within what is eligible, `chain` then `write` rank
    ahead of `multi_account`, then `read`. Approval-and-audit language never appears in a
    suggestion.
@@ -96,17 +99,21 @@ Examples of the shapes, for review rather than as final copy:
    the same `id` twice.
 8. **Degrade honestly.** With one service connected, show what that service can do, writes
    included, and stop. Fewer than three is fine; padding with variations of one shape is not.
-9. **No file names in prominent UI.** A shape may mention a user's content only in the prompt
-   sent after the click, never in the visible text. The personalised `Summarize "<file name>"`
-   lines are retired.
+9. **At most one file name, in the lowest slot.** When Drive is connected, the last suggestion
+   may name one of the user's own files, from the existing Drive read in
+   `gateway/agent/suggestions.ts`: one line, never the first slot, never more than one, the
+   name truncated to 40 characters and quoted. It is a `read` shape and does not count toward
+   the per-kind rule above it. Confluence titles are not used. No other visible text names the
+   user's content; any other shape may use content only in the prompt sent after the click.
 
 `post_connect` applies the same rules, with one more: the first suggestion uses the service
 just connected.
 
 ### Off-topic messages (SCRUM-321)
 
-A message that is not a task for a connected service gets one or two lines saying what the
-agent is for and three suggestions from the generator, instead of an answer. This is an
+Every message that is not a task for a connected service, not only the first in a thread,
+gets one or two lines saying what the agent is for and three suggestions from the generator,
+instead of an answer. This is an
 instruction in `mastra/agents/datatorag.ts`, not a classifier: a model can tell a general
 knowledge question from a task, and a classifier in front of it would refuse real tasks it
 misread. The reply is polite and short; it is not a refusal.
@@ -118,7 +125,8 @@ misread. The reply is polite and short; it is not a refusal.
 | `agent_suggestion_shown` (new, client) | the empty state renders its suggestions | `context`, `shape_ids` (ordered) |
 | `agent_suggestion_clicked` (new, client) | a suggestion is clicked | `context`, `shape_id`, `position` |
 
-Shape ids only, never the text a user's content filled in. The dashboard's prompt cards use the
+Shape ids only, never the text a user's content filled in. The click handler sends the
+shape's prompt to the agent and the shape id to the event, never the prompt text. The dashboard's prompt cards use the
 same generator and the same events with `context: "dashboard"`.
 
 ## Tests
@@ -126,8 +134,9 @@ same generator and the same events with `context: "dashboard"`.
 - The rules, one assertion each, over the pure function: nothing connected yields connect only;
   a Calendar-only Google grant yields no Gmail shape; one Google account yields no multi-account
   shape and two do; `first_run` puts fresh shapes first; no two results share a kind in the
-  first three; one service yields that service's shapes and no padding; no visible text contains
-  a file name.
+  first three; one service yields that service's shapes and no padding; with Drive connected
+  at most one visible line names a file and it is the last, truncated to 40 characters; with
+  Drive not connected no visible line names a file.
 - The correspondence check: offered only after a true answer; a list of notifications only
   answers false.
 - The empty state renders the generator's output and fires both events with shape ids; a click
@@ -138,18 +147,13 @@ same generator and the same events with `context: "dashboard"`.
 ## Not done, on purpose
 
 - No model call to produce suggestions, and no agent run spent on them.
-- No personalisation by file name.
+- No file name above the lowest slot, and none from Confluence.
 - No change to the locked state's connect control, which SCRUM-198 now instruments.
 
-## Decisions to rule on
+## Ruled (Manuel, 2026-10-26)
 
-1. **Retire the file-name suggestions entirely, or keep one as the last item.** This spec
-   retires them: they are the shape SCRUM-110 objects to and the content-safety risk. Keeping
-   one would keep the moment of recognition for some users at the cost of a file name on
-   screen.
-2. **The correspondence check.** One `gmail_list` per empty-state load for a Gmail user, not
-   charged to the allowance. The alternative is never offering the inbox summary on the first
-   screen at all, which costs nothing and loses the strongest chain for users who do have mail.
-3. **Whether the off-topic redirect applies to every message or only the first in a thread.**
-   This spec applies it to every off-topic message. Only the first would let a user who wants a
-   general answer get one by asking twice.
+1. **File-name suggestions are kept, at most one, in the lowest slot, when Drive is connected.**
+   Rule 9.
+2. **The inbox check runs on every empty-state load** for a user with Gmail, uncharged, keeping
+   only its boolean. Rule 4.
+3. **Every off-topic message is redirected**, not only the first in a thread.
