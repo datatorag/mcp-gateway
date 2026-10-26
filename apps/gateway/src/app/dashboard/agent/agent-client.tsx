@@ -4,7 +4,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import posthog from "posthog-js";
 import { EVENTS } from "@/lib/analytics";
 import { Playground, type PlaygroundHandle } from "../playground";
-import { AGENT_PROMPTS } from "../agent-prompts";
+import { PREVIEW_SUGGESTIONS } from "../agent-prompts";
+import type { Suggestion } from "@/gateway/agent/suggestion-generator";
 import { useSignupConversion } from "../use-signup-conversion";
 import { useConnections } from "../use-connections";
 import type { ConnectionsView } from "@/gateway/connections-view";
@@ -63,11 +64,11 @@ export function AgentClient({
   connectedService?: string | null;
   /** Error code from a connect that did not finish. */
   connectError?: string | null;
-  /** A prompt to run on arrival, RESOLVED SERVER-SIDE from the shared list
-   * by index (SCRUM-118) — the Connections page's Run action. Never raw URL
-   * text: the server hands this component either a string from
-   * AGENT_PROMPTS or null, so there is no payload a crafted link can carry
-   * into an auto-submitted turn. */
+  /** A prompt to run on arrival, RESOLVED SERVER-SIDE from the suggestion
+   * catalogue by shape id (SCRUM-118, SCRUM-110): the dashboard cards' Run
+   * action. Never raw URL text: the server hands this component either a
+   * catalogue string or null, so there is no payload a crafted link can
+   * carry into an auto-submitted turn. */
   seedPrompt?: string | null;
 }) {
   const {
@@ -154,11 +155,11 @@ export function AgentClient({
 
   /** Deterministic read, no model call, no run spent. Stable identity so the
    * effect that consumes it does not re-fire on every render. */
-  const loadSuggestions = useCallback(async () => {
-    const res = await fetch("/api/agent/suggestions");
+  const loadSuggestions = useCallback(async (): Promise<Suggestion[]> => {
+    const res = await fetch("/api/agent/suggestions?context=first_run");
     if (!res.ok) return [];
-    const data = (await res.json()) as { suggestions?: Array<{ text: string }> };
-    return (data.suggestions ?? []).map((s) => s.text);
+    const data = (await res.json()) as { suggestions?: Suggestion[] };
+    return data.suggestions ?? [];
   }, []);
 
   // Whether the user actually LANDED here, rather than navigating to it, is
@@ -363,7 +364,7 @@ export function AgentClient({
             layout="page"
             loadSuggestions={loadSuggestions}
             onConversationChanged={refreshList}
-            prompts={AGENT_PROMPTS}
+            prompts={PREVIEW_SUGGESTIONS}
             ref={ref}
             threadId={thread.id}
             // The signup landing (SCRUM-206): a user who signed up seconds ago

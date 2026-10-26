@@ -3,109 +3,106 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const executeUserTool = vi.fn();
 vi.mock("@/gateway/playground/tools", () => ({ executeUserTool }));
 
-const listUserToolRows = vi.fn();
-vi.mock("@/gateway/user-tools", () => ({ listUserToolRows }));
-
-/** What the user can actually see, which is what decides the read. */
-function visible(...names: string[]) {
-  listUserToolRows.mockResolvedValue(names.map((namespacedName) => ({ namespacedName })));
-}
+const listConnectedAccounts = vi.fn();
+vi.mock("@/gateway/connected-accounts", () => ({ listConnectedAccounts }));
 
 const { buildSuggestions, fileNamesFrom } = await import("./suggestions");
 
 const DB = {} as never;
 
-describe("post-connect suggestions", () => {
+/** Connected accounts as the list returns them. A null scope string is a
+ * legacy Google row and reads as every service granted. */
+function accounts(...rows: Array<{ connectorType: string; scopes?: string | null }>) {
+  listConnectedAccounts.mockResolvedValue(rows.map((r) => ({ scopes: null, ...r })));
+}
+
+/** The plugin reads, keyed by tool. */
+function reads(byTool: Record<string, string>) {
+  executeUserTool.mockImplementation(async (_db: unknown, _user: unknown, tool: string) =>
+    tool in byTool ? { isError: false, text: byTool[tool] } : { isError: true, text: "" }
+  );
+}
+
+const PERSON = JSON.stringify([{ from: "Sam Lee <sam@example.com>" }]);
+const NOTIFICATIONS = JSON.stringify([{ from: "no-reply@accounts.example.com" }]);
+const FILES = JSON.stringify({ files: [{ name: "Q3 Roadmap" }, { name: "Budget" }] });
+
+describe("buildSuggestions (SCRUM-110, SCRUM-321)", () => {
   beforeEach(() => {
     executeUserTool.mockReset();
-    listUserToolRows.mockReset();
-    visible("gws-mcp__drive_search");
+    listConnectedAccounts.mockReset();
   });
 
-  it("names the user's real files", async () => {
-    // The load-bearing property. A suggestion that says "your documents" is
-    // worth nothing here; one that says the name of the deck they were editing
-    // yesterday is the entire effect this exists to produce.
-    executeUserTool.mockResolvedValue({
-      isError: false,
-      text: JSON.stringify({
-        files: [{ name: "Q3 Roadmap.doc" }, { name: "Budget.sheet" }, { name: "Kickoff.slide" }],
-      }),
-    });
-
-    const out = await buildSuggestions(DB, "user-1");
-
-    expect(out.map((s) => s.fileName)).toEqual([
-      "Q3 Roadmap.doc",
-      "Budget.sheet",
-      "Kickoff.slide",
-    ]);
-    for (const s of out) expect(s.text).toContain(s.fileName);
-  });
-
-  it("spends no run and calls no model", async () => {
-    executeUserTool.mockResolvedValue({ isError: false, text: '{"files":[{"name":"a.doc"}]}' });
-    await buildSuggestions(DB, "user-1");
-
-    // One deterministic read. Charging part of someone's allowance for
-    // something they did not ask for spends it by our choice, not theirs.
-    expect(executeUserTool).toHaveBeenCalledTimes(1);
-    expect(executeUserTool.mock.calls[0][2]).toBe("gws-mcp__drive_search");
-  });
-
-  it("uses the connector the user actually has, not a hardcoded one", async () => {
-    // The gap this closes: an earlier version always searched Drive, so a user
-    // who connected Atlassian first reached the post-connect screen and got
-    // nothing — silently, because no-access correctly returns an empty list.
-    visible("atlassian-mcp__confluence_search");
-    executeUserTool.mockResolvedValue({
-      isError: false,
-      text: JSON.stringify({ results: [{ title: "Runbook" }] }),
-    });
-
-    const out = await buildSuggestions(DB, "user-1");
-
-    expect(executeUserTool.mock.calls[0][2]).toBe("atlassian-mcp__confluence_search");
-    expect(out[0].fileName).toBe("Runbook");
-  });
-
-  it("reads nothing when the user can see no search tool at all", async () => {
-    visible();
-    expect(await buildSuggestions(DB, "user-1")).toEqual([]);
+  it("offers nothing and reads nothing when nothing is connected", async () => {
+    accounts();
+    expect(await buildSuggestions(DB, "u", { context: "first_run" })).toEqual([]);
     expect(executeUserTool).not.toHaveBeenCalled();
   });
 
-  it("returns nothing rather than a generic prompt when the read is empty", async () => {
-    executeUserTool.mockResolvedValue({ isError: false, text: '{"files":[]}' });
-    expect(await buildSuggestions(DB, "user-1")).toEqual([]);
+  it("checks the inbox for a Gmail user and offers the mail chain only when a person wrote", async () => {
+    accounts({ connectorType: "google-workspace" });
+    reads({ "gws-mcp__gmail_list": PERSON, "gws-mcp__drive_search": FILES });
+    const withMail = await buildSuggestions(DB, "u", { context: "dashboard" });
+    expect(withMail.map((s) => s.id)).toContain("mail_to_status_doc");
+    const call = executeUserTool.mock.calls.find((c) => c[2] === "gws-mcp__gmail_list")!;
+    expect(call[3]).toEqual({ label: "CATEGORY_PERSONAL", max_results: 10 });
+
+    reads({ "gws-mcp__gmail_list": NOTIFICATIONS, "gws-mcp__drive_search": FILES });
+    const spamOnly = await buildSuggestions(DB, "u", { context: "dashboard" });
+    expect(spamOnly.map((s) => s.id)).not.toContain("mail_to_status_doc");
   });
 
-  it("returns nothing when the read fails, and does not throw", async () => {
-    // This runs immediately after a connect, on the screen whose job is to
-    // make the product feel like it already knows something. A failure means
-    // no suggestions, not a broken page.
+  it("puts one of the user's Drive files in the last slot, and only one", async () => {
+    accounts({ connectorType: "google-workspace" });
+    reads({ "gws-mcp__gmail_list": NOTIFICATIONS, "gws-mcp__drive_search": FILES });
+    const out = await buildSuggestions(DB, "u", { context: "first_run" });
+    expect(out).toHaveLength(3);
+    expect(out[2]).toEqual({ id: "drive_file_summary", text: 'Summarize "Q3 Roadmap" for me' });
+    expect(out.filter((s) => s.text.includes('"'))).toHaveLength(1);
+  });
+
+  it("does not read the inbox or Drive for services the grant does not cover", async () => {
+    accounts({ connectorType: "google-workspace", scopes: "https://www.googleapis.com/auth/calendar" });
+    reads({});
+    const out = await buildSuggestions(DB, "u", { context: "first_run" });
+    expect(executeUserTool).not.toHaveBeenCalled();
+    expect(out.length).toBeGreaterThan(0);
+    for (const s of out) expect(s.text).not.toMatch(/email|inbox|"/i);
+  });
+
+  it("never names a file without Drive, and never a Confluence title", async () => {
+    accounts({ connectorType: "atlassian" });
+    reads({ "atlassian-mcp__confluence_search": JSON.stringify({ results: [{ title: "Secret page" }] }) });
+    const out = await buildSuggestions(DB, "u", { context: "first_run" });
+    expect(out.every((s) => !s.text.includes('"'))).toBe(true);
+    expect(executeUserTool).not.toHaveBeenCalled();
+  });
+
+  it("degrades to no file line, not an error, when a read fails or throws", async () => {
+    accounts({ connectorType: "google-workspace" });
     executeUserTool.mockRejectedValue(new Error("plugin down"));
-    await expect(buildSuggestions(DB, "user-1")).resolves.toEqual([]);
-
-    executeUserTool.mockResolvedValue({ isError: true, text: "no access" });
-    await expect(buildSuggestions(DB, "user-1")).resolves.toEqual([]);
+    const out = await buildSuggestions(DB, "u", { context: "first_run" });
+    expect(out.length).toBeGreaterThan(0);
+    expect(out.map((s) => s.id)).not.toContain("drive_file_summary");
   });
 
-  it("does not repeat a file that appears twice", async () => {
-    executeUserTool.mockResolvedValue({
-      isError: false,
-      text: JSON.stringify({ files: [{ name: "Notes.doc" }, { name: "Notes.doc" }] }),
-    });
-    expect(await buildSuggestions(DB, "user-1")).toHaveLength(1);
+  it("counts accounts per service, so two Google accounts unlock the two-inbox shape", async () => {
+    accounts({ connectorType: "google-workspace" }, { connectorType: "google-workspace" });
+    reads({ "gws-mcp__gmail_list": PERSON, "gws-mcp__drive_search": "[]" });
+    const out = await buildSuggestions(DB, "u", { context: "dashboard", limit: 12 });
+    expect(out.map((s) => s.id)).toContain("two_inboxes");
   });
 
+  it("returns nothing, rather than throwing, when the account list cannot be read", async () => {
+    listConnectedAccounts.mockRejectedValue(new Error("db down"));
+    expect(await buildSuggestions(DB, "u", { context: "first_run" })).toEqual([]);
+  });
+});
+
+describe("fileNamesFrom", () => {
   it("survives a response shape it does not recognise", () => {
-    // The plugin's envelope is not ours, and a suggestion list is not worth
-    // throwing over.
     expect(fileNamesFrom("not json")).toEqual([]);
     expect(fileNamesFrom('{"unexpected":true}')).toEqual([]);
     expect(fileNamesFrom('[{"name":"Bare.doc"}]')).toEqual(["Bare.doc"]);
-    // Drive says `name`, Confluence says `title`.
-    expect(fileNamesFrom('{"results":[{"title":"Page"}]}')).toEqual(["Page"]);
   });
 });

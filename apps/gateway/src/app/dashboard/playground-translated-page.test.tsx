@@ -200,7 +200,11 @@ describe("the chat on a page the browser has translated", () => {
           connectionsLoaded
           hasConnectedAccount
           layout="page"
-          prompts={["first", "second", "third"]}
+          prompts={[
+            { id: "a", text: "first" },
+            { id: "b", text: "second" },
+            { id: "c", text: "third" },
+          ]}
           ref={(instance: PlaygroundHandle | null) => {
             handle = instance;
           }}

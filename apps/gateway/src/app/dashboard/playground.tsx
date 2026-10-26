@@ -1,6 +1,12 @@
 "use client";
 
 import { skillContinueMessage } from "@/lib/skill-links";
+import posthog from "posthog-js";
+import { EVENTS } from "@/lib/analytics";
+import type {
+  Suggestion as SuggestionItem,
+  SuggestionContext,
+} from "@/gateway/agent/suggestion-generator";
 
 /** The browser's IANA zone for a skill run (SCRUM-242), so the run message
  * can say what day it is where the user is. The server validates it and
@@ -247,11 +253,15 @@ export interface PlaygroundHandle {
 export type PendingSkill = { slug: string; title: string; missingServices: string[] };
 
 interface PlaygroundProps {
-  /** Example prompts, offered as quick-start chips in the empty state. */
-  prompts: string[];
-  /** Fetch three actions named from the user's real files. Injected rather
-   * than called directly so the presentation stays drivable by canned data. */
-  loadSuggestions?: () => Promise<string[]>;
+  /** The preview shown, locked, before anything is connected or while the
+   * connection state is unknown. Never offered as a run to a connected user,
+   * who gets the generator's own list instead (SCRUM-110, SCRUM-321). */
+  prompts: SuggestionItem[];
+  /** Fetch the generator's suggestions for this user. Injected rather than
+   * called directly so the presentation stays drivable by canned data. */
+  loadSuggestions?: () => Promise<SuggestionItem[]>;
+  /** Which empty state this is, for the suggestion events. */
+  suggestionContext?: SuggestionContext;
   /** Whether the user has at least one connected account (any service). */
   hasConnectedAccount: boolean;
   /** The connected accounts themselves, for the meter's connector half.
@@ -334,6 +344,7 @@ export const Playground = forwardRef<PlaygroundHandle, PlaygroundProps>(
       connectionsLoaded,
       launchedServices = ALWAYS_OFFERED_SERVICE_IDS,
       loadSuggestions,
+      suggestionContext = "first_run",
       layout = "panel",
       threadId = null,
       initialMessages,
@@ -359,10 +370,10 @@ export const Playground = forwardRef<PlaygroundHandle, PlaygroundProps>(
     const [erroredIds, setErroredIds] = useState<ReadonlySet<string>>(
       () => new Set()
     );
-    /** Suggestions naming the user's own files. Empty until the read returns,
-     * and empty forever if it returns nothing usable — a generic suggestion
-     * dressed as a personal one is worse than none. */
-    const [ownFilePrompts, setOwnFilePrompts] = useState<string[]>([]);
+    /** The generator's suggestions for a connected user (SCRUM-110): null
+     * until the read returns. Never padded: fewer than three is an honest
+     * answer about what the connected services can do. */
+    const [generated, setGenerated] = useState<SuggestionItem[] | null>(null);
     /** The stored thread this conversation lives in, as the server named it
      * on the last turn's response (SCRUM-78). Starts as the resumed thread's
      * id; a NEW conversation learns it from the first response, because the
@@ -383,17 +394,9 @@ export const Playground = forwardRef<PlaygroundHandle, PlaygroundProps>(
       onThreadKnownRef.current = onThreadKnown;
     }, [onThreadKnown]);
 
-    /** The user's own files when the read found any, the generic examples
-     * otherwise. Derived once so the copy and the list cannot disagree about
-     * which of the two is on screen.
-     *
-     * TOPPED UP TO THREE (SCRUM-114). The render below promises three
-     * suggestions and the personalised read guarantees no count at all: it
-     * returns whatever it found, and a one-file account collapsed the row to
-     * a single stale-looking entry. The personalised prompts lead and the
-     * generic list fills the remainder, so the promised three is enforced
-     * here rather than asserted in a comment. */
-    const personalised = ownFilePrompts.length > 0;
+    /** Whether the generator answered with something to offer. Derived once
+     * so the copy and the list cannot disagree about what is on screen. */
+    const personalised = generated !== null && generated.length > 0;
     /** The empty state's three answers to "is anything connected" (SCRUM-206).
      *
      * `locked`: known unconnected, OR a signup landing with no answer yet,
@@ -404,25 +407,33 @@ export const Playground = forwardRef<PlaygroundHandle, PlaygroundProps>(
      * it shows the control under a checking indicator and claims nothing. */
     const locked = !hasConnectedAccount && (connectionsLoaded || welcome);
     const checking = !connectionsLoaded && !welcome;
-    const suggestions = personalised
-      ? [
-          ...ownFilePrompts,
-          ...prompts.filter((p) => !ownFilePrompts.includes(p)),
-        ]
-      : prompts;
+    /** A connected user sees only what the generator offered; anyone else
+     * sees the locked preview. The connected list is never topped up with
+     * the preview: those shapes may need a service this user does not have. */
+    const suggestions = hasConnectedAccount ? (generated ?? []) : prompts;
 
     useEffect(() => {
       if (!hasConnectedAccount || !loadSuggestions) return;
       let live = true;
       void loadSuggestions()
         .then((next) => {
-          if (live) setOwnFilePrompts(next);
+          if (live) setGenerated(next);
         })
         .catch(() => {});
       return () => {
         live = false;
       };
     }, [hasConnectedAccount, loadSuggestions]);
+
+    // The suggestion events (SCRUM-321): shape ids only, never the text, which
+    // may name a file in the lowest slot. Shown once per answer.
+    useEffect(() => {
+      if (!hasConnectedAccount || !generated || generated.length === 0) return;
+      posthog.capture(EVENTS.AGENT_SUGGESTION_SHOWN, {
+        context: suggestionContext,
+        shape_ids: generated.slice(0, 3).map((s) => s.id),
+      });
+    }, [hasConnectedAccount, generated, suggestionContext]);
 
     const transport = useMemo(
       () =>
@@ -723,6 +734,21 @@ export const Playground = forwardRef<PlaygroundHandle, PlaygroundProps>(
         sendMessage,
         onConversationChanged,
       ]
+    );
+
+    /** A suggestion was picked: the event carries its shape id and position,
+     * never its text, then the text is sent as the prompt. A locked preview
+     * cannot be picked (its button is disabled), so no event fires for it. */
+    const pickSuggestion = useCallback(
+      (suggestion: SuggestionItem, position: number) => {
+        posthog.capture(EVENTS.AGENT_SUGGESTION_CLICKED, {
+          context: suggestionContext,
+          shape_id: suggestion.id,
+          position,
+        });
+        send(suggestion.text);
+      },
+      [send, suggestionContext]
     );
 
     /** Answer one gated tool call.
@@ -1030,9 +1056,9 @@ export const Playground = forwardRef<PlaygroundHandle, PlaygroundProps>(
                             <Suggestion
                               className="h-auto w-full justify-start whitespace-normal rounded-xl px-4 py-3 text-left text-sm font-normal disabled:cursor-not-allowed disabled:opacity-60"
                               disabled={locked}
-                              key={i}
-                              onClick={send}
-                              suggestion={prompt}
+                              key={prompt.id}
+                              onClick={() => pickSuggestion(prompt, i)}
+                              suggestion={prompt.text}
                               title={locked ? LOCKED_PROMPT_TITLE : undefined}
                             >
                               {locked && (
@@ -1041,7 +1067,7 @@ export const Playground = forwardRef<PlaygroundHandle, PlaygroundProps>(
                                   className="mr-2 size-3.5 shrink-0 text-muted-foreground"
                                 />
                               )}
-                              {prompt}
+                              {prompt.text}
                             </Suggestion>
                           ))}
                         </div>
@@ -1051,9 +1077,9 @@ export const Playground = forwardRef<PlaygroundHandle, PlaygroundProps>(
                             <Suggestion
                               className="h-auto py-1 text-[11px] disabled:cursor-not-allowed disabled:opacity-60"
                               disabled={locked}
-                              key={i}
-                              onClick={send}
-                              suggestion={prompt}
+                              key={prompt.id}
+                              onClick={() => pickSuggestion(prompt, i)}
+                              suggestion={prompt.text}
                               title={locked ? LOCKED_PROMPT_TITLE : undefined}
                             >
                               {locked && (
@@ -1062,7 +1088,7 @@ export const Playground = forwardRef<PlaygroundHandle, PlaygroundProps>(
                                   className="mr-1 size-3 shrink-0 text-muted-foreground"
                                 />
                               )}
-                              {prompt}
+                              {prompt.text}
                             </Suggestion>
                           ))}
                         </Suggestions>

@@ -77,7 +77,7 @@ async function sendOne(): Promise<string> {
         accounts={[]}
         connectionsLoaded
         hasConnectedAccount
-        prompts={["do a thing"]}
+        prompts={[{ id: "a", text: "do a thing" }]}
         ref={(instance: PlaygroundHandle | null) => {
           handle = instance;
         }}

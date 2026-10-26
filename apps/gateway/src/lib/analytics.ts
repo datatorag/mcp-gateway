@@ -169,6 +169,14 @@ export const EVENTS = {
    * renders in the empty state, once per page view; never while the
    * connection lookup is still open, since that user may be connected. */
   CONNECT_CONTROL_IMPRESSION: "connect_control_impression",
+  /** The empty state showed a connected user the generator's suggestions
+   * (SCRUM-321): `context` (`first_run`, `post_connect` or `dashboard`) and
+   * `shape_ids` in order. Shape ids only: the text of the lowest slot can
+   * name the user's file, so it never goes into an event. */
+  AGENT_SUGGESTION_SHOWN: "agent_suggestion_shown",
+  /** A suggestion was picked (SCRUM-321): `context`, `shape_id` and
+   * `position` (0-based). Never the prompt text. */
+  AGENT_SUGGESTION_CLICKED: "agent_suggestion_clicked",
   /** One hit on a `/r/<slug>` share link (SCRUM-152), counted server-side at
    * the redirect so it is independent of whether the landing page's script
    * ran. `slug`, `known` and `campaign` only — no request data. `known:false`

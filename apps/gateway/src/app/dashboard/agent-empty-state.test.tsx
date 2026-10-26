@@ -80,9 +80,10 @@ function mountWith(
     vi.fn(async (url: string) => {
       if (String(url).includes("/api/connections")) return connections();
       if (String(url).includes("/api/agent/suggestions")) {
-        return new Response(JSON.stringify({ suggestions: suggestions.map((text) => ({ text })) }), {
-          status: 200,
-        });
+        return new Response(
+          JSON.stringify({ suggestions: suggestions.map((text, i) => ({ id: `shape_${i}`, text })) }),
+          { status: 200 }
+        );
       }
       return new Response("{}", { status: 200 });
     })
@@ -384,7 +385,12 @@ describe("the empty state and the unknown connection state (SCRUM-114)", () => {
             connections: [],
           }),
           { status: 200 }
-        )
+        ),
+      [
+        "Turn notes I paste into a formatted Google Doc with headings",
+        "What's on my calendar this week, and where are the gaps?",
+        "Put a 30-minute focus block on my calendar tomorrow morning",
+      ]
     );
     await flush();
     await flush();
@@ -397,9 +403,9 @@ describe("the empty state and the unknown connection state (SCRUM-114)", () => {
     expect(text()).not.toContain("Connect Google Workspace");
   });
 
-  it("tops a thin personalised read up to three suggestions", async () => {
-    // The render promises three; the personalised endpoint guarantees no
-    // count. One real suggestion must not collapse the row to one.
+  it("shows exactly what the generator offered, never padded (SCRUM-110)", async () => {
+    // One service that can serve one thing gets one suggestion. Topping it up
+    // from a generic list would offer shapes this user's services cannot run.
     mountWith(
       async () =>
         new Response(
@@ -417,17 +423,45 @@ describe("the empty state and the unknown connection state (SCRUM-114)", () => {
     const suggestionButtons = Array.from(
       container.querySelectorAll("button")
     ).filter((b) => (b.textContent ?? "").length > 30);
-    expect(suggestionButtons.length).toBe(3);
-    // The personalised prompt leads; generic prompts fill the remainder.
+    expect(suggestionButtons.length).toBe(1);
     expect(suggestionButtons[0]?.textContent).toContain(
       "Summarize the doc you edited most recently"
     );
-    // The copy derives from what is rendered: three on screen means plural,
-    // and no claim that the connection just happened - this surface cannot
-    // distinguish a first visit from a returning one, so the copy must be
-    // true for both.
-    expect(text()).toContain("Here are a few things I can do");
+    // The copy derives from what is rendered: one on screen means singular,
+    // and no claim that the connection just happened.
+    expect(text()).toContain("Here is something I can do");
     expect(text()).not.toContain("just connected");
+  });
+
+  it("records shape ids, never the text, when suggestions are shown and picked (SCRUM-321)", async () => {
+    const posthog = (await import("posthog-js")).default as unknown as {
+      capture: ReturnType<typeof vi.fn>;
+    };
+    posthog.capture.mockClear();
+    const fileLine = 'Summarize "Board deck draft" for me';
+    mountWith(
+      async () =>
+        new Response(
+          JSON.stringify({ accounts: [{ id: "a1", connectorType: "google-workspace" }], connections: [] }),
+          { status: 200 }
+        ),
+      ["Turn notes I paste into a formatted Google Doc with headings", fileLine]
+    );
+    await flush();
+    await flush();
+    const shown = posthog.capture.mock.calls.filter((c) => c[0] === "agent_suggestion_shown");
+    expect(shown).toEqual([["agent_suggestion_shown", { context: "first_run", shape_ids: ["shape_0", "shape_1"] }]]);
+
+    const fileButton = Array.from(container.querySelectorAll("button")).find((b) =>
+      (b.textContent ?? "").includes("Board deck draft")
+    )!;
+    act(() => fileButton.click());
+    await flush();
+    const clicked = posthog.capture.mock.calls.filter((c) => c[0] === "agent_suggestion_clicked");
+    expect(clicked).toEqual([
+      ["agent_suggestion_clicked", { context: "first_run", shape_id: "shape_1", position: 1 }],
+    ]);
+    expect(JSON.stringify(posthog.capture.mock.calls)).not.toContain("Board deck draft");
   });
 });
 

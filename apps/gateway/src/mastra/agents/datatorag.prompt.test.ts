@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { SYSTEM_PROMPT } from "./datatorag";
+import { OFF_TOPIC_RULE, SYSTEM_PROMPT } from "./datatorag";
 
 /* SCRUM-238 (ruling Q4): the house rule against the em-dash reaches the
  * agent's own prose through the system prompt, pinned here; measured on the
@@ -13,5 +13,15 @@ describe("the agent's output rules", () => {
   it("does not itself contain the character it bans", () => {
     expect(SYSTEM_PROMPT).not.toContain("\u2014");
     expect(SYSTEM_PROMPT).not.toContain("\u2013");
+  });
+});
+
+describe("the off-topic redirect (SCRUM-321)", () => {
+  it("is in the prompt, applies to every off-topic message, and offers things to do instead", () => {
+    expect(SYSTEM_PROMPT).toContain(OFF_TOPIC_RULE);
+    expect(OFF_TOPIC_RULE).toMatch(/do not answer it/);
+    expect(OFF_TOPIC_RULE).toMatch(/one or two sentences/);
+    expect(OFF_TOPIC_RULE).toMatch(/every such message/);
+    expect(OFF_TOPIC_RULE).toMatch(/concrete things you can do/);
   });
 });

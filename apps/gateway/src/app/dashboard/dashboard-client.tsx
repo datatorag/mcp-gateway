@@ -42,7 +42,8 @@ import {
   grantState,
   type GrantState,
 } from "./connections/grant-state";
-import { AGENT_PROMPTS } from "./agent-prompts";
+import { PREVIEW_SUGGESTIONS } from "./agent-prompts";
+import type { Suggestion } from "@/gateway/agent/suggestion-generator";
 import { useSignupConversion } from "./use-signup-conversion";
 import { useConnections } from "./use-connections";
 import { ConnectHelper, NotionConnectHelper } from "./connect-helper";
@@ -65,16 +66,46 @@ export function DashboardClient() {
   const { copied, copy } = useCopyToClipboard<number>();
   const router = useRouter();
 
-  /** Run means run (SCRUM-118): the button's own label has always said "Run
-   * in the Agent", and with the embedded panel gone it navigates there,
-   * carrying the prompt AS AN INDEX into the shared list - never as text.
-   * The agent page resolves the index server-side from the same
-   * AGENT_PROMPTS constant these cards render, so there is no free-text
-   * parameter for a crafted link to abuse, and an index that does not
-   * resolve seeds nothing. */
-  function runPrompt(index: number) {
+  /** The cards (SCRUM-110): the generator's suggestions for a connected user,
+   * the locked preview otherwise. Never padded with the preview, whose shapes
+   * may need a service this user does not have. */
+  const [generated, setGenerated] = useState<Suggestion[] | null>(null);
+  useEffect(() => {
     if (!hasConnectedAccount) return;
-    router.push(`/dashboard/agent?prompt=${index}`);
+    let live = true;
+    void fetch("/api/agent/suggestions?context=dashboard")
+      .then((res) => (res.ok ? res.json() : { suggestions: [] }))
+      .then((data: { suggestions?: Suggestion[] }) => {
+        if (live) setGenerated(data.suggestions ?? []);
+      })
+      .catch(() => {});
+    return () => {
+      live = false;
+    };
+  }, [hasConnectedAccount]);
+  const cards = hasConnectedAccount ? (generated ?? []) : PREVIEW_SUGGESTIONS;
+  // Shape ids only, never the text (SCRUM-321).
+  useEffect(() => {
+    if (!hasConnectedAccount || !generated || generated.length === 0) return;
+    posthog.capture(EVENTS.AGENT_SUGGESTION_SHOWN, {
+      context: "dashboard",
+      shape_ids: generated.map((s) => s.id),
+    });
+  }, [hasConnectedAccount, generated]);
+
+  /** Run means run (SCRUM-118): the button's own label has always said "Run
+   * in the Agent", and it navigates there carrying the SHAPE ID, never the
+   * text. The agent page resolves the id server-side from the same catalogue
+   * these cards come from, so there is no free-text parameter for a crafted
+   * link to abuse, and an id that does not resolve seeds nothing. */
+  function runPrompt(card: Suggestion, position: number) {
+    if (!hasConnectedAccount) return;
+    posthog.capture(EVENTS.AGENT_SUGGESTION_CLICKED, {
+      context: "dashboard",
+      shape_id: card.id,
+      position,
+    });
+    router.push(`/dashboard/agent?prompt=${encodeURIComponent(card.id)}`);
   }
 
 
@@ -481,13 +512,13 @@ export function DashboardClient() {
           {PROMPT_CARDS_STANDFIRST}
         </p>
         <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-          {AGENT_PROMPTS.map((prompt, i) => (
+          {cards.map((card, i) => (
             <div
-              key={i}
+              key={card.id}
               className="group flex items-start gap-2 rounded-lg border border-border px-3 py-2.5 text-left transition-colors hover:border-primary/30 hover:bg-secondary/50"
             >
               <button
-                onClick={() => runPrompt(i)}
+                onClick={() => runPrompt(card, i)}
                 disabled={!hasConnectedAccount}
                 title={
                   hasConnectedAccount
@@ -497,12 +528,12 @@ export function DashboardClient() {
                 className="flex flex-1 items-start gap-1.5 text-left text-xs leading-relaxed text-foreground disabled:cursor-not-allowed disabled:opacity-50"
               >
                 <Play className="mt-0.5 size-3 shrink-0 fill-primary text-primary" />
-                {prompt}
+                {card.text}
               </button>
               <Button
                 variant="ghost"
                 size="icon-xs"
-                onClick={() => copy(prompt, i)}
+                onClick={() => copy(card.text, i)}
                 aria-label="Copy prompt"
                 title="Copy"
                 className="text-muted-foreground opacity-0 group-hover:opacity-100"
