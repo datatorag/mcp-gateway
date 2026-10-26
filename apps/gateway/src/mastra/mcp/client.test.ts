@@ -239,7 +239,7 @@ describe("identity and shape", () => {
  * provide, as before. The published morning-brief names gmail_search and
  * gmail_send and not the stranger in the fixture registry. */
 describe("a skill run sees its own tools (SCRUM-238)", () => {
-  it("keeps only the skill's named tools and the built-ins on a skill run", async () => {
+  it("keeps only the skill's named tools and the read-only built-ins on a skill run (SCRUM-376)", async () => {
     const requestContext = buildPluginRequestContext({ userId: "user-1" });
     requestContext.set(SKILL_RUN_CONTEXT_KEY, "morning-brief");
     const tools = (await resolveUserPluginTools({ requestContext })) as Record<string, ResolvedTool>;
@@ -247,7 +247,13 @@ describe("a skill run sees its own tools (SCRUM-238)", () => {
     expect(names).toContain("gws-mcp__gmail_search");
     expect(names).toContain("gws-mcp__gmail_send");
     expect(names).not.toContain("gws-mcp__totally_new_tool");
-    for (const b of BUILT_IN_TOOLS.filter((t) => !t.attended)) expect(names).toContain(b.definition.name);
+    // SCRUM-376: the built-ins that declare a read for everyone, and none of
+    // the rest, even though this suite resolves as an admin.
+    for (const b of BUILT_IN_TOOLS) {
+      const allowed = b.approval === "read" && !b.audience;
+      expect(names.includes(b.definition.name), b.definition.name).toBe(allowed);
+    }
+    expect(names).not.toContain("disconnect_service");
     // SCRUM-420: nobody is in a skill run to click a link, so the tools
     // that need a person are not there. Not vacuous: one such tool exists.
     const attended = BUILT_IN_TOOLS.filter((t) => t.attended).map((t) => t.definition.name);
@@ -285,7 +291,9 @@ describe("a skill run sees its own tools (SCRUM-238)", () => {
     const tools = (await resolveUserPluginTools({ requestContext })) as Record<string, ResolvedTool>;
     const names = Object.keys(tools);
     expect(names.filter((n) => n.includes("__"))).toEqual([]);
-    for (const b of BUILT_IN_TOOLS.filter((t) => !t.attended)) expect(names).toContain(b.definition.name);
+    for (const b of BUILT_IN_TOOLS) {
+      expect(names.includes(b.definition.name), b.definition.name).toBe(b.approval === "read" && !b.audience);
+    }
   });
 });
 
@@ -299,10 +307,11 @@ describe("the model-facing tool count (SCRUM-255)", () => {
     const names = Object.keys(tools);
     const connectorTools = names.filter((n) => n.includes("__"));
     // The count is the set the model is handed: the skill's two connector
-    // tools plus every gateway tool (the MCP built-ins and the introspection
-    // tools), and the built-in count is everything without a namespace.
+    // tools plus the gateway tools a skill run may have (the read-only
+    // built-ins and the introspection tools that ask nothing, SCRUM-376), and
+    // the built-in count is everything without a namespace.
     expect(connectorTools).toHaveLength(2);
-    expect(names.length).toBeGreaterThan(BUILT_IN_TOOLS.length + 2);
+    expect(names.length).toBeGreaterThan(2);
     expect(requestContext.get(SKILL_TOOL_COUNT_KEY)).toBe(names.length);
     expect(requestContext.get(SKILL_BUILTIN_COUNT_KEY)).toBe(names.length - 2);
   });
