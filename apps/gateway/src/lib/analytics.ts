@@ -97,7 +97,9 @@ export const EVENTS = {
    * else in the funnel.
    *
    * COHORT RULE. This used to fire for new users only, because only a signup
-   * was ever routed here. Every login is now, so the event on its own no
+   * was ever routed here. Every login is now, unconditionally since
+   * SCRUM-207 removed the switch that could route logins elsewhere, so the
+   * event on its own no
    * longer answers "how many NEW users landed on the Agent" — the
    * `landed_from` property does: `"signup"` for a post-signup landing,
    * `"login"` for a returning user's. Break the event out by that property
@@ -105,10 +107,11 @@ export const EVENTS = {
    * `landed_from` at all (emitted before the property existed) as `"signup"`,
    * since that was the only case that could fire then.
    *
-   * The NAME deliberately did not change: it is the join key for everything
-   * already built on this event, and renaming would silently end those series
-   * rather than break them. */
-  AGENT_DEFAULT_VIEW_SHOWN: "agent_default_view_shown",
+   * The event NAME deliberately did not change: it is the join key for
+   * everything already built on this event, and renaming would silently end
+   * those series rather than break them. Only the constant's key was renamed,
+   * with the switch it was named after. */
+  AGENT_LANDING_SHOWN: "agent_default_view_shown",
   PLAYGROUND_MESSAGE_SENT: "playground_message_sent",
   PLAYGROUND_CAP_HIT: "playground_cap_hit",
   /** One run's token ceiling (SCRUM-84). Distinct from PLAYGROUND_CAP_HIT,
@@ -125,7 +128,11 @@ export const EVENTS = {
   PLAYGROUND_RUN_ENDED: "playground_run_ended",
   PLAYGROUND_CONFIRM: "playground_confirm",
   PLAYGROUND_FEEDBACK: "playground_feedback",
-  /** The agent's in-thread connect ask reached a decision point (SCRUM-112).
+  /** The agent offered a connection: its in-thread connect ask reached a
+   * decision point (SCRUM-112). NOT an impression of any control, despite the
+   * name, which stays because renaming would end the series (SCRUM-198). It
+   * fires only when a user has messaged the agent AND the agent chose to call
+   * `request_connection`; a user who never messages fires nothing here.
    *
    * EMITTED SERVER-SIDE at the moment the `request_connection` tool places
    * (or fails to place) the card into the stream, for the same reason
@@ -144,10 +151,24 @@ export const EVENTS = {
   /** A click on a connect control (SCRUM-112). Client-side because the click
    * is a client fact. `source` says which affordance: `"thread"` for the
    * card the agent placed mid-conversation, `"empty_state"` for the standing
-   * control an unconnected user sees before any message. The funnel reads:
-   * connect_card_shown → connect_card_clicked is the card's copy/trust gap;
-   * connect_card_clicked → account_connected is OAuth drop-off. */
+   * control an unconnected user sees before any message.
+   *
+   * The funnels, one per affordance, never across them (SCRUM-198):
+   * - standing control: connect_control_impression → connect_card_clicked,
+   *   both with `source: "empty_state"`, read per `service`;
+   * - in-thread card: connect_card_shown with `outcome: "shown"` →
+   *   connect_card_clicked with `source: "thread"`.
+   * connect_card_shown is not the denominator of the empty-state clicks, so
+   * clicks exceeding it is expected. connect_card_clicked → account_connected
+   * is OAuth drop-off for either. */
   CONNECT_CARD_CLICKED: "connect_card_clicked",
+  /** The standing connect control was shown to a user known to have nothing
+   * connected (SCRUM-198): one event per offered service, `{ service,
+   * source: "empty_state" }`, the same shape as connect_card_clicked, so the
+   * click rate is clicked over this per service. Fired when the control
+   * renders in the empty state, once per page view; never while the
+   * connection lookup is still open, since that user may be connected. */
+  CONNECT_CONTROL_IMPRESSION: "connect_control_impression",
   /** One hit on a `/r/<slug>` share link (SCRUM-152), counted server-side at
    * the redirect so it is independent of whether the landing page's script
    * ran. `slug`, `known` and `campaign` only — no request data. `known:false`

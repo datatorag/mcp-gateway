@@ -19,7 +19,7 @@ import {
 
 /** Which login put the user here: the post-signup landing, or a returning
  * user's. Travels as the `landed_from` property on
- * `AGENT_DEFAULT_VIEW_SHOWN`; see the event's note in `lib/analytics.ts`. */
+ * `AGENT_LANDING_SHOWN`; see the event's note in `lib/analytics.ts`. */
 export type AgentLandedFrom = "signup" | "login";
 
 /**
@@ -172,7 +172,7 @@ export function AgentClient({
   // The event NAME stays put on purpose - see the note in `lib/analytics.ts`.
   useEffect(() => {
     if (isDefaultView) {
-      posthog.capture(EVENTS.AGENT_DEFAULT_VIEW_SHOWN, {
+      posthog.capture(EVENTS.AGENT_LANDING_SHOWN, {
         landed_from: landedFrom,
       });
     }
