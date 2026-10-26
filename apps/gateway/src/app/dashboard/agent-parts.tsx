@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useContext, type ReactNode } from "react";
+import { createContext, useContext, useEffect, type ReactNode } from "react";
 import posthog from "posthog-js";
 import { SetupInstructions } from "@/components/setup-instructions";
 import { buttonVariants } from "@/components/ui/button";
@@ -137,15 +137,30 @@ function safeConnectHref(href: string): string | null {
 export function ConnectPart({
   services,
   source = "thread",
+  reportImpression = false,
 }: AgentDataParts["connect"] & {
   /** Which affordance this render is (SCRUM-112): the card the agent placed
    * mid-conversation, or the standing empty-state control. A render-site
    * fact, so it is a prop and NOT part of the stored `data-connect` payload —
    * the part must stay exactly what the server emitted. */
   source?: "thread" | "empty_state";
+  /** Capture an impression of each offered service (SCRUM-198). Set by the
+   * empty state only while the user is known to have nothing connected; the
+   * in-thread card's offer is counted server-side as connect_card_shown. */
+  reportImpression?: boolean;
 }) {
   const { nextPath } = useContext(ConnectReturnContext);
   const { scopeStatusByService } = useContext(ConnectGrantContext);
+  const offered = services
+    .filter((service) => safeConnectHref(service.connectHref) !== null)
+    .map((service) => service.id)
+    .join(",");
+  useEffect(() => {
+    if (!reportImpression || offered === "") return;
+    for (const service of offered.split(",")) {
+      posthog.capture(EVENTS.CONNECT_CONTROL_IMPRESSION, { service, source });
+    }
+  }, [reportImpression, offered, source]);
   if (services.length === 0) return null;
 
   /** SCRUM-106. `request_connection` emits this same part for a
