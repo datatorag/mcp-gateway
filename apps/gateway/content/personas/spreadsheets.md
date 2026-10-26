@@ -7,6 +7,7 @@ skills:
   - sheet-as-knowledge-base
   - reddit-harvester
   - weekly-capture
+  - google-sheet-format
   - gmail-attachments-to-drive
   - document-to-deck
 faqs:
