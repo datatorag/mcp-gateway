@@ -3,7 +3,7 @@ import { Router } from "express";
 import { and, eq, isNull } from "drizzle-orm";
 import type { Database } from "@datatorag-mcp/db";
 import { oauthRefreshTokens } from "@datatorag-mcp/db";
-import { hashApiKey } from "@datatorag-mcp/auth";
+import { hashToken } from "@datatorag-mcp/auth";
 import { getPosthog } from "../../lib/posthog-server";
 import { EVENTS } from "../../lib/analytics";
 import { resolveUserEmail, identityProps } from "../user-email";
@@ -32,7 +32,7 @@ export function createRevokeRouter(
       return;
     }
 
-    const hash = hashApiKey(token);
+    const hash = hashToken(token);
     let revokedUserId: string | null = null;
 
     await db.transaction(async (tx) => {

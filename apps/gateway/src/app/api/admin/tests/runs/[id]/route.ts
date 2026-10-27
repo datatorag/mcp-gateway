@@ -28,5 +28,5 @@ const handler = withAdminRoute<Ctx>(
 
 /** Re-exported with the context REQUIRED, because the wrapper takes it
  * optionally so param-less routes typecheck, and Next's route validator
- * rejects that shape on a dynamic segment. Same pattern as /api/keys/[id]. */
+ * rejects that shape on a dynamic segment. */
 export const GET = (request: Parameters<typeof handler>[0], ctx: Ctx) => handler(request, ctx);

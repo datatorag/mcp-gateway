@@ -94,7 +94,7 @@ export const SCENARIOS: Scenario[] = [
       "E8", // the served schema carries the registry's parameters
       "F1", // a write prompts for approval and a reviewed read does not
       "F2", // tools needing an unapproved scope are absent
-      "F7", // a fabricated API key is refused with a usable challenge
+      "F7", // a bearer that is not an OAuth access token is refused with a usable challenge
       "R2", // a non-admin can neither see nor call the runner's tools
       "G1", // a read against something that does not exist names the cause
       "G2", // a missing or unknown argument is refused by the gateway, by name

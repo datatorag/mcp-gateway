@@ -41,7 +41,7 @@ import { eq } from "drizzle-orm";
  * bearer check is the real path: the tool filter, the dispatch, the scope
  * gate, the allowance check, metering, token resolution, the plugin call.
  *
- * It holds NO credential. An earlier design minted an API key per run; that
+ * It holds NO credential. An earlier design minted a credential per run; that
  * was reversed because a live admin credential held for twenty minutes is a
  * cost paid on every run to test a door one case can test. What this path
  * skips is the HTTP layer of `/mcp`, and the door case covers that.

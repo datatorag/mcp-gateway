@@ -27,7 +27,7 @@ import { createRevokeRouter } from "./src/gateway/oauth/revoke";
 import { oauthRateLimit } from "./src/gateway/oauth/rate-limit";
 import { createAuthRouter } from "./src/gateway/auth";
 import { getPluginManager } from "./src/lib/plugin-manager";
-import { mcpBearerGate, resolveBearer, touchApiKey, type McpAuthState } from "./src/gateway/bearer-auth";
+import { mcpBearerGate, resolveBearer, type McpAuthState } from "./src/gateway/bearer-auth";
 import { shutdownPosthog, trackFileDownload } from "./src/gateway/track";
 import {
   extractClientInfo,
@@ -232,11 +232,10 @@ async function main() {
   });
 
   /**
-   * Validate a Bearer: an OAuth access token, or an API key (SCRUM-245),
-   * decided by the key's fixed prefix. Both paths fetch the row without
-   * liveness conditions so a reject can be classified (expired/revoked rows
-   * still name their owner); acceptance is exactly isTokenLive for both.
-   * See bearer-auth.ts.
+   * Validate a Bearer: an OAuth access token, the only credential (SCRUM-451).
+   * The row is fetched without liveness conditions so a reject can be
+   * classified (expired/revoked rows still name their owner); acceptance is
+   * exactly isTokenLive. See bearer-auth.ts.
    */
   const validateBearer = (rawToken: string) => resolveBearer(db, rawToken);
 
@@ -351,12 +350,7 @@ async function main() {
           void trackMcpSessionInitialized(db, auth.userId, {
             clientName: clientInfo.name,
             clientVersion: clientInfo.version,
-            authKind: auth.authKind,
           });
-          // A key's last use is its session opening, not every request:
-          // one write per handshake, and the dashboard's "last used" column
-          // is about whether the credential is alive, not how busy.
-          if (auth.authKind === "api_key") void touchApiKey(db, auth.keyId);
         },
       });
 

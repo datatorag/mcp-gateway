@@ -8,7 +8,7 @@ import {
   oauthAccessTokens,
   oauthRefreshTokens,
 } from "@datatorag-mcp/db";
-import { hashApiKey, safeStringEqual } from "@datatorag-mcp/auth";
+import { hashToken, safeStringEqual } from "@datatorag-mcp/auth";
 import { getPosthog } from "../../lib/posthog-server";
 import { EVENTS } from "../../lib/analytics";
 import { resolveUserEmail, identityProps } from "../user-email";
@@ -126,7 +126,7 @@ export function createTokenRouter(db: Database): Router {
 
     const accessToken = randomBytes(32).toString("base64url");
     const refreshToken = randomBytes(32).toString("base64url");
-    const refreshTokenHash = hashApiKey(refreshToken);
+    const refreshTokenHash = hashToken(refreshToken);
     const now = Date.now();
     const familyId = randomUUID();
 
@@ -175,7 +175,7 @@ async function handleRefreshGrant(
     return;
   }
 
-  const hash = hashApiKey(refresh_token);
+  const hash = hashToken(refresh_token);
 
   try {
     const result: RefreshResult = await db.transaction(async (tx) => {
@@ -223,7 +223,7 @@ async function handleRefreshGrant(
       const [inserted] = await tx
         .insert(oauthRefreshTokens)
         .values({
-          tokenHash: hashApiKey(newRefreshToken),
+          tokenHash: hashToken(newRefreshToken),
           clientId: row.clientId,
           userId: row.userId,
           scope: row.scope,
