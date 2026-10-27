@@ -575,7 +575,7 @@ export default async function HomePage() {
                 <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
                   We handle deployment and ops for the model of your choice:
                   GLM, Gemma, DeepSeek, Qwen, and other families. Connect it to
-                  your MCP gateway or access it with API Keys.
+                  your MCP gateway.
                 </p>
               </div>
               <div className="rounded-2xl border border-border bg-background p-6">

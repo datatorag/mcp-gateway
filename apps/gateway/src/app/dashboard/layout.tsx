@@ -10,7 +10,6 @@ import {
   BookOpen,
   CreditCard,
   Cable,
-  KeyRound,
   MessageSquare,
   PanelLeftClose,
   PanelLeftOpen,
@@ -42,9 +41,6 @@ const navItems: Array<{ href: string; label: string; icon: LucideIcon }> = [
   { href: "/dashboard/usage", label: "Usage", icon: BarChart3 },
   { href: "/dashboard/billing", label: "Billing", icon: CreditCard },
   { href: "/dashboard/mcp-config", label: "MCP config", icon: Plug },
-  // API keys (SCRUM-245): the machine credential, next to the config a
-  // machine client pastes it into.
-  { href: "/dashboard/api-keys", label: "API keys", icon: KeyRound },
   { href: "/docs", label: "Docs", icon: BookOpen },
 ];
 

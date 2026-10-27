@@ -17,7 +17,7 @@ export default function PrivacyPage() {
         <h1 className="font-display text-3xl font-bold tracking-tight sm:text-4xl">
           Privacy Policy
         </h1>
-        <p className="mt-2 text-sm text-gray-500">Last updated: October 11, 2026</p>
+        <p className="mt-2 text-sm text-gray-500">Last updated: October 26, 2026</p>
 
         <section className="mt-10 space-y-6 text-[15px] leading-relaxed">
           <h2 className="text-xl font-semibold">1. Information We Collect</h2>
@@ -62,9 +62,8 @@ export default function PrivacyPage() {
           <h2 className="text-xl font-semibold">2. How We Use Your Information</h2>
           <p>
             To authenticate you and manage your account; to execute tool calls on your behalf using
-            the services you have connected; to generate and manage API keys you create; to operate
-            and improve the product, including diagnosing failures; to send transactional email
-            about your account.
+            the services you have connected; to operate and improve the product, including
+            diagnosing failures; to send transactional email about your account.
           </p>
           <p>
             We do not sell your personal information, and we do not use your conversations or your

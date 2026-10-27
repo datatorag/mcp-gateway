@@ -47,7 +47,7 @@ claude mcp add --transport http datatorag https://datatorag.com/mcp
 
 **ChatGPT.** Settings, then Connectors, enable Developer mode, then Create, and paste the URL.
 
-The [getting started guide](https://datatorag.com/docs/getting-started) has screenshots of each step. Scripts and agents can use an API key from the dashboard instead of signing in.
+The [getting started guide](https://datatorag.com/docs/getting-started) has screenshots of each step. Every client connects with OAuth.
 
 ## Screenshots
 
@@ -101,7 +101,7 @@ The three connectors live in this repository under `plugins/` and ship inside th
 
 In text:
 
-1. **Client.** Any MCP client sends Streamable HTTP to `POST /mcp` with a bearer token: an OAuth access token from the gateway's own authorization server, or an API key.
+1. **Client.** Any MCP client sends Streamable HTTP to `POST /mcp` with a bearer token: an OAuth access token from the gateway's own authorization server, the only credential it accepts.
 2. **Gateway** (`apps/gateway`, one Node.js process: Express plus Next.js). It authenticates the bearer, opens or reuses the session, and answers `tools/list` from the `tools` table in Postgres, filtered to the services the user has connected. A `tools/call` is split on `__` into the plugin and the tool, the user's token for that service is resolved (and refreshed if expired), and the call is forwarded to the plugin. Every call is metered. The same process serves the dashboard and its agent, the docs, the changelog and the status page.
 3. **Built-ins.** `list_connected_accounts`, `skills_*`, `file_upload_link` and `file_download_link` are answered by the gateway itself, with no plugin and no registry row.
 4. **Plugins.** Each connector is an MCP server under `plugins/`. The gateway starts each one as a child process under its own non-root account, with an environment of `PATH`, `NODE_ENV` and `PORT` only, and passes the user's token on each call in the `X-User-Token` header. A crashing plugin is restarted up to three times a minute, and `/health` reports each plugin as up or down.
@@ -132,7 +132,7 @@ The gateway listens on `http://localhost:8285` (set by `GATEWAY_PORT`):
 | Path | What it is |
 |---|---|
 | `/mcp` | The MCP endpoint |
-| `/dashboard` | Sign in, connect accounts, the agent, API keys |
+| `/dashboard` | Sign in, connect accounts, the agent |
 | `/docs/getting-started` | The docs |
 | `/health` | Liveness, and each plugin's state |
 | `/.well-known/oauth-authorization-server` | OAuth metadata for MCP clients |
@@ -172,7 +172,7 @@ apps/gateway/          The product: MCP gateway, OAuth server, dashboard, site
 packages/
   config/              Environment schema (zod)
   db/                  Drizzle schema and migrations
-  auth/                API key hashing and constant-time compares
+  auth/                Token hashing and constant-time compares
   types/               Shared types, including the plugin manifest
 plugins/
   gws-mcp/             Google Workspace connector

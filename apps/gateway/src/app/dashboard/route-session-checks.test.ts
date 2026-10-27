@@ -35,6 +35,8 @@ const DASHBOARD_DIR = join(import.meta.dirname, ".");
 const EXEMPT: Record<string, string> = {
   "connections/page.tsx":
     "Body is a bare redirect to /dashboard, which checks. No render path, no data access.",
+  "api-keys/page.tsx":
+    "API keys were removed (SCRUM-451). Body is a bare redirect to /dashboard, which checks. No render path, no data access.",
 };
 
 /** Source with comments removed.

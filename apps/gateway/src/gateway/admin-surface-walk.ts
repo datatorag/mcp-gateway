@@ -156,7 +156,7 @@ export function checkAdminPages(adminDir: string): GuardViolation[] {
  * The delegate form is not a convenience: `withAdminRoute` takes its route
  * context optionally so that param-less routes typecheck, and Next's route
  * validator rejects that shape on a dynamic segment. So a `[id]` route has
- * to re-export with the context required, exactly as `/api/keys/[id]` does.
+ * to re-export with the context required, as `/api/admin/tests/runs/[id]` does.
  *
  * The delegation is followed rather than waved through: the local name the
  * export forwards to must itself be assigned from `withAdminRoute(`, so an

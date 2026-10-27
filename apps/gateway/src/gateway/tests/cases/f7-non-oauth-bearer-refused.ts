@@ -1,17 +1,20 @@
 import type { TestCase } from "../types";
 
 /**
- * F7 (Gateway scenario): a fabricated API key is refused, diagnosably.
+ * F7 (Gateway scenario): a bearer that is not an OAuth access token is
+ * refused, diagnosably. The value sent is in the format API keys had, before
+ * they were removed (SCRUM-451): OAuth is the only way in, so a key, real or
+ * made up, is an unknown token.
  *
- * Two failures, not one: a made-up key being ACCEPTED means the credential
- * path is open, and a bare 401 with nothing to act on means a client with a
- * rotated key retries silently instead of prompting for re-auth.
+ * Two failures, not one: such a bearer being ACCEPTED means a second way in
+ * is open, and a bare 401 with nothing to act on means a client retries
+ * silently instead of prompting for re-auth.
  *
- * The positive half, a real key being accepted, is the door case R1.
+ * The positive half, an OAuth token being accepted, is the door case R1.
  */
-export const f7ApiKeyRefused: TestCase = {
+export const f7NonOauthBearerRefused: TestCase = {
   id: "F7",
-  title: "a fabricated API key is refused with a usable challenge",
+  title: "a bearer that is not an OAuth access token is refused with a usable challenge",
   covers: [],
   accounts: [],
   run: async (ctx) => {
@@ -31,8 +34,8 @@ export const f7ApiKeyRefused: TestCase = {
       },
       body: initialize,
     });
-    ctx.evidence(`forged key: ${forged.status}, WWW-Authenticate ${forged.headers.get("www-authenticate") ?? "absent"}`);
-    if (forged.status !== 401) throw new Error(`a fabricated key was answered ${forged.status}, not 401`);
+    ctx.evidence(`old-format key: ${forged.status}, WWW-Authenticate ${forged.headers.get("www-authenticate") ?? "absent"}`);
+    if (forged.status !== 401) throw new Error(`a bearer in the old key format was answered ${forged.status}, not 401`);
 
     const challenge = forged.headers.get("www-authenticate") ?? "";
     if (!/^Bearer/i.test(challenge)) throw new Error("the 401 carries no Bearer challenge");
@@ -40,7 +43,7 @@ export const f7ApiKeyRefused: TestCase = {
       throw new Error("the challenge names no resource_metadata, so a client cannot find where to re-auth");
     }
     if (!/invalid_token/.test(challenge)) {
-      throw new Error("the challenge does not say invalid_token, so a client cannot tell a bad key from a missing one");
+      throw new Error("the challenge does not say invalid_token, so a client cannot tell a bad token from a missing one");
     }
 
     const anonymous = await ctx.http("/mcp", {
@@ -50,7 +53,7 @@ export const f7ApiKeyRefused: TestCase = {
     });
     ctx.evidence(`control, no Authorization header: ${anonymous.status}`);
     if (anonymous.status !== 401) {
-      throw new Error(`the unauthenticated control answered ${anonymous.status}, so the 401 above is not about the key`);
+      throw new Error(`the unauthenticated control answered ${anonymous.status}, so the 401 above is not about the bearer`);
     }
   },
 };

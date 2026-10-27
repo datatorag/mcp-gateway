@@ -50,7 +50,7 @@ import { e14SignatureSuppressed } from "./e14-signature-suppressed";
 import { e15DraftSignature } from "./e15-draft-signature";
 import { f1ApprovalBoundary } from "./f1-approval-boundary";
 import { f2UnapprovedScopes } from "./f2-unapproved-scopes";
-import { f7ApiKeyRefused } from "./f7-api-key-refused";
+import { f7NonOauthBearerRefused } from "./f7-non-oauth-bearer-refused";
 import { g1ErrorShape } from "./g1-error-shape";
 import { g2ArgumentRefusal } from "./g2-argument-refusal";
 import { gw1ConnectedAccounts } from "./gw1-connected-accounts";
@@ -227,7 +227,7 @@ export const CASES: TestCase[] = [
   e15DraftSignature,
   f1ApprovalBoundary,
   f2UnapprovedScopes,
-  f7ApiKeyRefused,
+  f7NonOauthBearerRefused,
   g1ErrorShape,
   g2ArgumentRefusal,
   gw1ConnectedAccounts,

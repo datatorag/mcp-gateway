@@ -1,19 +1,13 @@
 import crypto from "node:crypto";
-import { eq, isNull } from "drizzle-orm";
-import { LRUCache } from "lru-cache";
-import type { Database } from "@datatorag-mcp/db";
-import { apiKeys } from "@datatorag-mcp/db";
 
-const API_KEY_PREFIX = "sk-dtrmcp_";
-
-export interface ApiKeyValidationResult {
-  valid: boolean;
-  userId?: string;
-  apiKeyId?: string;
-}
-
-export function hashApiKey(rawKey: string): string {
-  return crypto.createHash("sha256").update(rawKey).digest("hex");
+/**
+ * SHA-256 of a secret, as hex: how the gateway stores a token it must be able
+ * to recognise but never needs to read back (refresh tokens today). Renamed
+ * from `hashApiKey` when API keys were removed (SCRUM-451); the value is the
+ * same.
+ */
+export function hashToken(raw: string): string {
+  return crypto.createHash("sha256").update(raw).digest("hex");
 }
 
 /**
@@ -27,75 +21,4 @@ export function safeStringEqual(a: string, b: string): boolean {
   const ha = crypto.createHash("sha256").update(a).digest();
   const hb = crypto.createHash("sha256").update(b).digest();
   return crypto.timingSafeEqual(ha, hb);
-}
-
-export function generateApiKey(): string {
-  const bytes = crypto.randomBytes(32);
-  return `${API_KEY_PREFIX}${bytes.toString("base64url")}`;
-}
-
-export function getKeyPrefix(rawKey: string): string {
-  return rawKey.slice(0, API_KEY_PREFIX.length + 4);
-}
-
-export class ApiKeyValidator {
-  private cache: LRUCache<string, ApiKeyValidationResult>;
-
-  constructor(private db: Database) {
-    this.cache = new LRUCache<string, ApiKeyValidationResult>({
-      max: 10_000,
-      ttl: 60_000, // 60 seconds
-    });
-  }
-
-  async validate(rawKey: string): Promise<ApiKeyValidationResult> {
-    if (!rawKey.startsWith(API_KEY_PREFIX)) {
-      return { valid: false };
-    }
-
-    const keyHash = hashApiKey(rawKey);
-    const cached = this.cache.get(keyHash);
-    if (cached) return cached;
-
-    const [row] = await this.db
-      .select({
-        id: apiKeys.id,
-        userId: apiKeys.userId,
-        revokedAt: apiKeys.revokedAt,
-        expiresAt: apiKeys.expiresAt,
-      })
-      .from(apiKeys)
-      .where(eq(apiKeys.keyHash, keyHash))
-      .limit(1);
-
-    if (!row) {
-      const result: ApiKeyValidationResult = { valid: false };
-      this.cache.set(keyHash, result);
-      return result;
-    }
-
-    if (row.revokedAt) {
-      const result: ApiKeyValidationResult = { valid: false };
-      this.cache.set(keyHash, result);
-      return result;
-    }
-
-    if (row.expiresAt && row.expiresAt < new Date()) {
-      const result: ApiKeyValidationResult = { valid: false };
-      this.cache.set(keyHash, result);
-      return result;
-    }
-
-    const result: ApiKeyValidationResult = {
-      valid: true,
-      userId: row.userId,
-      apiKeyId: row.id,
-    };
-    this.cache.set(keyHash, result);
-    return result;
-  }
-
-  invalidateCache(keyHash: string): void {
-    this.cache.delete(keyHash);
-  }
 }

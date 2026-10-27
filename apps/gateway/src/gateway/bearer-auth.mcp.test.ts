@@ -1,9 +1,9 @@
 /**
- * A key authenticates a tools/list and a tool call (SCRUM-245).
+ * An OAuth bearer authenticates a tools/list and a tool call.
  *
- * The identity a key resolves to is handed to the same MCP server every
- * OAuth session gets, and the server is driven through a real client pair,
- * so what is asserted is what a connected machine client sees.
+ * The identity the bearer resolves to is handed to the MCP server and driven
+ * through a real client pair, so what is asserted is what a connected client
+ * sees, attributed to the token's own client id.
  */
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -42,7 +42,7 @@ vi.mock("./billing/enforce", () => ({
 }));
 
 import { createMcpServer } from "./mcp-server";
-import { resolveBearer, API_KEY_CLIENT_ID } from "./bearer-auth";
+import { resolveBearer } from "./bearer-auth";
 import type { ConnectionPool } from "./pool";
 
 const selectResults: unknown[][] = [];
@@ -59,10 +59,10 @@ beforeEach(() => {
   trackToolCall.mockClear();
 });
 
-describe("a key on /mcp (SCRUM-245)", () => {
-  it("lists tools and calls one, and the call attributes to the key's client id", async () => {
-    selectResults.push([{ id: "key-1", userId: "user-1", revokedAt: null, expiresAt: null }]);
-    const auth = await resolveBearer(db, "sk-dtrmcp_abcdefghijklmnopqrstuvwxyz0123456789ABCDEF");
+describe("an OAuth token on /mcp", () => {
+  it("lists tools and calls one, and the call attributes to the token's client id", async () => {
+    selectResults.push([{ userId: "user-1", clientId: "client-xyz", revokedAt: null, expiresAt: null }]);
+    const auth = await resolveBearer(db, "opaque-oauth-access-token");
     expect(auth.ok).toBe(true);
     if (!auth.ok) return;
 
@@ -79,7 +79,7 @@ describe("a key on /mcp (SCRUM-245)", () => {
     expect(JSON.stringify(result)).toContain("hi");
     expect(trackToolCall).toHaveBeenCalledTimes(1);
     const [, props] = trackToolCall.mock.calls[0] as [unknown, Record<string, unknown>];
-    expect(props.clientId).toBe(API_KEY_CLIENT_ID);
+    expect(props.clientId).toBe("client-xyz");
     expect(props.clientName).toBe("machine-client");
   });
 });
