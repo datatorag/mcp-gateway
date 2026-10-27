@@ -15,6 +15,7 @@ import { getEnv } from "@datatorag-mcp/config";
 import { buildIntrospectionTools } from "@/mastra/tools/introspection";
 import { launchedServiceIds } from "@/gateway/service-launch";
 import { skillRunApproval } from "./skill-run-gate";
+import { skillRunIntrospection, skillRunTools } from "./skill-run-tools";
 
 /**
  * The dashboard agent's connection to the gateway's own MCP (SCRUM-188).
@@ -195,22 +196,18 @@ export function applyPromptCacheBreakpoint(tools: ToolsInput): ToolsInput {
  * inline reconnect control it can render); the gate policy is the server's
  * own, identical for every client.
  */
-/** The tools a skill run may see: the skill's own `tools` list (bare names
- * matched against the namespaced tools the user's services provide) plus the
- * MCP server's built-ins. A slug that names no skill the viewer can see
- * offers the built-ins alone; the run message already says what happened. */
+/** The tools a skill run may see (SCRUM-238, SCRUM-376): the connector
+ * tools its skill names, and the built-ins that declare a read for everyone.
+ * The rule is `skill-run-tools.ts`. A slug that names no skill the viewer can
+ * see offers the read-only built-ins alone; the run message already says
+ * what happened. */
 async function skillScopedTools(
   tools: McpToolDef[],
   slug: string,
   userId: string
 ): Promise<McpToolDef[]> {
   const skill = await getSkillBySlug(slug, userId);
-  const named = new Set(skill?.tools ?? []);
-  return tools.filter((t) => {
-    const sep = t.name.indexOf(NAMESPACE_SEPARATOR);
-    if (sep === -1) return true; // a gateway built-in
-    return named.has(t.name.slice(sep + NAMESPACE_SEPARATOR.length));
-  });
+  return skillRunTools(tools, new Set(skill?.tools ?? []));
 }
 
 export async function resolveUserPluginTools({
@@ -245,10 +242,11 @@ export async function resolveUserPluginTools({
   ]);
 
   const { tools } = await client.listTools();
-  // SCRUM-238: a skill run sees the tools its skill names plus the gateway's
-  // built-ins, nothing else. The built-ins are the fixed set the MCP server
-  // registers (no namespace in the name), never something a skill can widen:
-  // a skill that needs a tool names it, and gws_run only when named.
+  // SCRUM-238 and SCRUM-376: a skill run sees the tools its skill names and
+  // the built-ins that declare a read for everyone, nothing else. Neither is
+  // something a skill can widen: a skill that needs a connector tool names
+  // it (gws_run only when named), and no skill can name its way to a write
+  // or admin built-in.
   const offered = skillRun
     ? await skillScopedTools(tools as McpToolDef[], skillSlug, userId)
     : (tools as McpToolDef[]);
@@ -265,9 +263,12 @@ export async function resolveUserPluginTools({
   // SCRUM-366: request_connection offers only services whose plugin has
   // launched.
   const launchedServices = await launchedServiceIds(db);
+  const introspection = buildIntrospectionTools({ db, userId, launchedServices });
   const handed = {
     ...wrapped,
-    ...buildIntrospectionTools({ db, userId, launchedServices }),
+    // A skill run gets only the introspection tools that declare no approval
+    // (SCRUM-376): never disconnect_service.
+    ...(skillRun ? skillRunIntrospection(introspection) : introspection),
   };
   if (skillRun) {
     // SCRUM-255: the number the skill filter exists to reduce, written where
