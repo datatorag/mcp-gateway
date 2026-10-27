@@ -2,11 +2,12 @@ import { randomBytes } from "node:crypto";
 import { Router } from "express";
 import { eq } from "drizzle-orm";
 import type { Database } from "@datatorag-mcp/db";
-import { oauthClients, oauthAuthorizationCodes } from "@datatorag-mcp/db";
-import { hashToken, safeStringEqual } from "@datatorag-mcp/auth";
+import { oauthClients } from "@datatorag-mcp/db";
+import { safeStringEqual } from "@datatorag-mcp/auth";
 import { nonceMatches, OAUTH_STATE_TTL_MS } from "./csrf";
 import { findOrCreateGoogleUser, onNewUser } from "../signup";
-import { cleanClientName } from "../untrusted-text";
+import { cleanClientName, cleanRegisteredClientName } from "../untrusted-text";
+import { hasConsent, issueAuthorizationCode, startConsent } from "./consent";
 
 // A redirect_uri is valid only if it's one the client registered. Shared by
 // /authorize (up front) and /callback (re-checked, since `state` is user-supplied).
@@ -241,30 +242,28 @@ export function createAuthorizeRouter(
       });
     }
 
-    // Issue authorization code to the MCP client
-    const authCode = randomBytes(32).toString("base64url");
-    const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
-
-    await db.insert(oauthAuthorizationCodes).values({
-      code: authCode,
-      // SCRUM-443 release 1: the hash beside the raw value; the exchange still matches the raw value.
-      codeHash: hashToken(authCode),
+    // SCRUM-373: a client this user has approved before gets its code now;
+    // any other gets the consent page first, and the code only on Approve.
+    const flow = {
       clientId: params.client_id,
-      userId: user.id,
       redirectUri: params.redirect_uri,
       codeChallenge: params.code_challenge,
       codeChallengeMethod: params.code_challenge_method,
+      state: params.state ?? null,
       scope: params.scope ?? null,
-      expiresAt,
-    });
-
-    const redirectUrl = new URL(params.redirect_uri);
-    redirectUrl.searchParams.set("code", authCode);
-    if (params.state) {
-      redirectUrl.searchParams.set("state", params.state);
+    };
+    if (!(await hasConsent(db, user.id, params.client_id))) {
+      await startConsent(db, res, {
+        userId: user.id,
+        email: user.email,
+        // Cleaned again here: a registration from before SCRUM-373 was stored
+        // as sent.
+        clientName: cleanRegisteredClientName(client?.clientName),
+        flow,
+      });
+      return;
     }
-
-    res.redirect(redirectUrl.toString());
+    res.redirect(await issueAuthorizationCode(db, user.id, flow));
   });
 
   return router;

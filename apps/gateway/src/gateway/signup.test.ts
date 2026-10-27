@@ -13,7 +13,7 @@ import express from "express";
 import cookieParser from "cookie-parser";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Database } from "@datatorag-mcp/db";
-import { oauthAccessTokens, oauthAuthorizationCodes, oauthClients, users } from "@datatorag-mcp/db";
+import { oauthAccessTokens, oauthAuthorizationCodes, oauthClients, oauthConsents, users } from "@datatorag-mcp/db";
 import { hashToken } from "@datatorag-mcp/auth";
 
 vi.mock("./track", () => ({
@@ -57,7 +57,13 @@ const dbMock = {
     from: (table: unknown) => ({
       where: () => ({
         limit: async () =>
-          table === oauthClients ? [{ redirectUris: [REDIRECT], clientName }] : (userLookups.shift() ?? []),
+          table === oauthClients
+            ? [{ redirectUris: [REDIRECT], clientName }]
+            : // The client is already approved (SCRUM-373), so the callback
+              // issues its code and the signup path is what is under test.
+              table === oauthConsents
+              ? [{ id: "consent-1" }]
+              : (userLookups.shift() ?? []),
       }),
     }),
   }),

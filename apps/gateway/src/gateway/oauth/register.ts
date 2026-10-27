@@ -2,6 +2,8 @@ import { randomUUID } from "node:crypto";
 import { Router } from "express";
 import type { Database } from "@datatorag-mcp/db";
 import { oauthClients } from "@datatorag-mcp/db";
+import { checkRedirectUris } from "./redirect-uri-rules";
+import { cleanRegisteredClientName } from "../untrusted-text";
 
 /**
  * RFC 7591 — Dynamic Client Registration
@@ -18,17 +20,19 @@ export function createRegisterRouter(db: Database): Router {
       response_types = ["code"],
     } = req.body ?? {};
 
-    if (
-      !redirect_uris ||
-      !Array.isArray(redirect_uris) ||
-      redirect_uris.length === 0
-    ) {
+    // SCRUM-373: the code goes wherever the client registered, so what may
+    // be registered is the rule (redirect-uri-rules.ts). RFC 7591 names the
+    // error.
+    const checked = checkRedirectUris(redirect_uris);
+    if (!checked.ok) {
       res.status(400).json({
-        error: "invalid_client_metadata",
-        error_description: "redirect_uris is required",
+        error: "invalid_redirect_uri",
+        error_description: checked.description,
       });
       return;
     }
+    // Shown on the consent page, so stored cleaned and capped.
+    const clientName = cleanRegisteredClientName(client_name);
 
     const clientId = randomUUID();
 
@@ -40,8 +44,8 @@ export function createRegisterRouter(db: Database): Router {
 
     await db.insert(oauthClients).values({
       clientId,
-      redirectUris: redirect_uris,
-      clientName: client_name ?? null,
+      redirectUris: checked.uris,
+      clientName,
       grantTypes: grant_types,
       responseTypes: response_types,
       tokenEndpointAuthMethod,
@@ -49,8 +53,8 @@ export function createRegisterRouter(db: Database): Router {
 
     res.status(201).json({
       client_id: clientId,
-      redirect_uris,
-      client_name: client_name ?? null,
+      redirect_uris: checked.uris,
+      client_name: clientName,
       grant_types,
       response_types,
       token_endpoint_auth_method: tokenEndpointAuthMethod,

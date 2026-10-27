@@ -1,4 +1,4 @@
-import { pgTable, text, timestamp, uuid, jsonb, index } from "drizzle-orm/pg-core";
+import { pgTable, text, timestamp, uuid, jsonb, index, unique } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 import { users } from "./users";
 
@@ -89,3 +89,48 @@ export const oauthRefreshTokens = pgTable(
       .where(sql`revoked_at IS NULL`),
   ]
 );
+
+// Consent a user gave an MCP client (SCRUM-373), remembered per (user, client).
+// The first sign-in from a new registration shows the consent page; once
+// approved, that client is issued codes without it.
+export const oauthConsents = pgTable(
+  "oauth_consents",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    clientId: text("client_id").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [unique("oauth_consents_user_client_unique").on(table.userId, table.clientId)]
+);
+
+/** The validated authorization flow a consent page answers for. */
+export type PendingConsentFlow = {
+  clientId: string;
+  redirectUri: string;
+  codeChallenge: string;
+  codeChallengeMethod: string;
+  state: string | null;
+  scope: string | null;
+};
+
+// A consent page waiting for an answer (SCRUM-373). Bound to the browser by a
+// one-time nonce whose sha256 is stored here and whose raw value is in an
+// httpOnly cookie; one use, ten minutes.
+export const oauthPendingConsents = pgTable("oauth_pending_consents", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  nonceHash: text("nonce_hash").notNull(),
+  userId: uuid("user_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  flow: jsonb("flow").notNull().$type<PendingConsentFlow>(),
+  expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+  usedAt: timestamp("used_at", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+});
