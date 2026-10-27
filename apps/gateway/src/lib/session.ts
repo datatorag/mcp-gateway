@@ -1,28 +1,13 @@
 import { cookies } from "next/headers";
-import { eq, and } from "drizzle-orm";
 import { db } from "./db";
-import { oauthAccessTokens } from "@datatorag-mcp/db";
-import { liveTokenConditions } from "./token-liveness";
+import { liveWebSessionUserId } from "./web-session";
 
 /**
  * Get the authenticated user ID from the session cookie.
- * Returns null if not authenticated.
+ * Returns null if not authenticated: no cookie, or one that is not a live web
+ * session (see `liveWebSessionUserId`).
  */
 export async function getSessionUserId(): Promise<string | null> {
   const cookieStore = await cookies();
-  const sessionToken = cookieStore.get("dtrmcp_session")?.value;
-  if (!sessionToken) return null;
-
-  const [token] = await db
-    .select({ userId: oauthAccessTokens.userId })
-    .from(oauthAccessTokens)
-    .where(
-      and(
-        eq(oauthAccessTokens.token, sessionToken),
-        ...liveTokenConditions()
-      )
-    )
-    .limit(1);
-
-  return token?.userId ?? null;
+  return liveWebSessionUserId(db, cookieStore.get("dtrmcp_session")?.value);
 }

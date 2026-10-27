@@ -58,6 +58,15 @@ describe("OAuth is the only bearer (SCRUM-451)", () => {
     expect(selects).toBe(1);
   });
 
+  it("a live dashboard session presented as a bearer is refused as wrong_token_kind (SCRUM-374)", async () => {
+    selectResults.push([{ userId: "user-3", clientId: "web", ...LIVE }]);
+    expect(await resolveBearer(db, "a-web-session-token")).toEqual({
+      ok: false,
+      reason: "wrong_token_kind",
+      userId: "user-3",
+    });
+  });
+
   it("an unknown token is refused as invalid", async () => {
     expect(await resolveBearer(db, "never-issued")).toEqual({ ok: false, reason: "invalid", userId: null });
   });
