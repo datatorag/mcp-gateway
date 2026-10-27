@@ -1,5 +1,5 @@
 import { buildRequest, requestUrl, type BuiltRequest, supportsMediaDownload } from "./request.js";
-import { TransientGwsError, isTransient } from "./errors.js";
+import { GwsApiError, GwsUnreachableError, TransientGwsError, isTransient } from "./errors.js";
 import { MAX_ATTEMPTS, isRateLimited, retryClock, retryWaitMs } from "./rate-limit-retry.js";
 
 /** One default per call; media moves more bytes and gets longer (SCRUM-289). */
@@ -65,7 +65,7 @@ export interface ApiResult {
  * text and the reason to reword a missing-scope refusal, so the three fields
  * keep their names and their order. `reason` is Google's own, from whichever
  * of its two error formats the API answered in. */
-function apiErrorText(status: number, bodyText: string): string {
+function apiError(status: number, bodyText: string): { text: string; reason?: string } {
   let message = bodyText.trim();
   let reason: string | undefined;
   try {
@@ -87,7 +87,10 @@ function apiErrorText(status: number, bodyText: string): string {
     // Not JSON (an HTML error page from a proxy): the text itself is the message.
   }
   if (!message) message = `HTTP ${status} with an empty body`;
-  return `API error: ${JSON.stringify({ error: { code: status, message, ...(reason ? { reason } : {}) } })}`;
+  return {
+    text: `API error: ${JSON.stringify({ error: { code: status, message, ...(reason ? { reason } : {}) } })}`,
+    reason,
+  };
 }
 
 /** What a caller reads when Google answers 401. */
@@ -106,11 +109,14 @@ function throwApiError(status: number, bodyText: string): never {
     // accounts are connected and what each granted, and the page that
     // reconnects one. It used to name `gws_auth_setup`, a tool that could
     // only answer that it could not log in (removed, SCRUM-412).
-    throw new Error(AUTH_REQUIRED);
+    throw new GwsApiError(AUTH_REQUIRED, status);
   }
-  const text = apiErrorText(status, bodyText);
-  if (TRANSIENT_STATUS.has(status) || isTransient(text)) throw new TransientGwsError(text);
-  throw new Error(text);
+  const { text, reason } = apiError(status, bodyText);
+  // The words are read only where Google can mean a transient failure: a
+  // 400's message can quote the caller's own input, "503" included.
+  const mayBeTransient = status >= 500 || status === 403 || status === 429;
+  if (TRANSIENT_STATUS.has(status) || (mayBeTransient && isTransient(text))) throw new TransientGwsError(text, status);
+  throw new GwsApiError(text, status, reason);
 }
 
 /** A failure of the path to Google, reworded so it cannot carry the request.
@@ -129,7 +135,7 @@ function throwNetworkError(err: unknown, label: string): never {
   const raw = e?.cause?.code ?? e?.code ?? e?.name;
   const code = typeof raw === "string" && /^[A-Z][A-Za-z0-9_]{0,40}$/.test(raw) ? raw : "network error";
   const text = `${label} could not reach Google: ${code}`;
-  throw isTransient(text) ? new TransientGwsError(text) : new Error(text);
+  throw isTransient(text) ? new TransientGwsError(text) : new GwsUnreachableError(text);
 }
 
 /** Where the bearer token may travel. Every table entry is rooted at one of

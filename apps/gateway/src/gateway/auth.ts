@@ -4,11 +4,7 @@ import { eq, and, isNull } from "drizzle-orm";
 import type { Database } from "@datatorag-mcp/db";
 import { oauthAccessTokens, users } from "@datatorag-mcp/db";
 import { nonceMatches, OAUTH_STATE_TTL_MS } from "./oauth/csrf";
-import {
-  persistAcquisition,
-  stashAttribution,
-  takeAttribution,
-} from "./attribution";
+import { stashAttribution, takeAttribution } from "./attribution";
 import { connectedElsewhere, upsertServiceAccount } from "./connected-accounts";
 import { renderConnectDuplicate, type DuplicateProvider } from "./connect-duplicate";
 import { PROVIDERS } from "../lib/analytics";
@@ -17,10 +13,8 @@ import {
   trackConnectRefused,
   trackLogin,
   trackOAuthCompleted,
-  trackSignup,
 } from "./track";
-import { sendWelcomeEmail } from "./lifecycle";
-import { notifySignup } from "./signup-alert";
+import { findOrCreateGoogleUser, onNewUser } from "./signup";
 import { skillSlugFromPath } from "../lib/skills";
 import { parseAttribution, toWireParams } from "../lib/attribution";
 import {
@@ -453,47 +447,13 @@ export function createAuthRouter(
       picture?: string;
     };
 
-    let [user] = await db
-      .select()
-      .from(users)
-      .where(eq(users.email, googleUser.email))
-      .limit(1);
-
-    let isNewUser = false;
-    if (!user) {
-      [user] = await db
-        .insert(users)
-        .values({
-          email: googleUser.email,
-          name: googleUser.name ?? null,
-          emailVerified: true,
-          avatarUrl: googleUser.picture ?? null,
-        })
-        .returning();
-      isNewUser = true;
-    }
+    const { user, isNewUser } = await findOrCreateGoogleUser(db, googleUser);
 
     if (isNewUser) {
-      // Durable copy first: a session id joins only while the analytics
-      // session row survives its retention window, a column on the user does
-      // not expire.
-      await persistAcquisition(db, user.id, attribution);
-      // SCRUM-223: the campaign funnel's slug rides on the login event,
-      // parsed from the same parked `next` the redirect below redeems.
-      trackSignup(user.id, user.email, user.name, attribution, {
+      await onNewUser(db, user, {
+        entry: "dashboard",
+        attribution,
         skill: skillSlugFromPath(requestedPath),
-      });
-      void sendWelcomeEmail({
-        email: user.email,
-        name: user.name,
-        createdAt: user.createdAt,
-        plan: user.plan,
-      });
-      void notifySignup(db, {
-        id: user.id,
-        email: user.email,
-        name: user.name,
-        createdAt: user.createdAt,
       });
     } else {
       trackLogin(user.id, user.email, attribution, {

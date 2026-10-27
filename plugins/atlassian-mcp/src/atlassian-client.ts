@@ -19,7 +19,7 @@ export interface AtlassianClientOptions {
   accessToken?: string;
 }
 
-/** A Jira call that was answered, and answered no. Kept apart from a plain
+/** An Atlassian call that was answered, and answered no. Kept apart from a plain
  * Error so a caller can tell a refusal (the status is known) from a request
  * that never completed (nothing is known). */
 export class AtlassianHttpError extends Error {
@@ -100,8 +100,9 @@ export class AtlassianClient {
     );
 
     if (!res.ok) {
-      throw new Error(
-        `Failed to resolve Atlassian cloud ID: ${res.status} ${res.statusText}`
+      throw new AtlassianHttpError(
+        `Failed to resolve Atlassian cloud ID: ${res.status} ${res.statusText}`,
+        res.status
       );
     }
 
@@ -164,7 +165,7 @@ export class AtlassianClient {
     const res = await fetch(url, { headers: this.headers() });
     if (!res.ok) {
       const body = await res.text();
-      throw new Error(`Jira GET ${path} failed (${res.status}): ${body}`);
+      throw new AtlassianHttpError(`Jira GET ${path} failed (${res.status}): ${body}`, res.status);
     }
     return res.json();
   }
@@ -179,7 +180,7 @@ export class AtlassianClient {
     });
     if (!res.ok) {
       const text = await res.text();
-      throw new Error(`Jira POST ${path} failed (${res.status}): ${text}`);
+      throw new AtlassianHttpError(`Jira POST ${path} failed (${res.status}): ${text}`, res.status);
     }
     return successBody(res);
   }
@@ -231,7 +232,7 @@ export class AtlassianClient {
     });
     if (!res.ok) {
       const text = await res.text();
-      throw new Error(`Jira PUT ${path} failed (${res.status}): ${text}`);
+      throw new AtlassianHttpError(`Jira PUT ${path} failed (${res.status}): ${text}`, res.status);
     }
     return successBody(res);
   }
@@ -245,7 +246,7 @@ export class AtlassianClient {
     });
     if (!res.ok) {
       const text = await res.text();
-      throw new Error(`Jira DELETE ${path} failed (${res.status}): ${text}`);
+      throw new AtlassianHttpError(`Jira DELETE ${path} failed (${res.status}): ${text}`, res.status);
     }
   }
 
@@ -257,8 +258,9 @@ export class AtlassianClient {
     const res = await fetch(url, { headers: this.headers() });
     if (!res.ok) {
       const body = await res.text();
-      throw new Error(
-        `Confluence v2 GET ${path} failed (${res.status}): ${body}`
+      throw new AtlassianHttpError(
+        `Confluence v2 GET ${path} failed (${res.status}): ${body}`,
+        res.status
       );
     }
     return res.json();
@@ -274,8 +276,9 @@ export class AtlassianClient {
     });
     if (!res.ok) {
       const text = await res.text();
-      throw new Error(
-        `Confluence v2 POST ${path} failed (${res.status}): ${text}`
+      throw new AtlassianHttpError(
+        `Confluence v2 POST ${path} failed (${res.status}): ${text}`,
+        res.status
       );
     }
     return successBody(res);
@@ -291,8 +294,9 @@ export class AtlassianClient {
     });
     if (!res.ok) {
       const text = await res.text();
-      throw new Error(
-        `Confluence v2 PUT ${path} failed (${res.status}): ${text}`
+      throw new AtlassianHttpError(
+        `Confluence v2 PUT ${path} failed (${res.status}): ${text}`,
+        res.status
       );
     }
     return successBody(res);
@@ -307,8 +311,9 @@ export class AtlassianClient {
     });
     if (!res.ok) {
       const text = await res.text();
-      throw new Error(
-        `Confluence v2 DELETE ${path} failed (${res.status}): ${text}`
+      throw new AtlassianHttpError(
+        `Confluence v2 DELETE ${path} failed (${res.status}): ${text}`,
+        res.status
       );
     }
   }
@@ -341,8 +346,9 @@ export class AtlassianClient {
     const res = await fetch(url, { headers: this.headers() });
     if (!res.ok) {
       const body = await res.text();
-      throw new Error(
-        `Confluence v1 GET ${path} failed (${res.status}): ${body}`
+      throw new AtlassianHttpError(
+        `Confluence v1 GET ${path} failed (${res.status}): ${body}`,
+        res.status
       );
     }
     return res.json();
