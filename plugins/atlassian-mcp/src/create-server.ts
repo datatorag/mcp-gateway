@@ -5,6 +5,7 @@ import {
 } from "@modelcontextprotocol/sdk/types.js";
 import { AtlassianClient } from "./atlassian-client.js";
 import { allTools, toolHandlers } from "./tools/index.js";
+import { errorMetaField, errorMetaFor } from "./error-meta.js";
 
 export const atlassianClient = new AtlassianClient();
 
@@ -33,6 +34,7 @@ export function createMcpServer(client?: AtlassianClient): Server {
         return {
           content: [{ type: "text" as const, text: `Unknown tool: ${name}` }],
           isError: true,
+          _meta: errorMetaField({ kind: "unknown_tool" }),
         };
       }
       return await handler(
@@ -45,6 +47,7 @@ export function createMcpServer(client?: AtlassianClient): Server {
       return {
         content: [{ type: "text" as const, text: `Error: ${message}` }],
         isError: true,
+        _meta: errorMetaField(errorMetaFor(err)),
       };
     }
   });
