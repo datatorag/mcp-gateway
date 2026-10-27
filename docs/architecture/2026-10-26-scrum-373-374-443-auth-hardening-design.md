@@ -1,7 +1,8 @@
 # Auth hardening: token kinds, hashed tokens, and a consent page (SCRUM-374, SCRUM-443, SCRUM-373)
 
-Status: spec, written from the code at `2c5be1b`. Nothing here is built. After review it is built
-as three pull requests, in this order: 374, then 443, then 373.
+Status: spec, written from the code at `2c5be1b`, with its three decisions ruled on 2026-10-26
+(the last section). Nothing here is built. It is built as three pull requests, in this order: 374,
+then 443, then 373, each on its own go.
 
 - **SCRUM-374.** A web session token and an MCP access token are told apart everywhere they are
   read, every connect callback checks that its session is live, and an API key can only be minted
@@ -92,7 +93,8 @@ lifetime would revoke them at every logout and every 24-hour expiry, which is no
 for. So minting requires a **recent sign-in** instead: `POST /api/keys` checks that the web
 session's `created_at` is within the last 10 minutes; otherwise it answers 403 with
 `reauth_required`, and the API keys page sends the user through sign-in with `next` back to the
-page, after which the mint succeeds. Listing and revoking keys are unchanged.
+page, after which the mint succeeds. A key minted this way lives on after the session that minted
+it ends, by logout or by expiry. Listing and revoking keys are unchanged.
 
 ### Tests (374)
 
@@ -179,7 +181,7 @@ characters and cleaned of control characters, because the consent page shows it.
 | Claude (web and Desktop) | `https://claude.ai/...` | yes |
 | Claude Code | `http://localhost:<port>/...` | yes |
 | Cursor | `https://www.cursor.com/...` and `http://localhost:<port>/...` | yes |
-| Codex | its documented OAuth flow uses a loopback callback, which passes; a custom scheme would not | to verify before 373 ships |
+| Codex | its documented OAuth flow uses a loopback callback, which passes; a custom scheme would not | expected yes; fixed forward if not |
 
 Existing registrations are not re-validated: the rule applies at registration.
 
@@ -249,14 +251,13 @@ remembered for that app. No mention of the reason.
 - Confidential clients or client secrets.
 - Any change to refresh tokens or API keys beyond the recent-sign-in rule for minting.
 
-## Decisions to rule on
+## Decisions (ruled 2026-10-26)
 
-1. **API keys and sessions.** This spec requires a sign-in within 10 minutes to mint a key and
-   leaves existing keys alone. The alternative revokes a key when the session that minted it is
-   revoked, which also kills keys at every logout.
-2. **What consent is remembered against.** This spec keys it on `(user, client_id)`, as the
-   ticket says. Claude Code registers a new client per local callback port, so its users would see
-   the page again on each new registration. Keying on client name plus redirect host would ask
-   less often, but both are values the client asserts.
-3. **Codex.** Ship the scheme rule as written and fix forward if Codex turns out to register a
-   custom scheme, or verify Codex's registration first and hold 373 until then.
+1. **API keys and sessions.** Minting needs a sign-in within the last 10 minutes; a key lives on
+   after logout and after the minting session expires. Existing keys are left alone.
+2. **What consent is remembered against.** `(user, client_id)`, as the ticket says. Claude Code's
+   users see the page again for each new registration it makes; that is accepted over keying on
+   values the client asserts.
+3. **Codex.** The redirect rule ships as written: `https`, or `http` on a loopback host. If Codex
+   turns out to register a custom scheme, that is fixed forward after 373 ships; 373 is not held
+   for it.
