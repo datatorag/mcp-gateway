@@ -3,6 +3,7 @@ import type { RequestHandler } from "express";
 import type { Database } from "@datatorag-mcp/db";
 import { oauthAccessTokens } from "@datatorag-mcp/db";
 import { isTokenLive } from "@/lib/token-liveness";
+import { WEB_SESSION_CLIENT_ID } from "@/lib/web-session";
 import { classifyAuthFailure, type AuthFailureReason } from "./mcp-analytics";
 
 /**
@@ -36,6 +37,12 @@ export async function resolveBearer(db: Database, rawToken: string): Promise<Bea
     .from(oauthAccessTokens)
     .where(eq(oauthAccessTokens.token, rawToken))
     .limit(1);
+  // A dashboard session shares the table but is not a bearer (SCRUM-374): the
+  // cookie that carries it is httpOnly and same-site, and a bearer has neither
+  // protection, so a session token copied out of a browser does not open /mcp.
+  if (token?.clientId === WEB_SESSION_CLIENT_ID) {
+    return { ok: false, reason: "wrong_token_kind", userId: token.userId };
+  }
   if (token && isTokenLive(token)) {
     return { ok: true, userId: token.userId, clientId: token.clientId };
   }

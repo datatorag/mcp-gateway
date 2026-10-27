@@ -4,6 +4,7 @@ import { eq, and, isNull } from "drizzle-orm";
 import type { Database } from "@datatorag-mcp/db";
 import { oauthAccessTokens, users } from "@datatorag-mcp/db";
 import { nonceMatches, OAUTH_STATE_TTL_MS } from "./oauth/csrf";
+import { liveWebSessionUserId, WEB_SESSION_CLIENT_ID } from "../lib/web-session";
 import { stashAttribution, takeAttribution } from "./attribution";
 import { connectedElsewhere, upsertServiceAccount } from "./connected-accounts";
 import { renderConnectDuplicate, type DuplicateProvider } from "./connect-duplicate";
@@ -254,14 +255,8 @@ export function createAuthRouter(
       return;
     }
     const sessionToken = req.cookies?.dtrmcp_session;
-    const [session] = sessionToken
-      ? await db
-          .select({ userId: oauthAccessTokens.userId })
-          .from(oauthAccessTokens)
-          .where(and(eq(oauthAccessTokens.token, sessionToken), isNull(oauthAccessTokens.revokedAt)))
-          .limit(1)
-      : [];
-    if (!session?.userId) {
+    const sessionUserId = await liveWebSessionUserId(db, sessionToken);
+    if (!sessionUserId) {
       res.redirect(303, "/auth/login");
       return;
     }
@@ -271,7 +266,7 @@ export function createAuthRouter(
       return;
     }
     res.cookie(DUP_ACK_PENDING_COOKIE, provider, oneShot);
-    await trackConnectDuplicate(db, session.userId, provider, "connected_anyway");
+    await trackConnectDuplicate(db, sessionUserId, provider, "connected_anyway");
     const start = new URL(CONNECT_START[provider], "http://placeholder.invalid");
     const next = resolveNextPath(req.query.next);
     if (next) start.searchParams.set("next", next);
@@ -466,7 +461,7 @@ export function createAuthRouter(
 
     await db.insert(oauthAccessTokens).values({
       token,
-      clientId: "web",
+      clientId: WEB_SESSION_CLIENT_ID,
       userId: user.id,
       scope: null,
       expiresAt,
@@ -542,10 +537,10 @@ export function createAuthRouter(
 
   // --- Google Workspace connection (full scopes) ---
 
-  router.get("/auth/google/connect", (req, res) => {
-    // Require session cookie
-    const sessionToken = req.cookies?.dtrmcp_session;
-    if (!sessionToken) {
+  router.get("/auth/google/connect", async (req, res) => {
+    // Require a live web session (SCRUM-374): an expired or revoked one goes
+    // to sign in before the round trip to Google, not after it.
+    if (!(await liveWebSessionUserId(db, req.cookies?.dtrmcp_session))) {
       res.redirect("/auth/login");
       return;
     }
@@ -699,16 +694,14 @@ export function createAuthRouter(
     }
 
     // Resolve userId from session
-    const [session] = await db
-      .select({ userId: oauthAccessTokens.userId })
-      .from(oauthAccessTokens)
-      .where(eq(oauthAccessTokens.token, sessionToken))
-      .limit(1);
-
-    if (!session) {
+    // SCRUM-374: a live WEB session, not just any row: a revoked or expired
+    // session, or an MCP client's token set as the cookie, goes to sign in.
+    const sessionUserId = await liveWebSessionUserId(db, sessionToken);
+    if (!sessionUserId) {
       res.redirect("/auth/login");
       return;
     }
+    const session = { userId: sessionUserId };
 
     const tokenResponse = await fetch(
       "https://oauth2.googleapis.com/token",
@@ -924,9 +917,9 @@ export function createAuthRouter(
     "offline_access",
   ].join(" ");
 
-  router.get("/auth/atlassian/connect", (req, res) => {
-    const sessionToken = req.cookies?.dtrmcp_session;
-    if (!sessionToken) {
+  router.get("/auth/atlassian/connect", async (req, res) => {
+    // A live web session, as for Google (SCRUM-374).
+    if (!(await liveWebSessionUserId(db, req.cookies?.dtrmcp_session))) {
       res.redirect("/auth/login");
       return;
     }
@@ -993,16 +986,14 @@ export function createAuthRouter(
       return;
     }
 
-    const [session] = await db
-      .select({ userId: oauthAccessTokens.userId })
-      .from(oauthAccessTokens)
-      .where(eq(oauthAccessTokens.token, sessionToken))
-      .limit(1);
-
-    if (!session) {
+    // SCRUM-374: a live WEB session, not just any row: a revoked or expired
+    // session, or an MCP client's token set as the cookie, goes to sign in.
+    const sessionUserId = await liveWebSessionUserId(db, sessionToken);
+    if (!sessionUserId) {
       res.redirect("/auth/login");
       return;
     }
+    const session = { userId: sessionUserId };
 
     const tokenResponse = await fetch(
       "https://auth.atlassian.com/oauth/token",
@@ -1110,8 +1101,8 @@ export function createAuthRouter(
   // label; a second workspace under the same email is a second account.
 
   router.get("/auth/notion/connect", async (req, res) => {
-    const sessionToken = req.cookies?.dtrmcp_session;
-    if (!sessionToken) {
+    // A live web session, as for Google (SCRUM-374).
+    if (!(await liveWebSessionUserId(db, req.cookies?.dtrmcp_session))) {
       res.redirect("/auth/login");
       return;
     }
@@ -1185,16 +1176,14 @@ export function createAuthRouter(
       return;
     }
 
-    const [session] = await db
-      .select({ userId: oauthAccessTokens.userId })
-      .from(oauthAccessTokens)
-      .where(eq(oauthAccessTokens.token, sessionToken))
-      .limit(1);
-
-    if (!session) {
+    // SCRUM-374: a live WEB session, not just any row: a revoked or expired
+    // session, or an MCP client's token set as the cookie, goes to sign in.
+    const sessionUserId = await liveWebSessionUserId(db, sessionToken);
+    if (!sessionUserId) {
       res.redirect("/auth/login");
       return;
     }
+    const session = { userId: sessionUserId };
 
     let tokens: NotionTokenResponse | null = null;
     try {

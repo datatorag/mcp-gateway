@@ -23,7 +23,10 @@ export type AuthFailureReason =
   | "missing_credential" // no Bearer header at all
   | "invalid" // token string matches nothing we ever issued
   | "expired"
-  | "revoked";
+  | "revoked"
+  // a live dashboard session presented as a bearer (SCRUM-374): a real
+  // token, of the wrong kind, told apart from one we never issued
+  | "wrong_token_kind";
 
 /**
  * Classify why a bearer was rejected, from the token row fetched WITHOUT
