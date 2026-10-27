@@ -46,5 +46,10 @@ export async function runDailyRollup(
   await db.execute(
     sql`DELETE FROM usage_events WHERE created_at < now() - INTERVAL '90 days'`
   );
+  // SCRUM-164: session starts keep the same window as the calls they are
+  // compared with.
+  await db.execute(
+    sql`DELETE FROM mcp_session_starts WHERE started_at < now() - INTERVAL '90 days'`
+  );
   console.log(`[rollup] done`);
 }

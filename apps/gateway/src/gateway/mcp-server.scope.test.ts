@@ -443,3 +443,39 @@ describe("the plugin's statement of a failure reaches the classifier (SCRUM-154)
     expect(classified).toEqual({ status: "user_error", meter: true });
   });
 });
+
+/* SCRUM-190: a connected account whose refresh the provider refused is said
+ * to be exactly that, never "not connected", and nothing is dispatched. */
+describe("a refused refresh reaches the caller in true words (SCRUM-190)", () => {
+  it("a dead grant names the account and the reconnect page", async () => {
+    resolveServiceToken.mockResolvedValue({
+      refreshFailed: true,
+      service: "google-workspace",
+      accountEmail: "a@example.com",
+      reconnectNeeded: true,
+    });
+    const client = await connectedClient("https://gw.example.test");
+    const result = await client.callTool({ name: "gws-mcp__drive_search", arguments: { query: "q" } });
+    expect(result.isError).toBe(true);
+    expect(textOf(result)).toBe(
+      "Your Google Workspace account a@example.com needs reconnecting: Google Workspace no longer accepts the access it granted. Reconnect it at https://gw.example.test/dashboard/connections/google-workspace."
+    );
+    expect(textOf(result)).not.toContain("not connected");
+    expect(callPluginToolOnce).not.toHaveBeenCalled();
+  });
+
+  it("a transient failure says to try again", async () => {
+    resolveServiceToken.mockResolvedValue({
+      refreshFailed: true,
+      service: "google-workspace",
+      accountEmail: "a@example.com",
+      reconnectNeeded: false,
+    });
+    const client = await connectedClient("https://gw.example.test");
+    const result = await client.callTool({ name: "gws-mcp__drive_search", arguments: { query: "q" } });
+    expect(textOf(result)).toBe(
+      "Google Workspace did not respond to a token refresh just now. Try the call again in a moment."
+    );
+    expect(callPluginToolOnce).not.toHaveBeenCalled();
+  });
+});

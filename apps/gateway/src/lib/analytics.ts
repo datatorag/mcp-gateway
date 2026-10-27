@@ -104,6 +104,12 @@ export const EVENTS = {
   OAUTH_REFRESH_REPLAY: "oauth_refresh_replay",
   OAUTH_REFRESH_EXPIRED: "oauth_refresh_expired",
   OAUTH_TOKEN_REVOKED: "oauth_token_revoked",
+  /** SCRUM-190: a provider (Google, Atlassian, Notion) refused to refresh a
+   * connection's token. Not `oauth_refresh_expired`, which is our own grant
+   * to an MCP client. `service`, `reason` (a fixed code), `kind` (permanent
+   * or transient), `consecutive_permanent` and `reconnect_needed`; never the
+   * account email, a token or the provider's answer. */
+  SERVICE_REFRESH_FAILED: "service_refresh_failed",
   /** One agent turn. Emitted SERVER-SIDE, where the run id is minted, so it
    * can carry `run_id` and so it counts every run rather than only the ones
    * started from a particular button. */

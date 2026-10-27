@@ -35,6 +35,7 @@ import {
   trackMcpSessionInitialized,
   trackMcpAuthFailed,
 } from "./src/gateway/mcp-analytics";
+import { recordSessionStart } from "./src/gateway/session-starts";
 import cron from "node-cron";
 import { runDailyRollup } from "./src/gateway/usage/rollup";
 import { runDailyDigest } from "./src/gateway/digest";
@@ -351,6 +352,10 @@ async function main() {
             clientName: clientInfo.name,
             clientVersion: clientInfo.version,
           });
+          // SCRUM-164: the same start in Postgres, against the accounts the
+          // session would use, so a dead grant shows per connection. One
+          // statement, fire-and-forget like the capture above.
+          void recordSessionStart(db, auth.userId, clientInfo.name);
         },
       });
 

@@ -152,7 +152,7 @@ describe.skipIf(!isDockerAvailable())("SCRUM-366: refreshNotionToken", () => {
   it("rotates and persists the new pair before returning, with Basic auth and no invented expiry", async () => {
     const { connId, userId } = await connected();
     const token = await refreshNotionToken(db, { id: connId, userId }, "refresh-1");
-    expect(token).toBe("access-2");
+    expect(token).toEqual({ token: "access-2" });
     expect(await stored(connId)).toEqual({ access: "access-2", refresh: "refresh-2", expires: null });
     expect(notion.calls).toEqual([
       {
@@ -169,8 +169,8 @@ describe.skipIf(!isDockerAvailable())("SCRUM-366: refreshNotionToken", () => {
       refreshNotionToken(db, { id: connId, userId }, "refresh-1"),
     ]);
     expect(notion.calls).toHaveLength(1);
-    expect(first).toBe("access-2");
-    expect(second).toBe("access-2");
+    expect(first).toEqual({ token: "access-2" });
+    expect(second).toEqual({ token: "access-2" });
     expect(await stored(connId)).toMatchObject({ access: "access-2", refresh: "refresh-2" });
     // And the token both callers hold is the one Notion still honours.
     notion.useAccess("access-2");
@@ -182,7 +182,7 @@ describe.skipIf(!isDockerAvailable())("SCRUM-366: refreshNotionToken", () => {
     await refreshNotionToken(db, { id: connId, userId }, "refresh-1");
     notion.calls = [];
     const token = await refreshNotionToken(db, { id: connId, userId }, "refresh-1");
-    expect(token).toBe("access-2");
+    expect(token).toEqual({ token: "access-2" });
     expect(notion.calls).toHaveLength(0);
   });
 
@@ -216,18 +216,20 @@ describe.skipIf(!isDockerAvailable())("SCRUM-366: refreshNotionToken", () => {
 
     const token = await refreshNotionToken(db, { id: connId, userId }, "refresh-1");
     await rotation;
-    expect(token).toBe("access-reconnected");
+    expect(token).toEqual({ token: "access-reconnected" });
     expect(await stored(connId)).toMatchObject({
       access: "access-reconnected",
       refresh: "refresh-reconnected",
     });
   });
 
-  it("invalid_grant with nothing rotated is a dead grant: null, and the stored row is left as it was", async () => {
+  it("invalid_grant with nothing rotated is a dead grant: a permanent failure, and the stored row is left as it was", async () => {
     const { connId, userId } = await connected();
     notion.forceInvalidGrant = true;
+    // SCRUM-190: a dead grant is now a classified failure, recorded by the
+    // caller, rather than a bare null.
     const token = await refreshNotionToken(db, { id: connId, userId }, "refresh-1");
-    expect(token).toBeNull();
+    expect(token).toEqual({ failure: { kind: "permanent", reason: "invalid_grant" } });
     expect(await stored(connId)).toMatchObject({ access: "access-1", refresh: "refresh-1" });
   });
 

@@ -11,6 +11,9 @@ export type ConnectedAccountLine = {
    * workspace. Absent on accounts that have no workspace. */
   workspace?: string | null;
   workspace_id?: string;
+  /** Present, and true, only when the provider no longer accepts this
+   * account's access (SCRUM-190, `connectionDead`). */
+  needs_reconnect?: true;
   /** The Google services this account granted, by name; "not recorded" for
    * a grant stored before grants were recorded. Absent for a connector whose
    * consent has no per-service choice. */

@@ -5,6 +5,12 @@ import { revokeGoogleToken } from "@/lib/google-revoke";
 import { NOTION_REVOKE_URL, NOTION_TOKEN_URL, notionBasicAuth } from "./notion-oauth";
 import { cleanWorkspaceName } from "./untrusted-text";
 import { openToken, sealedColumns, TokenOpenError, type TokenRow } from "./token-crypto";
+import {
+  classifyRefreshFailure,
+  recordRefreshFailure,
+  refreshSucceededFields,
+  type RefreshFailure,
+} from "./refresh-failure";
 
 /** The row a refresh writes, and the user it belongs to: what each sealed
  * value it writes is bound to (SCRUM-442). */
@@ -30,6 +36,23 @@ function openPair(row: TokenRow, sealed: SealedPair): { accessToken: string | nu
   };
 }
 
+/** What a refresh comes back with (SCRUM-190): the new access token, or the
+ * provider's refusal classified. Null only when the deployment has no client
+ * credentials for the provider, which is a fault of ours and says nothing
+ * about the user's grant, so it records nothing on the row. */
+type RefreshOutcome = { token: string } | { failure: RefreshFailure } | null;
+
+/** A refused refresh's classification, from the answer's status and its
+ * OAuth `error` field alone. */
+async function refusedRefresh(res: Response): Promise<{ failure: RefreshFailure }> {
+  const body = (await res.json().catch(() => null)) as unknown;
+  return { failure: classifyRefreshFailure(res.status, body) };
+}
+
+/** A success that could not be read or written: transient, so the count is
+ * left alone and the next call tries again. */
+const UNEXPECTED: { failure: RefreshFailure } = { failure: { kind: "transient", reason: "unexpected" } };
+
 /** Mapping from plugin slug to the service connection it needs. */
 export const PLUGIN_SERVICE_MAP: Record<string, string> = {
   "gws-mcp": "google-workspace",
@@ -49,13 +72,14 @@ async function refreshGoogleToken(
   db: Database,
   conn: ConnectionRef,
   refreshToken: string
-): Promise<string | null> {
+): Promise<RefreshOutcome> {
   const clientId = process.env.GOOGLE_GWS_CLIENT_ID;
   const clientSecret = process.env.GOOGLE_GWS_CLIENT_SECRET;
   if (!clientId || !clientSecret) return null;
 
+  let res: Response;
   try {
-    const res = await fetch("https://oauth2.googleapis.com/token", {
+    res = await fetch("https://oauth2.googleapis.com/token", {
       method: "POST",
       headers: { "Content-Type": "application/x-www-form-urlencoded" },
       body: new URLSearchParams({
@@ -65,13 +89,17 @@ async function refreshGoogleToken(
         grant_type: "refresh_token",
       }),
     });
+  } catch (err) {
+    return { failure: classifyRefreshFailure(null, err) };
+  }
+  if (!res.ok) return refusedRefresh(res);
 
-    if (!res.ok) return null;
-
+  try {
     const data = (await res.json()) as {
-      access_token: string;
+      access_token?: unknown;
       expires_in?: number;
     };
+    if (typeof data.access_token !== "string") return UNEXPECTED;
 
     const expiresAt = data.expires_in
       ? new Date(Date.now() + data.expires_in * 1000)
@@ -84,12 +112,13 @@ async function refreshGoogleToken(
         ...sealedFor(conn, { accessToken: data.access_token }),
         tokenExpiresAt: expiresAt,
         updatedAt: new Date(),
+        ...refreshSucceededFields(),
       })
       .where(eq(serviceConnections.id, conn.id));
 
-    return data.access_token;
+    return { token: data.access_token };
   } catch {
-    return null;
+    return UNEXPECTED;
   }
 }
 
@@ -102,13 +131,14 @@ async function refreshAtlassianToken(
   db: Database,
   conn: ConnectionRef,
   refreshToken: string
-): Promise<string | null> {
+): Promise<RefreshOutcome> {
   const clientId = process.env.ATLASSIAN_CLIENT_ID;
   const clientSecret = process.env.ATLASSIAN_CLIENT_SECRET;
   if (!clientId || !clientSecret) return null;
 
+  let res: Response;
   try {
-    const res = await fetch("https://auth.atlassian.com/oauth/token", {
+    res = await fetch("https://auth.atlassian.com/oauth/token", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -118,14 +148,18 @@ async function refreshAtlassianToken(
         refresh_token: refreshToken,
       }),
     });
+  } catch (err) {
+    return { failure: classifyRefreshFailure(null, err) };
+  }
+  if (!res.ok) return refusedRefresh(res);
 
-    if (!res.ok) return null;
-
+  try {
     const data = (await res.json()) as {
-      access_token: string;
+      access_token?: unknown;
       refresh_token?: string;
       expires_in?: number;
     };
+    if (typeof data.access_token !== "string") return UNEXPECTED;
 
     const expiresAt = data.expires_in
       ? new Date(Date.now() + data.expires_in * 1000)
@@ -143,12 +177,13 @@ async function refreshAtlassianToken(
         ...sealedFor(conn, rotated),
         tokenExpiresAt: expiresAt,
         updatedAt: new Date(),
+        ...refreshSucceededFields(),
       })
       .where(eq(serviceConnections.id, conn.id));
 
-    return data.access_token;
+    return { token: data.access_token };
   } catch {
-    return null;
+    return UNEXPECTED;
   }
 }
 
@@ -187,13 +222,13 @@ export async function refreshNotionToken(
   db: Database,
   conn: ConnectionRef,
   presentedRefreshToken: string
-): Promise<string | null> {
+): Promise<RefreshOutcome> {
   const connectionId = conn.id;
   const clientId = process.env.NOTION_OAUTH_CLIENT_ID;
   const clientSecret = process.env.NOTION_OAUTH_CLIENT_SECRET;
   if (!clientId || !clientSecret) return null;
 
-  type Outcome = { token: string } | { rejected: true } | { failed: true };
+  type Outcome = { token: string } | { rejected: true } | { failure: RefreshFailure };
   let outcome: Outcome;
   try {
     outcome = await db.transaction(async (tx): Promise<Outcome> => {
@@ -205,37 +240,43 @@ export async function refreshNotionToken(
         .from(serviceConnections)
         .where(eq(serviceConnections.id, connectionId))
         .for("update");
-      if (!locked) return { failed: true };
+      if (!locked) return UNEXPECTED;
       // Compared opened: a fresh nonce on every seal means two seals of one
       // token never match as text (SCRUM-442).
       const row = openPair({ userId: conn.userId, rowId: conn.id }, locked);
-      if (!row.accessToken) return { failed: true };
+      if (!row.accessToken) return UNEXPECTED;
       // Someone else rotated while this caller waited: theirs is current.
       if (row.refreshToken !== presentedRefreshToken) {
         return { token: row.accessToken };
       }
 
-      const res = await fetch(NOTION_TOKEN_URL, {
-        method: "POST",
-        headers: {
-          Authorization: notionBasicAuth(clientId, clientSecret),
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          grant_type: "refresh_token",
-          refresh_token: presentedRefreshToken,
-        }),
-        signal: AbortSignal.timeout(NOTION_TOKEN_TIMEOUT_MS),
-      });
+      let res: Response;
+      try {
+        res = await fetch(NOTION_TOKEN_URL, {
+          method: "POST",
+          headers: {
+            Authorization: notionBasicAuth(clientId, clientSecret),
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            grant_type: "refresh_token",
+            refresh_token: presentedRefreshToken,
+          }),
+          signal: AbortSignal.timeout(NOTION_TOKEN_TIMEOUT_MS),
+        });
+      } catch (err) {
+        return { failure: classifyRefreshFailure(null, err) };
+      }
       if (!res.ok) {
-        const body = (await res.json().catch(() => null)) as { error?: unknown } | null;
-        return body?.error === "invalid_grant" ? { rejected: true } : { failed: true };
+        const refused = await refusedRefresh(res);
+        // invalid_grant is looked at again below, after the lock is let go.
+        return refused.failure.reason === "invalid_grant" ? { rejected: true } : refused;
       }
       const data = (await res.json()) as {
         access_token?: unknown;
         refresh_token?: unknown;
       };
-      if (typeof data.access_token !== "string") return { failed: true };
+      if (typeof data.access_token !== "string") return UNEXPECTED;
 
       const rotated = {
         accessToken: data.access_token,
@@ -250,16 +291,17 @@ export async function refreshNotionToken(
           // Notion sends no expiry, and none is invented.
           tokenExpiresAt: null,
           updatedAt: new Date(),
+          ...refreshSucceededFields(),
         })
         .where(eq(serviceConnections.id, connectionId));
       return { token: data.access_token };
     });
   } catch {
-    return null;
+    return UNEXPECTED;
   }
 
-  if ("token" in outcome) return outcome.token;
-  if ("failed" in outcome) return null;
+  if ("token" in outcome) return outcome;
+  if ("failure" in outcome) return outcome;
 
   // invalid_grant. Before calling the grant dead, look again: a writer that
   // does not take this lock (a reconnect) may have been queued behind it.
@@ -276,19 +318,19 @@ export async function refreshNotionToken(
     );
     const row = locked && openPair({ userId: conn.userId, rowId: conn.id }, locked);
     if (row && row.accessToken && row.refreshToken !== presentedRefreshToken) {
-      return row.accessToken;
+      return { token: row.accessToken };
     }
   } catch {
-    return null;
+    return UNEXPECTED;
   }
   console.warn("[service-token] notion refresh refused (invalid_grant); the workspace needs reconnecting");
-  return null;
+  return { failure: { kind: "permanent", reason: "invalid_grant" } };
 }
 
 /** Service-specific refresh function lookup. */
 const REFRESH_FN: Record<
   string,
-  (db: Database, conn: ConnectionRef, rt: string) => Promise<string | null>
+  (db: Database, conn: ConnectionRef, rt: string) => Promise<RefreshOutcome>
 > = {
   "google-workspace": refreshGoogleToken,
   atlassian: refreshAtlassianToken,
@@ -405,6 +447,20 @@ export type ResolvedServiceToken = {
   scopes: string | null;
 };
 
+/** A connected account whose token could not be refreshed (SCRUM-190). The
+ * provider's answer is recorded on the row before this is returned, so the
+ * caller only has to say it truthfully. */
+export type RefreshFailed = {
+  refreshFailed: true;
+  service: string;
+  accountEmail: string | null;
+  /** True when `connectionDead` holds after this failure. */
+  reconnectNeeded: boolean;
+  /** Never present, so a caller that reads a token off it fails closed. */
+  token?: never;
+  scopes?: never;
+};
+
 /** One account an ambiguous `account` value could have meant, and the value
  * that names it alone. */
 export type AccountChoice = {
@@ -497,7 +553,7 @@ export async function resolveServiceToken(
   userId: string,
   service: string,
   accountEmail?: string
-): Promise<ResolvedServiceToken | AmbiguousAccount | null> {
+): Promise<ResolvedServiceToken | AmbiguousAccount | RefreshFailed | null> {
   type ConnRow = {
     id: string;
     accessTokenSealed: string | null;
@@ -630,10 +686,14 @@ export async function resolveServiceToken(
   if (tokens.refreshToken) {
     const refreshFn = REFRESH_FN[service];
     if (refreshFn) {
-      const newToken = await refreshFn(db, { id: conn.id, userId }, tokens.refreshToken);
+      const outcome = await refreshFn(db, { id: conn.id, userId }, tokens.refreshToken);
       // A refresh never widens the grant, so the stored scopes still hold.
-      if (newToken)
-        return { token: newToken, accountEmail: resolvedEmail, scopes: conn.scopes };
+      if (outcome && "token" in outcome)
+        return { token: outcome.token, accountEmail: resolvedEmail, scopes: conn.scopes };
+      if (outcome && "failure" in outcome) {
+        const reconnectNeeded = await recordRefreshFailure(db, { id: conn.id, userId }, service, outcome.failure);
+        return { refreshFailed: true, service, accountEmail: resolvedEmail, reconnectNeeded };
+      }
     }
   }
 
@@ -648,7 +708,7 @@ export async function getServiceToken(
   accountEmail?: string
 ): Promise<string | null> {
   const resolved = await resolveServiceToken(db, userId, service, accountEmail);
-  if (!resolved || "ambiguous" in resolved) return null;
+  if (!resolved || "ambiguous" in resolved || "refreshFailed" in resolved) return null;
   return resolved.token;
 }
 
