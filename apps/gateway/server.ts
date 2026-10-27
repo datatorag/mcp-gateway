@@ -22,6 +22,7 @@ import {
 } from "./src/gateway/mcp-session";
 import { createRegisterRouter } from "./src/gateway/oauth/register";
 import { createAuthorizeRouter } from "./src/gateway/oauth/authorize";
+import { createConsentRouter } from "./src/gateway/oauth/consent";
 import { createTokenRouter } from "./src/gateway/oauth/token";
 import { createRevokeRouter } from "./src/gateway/oauth/revoke";
 import { oauthRateLimit } from "./src/gateway/oauth/rate-limit";
@@ -211,6 +212,8 @@ async function main() {
       baseUrl,
     })
   );
+  // SCRUM-373: the Approve and Deny answers to the consent page.
+  app.use(createConsentRouter(db, { baseUrl }));
   app.use(createTokenRouter(db));
   app.use(
     createRevokeRouter(db, {

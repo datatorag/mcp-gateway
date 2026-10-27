@@ -60,3 +60,14 @@ export const CLIENT_NAME_MAX = 60;
 export function cleanClientName(value: unknown): string | null {
   return cleanUntrustedText(value, CLIENT_NAME_MAX);
 }
+
+/** The longest client name stored at registration (SCRUM-373). Longer than
+ * `CLIENT_NAME_MAX` because the consent page shows the name whole; the
+ * shorter cap is for the signup event and the #leads post. */
+export const REGISTERED_CLIENT_NAME_MAX = 100;
+
+/** A `client_name` as `POST /oauth/register` stores it: cleaned of control
+ * and format characters and capped, because the consent page shows it. */
+export function cleanRegisteredClientName(value: unknown): string | null {
+  return cleanUntrustedText(value, REGISTERED_CLIENT_NAME_MAX);
+}
