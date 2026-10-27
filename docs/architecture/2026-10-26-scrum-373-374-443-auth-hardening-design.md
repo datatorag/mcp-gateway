@@ -1,12 +1,14 @@
-# Auth hardening: token kinds, hashed tokens, and a consent page (SCRUM-374, SCRUM-443, SCRUM-373)
+# Auth hardening: OAuth only, token kinds, hashed tokens, and a consent page (SCRUM-451, SCRUM-374, SCRUM-443, SCRUM-373)
 
-Status: spec, written from the code at `2c5be1b`, with its three decisions ruled on 2026-10-26
-(the last section). Nothing here is built. It is built as three pull requests, in this order: 374,
-then 443, then 373, each on its own go.
+Status: spec, written from the code at `2c5be1b`, with its decisions ruled on 2026-10-26 (the
+last section). Nothing here is built. It is built in this order, each on its own go: 451, then 374,
+then 443 (three releases), then 373.
 
+- **SCRUM-451.** API keys are removed: OAuth is the only way into the gateway. The dashboard page,
+  the `/api/keys` routes and the bearer's key path go, with every mention of keys in the product
+  and its documents. The only user-visible change apart from 373.
 - **SCRUM-374.** A web session token and an MCP access token are told apart everywhere they are
-  read, every connect callback checks that its session is live, and an API key can only be minted
-  from a recent sign-in. Invisible to users.
+  read, and every connect callback checks that its session is live. Invisible to users.
 - **SCRUM-443.** Gateway access tokens (web sessions and MCP bearers) and authorization codes are
   stored as hashes, through a dual-read release so nobody is signed out. Invisible to users.
 - **SCRUM-373.** A consent page of our own, naming the client and where it sends you, before the
@@ -26,7 +28,7 @@ then 443, then 373, each on its own go.
   `sha256(raw)` in `oauth_refresh_tokens` (rotated, with family revocation on replay).
 
 API keys live in `api_keys`, stored as `sha256(raw)` with a display prefix
-(`gateway/bearer-auth.ts`, `createApiKey`). Authorization codes live in
+(`gateway/bearer-auth.ts`, `createApiKey`), until SCRUM-451 removes them. Authorization codes live in
 `oauth_authorization_codes.code`, raw, with a 10-minute expiry and a `used_at`.
 
 ### Every place a token is read
@@ -37,7 +39,7 @@ below.
 - `lib/session.ts` `getSessionUserId`: the cookie, for every Next route through `withRoute` and
   `withAdminRoute`, and the server components.
 - `gateway/bearer-auth.ts` `resolveBearer`: the `/mcp` bearer, an API key by `key_hash`, else an
-  access token.
+  access token. After 451, an access token only.
 - `gateway/auth.ts`: the Google, Atlassian and Notion connect starts and callbacks, and
   `POST /auth/connect/anyway`, which read the cookie; `POST /auth/logout` and
   `POST /auth/connect/switch-account`, which revoke by it.
@@ -63,7 +65,64 @@ below.
 Each part below lists the tests it adds, on `authorize.ts`, `register.ts`, `lib/session.ts` and
 `bearer-auth.ts` among others, beside the suites those files already have.
 
-## SCRUM-374: token kinds, live sessions, and key minting
+## SCRUM-451: OAuth is the only way in
+
+Every MCP client this product supports connects with OAuth, so a second credential is a second
+surface to secure for no client that needs it. Removing it breaks no client that connects with
+OAuth; the evidence is in the ticket. This supersedes the earlier SCRUM-374 rule for minting a key
+from a recent sign-in: there is no minting.
+
+### What is removed
+
+- **The dashboard:** the API keys page and panel (`app/dashboard/api-keys/`) and its entry in the
+  dashboard navigation (`app/dashboard/layout.tsx`). The old path redirects to `/dashboard`.
+- **The routes:** `app/api/keys/route.ts` and `app/api/keys/[id]/route.ts`.
+- **The bearer:** `resolveBearer` accepts an OAuth access token and nothing else. A value shaped
+  like a key is an unknown token, refused as `invalid` with the same challenge as any other.
+  `createApiKey`, `touchApiKey` and its call in `server.ts`, `API_KEY_CLIENT_ID`, and the
+  `api_key` value of `authKind` on `mcp_session_initialized` go.
+- **`packages/auth`:** `generateApiKey`, `getKeyPrefix`, the key prefix and `ApiKeyValidator` go.
+  `hashApiKey` stays, because refresh tokens are hashed with it and 443 hashes access tokens and
+  codes with it; it is renamed `hashToken`, with its callers, in the same change.
+- **Words:** the home page line about keys; the README's mention of keys for scripts and agents,
+  its dashboard row and its `packages/auth` description; the terms' section on keys (the sections
+  after it renumbered) and the sentence on keeping them secure; the privacy policy's clause on generating and managing keys;
+  comments that name keys as a credential (`lifecycle.ts`, `admin-surface-walk.ts`,
+  `tests/execute.ts`, the agent's client cache in `mastra/agents/datatorag.ts`), reworded or
+  removed. The terms and privacy pages carry a new effective date. No docs page and no blog post
+  claims DataToRAG offers keys (the comparison posts describe other products' keys, and one says
+  DataToRAG needs none), so no post gets an edited note.
+- **The runner:** case F7 ("a fabricated API key is refused") stays, renamed to say what it now
+  proves: a bearer that is not an OAuth access token is refused with a usable challenge.
+
+### The live key, and the table
+
+The release that removes the code carries a journaled migration that revokes every key still
+live: `UPDATE api_keys SET revoked_at = now() WHERE revoked_at IS NULL`. The table stays for that
+one release, so rolling the image back refuses a key instead of failing on a missing table. A
+journaled migration in the 374 release then drops `api_keys`, once nothing in the running image
+reads it.
+
+The revoke runs once the old container has stopped serving, so no key can be minted between it
+and the switch. A rollback of the 451 image brings the key routes back until the roll forward, so
+the rollback step runs the same revoke again first, and the runbook says the routes are live in
+that window.
+
+### Changelog (451)
+
+"API keys are gone; every client connects with OAuth." With one line on where to connect a
+client instead (the getting started guide).
+
+### Tests (451)
+
+- `resolveBearer`: a value in the old key format, a revoked key's raw value, and an unknown token
+  are each refused as `invalid` with the challenge; an OAuth access token resolves.
+- `/api/keys` and `/api/keys/<id>` are 404 for a signed-in user; `/dashboard/api-keys` redirects.
+- The dashboard navigation has no keys entry.
+- The migration, on real Postgres: a live key is revoked, a revoked key keeps its time.
+- A source test: nothing under `apps/gateway/src` or `packages` imports a removed name.
+
+## SCRUM-374: token kinds and live sessions
 
 ### One session lookup
 
@@ -86,26 +145,14 @@ presented on `/mcp` is refused as `invalid`, with a new `AuthFailureReason`, `wr
 so the analytics can tell it from an unknown token. The dashboard agent is an in-process client
 of the MCP server and never presents a bearer, so it is unaffected.
 
-### Minting an API key needs a recent sign-in
-
-An API key does not expire and outlives the session that made it. Tying keys to the session's
-lifetime would revoke them at every logout and every 24-hour expiry, which is not what a key is
-for. So minting requires a **recent sign-in** instead: `POST /api/keys` checks that the web
-session's `created_at` is within the last 10 minutes; otherwise it answers 403 with
-`reauth_required`, and the API keys page sends the user through sign-in with `next` back to the
-page, after which the mint succeeds. A key minted this way lives on after the session that minted
-it ends, by logout or by expiry. Listing and revoking keys are unchanged.
-
 ### Tests (374)
 
 - `lib/session.ts`: a live web token resolves; an MCP client's live token, a revoked web token and
   an expired web token do not.
-- `resolveBearer`: an MCP token resolves; a live web token is refused as `wrong_token_kind`; API
-  keys unchanged.
+- `resolveBearer`: an MCP token resolves; a live web token is refused as `wrong_token_kind`.
 - Each connect callback (Google, Atlassian, Notion) and `/auth/connect/anyway`: a revoked, an
   expired, and a non-web session each go to sign in, and nothing is stored.
-- `POST /api/keys`: refused with `reauth_required` on a session older than the window, accepted on
-  a fresh one.
+- The `api_keys` drop migration runs clean on a database where 451's revoke has run.
 - `with-admin-route`: an MCP token set as the cookie is a 404, like no session.
 
 ## SCRUM-443: hashed tokens, through a dual-read release
@@ -113,7 +160,8 @@ it ends, by logout or by expiry. Listing and revoking keys are unchanged.
 ### What changes
 
 - `oauth_access_tokens` gains `token_hash text` (nullable, unique). The value is
-  `sha256(raw)` as hex, the same function as refresh tokens and API keys (`hashApiKey`).
+  `sha256(raw)` as hex, the same function as refresh tokens (`hashToken`, renamed from
+  `hashApiKey` by 451).
 - `oauth_authorization_codes` gains `code_hash text` (nullable, unique), the same way.
 - The raw values (`token`, `code`) are dropped at the end. The cookie and the bearer still carry
   the raw token; the gateway hashes what it is handed and looks the hash up.
@@ -146,7 +194,7 @@ nothing to backfill: a lost row is a token nobody can present, and the client re
 MCP client through its refresh token, a browser by signing in), exactly as after a 24-hour
 expiry.
 
-**Refresh tokens and API keys** are already hashed and do not change.
+**Refresh tokens** are already hashed and do not change.
 
 ### Tests (443)
 
@@ -249,12 +297,12 @@ remembered for that app. No mention of the reason.
 - A page listing and revoking remembered consents (a follow-up ticket; revoking a client's
   tokens already exists through `/oauth/revoke`).
 - Confidential clients or client secrets.
-- Any change to refresh tokens or API keys beyond the recent-sign-in rule for minting.
+- Any change to refresh tokens.
 
 ## Decisions (ruled 2026-10-26)
 
-1. **API keys and sessions.** Minting needs a sign-in within the last 10 minutes; a key lives on
-   after logout and after the minting session expires. Existing keys are left alone.
+1. **API keys.** There are none: OAuth is the only way into the gateway (SCRUM-451, ruled
+   2026-10-26). This replaces the earlier ruling on minting keys from a recent sign-in.
 2. **What consent is remembered against.** `(user, client_id)`, as the ticket says. Claude Code's
    users see the page again for each new registration it makes; that is accepted over keying on
    values the client asserts.
