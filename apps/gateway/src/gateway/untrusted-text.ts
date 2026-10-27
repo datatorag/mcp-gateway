@@ -51,3 +51,12 @@ function cleanUntrustedText(value: unknown, max: number): string | null {
 export function cleanWorkspaceName(value: unknown): string | null {
   return cleanUntrustedText(value, WORKSPACE_NAME_MAX);
 }
+
+/** The longest MCP client name kept. A real one is a product name. */
+export const CLIENT_NAME_MAX = 60;
+
+/** An OAuth client's registered name, which the client chose itself (RFC
+ * 7591), safe to store and to show (SCRUM-89). */
+export function cleanClientName(value: unknown): string | null {
+  return cleanUntrustedText(value, CLIENT_NAME_MAX);
+}
