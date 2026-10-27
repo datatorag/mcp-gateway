@@ -1,4 +1,4 @@
-import { index, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
+import { index, integer, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
 import { users } from "./users";
 
 export const serviceConnections = pgTable(
@@ -23,6 +23,11 @@ export const serviceConnections = pgTable(
     updatedAt: timestamp("updated_at", { withTimezone: true })
       .notNull()
       .defaultNow(),
+    // SCRUM-190: what the last provider refresh said. A reason code only
+    // (gateway refresh-failure.ts), never a token or a provider's body.
+    lastRefreshAt: timestamp("last_refresh_at", { withTimezone: true }),
+    lastRefreshError: text("last_refresh_error"),
+    refreshPermanentFailures: integer("refresh_permanent_failures").notNull().default(0),
   },
   // Every plugin CallTool resolves the user's token by (user_id, service); the
   // dashboard/setup routes scan by user_id alone (covered by the leftmost

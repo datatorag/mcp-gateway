@@ -23,7 +23,9 @@ export function sourceResolversFor(
     // here; no file source today has more than one account per email.
     resolveToken: async (service, account) => {
       const resolved = await resolveServiceToken(db, userId, service, account);
-      return resolved && "ambiguous" in resolved ? null : resolved;
+      // A failed refresh is still a source that cannot be read; it gets its
+      // own words in a follow-up (SCRUM-190).
+      return resolved && ("ambiguous" in resolved || "refreshFailed" in resolved) ? null : resolved;
     },
     resolvePluginUrl: async (slug) => {
       const [row] = await db

@@ -199,6 +199,8 @@ edit means the design-time check was skipped.
 | Launch gate for a connectable service (`launchPluginSlug` on the registry entry; `launchedServiceIds`/`isServiceLaunched`: hidden on every connect surface and refused by its connect route with `connect_error=service_not_available` until that plugin's `mcp_servers` row is active; fails closed; SCRUM-366) | `apps/gateway/src/gateway/service-launch.ts` |
 | Untrusted display names from another system (a Notion workspace name): cleaned and capped where stored and where rendered to the model, `WORKSPACE_NAME_MAX` | `apps/gateway/src/gateway/untrusted-text.ts` |
 | Per-user service token resolution + refresh (`PLUGIN_SERVICE_MAP`, `REFRESH_FN`) | `apps/gateway/src/gateway/service-token.ts` |
+| Refresh failures: classify, record, dead rule (`connectionDead`), `service_refresh_failed` (SCRUM-190) | `apps/gateway/src/gateway/refresh-failure.ts` |
+| Session starts per default account + the shape alert query (`quietConnections`, SCRUM-164) | `apps/gateway/src/gateway/session-starts.ts` |
 | Multi-account list/default/disconnect | `apps/gateway/src/gateway/connected-accounts.ts` |
 | Dashboard page gating (`dtrmcp_session`) | `apps/gateway/src/proxy.ts` |
 | Plan caps + free-tier hard-stop gate | `apps/gateway/src/gateway/billing/{plans,enforce}.ts` |

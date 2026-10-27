@@ -170,7 +170,7 @@ describe.skipIf(!isDockerAvailable())("SCRUM-442: provider tokens are read seale
         .set(sealedColumns("service_connections", { userId, rowId }, { refreshToken: "rt-1" }))
         .where(eq(serviceConnections.id, rowId));
       provider({ access_token: "at-2", refresh_token: "rt-2" });
-      expect(await refreshNotionToken(db, { id: rowId, userId }, "rt-1")).toBe("at-2");
+      expect(await refreshNotionToken(db, { id: rowId, userId }, "rt-1")).toEqual({ token: "at-2" });
       expect(fetchBodies).toHaveLength(1);
     });
 
@@ -178,7 +178,7 @@ describe.skipIf(!isDockerAvailable())("SCRUM-442: provider tokens are read seale
       const { userId, rowId } = await connect("notion", { access_token: "at-1", refresh_token: "rt-1" });
       await scramblePlain(rowId);
       provider({ access_token: "never", refresh_token: "never" });
-      expect(await refreshNotionToken(db, { id: rowId, userId }, "rt-old")).toBe("at-1");
+      expect(await refreshNotionToken(db, { id: rowId, userId }, "rt-old")).toEqual({ token: "at-1" });
       expect(fetchBodies).toHaveLength(0);
     });
   });

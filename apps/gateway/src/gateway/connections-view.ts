@@ -4,6 +4,7 @@ import { serviceConnections, connectedAccounts } from "@datatorag-mcp/db";
 import { listConnectedAccounts } from "./connected-accounts";
 import { connectorGrantsScopes, scopeDelta, serviceGrantStates } from "./scope-grant";
 import { launchedServiceIds } from "./service-launch";
+import { connectionDead } from "./refresh-failure";
 import type {
   ConnectedAccount,
   LegacyConnection,
@@ -33,6 +34,15 @@ function scopeStatusFor(service: string, scopes: string | null) {
     services: serviceGrantStates(service, scopes),
     scoped: connectorGrantsScopes(service),
   };
+}
+
+/** The refresh health for one row (SCRUM-190), from the same rule the token
+ * path uses, so the screen and the model cannot disagree about a dead grant. */
+function refreshStatusFor(
+  service: string,
+  row: { lastRefreshError: string | null; refreshPermanentFailures: number }
+) {
+  return { needsReconnect: connectionDead(service, row), lastError: row.lastRefreshError };
 }
 
 /**
@@ -69,6 +79,8 @@ export async function loadConnectionsView(
         service: serviceConnections.service,
         scopes: serviceConnections.scopes,
         connectedAt: serviceConnections.connectedAt,
+        lastRefreshError: serviceConnections.lastRefreshError,
+        refreshPermanentFailures: serviceConnections.refreshPermanentFailures,
       })
       .from(serviceConnections)
       .where(
@@ -90,14 +102,18 @@ export async function loadConnectionsView(
 
   // SCRUM-136 (the SCRUM-105 shape): callers get the finished DELTA, not a
   // scope array to re-derive "is this enough" from.
-  const accounts = rawAccounts.map((a) => ({
+  // The raw refresh columns become `refresh`, the finished answer, the same
+  // way scopes become `scopeStatus`.
+  const accounts = rawAccounts.map(({ lastRefreshError, refreshPermanentFailures, ...a }) => ({
     ...a,
     scopeStatus: scopeStatusFor(a.connectorType, a.scopes),
+    refresh: refreshStatusFor(a.connectorType, { lastRefreshError, refreshPermanentFailures }),
   }));
 
-  const connections = legacyConnections.map((c) => ({
+  const connections = legacyConnections.map(({ lastRefreshError, refreshPermanentFailures, ...c }) => ({
     ...c,
     scopeStatus: scopeStatusFor(c.service, c.scopes),
+    refresh: refreshStatusFor(c.service, { lastRefreshError, refreshPermanentFailures }),
   }));
 
   return JSON.parse(

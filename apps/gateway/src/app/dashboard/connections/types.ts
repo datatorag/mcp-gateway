@@ -40,6 +40,17 @@ export interface ConnectedAccount {
   scopes: string | null;
   connectedAt: string;
   scopeStatus: ScopeStatus;
+  /** What the last provider refresh said (SCRUM-190). Optional because
+   * fixtures and older callers omit it. */
+  refresh?: RefreshStatus;
+}
+
+/** A connection's refresh health. Not rendered yet: the connections screen's
+ * "reconnect needed" state is a follow-up that reads `needsReconnect`. */
+export interface RefreshStatus {
+  needsReconnect: boolean;
+  /** A fixed reason code, or null after a success or a reconnect. */
+  lastError: string | null;
 }
 
 export interface LegacyConnection {
@@ -48,4 +59,7 @@ export interface LegacyConnection {
   scopes: string | null;
   connectedAt: string;
   scopeStatus: ScopeStatus;
+  /** What the last provider refresh said (SCRUM-190). Optional because
+   * fixtures and older callers omit it. */
+  refresh?: RefreshStatus;
 }

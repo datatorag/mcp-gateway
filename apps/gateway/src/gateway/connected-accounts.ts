@@ -6,6 +6,7 @@ import { randomUUID } from "node:crypto";
 import { revokeUpstream } from "./service-token";
 import { sealedColumns } from "./token-crypto";
 import { grantedServiceCount, scopeDelta } from "./scope-grant";
+import { refreshClearedFields } from "./refresh-failure";
 
 /**
  * List all connected accounts for a user, joined with service connection metadata.
@@ -23,6 +24,9 @@ export async function listConnectedAccounts(db: Database, userId: string) {
       scopes: serviceConnections.scopes,
       connectedAt: serviceConnections.connectedAt,
       serviceConnectionId: connectedAccounts.serviceConnectionId,
+      // SCRUM-190: reason codes and a count, never a token.
+      lastRefreshError: serviceConnections.lastRefreshError,
+      refreshPermanentFailures: serviceConnections.refreshPermanentFailures,
     })
     .from(connectedAccounts)
     .innerJoin(
@@ -151,6 +155,9 @@ export async function upsertServiceAccount(
         scopes: tokens.scope ?? defaultScopes,
         tokenExpiresAt: expiresAt,
         updatedAt: new Date(),
+        // New tokens are a new grant: whatever the old one's refreshes said
+        // no longer applies (SCRUM-190).
+        ...refreshClearedFields(),
       })
       .where(eq(serviceConnections.id, existing.serviceConnectionId));
   } else {

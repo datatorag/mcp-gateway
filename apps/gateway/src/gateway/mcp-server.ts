@@ -60,6 +60,8 @@ import {
 import { pluginFailureOf } from "./usage/classify";
 import { grantLine, type ConnectedAccountLine } from "./account-grant-line";
 import { cleanWorkspaceName } from "./untrusted-text";
+import { getConnectableService } from "@/app/dashboard/connections/service-registry";
+import { connectionDead } from "./refresh-failure";
 import { crossFile, filePathsFor } from "./file-crossing";
 import { createDownloadLink, createUploadLink, DOWNLOAD_TOOL, revokeCarriedLinks, UPLOAD_TOOL } from "./file-download";
 import { downloadDepsFor } from "./file-download-route";
@@ -77,21 +79,40 @@ const ACCOUNT_PARAM_SCHEMA = {
  *
  * The scheduler reads a run's tool results through this so it can pause a
  * schedule with "reconnect needed" naming the service. It lives beside the
- * three sentences it recognises (the not-connected answer, the unknown-account
- * answer and the scope refusal, all below) so the wording and the recogniser
- * change in one file. Every one of them carries the connect URL with the
- * service as its last segment, and that is what is read.
+ * four sentences it recognises (the not-connected answer, the unknown-account
+ * answer, the scope refusal and the dead-grant answer, all below) so the
+ * wording and the recogniser change in one file. Every one of them carries the
+ * connect URL with the service as its last segment, and that is what is read.
+ *
+ * The transient refresh answer is deliberately NOT recognised (SCRUM-190): a
+ * provider that did not respond is a failed run, retried on the next tick,
+ * never a pause.
  */
 export function connectionFailureService(text: string): string | null {
   if (
     !/ is not connected\. Please connect it/.test(text) &&
     !text.startsWith("No connected account found for ") &&
-    !text.includes(MISSING_SCOPE_ERROR_MARKER)
+    !text.includes(MISSING_SCOPE_ERROR_MARKER) &&
+    !/ needs reconnecting: .+ no longer accepts the access it granted\. Reconnect it at /.test(text)
   ) {
     return null;
   }
   const m = /\/dashboard\/connections\/([a-z0-9-]+)/.exec(text);
   return m?.[1] ?? "unknown";
+}
+
+/** The words for a failed refresh (SCRUM-190). The reconnect sentence is one
+ * `connectionFailureService` recognises; the transient one is not. */
+export function refreshFailedMessage(
+  failed: { service: string; accountEmail: string | null; reconnectNeeded: boolean },
+  connectUrl: string
+): string {
+  const service = getConnectableService(failed.service)?.name ?? failed.service;
+  if (failed.reconnectNeeded) {
+    const account = failed.accountEmail ? ` ${failed.accountEmail}` : "";
+    return `Your ${service} account${account} needs reconnecting: ${service} no longer accepts the access it granted. Reconnect it at ${connectUrl}.`;
+  }
+  return `${service} did not respond to a token refresh just now. Try the call again in a moment.`;
 }
 
 /** The fields a user's skill is saved from (SCRUM-226); one definition for
@@ -585,7 +606,7 @@ export const BUILT_IN_TOOLS: {
     definition: {
       name: "list_connected_accounts",
       description:
-        "List the user's connected accounts grouped by service. Use this to discover which accounts are available before passing the 'account' parameter to other tools. Each Google Workspace account also says which services it granted (granted_services) and which it did not (missing_services). Each Notion account names its workspace (workspace, workspace_id); when one email holds several Notion workspaces, pass the workspace name or id as 'account' instead of the email. A call that fails for a missing permission is explained here, and the account is reconnected at /dashboard/connections.",
+        "List the user's connected accounts grouped by service. Use this to discover which accounts are available before passing the 'account' parameter to other tools. Each Google Workspace account also says which services it granted (granted_services) and which it did not (missing_services). Each Notion account names its workspace (workspace, workspace_id); when one email holds several Notion workspaces, pass the workspace name or id as 'account' instead of the email. An account whose provider no longer accepts its access is marked needs_reconnect: true. A call that fails for a missing permission is explained here, and the account is reconnected at /dashboard/connections.",
       inputSchema: {
         type: "object" as const,
         properties: {},
@@ -624,6 +645,9 @@ export const BUILT_IN_TOOLS: {
             : {}),
           // What the account granted, by service name (SCRUM-412).
           ...grantLine(row.connectorType, row.scopes),
+          // SCRUM-190: only on a dead grant, so the model names the account
+          // to reconnect instead of guessing from scopes.
+          ...(connectionDead(row.connectorType, row) ? { needs_reconnect: true } : {}),
         });
       }
 
@@ -1222,6 +1246,15 @@ export function createMcpServer(
               ),
             },
           ],
+          isError: true,
+        };
+      }
+      // SCRUM-190: a connected account whose refresh the provider refused is
+      // said to be exactly that, never "not connected". The failure is
+      // already recorded on the row.
+      if (resolution && "refreshFailed" in resolution) {
+        return {
+          content: [{ type: "text" as const, text: refreshFailedMessage(resolution, grantFixUrl) }],
           isError: true,
         };
       }
