@@ -9,7 +9,9 @@ faqs:
       Some do. Successful calls and user errors are both counted, because a
       request that reached the API and came back with a legitimate no still ran.
       Server errors are not counted: if the DataToRAG gateway is down, a plugin
-      crashes, or an upstream API has a 5xx outage, that is not metered.
+      crashes, an upstream API has a 5xx outage or refuses for rate, a request
+      never reaches the service, or Google refuses for access we never asked
+      you for, that is not metered.
   - q: I pay for Pro, so why are my calls counting on the free plan?
     a: >-
       You most likely have two DataToRAG accounts. DataToRAG makes one account
@@ -81,7 +83,7 @@ Not every call is counted the same way:
 
 - **Successful calls**: counted. Your AI asked Gmail to search, Gmail returned results, you got what you wanted.
 - **User errors**: counted. You asked for a message that doesn't exist, a query with bad JQL, a file you don't have access to. The request reached the API and came back with a legitimate "no."
-- **Server errors**: *not* counted. If our gateway is down, a plugin crashes, or an upstream API has a 5xx outage, that's not your problem and we don't meter it.
+- **Server errors**: *not* counted. If our gateway is down, a plugin crashes, an upstream API has a 5xx outage or refuses for rate, or a request never reaches the service, that's not your problem and we don't meter it. The same goes for a Google refusal for access we never asked you for, when you granted everything we did ask for.
 
 Calls you make from the dashboard are counted under the same rules as calls from an MCP client.
 

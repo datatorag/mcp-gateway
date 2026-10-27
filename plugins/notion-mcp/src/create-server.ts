@@ -5,6 +5,7 @@ import {
 } from "@modelcontextprotocol/sdk/types.js";
 import { NotionClient } from "./notion-client.js";
 import { allTools, toolHandlers, toolReadOnly } from "./tools/index.js";
+import { errorMetaField, errorMetaFor } from "./error-meta.js";
 
 /** A client with no token: every call through it is refused in words. */
 export const notionClient = new NotionClient();
@@ -34,6 +35,7 @@ export function createMcpServer(client?: NotionClient): Server {
         return {
           content: [{ type: "text" as const, text: `Unknown tool: ${name}` }],
           isError: true,
+          _meta: errorMetaField({ kind: "unknown_tool" }),
         };
       }
       // Retry is decided by the tool's annotation, never by HTTP method: two
@@ -49,6 +51,7 @@ export function createMcpServer(client?: NotionClient): Server {
       return {
         content: [{ type: "text" as const, text: `Error: ${message}` }],
         isError: true,
+        _meta: errorMetaField(errorMetaFor(err)),
       };
     }
   });
