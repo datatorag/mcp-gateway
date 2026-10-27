@@ -1,7 +1,8 @@
 # Provider refresh failures become a recorded fact (SCRUM-190, SCRUM-164)
 
-Status: spec, written from the code at `2c5be1b`. Nothing here is built until a go. Not
-user-visible in this step; no changelog entry.
+Status: spec, written from the code at `2c5be1b`, with its three decisions ruled on 2026-10-26
+(the last section). Nothing here is built until a go. Not user-visible in this step; no changelog
+entry.
 
 Two tickets, one signal. When a provider refuses to refresh a connection's token, it says why,
 and today that answer is dropped. The user then reads a sentence that is false ("No connected
@@ -41,7 +42,8 @@ wording changes that recogniser in the same file.
 in `gateway/oauth/token.ts` when an MCP CLIENT presents an expired refresh token to the gateway's
 own token endpoint. It is about our grant to Claude or Cursor, not a provider's grant to us. There
 is no event for a provider refresh at all, succeeded or failed: `oauth_refresh_succeeded` is also
-the gateway's own endpoint. See Decision 1.
+the gateway's own endpoint. So provider refresh failures get their own event,
+`service_refresh_failed` (section 4).
 
 **The row** (`packages/db/src/schema/service-connections.ts`) holds tokens, scopes,
 `token_expires_at`, `connected_at` and `updated_at`. `updated_at` moves on every successful
@@ -96,7 +98,8 @@ case: a deployment fault, not a fact about the user's grant, and it records noth
 
 ### 2. Record it on the connection
 
-A migration adds three columns to `service_connections`:
+One migration adds three columns to `service_connections` (and the `mcp_session_starts` table of
+section 6):
 
 | Column | Type | Written |
 |---|---|---|
@@ -104,8 +107,16 @@ A migration adds three columns to `service_connections`:
 | `last_refresh_error` | `text` | the reason code on failure, `NULL` on success |
 | `refresh_permanent_failures` | `integer not null default 0` | `+1` on a permanent failure, `0` on success, unchanged on a transient one |
 
-**Dead means two consecutive permanent failures**, `refresh_permanent_failures >= 2`. That is
-cheap: the failed refresh already knows the row id, so the record is one `UPDATE ... SET
+**Dead means one Google `invalid_grant`, or two consecutive permanent failures.** One function
+decides it, `connectionDead(service, row)`:
+
+- a Google Workspace row whose `last_refresh_error` is `invalid_grant` (and whose count is
+  therefore at least 1) is dead at once: Google sends that answer only when the grant is revoked
+  or expired, so a second call would only fail the same way;
+- any row with `refresh_permanent_failures >= 2` is dead, which covers Atlassian, Notion, and
+  Google's other permanent answers.
+
+Keeping the count is cheap: the failed refresh already knows the row id, so the record is one `UPDATE ... SET
 refresh_permanent_failures = refresh_permanent_failures + 1` with no read first, and the
 successful refresh already writes the row, so the reset rides that write. A transient failure in
 between leaves the count alone, so "consecutive" means consecutive permanent answers, not
@@ -128,7 +139,7 @@ type RefreshFailed = {
   refreshFailed: true;
   service: string;
   accountEmail: string | null;
-  /** True when this failure made the connection dead (the count reached 2). */
+  /** True when `connectionDead` holds after this failure. */
   reconnectNeeded: boolean;
   token?: never; // fails closed for a caller that reads a token off it
 };
@@ -152,7 +163,8 @@ source refusal is unchanged in this step; giving it the same two sentences is a 
 
 ### 4. Emit an event
 
-A server event per failed refresh (name: Decision 1), with `service`, `reason`, `kind`,
+A server event per failed refresh, `service_refresh_failed` (added to `lib/analytics.ts` in the
+doc-comment style there), with `service`, `reason`, `kind`,
 `consecutive_permanent` and `reconnect_needed`, plus the acting user's identity like every
 server event. Never the account email, a token or the provider's response.
 
@@ -173,47 +185,72 @@ which a broken connection and a bored user both produce.
 
 **Where the data is today.** A session start is recorded only as the PostHog event
 `mcp_session_initialized` (`mcp-analytics.ts`), per user, with the client name and the credential
-kind. It is not in Postgres, and it is not tied to a connection. A tool call is in both places:
-the PostHog `tool_call` event (with `connector_type` and `account_email`) and a `usage_events`
-row. So the alert is a PostHog query, per user, joined to Postgres for the connection facts.
+kind. It is not in Postgres and not tied to a connection. A tool call is in both places: the
+PostHog `tool_call` event and a `usage_events` row, which carries `connector` and
+`account_email`.
 
-**The query** (HogQL, for the daily routine; `{N}` days, `{N}` of 3 suggested):
+**Session starts in Postgres, per resolved account.** A new table, `mcp_session_starts`:
 
-```sql
-SELECT
-  distinct_id AS user_id,
-  uniqExactIf(toDate(timestamp), event = 'mcp_session_initialized') AS days_with_sessions,
-  countIf(event = 'mcp_session_initialized') AS sessions,
-  countIf(event = 'mcp_tools_listed') AS tools_listed,
-  countIf(event = 'tool_call') AS tool_calls
-FROM events
-WHERE timestamp >= now() - INTERVAL {N} DAY
-  AND event IN ('mcp_session_initialized', 'mcp_tools_listed', 'tool_call')
-GROUP BY distinct_id
-HAVING days_with_sessions >= greatest({N} - 1, 1) AND tool_calls = 0
-```
+| Column | Type |
+|---|---|
+| `id` | `uuid` primary key |
+| `user_id` | `uuid`, references `users`, cascade |
+| `connected_account_id` | `uuid`, references `connected_accounts`, cascade |
+| `client_name` | `text`, cleaned and capped like any client-chosen name |
+| `started_at` | `timestamptz not null default now()` |
 
-`tools_listed` against `sessions` answers SCRUM-164's third question: a client opening sessions
-without listing tools is a reconnect loop, which is a different fault from a dead grant. Internal
-accounts are excluded the way the routine already excludes them.
-
-**The Postgres half**, for each `user_id` the alert returns (selects no token column):
+Indexed on `(connected_account_id, started_at)`. At `initialize`, beside the existing
+`trackMcpSessionInitialized`, the gateway runs ONE statement:
 
 ```sql
-SELECT sc.user_id, sc.service, ca.account_email,
-       sc.last_refresh_at, sc.last_refresh_error, sc.refresh_permanent_failures,
-       sc.updated_at
-FROM service_connections sc
-JOIN connected_accounts ca ON ca.service_connection_id = sc.id
-WHERE sc.user_id = ANY($1);
+INSERT INTO mcp_session_starts (user_id, connected_account_id, client_name)
+SELECT user_id, id, $2 FROM connected_accounts
+WHERE user_id = $1 AND is_default;
 ```
 
-A user in the alert with `refresh_permanent_failures >= 2` is broken and an outreach trigger. One
-with no refresh error is quiet, or stuck in the client (look at `tools_listed`).
+That is one write per session: one row for each service's default account, which is the
+account every call without an `account` argument resolves to. A user with no connection gets no
+row. Fire-and-forget like the PostHog capture, so a failed insert never delays or fails the
+initialize. The nightly rollup prunes it at 90 days, the same window as `usage_events`.
 
-**Fields this needs.** All exist today except the three new columns. Not available, and named
-rather than invented: a session tied to a connection. A session is per user, so the alert cannot
-say which of a user's connections the sessions were for. Decision 3 asks whether to add it.
+A call that names a non-default `account` is not tied back to the session. The alert below asks
+about the account a session would have used, which is the one a broken grant hurts.
+
+**The query**, Postgres only, per connection (`$1` is N days, 3 suggested; selects no token
+column):
+
+```sql
+WITH starts AS (
+  SELECT connected_account_id,
+         count(DISTINCT started_at::date) AS days_with_sessions,
+         count(*) AS sessions
+  FROM mcp_session_starts
+  WHERE started_at >= now() - make_interval(days => $1)
+  GROUP BY connected_account_id
+)
+SELECT ca.user_id, ca.connector_type, ca.account_email, s.days_with_sessions, s.sessions,
+       sc.last_refresh_at, sc.last_refresh_error, sc.refresh_permanent_failures
+FROM starts s
+JOIN connected_accounts ca ON ca.id = s.connected_account_id
+JOIN service_connections sc ON sc.id = ca.service_connection_id
+WHERE s.days_with_sessions >= greatest($1 - 1, 1)
+  AND NOT EXISTS (
+    SELECT 1 FROM usage_events ue
+    WHERE ue.user_id = ca.user_id
+      AND ue.connector = ca.connector_type
+      AND ue.account_email = ca.account_email
+      AND ue.created_at >= now() - make_interval(days => $1)
+  );
+```
+
+A row whose connection is dead (`connectionDead`) is broken and an outreach trigger. One with no
+refresh error is quiet, or stuck in the client. Internal accounts are excluded the way the
+routine already excludes them.
+
+**Still a PostHog read:** SCRUM-164's third question, a client opening sessions without listing
+tools (a reconnect loop, a different fault from a dead grant), because `mcp_tools_listed` is a
+PostHog event only. The routine compares `mcp_session_initialized` with `mcp_tools_listed` per
+user there.
 
 `token_expires_at` is not a health signal and the alert does not use it: access tokens live about
 an hour and refresh lazily, so nearly every connection reads as expired at any moment.
@@ -228,14 +265,22 @@ an hour and refresh lazily, so nearly every connection reads as expired at any m
   - a 429, a 500 and a thrown fetch record the reason and leave the count alone;
   - a success after failures resets all three;
   - missing client credentials records nothing.
-- The count reaches dead only on the second consecutive permanent failure, and a transient
-  failure between two permanent ones does not reset it.
+- `connectionDead`: a Google `invalid_grant` is dead on the first failure; an Atlassian or Notion
+  `invalid_grant`, and Google's `invalid_client`, are dead only on the second consecutive
+  permanent failure; a transient failure between two permanent ones does not reset the count.
+- Session starts: an `initialize` writes one statement and one row per default account; a user
+  with no connection writes none; a failed insert does not fail the initialize; the rollup prunes
+  rows older than 90 days.
+- The alert query, on real Postgres: a default account with sessions on enough days and no
+  `usage_events` row is returned; one with a tool call is not; a non-default account is never
+  counted.
 - `upsertServiceAccount` clears the three on reconnect.
-- `resolveServiceToken` returns `RefreshFailed` with `reconnectNeeded` false, then true.
+- `resolveServiceToken` returns `RefreshFailed` with `reconnectNeeded` false, then true (and true
+  at once for a Google `invalid_grant`).
 - CallTool words each case; the transient sentence is not recognised by
   `connectionFailureService`, the reconnect sentence is (both directions in one test).
 - `list_connected_accounts` shows `needs_reconnect` only on a dead connection.
-- The event carries the reason and kind, and no email, token or body.
+- `service_refresh_failed` carries the reason and kind, and no email, token or body.
 
 ## Not done, on purpose
 
@@ -245,15 +290,11 @@ an hour and refresh lazily, so nearly every connection reads as expired at any m
 - An outreach email on a dead connection. That is a separate process, run from the alert.
 - Atlassian's missing refresh lock and revoke, which are SCRUM-444.
 
-## Decisions to rule on
+## Decisions (ruled 2026-10-26)
 
-1. **The event.** `oauth_refresh_expired` already means our own MCP-client refresh token expired.
-   This spec proposes a new event, `service_refresh_failed`, rather than overloading that one.
-   Reusing it would mix two different grants in one series.
-2. **The dead threshold.** Two consecutive permanent failures, as SCRUM-190 prefers. Google's
-   `invalid_grant` is unambiguous, so one would also be safe for it and would tell the user one
-   call sooner. Two costs one more failed call and protects against a provider's own mistake.
-3. **Sessions per connection.** The shape alert is per user, because a session is not tied to a
-   connection anywhere. Recording each session start in Postgres, with the account its first
-   tool call resolved to, would make the alert per connection and answerable without PostHog. It
-   costs one write per session.
+1. **The event.** A new event, `service_refresh_failed`. `oauth_refresh_expired` keeps its one
+   meaning, our own MCP-client refresh token.
+2. **The dead threshold.** Dead after one Google `invalid_grant`, or after two consecutive
+   permanent failures for anything else.
+3. **Sessions per connection.** Session starts are recorded in Postgres per resolved account, one
+   write per session, and the shape alert is per connection.
