@@ -65,6 +65,7 @@ describe.skipIf(!dockerAvailable)("the token endpoint writes the hash beside the
     const code = `code-${randomUUID()}`;
     await db.insert(oauthAuthorizationCodes).values({
       code,
+      codeHash: hashToken(code),
       clientId: CLIENT,
       userId,
       redirectUri: REDIRECT,
@@ -94,6 +95,30 @@ describe.skipIf(!dockerAvailable)("the token endpoint writes the hash beside the
     expect(refreshed.status).toBe(200);
     const second = await storedHash(refreshed.json.access_token);
     expect(second.tokenHash).toBe(hashToken(refreshed.json.access_token));
+  });
+
+  it("release 2: a code stored with no hash is refused, though its raw value matches", async () => {
+    const userId = await insertTestUser(db);
+    const verifier = randomBytes(32).toString("base64url");
+    const code = `code-${randomUUID()}`;
+    await db.insert(oauthAuthorizationCodes).values({
+      code,
+      clientId: CLIENT,
+      userId,
+      redirectUri: REDIRECT,
+      codeChallenge: createHash("sha256").update(verifier).digest("base64url"),
+      codeChallengeMethod: "S256",
+      expiresAt: new Date(Date.now() + 600_000),
+    });
+    const res = await post({
+      grant_type: "authorization_code",
+      code,
+      redirect_uri: REDIRECT,
+      client_id: CLIENT,
+      code_verifier: verifier,
+    });
+    expect(res.status).toBe(400);
+    expect(res.json.error).toBe("invalid_grant");
   });
 
   it("the hash is what Postgres computes for the backfill, so release 2's fill agrees", async () => {

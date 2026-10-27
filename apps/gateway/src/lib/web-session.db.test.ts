@@ -8,6 +8,8 @@ import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import type { Database } from "@datatorag-mcp/db";
 import { oauthAccessTokens } from "@datatorag-mcp/db";
 import { getTestDb, insertTestUser, isDockerAvailable, stopTestDb } from "@/test-utils/db";
+import { hashToken } from "@datatorag-mcp/auth";
+import { resolveBearer } from "@/gateway/bearer-auth";
 import { liveWebSessionUserId, WEB_SESSION_CLIENT_ID } from "./web-session";
 
 const dockerAvailable = isDockerAvailable();
@@ -27,10 +29,11 @@ vi.mock("./db", () => ({
 
 const HOUR = 3600_000;
 
-async function token(userId: string, opts: { clientId?: string; expiresIn?: number; revoked?: boolean } = {}) {
+async function token(userId: string, opts: { clientId?: string; expiresIn?: number; revoked?: boolean; rawOnly?: boolean } = {}) {
   const raw = `tok-${randomUUID()}`;
   await db.insert(oauthAccessTokens).values({
     token: raw,
+    tokenHash: opts.rawOnly ? null : hashToken(raw),
     clientId: opts.clientId ?? WEB_SESSION_CLIENT_ID,
     userId,
     scope: null,
@@ -62,6 +65,25 @@ describe.skipIf(!dockerAvailable)("liveWebSessionUserId (real db)", () => {
     const userId = await insertTestUser(db);
     expect(await liveWebSessionUserId(db, await token(userId, { revoked: true }))).toBeNull();
     expect(await liveWebSessionUserId(db, await token(userId, { expiresIn: -HOUR }))).toBeNull();
+  });
+
+  it("SCRUM-443 release 2: a live web session with no hash is no session, though its raw value matches", async () => {
+    const userId = await insertTestUser(db);
+    expect(await liveWebSessionUserId(db, await token(userId, { rawOnly: true }))).toBeNull();
+  });
+
+  it("SCRUM-443 release 2: the bearer resolves by hash, and refuses a live MCP token that has none", async () => {
+    const userId = await insertTestUser(db);
+    expect(await resolveBearer(db, await token(userId, { clientId: "client-xyz" }))).toEqual({
+      ok: true,
+      userId,
+      clientId: "client-xyz",
+    });
+    expect(await resolveBearer(db, await token(userId, { clientId: "client-xyz", rawOnly: true }))).toEqual({
+      ok: false,
+      reason: "invalid",
+      userId: null,
+    });
   });
 
   it("no cookie, and an unknown value, are no session", async () => {

@@ -284,7 +284,7 @@ export function createAuthRouter(
       const revoked = await db
         .update(oauthAccessTokens)
         .set({ revokedAt: new Date() })
-        .where(eq(oauthAccessTokens.token, sessionToken))
+        .where(eq(oauthAccessTokens.tokenHash, hashToken(sessionToken)))
         .returning({ userId: oauthAccessTokens.userId });
       for (const row of revoked) {
         if (!row.userId) continue;
@@ -521,7 +521,7 @@ export function createAuthRouter(
       const revoked = await db
         .update(oauthAccessTokens)
         .set({ revokedAt: new Date() })
-        .where(eq(oauthAccessTokens.token, sessionToken))
+        .where(eq(oauthAccessTokens.tokenHash, hashToken(sessionToken)))
         .returning({ userId: oauthAccessTokens.userId });
       // Signing out takes the user's open download links with it (SCRUM-420).
       for (const row of revoked) if (row.userId) dropLinksForUser(row.userId);

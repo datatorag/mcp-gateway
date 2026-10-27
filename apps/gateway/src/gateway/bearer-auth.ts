@@ -2,6 +2,7 @@ import { eq } from "drizzle-orm";
 import type { RequestHandler } from "express";
 import type { Database } from "@datatorag-mcp/db";
 import { oauthAccessTokens } from "@datatorag-mcp/db";
+import { hashToken } from "@datatorag-mcp/auth";
 import { isTokenLive } from "@/lib/token-liveness";
 import { WEB_SESSION_CLIENT_ID } from "@/lib/web-session";
 import { classifyAuthFailure, type AuthFailureReason } from "./mcp-analytics";
@@ -35,7 +36,8 @@ export async function resolveBearer(db: Database, rawToken: string): Promise<Bea
       expiresAt: oauthAccessTokens.expiresAt,
     })
     .from(oauthAccessTokens)
-    .where(eq(oauthAccessTokens.token, rawToken))
+    // SCRUM-443 release 2: matched by hash; the raw value is no longer read.
+    .where(eq(oauthAccessTokens.tokenHash, hashToken(rawToken)))
     .limit(1);
   // A dashboard session shares the table but is not a bearer (SCRUM-374): the
   // cookie that carries it is httpOnly and same-site, and a bearer has neither
