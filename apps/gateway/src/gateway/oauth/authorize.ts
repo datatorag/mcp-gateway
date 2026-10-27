@@ -2,9 +2,11 @@ import { randomBytes } from "node:crypto";
 import { Router } from "express";
 import { eq } from "drizzle-orm";
 import type { Database } from "@datatorag-mcp/db";
-import { oauthClients, oauthAuthorizationCodes, users } from "@datatorag-mcp/db";
+import { oauthClients, oauthAuthorizationCodes } from "@datatorag-mcp/db";
 import { safeStringEqual } from "@datatorag-mcp/auth";
 import { nonceMatches, OAUTH_STATE_TTL_MS } from "./csrf";
+import { findOrCreateGoogleUser, onNewUser } from "../signup";
+import { cleanClientName } from "../untrusted-text";
 
 // A redirect_uri is valid only if it's one the client registered. Shared by
 // /authorize (up front) and /callback (re-checked, since `state` is user-supplied).
@@ -170,7 +172,7 @@ export function createAuthorizeRouter(
     // Re-validate redirect_uri against the registered client — `state` is
     // user-supplied and must never be trusted to point the auth code anywhere.
     const [client] = await db
-      .select({ redirectUris: oauthClients.redirectUris })
+      .select({ redirectUris: oauthClients.redirectUris, clientName: oauthClients.clientName })
       .from(oauthClients)
       .where(eq(oauthClients.clientId, params.client_id))
       .limit(1);
@@ -228,23 +230,15 @@ export function createAuthorizeRouter(
       picture?: string;
     };
 
-    // Find or create user
-    let [user] = await db
-      .select()
-      .from(users)
-      .where(eq(users.email, googleUser.email))
-      .limit(1);
-
-    if (!user) {
-      [user] = await db
-        .insert(users)
-        .values({
-          email: googleUser.email,
-          name: googleUser.name ?? null,
-          emailVerified: true,
-          avatarUrl: googleUser.picture ?? null,
-        })
-        .returning();
+    // A signup that starts in an MCP client gets what a dashboard signup
+    // gets (SCRUM-89). There is no landing page to attribute, so the client's
+    // registered name stands in, cleaned: it is the client's own claim.
+    const { user, isNewUser } = await findOrCreateGoogleUser(db, googleUser);
+    if (isNewUser) {
+      await onNewUser(db, user, {
+        entry: "mcp_client",
+        clientName: cleanClientName(client?.clientName),
+      });
     }
 
     // Issue authorization code to the MCP client
