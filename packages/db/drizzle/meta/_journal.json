@@ -183,6 +183,13 @@
       "when": 1793073384868,
       "tag": "0025_gifted_vision",
       "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "7",
+      "when": 1793075245108,
+      "tag": "0026_tired_phalanx",
+      "breakpoints": true
     }
   ]
 }

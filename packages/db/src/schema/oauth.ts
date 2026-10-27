@@ -23,6 +23,8 @@ export const oauthClients = pgTable("oauth_clients", {
 export const oauthAuthorizationCodes = pgTable("oauth_authorization_codes", {
   id: uuid("id").primaryKey().defaultRandom(),
   code: text("code").notNull().unique(),
+  // sha256(code) as hex, as `token_hash` above (SCRUM-443).
+  codeHash: text("code_hash").unique(),
   clientId: text("client_id").notNull(),
   userId: uuid("user_id")
     .notNull()
@@ -42,6 +44,9 @@ export const oauthAuthorizationCodes = pgTable("oauth_authorization_codes", {
 export const oauthAccessTokens = pgTable("oauth_access_tokens", {
   id: uuid("id").primaryKey().defaultRandom(),
   token: text("token").notNull().unique(),
+  // sha256(token) as hex (SCRUM-443). Written beside the raw value from
+  // release 1, read from release 2; the raw column goes in release 3.
+  tokenHash: text("token_hash").unique(),
   clientId: text("client_id").notNull(),
   userId: uuid("user_id")
     .notNull()

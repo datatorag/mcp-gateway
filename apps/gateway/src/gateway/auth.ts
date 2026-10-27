@@ -31,6 +31,7 @@ import {
 import { googleConnectRefusedUrl, renderConnectInterstitial } from "./connect-interstitial";
 import { GWS_SCOPE_LIST, grantedServiceCount, scopeDelta, serviceGrantStates } from "./scope-grant";
 import { NOTION_AUTHORIZE_URL, NOTION_TOKEN_URL, notionBasicAuth } from "./notion-oauth";
+import { hashToken } from "@datatorag-mcp/auth";
 import { isServiceLaunched } from "./service-launch";
 import { cleanWorkspaceName } from "./untrusted-text";
 import { dropLinksForUser } from "./file-download";
@@ -461,6 +462,8 @@ export function createAuthRouter(
 
     await db.insert(oauthAccessTokens).values({
       token,
+      // SCRUM-443 release 1: the hash beside the raw value; reads still use the raw value.
+      tokenHash: hashToken(token),
       clientId: WEB_SESSION_CLIENT_ID,
       userId: user.id,
       scope: null,
