@@ -260,12 +260,17 @@ async function trackFirstToolCall(
  * behalf. */
 export type SkillContext = { skill?: string | null; entry?: "agent" | "connect" };
 
+/** Which door a signup came in by (SCRUM-89), and for an MCP client the name
+ * it registered with. */
+export type SignupSource = { entry: "dashboard" | "mcp_client"; clientName?: string | null };
+
 export function trackSignup(
   userId: string,
   email: string,
   name: string | null,
   attribution?: Attribution | null,
-  context?: SkillContext
+  context?: SkillContext,
+  source?: SignupSource
 ): void {
   const c = getPosthog();
   if (!c) return;
@@ -283,6 +288,8 @@ export function trackSignup(
       ...acquisitionProps(attribution),
       ...acquisitionSetOnce(attribution),
       skill: context?.skill ?? null,
+      signup_entry: source?.entry ?? null,
+      client_name: source?.clientName ?? null,
     },
   });
 }

@@ -11,9 +11,35 @@
  * that hides a real outage is how a broken integration looks healthy. */
 export class TransientGwsError extends Error {
   readonly retryable = true;
-  constructor(message: string) {
+  /** Google's HTTP status, when Google answered at all. */
+  readonly status?: number;
+  constructor(message: string, status?: number) {
     super(`${message}\n\n[transient — this usually succeeds on an immediate retry]`);
     this.name = "TransientGwsError";
+    if (status !== undefined) this.status = status;
+  }
+}
+
+/** Google answered the request with an HTTP error. The status and Google's
+ * own reason travel with it, so the gateway can tell a refusal of the request
+ * from a failure on our side without reading the words (SCRUM-154). */
+export class GwsApiError extends Error {
+  constructor(
+    message: string,
+    readonly status: number,
+    readonly reason?: string
+  ) {
+    super(message);
+    this.name = "GwsApiError";
+  }
+}
+
+/** The request never reached Google and the failure is not one known to pass
+ * on a retry. */
+export class GwsUnreachableError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "GwsUnreachableError";
   }
 }
 

@@ -3,6 +3,7 @@ import type { Database } from "@datatorag-mcp/db";
 import { leads, users } from "@datatorag-mcp/db";
 import { sendSlack } from "../lib/slack";
 import { isInternalEmail } from "../lib/brevo";
+import type { SignupSource } from "./track";
 
 /**
  * Real-time #leads post on every new signup (SCRUM-26) — not just lead-form
@@ -21,7 +22,8 @@ import { isInternalEmail } from "../lib/brevo";
  */
 export async function notifySignup(
   db: Database,
-  user: { id: string; email: string; name: string | null; createdAt?: Date }
+  user: { id: string; email: string; name: string | null; createdAt?: Date },
+  source?: SignupSource
 ): Promise<void> {
   try {
     if (isInternalEmail(user.email)) {
@@ -60,8 +62,9 @@ export async function notifySignup(
 
     await sendSlack("leads", {
       text:
-        `🟣 New signup: ${user.name ?? "(no name)"} <${user.email}>` +
+        `🟣 New signup: ${user.name ? slackEscape(user.name) : "(no name)"} <${user.email}>` +
         `\n${sourceLine(acquisition)}` +
+        (source ? `\n${entryLine(source)}` : "") +
         (entryPath ? `\nLanded: ${entryPath}` : "") +
         `\n${leadMatchLine(lead)}` +
         `\nSigned up: ${signedUpAt}`,
@@ -105,6 +108,20 @@ function sourceLine(a: AcquisitionRow): string {
   // acts on in Slack.
   const gclid = a.acquisitionGclid ? " (gclid ✓)" : "";
   return `Source: ${a.acquisitionChannel}${shown ? ` - ${shown}` : ""}${gclid}`;
+}
+
+/** Which door the signup came in by. An MCP client signup has no landing
+ * page, so its Source line reads unknown and this line says why. The client
+ * name is the client's own claim: escaped so it cannot mention or link. */
+function entryLine(source: SignupSource): string {
+  if (source.entry === "dashboard") return "Entry: dashboard";
+  // Inline code, so a name shaped like a domain is not made a link.
+  const name = source.clientName ? ` (\`${slackEscape(source.clientName.replace(/`/g, "'"))}\`)` : "";
+  return `Entry: MCP client${name}`;
+}
+
+function slackEscape(text: string): string {
+  return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
 
 /** Entry PATH only: the query string is where all the length is and none of

@@ -177,4 +177,30 @@ describe("notifySignup", () => {
       notifySignup(dbMock, { id: "u1", email: "carol@customer.com", name: "Carol" })
     ).resolves.toBeUndefined();
   });
+
+  // SCRUM-89: which door the signup came in by. The client name is chosen by
+  // the client, so it can neither mention, link nor break out of its span.
+  it("names the MCP client a signup came from, as inline code that cannot mention or link", async () => {
+    await notifySignup(
+      dbMock,
+      { id: "u1", email: "bob@customer.com", name: null },
+      { entry: "mcp_client", clientName: "<!channel> `x` evil.example" }
+    );
+    const text = lastText();
+    expect(text).toContain("Entry: MCP client (`&lt;!channel&gt; 'x' evil.example`)");
+    expect(text).not.toContain("<!channel>");
+  });
+
+  it("an MCP client with no name, and a dashboard signup, each say their door", async () => {
+    await notifySignup(dbMock, { id: "u1", email: "bob@customer.com", name: null }, { entry: "mcp_client", clientName: null });
+    expect(lastText()).toContain("Entry: MCP client\n");
+    vi.mocked(sendSlack).mockClear();
+    await notifySignup(dbMock, { id: "u1", email: "bob@customer.com", name: null }, { entry: "dashboard" });
+    expect(lastText()).toContain("Entry: dashboard");
+  });
+
+  it("escapes the Google display name, which its owner chose", async () => {
+    await notifySignup(dbMock, { id: "u1", email: "bob@customer.com", name: "<!here> Bob" });
+    expect(lastText()).toContain("New signup: &lt;!here&gt; Bob <bob@customer.com>");
+  });
 });

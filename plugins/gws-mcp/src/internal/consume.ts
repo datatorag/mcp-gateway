@@ -16,6 +16,7 @@
  */
 
 import { GwsClient } from "../gws-client.js";
+import { errorMetaField, errorMetaFor, type ErrorMeta } from "../error-meta.js";
 import { handleGmail } from "../tools/gmail.js";
 import {
   BadHandoff,
@@ -36,6 +37,7 @@ export const CONSUME_PATH = "/internal/consume";
 type ToolResult = {
   content: Array<{ type: "text"; text: string }>;
   isError?: boolean;
+  _meta?: Record<string, ErrorMeta>;
 };
 
 type ConsumingTool = (
@@ -113,7 +115,7 @@ export interface ConsumeResponse {
   status: number;
   body:
     | { error: string; code: string }
-    | { content: Array<{ type: "text"; text: string }>; isError: boolean };
+    | { content: Array<{ type: "text"; text: string }>; isError: boolean; _meta?: Record<string, ErrorMeta> };
 }
 
 function refuse(status: number, code: string, error: string): ConsumeResponse {
@@ -219,6 +221,7 @@ export async function handleConsume(
     result = {
       content: [{ type: "text", text: `Error: ${message}` }],
       isError: true,
+      _meta: errorMetaField(errorMetaFor(err)),
     };
   }
 
@@ -226,7 +229,10 @@ export async function handleConsume(
   // One line, and nothing in it that came from the file, the folder or the
   // arguments: the outcome and a byte count.
   console.error(`[consume] ${toolName} outcome=${isError ? "error" : "ok"} bytes=${bytes}`);
-  return { status: 200, body: { content: result.content, isError } };
+  return {
+    status: 200,
+    body: { content: result.content, isError, ...(result._meta ? { _meta: result._meta } : {}) },
+  };
 }
 
 function tooLargeMessage(): string {

@@ -6,7 +6,8 @@ import { NotionClient } from "./notion-client.js";
 import { retryClock } from "./rate-limit-retry.js";
 import { fakeFetch } from "./fixtures/fake-fetch.js";
 import { recorded } from "./fixtures/load.js";
-import { RATE_LIMITED } from "./fixtures/errors-documented.js";
+import { RATE_LIMITED, SERVICE_UNAVAILABLE } from "./fixtures/errors-documented.js";
+import { ERROR_META_KEY } from "./error-meta.js";
 
 /* Through the MCP server, the way the gateway calls it. What this pins is the
  * wiring: the dispatch hands each tool a client whose retry is decided by
@@ -95,5 +96,84 @@ describe("the MCP server", () => {
     const res = (await mcp.callTool({ name: "notion_delete_everything", arguments: {} })) as { isError?: boolean; content: Array<{ text: string }> };
     expect(res.isError).toBe(true);
     expect(res.content[0].text).toBe("Unknown tool: notion_delete_everything");
+  });
+});
+
+/* What a failed call says about whose failure it was (SCRUM-154). The gateway
+ * meters on this field, so each kind is pinned from the answer that produces
+ * it. */
+describe("a failed call names its kind in _meta", () => {
+  type Res = { isError?: boolean; _meta?: Record<string, unknown> };
+  const PAGE = "122f53f3d53e4072842d9891b983e4e0";
+
+  it("Notion's 404 is an http error with its status and code", async () => {
+    fakeFetch([{ status: 404, body: recorded("err-not-found").body }]);
+    const mcp = await connect(new NotionClient({ accessToken: TOKEN }));
+    const res = (await mcp.callTool({ name: "notion_get_page", arguments: { page_id: PAGE } })) as Res;
+    expect(res.isError).toBe(true);
+    expect(res._meta?.[ERROR_META_KEY]).toEqual({ kind: "http", status: 404, reason: "object_not_found" });
+  });
+
+  it("a write refused for rate keeps its 429", async () => {
+    fakeFetch([{ status: 429, body: RATE_LIMITED, headers: { "Retry-After": "1" } }]);
+    const mcp = await connect(new NotionClient({ accessToken: TOKEN }));
+    const res = (await mcp.callTool({
+      name: "notion_create_comment",
+      arguments: { page_id: PAGE, text: "hi" },
+    })) as Res;
+    expect(res._meta?.[ERROR_META_KEY]).toMatchObject({ kind: "http", status: 429 });
+  });
+
+  it("a 503 keeps its status", async () => {
+    fakeFetch([{ status: 503, body: SERVICE_UNAVAILABLE }]);
+    const mcp = await connect(new NotionClient({ accessToken: TOKEN }));
+    const res = (await mcp.callTool({
+      name: "notion_create_comment",
+      arguments: { page_id: PAGE, text: "hi" },
+    })) as Res;
+    expect(res._meta?.[ERROR_META_KEY]).toMatchObject({ kind: "http", status: 503 });
+  });
+
+  it("a write that got no answer is unreachable", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => {
+        throw Object.assign(new TypeError("fetch failed"), { cause: { code: "ECONNRESET" } });
+      })
+    );
+    const mcp = await connect(new NotionClient({ accessToken: TOKEN }));
+    const res = (await mcp.callTool({
+      name: "notion_create_comment",
+      arguments: { page_id: PAGE, text: "hi" },
+    })) as Res;
+    expect(res._meta?.[ERROR_META_KEY]).toEqual({ kind: "unreachable" });
+  });
+
+  it("a read whose connection failed is unreachable", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => {
+        throw Object.assign(new TypeError("fetch failed"), { cause: { code: "ECONNRESET" } });
+      })
+    );
+    const mcp = await connect(new NotionClient({ accessToken: TOKEN }));
+    const res = (await mcp.callTool({ name: "notion_get_page", arguments: { page_id: PAGE } })) as Res;
+    expect(res._meta?.[ERROR_META_KEY]).toEqual({ kind: "unreachable" });
+  });
+
+  it("an encoder refusal is the plugin's own refusal", async () => {
+    fakeFetch([{ status: 200, body: recorded("data-source").body }]);
+    const mcp = await connect(new NotionClient({ accessToken: TOKEN }));
+    const res = (await mcp.callTool({
+      name: "notion_create_page",
+      arguments: { parent_data_source_id: "fcfeab1774c94fac80268fdff653c6c5", properties: { "Membership Type": "Nobody" } },
+    })) as Res;
+    expect(res._meta?.[ERROR_META_KEY]).toEqual({ kind: "refused" });
+  });
+
+  it("a tool this plugin does not serve is unknown_tool", async () => {
+    const mcp = await connect(new NotionClient({ accessToken: TOKEN }));
+    const res = (await mcp.callTool({ name: "not_a_tool", arguments: {} })) as Res;
+    expect(res._meta?.[ERROR_META_KEY]).toEqual({ kind: "unknown_tool" });
   });
 });

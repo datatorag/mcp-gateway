@@ -1,8 +1,10 @@
 import type Stripe from "stripe";
-import { and, eq, isNull } from "drizzle-orm";
+import { and, eq, isNull, ne } from "drizzle-orm";
 import type { Database } from "@datatorag-mcp/db";
 import { stripeEvents, subscriptions, users, type Plan } from "@datatorag-mcp/db";
 import type { SubscriptionStatus } from "@datatorag-mcp/db";
+import { EVENTS } from "../../lib/analytics";
+import { getPosthog } from "../../lib/posthog-server";
 
 /**
  * Stripe webhook lifecycle, in one place, IDEMPOTENT BY CONSTRUCTION.
@@ -33,6 +35,16 @@ import type { SubscriptionStatus } from "@datatorag-mcp/db";
  * - invoice.payment_failed              → free, immediately. A failed payment
  *   must not silently leave someone on Pro; if a Stripe retry later collects,
  *   customer.subscription.updated (status back to `active`) restores Pro.
+ *
+ * WHAT EACH EVENT TELLS POSTHOG (SCRUM-144), from Stripe's own
+ * `previous_attributes`, so no state of ours is compared:
+ * - subscription_started: a user's first subscription becomes active.
+ * - subscription_changed: the billing interval moved.
+ * - subscription_cancelled: a cancellation was scheduled, or a subscription
+ *   was deleted without one (an immediate cancel).
+ * - subscription_ended: the subscription was deleted.
+ * Captured only after the claiming transaction commits, so a redelivery, or a
+ * delivery that rolled back, sends nothing.
  */
 
 /** Events this gateway reacts to. Anything else is claimed (so a later
@@ -50,6 +62,73 @@ export function planForSubscriptionStatus(status: Stripe.Subscription.Status): P
   // `trialing` maps to pro for Stripe-side completeness only — we never
   // create trialing subscriptions (the free tier is the trial).
   return status === "active" || status === "trialing" ? "pro" : "free";
+}
+
+/** The one paid plan: every subscription is to it. */
+const SUBSCRIBED_PLAN: Plan = "pro";
+
+type SubscriptionEvent =
+  | typeof EVENTS.SUBSCRIPTION_STARTED
+  | typeof EVENTS.SUBSCRIPTION_CHANGED
+  | typeof EVENTS.SUBSCRIPTION_CANCELLED
+  | typeof EVENTS.SUBSCRIPTION_ENDED;
+
+/** One event to send once the transaction holds. Plan and interval only:
+ * never an amount, never a Stripe id. */
+type SubscriptionCapture = { userId: string; event: SubscriptionEvent; plan: Plan; interval: string | null };
+
+function intervalOf(sub: Partial<Stripe.Subscription>): string | null {
+  return sub.items?.data?.[0]?.price?.recurring?.interval ?? null;
+}
+
+/** What changed, read from the event Stripe sent. `previous` holds only the
+ * fields that changed, each at its old value. */
+function subscriptionTransitions(
+  type: "customer.subscription.created" | "customer.subscription.updated" | "customer.subscription.deleted",
+  sub: Stripe.Subscription,
+  previous: Partial<Stripe.Subscription>,
+  firstSubscription: boolean
+): SubscriptionEvent[] {
+  const active = planForSubscriptionStatus(sub.status) === "pro";
+  const out: SubscriptionEvent[] = [];
+  if (type === "customer.subscription.deleted") {
+    const wasScheduled = sub.cancel_at_period_end || sub.cancel_at != null;
+    if (!wasScheduled) out.push(EVENTS.SUBSCRIPTION_CANCELLED);
+    out.push(EVENTS.SUBSCRIPTION_ENDED);
+    return out;
+  }
+  // First activation: created already paid, or an incomplete checkout that
+  // was paid. A recovery from past_due is not a start.
+  const becameActive =
+    active && (type === "customer.subscription.created" || previous.status === "incomplete");
+  if (becameActive && firstSubscription) out.push(EVENTS.SUBSCRIPTION_STARTED);
+  if (type === "customer.subscription.updated") {
+    if (active && previous.items !== undefined && intervalOf(previous) !== intervalOf(sub)) {
+      out.push(EVENTS.SUBSCRIPTION_CHANGED);
+    }
+    // The portal schedules a cancellation with `cancel_at` and leaves the
+    // boolean false on the current API version, so either counts.
+    const scheduled =
+      (previous.cancel_at_period_end === false && sub.cancel_at_period_end) ||
+      (previous.cancel_at === null && sub.cancel_at != null);
+    if (scheduled) out.push(EVENTS.SUBSCRIPTION_CANCELLED);
+  }
+  return out;
+}
+
+/** Send what the transaction decided. Never throws: analytics must not turn
+ * an applied event into a failed delivery. */
+function captureSubscriptionEvents(captures: SubscriptionCapture[]): void {
+  if (captures.length === 0) return;
+  try {
+    const c = getPosthog();
+    if (!c) return;
+    for (const { userId, event, plan, interval } of captures) {
+      c.capture({ distinctId: userId, event, properties: { plan, interval } });
+    }
+  } catch (err) {
+    console.warn("[stripe-webhook] subscription event capture failed", err);
+  }
 }
 
 export type WebhookOutcome =
@@ -96,7 +175,15 @@ function subscriptionPeriod(sub: Stripe.Subscription): { start: Date; end: Date 
   };
 }
 
-async function applySubscriptionState(tx: Tx, sub: Stripe.Subscription): Promise<string> {
+async function applySubscriptionState(
+  tx: Tx,
+  event:
+    | Stripe.CustomerSubscriptionCreatedEvent
+    | Stripe.CustomerSubscriptionUpdatedEvent
+    | Stripe.CustomerSubscriptionDeletedEvent,
+  captures: SubscriptionCapture[]
+): Promise<string> {
+  const sub = event.data.object;
   const customerId = typeof sub.customer === "string" ? sub.customer : sub.customer.id;
   const userId = await resolveUserId(tx, customerId, sub.metadata?.user_id);
   if (!userId) {
@@ -107,6 +194,16 @@ async function applySubscriptionState(tx: Tx, sub: Stripe.Subscription): Promise
       `[stripe-webhook] subscription ${sub.id} for unknown customer ${customerId} — no user updated`
     );
     return "unknown-customer";
+  }
+  // Read before the upsert below adds this one: is it the user's first?
+  const [other] = await tx
+    .select({ id: subscriptions.id })
+    .from(subscriptions)
+    .where(and(eq(subscriptions.userId, userId), ne(subscriptions.stripeSubscriptionId, sub.id)))
+    .limit(1);
+  const previous = (event.data.previous_attributes ?? {}) as Partial<Stripe.Subscription>;
+  for (const name of subscriptionTransitions(event.type, sub, previous, !other)) {
+    captures.push({ userId, event: name, plan: SUBSCRIBED_PLAN, interval: intervalOf(sub) });
   }
   const period = subscriptionPeriod(sub);
   const status = sub.status as SubscriptionStatus;
@@ -141,7 +238,7 @@ async function applySubscriptionState(tx: Tx, sub: Stripe.Subscription): Promise
   return `subscription ${sub.status} → plan ${plan}`;
 }
 
-async function applyEvent(tx: Tx, event: Stripe.Event): Promise<string> {
+async function applyEvent(tx: Tx, event: Stripe.Event, captures: SubscriptionCapture[]): Promise<string> {
   switch (event.type) {
     case "checkout.session.completed": {
       const session = event.data.object;
@@ -162,7 +259,7 @@ async function applyEvent(tx: Tx, event: Stripe.Event): Promise<string> {
     case "customer.subscription.created":
     case "customer.subscription.updated":
     case "customer.subscription.deleted": {
-      return applySubscriptionState(tx, event.data.object);
+      return applySubscriptionState(tx, event, captures);
     }
     case "invoice.payment_failed": {
       const invoice = event.data.object;
@@ -204,7 +301,8 @@ export async function handleStripeEvent(
   db: Database,
   event: Stripe.Event
 ): Promise<WebhookOutcome> {
-  return db.transaction(async (tx) => {
+  const captures: SubscriptionCapture[] = [];
+  const outcome = await db.transaction(async (tx) => {
     const claimed = await tx
       .insert(stripeEvents)
       .values({ id: event.id, type: event.type })
@@ -213,7 +311,9 @@ export async function handleStripeEvent(
     if (claimed.length === 0) {
       return { duplicate: true as const };
     }
-    const action = await applyEvent(tx, event);
+    const action = await applyEvent(tx, event, captures);
     return { duplicate: false as const, action };
   });
+  captureSubscriptionEvents(captures);
+  return outcome;
 }
