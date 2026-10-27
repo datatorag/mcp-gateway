@@ -1,5 +1,6 @@
 /**
- * `node dist/tokens.js backfill | reencrypt | restore` (SCRUM-442).
+ * `node dist/tokens.js backfill | reencrypt | restore` (SCRUM-442), and
+ * `hash-access-tokens` (SCRUM-443 release 2).
  *
  * Its own entry, so it runs whenever it is started and never on an import:
  * a "was I started directly" check does not survive the bundler, which turns

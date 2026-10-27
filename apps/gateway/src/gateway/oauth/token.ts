@@ -75,7 +75,8 @@ export function createTokenRouter(db: Database): Router {
       .from(oauthAuthorizationCodes)
       .where(
         and(
-          eq(oauthAuthorizationCodes.code, code),
+          // SCRUM-443 release 2: matched by hash; the raw value is no longer read.
+          eq(oauthAuthorizationCodes.codeHash, hashToken(code)),
           isNull(oauthAuthorizationCodes.usedAt)
         )
       )

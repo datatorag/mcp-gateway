@@ -1,6 +1,7 @@
 import { and, eq } from "drizzle-orm";
 import type { Database } from "@datatorag-mcp/db";
 import { oauthAccessTokens } from "@datatorag-mcp/db";
+import { hashToken } from "@datatorag-mcp/auth";
 import { liveTokenConditions } from "./token-liveness";
 
 /** The client id every dashboard sign-in is stored under. A web session and an
@@ -27,7 +28,8 @@ export async function liveWebSessionUserId(
     .from(oauthAccessTokens)
     .where(
       and(
-        eq(oauthAccessTokens.token, rawToken),
+        // SCRUM-443 release 2: matched by hash; the raw value is no longer read.
+        eq(oauthAccessTokens.tokenHash, hashToken(rawToken)),
         eq(oauthAccessTokens.clientId, WEB_SESSION_CLIENT_ID),
         ...liveTokenConditions()
       )

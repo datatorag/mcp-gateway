@@ -1,6 +1,7 @@
 import { sql } from "drizzle-orm";
 import type { Database } from "@datatorag-mcp/db";
 import { TokenOpenError, currentKeyId, openToken, sealToken, type SealContext } from "./token-crypto";
+import { backfillAccessTokenHashes } from "./access-token-hash-commands";
 
 /**
  * The three commands that move provider tokens between their plain and
@@ -207,8 +208,18 @@ export async function runTokenCommand(
       console.log(`restore: ${counts(result)}`);
       return result.failed > 0 ? 1 : 0;
     }
+    case "hash-access-tokens": {
+      // SCRUM-443 release 2: the gate before reads move to token_hash.
+      const result = await backfillAccessTokenHashes(db);
+      console.log(`hash-access-tokens: ${counts(result)}`);
+      if (result.unhashed > 0) {
+        console.error("hash-access-tokens: live tokens still have no hash; run it again");
+        return 1;
+      }
+      return 0;
+    }
     default:
-      console.error("usage: node dist/tokens.js backfill | reencrypt | restore");
+      console.error("usage: node dist/tokens.js backfill | reencrypt | restore | hash-access-tokens");
       return 2;
   }
 }
