@@ -53,6 +53,17 @@ export const EVENTS = {
    * byte count and whether the send finished; never the name, the hash or
    * the link. The call that made the link is an ordinary `tool_call`. */
   FILE_DOWNLOADED: "file_downloaded",
+  /** SCRUM-144: the subscription lifecycle, server-side from the Stripe
+   * webhook, distinct id the user id. Properties are `plan` and `interval`
+   * (`month` or `year`) and nothing else: no amount, no Stripe id. Started
+   * fires for a user's first subscription only; changed when the interval
+   * moves; cancelled when a cancellation is scheduled or a subscription is
+   * deleted without one; ended when it is deleted. Each fires once per
+   * Stripe event, after the webhook's own claim commits. */
+  SUBSCRIPTION_STARTED: "subscription_started",
+  SUBSCRIPTION_CHANGED: "subscription_changed",
+  SUBSCRIPTION_CANCELLED: "subscription_cancelled",
+  SUBSCRIPTION_ENDED: "subscription_ended",
   /** Scheduled skill runs (SCRUM-225). */
   SKILL_SCHEDULED: "skill_scheduled",
   SKILL_SCHEDULE_PAUSED: "skill_schedule_paused",
