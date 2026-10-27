@@ -133,6 +133,8 @@ export function createTokenRouter(db: Database): Router {
     await db.transaction(async (tx) => {
       await tx.insert(oauthAccessTokens).values({
         token: accessToken,
+        // SCRUM-443 release 1: the hash beside the raw value.
+        tokenHash: hashToken(accessToken),
         clientId: client_id,
         userId: authCode.userId,
         scope: authCode.scope,
@@ -215,6 +217,7 @@ async function handleRefreshGrant(
 
       await tx.insert(oauthAccessTokens).values({
         token: newAccessToken,
+        tokenHash: hashToken(newAccessToken),
         clientId: row.clientId,
         userId: row.userId,
         scope: row.scope,

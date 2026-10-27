@@ -3,7 +3,7 @@ import { Router } from "express";
 import { eq } from "drizzle-orm";
 import type { Database } from "@datatorag-mcp/db";
 import { oauthClients, oauthAuthorizationCodes } from "@datatorag-mcp/db";
-import { safeStringEqual } from "@datatorag-mcp/auth";
+import { hashToken, safeStringEqual } from "@datatorag-mcp/auth";
 import { nonceMatches, OAUTH_STATE_TTL_MS } from "./csrf";
 import { findOrCreateGoogleUser, onNewUser } from "../signup";
 import { cleanClientName } from "../untrusted-text";
@@ -247,6 +247,8 @@ export function createAuthorizeRouter(
 
     await db.insert(oauthAuthorizationCodes).values({
       code: authCode,
+      // SCRUM-443 release 1: the hash beside the raw value; the exchange still matches the raw value.
+      codeHash: hashToken(authCode),
       clientId: params.client_id,
       userId: user.id,
       redirectUri: params.redirect_uri,

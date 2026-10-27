@@ -13,7 +13,8 @@ import express from "express";
 import cookieParser from "cookie-parser";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Database } from "@datatorag-mcp/db";
-import { oauthClients, users } from "@datatorag-mcp/db";
+import { oauthAccessTokens, oauthAuthorizationCodes, oauthClients, users } from "@datatorag-mcp/db";
+import { hashToken } from "@datatorag-mcp/auth";
 
 vi.mock("./track", () => ({
   trackLogin: vi.fn(),
@@ -49,6 +50,7 @@ const REDIRECT = "http://127.0.0.1:9999/callback";
 let userLookups: unknown[][] = [];
 let inserted: unknown[] = [];
 let clientName: string | null = "Claude";
+const insertedRows: Array<{ table: unknown; v: Record<string, unknown> }> = [];
 
 const dbMock = {
   select: () => ({
@@ -60,7 +62,8 @@ const dbMock = {
     }),
   }),
   insert: (table: unknown) => ({
-    values: () => {
+    values: (v: Record<string, unknown>) => {
+      insertedRows.push({ table, v });
       const done = Promise.resolve([]);
       return {
         onConflictDoNothing: () => ({ returning: async () => (table === users ? inserted : []) }),
@@ -106,6 +109,7 @@ afterAll(async () => {
 beforeEach(() => {
   vi.clearAllMocks();
   clientName = "Claude";
+  insertedRows.length = 0;
   vi.stubGlobal(
     "fetch",
     vi.fn(async (url: string | URL) => {
@@ -242,5 +246,29 @@ describe("onNewUser", () => {
   it("carries the dashboard's skill slug onto the signup event", async () => {
     await onNewUser(dbMock, NEW_USER as never, { entry: "dashboard", attribution: null, skill: "weekly-report" });
     expect(vi.mocked(trackSignup).mock.calls[0][4]).toEqual({ skill: "weekly-report" });
+  });
+});
+
+/* SCRUM-443 release 1: the session token and the authorization code are
+ * stored with sha256(raw) as hex beside the raw value. */
+describe("the hash is written beside the raw value (SCRUM-443)", () => {
+  it("for the dashboard session the login sets as the cookie", async () => {
+    userLookups = [[OLD_USER]];
+    const res = await dashboardCallback();
+    const cookie = /dtrmcp_session=([^;]+)/.exec(res.headers.get("set-cookie") ?? "")?.[1];
+    expect(cookie).toBeTruthy();
+    const row = insertedRows.find((r) => r.table === oauthAccessTokens)?.v;
+    expect(row?.token).toBe(cookie);
+    expect(row?.tokenHash).toBe(hashToken(cookie!));
+  });
+
+  it("for the authorization code the MCP callback hands the client", async () => {
+    userLookups = [[OLD_USER]];
+    const res = await mcpCallback();
+    const code = new URL(res.headers.get("location")!).searchParams.get("code");
+    expect(code).toBeTruthy();
+    const row = insertedRows.find((r) => r.table === oauthAuthorizationCodes)?.v;
+    expect(row?.code).toBe(code);
+    expect(row?.codeHash).toBe(hashToken(code!));
   });
 });
