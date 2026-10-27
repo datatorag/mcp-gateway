@@ -6,6 +6,7 @@ import {
 import { GwsClient, errorMessage } from "./gws-client.js";
 import { allTools, toolHandlers } from "./tools/index.js";
 import { validateArgs } from "./tools/validate.js";
+import { errorMetaField, errorMetaFor } from "./error-meta.js";
 
 export const gwsClient = new GwsClient();
 
@@ -34,6 +35,7 @@ export function createMcpServer(client?: GwsClient): Server {
         return {
           content: [{ type: "text" as const, text: `Unknown tool: ${name}` }],
           isError: true,
+          _meta: errorMetaField({ kind: "unknown_tool" }),
         };
       }
       // Validate against the tool's own advertised schema before the call
@@ -47,6 +49,7 @@ export function createMcpServer(client?: GwsClient): Server {
       return {
         content: [{ type: "text" as const, text: `Error: ${errorMessage(err)}` }],
         isError: true,
+        _meta: errorMetaField(errorMetaFor(err)),
       };
     }
   });

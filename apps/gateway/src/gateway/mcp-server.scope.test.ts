@@ -384,3 +384,62 @@ describe("an account value naming more than one account (SCRUM-366)", () => {
     );
   });
 });
+
+/* SCRUM-154: the dispatch hands the tracker what the plugin said about a
+ * failure and whether the grant holds every scope we request, and the
+ * classifier decides from those two. */
+describe("the plugin's statement of a failure reaches the classifier (SCRUM-154)", () => {
+  const SCOPE_403 = {
+    content: [
+      {
+        type: "text",
+        text: 'Error: API error: {"error":{"code":403,"message":"Request had insufficient authentication scopes.","reason":"insufficientPermissions"}}',
+      },
+    ],
+    isError: true,
+    _meta: { "datatorag.com/error": { kind: "http", status: 403, reason: "insufficientPermissions" } },
+  };
+
+  async function outcomeOf(scopes: string, answer: unknown) {
+    resolveServiceToken.mockResolvedValue({ token: "tok", accountEmail: "a@example.com", scopes });
+    callPluginToolOnce.mockResolvedValue(answer);
+    const client = await connectedClient("https://gw.example.test");
+    await client.callTool({ name: "gws-mcp__gmail_list_filters", arguments: {} });
+    expect(trackToolCall).toHaveBeenCalledTimes(1);
+    const { classifyOutcome } = await vi.importActual<typeof import("./usage/classify")>("./usage/classify");
+    const outcome = trackToolCall.mock.calls[0][1].outcome;
+    return { outcome, classified: classifyOutcome(outcome) };
+  }
+
+  it("a scope refusal on a grant holding every scope we request is ours, unmetered", async () => {
+    const { outcome, classified } = await outcomeOf(FULL_GRANT, SCOPE_403);
+    expect(outcome.failure).toEqual({ kind: "http", status: 403, reason: "insufficientPermissions" });
+    expect(outcome.grantComplete).toBe(true);
+    expect(classified).toEqual({ status: "server_error", meter: false });
+  });
+
+  it("the same refusal on a grant the user narrowed is theirs, metered", async () => {
+    const narrowed = FULL_GRANT.replace(" https://www.googleapis.com/auth/tasks", "");
+    const { outcome, classified } = await outcomeOf(narrowed, SCOPE_403);
+    expect(outcome.grantComplete).toBe(false);
+    expect(classified).toEqual({ status: "user_error", meter: true });
+  });
+
+  it("an upstream 503 is ours, unmetered", async () => {
+    const { classified } = await outcomeOf(FULL_GRANT, {
+      content: [{ type: "text", text: "Error: API error: ..." }],
+      isError: true,
+      _meta: { "datatorag.com/error": { kind: "transient", status: 503 } },
+    });
+    expect(classified).toEqual({ status: "server_error", meter: false });
+  });
+
+  it("a plugin error with no statement stays a metered user_error", async () => {
+    const { outcome, classified } = await outcomeOf(FULL_GRANT, {
+      content: [{ type: "text", text: "Error: no" }],
+      isError: true,
+    });
+    expect(outcome.failure).toBeNull();
+    expect(classified).toEqual({ status: "user_error", meter: true });
+  });
+});
