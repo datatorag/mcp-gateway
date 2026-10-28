@@ -22,11 +22,14 @@ export const dr7OfficeConvert: TestCase = {
   title: "an Excel file is refused by the Sheets tools with the conversion named, and its converted copy opens",
   covers: [
     "gws-mcp__drive_search",
-    "gws-mcp__drive_upload_file",
     "gws-mcp__sheets_get_metadata",
     "gws-mcp__drive_copy_file",
     "gws-mcp__sheets_delete",
   ],
+  // Setup, not coverage: the upload runs only when the standing fixture is
+  // missing, so on every run after the first it is not called at all.
+  // drive_upload_file's coverage is FD6, FD12 and the other upload cases.
+  cleanupCalls: ["gws-mcp__drive_upload_file"],
   accounts: ["sender"],
   fixtures: ["folder"],
   timeoutMs: 120_000,

@@ -150,10 +150,13 @@ export function accountArgs(
  */
 export const FILE_TRANSFER_LOCK = "file-transfer";
 
-export function movesAFile(testCase: Pick<TestCase, "covers" | "crossesFiles">): boolean {
+export function movesAFile(testCase: Pick<TestCase, "covers" | "crossesFiles" | "cleanupCalls">): boolean {
+  // cleanupCalls too: a file a case moves only on some runs (DR7's fixture,
+  // uploaded when it is missing) still needs the lock on the run it moves it.
+  const tools = [...testCase.covers, ...(testCase.cleanupCalls ?? [])];
   return (
     testCase.crossesFiles === true ||
-    testCase.covers.some((tool) => tool === DOWNLOAD_TOOL || tool === UPLOAD_TOOL || Object.hasOwn(FILE_CONSUMING_TOOLS, tool))
+    tools.some((tool) => tool === DOWNLOAD_TOOL || tool === UPLOAD_TOOL || Object.hasOwn(FILE_CONSUMING_TOOLS, tool))
   );
 }
 

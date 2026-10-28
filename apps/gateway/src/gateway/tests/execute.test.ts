@@ -15,6 +15,7 @@
 import { describe, expect, it } from "vitest";
 import { makeContextParts, startTestRun, contractSubjectFor, unmappedProbeRole, coverageMismatch, missingMappingsFor, selectCases, unservedToolsFor, pluginsBlocking, sharedAccountsFor } from "./execute";
 import { parseFixtureMap } from "./fixtures";
+import { CASES } from "./cases";
 import { vi } from "vitest";
 import type { TestCase } from "./types";
 import { SCENARIOS } from "./scenarios";
@@ -200,6 +201,13 @@ describe("coverageMismatch", () => {
     // A1 reads /health, R1 pokes the front door. Inventing a declaration for
     // them would be worse than an empty list.
     expect(coverageMismatch([], [])).toEqual([]);
+  });
+
+  it("DR7 agrees with its calls on a run that reuses its fixture and on one that uploads it", () => {
+    const dr7 = CASES.find((c) => c.id === "DR7")!;
+    const reused = ["gws-mcp__drive_search", "gws-mcp__sheets_get_metadata", "gws-mcp__drive_copy_file", "gws-mcp__sheets_delete"];
+    expect(coverageMismatch(dr7.covers, reused, dr7.cleanupCalls)).toEqual([]);
+    expect(coverageMismatch(dr7.covers, [...reused, "gws-mcp__drive_upload_file"], dr7.cleanupCalls)).toEqual([]);
   });
 
   it("catches a declaration the case never exercised", () => {
