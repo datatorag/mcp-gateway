@@ -219,7 +219,9 @@ gateway deploy carries it. What goes with it:
   `aliased` to the answer once (`withAliased`). `required` keeps naming the
   canonical argument, and no handler sees the alias. The alias has to be in
   the schema because the gateway refuses arguments its registry row does
-  not list (SCRUM-392).
+  not list (SCRUM-392), and the gateway's check reads the same
+  `x-alias-of` (SCRUM-458): an alias satisfies its canonical's `required`
+  there, which a new alias gets for free.
 - **Bytes do not travel through a tool response.** `gmail_get_attachment`
   returns a text attachment as text, up to a stated size, and for anything
   else a description with the size and the save-to-Drive route. A new tool
