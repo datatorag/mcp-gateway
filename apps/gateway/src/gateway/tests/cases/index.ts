@@ -74,6 +74,7 @@ import { dr1DriveFolder } from "./dr1-drive-folder";
 import { dr2DriveRead } from "./dr2-drive-read";
 import { dr3DriveGetFile } from "./dr3-drive-get-file";
 import { dr4DriveMoveTrash } from "./dr4-drive-move-trash";
+import { dr7OfficeConvert } from "./dr7-office-convert";
 import { dr5DriveShareRecent } from "./dr5-drive-share-recent";
 import { dr6DriveCrossAccount } from "./dr6-drive-cross-account";
 import { ca1CalendarGet } from "./ca1-calendar-get";
@@ -251,6 +252,7 @@ export const CASES: TestCase[] = [
   dr2DriveRead,
   dr3DriveGetFile,
   dr4DriveMoveTrash,
+  dr7OfficeConvert,
   dr5DriveShareRecent,
   dr6DriveCrossAccount,
   ca1CalendarGet,

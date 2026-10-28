@@ -199,6 +199,14 @@ gateway deploy carries it. What goes with it:
   plugin's typed error with its status (`GwsApiError`, `AtlassianHttpError`,
   `NotionApiError`), never as a plain `Error` with the status in the words: a
   plain `Error` reads as the plugin refusing the request, which is metered.
+- **An Office file is not a Google file** (SCRUM-455). Which Office types
+  convert to which Google type is one function, `googleTypeFor` in
+  `src/tools/office-files.ts`, shared by `drive_read_file`'s temporary
+  conversion and `drive_copy_file`'s `convert`. A Sheets, Docs or Slides
+  tool that fails with Google's 400 asks Drive for the file's type once,
+  in the CallTool catch (`officeFileRefusal`), and answers that the file
+  needs converting; it never matches Google's words. A new tool family that
+  opens a Google file by id goes into that module's family list.
 - **Bytes do not travel through a tool response.** `gmail_get_attachment`
   returns a text attachment as text, up to a stated size, and for anything
   else a description with the size and the save-to-Drive route. A new tool

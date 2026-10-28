@@ -20,6 +20,7 @@ const DESCRIBED = [
   "gmail_list_drafts",
   "gmail_get_attachment",
   "drive_get_file",
+  "drive_copy_file",
   "drive_move_file",
   "drive_trash_file",
   // SCRUM-428, the built-in connectors' surface.

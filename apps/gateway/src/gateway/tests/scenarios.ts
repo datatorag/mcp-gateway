@@ -211,6 +211,7 @@ export const SCENARIOS: Scenario[] = [
       "DR2", // reading the fixture doc returns the document's own text
       "DR3", // a file's details place it in its folder, without its content
       "DR4", // a moved file leaves its old folder, and a trashed file reads back trashed
+      "DR7", // an Excel file is refused by the Sheets tools with the conversion named, and its converted copy opens
       "DR5", // a shared folder is readable by the reader, and listed as recent
       "FD3", // a Drive file named by drive_file downloads as the bytes Drive stored
       "FD4", // a Doc named by drive_export downloads as a PDF
