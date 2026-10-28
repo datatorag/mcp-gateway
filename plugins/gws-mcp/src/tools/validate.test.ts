@@ -40,14 +40,15 @@ describe("SCRUM-121: the caller's mistake is named as the caller's", () => {
     expect(message).not.toContain("undefined");
   });
 
-  it("docs_write with content instead of text names the typo and the accepted keys", () => {
+  it("docs_write with body instead of text names the typo and the accepted keys", () => {
+    // content is an accepted alias of text since SCRUM-456; body is not.
     const message = failure("docs_write", {
       document_id: "d",
-      content: "hello",
+      body: "hello",
     });
 
     expect(message).toContain("docs_write");
-    expect(message).toContain('"content"');
+    expect(message).toContain('"body"');
     // Naming what IS accepted is the half that makes it actionable.
     expect(message).toContain('"text"');
     expect(message).not.toContain("insertText");
@@ -70,7 +71,7 @@ describe("validateArgs", () => {
   it("treats null as missing rather than as a value", () => {
     // Letting null through recreates the original bug with a different word
     // in the error message.
-    expect(failure("docs_write", { document_id: "d", text: null })).toContain(
+    expect(failure("docs_write", { document_id: null, text: "x" })).toContain(
       "missing required"
     );
   });

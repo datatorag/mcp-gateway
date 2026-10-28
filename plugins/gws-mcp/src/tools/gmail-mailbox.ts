@@ -188,7 +188,7 @@ export const gmailMailboxTools: ToolDef[] = [
   {
     name: "gmail_get_attachment",
     description:
-      `Describes one attachment of a Gmail message and, when the attachment is text, returns that text. Takes the message ID and the attachment's part ID, both of which gmail_read lists for each attachment. Every response carries the file name, MIME type, size in bytes and a current attachment ID. For a text attachment (plain text, CSV, JSON, XML, HTML, calendar files and similar) of up to ${mb(
+      `Gets one attachment of a Gmail message by the message ID and the attachment's part ID, both of which gmail_read lists for each attachment. Describes the attachment and, when it is text, returns that text. Every response carries the file name, MIME type, size in bytes and a current attachment ID. For a text attachment (plain text, CSV, JSON, XML, HTML, calendar files and similar) of up to ${mb(
         ATTACHMENT_TEXT_MAX_BYTES
       )}, the response also carries the content as text, cut at ${ATTACHMENT_TEXT_MAX_CHARS.toLocaleString(
         "en-US"
