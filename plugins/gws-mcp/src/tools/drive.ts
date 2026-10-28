@@ -2,7 +2,7 @@ import { errorMessage, type GwsClient } from "../gws-client.js";
 import { CREATE, MUTATE, READ, ToolDef } from "./annotations.js";
 import { jsonResponse } from "./response.js";
 import { requireNonBlank } from "./validate.js";
-import { copyDriveFile, deleteDriveFile } from "./drive-ops.js";
+import { convertCopy, copyDriveFile, deleteDriveFile } from "./drive-ops.js";
 import { GOOGLE_DOC, GOOGLE_SHEET, GOOGLE_SLIDES, googleTypeFor } from "./office-files.js";
 import { readDocText } from "./docs.js";
 import { readSheetValues } from "./sheets.js";
@@ -346,32 +346,15 @@ export async function handleDrive(
       if (args.parent_id) {
         body.parents = [args.parent_id as string];
       }
-      // SCRUM-455: Drive converts on copy when the copy's mimeType is the
-      // Google type, so the source's type is read first to pick it.
-      if (args.convert === true) {
-        const source = await client.api("drive", "files", "get", {
-          params: { fileId: args.file_id as string, fields: "mimeType", supportsAllDrives: true },
-        });
-        const sourceType = (source.data as { mimeType?: string } | undefined)?.mimeType;
-        const target = googleTypeFor(sourceType);
-        if (!target) {
-          throw new Error(
-            // A fixed phrase, not the type Drive reports: that value can be
-            // set by whoever uploaded the file.
-            "convert copies an Excel, Word or PowerPoint file as a Google file; this file is of another type, so nothing was copied."
-          );
-        }
-        body.mimeType = target;
-      }
       // `parents` is in the field list because where the copy landed is the
       // one thing the caller cannot see without a second call, and
       // `mimeType` because it is how a converted copy says what it became.
-      const result = await copyDriveFile(
-        client,
-        args.file_id as string,
-        body,
-        "id,name,mimeType,parents,webViewLink"
-      );
+      const fields = "id,name,mimeType,parents,webViewLink";
+      // SCRUM-455: with convert, the copy of an Office file is the Google type.
+      const result =
+        args.convert === true
+          ? await convertCopy(client, args.file_id as string, body, fields)
+          : await copyDriveFile(client, args.file_id as string, body, fields);
       return jsonResponse(result.data);
     }
 
@@ -500,14 +483,10 @@ async function readFileContent(
   }
 
   // Office formats → copy-convert to native, read, delete copy
-  const target = googleTypeFor(mimeType);
-  if (target) {
+  if (googleTypeFor(mimeType)) {
     let copy: { id: string; mimeType: string } | undefined;
     try {
-      const copyResult = await copyDriveFile(client, fileId, {
-        name: `${name} [MCP temp]`,
-        mimeType: target,
-      });
+      const copyResult = await convertCopy(client, fileId, { name: `${name} [MCP temp]` }, undefined, mimeType);
       copy = copyResult.data as { id: string; mimeType: string };
       return await readFileContent(client, copy.id, name, copy.mimeType);
     } catch (err: unknown) {

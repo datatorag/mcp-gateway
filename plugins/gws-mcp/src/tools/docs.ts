@@ -1,5 +1,4 @@
 import type { GwsClient } from "../gws-client.js";
-import { requireOneOf, takeAlias } from "./aliases.js";
 import { CREATE, MUTATE, READ, ToolDef } from "./annotations.js";
 import { jsonResponse } from "./response.js";
 import { deleteDriveFileResponse } from "./drive-ops.js";
@@ -54,11 +53,11 @@ export const docsTools: ToolDef[] = [
         },
         content: {
           type: "string",
+          "x-alias-of": "text",
           description: "The same as text, under another name. Give text or content, not both. The answer names it under aliased.",
         },
       },
-      // text or its alias content: one of the two is checked in the handler.
-      required: ["document_id"],
+      required: ["document_id", "text"],
     },
     annotations: MUTATE("Insert text into document"),
   },
@@ -309,9 +308,6 @@ export async function handleDocs(
     }
 
     case "docs_write": {
-      // SCRUM-456: content is text under another name.
-      const note = takeAlias(toolName, args, "content", "text");
-      requireOneOf(toolName, args, "text", "content");
       const result = await client.api("docs", "documents", "batchUpdate", {
         params: { documentId: args.document_id },
         jsonBody: {
@@ -320,7 +316,7 @@ export async function handleDocs(
           ],
         },
       });
-      return jsonResponse(note ? { ...(result.data as Record<string, unknown>), ...note } : result.data);
+      return jsonResponse(result.data);
     }
 
     case "docs_create": {

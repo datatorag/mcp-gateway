@@ -85,13 +85,35 @@ describe("an Office file given to a Google tool (SCRUM-455)", () => {
     expect(res.content[0].text).toMatch(/^This file is a Word file, not a Google Doc, so docs_get cannot open it\./);
   });
 
-  it("a 400 on a real Google Sheet keeps Google's own error", async () => {
-    google({
+  it("an ordinary 400 (INVALID_ARGUMENT) keeps Google's own error and asks Drive nothing", async () => {
+    const sent = google({
       api: () => json({ error: { code: 400, message: "Unable to parse range: Nope!A1", status: "INVALID_ARGUMENT" } }, 400),
       drive: () => json({ mimeType: GOOGLE_SHEET }),
     });
     const res = await call("sheets_read", { spreadsheet_id: "realSheet", range: "Nope!A1" });
     expect(res.content[0].text).toMatch(/^Error: API error: .*Unable to parse range/);
+    expect(sent.some((s) => s.url.pathname.startsWith("/drive/"))).toBe(false);
+  });
+
+  it("a 400 with no reason still asks Drive, and keeps Google's error for a Google file", async () => {
+    const sent = google({
+      api: () => new Response("<html>bad request</html>", { status: 400 }),
+      drive: () => json({ mimeType: GOOGLE_SHEET }),
+    });
+    const res = await call("sheets_get_metadata", { spreadsheet_id: "realSheet" });
+    expect(res.content[0].text).toMatch(/^Error: /);
+    expect(sent.some((s) => s.url.pathname.startsWith("/drive/"))).toBe(true);
+  });
+
+  it("gws_run against the Sheets API on an Excel file is covered too", async () => {
+    google({ api: OFFICE_400, drive: () => json({ mimeType: XLSX }) });
+    const res = await call("gws_run", {
+      service: "sheets",
+      resource: "spreadsheets",
+      method: "get",
+      params: { spreadsheetId: "xlsxFile" },
+    });
+    expect(res.content[0].text).toMatch(/^This file is an Excel file, not a Google Sheet, so gws_run cannot open it\./);
   });
 
   it("an error that is not a 400 asks Drive nothing", async () => {

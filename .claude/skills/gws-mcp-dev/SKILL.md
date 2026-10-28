@@ -201,20 +201,25 @@ gateway deploy carries it. What goes with it:
   plain `Error` reads as the plugin refusing the request, which is metered.
 - **An Office file is not a Google file** (SCRUM-455). Which Office types
   convert to which Google type is one function, `googleTypeFor` in
-  `src/tools/office-files.ts`, shared by `drive_read_file`'s temporary
-  conversion and `drive_copy_file`'s `convert`. A Sheets, Docs or Slides
-  tool that fails with Google's 400 asks Drive for the file's type once,
-  in the CallTool catch (`officeFileRefusal`), and answers that the file
-  needs converting; it never matches Google's words. A new tool family that
-  opens a Google file by id goes into that module's family list.
-- **An alias is a schema property, mapped in the handler** (SCRUM-456).
-  When callers keep reaching for a name the tool does not use (`query` on
-  `sheets_find_rows`, `content` on `docs_write`), the alias goes into the
-  tool's schema, because the gateway refuses any argument the registry row
-  does not list (SCRUM-392). The canonical argument then leaves `required`,
-  and the handler maps the alias with `takeAlias` and checks one of the two
-  with `requireOneOf` (`src/tools/aliases.ts`). The answer carries
-  `aliased: {alias: canonical}`, and giving both is refused.
+  `src/tools/office-files.ts`. `drive-ops.ts` holds the two Drive steps
+  around it: `getDriveFileMeta` (one `files.get` for the fields named) and
+  `convertCopy` (read the type, pick the target, copy), used by
+  `drive_copy_file`'s `convert` and `drive_read_file`'s temporary copy. A
+  Google API 400 whose reason is FAILED_PRECONDITION is checked in the
+  CallTool catch (`officeFileRefusal`), keyed on the request the transport
+  attaches to `GwsApiError` (its `service` and path parameters), so gws_run
+  is covered too; it never matches Google's words, and an ordinary 400
+  costs no Drive call.
+- **An alias is declared on the schema** (SCRUM-456). A name callers keep
+  reaching for is a property carrying `"x-alias-of": "<canonical>"`
+  (`query` on `sheets_find_rows`, `content` on `docs_write`, `body` on
+  `gws_run`). `validateArgs` maps it before anything else is checked (a
+  string for an array canonical becomes a one-value array), refuses both
+  together, and returns what it applied; the CallTool handler attaches
+  `aliased` to the answer once (`withAliased`). `required` keeps naming the
+  canonical argument, and no handler sees the alias. The alias has to be in
+  the schema because the gateway refuses arguments its registry row does
+  not list (SCRUM-392).
 - **Bytes do not travel through a tool response.** `gmail_get_attachment`
   returns a text attachment as text, up to a stated size, and for anything
   else a description with the size and the save-to-Drive route. A new tool

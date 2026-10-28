@@ -37,6 +37,7 @@ export const genericTools: ToolDef[] = [
         },
         body: {
           type: "object",
+          "x-alias-of": "json_body",
           description: "Request body for create/update operations (alias for json_body)",
         },
         page_all: {
@@ -95,7 +96,7 @@ export async function handleGeneric(
     method,
     {
       params: unwrapRepeatedParams(service, resource, method, args.params as Record<string, unknown> | undefined),
-      jsonBody: args.json_body ?? args.body,
+      jsonBody: args.json_body,
       pageAll: args.page_all as boolean | undefined,
       dryRun: args.dry_run as boolean | undefined,
     }

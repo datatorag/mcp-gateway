@@ -57,18 +57,55 @@ export function unwrapJsonString(value: string, expected: "array" | "object"): u
   return typeOf(parsed) === expected ? parsed : undefined;
 }
 
+/** The schema keyword that declares a property an alias of another
+ * (SCRUM-456): a name callers reach for, accepted as the one it means. */
+export const ALIAS_OF = "x-alias-of";
+
+type PropertySpec = { type?: string; enum?: unknown[]; minLength?: number; [ALIAS_OF]?: string };
+
+/** Every alias the caller used, by alias name, mapped to the canonical name
+ * it was read as. Empty when no alias was used. */
+export type AppliedAliases = Record<string, string>;
+
+/**
+ * Moves each declared alias's value to its canonical argument before anything
+ * else is checked, so `required` and the type checks below hold the canonical
+ * name. A string given for an array canonical becomes a one-value array.
+ * Giving an alias and its canonical together is refused: both cannot be meant.
+ */
+function applyAliases(
+  tool: ToolDef,
+  properties: Record<string, PropertySpec | undefined>,
+  args: Record<string, unknown>
+): AppliedAliases {
+  const applied: AppliedAliases = {};
+  for (const [alias, spec] of Object.entries(properties)) {
+    const canonical = spec?.[ALIAS_OF];
+    if (!canonical) continue;
+    const value = args[alias];
+    if (value === undefined || value === null) continue;
+    if (args[canonical] !== undefined && args[canonical] !== null) {
+      throw new Error(`${tool.name}: give "${canonical}" or "${alias}", not both. Nothing was sent.`);
+    }
+    const wantsArray = properties[canonical]?.type === "array";
+    args[canonical] = wantsArray && typeof value === "string" ? [value] : value;
+    delete args[alias];
+    applied[alias] = canonical;
+  }
+  return applied;
+}
+
 /**
  * Throws with a caller-facing message when `args` does not satisfy `tool`.
- * Returns silently otherwise. Mutates `args` in place when it unwraps a
- * JSON-encoded array or object, so the handler reading the same object sees
- * the decoded value.
+ * Returns the aliases it applied otherwise (see `applyAliases`). Mutates
+ * `args` in place when it maps an alias or unwraps a JSON-encoded array or
+ * object, so the handler reading the same object sees the canonical, decoded
+ * value.
  */
-export function validateArgs(tool: ToolDef, args: Record<string, unknown>): void {
-  const properties = tool.inputSchema.properties as Record<
-    string,
-    { type?: string; enum?: unknown[]; minLength?: number } | undefined
-  >;
+export function validateArgs(tool: ToolDef, args: Record<string, unknown>): AppliedAliases {
+  const properties = tool.inputSchema.properties as Record<string, PropertySpec | undefined>;
   const known = Object.keys(properties);
+  const applied = applyAliases(tool, properties, args);
 
   // 1. Unknown arguments. Dropping these silently is what made a misspelled
   //    parameter look like a server-side problem, so name the accepted set —
@@ -144,6 +181,7 @@ export function validateArgs(tool: ToolDef, args: Record<string, unknown>): void
       );
     }
   }
+  return applied;
 }
 
 /**

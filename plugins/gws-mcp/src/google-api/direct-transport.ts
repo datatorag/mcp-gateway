@@ -101,7 +101,11 @@ export const AUTH_REQUIRED =
 
 const TRANSIENT_STATUS = new Set([502, 503, 504]);
 
-function throwApiError(status: number, bodyText: string): never {
+function throwApiError(
+  status: number,
+  bodyText: string,
+  request?: { service: string; pathParams: Record<string, string> }
+): never {
   if (status === 401) {
     // Google refused the token the gateway sent. Nothing on this server can
     // repair that: the account is reconnected on the gateway. So the error
@@ -109,14 +113,14 @@ function throwApiError(status: number, bodyText: string): never {
     // accounts are connected and what each granted, and the page that
     // reconnects one. It used to name `gws_auth_setup`, a tool that could
     // only answer that it could not log in (removed, SCRUM-412).
-    throw new GwsApiError(AUTH_REQUIRED, status);
+    throw new GwsApiError(AUTH_REQUIRED, status, undefined, request);
   }
   const { text, reason } = apiError(status, bodyText);
   // The words are read only where Google can mean a transient failure: a
   // 400's message can quote the caller's own input, "503" included.
   const mayBeTransient = status >= 500 || status === 403 || status === 429;
   if (TRANSIENT_STATUS.has(status) || (mayBeTransient && isTransient(text))) throw new TransientGwsError(text, status);
-  throw new GwsApiError(text, status, reason);
+  throw new GwsApiError(text, status, reason, request);
 }
 
 /** A failure of the path to Google, reworded so it cannot carry the request.
@@ -272,7 +276,7 @@ async function sendOk(
         continue;
       }
     }
-    throwApiError(res.status, text);
+    throwApiError(res.status, text, { service: request.service, pathParams: request.pathParams });
   }
 }
 

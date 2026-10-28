@@ -9,6 +9,10 @@ import { METHOD_TABLE, type MethodEntry } from "./method-table.js";
 export interface BuiltRequest {
   method: string;
   url: string;
+  /** The API the request is for, and the path parameters as given, so an
+   * error can name what it was about (SCRUM-455). */
+  service: string;
+  pathParams: Record<string, string>;
   queryParams: Array<[string, string]>;
   body: unknown;
   isUpload: boolean;
@@ -140,9 +144,17 @@ export function buildRequest(
     throw new Error(`Validation error: ${service} ${resource} ${method} built a path that does not survive URL parsing.`);
   }
 
+  const pathParams: Record<string, string> = {};
+  for (const name of entry.pathParams) {
+    const value = params[name];
+    if (typeof value === "string" || typeof value === "number") pathParams[name] = String(value);
+  }
+
   return {
     method: entry.httpMethod,
     url: built,
+    service,
+    pathParams,
     queryParams,
     body: options?.jsonBody ?? null,
     isUpload: options?.upload === true,
