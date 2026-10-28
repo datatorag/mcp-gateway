@@ -270,7 +270,7 @@ export const gmailTools: ToolDef[] = [
   {
     name: "gmail_read",
     description:
-      "Read a specific email message by its ID. By default returns the full message including headers, body, and metadata. Use text_only for a compact view (flattened headers, decoded text body, attachment metadata) that avoids large MIME/base64 payloads.",
+      "Read a specific email message by its ID. By default returns the full message including headers, body, and metadata. Use text_only for a compact view (flattened headers, decoded text body, attachment metadata) that avoids large MIME/base64 payloads. Each attachment is listed with its part ID; gmail_get_attachment takes the message ID and that part ID and returns the attachment's text, or describes a file that is not text.",
     inputSchema: {
       type: "object",
       properties: {
@@ -296,7 +296,7 @@ export const gmailTools: ToolDef[] = [
   {
     name: "gmail_search",
     description:
-      "Search Gmail messages using Gmail search syntax. Returns matching messages with flattened from/to/subject/date fields plus snippet and labels. Supports queries like \"from:client@acme.com\", \"subject:proposal\", \"after:2024/01/01\", \"has:attachment\", \"label:important\".",
+      "Search Gmail messages using Gmail search syntax. Returns matching messages with flattened from/to/subject/date fields plus snippet and labels. Supports queries like \"from:client@acme.com\", \"subject:proposal\", \"after:2024/01/01\", \"has:attachment\", \"label:important\". A message's attachments are listed by gmail_read and read by gmail_get_attachment.",
     inputSchema: {
       type: "object",
       properties: {

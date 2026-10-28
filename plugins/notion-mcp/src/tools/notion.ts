@@ -179,9 +179,24 @@ function pageSize(value: unknown, dflt: number): number {
   return value;
 }
 
-function cursor(value: unknown): string | undefined {
+/** What a cursor refusal says (SCRUM-456): an agent that has no cursor
+ * passes a placeholder, and Notion's answer to one does not say why. */
+const CURSOR_WORDS = "pass the next_cursor from the previous page, or omit it for the first page.";
+
+/** Notion's cursors for search, data source queries, comments and users are
+ * UUIDs, with or without dashes. */
+const NOTION_CURSOR = /^[0-9a-f]{8}-?[0-9a-f]{4}-?[0-9a-f]{4}-?[0-9a-f]{4}-?[0-9a-f]{12}$/i;
+
+/** The cursor argument, or undefined for the first page. A value that is not
+ * the shape of a cursor Notion returns is refused before anything is sent.
+ * `opaque` skips the shape check for a cursor this plugin composes itself
+ * (a view query's, which carries its own check). */
+function cursor(value: unknown, opaque = false): string | undefined {
   if (value === undefined || value === null || value === "") return undefined;
-  if (typeof value !== "string") throw new Error("cursor takes the next_cursor string an earlier call returned.");
+  if (typeof value !== "string") throw new Error(`cursor takes a string: ${CURSOR_WORDS}`);
+  if (!opaque && !NOTION_CURSOR.test(value)) {
+    throw new Error(`cursor is not a cursor Notion returned: ${CURSOR_WORDS} Nothing was sent.`);
+  }
   return value;
 }
 
@@ -283,7 +298,8 @@ async function queryView(client: NotionClient, args: Record<string, unknown>): P
     throw new Error("With view_id, the view's own filter and sorts apply, and rows are ids; filter, sorts and properties are not taken.");
   }
   const size = pageSize(args.page_size, 25);
-  const start = cursor(args.cursor);
+  // The view query cursor is ours ("<query id>:<Notion cursor>"), checked below.
+  const start = cursor(args.cursor, true);
   let res: unknown;
   let queryId: string;
   if (start === undefined) {
@@ -292,7 +308,7 @@ async function queryView(client: NotionClient, args: Record<string, unknown>): P
   } else {
     const at = start.indexOf(":");
     if (at <= 0 || at === start.length - 1) {
-      throw new Error("cursor takes the next_cursor string an earlier call with this view_id returned.");
+      throw new Error(`cursor is not a cursor this view query returned: ${CURSOR_WORDS} Nothing was sent.`);
     }
     queryId = start.slice(0, at);
     try {

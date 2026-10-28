@@ -5,6 +5,9 @@ import { fakeFetch } from "../fixtures/fake-fetch.js";
 import { recorded } from "../fixtures/load.js";
 import { COMMENTS_PAGE } from "../fixtures/comments-documented.js";
 
+/** A cursor in the shape Notion returns, a UUID. */
+const CUR2 = "400b91cc-091d-81dd-9aff-d24496f00f40";
+
 /* Each tool through the real client against a stubbed fetch: the request it
  * sends (path, method, body) and what it makes of a recorded answer. */
 
@@ -41,11 +44,11 @@ describe("notion_search", () => {
     expect(f.sent[0].body).toEqual(rec.request.body);
 
     const g = fakeFetch([ok("search-empty")]);
-    await call("notion_search", { object: "data_source", cursor: "cur-2" });
+    await call("notion_search", { object: "data_source", cursor: CUR2 });
     expect(g.sent[0].body).toEqual({
       page_size: 20,
       filter: { property: "object", value: "data_source" },
-      start_cursor: "cur-2",
+      start_cursor: CUR2,
     });
   });
 
@@ -212,10 +215,10 @@ describe("notion_query_data_source", () => {
     const filter = { and: [{ property: "Status", status: { equals: "Done" } }] };
     const sorts = [{ timestamp: "last_edited_time", direction: "descending" }];
     const f = fakeFetch([ok("query")]);
-    await call("notion_query_data_source", { data_source_id: DS, filter, sorts, page_size: 3, cursor: "cur-2" });
+    await call("notion_query_data_source", { data_source_id: DS, filter, sorts, page_size: 3, cursor: CUR2 });
     expect(f.sent[0].method).toBe("POST");
     expect(f.sent[0].url.pathname).toBe(`/v1/data_sources/${DS}/query`);
-    expect(f.sent[0].body).toEqual({ page_size: 3, filter, sorts, start_cursor: "cur-2" });
+    expect(f.sent[0].body).toEqual({ page_size: 3, filter, sorts, start_cursor: CUR2 });
   });
 
   it("the recorded request is what the tool sends for the same arguments", async () => {
@@ -333,10 +336,10 @@ describe("notion_query_data_source with view_id", () => {
 describe("notion_get_comments", () => {
   it("sends GET /v1/comments with block_id, page size and cursor", async () => {
     const f = fakeFetch([ok("comments")]);
-    await call("notion_get_comments", { block_id: PAGE.replace(/-/g, ""), cursor: "cur-2", page_size: 10 });
+    await call("notion_get_comments", { block_id: PAGE.replace(/-/g, ""), cursor: CUR2, page_size: 10 });
     expect(f.sent[0].method).toBe("GET");
     expect(f.sent[0].url.pathname).toBe("/v1/comments");
-    expect(Object.fromEntries(f.sent[0].url.searchParams)).toEqual({ block_id: PAGE, page_size: "10", start_cursor: "cur-2" });
+    expect(Object.fromEntries(f.sent[0].url.searchParams)).toEqual({ block_id: PAGE, page_size: "10", start_cursor: CUR2 });
   });
 
   it("the recorded empty list has the list shape", async () => {
@@ -376,9 +379,9 @@ describe("notion_get_comments", () => {
 describe("notion_list_users", () => {
   it("lists with GET /v1/users, page size and cursor", async () => {
     const f = fakeFetch([ok("users")]);
-    const out = await call("notion_list_users", { page_size: 10, cursor: "cur-2" });
+    const out = await call("notion_list_users", { page_size: 10, cursor: CUR2 });
     expect(f.sent[0].url.pathname).toBe("/v1/users");
-    expect(Object.fromEntries(f.sent[0].url.searchParams)).toEqual({ page_size: "10", start_cursor: "cur-2" });
+    expect(Object.fromEntries(f.sent[0].url.searchParams)).toEqual({ page_size: "10", start_cursor: CUR2 });
     expect(out).toEqual({
       results: [
         { id: "460f4399-740e-44ab-827d-0134421cdedf", type: "person", name: "Test User", email: "test-user@example.com" },
@@ -407,5 +410,37 @@ describe("notion_list_users", () => {
     expect(out.results).toEqual([
       { id: "460f4399-740e-44ab-827d-0134421cdedf", type: "person", name: "Test User", email: "test-user@example.com" },
     ]);
+  });
+});
+
+/* SCRUM-456: an agent with no cursor passes a placeholder, and Notion's answer
+ * to one did not say why. Every paginated tool refuses a value that is not the
+ * shape of a cursor Notion returns, before anything is sent. */
+describe("a cursor that is not a cursor", () => {
+  const CALLS: Array<[string, Record<string, unknown>]> = [
+    ["notion_search", {}],
+    ["notion_query_data_source", { data_source_id: DS }],
+    ["notion_get_comments", { block_id: PAGE }],
+    ["notion_list_users", {}],
+  ];
+
+  it.each(CALLS)("%s refuses PLACEHOLDER, naming next_cursor, and sends nothing", async (tool, args) => {
+    const f = fakeFetch([]);
+    await expect(call(tool, { ...args, cursor: "PLACEHOLDER" })).rejects.toThrow(
+      /cursor is not a cursor Notion returned: pass the next_cursor from the previous page, or omit it for the first page\. Nothing was sent\./
+    );
+    expect(f.sent).toEqual([]);
+  });
+
+  it("a cursor without dashes is still a cursor", async () => {
+    const f = fakeFetch([{ status: 200, body: recorded("users").body }]);
+    await call("notion_list_users", { cursor: CUR2.replace(/-/g, "") });
+    expect(f.sent[0].url.searchParams.get("start_cursor")).toBe(CUR2.replace(/-/g, ""));
+  });
+
+  it("an empty cursor is the first page", async () => {
+    const f = fakeFetch([{ status: 200, body: recorded("users").body }]);
+    await call("notion_list_users", { cursor: "" });
+    expect(f.sent[0].url.searchParams.has("start_cursor")).toBe(false);
   });
 });

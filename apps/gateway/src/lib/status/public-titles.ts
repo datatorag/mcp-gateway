@@ -79,6 +79,8 @@ export const PUBLIC_TITLES: Readonly<Record<string, string>> = {
   "E16": "Label several emails in one step, and remove the label from all of them",
   "E17": "Read several ranges in one step, in the order asked",
   "E18": "Query a tab that does not exist, and be told which tabs do",
+  "E19": "Find a row in a sheet by searching for one value",
+  "E20": "Write text into a Google Doc under the name content",
   "F1": "A change asks for your approval first, and a read does not",
   "F2": "Only the tools your connection allows are offered",
   "F7": "A wrong API key is refused with a way to sign in",

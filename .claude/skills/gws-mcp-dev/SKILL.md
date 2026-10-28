@@ -207,6 +207,14 @@ gateway deploy carries it. What goes with it:
   in the CallTool catch (`officeFileRefusal`), and answers that the file
   needs converting; it never matches Google's words. A new tool family that
   opens a Google file by id goes into that module's family list.
+- **An alias is a schema property, mapped in the handler** (SCRUM-456).
+  When callers keep reaching for a name the tool does not use (`query` on
+  `sheets_find_rows`, `content` on `docs_write`), the alias goes into the
+  tool's schema, because the gateway refuses any argument the registry row
+  does not list (SCRUM-392). The canonical argument then leaves `required`,
+  and the handler maps the alias with `takeAlias` and checks one of the two
+  with `requireOneOf` (`src/tools/aliases.ts`). The answer carries
+  `aliased: {alias: canonical}`, and giving both is refused.
 - **Bytes do not travel through a tool response.** `gmail_get_attachment`
   returns a text attachment as text, up to a stated size, and for anything
   else a description with the size and the save-to-Drive route. A new tool
