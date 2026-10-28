@@ -57,7 +57,7 @@ the conversation to be read.
 | `drive_create_folder` | Create a new folder, optionally inside a parent folder |
 | `drive_rename_file` | Rename a file or folder by ID. Changes the name only: content, location and sharing are untouched. Works on Docs, Sheets, Slides and folders |
 | `drive_upload_file` | Put an email, one of its attachments, or a file from another connected account's Drive (as stored, or a Google file exported, such as a Doc as a PDF) into Drive, named by a [file reference](/docs/file-references). The receipt includes the SHA-256 Drive reports for what it stored and whether it matches what was sent, and the owners and sharing of the folder it went into |
-| `drive_copy_file` | Copy a file and name the copy in the same call, optionally into another folder with `parent_id`. The copy carries the original's tabs, formatting and formulas. **Folders cannot be copied** |
+| `drive_copy_file` | Copy a file and name the copy in the same call, optionally into another folder with `parent_id`. The copy carries the original's tabs, formatting and formulas. With `convert: true`, an Excel, Word or PowerPoint file is copied as a Google Sheet, Doc or Slides file. **Folders cannot be copied** |
 | `drive_get_file` | Describe a file or folder by ID without reading its content: name, type, size, the folders it is in, owners, created and modified times, link, and whether it is in Trash |
 | `drive_move_file` | Move a file or folder into another folder. It is removed from the folder it was in, so it ends up in one place; name, content and ID are unchanged |
 | `drive_trash_file` | Move a file or folder to Trash, where its owner can restore it for 30 days. Trashing a folder trashes what is inside it |
@@ -104,3 +104,14 @@ then fill in the copy.
 
 Drive refuses to copy a **folder**, answering with a 403 that reads like a permissions problem.
 It is not one, and retrying with wider access will not change it.
+
+## Excel, Word and PowerPoint files
+
+An `.xlsx` stored in Drive opens in the browser like a spreadsheet, but it is still an Excel
+file, and the Sheets tools cannot open it. The same goes for `.docx` with the Docs tools and
+`.pptx` with the Slides tools. When that happens the tool says so, and names the fix:
+`drive_copy_file` with `convert: true` makes a Google Sheet, Doc or Slides copy, and the tools
+work on that copy. The original stays as it was. `.xls`, `.doc` and `.ppt` convert the same way.
+
+`drive_read_file` does not need this: it converts a temporary copy on its own, reads it, and
+deletes it.

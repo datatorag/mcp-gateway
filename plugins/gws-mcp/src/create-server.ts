@@ -7,6 +7,7 @@ import { GwsClient, errorMessage } from "./gws-client.js";
 import { allTools, toolHandlers } from "./tools/index.js";
 import { validateArgs } from "./tools/validate.js";
 import { errorMetaField, errorMetaFor } from "./error-meta.js";
+import { officeFileRefusal } from "./tools/office-files.js";
 
 export const gwsClient = new GwsClient();
 
@@ -46,8 +47,11 @@ export function createMcpServer(client?: GwsClient): Server {
       if (tool) validateArgs(tool, args as Record<string, unknown>);
       return await handler(client, name, args as Record<string, unknown>);
     } catch (err) {
+      // SCRUM-455: an Office file given to a Sheets, Docs or Slides tool gets
+      // words that name the conversion instead of Google's bare 400.
+      const office = await officeFileRefusal(client, name, args as Record<string, unknown>, err);
       return {
-        content: [{ type: "text" as const, text: `Error: ${errorMessage(err)}` }],
+        content: [{ type: "text" as const, text: office ?? `Error: ${errorMessage(err)}` }],
         isError: true,
         _meta: errorMetaField(errorMetaFor(err)),
       };

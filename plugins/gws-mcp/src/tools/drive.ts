@@ -3,6 +3,7 @@ import { CREATE, MUTATE, READ, ToolDef } from "./annotations.js";
 import { jsonResponse } from "./response.js";
 import { requireNonBlank } from "./validate.js";
 import { copyDriveFile, deleteDriveFile } from "./drive-ops.js";
+import { GOOGLE_DOC, GOOGLE_SHEET, GOOGLE_SLIDES, googleTypeFor } from "./office-files.js";
 import { readDocText } from "./docs.js";
 import { readSheetValues } from "./sheets.js";
 import { getPresentationOutline } from "./slides.js";
@@ -88,7 +89,7 @@ export const driveTools: ToolDef[] = [
   {
     name: "drive_copy_file",
     description:
-      "Copy a file in Google Drive, naming the copy in the same call. Use this to instantiate a template instead of rebuilding it: the copy carries the original's tabs, formatting, and formulas, so it cannot drift from the template the way a hand-rebuild does. Folders cannot be copied: Drive rejects that with a 403 \"This file cannot be copied by the user\", which is a limitation of the API and not a permissions problem to retry.",
+      "Copies a file in Google Drive and names the copy in the same call. The copy carries the original's tabs, formatting and formulas, so a copied template matches its source. With convert set to true, an Excel, Word or PowerPoint file is copied as a Google Sheet, Doc or Slides file, which the sheets_, docs_ and slides_ tools open; the original is left as it was. Returns the copy's id, name, MIME type, folders and link. Folders are not copyable: Drive refuses them with a 403 \"This file cannot be copied by the user\", a limit of the API rather than of permissions.",
     inputSchema: {
       type: "object",
       properties: {
@@ -105,6 +106,11 @@ export const driveTools: ToolDef[] = [
           type: "string",
           description:
             "Folder ID to place the copy in (optional, defaults to the original's folder)",
+        },
+        convert: {
+          type: "boolean",
+          description:
+            "When true, the copy of an Excel, Word or PowerPoint file is a Google Sheet, Doc or Slides file (.xlsx and .xls to Sheets, .docx and .doc to Docs, .pptx and .ppt to Slides). A file of any other type is refused and nothing is copied. Defaults to false, a copy of the same type.",
         },
       },
       required: ["file_id", "name"],
@@ -270,10 +276,6 @@ export const FILE_DETAIL_FIELDS =
   "id,name,mimeType,size,parents,owners(displayName,emailAddress)," +
   "createdTime,modifiedTime,webViewLink,trashed,shared,driveId";
 
-const GOOGLE_DOC = "application/vnd.google-apps.document";
-const GOOGLE_SHEET = "application/vnd.google-apps.spreadsheet";
-const GOOGLE_SLIDES = "application/vnd.google-apps.presentation";
-const OFFICE_PREFIX = "application/vnd.openxmlformats-officedocument";
 
 export async function handleDrive(
   client: GwsClient,
@@ -344,13 +346,31 @@ export async function handleDrive(
       if (args.parent_id) {
         body.parents = [args.parent_id as string];
       }
+      // SCRUM-455: Drive converts on copy when the copy's mimeType is the
+      // Google type, so the source's type is read first to pick it.
+      if (args.convert === true) {
+        const source = await client.api("drive", "files", "get", {
+          params: { fileId: args.file_id as string, fields: "mimeType", supportsAllDrives: true },
+        });
+        const sourceType = (source.data as { mimeType?: string } | undefined)?.mimeType;
+        const target = googleTypeFor(sourceType);
+        if (!target) {
+          throw new Error(
+            // A fixed phrase, not the type Drive reports: that value can be
+            // set by whoever uploaded the file.
+            "convert copies an Excel, Word or PowerPoint file as a Google file; this file is of another type, so nothing was copied."
+          );
+        }
+        body.mimeType = target;
+      }
       // `parents` is in the field list because where the copy landed is the
-      // one thing the caller cannot see without a second call.
+      // one thing the caller cannot see without a second call, and
+      // `mimeType` because it is how a converted copy says what it became.
       const result = await copyDriveFile(
         client,
         args.file_id as string,
         body,
-        "id,name,parents,webViewLink"
+        "id,name,mimeType,parents,webViewLink"
       );
       return jsonResponse(result.data);
     }
@@ -480,12 +500,8 @@ async function readFileContent(
   }
 
   // Office formats → copy-convert to native, read, delete copy
-  if (mimeType.startsWith(OFFICE_PREFIX)) {
-    const target = mimeType.includes("wordprocessing")
-      ? GOOGLE_DOC
-      : mimeType.includes("spreadsheet")
-        ? GOOGLE_SHEET
-        : GOOGLE_SLIDES;
+  const target = googleTypeFor(mimeType);
+  if (target) {
     let copy: { id: string; mimeType: string } | undefined;
     try {
       const copyResult = await copyDriveFile(client, fileId, {
