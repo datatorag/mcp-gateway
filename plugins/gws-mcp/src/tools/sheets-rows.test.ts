@@ -292,9 +292,9 @@ describe("sheets_find_rows", () => {
   it("is read-only, pinned to the exact annotation shape", () => {
     const tool = sheetsRowTools.find((t) => t.name === "sheets_find_rows");
     expect(tool?.annotations).toEqual(READ("Find rows matching a value"));
-    // values is required too, as values or its alias query, checked in the
-    // handler (SCRUM-456), so it is not in the schema's list.
-    expect(tool?.inputSchema.required).toEqual(["spreadsheet_id", "range", "column"]);
+    // values stays required: its alias query is mapped onto it before the
+    // required check (SCRUM-456).
+    expect(tool?.inputSchema.required).toEqual(["spreadsheet_id", "range", "column", "values"]);
   });
 });
 

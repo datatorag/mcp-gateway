@@ -27,7 +27,10 @@ export class GwsApiError extends Error {
   constructor(
     message: string,
     readonly status: number,
-    readonly reason?: string
+    readonly reason?: string,
+    /** The request it answered: its API and path parameters (SCRUM-455).
+     * Absent for an error thrown outside the method table's requests. */
+    readonly request?: { service: string; pathParams: Record<string, string> }
   ) {
     super(message);
     this.name = "GwsApiError";

@@ -444,3 +444,41 @@ describe("a cursor that is not a cursor", () => {
     expect(f.sent[0].url.searchParams.has("start_cursor")).toBe(false);
   });
 });
+
+/* SCRUM-456 cleanup: Notion's own refusal of a cursor it did not issue is
+ * translated, so the pre-send check only has to catch the obvious
+ * placeholder. The two bodies are Notion's answers as captured live, one for
+ * a value that is not a UUID and one for a UUID Notion never issued. */
+describe("Notion's refusal of a cursor, in our words", () => {
+  const NOT_A_UUID = {
+    object: "error",
+    status: 400,
+    code: "validation_error",
+    message: 'body failed validation: body.start_cursor should be a valid uuid or `undefined`, instead was `"abc-123"`.',
+  };
+  const NOT_ISSUED = {
+    object: "error",
+    status: 400,
+    code: "validation_error",
+    message: "The start_cursor provided is invalid: 00000000-0000-4000-8000-000000000000",
+  };
+
+  it.each([
+    ["a value that is not a UUID", NOT_A_UUID, "abc-123"],
+    ["a UUID Notion never issued", NOT_ISSUED, "00000000-0000-4000-8000-000000000000"],
+  ])("%s is answered with the cursor words, without echoing the value", async (_what, body, value) => {
+    fakeFetch([{ status: 400, body }]);
+    const err = (await call("notion_search", { cursor: value }).catch((e: Error) => e)) as Error;
+    expect(err.message).toBe(
+      "The cursor is not one Notion returned: pass the next_cursor from the previous page, or omit it for the first page."
+    );
+    expect(err.message).not.toContain(value);
+  });
+
+  it("any other validation_error keeps Notion's own words", async () => {
+    fakeFetch([{ status: 400, body: recorded("err-validation").body }]);
+    await expect(call("notion_query_data_source", { data_source_id: DS, filter: {} })).rejects.toThrow(
+      /Could not find property with name or id/
+    );
+  });
+});

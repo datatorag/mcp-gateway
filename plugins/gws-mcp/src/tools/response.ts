@@ -6,6 +6,32 @@ export function textResponse(text: string) {
   };
 }
 
+/**
+ * The answer with the aliases a call used named in it (SCRUM-456), so the
+ * caller learns the tool's own word. Merged into a JSON object answer as
+ * `aliased`; any other answer gets a line of its own after it.
+ */
+export function withAliased<T extends { content: Array<{ type: string; text?: string }> }>(
+  result: T,
+  aliased: Record<string, string>
+): T {
+  if (Object.keys(aliased).length === 0) return result;
+  const [first, ...rest] = result.content;
+  if (first?.type === "text" && typeof first.text === "string") {
+    try {
+      const parsed: unknown = JSON.parse(first.text);
+      if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+        const merged = JSON.stringify({ ...(parsed as Record<string, unknown>), aliased }, null, 2);
+        return { ...result, content: [{ ...first, text: merged }, ...rest] };
+      }
+    } catch {
+      // Not JSON (text, or a truncated body): the note goes on a line of its own.
+    }
+  }
+  const words = Object.entries(aliased).map(([alias, canonical]) => `"${alias}" was read as "${canonical}"`).join("; ");
+  return { ...result, content: [...result.content, { type: "text", text: `Note: ${words}.` }] };
+}
+
 export function jsonResponse(data: unknown) {
   let text = JSON.stringify(data, null, 2);
   if (text.length > MAX_RESPONSE_SIZE) {

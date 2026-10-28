@@ -1,4 +1,4 @@
-import { NotionApiError, type NotionClient } from "../notion-client.js";
+import { CURSOR_WORDS, NotionApiError, type NotionClient } from "../notion-client.js";
 import { notionId, viewId } from "../notion-id.js";
 import { decodeProperties, pageTitle, plainText, userName } from "../properties.js";
 import { READ, type ToolDef } from "./annotations.js";
@@ -179,22 +179,16 @@ function pageSize(value: unknown, dflt: number): number {
   return value;
 }
 
-/** What a cursor refusal says (SCRUM-456): an agent that has no cursor
- * passes a placeholder, and Notion's answer to one does not say why. */
-const CURSOR_WORDS = "pass the next_cursor from the previous page, or omit it for the first page.";
+/** A cursor that is plainly not one: a single word with no digit, the shape
+ * of a placeholder ("PLACEHOLDER", "next_cursor", "undefined"). Notion's
+ * cursors are UUIDs, and Notion's own refusal of anything else is translated
+ * in `errorFor`; this only saves the round trip for the obvious case. */
+const PLACEHOLDER = /^[A-Za-z_]+$/;
 
-/** Notion's cursors for search, data source queries, comments and users are
- * UUIDs, with or without dashes. */
-const NOTION_CURSOR = /^[0-9a-f]{8}-?[0-9a-f]{4}-?[0-9a-f]{4}-?[0-9a-f]{4}-?[0-9a-f]{12}$/i;
-
-/** The cursor argument, or undefined for the first page. A value that is not
- * the shape of a cursor Notion returns is refused before anything is sent.
- * `opaque` skips the shape check for a cursor this plugin composes itself
- * (a view query's, which carries its own check). */
-function cursor(value: unknown, opaque = false): string | undefined {
+/** The cursor argument, or undefined for the first page. */
+function cursor(value: unknown): string | undefined {
   if (value === undefined || value === null || value === "") return undefined;
-  if (typeof value !== "string") throw new Error(`cursor takes a string: ${CURSOR_WORDS}`);
-  if (!opaque && !NOTION_CURSOR.test(value)) {
+  if (typeof value !== "string" || PLACEHOLDER.test(value)) {
     throw new Error(`cursor is not a cursor Notion returned: ${CURSOR_WORDS} Nothing was sent.`);
   }
   return value;
@@ -299,7 +293,7 @@ async function queryView(client: NotionClient, args: Record<string, unknown>): P
   }
   const size = pageSize(args.page_size, 25);
   // The view query cursor is ours ("<query id>:<Notion cursor>"), checked below.
-  const start = cursor(args.cursor, true);
+  const start = cursor(args.cursor);
   let res: unknown;
   let queryId: string;
   if (start === undefined) {

@@ -1,5 +1,5 @@
 import type { TestCase } from "../types";
-import { resultJson } from "../result-json";
+import { resultJson, resultText } from "../result-json";
 import { officeFile, XLSX_MIME } from "../office-file";
 
 /**
@@ -10,12 +10,12 @@ import { officeFile, XLSX_MIME } from "../office-file";
  * THE EXCEL FILE IS A STANDING FIXTURE THE CASE MAKES ITSELF. It is looked up
  * by name in the fixture folder and uploaded only when it is not there, so
  * the first run creates it and every later run reuses it. Only the converted
- * copy is made per run, and it is trashed at the end. The file's bytes are
+ * copy is made per run, and it is deleted at the end. The file's bytes are
  * built by `office-file.ts`, the same every run.
  */
 const NAME = "dr7-excel-fixture.xlsx";
 
-type DriveFile = { id?: string; name?: string; mimeType?: string };
+type DriveFile = { id?: string; mimeType?: string };
 
 export const dr7OfficeConvert: TestCase = {
   id: "DR7",
@@ -25,7 +25,7 @@ export const dr7OfficeConvert: TestCase = {
     "gws-mcp__drive_upload_file",
     "gws-mcp__sheets_get_metadata",
     "gws-mcp__drive_copy_file",
-    "gws-mcp__drive_trash_file",
+    "gws-mcp__sheets_delete",
   ],
   accounts: ["sender"],
   fixtures: ["folder"],
@@ -60,15 +60,13 @@ export const dr7OfficeConvert: TestCase = {
     }
 
     const refused = await ctx.call("gws-mcp__sheets_get_metadata", { spreadsheet_id: excelId }, { as: "sender" });
-    const words = refused.content?.map((c) => ("text" in c ? c.text : "")).join(" ") ?? "";
-    ctx.evidence(`sheets_get_metadata on the Excel file: isError ${refused.isError === true}, names the conversion ${words.includes("drive_copy_file with convert")}`);
+    const expected =
+      "This file is an Excel file, not a Google Sheet, so sheets_get_metadata cannot open it. " +
+      "drive_copy_file with convert set to true copies it as a Google Sheet; use that copy's file id here.";
+    const said = resultText(refused).trim();
+    ctx.evidence(`sheets_get_metadata on the Excel file: isError ${refused.isError === true}, the expected words ${said === expected}`);
     if (refused.isError !== true) throw new Error("sheets_get_metadata opened an Excel file, so the fixture is not one");
-    if (!words.includes("This file is an Excel file, not a Google Sheet")) {
-      throw new Error("the refusal does not say the file is an Excel file");
-    }
-    if (!words.includes("drive_copy_file with convert set to true")) {
-      throw new Error("the refusal does not name drive_copy_file's convert");
-    }
+    if (said !== expected) throw new Error("the refusal is not the words that name the file and drive_copy_file's convert");
 
     const copy = resultJson<DriveFile>(
       "drive_copy_file",
@@ -80,9 +78,10 @@ export const dr7OfficeConvert: TestCase = {
     );
     const copyId = copy.id;
     if (typeof copyId !== "string") throw new Error("drive_copy_file with convert answered no file id");
-    ctx.defer("trash the converted copy", async () => {
-      const res = await ctx.call("gws-mcp__drive_trash_file", { file_id: copyId }, { as: "sender" });
-      if (res.isError) ctx.evidence("RESIDUE: the converted copy could not be trashed");
+    // Deleted, not trashed: a trash per run would leave one Sheet in Trash each time.
+    ctx.defer("delete the converted copy", async () => {
+      const res = await ctx.call("gws-mcp__sheets_delete", { spreadsheet_id: copyId }, { as: "sender" });
+      if (res.isError) ctx.evidence("RESIDUE: the converted copy could not be deleted");
     });
     ctx.evidence(`the copy's type: ${copy.mimeType}`);
     if (copy.mimeType !== "application/vnd.google-apps.spreadsheet") {

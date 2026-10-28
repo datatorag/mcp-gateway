@@ -1,5 +1,4 @@
 import type { GwsClient } from "../gws-client.js";
-import { requireOneOf, takeAlias } from "./aliases.js";
 import { READ, ToolDef } from "./annotations.js";
 import { jsonResponse } from "./response.js";
 import {
@@ -55,6 +54,7 @@ export const sheetsRowTools: ToolDef[] = [
         },
         query: {
           type: "string",
+          "x-alias-of": "values",
           description:
             "One value to look for, taken as values with that single value. Give values or query, not both. The answer names it under aliased.",
         },
@@ -75,8 +75,7 @@ export const sheetsRowTools: ToolDef[] = [
             `Maximum matching rows returned per searched value. Default ${DEFAULT_MAX_RESULTS}. A capped result says truncated: true, because a silent truncation reads exactly like a complete answer.`,
         },
       },
-      // values or its alias query: one of the two is checked in the handler.
-      required: ["spreadsheet_id", "range", "column"],
+      required: ["spreadsheet_id", "range", "column", "values"],
     },
     annotations: READ("Find rows matching a value"),
   },
@@ -172,9 +171,6 @@ export async function handleSheetsRows(
 }
 
 async function findRows(client: GwsClient, args: Record<string, unknown>) {
-  // SCRUM-456: a single-string query is values with one value.
-  const note = takeAlias("sheets_find_rows", args, "query", "values", (v) => (typeof v === "string" ? [v] : v));
-  requireOneOf("sheets_find_rows", args, "values", "query");
   const requested = args.range as string;
   const needles = args.values as string[];
   const mode = ((args.match as MatchMode) ?? "exact") satisfies MatchMode;
@@ -207,7 +203,7 @@ async function findRows(client: GwsClient, args: Record<string, unknown>) {
   // the column against absent headers would throw, which would make "the sheet
   // is empty" indistinguishable from "you named a column wrong".
   if (body.length === 0) {
-    return jsonResponse({ matches: [], notFound: needles, searchedRows: 0, ...note });
+    return jsonResponse({ matches: [], notFound: needles, searchedRows: 0 });
   }
 
   const column = resolveColumn(args.column as string, headers);
@@ -245,6 +241,5 @@ async function findRows(client: GwsClient, args: Record<string, unknown>) {
     matches: found,
     notFound,
     searchedRows: body.length,
-    ...note,
   });
 }

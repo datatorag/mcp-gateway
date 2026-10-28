@@ -1,5 +1,6 @@
 import type { GwsClient } from "../gws-client.js";
 import { GwsApiError } from "../google-api/errors.js";
+import { getDriveFileMeta } from "./drive-ops.js";
 
 /**
  * Office files in Drive, and the Google types they convert to (SCRUM-455).
@@ -40,60 +41,53 @@ export function googleTypeFor(mimeType: string | undefined | null): string | nul
   return null;
 }
 
-/** What each Google type is called, the Office program a file of that kind
- * comes from, and the tools that open it. */
-const KIND: Readonly<Record<string, { google: string; office: string; tools: string }>> = {
-  [GOOGLE_SHEET]: { google: "a Google Sheet", office: "an Excel file", tools: "sheets_" },
-  [GOOGLE_DOC]: { google: "a Google Doc", office: "a Word file", tools: "docs_" },
-  [GOOGLE_SLIDES]: { google: "Google Slides", office: "a PowerPoint file", tools: "slides_" },
+/** Each Google type: what it is called, the Office program a file of that
+ * kind comes from, the tools that open it, and the API and path parameter
+ * that name its file in a request. */
+const GOOGLE_KINDS: Readonly<
+  Record<string, { google: string; office: string; tools: string; service: string; idParam: string }>
+> = {
+  [GOOGLE_SHEET]: { google: "a Google Sheet", office: "an Excel file", tools: "sheets_", service: "sheets", idParam: "spreadsheetId" },
+  [GOOGLE_DOC]: { google: "a Google Doc", office: "a Word file", tools: "docs_", service: "docs", idParam: "documentId" },
+  [GOOGLE_SLIDES]: { google: "Google Slides", office: "a PowerPoint file", tools: "slides_", service: "slides", idParam: "presentationId" },
 };
 
-/** The tool families that open a Google file by id, the argument naming it,
- * and the Google type they expect. */
-const FAMILIES: ReadonlyArray<{ prefix: string; idArg: string; expects: string }> = [
-  { prefix: "sheets_", idArg: "spreadsheet_id", expects: GOOGLE_SHEET },
-  { prefix: "docs_", idArg: "document_id", expects: GOOGLE_DOC },
-  { prefix: "slides_", idArg: "presentation_id", expects: GOOGLE_SLIDES },
-];
+/** Google's reason for a request on an Office file; any other 400 reason
+ * (INVALID_ARGUMENT for a bad range or index) needs no Drive lookup. */
+const OFFICE_FILE_REASON = "FAILED_PRECONDITION";
 
 /**
- * When a Sheets, Docs or Slides tool failed with Google's 400 on a file that
- * is an Office file, the words that say so and name the conversion. Null in
- * every other case, including when the lookup itself fails, so the caller
- * keeps Google's own error. One Drive `files.get` for the mime type, on the
- * error path only: a call that succeeds costs nothing extra.
+ * When a Sheets, Docs or Slides request was refused because its file is an
+ * Office file, the words that say so and name the conversion. Null in every
+ * other case, including when the lookup itself fails, so the caller keeps
+ * Google's own error.
+ *
+ * Keyed on the request the transport attached to the error, its API and path
+ * parameters, so it covers every tool that sends one, gws_run included. One
+ * Drive `files.get` for the mime type, only after a 400 whose reason is
+ * FAILED_PRECONDITION (or carries none).
  */
-export async function officeFileRefusal(
-  client: GwsClient,
-  toolName: string,
-  args: Record<string, unknown>,
-  err: unknown
-): Promise<string | null> {
-  if (!(err instanceof GwsApiError) || err.status !== 400) return null;
-  const family = FAMILIES.find((f) => toolName.startsWith(f.prefix));
-  const fileId = family ? args[family.idArg] : undefined;
-  if (!family || typeof fileId !== "string" || fileId === "") return null;
+export async function officeFileRefusal(client: GwsClient, toolName: string, err: unknown): Promise<string | null> {
+  if (!(err instanceof GwsApiError) || err.status !== 400 || !err.request) return null;
+  if (err.reason !== undefined && err.reason !== OFFICE_FILE_REASON) return null;
+  const expects = Object.keys(GOOGLE_KINDS).find((type) => GOOGLE_KINDS[type].service === err.request?.service);
+  const fileId = expects ? err.request.pathParams[GOOGLE_KINDS[expects].idParam] : undefined;
+  if (!expects || !fileId) return null;
 
   let mimeType: string | undefined;
   try {
-    const meta = await client.api("drive", "files", "get", {
-      params: { fileId, fields: "mimeType", supportsAllDrives: true },
-    });
-    mimeType = (meta.data as { mimeType?: string } | undefined)?.mimeType;
+    mimeType = (await getDriveFileMeta<{ mimeType?: string }>(client, fileId, "mimeType")).mimeType;
   } catch {
     return null;
   }
   const converts = googleTypeFor(mimeType);
   if (!converts) return null;
 
-  const file = KIND[converts];
-  const expected = KIND[family.expects];
+  const file = GOOGLE_KINDS[converts];
   const next =
-    converts === family.expects
-      ? "use that copy's file id here"
-      : `the ${file.tools} tools open that copy`;
+    converts === expects ? "use that copy's file id here" : `the ${file.tools} tools open that copy`;
   return (
-    `This file is ${file.office}, not ${expected.google}, so ${toolName} cannot open it. ` +
+    `This file is ${file.office}, not ${GOOGLE_KINDS[expects].google}, so ${toolName} cannot open it. ` +
     `drive_copy_file with convert set to true copies it as ${file.google}; ${next}.`
   );
 }

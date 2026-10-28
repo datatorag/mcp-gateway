@@ -219,3 +219,61 @@ describe("validateArgs", () => {
     }
   });
 });
+
+/* SCRUM-456: an alias is declared on the schema property ("x-alias-of") and
+ * applied here, before anything else is checked, so `required` keeps naming
+ * the canonical argument and no handler re-implements it. */
+describe("declared aliases", () => {
+  const named = (name: string) => {
+    const tool = allTools.find((t) => t.name === name);
+    if (!tool) throw new Error(`no tool ${name}`);
+    return tool;
+  };
+
+  it("sheets_find_rows: query becomes values with that one value, and is reported", () => {
+    const args: Record<string, unknown> = { spreadsheet_id: "s", range: "A:B", column: "Email", query: "bo@example.com" };
+    expect(validateArgs(named("sheets_find_rows"), args)).toEqual({ query: "values" });
+    expect(args).toEqual({ spreadsheet_id: "s", range: "A:B", column: "Email", values: ["bo@example.com"] });
+  });
+
+  it("docs_write: content becomes text", () => {
+    const args: Record<string, unknown> = { document_id: "d", content: "hello" };
+    expect(validateArgs(named("docs_write"), args)).toEqual({ content: "text" });
+    expect(args).toEqual({ document_id: "d", text: "hello" });
+  });
+
+  it("gws_run: body becomes json_body", () => {
+    const args: Record<string, unknown> = { service: "docs", resource: "documents", method: "create", body: { title: "t" } };
+    expect(validateArgs(named("gws_run"), args)).toEqual({ body: "json_body" });
+    expect(args.json_body).toEqual({ title: "t" });
+    expect(args).not.toHaveProperty("body");
+  });
+
+  it("the canonical name alone applies no alias", () => {
+    expect(validateArgs(named("docs_write"), { document_id: "d", text: "hello" })).toEqual({});
+  });
+
+  it("an alias and its canonical together are refused", () => {
+    expect(() => validateArgs(named("docs_write"), { document_id: "d", text: "a", content: "b" })).toThrow(
+      'docs_write: give "text" or "content", not both. Nothing was sent.'
+    );
+  });
+
+  it("neither is the canonical argument missing, named as required", () => {
+    expect(failure("sheets_find_rows", { spreadsheet_id: "s", range: "A:B", column: "Email" })).toContain('"values"');
+  });
+
+  it("an alias still has its own type checked", () => {
+    expect(failure("docs_write", { document_id: "d", content: 7 })).toContain('"text" must be a string');
+  });
+
+  it("every declared alias names a real property of its tool", () => {
+    for (const tool of allTools) {
+      const props = tool.inputSchema.properties as Record<string, Record<string, unknown>>;
+      for (const [key, spec] of Object.entries(props)) {
+        const of = spec["x-alias-of"];
+        if (of !== undefined) expect(props, `${tool.name}.${key}`).toHaveProperty(String(of));
+      }
+    }
+  });
+});

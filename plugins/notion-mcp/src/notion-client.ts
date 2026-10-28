@@ -107,6 +107,10 @@ function rateLimitWords(
 }
 
 /** The error for a refused answer. Exported for test. */
+/** What a cursor refusal says (SCRUM-456): an agent that has no cursor
+ * passes a placeholder, and Notion's answer to one does not say what to do. */
+export const CURSOR_WORDS = "pass the next_cursor from the previous page, or omit it for the first page.";
+
 export function errorFor(
   status: number,
   text: string,
@@ -124,6 +128,11 @@ export function errorFor(
     const ms = retryAfterMs(retryAfter);
     const seconds = ms === undefined ? undefined : Math.ceil(ms / 1000);
     return new NotionApiError(rateLimitWords(status, code, seconds, reason), status, code, seconds);
+  }
+  // Notion refuses a cursor it did not issue as a validation_error that names
+  // start_cursor, and quotes the value back. Said in our words, without it.
+  if (status === 400 && code === "validation_error" && message?.includes("start_cursor")) {
+    return new NotionApiError(`The cursor is not one Notion returned: ${CURSOR_WORDS}`, status, code);
   }
   const detail = message ?? text.trim().slice(0, 300);
   return new NotionApiError(
