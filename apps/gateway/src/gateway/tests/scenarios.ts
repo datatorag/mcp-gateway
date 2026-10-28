@@ -130,6 +130,7 @@ export const SCENARIOS: Scenario[] = [
       "E11", // a range naming a missing tab names the tabs that do exist
       "E17", // many ranges answer in request order, duplicates and all
       "E18", // a query over a missing tab is refused, naming the tabs that exist
+      "E19", // find_rows takes query as one value and says it read it as values
       "C12", // a query returns rows and refuses a column out of range
       "SH5", // delete the spreadsheet, and prove it is gone from Drive
     ],
@@ -195,6 +196,7 @@ export const SCENARIOS: Scenario[] = [
       /* D4 and E10 each create and delete their own document, so neither
        * depends on the other and neither touches the fixture doc. */
       "D4", //  created, written, read back, deleted
+      "E20", // docs_write takes content as text and says so
       "E10", // nested replaceAllText works; the flat shape is refused
       /* Read guards, on the standing fixture doc. */
       "C5", //  the fixture doc's first line is its control heading
