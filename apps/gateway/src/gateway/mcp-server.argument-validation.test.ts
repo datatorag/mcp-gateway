@@ -145,3 +145,44 @@ describe("calls the tool can take are untouched", () => {
     expect(callPluginToolOnce).toHaveBeenCalledTimes(1);
   });
 });
+
+/* SCRUM-458: an alias declared with x-alias-of reaches the plugin, which maps
+ * it; before this the gateway refused it as the canonical argument missing. */
+describe("an alias declared in the registry schema", () => {
+  const ALIAS_SCHEMA = {
+    type: "object",
+    properties: {
+      issue_key: { type: "string" },
+      comment: { type: "string" },
+      body: { type: "string", "x-alias-of": "comment" },
+    },
+    required: ["issue_key", "comment"],
+  };
+
+  it("is passed through to the plugin as the caller sent it", async () => {
+    selectLimit.mockReset();
+    selectLimit.mockResolvedValueOnce([SERVER_ROW]).mockResolvedValueOnce([{ schema: ALIAS_SCHEMA }]);
+    const client = await connectedClient();
+    const result = await client.callTool({
+      name: "atlassian-mcp__jira_add_comment",
+      arguments: { issue_key: "FIX-1", body: "hello" },
+    });
+    expect(result.isError).toBeFalsy();
+    expect(callPluginToolOnce).toHaveBeenCalledTimes(1);
+    const sent = callPluginToolOnce.mock.calls[0][0] as { args: Record<string, unknown> };
+    expect(sent.args).toEqual({ issue_key: "FIX-1", body: "hello" });
+  });
+
+  it("given with its canonical, is refused before the plugin, in the plugin's words", async () => {
+    selectLimit.mockReset();
+    selectLimit.mockResolvedValueOnce([SERVER_ROW]).mockResolvedValueOnce([{ schema: ALIAS_SCHEMA }]);
+    const client = await connectedClient();
+    const result = await client.callTool({
+      name: "atlassian-mcp__jira_add_comment",
+      arguments: { issue_key: "FIX-1", comment: "a", body: "b" },
+    });
+    expect(result.isError).toBe(true);
+    expect(text(result)).toBe('jira_add_comment: give "comment" or "body", not both. Nothing was sent.');
+    expect(callPluginToolOnce).not.toHaveBeenCalled();
+  });
+});

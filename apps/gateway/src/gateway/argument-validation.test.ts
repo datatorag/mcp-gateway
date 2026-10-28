@@ -113,3 +113,68 @@ describe("hardening", () => {
     expect(text.length).toBeLessThan(400);
   });
 });
+
+/* SCRUM-458: the plugin declares an alias with "x-alias-of" and maps it before
+ * its own checks (SCRUM-456), so the gateway's check, which runs first against
+ * the same registry schema, has to count the alias as its canonical argument.
+ * The schemas below have the shape the registry rows carry. */
+describe("aliases declared with x-alias-of", () => {
+  const findRows = {
+    type: "object",
+    properties: {
+      spreadsheet_id: { type: "string" },
+      range: { type: "string" },
+      column: { type: "string" },
+      values: { type: "array", items: { type: "string" } },
+      query: { type: "string", "x-alias-of": "values" },
+    },
+    required: ["spreadsheet_id", "range", "column", "values"],
+  };
+  const docsWrite = {
+    type: "object",
+    properties: {
+      document_id: { type: "string" },
+      text: { type: "string" },
+      content: { type: "string", "x-alias-of": "text" },
+    },
+    required: ["document_id", "text"],
+  };
+  const base = { spreadsheet_id: "s", range: "A:B", column: "Email" };
+
+  it("an alias alone satisfies its required canonical", () => {
+    expect(validateArguments(findRows, { ...base, query: "bo@example.com" })).toEqual({ ok: true });
+    expect(validateArguments(docsWrite, { document_id: "d", content: "hello" })).toEqual({ ok: true });
+  });
+
+  it("the canonical alone passes as before", () => {
+    expect(validateArguments(findRows, { ...base, values: ["bo@example.com"] })).toEqual({ ok: true });
+    expect(validateArguments(docsWrite, { document_id: "d", text: "hello" })).toEqual({ ok: true });
+  });
+
+  it("both together are refused in the plugin's own words", () => {
+    const v = validateArguments(docsWrite, { document_id: "d", text: "a", content: "b" });
+    expect(v.ok).toBe(false);
+    if (v.ok) return;
+    expect(v.conflicts).toEqual([{ alias: "content", canonical: "text" }]);
+    expect(argumentRefusalText("docs_write", v, docsWrite.required)).toBe(
+      'docs_write: give "text" or "content", not both. Nothing was sent.'
+    );
+  });
+
+  it("neither is the canonical argument missing, named in the refusal", () => {
+    const v = validateArguments(findRows, { ...base });
+    expect(v.ok).toBe(false);
+    if (v.ok) return;
+    expect(v.missing).toEqual(["values"]);
+    expect(argumentRefusalText("sheets_find_rows", v, findRows.required)).toContain(
+      "missing required argument: values"
+    );
+  });
+
+  it("an alias of some other argument does not stand in for this one", () => {
+    const v = validateArguments(docsWrite, { content: "hello" });
+    expect(v.ok).toBe(false);
+    if (v.ok) return;
+    expect(v.missing).toEqual(["document_id"]);
+  });
+});
