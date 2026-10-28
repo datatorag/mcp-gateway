@@ -49,6 +49,8 @@ claude mcp add --transport http datatorag https://datatorag.com/mcp
 
 The [getting started guide](https://datatorag.com/docs/getting-started) has screenshots of each step. Every client connects with OAuth.
 
+The server is listed in the [official MCP registry](https://registry.modelcontextprotocol.io) as `com.datatorag/mcp-gateway`; [`server.json`](server.json) is the listing.
+
 ## Screenshots
 
 <p align="center">
