@@ -16,4 +16,4 @@ Google Sheet. Until now they answered with Google's own error, which did not say
   Sheet, a `.docx` or `.doc` becomes a Google Doc, and a `.pptx` or `.ppt` becomes Google Slides.
   The answer gives the new file's id and type, and the original is left as it was.
 
-More in [Drive](/docs/drive).
+More in [Drive](/docs/drive). The [launch post](/blog/an-excel-file-in-drive-is-not-a-spreadsheet-yet) walks through it.
