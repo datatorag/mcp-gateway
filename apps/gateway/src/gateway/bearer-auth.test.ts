@@ -106,7 +106,11 @@ describe("the /mcp body gate (SCRUM-437)", () => {
       const res = await fetch(s.url, { method: "POST", headers: { authorization: "Bearer good", "content-type": "application/json" }, body: body(1_400_000) });
       expect(res.status).toBe(200);
       const seen = await res.json();
-      expect(seen.state).toEqual({ header: "present", auth: { ok: true, userId: "u1", clientId: "c1", authKind: "oauth" } });
+      expect(seen.state).toEqual({
+        header: "present",
+        auth: { ok: true, userId: "u1", clientId: "c1", authKind: "oauth" },
+        emptyToken: false,
+      });
       expect(seen.bodyKeys).toEqual(["jsonrpc", "method", "params"]);
     } finally {
       await s.close();
@@ -144,7 +148,8 @@ describe("the /mcp body gate (SCRUM-437)", () => {
     const s = await serve(invalid);
     try {
       const none = await (await fetch(s.url, { method: "GET" })).json();
-      expect(none.state).toEqual({ header: "missing" });
+      // SCRUM-464: the gate says why there is no bearer.
+      expect(none.state).toEqual({ header: "missing", authorization: "absent" });
       const bad = await (await fetch(s.url, { method: "GET", headers: { authorization: "Bearer bad" } })).json();
       expect(bad.state.header).toBe("present");
       expect(bad.state.auth.ok).toBe(false);

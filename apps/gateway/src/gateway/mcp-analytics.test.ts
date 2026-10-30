@@ -135,6 +135,25 @@ describe("capture identity", () => {
     );
   });
 
+  it("carries who the refused caller was, keeping reason and http_method as they were (SCRUM-464)", async () => {
+    const context = {
+      path: "/mcp",
+      user_agent: "mcpbeat/1.0",
+      client_name: null,
+      client_version: null,
+      reason_detail: "no_header" as const,
+      bearer_present: false,
+      peer_hash: "0123456789abcdef",
+      peer_prefix: "203.0.113.0/24",
+    };
+    await trackMcpAuthFailed(db, { userId: null, reason: "missing_credential", method: "POST", context });
+    expect(capture.mock.calls[0][0].properties).toMatchObject({
+      reason: "missing_credential",
+      http_method: "POST",
+      ...context,
+    });
+  });
+
   it("sends the tool count and nothing about the tools themselves", async () => {
     await trackMcpToolsListed(db, "user-123", { connectorTools: 70, builtinTools: 6 });
     const { properties } = capture.mock.calls[0][0];

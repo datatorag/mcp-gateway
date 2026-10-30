@@ -52,7 +52,11 @@ export async function resolveBearer(db: Database, rawToken: string): Promise<Bea
 }
 
 /** What the /mcp gate found, for the handler after it. */
-export type McpAuthState = { header: "missing" } | { header: "present"; auth: BearerAuth };
+export type McpAuthState =
+  /** `authorization` says why there is no bearer (SCRUM-464): no header at
+   * all, or one that is not `Bearer <token>`. */
+  | { header: "missing"; authorization: "absent" | "not_bearer" }
+  | { header: "present"; auth: BearerAuth; emptyToken: boolean };
 
 /**
  * The bearer check on /mcp, run BEFORE the body is parsed (SCRUM-437).
@@ -72,10 +76,14 @@ export function mcpBearerGate(
     const header = req.headers.authorization;
     let state: McpAuthState;
     if (!header?.startsWith("Bearer ")) {
-      state = { header: "missing" };
+      state = { header: "missing", authorization: header === undefined ? "absent" : "not_bearer" };
     } else {
       try {
-        state = { header: "present", auth: await validate(header.slice(7)) };
+        state = {
+          header: "present",
+          auth: await validate(header.slice(7)),
+          emptyToken: header.slice(7).trim() === "",
+        };
       } catch (err) {
         next(err);
         return;
