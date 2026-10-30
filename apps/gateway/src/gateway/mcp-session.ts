@@ -53,3 +53,27 @@ export async function closeSessionsForUser(
   }
   return closed;
 }
+
+/**
+ * Tells each of a user's live MCP sessions that its tool list changed
+ * (SCRUM-466): a provider's tools are listed only once it is connected, so a
+ * connect that completes mid-conversation changes the list. A client that
+ * ignores the notification still gets the new tools on its next tools/list.
+ * Never throws; returns how many sessions were told.
+ */
+export async function notifyToolsChangedForUser(
+  sessions: Map<string, { server: { sendToolListChanged(): Promise<void> }; userId: string }>,
+  userId: string
+): Promise<number> {
+  let told = 0;
+  for (const session of sessions.values()) {
+    if (session.userId !== userId) continue;
+    try {
+      await session.server.sendToolListChanged();
+      told++;
+    } catch (err) {
+      console.warn(`[mcp-session] list_changed failed for a session of user=${userId}`, err instanceof Error ? err.message : err);
+    }
+  }
+  return told;
+}

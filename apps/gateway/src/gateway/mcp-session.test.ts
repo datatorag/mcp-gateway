@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { classifyMcpRequest, closeSessionsForUser } from "./mcp-session";
+import { classifyMcpRequest, closeSessionsForUser, notifyToolsChangedForUser } from "./mcp-session";
 
 // SCRUM-23: gateway restarts (every deploy) wipe the in-memory session map.
 // The MCP Streamable HTTP spec says a request carrying an unknown/terminated
@@ -90,5 +90,31 @@ describe("closeSessionsForUser", () => {
     const sessions = new Map([["s1", other]]);
     expect(await closeSessionsForUser(sessions, "user-a")).toBe(0);
     expect(sessions.size).toBe(1);
+  });
+});
+
+/* SCRUM-466: a connect changes which tools a user's sessions list, and each
+ * of that user's sessions, and nobody else's, is told. */
+describe("notifyToolsChangedForUser", () => {
+  const live = (userId: string, send = vi.fn().mockResolvedValue(undefined)) => ({ server: { sendToolListChanged: send }, userId });
+
+  it("tells each of the user's sessions and no one else's", async () => {
+    const a1 = live("user-a");
+    const a2 = live("user-a");
+    const b = live("user-b");
+    const told = await notifyToolsChangedForUser(new Map([["s1", a1], ["s2", b], ["s3", a2]]), "user-a");
+    expect(told).toBe(2);
+    expect(a1.server.sendToolListChanged).toHaveBeenCalledTimes(1);
+    expect(a2.server.sendToolListChanged).toHaveBeenCalledTimes(1);
+    expect(b.server.sendToolListChanged).not.toHaveBeenCalled();
+  });
+
+  it("goes on past a session that cannot be told", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const bad = live("user-a", vi.fn().mockRejectedValue(new Error("closed")));
+    const good = live("user-a");
+    expect(await notifyToolsChangedForUser(new Map([["s1", bad], ["s2", good]]), "user-a")).toBe(1);
+    expect(good.server.sendToolListChanged).toHaveBeenCalled();
+    warn.mockRestore();
   });
 });

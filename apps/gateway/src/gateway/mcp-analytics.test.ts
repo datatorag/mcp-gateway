@@ -78,6 +78,19 @@ describe("extractClientInfo", () => {
     ).toEqual({});
   });
 
+  it("reads which elicitation modes the client declared, the way the SDK does (SCRUM-466)", () => {
+    const init = (capabilities: unknown) => ({ method: "initialize", params: { clientInfo: { name: "c" }, capabilities } });
+    expect(extractClientInfo(init({ elicitation: { url: {} } }))).toMatchObject({ elicitationForm: false, elicitationUrl: true });
+    expect(extractClientInfo(init({ elicitation: { form: {}, url: {} } }))).toMatchObject({ elicitationForm: true, elicitationUrl: true });
+    // An empty object is form only, never URL.
+    expect(extractClientInfo(init({ elicitation: {} }))).toMatchObject({ elicitationForm: true, elicitationUrl: false });
+    expect(extractClientInfo(init({ sampling: {} }))).toMatchObject({ elicitationForm: false, elicitationUrl: false });
+    expect(extractClientInfo(init({ elicitation: { url: true } }))).toMatchObject({ elicitationUrl: false });
+    const none = extractClientInfo({ method: "initialize", params: { clientInfo: { name: "c" } } });
+    expect(none.elicitationForm).toBeUndefined();
+    expect(none.elicitationUrl).toBeUndefined();
+  });
+
   it("caps runaway string lengths", () => {
     const { name } = extractClientInfo({
       method: "initialize",
@@ -102,6 +115,14 @@ describe("capture identity", () => {
         }),
       })
     );
+  });
+
+  it("records what the client can be asked through on the session event (SCRUM-466)", async () => {
+    await trackMcpSessionInitialized(db, "user-123", { clientName: "Claude Code", elicitationForm: true, elicitationUrl: true });
+    expect(capture.mock.calls[0][0].properties).toMatchObject({ elicitation_form: true, elicitation_url: true });
+    capture.mockClear();
+    await trackMcpSessionInitialized(db, "user-123", { clientName: "x" });
+    expect(capture.mock.calls[0][0].properties).toMatchObject({ elicitation_form: false, elicitation_url: false });
   });
 
   it("captures unauthenticated requests under the stable anonymous id", async () => {

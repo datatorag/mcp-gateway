@@ -19,6 +19,7 @@ import {
 import {
   classifyMcpRequest,
   closeSessionsForUser,
+  notifyToolsChangedForUser,
 } from "./src/gateway/mcp-session";
 import { createRegisterRouter } from "./src/gateway/oauth/register";
 import { createAuthorizeRouter } from "./src/gateway/oauth/authorize";
@@ -28,6 +29,8 @@ import { createRevokeRouter } from "./src/gateway/oauth/revoke";
 import { oauthRateLimit } from "./src/gateway/oauth/rate-limit";
 import { createAuthRouter } from "./src/gateway/auth";
 import { createConnectLinkRouter } from "./src/gateway/connect-link-route";
+import { serverInstructions } from "./src/gateway/server-instructions";
+import { launchedServiceIds } from "./src/gateway/service-launch";
 import { getPluginManager } from "./src/lib/plugin-manager";
 import { mcpBearerGate, resolveBearer, type McpAuthState } from "./src/gateway/bearer-auth";
 import { authFailureContext } from "./src/gateway/auth-failure-context";
@@ -191,6 +194,10 @@ async function main() {
       notionClientId: env.NOTION_OAUTH_CLIENT_ID,
       notionClientSecret: env.NOTION_OAUTH_CLIENT_SECRET,
       baseUrl,
+      // SCRUM-466: a connect changes which tools the user's sessions list.
+      onConnected: ({ userId }) => {
+        void notifyToolsChangedForUser(sessions, userId);
+      },
     })
   );
 
@@ -366,7 +373,20 @@ async function main() {
           void trackMcpSessionInitialized(db, auth.userId, {
             clientName: clientInfo.name,
             clientVersion: clientInfo.version,
+            elicitationForm: clientInfo.elicitationForm,
+            elicitationUrl: clientInfo.elicitationUrl,
           });
+          // SCRUM-466: what each client can be asked through, in the log
+          // too. Names a client, never a user.
+          console.log(
+            `[mcp] session started ${JSON.stringify({
+              client_name: clientInfo.name ?? null,
+              client_version: clientInfo.version ?? null,
+              protocol_version: clientInfo.protocolVersion ?? null,
+              elicitation_form: clientInfo.elicitationForm ?? false,
+              elicitation_url: clientInfo.elicitationUrl ?? false,
+            })}`
+          );
           // SCRUM-164: the same start in Postgres, against the accounts the
           // session would use, so a dead grant shows per connection. One
           // statement, fire-and-forget like the capture above.
@@ -384,6 +404,7 @@ async function main() {
         baseUrl,
         clientId: auth.clientId,
         protocolVersion: clientInfo.protocolVersion,
+        instructions: serverInstructions(await launchedServiceIds(db)),
       });
       await server.connect(transport);
 

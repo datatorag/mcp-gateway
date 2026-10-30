@@ -905,6 +905,10 @@ export function createMcpServer(
      * The agent's in-process server passes this and no `baseUrl`, so the
      * relative links its other messages rely on stay as they were. */
     downloadBaseUrl?: string;
+    /** The initialize instructions (SCRUM-466), built by the HTTP layer,
+     * which can wait on the registry for which providers have launched.
+     * Sent on the MCP surface only. */
+    instructions?: string;
   }
 ): Server {
   const connectionsUrl = `${opts?.baseUrl ?? ""}/dashboard/connections`;
@@ -924,7 +928,12 @@ export function createMcpServer(
     // reusable instruction to this session" primitive, for clients that
     // render it. The same catalogue is served as tools for clients that do
     // not; see BUILT_IN_TOOLS.
-    { capabilities: { tools: {}, prompts: {} } }
+    // `listChanged` (SCRUM-466): a connect mid-conversation changes which
+    // tools are listed, and the session is told (`notifyToolsChangedForUser`).
+    {
+      capabilities: { tools: { listChanged: true }, prompts: {} },
+      ...(surface === "mcp" && opts?.instructions ? { instructions: opts.instructions } : {}),
+    }
   );
   /** Self-reported by the client at initialize; undefined until the
    * handshake completes, which is before any tool call can arrive. */

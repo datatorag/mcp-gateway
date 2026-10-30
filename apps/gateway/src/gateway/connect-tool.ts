@@ -46,7 +46,7 @@ export type ConnectToolProvider = {
 };
 
 /** "A", "A and B", "A, B and C". */
-function listOf(names: string[]): string {
+export function listOf(names: string[]): string {
   if (names.length <= 1) return names.join("");
   return `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}`;
 }
