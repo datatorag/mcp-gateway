@@ -14,6 +14,12 @@ import { hashToken } from "@datatorag-mcp/auth";
 import { cleanClientName } from "./untrusted-text";
 
 export const CONNECT_LINK_TTL_MS = 10 * 60 * 1000;
+
+/** The one-shot cookie a spent link leaves in the browser that spent it,
+ * holding the link's id: what tells the provider's connect routes who the
+ * connect is for when the browser has no session, and which link a connect
+ * came from. Cleared at the top of every connect callback. */
+export const CONNECT_LINK_COOKIE = "dtr_connect_link";
 /** Rows are kept a day past expiry, then swept. */
 const SWEEP_AFTER_MS = 24 * 60 * 60 * 1000;
 
@@ -30,7 +36,8 @@ export type ConnectLink = {
 };
 
 /** The token's shape in a URL: exactly what `issueConnectLink` makes. */
-const TOKEN = /^[A-Za-z0-9_-]{43}$/;
+export const CONNECT_LINK_TOKEN = /^[A-Za-z0-9_-]{43}$/;
+const TOKEN = CONNECT_LINK_TOKEN;
 
 const columns = {
   id: connectLinks.id,
@@ -86,9 +93,21 @@ export async function claimConnectLink(db: Database, token: string): Promise<Con
   return (row as ConnectLink | undefined) ?? null;
 }
 
-/** A spent link by id, for the connect that it started. */
-export async function connectLinkById(db: Database, id: string): Promise<ConnectLink | null> {
-  const [row] = await db.select(columns).from(connectLinks).where(eq(connectLinks.id, id)).limit(1);
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/** The link a connect round trip carries in its cookie: spent, and spent
+ * within `withinMs`, the round trip's own lifetime. Anything else is no link. */
+export async function spentConnectLink(
+  db: Database,
+  id: unknown,
+  withinMs: number
+): Promise<ConnectLink | null> {
+  if (typeof id !== "string" || !UUID.test(id)) return null;
+  const [row] = await db
+    .select(columns)
+    .from(connectLinks)
+    .where(and(eq(connectLinks.id, id), gt(connectLinks.spentAt, new Date(Date.now() - withinMs))))
+    .limit(1);
   return (row as ConnectLink | undefined) ?? null;
 }
 

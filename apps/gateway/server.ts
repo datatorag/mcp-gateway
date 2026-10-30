@@ -27,6 +27,7 @@ import { createTokenRouter } from "./src/gateway/oauth/token";
 import { createRevokeRouter } from "./src/gateway/oauth/revoke";
 import { oauthRateLimit } from "./src/gateway/oauth/rate-limit";
 import { createAuthRouter } from "./src/gateway/auth";
+import { createConnectLinkRouter } from "./src/gateway/connect-link-route";
 import { getPluginManager } from "./src/lib/plugin-manager";
 import { mcpBearerGate, resolveBearer, type McpAuthState } from "./src/gateway/bearer-auth";
 import { authFailureContext } from "./src/gateway/auth-failure-context";
@@ -192,6 +193,10 @@ async function main() {
       baseUrl,
     })
   );
+
+  // SCRUM-466: one-click connect links, before the catch-all so the app never
+  // sees a path with a token in it.
+  app.use(createConnectLinkRouter(db, { baseUrl }));
 
   // Session store. userId binds each session to the bearer that initialized
   // it — a session id presented with a different user's (valid) bearer is
