@@ -15,6 +15,7 @@ export { mcpServerEnvVars } from "./mcp-server-env-vars";
 export { pluginConnections } from "./plugin-connections";
 export { serviceConnections } from "./service-connections";
 export { connectedAccounts } from "./connected-accounts";
+export { connectLinks } from "./connect-links";
 export { mcpSessionStarts } from "./mcp-session-starts";
 export { usageEvents, usageEventsDaily } from "./usage";
 export { agentRunUsage } from "./agent-run-usage";

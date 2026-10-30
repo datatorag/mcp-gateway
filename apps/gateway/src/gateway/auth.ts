@@ -35,6 +35,7 @@ import { hashToken } from "@datatorag-mcp/auth";
 import { isServiceLaunched } from "./service-launch";
 import { cleanWorkspaceName } from "./untrusted-text";
 import { dropLinksForUser } from "./file-download";
+import { dropConnectLinksQuietly } from "./connect-links";
 
 /** Where the requested route (`?next=` on the login URL) survives the trip
  * through Google's consent screen, which loses the query string — the same
@@ -289,6 +290,7 @@ export function createAuthRouter(
       for (const row of revoked) {
         if (!row.userId) continue;
         dropLinksForUser(row.userId);
+        await dropConnectLinksQuietly(db, row.userId);
         const provider = req.query.provider;
         if (isDuplicateProvider(provider)) {
           await trackConnectDuplicate(db, row.userId, provider, "signed_in_other");
@@ -524,7 +526,12 @@ export function createAuthRouter(
         .where(eq(oauthAccessTokens.tokenHash, hashToken(sessionToken)))
         .returning({ userId: oauthAccessTokens.userId });
       // Signing out takes the user's open download links with it (SCRUM-420).
-      for (const row of revoked) if (row.userId) dropLinksForUser(row.userId);
+      // And its connect links (SCRUM-466).
+      for (const row of revoked) {
+        if (!row.userId) continue;
+        dropLinksForUser(row.userId);
+        await dropConnectLinksQuietly(db, row.userId);
+      }
     }
     res.clearCookie("dtrmcp_session", { path: "/" });
     // The account a refused connect was tried with belongs to the person

@@ -40,6 +40,7 @@ import {
 import { recordSessionStart } from "./src/gateway/session-starts";
 import cron from "node-cron";
 import { runDailyRollup } from "./src/gateway/usage/rollup";
+import { dropConnectLinksQuietly, sweepConnectLinks } from "./src/gateway/connect-links";
 import { runDailyDigest } from "./src/gateway/digest";
 import { runDueSchedules } from "./src/gateway/skills/scheduler";
 import { seedPublishedSkills, skillReader } from "./src/gateway/skills/catalogue-store";
@@ -102,6 +103,9 @@ async function main() {
     () => {
       runDailyRollup(db).catch((err) =>
         console.error("[rollup] failed", err)
+      );
+      sweepConnectLinks(db).catch((err) =>
+        console.error("[connect-links] sweep failed", err)
       );
     },
     { timezone: "UTC" }
@@ -226,6 +230,8 @@ async function main() {
           if (n > 0)
             console.log(`[revoke] closed ${n} live MCP session(s) for user=${userId}`);
         });
+        // A revoked grant takes the user's connect links with it (SCRUM-466).
+        void dropConnectLinksQuietly(db, userId);
       },
     })
   );
