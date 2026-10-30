@@ -43,6 +43,21 @@ export function classifyAuthFailure(
   return "invalid";
 }
 
+function isObject(v: unknown): v is Record<string, unknown> {
+  return typeof v === "object" && v !== null && !Array.isArray(v);
+}
+
+/** The SDK's reading of a client's `elicitation` capability: `{}` is form
+ * only, and each mode is otherwise declared by its own key. */
+function elicitationModes(capabilities: unknown): { elicitationForm?: boolean; elicitationUrl?: boolean } {
+  if (!isObject(capabilities)) return {};
+  const e = capabilities.elicitation;
+  if (!isObject(e)) return { elicitationForm: false, elicitationUrl: false };
+  const url = isObject(e.url);
+  const form = isObject(e.form) || (!("form" in e) && !("url" in e));
+  return { elicitationForm: form, elicitationUrl: url };
+}
+
 /**
  * Pull clientInfo out of an initialize request body (single message or
  * JSON-RPC batch) without touching anything else in it. Returns {} for
@@ -55,13 +70,18 @@ export function extractClientInfo(body: unknown): {
    * negotiates it at initialize and keeps no getter for it, so this is the
    * one place it can be read. */
   protocolVersion?: string;
+  /** Which elicitation modes the client declared (SCRUM-466), read the way
+   * the SDK reads them: an empty `elicitation` object means form only.
+   * Undefined when the message carried no capabilities at all. */
+  elicitationForm?: boolean;
+  elicitationUrl?: boolean;
 } {
   const messages = Array.isArray(body) ? body : [body];
   for (const m of messages) {
     if (!m || typeof m !== "object") continue;
     const msg = m as {
       method?: unknown;
-      params?: { clientInfo?: unknown; protocolVersion?: unknown };
+      params?: { clientInfo?: unknown; protocolVersion?: unknown; capabilities?: unknown };
     };
     if (msg.method !== "initialize") continue;
     const ci = msg.params?.clientInfo;
@@ -72,6 +92,7 @@ export function extractClientInfo(body: unknown): {
       name: typeof name === "string" ? name.slice(0, 200) : undefined,
       version: typeof version === "string" ? version.slice(0, 100) : undefined,
       protocolVersion: typeof pv === "string" ? pv.slice(0, 50) : undefined,
+      ...elicitationModes(msg.params?.capabilities),
     };
   }
   return {};
@@ -131,11 +152,17 @@ export async function trackMcpSessionInitialized(
   opts: {
     clientName?: string;
     clientVersion?: string;
+    elicitationForm?: boolean;
+    elicitationUrl?: boolean;
   }
 ): Promise<void> {
   return captureMcpEvent(db, userId, EVENTS.MCP_SESSION_INITIALIZED, {
     client_name: opts.clientName ?? null,
     client_version: opts.clientVersion ?? null,
+    // What the client can be asked through (SCRUM-466): whether a connect
+    // link can be sent as a URL elicitation, per client, is read from here.
+    elicitation_form: opts.elicitationForm ?? false,
+    elicitation_url: opts.elicitationUrl ?? false,
     // Every session is OAuth since API keys were removed (SCRUM-451). Still
     // written, so a filter on the property keeps finding every session.
     auth_kind: "oauth",

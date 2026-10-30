@@ -28,6 +28,10 @@ export interface ClassifyInput {
    * built-in's own registry entry; absent on every other, which therefore
    * stay unmetered exactly as before. */
   meteredBuiltin?: boolean;
+  /** The gateway refused the call because the provider is not connected or
+   * its connection is broken (SCRUM-466): a user error that never reached a
+   * provider, so it never uses the allowance. */
+  notConnected?: boolean;
   /** What the plugin said about a failed call, read from the result's
    * `_meta` by `pluginFailureOf` (SCRUM-154). Absent for the gateway's own
    * refusals and for a result without the field: those stay user errors. */
@@ -123,6 +127,7 @@ export function classifyOutcome(input: ClassifyInput): ClassifyResult {
   }
   if (input.isError) {
     if (ourFailure(input)) return { status: "server_error", meter: false };
+    if (input.notConnected) return { status: "user_error", meter: false };
     return {
       status: "user_error",
       meter: meterable,

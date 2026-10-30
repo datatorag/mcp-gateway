@@ -23,3 +23,12 @@ export function nonceMatches(
     !!cookieNonce && !!stateNonce && safeStringEqual(cookieNonce, stateNonce)
   );
 }
+
+/**
+ * A POST from one of our own pages: no Origin, or ours. The session cookie is
+ * SameSite=Lax, which already keeps another site's POST from carrying it;
+ * this says so explicitly, for every form route that changes state.
+ */
+export function sameOriginRequest(origin: unknown, baseUrl: string): boolean {
+  return origin === undefined || origin === new URL(baseUrl).origin;
+}

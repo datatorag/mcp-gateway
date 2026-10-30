@@ -207,7 +207,12 @@ export function renderConnectInterstitial(
      * caller from a validated path; escaped here regardless. */
     cancelHref: string;
   },
-  carry: Record<string, string> = {}
+  carry: Record<string, string> = {},
+  /** A connect link's page (SCRUM-466): the button posts to the link, which
+   * is spent only then, and a line above the steps names the DataToRAG
+   * account the connect is for. No "back", since the user came from a
+   * conversation, not the dashboard. */
+  link?: { action: string; lead: string }
 ): string {
   const proceedUrl = googleConnectProceedUrl(next, Boolean(refused), carry);
   const title = refused ? REFUSED_TITLE : INTERSTITIAL_TITLE;
@@ -283,6 +288,8 @@ export function renderConnectInterstitial(
     display: block; text-align: center; margin-top: 12px; font-size: 13px;
     color: var(--muted); text-decoration: none;
   }
+  button.cta { width: 100%; border: 0; cursor: pointer; font-family: inherit; }
+  form { margin: 0; }
   .cancel:hover, .cta:hover { opacity: 0.9; }
   .services { font-size: 13px; }
   .services span { color: var(--fg); }
@@ -292,12 +299,17 @@ export function renderConnectInterstitial(
 <main>
   <div class="card">
     <h1>${title}</h1>
+    ${link ? `<p>${escapeHtml(link.lead)}</p>` : ""}
     <p>${explanation}</p>
     <ol class="steps">${CONSENT_STEPS.map((step, i) => renderStep(step, i)).join("")}</ol>
     ${services}
     <p class="instruction">${instruction}</p>
-    <a class="cta" href="${proceedUrl}">${cta}</a>
-    <a class="cancel" href="${cancelHref}">${INTERSTITIAL_CANCEL}</a>
+    ${
+      link
+        ? `<form method="post" action="${escapeHtml(link.action)}"><button class="cta" type="submit">${cta}</button></form>`
+        : `<a class="cta" href="${proceedUrl}">${cta}</a>
+    <a class="cancel" href="${cancelHref}">${INTERSTITIAL_CANCEL}</a>`
+    }
   </div>
 </main>
 </body>

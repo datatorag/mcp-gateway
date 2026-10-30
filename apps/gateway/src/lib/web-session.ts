@@ -1,3 +1,5 @@
+import { randomBytes } from "node:crypto";
+import type { Response } from "express";
 import { and, eq } from "drizzle-orm";
 import type { Database } from "@datatorag-mcp/db";
 import { oauthAccessTokens } from "@datatorag-mcp/db";
@@ -36,4 +38,33 @@ export async function liveWebSessionUserId(
     )
     .limit(1);
   return token?.userId ?? null;
+}
+
+/** A web session lives this long. */
+export const WEB_SESSION_TTL_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * Mints a dashboard session for a user and sets its cookie. The Google
+ * sign-in and a connect link that has proved who the user is (SCRUM-466) are
+ * the only two callers; nothing else makes a session.
+ */
+export async function createWebSession(db: Database, res: Response, userId: string): Promise<void> {
+  const token = randomBytes(32).toString("base64url");
+  const expiresAt = new Date(Date.now() + WEB_SESSION_TTL_MS);
+  await db.insert(oauthAccessTokens).values({
+    token,
+    // SCRUM-443 release 1: the hash beside the raw value; reads use the hash.
+    tokenHash: hashToken(token),
+    clientId: WEB_SESSION_CLIENT_ID,
+    userId,
+    scope: null,
+    expiresAt,
+  });
+  res.cookie("dtrmcp_session", token, {
+    httpOnly: true,
+    secure: true,
+    sameSite: "lax",
+    path: "/",
+    expires: expiresAt,
+  });
 }

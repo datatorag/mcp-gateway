@@ -3,14 +3,16 @@ import { Router } from "express";
 import { eq, and, isNull } from "drizzle-orm";
 import type { Database } from "@datatorag-mcp/db";
 import { oauthAccessTokens, users } from "@datatorag-mcp/db";
-import { nonceMatches, OAUTH_STATE_TTL_MS } from "./oauth/csrf";
-import { liveWebSessionUserId, WEB_SESSION_CLIENT_ID } from "../lib/web-session";
+import { nonceMatches, OAUTH_STATE_TTL_MS, sameOriginRequest } from "./oauth/csrf";
+import { createWebSession, liveWebSessionUserId } from "../lib/web-session";
+import { signInHref } from "../lib/sign-in";
 import { stashAttribution, takeAttribution } from "./attribution";
 import { connectedElsewhere, upsertServiceAccount } from "./connected-accounts";
-import { renderConnectDuplicate, type DuplicateProvider } from "./connect-duplicate";
-import { PROVIDERS } from "../lib/analytics";
+import { CONNECT_START, isDuplicateProvider, renderConnectDuplicate, type DuplicateProvider } from "./connect-duplicate";
+import { EVENTS, PROVIDERS } from "../lib/analytics";
 import {
   trackConnectDuplicate,
+  trackConnectLinkEvent,
   trackConnectRefused,
   trackLogin,
   trackOAuthCompleted,
@@ -35,6 +37,13 @@ import { hashToken } from "@datatorag-mcp/auth";
 import { isServiceLaunched } from "./service-launch";
 import { cleanWorkspaceName } from "./untrusted-text";
 import { dropLinksForUser } from "./file-download";
+import {
+  CONNECT_LINK_COOKIE,
+  dropConnectLinksQuietly,
+  spentConnectLink,
+  type ConnectLink,
+} from "./connect-links";
+import { renderConnectLinkConfirm } from "./connect-link-page";
 
 /** Where the requested route (`?next=` on the login URL) survives the trip
  * through Google's consent screen, which loses the query string — the same
@@ -136,6 +145,10 @@ export function createAuthRouter(
     notionClientId: string;
     notionClientSecret: string;
     baseUrl: string;
+    /** After a connect stores its account (SCRUM-466): which link it came
+     * from, if any, for the events, the waiting tool call and the client's
+     * tool list. Never throws into the callback. */
+    onConnected?: (event: { userId: string; provider: DuplicateProvider; link: ConnectLink | null }) => void;
   }
 ): Router {
   const router = Router();
@@ -227,6 +240,85 @@ export function createAuthRouter(
     return true;
   }
 
+  // --- Who a connect is for (SCRUM-466) ---
+  //
+  // The live web session, as always. With none, a connect link this browser
+  // spent for this provider within the round trip's lifetime stands in for
+  // it, for the connect only: no web session exists until the callback has
+  // matched the provider account to the link user's sign-in email
+  // (`refusedUnconfirmed`). A link with a session for the same user rides
+  // along only to say which link the connect came from.
+  type ConnectUser = { userId: string; link: ConnectLink | null; viaLink: boolean };
+
+  async function connectUser(
+    sessionToken: unknown,
+    linkToken: unknown,
+    provider: DuplicateProvider
+  ): Promise<ConnectUser | null> {
+    const sessionUserId = await liveWebSessionUserId(db, typeof sessionToken === "string" ? sessionToken : undefined);
+    const spent = linkToken ? await spentConnectLink(db, linkToken, OAUTH_STATE_TTL_MS) : null;
+    const link = spent && spent.provider === provider ? spent : null;
+    if (sessionUserId) {
+      return { userId: sessionUserId, link: link?.userId === sessionUserId ? link : null, viaLink: false };
+    }
+    return link ? { userId: link.userId, link, viaLink: true } : null;
+  }
+
+  /** At the top of a callback, with the other one-shot cookies. */
+  function takeConnectLink(
+    req: { cookies?: Record<string, unknown> },
+    res: { clearCookie: (n: string, o: object) => unknown }
+  ): string | undefined {
+    const value = req.cookies?.[CONNECT_LINK_COOKIE];
+    res.clearCookie(CONNECT_LINK_COOKIE, { path: "/" });
+    return typeof value === "string" ? value : undefined;
+  }
+
+  /** A connect that only a link vouches for completes when the provider
+   * account is the link user's own sign-in email, and the provider says it
+   * verified that email. Then the browser gets that
+   * user's web session, and the connect goes on. Otherwise nothing is stored
+   * and the page asks for a sign-in, which is what stops a link sent to
+   * somebody else from attaching THEIR account to its user. True when the
+   * page was sent. */
+  async function refusedUnconfirmed(
+    res: Parameters<typeof refusedAsDuplicate>[0] & Parameters<typeof createWebSession>[1],
+    who: ConnectUser,
+    provider: DuplicateProvider,
+    accountEmail: string,
+    emailVerified: boolean
+  ): Promise<boolean> {
+    if (!who.viaLink) return false;
+    const [owner] = await db.select({ email: users.email }).from(users).where(eq(users.id, who.userId)).limit(1);
+    if (emailVerified && owner && owner.email.toLowerCase() === accountEmail.toLowerCase()) {
+      await createWebSession(db, res, who.userId);
+      return false;
+    }
+    res
+      .status(200)
+      .type("html")
+      .send(
+        renderConnectLinkConfirm({
+          provider,
+          signInHref: signInHref(`/connect/resume/${provider}`),
+        })
+      );
+    return true;
+  }
+
+  function connected(who: ConnectUser, provider: DuplicateProvider): void {
+    void trackConnectLinkEvent(who.userId, EVENTS.CONNECT_COMPLETED, {
+      provider,
+      path: who.link?.path ?? "website",
+      clientName: who.link?.clientName ?? null,
+    });
+    try {
+      config.onConnected?.({ userId: who.userId, provider, link: who.link });
+    } catch (err) {
+      console.error("[auth] onConnected failed:", err instanceof Error ? err.message : err);
+    }
+  }
+
   /** Which half of activation a connect belongs to (SCRUM-96): "agent" when
    * it carried a return path into the agent, "connect" otherwise. */
   function connectEntry(requestedPath: unknown): "agent" | "connect" {
@@ -234,21 +326,10 @@ export function createAuthRouter(
     return next !== null && /^\/dashboard\/agent(\/|\?|$)/.test(next) ? "agent" : "connect";
   }
 
-  /** A POST from one of our own pages: no Origin, or ours. The session
-   * cookie is SameSite=Lax, which already keeps another site's POST from
-   * carrying it; this says so explicitly. */
   function sameOrigin(req: { headers: Record<string, unknown> }): boolean {
-    const origin = req.headers.origin;
-    return origin === undefined || origin === new URL(config.baseUrl).origin;
+    return sameOriginRequest(req.headers.origin, config.baseUrl);
   }
 
-  const CONNECT_START: Record<DuplicateProvider, string> = {
-    "google-workspace": "/auth/google/connect?proceed=1",
-    atlassian: "/auth/atlassian/connect",
-    notion: "/auth/notion/connect",
-  };
-  const isDuplicateProvider = (v: unknown): v is DuplicateProvider =>
-    typeof v === "string" && Object.prototype.hasOwnProperty.call(CONNECT_START, v);
 
   router.post("/auth/connect/anyway", async (req, res) => {
     if (!sameOrigin(req)) {
@@ -289,6 +370,7 @@ export function createAuthRouter(
       for (const row of revoked) {
         if (!row.userId) continue;
         dropLinksForUser(row.userId);
+        await dropConnectLinksQuietly(db, row.userId);
         const provider = req.query.provider;
         if (isDuplicateProvider(provider)) {
           await trackConnectDuplicate(db, row.userId, provider, "signed_in_other");
@@ -457,26 +539,7 @@ export function createAuthRouter(
       });
     }
 
-    const token = randomBytes(32).toString("base64url");
-    const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
-
-    await db.insert(oauthAccessTokens).values({
-      token,
-      // SCRUM-443 release 1: the hash beside the raw value; reads still use the raw value.
-      tokenHash: hashToken(token),
-      clientId: WEB_SESSION_CLIENT_ID,
-      userId: user.id,
-      scope: null,
-      expiresAt,
-    });
-
-    res.cookie("dtrmcp_session", token, {
-      httpOnly: true,
-      secure: true,
-      sameSite: "lax",
-      path: "/",
-      expires: expiresAt,
-    });
+    await createWebSession(db, res, user.id);
 
     // Where EVERY login lands, behind a flag that defaults OFF. The flag used
     // to select a destination for new signups only, so it could not reach a
@@ -524,7 +587,12 @@ export function createAuthRouter(
         .where(eq(oauthAccessTokens.tokenHash, hashToken(sessionToken)))
         .returning({ userId: oauthAccessTokens.userId });
       // Signing out takes the user's open download links with it (SCRUM-420).
-      for (const row of revoked) if (row.userId) dropLinksForUser(row.userId);
+      // And its connect links (SCRUM-466).
+      for (const row of revoked) {
+        if (!row.userId) continue;
+        dropLinksForUser(row.userId);
+        await dropConnectLinksQuietly(db, row.userId);
+      }
     }
     res.clearCookie("dtrmcp_session", { path: "/" });
     // The account a refused connect was tried with belongs to the person
@@ -542,8 +610,9 @@ export function createAuthRouter(
 
   router.get("/auth/google/connect", async (req, res) => {
     // Require a live web session (SCRUM-374): an expired or revoked one goes
-    // to sign in before the round trip to Google, not after it.
-    if (!(await liveWebSessionUserId(db, req.cookies?.dtrmcp_session))) {
+    // to sign in before the round trip to Google, not after it. Or a connect
+    // link spent in this browser (SCRUM-466).
+    if (!(await connectUser(req.cookies?.dtrmcp_session, req.cookies?.[CONNECT_LINK_COOKIE], PROVIDERS.GOOGLE_WORKSPACE))) {
       res.redirect("/auth/login");
       return;
     }
@@ -661,8 +730,9 @@ export function createAuthRouter(
     const attribution = takeAttribution(req, res);
     const requestedPath = takeConnectNext(req, res);
     const duplicateAck = takeDuplicateAck(req, res);
+    const linkToken = takeConnectLink(req, res);
 
-    if (!sessionToken) {
+    if (!sessionToken && !linkToken) {
       res.redirect("/auth/login");
       return;
     }
@@ -696,15 +766,15 @@ export function createAuthRouter(
       return;
     }
 
-    // Resolve userId from session
     // SCRUM-374: a live WEB session, not just any row: a revoked or expired
     // session, or an MCP client's token set as the cookie, goes to sign in.
-    const sessionUserId = await liveWebSessionUserId(db, sessionToken);
-    if (!sessionUserId) {
+    // With no session, a connect link spent in this browser (SCRUM-466).
+    const who = await connectUser(sessionToken, linkToken, PROVIDERS.GOOGLE_WORKSPACE);
+    if (!who) {
       res.redirect("/auth/login");
       return;
     }
-    const session = { userId: sessionUserId };
+    const session = { userId: who.userId };
 
     const tokenResponse = await fetch(
       "https://oauth2.googleapis.com/token",
@@ -792,6 +862,9 @@ export function createAuthRouter(
           maxAge: OAUTH_STATE_TTL_MS,
         });
       }
+      // A connect only a link vouches for keeps that link for the retry, which
+      // starts over at the same route (SCRUM-466).
+      if (who.viaLink && linkToken) res.cookie(CONNECT_LINK_COOKIE, linkToken, oneShot);
       // And they land on the page that names what to tick, with Try again,
       // carrying the place they started from. That page's "back" link is the
       // destination this used to redirect to, so nothing about where a
@@ -802,14 +875,18 @@ export function createAuthRouter(
 
     // Fetch the email of the connected Google account
     let accountEmail: string | null = null;
+    // Whether Google verified that address: a link with no session trusts
+    // only a verified one (SCRUM-466).
+    let emailVerified = false;
     try {
       const userInfoRes = await fetch(
         "https://www.googleapis.com/oauth2/v2/userinfo",
         { headers: { Authorization: `Bearer ${tokens.access_token}` } }
       );
       if (userInfoRes.ok) {
-        const userInfo = (await userInfoRes.json()) as { email: string };
+        const userInfo = (await userInfoRes.json()) as { email: string; verified_email?: unknown };
         accountEmail = userInfo.email;
+        emailVerified = userInfo.verified_email === true;
       }
     } catch {
       // Fall through — accountEmail stays null
@@ -834,6 +911,11 @@ export function createAuthRouter(
     // prompt=consent with the full set, so Google re-prompts). The ZERO case
     // never reaches this line — the SCRUM-149 gate above refused it.
     // SCRUM-363: already held by another DataToRAG user? Warn, store nothing.
+    // SCRUM-466: a connect only a link vouches for must be the link user's own.
+    if (await refusedUnconfirmed(res, who, PROVIDERS.GOOGLE_WORKSPACE, accountEmail, emailVerified)) {
+      return;
+    }
+
     if (
       await refusedAsDuplicate(res, {
         userId: session.userId,
@@ -868,6 +950,8 @@ export function createAuthRouter(
       // the same parked `next` the return redirect redeems.
       { skill: skillSlugFromPath(requestedPath), entry: connectEntry(requestedPath) }
     );
+
+    connected(who, PROVIDERS.GOOGLE_WORKSPACE);
 
     res.redirect(
       postConnectDestination({
@@ -921,8 +1005,8 @@ export function createAuthRouter(
   ].join(" ");
 
   router.get("/auth/atlassian/connect", async (req, res) => {
-    // A live web session, as for Google (SCRUM-374).
-    if (!(await liveWebSessionUserId(db, req.cookies?.dtrmcp_session))) {
+    // A live web session, or a spent connect link, as for Google.
+    if (!(await connectUser(req.cookies?.dtrmcp_session, req.cookies?.[CONNECT_LINK_COOKIE], PROVIDERS.ATLASSIAN))) {
       res.redirect("/auth/login");
       return;
     }
@@ -968,8 +1052,9 @@ export function createAuthRouter(
     const attribution = takeAttribution(req, res);
     const requestedPath = takeConnectNext(req, res);
     const duplicateAck = takeDuplicateAck(req, res);
+    const linkToken = takeConnectLink(req, res);
 
-    if (!sessionToken) {
+    if (!sessionToken && !linkToken) {
       res.redirect("/auth/login");
       return;
     }
@@ -991,12 +1076,13 @@ export function createAuthRouter(
 
     // SCRUM-374: a live WEB session, not just any row: a revoked or expired
     // session, or an MCP client's token set as the cookie, goes to sign in.
-    const sessionUserId = await liveWebSessionUserId(db, sessionToken);
-    if (!sessionUserId) {
+    // With no session, a connect link spent in this browser (SCRUM-466).
+    const who = await connectUser(sessionToken, linkToken, PROVIDERS.ATLASSIAN);
+    if (!who) {
       res.redirect("/auth/login");
       return;
     }
-    const session = { userId: sessionUserId };
+    const session = { userId: who.userId };
 
     const tokenResponse = await fetch(
       "https://auth.atlassian.com/oauth/token",
@@ -1033,13 +1119,16 @@ export function createAuthRouter(
 
     // Fetch the email of the connected Atlassian account
     let accountEmail: string | null = null;
+    // As for Google: a link with no session trusts only a verified address.
+    let emailVerified = false;
     try {
       const meRes = await fetch("https://api.atlassian.com/me", {
         headers: { Authorization: `Bearer ${tokens.access_token}` },
       });
       if (meRes.ok) {
-        const me = (await meRes.json()) as { email: string };
+        const me = (await meRes.json()) as { email: string; email_verified?: unknown };
         accountEmail = me.email;
+        emailVerified = me.email_verified === true;
       }
     } catch {
       // Fall through — accountEmail stays null
@@ -1052,6 +1141,11 @@ export function createAuthRouter(
           error: "could_not_resolve_account_email",
         })
       );
+      return;
+    }
+
+    // SCRUM-466: a connect only a link vouches for must be the link user's own.
+    if (await refusedUnconfirmed(res, who, PROVIDERS.ATLASSIAN, accountEmail, emailVerified)) {
       return;
     }
 
@@ -1088,6 +1182,8 @@ export function createAuthRouter(
       { skill: skillSlugFromPath(requestedPath), entry: connectEntry(requestedPath) }
     );
 
+    connected(who, PROVIDERS.ATLASSIAN);
+
     res.redirect(
       postConnectDestination({ requestedPath, provider: PROVIDERS.ATLASSIAN })
     );
@@ -1104,8 +1200,8 @@ export function createAuthRouter(
   // label; a second workspace under the same email is a second account.
 
   router.get("/auth/notion/connect", async (req, res) => {
-    // A live web session, as for Google (SCRUM-374).
-    if (!(await liveWebSessionUserId(db, req.cookies?.dtrmcp_session))) {
+    // A live web session, or a spent connect link, as for Google.
+    if (!(await connectUser(req.cookies?.dtrmcp_session, req.cookies?.[CONNECT_LINK_COOKIE], PROVIDERS.NOTION))) {
       res.redirect("/auth/login");
       return;
     }
@@ -1159,8 +1255,9 @@ export function createAuthRouter(
     const attribution = takeAttribution(req, res);
     const requestedPath = takeConnectNext(req, res);
     const duplicateAck = takeDuplicateAck(req, res);
+    const linkToken = takeConnectLink(req, res);
 
-    if (!sessionToken) {
+    if (!sessionToken && !linkToken) {
       res.redirect("/auth/login");
       return;
     }
@@ -1181,12 +1278,13 @@ export function createAuthRouter(
 
     // SCRUM-374: a live WEB session, not just any row: a revoked or expired
     // session, or an MCP client's token set as the cookie, goes to sign in.
-    const sessionUserId = await liveWebSessionUserId(db, sessionToken);
-    if (!sessionUserId) {
+    // With no session, a connect link spent in this browser (SCRUM-466).
+    const who = await connectUser(sessionToken, linkToken, PROVIDERS.NOTION);
+    if (!who) {
       res.redirect("/auth/login");
       return;
     }
-    const session = { userId: sessionUserId };
+    const session = { userId: who.userId };
 
     let tokens: NotionTokenResponse | null = null;
     try {
@@ -1254,6 +1352,13 @@ export function createAuthRouter(
     // in the dashboard: cleaned and capped before it is stored.
     const workspaceName = cleanWorkspaceName(tokens.workspace_name);
 
+    // SCRUM-466: a connect only a link vouches for must be the link user's own.
+    // Notion reports no verified flag; the address is the one its own
+    // sign-in uses.
+    if (await refusedUnconfirmed(res, who, PROVIDERS.NOTION, accountEmail, true)) {
+      return;
+    }
+
     if (
       await refusedAsDuplicate(res, {
         userId: session.userId,
@@ -1291,6 +1396,8 @@ export function createAuthRouter(
       undefined,
       { skill: skillSlugFromPath(requestedPath), entry: connectEntry(requestedPath) }
     );
+
+    connected(who, PROVIDERS.NOTION);
 
     res.redirect(
       postConnectDestination({ requestedPath, provider: PROVIDERS.NOTION })

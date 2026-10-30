@@ -19,6 +19,7 @@ import {
 import {
   classifyMcpRequest,
   closeSessionsForUser,
+  notifyToolsChangedForUser,
 } from "./src/gateway/mcp-session";
 import { createRegisterRouter } from "./src/gateway/oauth/register";
 import { createAuthorizeRouter } from "./src/gateway/oauth/authorize";
@@ -27,6 +28,11 @@ import { createTokenRouter } from "./src/gateway/oauth/token";
 import { createRevokeRouter } from "./src/gateway/oauth/revoke";
 import { oauthRateLimit } from "./src/gateway/oauth/rate-limit";
 import { createAuthRouter } from "./src/gateway/auth";
+import { createConnectLinkRouter } from "./src/gateway/connect-link-route";
+import { serverInstructions } from "./src/gateway/server-instructions";
+import { connectLinkDone } from "./src/gateway/connect-elicitation";
+import { mcpChallenge, mcpUnauthorizedBody } from "./src/gateway/mcp-unauthorized";
+import { launchedServiceIds } from "./src/gateway/service-launch";
 import { getPluginManager } from "./src/lib/plugin-manager";
 import { mcpBearerGate, resolveBearer, type McpAuthState } from "./src/gateway/bearer-auth";
 import { authFailureContext } from "./src/gateway/auth-failure-context";
@@ -40,6 +46,7 @@ import {
 import { recordSessionStart } from "./src/gateway/session-starts";
 import cron from "node-cron";
 import { runDailyRollup } from "./src/gateway/usage/rollup";
+import { dropConnectLinksQuietly, sweepConnectLinks } from "./src/gateway/connect-links";
 import { runDailyDigest } from "./src/gateway/digest";
 import { runDueSchedules } from "./src/gateway/skills/scheduler";
 import { seedPublishedSkills, skillReader } from "./src/gateway/skills/catalogue-store";
@@ -102,6 +109,9 @@ async function main() {
     () => {
       runDailyRollup(db).catch((err) =>
         console.error("[rollup] failed", err)
+      );
+      sweepConnectLinks(db).catch((err) =>
+        console.error("[connect-links] sweep failed", err)
       );
     },
     { timezone: "UTC" }
@@ -186,8 +196,18 @@ async function main() {
       notionClientId: env.NOTION_OAUTH_CLIENT_ID,
       notionClientSecret: env.NOTION_OAUTH_CLIENT_SECRET,
       baseUrl,
+      // SCRUM-466: a connect changes which tools the user's sessions list.
+      onConnected: ({ userId, link }) => {
+        void notifyToolsChangedForUser(sessions, userId);
+        // A tool call waiting on this link's connect can go on.
+        if (link) void connectLinkDone(db, link.id);
+      },
     })
   );
+
+  // SCRUM-466: one-click connect links, before the catch-all so the app never
+  // sees a path with a token in it.
+  app.use(createConnectLinkRouter(db, { baseUrl }));
 
   // Session store. userId binds each session to the bearer that initialized
   // it — a session id presented with a different user's (valid) bearer is
@@ -226,6 +246,8 @@ async function main() {
           if (n > 0)
             console.log(`[revoke] closed ${n} live MCP session(s) for user=${userId}`);
         });
+        // A revoked grant takes the user's connect links with it (SCRUM-466).
+        void dropConnectLinksQuietly(db, userId);
       },
     })
   );
@@ -256,14 +278,10 @@ async function main() {
     error: string,
     challengeParams: string[] = []
   ) {
-    const challenge = [
-      ...challengeParams,
-      `resource_metadata="${resourceMetadataUrl}"`,
-    ].join(", ");
     res
       .status(401)
-      .set("WWW-Authenticate", `Bearer ${challenge}`)
-      .json({ error, resource_metadata: resourceMetadataUrl });
+      .set("WWW-Authenticate", mcpChallenge(resourceMetadataUrl, challengeParams))
+      .json(mcpUnauthorizedBody(error, resourceMetadataUrl, baseUrl));
   }
 
   // The bearer is checked before the body is parsed, so only an
@@ -355,7 +373,20 @@ async function main() {
           void trackMcpSessionInitialized(db, auth.userId, {
             clientName: clientInfo.name,
             clientVersion: clientInfo.version,
+            elicitationForm: clientInfo.elicitationForm,
+            elicitationUrl: clientInfo.elicitationUrl,
           });
+          // SCRUM-466: what each client can be asked through, in the log
+          // too. Names a client, never a user.
+          console.log(
+            `[mcp] session started ${JSON.stringify({
+              client_name: clientInfo.name ?? null,
+              client_version: clientInfo.version ?? null,
+              protocol_version: clientInfo.protocolVersion ?? null,
+              elicitation_form: clientInfo.elicitationForm ?? false,
+              elicitation_url: clientInfo.elicitationUrl ?? false,
+            })}`
+          );
           // SCRUM-164: the same start in Postgres, against the accounts the
           // session would use, so a dead grant shows per connection. One
           // statement, fire-and-forget like the capture above.
@@ -373,6 +404,7 @@ async function main() {
         baseUrl,
         clientId: auth.clientId,
         protocolVersion: clientInfo.protocolVersion,
+        instructions: serverInstructions(await launchedServiceIds(db)),
       });
       await server.connect(transport);
 

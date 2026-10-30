@@ -32,6 +32,7 @@ import type { Database } from "@datatorag-mcp/db";
 const trackOAuthCompleted = vi.fn(async (..._args: unknown[]) => undefined);
 const trackConnectRefused = vi.fn(async (..._args: unknown[]) => undefined);
 vi.mock("./track", () => ({
+  trackConnectLinkEvent: vi.fn(async () => undefined),
   trackLogin: vi.fn(),
   trackSignup: vi.fn(),
   trackOAuthCompleted: (...args: unknown[]) => trackOAuthCompleted(...args),

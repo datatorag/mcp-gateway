@@ -31,6 +31,7 @@ import {
 import type { Database } from "@datatorag-mcp/db";
 
 vi.mock("./track", () => ({
+  trackConnectLinkEvent: vi.fn(async () => undefined),
   trackLogin: vi.fn(),
   trackSignup: vi.fn(),
   trackOAuthCompleted: vi.fn(async () => undefined),

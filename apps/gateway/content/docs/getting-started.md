@@ -75,6 +75,14 @@ Setup is two connections, and both are required before your assistant can do any
 
 Once your client completes its sign-in, ask it something like "search my email for invoices from last month". The first successful tool call shows up in your [dashboard](https://datatorag.com/dashboard) within seconds.
 
+## Connect accounts from your assistant
+
+Once your client is connected, you can also connect accounts without leaving the conversation. Ask your assistant to connect Google Workspace, Atlassian or Notion. It calls the `connect` tool, which says what is already connected and gives you a link for anything that is not. Open the link in your browser, approve the provider's consent screen, then go back to the conversation. The link works once and expires after ten minutes.
+
+When a tool needs an account you have not connected, its answer carries the same kind of link. A client that supports it shows the link itself and carries on with your request once you have connected.
+
+If the account you connect has a different email from the one you signed in to DataToRAG with, and your browser is not already signed in to DataToRAG, you are asked to sign in first. That stops a link meant for someone else from adding your account to theirs.
+
 ## Connect through Claude on the web
 
 The full flow for claude.ai in the browser (Claude Desktop is identical):

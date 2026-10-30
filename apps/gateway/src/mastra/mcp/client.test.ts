@@ -143,8 +143,9 @@ describe("the approval boundary (SCRUM-188)", () => {
     expect(tools["gws-mcp__gmail_send"]!.requireApproval).toBe(true);
     expect(tools["gws-mcp__totally_new_tool"]!.requireApproval).toBe(true);
 
-    // Built-ins arrive through the same listing with their DECLARED value.
-    for (const entry of BUILT_IN_TOOLS) {
+    // Built-ins arrive through the same listing with their DECLARED value,
+    // all but those served to MCP clients only (SCRUM-466).
+    for (const entry of BUILT_IN_TOOLS.filter((t) => !t.surfaces || t.surfaces.includes("agent"))) {
       const tool = tools[entry.definition.name];
       expect(tool, `built-in ${entry.definition.name} must be listed`).toBeDefined();
       expect(tool!.requireApproval).toBe(entry.approval === "write");
@@ -250,7 +251,7 @@ describe("a skill run sees its own tools (SCRUM-238)", () => {
     // SCRUM-376: the built-ins that declare a read for everyone, and none of
     // the rest, even though this suite resolves as an admin.
     for (const b of BUILT_IN_TOOLS) {
-      const allowed = b.approval === "read" && !b.audience;
+      const allowed = b.approval === "read" && !b.audience && !b.attended && (!b.surfaces || b.surfaces.includes("agent"));
       expect(names.includes(b.definition.name), b.definition.name).toBe(allowed);
     }
     expect(names).not.toContain("disconnect_service");
@@ -292,7 +293,8 @@ describe("a skill run sees its own tools (SCRUM-238)", () => {
     const names = Object.keys(tools);
     expect(names.filter((n) => n.includes("__"))).toEqual([]);
     for (const b of BUILT_IN_TOOLS) {
-      expect(names.includes(b.definition.name), b.definition.name).toBe(b.approval === "read" && !b.audience);
+      const allowed = b.approval === "read" && !b.audience && !b.attended && (!b.surfaces || b.surfaces.includes("agent"));
+      expect(names.includes(b.definition.name), b.definition.name).toBe(allowed);
     }
   });
 });

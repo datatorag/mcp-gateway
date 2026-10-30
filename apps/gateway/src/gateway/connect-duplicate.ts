@@ -17,6 +17,18 @@
 
 export type DuplicateProvider = "google-workspace" | "atlassian" | "notion";
 
+/** Where each provider's connect starts, past Google's interstitial: the
+ * duplicate page's restart and a connect link (SCRUM-466) both hand over
+ * here, after their own page has been shown. */
+export const CONNECT_START: Record<DuplicateProvider, string> = {
+  "google-workspace": "/auth/google/connect?proceed=1",
+  atlassian: "/auth/atlassian/connect",
+  notion: "/auth/notion/connect",
+};
+
+export const isDuplicateProvider = (v: unknown): v is DuplicateProvider =>
+  typeof v === "string" && Object.prototype.hasOwnProperty.call(CONNECT_START, v);
+
 /** What the account is called on the page, per provider. */
 const ACCOUNT_NOUN: Record<DuplicateProvider, string> = {
   "google-workspace": "Google account",

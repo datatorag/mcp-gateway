@@ -8,6 +8,8 @@ import {
   ListPromptsRequestSchema,
   ListToolsRequestSchema,
   McpError,
+  type CallToolRequest,
+  type CallToolResult,
 } from "@modelcontextprotocol/sdk/types.js";
 import { getAllSkills } from "@/lib/skills";
 import {
@@ -19,7 +21,7 @@ import {
   topResultKind,
 } from "./skills-catalogue";
 import { listConnectedServiceIds } from "./connected-services";
-import { trackSkillApplied, trackSkillEvent, trackSkillSearched } from "./track";
+import { trackConnectLinkEvent, trackSkillApplied, trackSkillEvent, trackSkillSearched } from "./track";
 import { gwsRunFields } from "./usage/gws-run-fields";
 import { EVENTS } from "../lib/analytics";
 import { createUserSkill, deleteUserSkill, forkSkill, updateUserSkill, type WriteResult } from "./skills/catalogue-store";
@@ -60,13 +62,18 @@ import {
 import { pluginFailureOf } from "./usage/classify";
 import { grantLine, type ConnectedAccountLine } from "./account-grant-line";
 import { cleanWorkspaceName } from "./untrusted-text";
-import { getConnectableService } from "@/app/dashboard/connections/service-registry";
+import { CONNECTABLE_SERVICES, getConnectableService } from "@/app/dashboard/connections/service-registry";
 import { connectionDead } from "./refresh-failure";
 import { crossFile, filePathsFor } from "./file-crossing";
 import { createDownloadLink, createUploadLink, DOWNLOAD_TOOL, revokeCarriedLinks, UPLOAD_TOOL } from "./file-download";
 import { downloadDepsFor } from "./file-download-route";
 import { sourceResolversFor } from "./file-source";
 import type { Surface } from "./scope-grant";
+import { NOT_CONNECTED_ERROR_MARKER, notConnectedResult, type NotConnectedReason } from "./not-connected";
+import { issueConnectLink, type ConnectLinkPath } from "./connect-links";
+import { isDuplicateProvider } from "./connect-duplicate";
+import { CONNECT_TOOL, CONNECT_TOOL_DESCRIPTION, connectToolResult } from "./connect-tool";
+import { elicitConnect, supportsUrlElicitation, type CallExtra, type ElicitOutcome } from "./connect-elicitation";
 
 const ACCOUNT_PARAM_SCHEMA = {
   type: "string",
@@ -158,6 +165,7 @@ function writeAnswer(result: WriteResult, verb: string): string {
 
 type BuiltinResult = {
   content: { type: "text"; text: string }[];
+  structuredContent?: Record<string, unknown>;
   isError?: boolean;
 };
 
@@ -228,6 +236,10 @@ export const BUILT_IN_TOOLS: {
    * person can act on. Hidden from, and refused in, a session built with
    * `unattended` (a skill run), in both the listing and the call lookup. */
   attended?: true;
+  /** The surfaces the tool is served on; absent means every one. `connect`
+   * is MCP only (SCRUM-466): the agent has its own connect card. Applied with
+   * `attended`, to the listing and the call lookup alike. */
+  surfaces?: Surface[];
   handler: (
     args: Record<string, unknown> | undefined,
     /** `pool` is here for the test runner (SCRUM-303), which builds a second
@@ -244,6 +256,12 @@ export const BUILT_IN_TOOLS: {
        * without one. */
       baseUrl: string;
       surface: Surface;
+      /** A connect link for this user and provider, or null when none can be
+       * made on this surface (SCRUM-466). */
+      connectLink: (service: string) => Promise<string | null>;
+      /** Asks the client to open a connect link and waits for the connect,
+       * or null when the client cannot be asked by URL (SCRUM-466). */
+      elicitConnect?: ((service: string) => Promise<ElicitOutcome>) | null;
     }
   ) => Promise<BuiltinResult>;
 }[] = [
@@ -601,6 +619,30 @@ export const BUILT_IN_TOOLS: {
       };
     },
   },
+  /* SCRUM-466: what is connected, and a one-click link for what is not. A
+   * read: it changes nothing the user owns, and a link does nothing until
+   * the user opens it. Attended, because a link nobody is there to open is
+   * no use; MCP only, because the agent has its own connect card. */
+  {
+    approval: "read",
+    attended: true,
+    surfaces: ["mcp"],
+    definition: {
+      name: CONNECT_TOOL,
+      description: CONNECT_TOOL_DESCRIPTION,
+      inputSchema: {
+        type: "object" as const,
+        properties: {
+          service: {
+            type: "string",
+            enum: CONNECTABLE_SERVICES.map((s) => s.id),
+            description: "One provider to report on, with a link even when it is already connected. Omit it to report on all of them.",
+          },
+        },
+      },
+    },
+    handler: (args, ctx) => connectToolResult(ctx.db, ctx.userId, args?.service, ctx.connectLink, ctx.elicitConnect),
+  },
   {
     approval: "read",
     definition: {
@@ -868,6 +910,10 @@ export function createMcpServer(
      * The agent's in-process server passes this and no `baseUrl`, so the
      * relative links its other messages rely on stay as they were. */
     downloadBaseUrl?: string;
+    /** The initialize instructions (SCRUM-466), built by the HTTP layer,
+     * which can wait on the registry for which providers have launched.
+     * Sent on the MCP surface only. */
+    instructions?: string;
   }
 ): Server {
   const connectionsUrl = `${opts?.baseUrl ?? ""}/dashboard/connections`;
@@ -878,18 +924,54 @@ export function createMcpServer(
   const baseUrl = opts?.downloadBaseUrl ?? opts?.baseUrl ?? "";
   /** The built-ins this session has at all. The listing filter and the call
    * lookup below both read this one list, so the two cannot disagree. */
-  const builtinEntries = opts?.unattended ? BUILT_IN_TOOLS.filter((t) => !t.attended) : BUILT_IN_TOOLS;
+  const builtinEntries = BUILT_IN_TOOLS.filter(
+    (t) => !(opts?.unattended && t.attended) && (!t.surfaces || t.surfaces.includes(surface))
+  );
   const server = new Server(
     { name: "datatorag-mcp", version: "0.1.0" },
     // Prompts (SCRUM-224): the skill catalogue as the native "apply a
     // reusable instruction to this session" primitive, for clients that
     // render it. The same catalogue is served as tools for clients that do
     // not; see BUILT_IN_TOOLS.
-    { capabilities: { tools: {}, prompts: {} } }
+    // `listChanged` (SCRUM-466): a connect mid-conversation changes which
+    // tools are listed, and the session is told (`notifyToolsChangedForUser`).
+    {
+      capabilities: { tools: { listChanged: true }, prompts: {} },
+      ...(surface === "mcp" && opts?.instructions ? { instructions: opts.instructions } : {}),
+    }
   );
   /** Self-reported by the client at initialize; undefined until the
    * handshake completes, which is before any tool call can arrive. */
   const clientName = () => server.getClientVersion()?.name ?? null;
+  /** A connect link for this user, on the MCP surface only: the agent shows
+   * its own connect card, and a link needs an absolute origin to be
+   * clickable outside the dashboard (SCRUM-466). Never throws: a refusal
+   * without a link still says where to connect. */
+  const issueLinkFor = async (service: string, path: ConnectLinkPath): Promise<{ id: string; url: string } | null> => {
+    if (surface !== "mcp" || !opts?.baseUrl || !isDuplicateProvider(service)) return null;
+    try {
+      const link = await issueConnectLink(db, { userId, provider: service, path, clientName: clientName(), baseUrl: opts.baseUrl });
+      void trackConnectLinkEvent(userId, EVENTS.CONNECT_LINK_ISSUED, { provider: service, path, clientName: clientName() });
+      return link;
+    } catch (err) {
+      console.error("[connect-links] could not issue a link:", err instanceof Error ? err.message : err);
+      return null;
+    }
+  };
+  const connectLinkFor = async (service: string, path: ConnectLinkPath) => (await issueLinkFor(service, path))?.url ?? null;
+  /** Asks the client to open a connect link and waits for the connect, when
+   * the client can be asked by URL (SCRUM-466); null when it cannot. */
+  const elicitFor = (extra: CallExtra) =>
+    surface === "mcp" && supportsUrlElicitation(server)
+      ? (service: string) =>
+          elicitConnect({
+            server,
+            db,
+            extra,
+            serviceName: getConnectableService(service)?.name ?? service,
+            issueLink: () => issueLinkFor(service, "elicitation"),
+          })
+      : null;
 
   server.setRequestHandler(ListPromptsRequestSchema, async () => ({
     prompts: (await getAllSkills(userId)).map((skill) => ({
@@ -996,8 +1078,13 @@ export function createMcpServer(
     return { tools: toolList };
   });
 
-  server.setRequestHandler(CallToolRequestSchema, async (request) => {
+  /** One tool call. `retried` is true on the single re-run after a connect
+   * the call itself asked for (SCRUM-466), which never asks again. */
+  const callTool = async (request: CallToolRequest, extra: CallExtra, retried: boolean) => {
     const { name, arguments: rawArgs } = request.params;
+    // The dispatch takes `account` out of the arguments it hands on; a re-run
+    // needs the call as it was asked.
+    const askedAccount = (rawArgs as Record<string, unknown> | undefined)?.account;
 
     // SCRUM-420: the gateway does not carry its own download link. Before
     // any tool, built-in or plugin: arguments that hold a live link of this
@@ -1038,7 +1125,16 @@ export function createMcpServer(
       try {
         const result = await builtin.handler(
           rawArgs as Record<string, unknown> | undefined,
-          { db, userId, connectionsUrl, pool, baseUrl, surface }
+          {
+            db,
+            userId,
+            connectionsUrl,
+            pool,
+            baseUrl,
+            surface,
+            connectLink: (service) => connectLinkFor(service, "tool_result"),
+            elicitConnect: elicitFor(extra),
+          }
         );
         const refused = builtin.metered ? !!result.isError : false;
         // Same fire-and-forget shape as the plugin path below. This call
@@ -1219,6 +1315,44 @@ export function createMcpServer(
       ? `${connectionsUrl}/${requiredService}`
       : connectionsUrl;
     let accountEmail: string | undefined;
+    /** SCRUM-466: every refusal for a provider that is not connected, or
+     * whose connection is broken, in one shape: tracked, never metered, and
+     * on the MCP surface carrying a fresh connect link. */
+    const refuseNotConnected = async (
+      service: string,
+      reason: NotConnectedReason,
+      sentence: string,
+      errorMessage = `${NOT_CONNECTED_ERROR_MARKER} ${reason}`
+    ): Promise<CallToolResult> => {
+      void trackToolCall(db, {
+        userId,
+        clientId,
+        clientName: clientName(),
+        testRunId,
+        toolName: name,
+        connectorType: service,
+        accountEmail,
+        ...runFields,
+        latencyMs: 0,
+        responseSizeBytes: null,
+        errorMessage,
+        outcome: { thrown: false, isError: true, errorMessage, source: surface, toolName: name, notConnected: true },
+      });
+      // URL elicitation, once per call: on a completed connect the call runs
+      // again as it was asked, and its answer is the call's answer.
+      const elicit = retried ? null : elicitFor(extra);
+      if (elicit && (await elicit(service)) === "connected") {
+        const args = rawArgs as Record<string, unknown> | undefined;
+        const again = args && askedAccount !== undefined ? { ...args, account: askedAccount } : args;
+        return (await callTool({ ...request, params: { ...request.params, arguments: again } }, extra, true)) as CallToolResult;
+      }
+      return notConnectedResult({
+        service,
+        reason,
+        sentence,
+        link: await connectLinkFor(service, "tool_result"),
+      });
+    };
     // Whether the account holds every scope we request (SCRUM-154): a scope
     // refusal on a complete grant is for a scope we never asked for.
     let grantComplete = false;
@@ -1253,10 +1387,12 @@ export function createMcpServer(
       // said to be exactly that, never "not connected". The failure is
       // already recorded on the row.
       if (resolution && "refreshFailed" in resolution) {
-        return {
-          content: [{ type: "text" as const, text: refreshFailedMessage(resolution, grantFixUrl) }],
-          isError: true,
-        };
+        const text = refreshFailedMessage(resolution, grantFixUrl);
+        // A provider that did not answer is a retry, not a broken connection.
+        if (!resolution.reconnectNeeded) {
+          return { content: [{ type: "text" as const, text }], isError: true };
+        }
+        return refuseNotConnected(requiredService, "reconnect", text);
       }
       const resolved = resolution;
       userToken = resolved?.token ?? null;
@@ -1277,10 +1413,7 @@ export function createMcpServer(
         const msg = requestedAccount
           ? `No connected account found for ${echoName(requestedAccount)}. Please connect it from the dashboard at ${grantFixUrl}.`
           : `${requiredService} is not connected. Please connect it from the dashboard at ${grantFixUrl} before using ${serverSlug} tools.`;
-        return {
-          content: [{ type: "text" as const, text: msg }],
-          isError: true,
-        };
+        return refuseNotConnected(requiredService, requestedAccount ? "no_such_account" : "not_connected", msg);
       }
 
       // SCRUM-136/107: refuse BEFORE dispatch when the scope this tool needs
@@ -1320,33 +1453,16 @@ export function createMcpServer(
         } catch {
           // scopeCheck.message stands.
         }
-        // Metered with a distinct marker: a refusal the instrumentation
+        // Tracked with a distinct marker: a refusal the instrumentation
         // cannot see would be a one-sided measurement of exactly the failure
-        // this exists to fix.
-        void trackToolCall(db, {
-          userId,
-          clientId,
-          clientName: clientName(),
-          testRunId,
-          toolName: name,
-          connectorType: requiredService,
-          accountEmail,
-          ...runFields,
-          latencyMs: 0,
-          responseSizeBytes: null,
-          errorMessage: `${MISSING_SCOPE_ERROR_MARKER} ${scopeCheck.missing.displayName} not granted`,
-          outcome: {
-            thrown: false,
-            isError: true,
-            errorMessage: `${MISSING_SCOPE_ERROR_MARKER} ${scopeCheck.missing.displayName} not granted`,
-            source: surface,
-            toolName: name,
-          },
-        });
-        return {
-          content: [{ type: "text" as const, text: refusalText }],
-          isError: true,
-        };
+        // this exists to fix. Unmetered since SCRUM-466, like every refusal
+        // for a connection that cannot serve the call.
+        return refuseNotConnected(
+          requiredService,
+          "missing_scope",
+          refusalText,
+          `${MISSING_SCOPE_ERROR_MARKER} ${scopeCheck.missing.displayName} not granted`
+        );
       }
     } else if (mcpServer.githubRepoUrl) {
       // Legacy: the pluginConnections table, sealed (SCRUM-442).
@@ -1429,6 +1545,24 @@ export function createMcpServer(
           content: [{ type: "text" as const, text: scopeRewrite }],
         };
       }
+      // SCRUM-466: the provider refused a token it issued (a grant revoked on
+      // its side). The plugin's words stand, followed by a connect link, in
+      // the same shape as the gateway's own refusals; never metered.
+      const failure = isError ? pluginFailureOf(result) : null;
+      const reconnect = !!requiredService && failure?.kind === "http" && failure.status === 401;
+      if (reconnect) {
+        const link = await connectLinkFor(requiredService, "tool_result");
+        if (link) {
+          const text = ((result as CallToolResult).content ?? [])
+            .map((c) => (c.type === "text" ? c.text : ""))
+            .join(" ")
+            .trim();
+          result = {
+            ...(result as Record<string, unknown>),
+            ...notConnectedResult({ service: requiredService, reason: "reconnect", sentence: text, link }),
+          };
+        }
+      }
       // Fire-and-forget: metering must never slow the tool response. Latency
       // and sizes are already captured into the props here; trackToolCall is
       // self-contained (never throws) so the floating promise is safe.
@@ -1450,8 +1584,9 @@ export function createMcpServer(
           errorMessage,
           source: surface,
           toolName: name,
-          failure: isError ? pluginFailureOf(result) : null,
+          failure,
           grantComplete,
+          notConnected: reconnect,
         },
       });
 
@@ -1491,7 +1626,8 @@ export function createMcpServer(
         isError: true,
       };
     }
-  });
+  };
+  server.setRequestHandler(CallToolRequestSchema, (request, extra) => callTool(request, extra, false));
 
   return server;
 }
