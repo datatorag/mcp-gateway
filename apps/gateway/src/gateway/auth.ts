@@ -4,7 +4,7 @@ import { eq, and, isNull } from "drizzle-orm";
 import type { Database } from "@datatorag-mcp/db";
 import { oauthAccessTokens, users } from "@datatorag-mcp/db";
 import { nonceMatches, OAUTH_STATE_TTL_MS } from "./oauth/csrf";
-import { liveWebSessionUserId, WEB_SESSION_CLIENT_ID } from "../lib/web-session";
+import { createWebSession, liveWebSessionUserId } from "../lib/web-session";
 import { stashAttribution, takeAttribution } from "./attribution";
 import { connectedElsewhere, upsertServiceAccount } from "./connected-accounts";
 import { renderConnectDuplicate, type DuplicateProvider } from "./connect-duplicate";
@@ -459,26 +459,7 @@ export function createAuthRouter(
       });
     }
 
-    const token = randomBytes(32).toString("base64url");
-    const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
-
-    await db.insert(oauthAccessTokens).values({
-      token,
-      // SCRUM-443 release 1: the hash beside the raw value; reads still use the raw value.
-      tokenHash: hashToken(token),
-      clientId: WEB_SESSION_CLIENT_ID,
-      userId: user.id,
-      scope: null,
-      expiresAt,
-    });
-
-    res.cookie("dtrmcp_session", token, {
-      httpOnly: true,
-      secure: true,
-      sameSite: "lax",
-      path: "/",
-      expires: expiresAt,
-    });
+    await createWebSession(db, res, user.id);
 
     // Where EVERY login lands, behind a flag that defaults OFF. The flag used
     // to select a destination for new signups only, so it could not reach a
