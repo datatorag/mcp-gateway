@@ -5,12 +5,14 @@ import type { Database } from "@datatorag-mcp/db";
 import { oauthAccessTokens, users } from "@datatorag-mcp/db";
 import { nonceMatches, OAUTH_STATE_TTL_MS, sameOriginRequest } from "./oauth/csrf";
 import { createWebSession, liveWebSessionUserId } from "../lib/web-session";
+import { signInHref } from "../lib/sign-in";
 import { stashAttribution, takeAttribution } from "./attribution";
 import { connectedElsewhere, upsertServiceAccount } from "./connected-accounts";
 import { CONNECT_START, isDuplicateProvider, renderConnectDuplicate, type DuplicateProvider } from "./connect-duplicate";
-import { PROVIDERS } from "../lib/analytics";
+import { EVENTS, PROVIDERS } from "../lib/analytics";
 import {
   trackConnectDuplicate,
+  trackConnectLinkEvent,
   trackConnectRefused,
   trackLogin,
   trackOAuthCompleted,
@@ -296,13 +298,18 @@ export function createAuthRouter(
       .send(
         renderConnectLinkConfirm({
           provider,
-          signInHref: `/auth/google?next=${encodeURIComponent(`/connect/resume/${provider}`)}`,
+          signInHref: signInHref(`/connect/resume/${provider}`),
         })
       );
     return true;
   }
 
   function connected(who: ConnectUser, provider: DuplicateProvider): void {
+    void trackConnectLinkEvent(who.userId, EVENTS.CONNECT_COMPLETED, {
+      provider,
+      path: who.link?.path ?? "website",
+      clientName: who.link?.clientName ?? null,
+    });
     try {
       config.onConnected?.({ userId: who.userId, provider, link: who.link });
     } catch (err) {

@@ -19,7 +19,8 @@ const launchedServiceIds = vi.fn();
 vi.mock("./service-launch", () => ({
   launchedServiceIds: (...a: unknown[]) => launchedServiceIds(...a),
 }));
-vi.mock("./track", () => ({ trackToolCall: vi.fn(async () => undefined) }));
+vi.mock("./track", () => ({
+  trackConnectLinkEvent: vi.fn(async () => undefined), trackToolCall: vi.fn(async () => undefined) }));
 vi.mock("./mcp-analytics", () => ({ trackMcpToolsListed: vi.fn(async () => undefined) }));
 vi.mock("./user-tools", () => ({
   listUserToolRows: vi.fn(async () => []),

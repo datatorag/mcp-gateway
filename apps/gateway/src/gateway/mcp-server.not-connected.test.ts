@@ -11,7 +11,9 @@ import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 
 const trackToolCall = vi.fn().mockResolvedValue(undefined);
+const trackConnectLinkEvent = vi.fn(async (..._a: unknown[]) => undefined);
 vi.mock("./track", () => ({
+  trackConnectLinkEvent: (...a: unknown[]) => trackConnectLinkEvent(...a),
   trackToolCall: (...args: unknown[]) => trackToolCall(...args),
 }));
 vi.mock("./mcp-analytics", () => ({
@@ -128,6 +130,11 @@ describe("a not-connected refusal on the MCP surface", () => {
         baseUrl: BASE,
       });
       expect(callPluginToolOnce).not.toHaveBeenCalled();
+      expect(trackConnectLinkEvent).toHaveBeenCalledWith("user-1", "connect_link_issued", {
+        provider: "google-workspace",
+        path: "tool_result",
+        clientName: "claude-ai",
+      });
 
       // Tracked, as a user error that never uses the allowance.
       expect(trackToolCall).toHaveBeenCalledTimes(1);

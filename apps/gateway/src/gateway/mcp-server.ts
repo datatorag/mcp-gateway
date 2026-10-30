@@ -21,7 +21,7 @@ import {
   topResultKind,
 } from "./skills-catalogue";
 import { listConnectedServiceIds } from "./connected-services";
-import { trackSkillApplied, trackSkillEvent, trackSkillSearched } from "./track";
+import { trackConnectLinkEvent, trackSkillApplied, trackSkillEvent, trackSkillSearched } from "./track";
 import { gwsRunFields } from "./usage/gws-run-fields";
 import { EVENTS } from "../lib/analytics";
 import { createUserSkill, deleteUserSkill, forkSkill, updateUserSkill, type WriteResult } from "./skills/catalogue-store";
@@ -950,7 +950,9 @@ export function createMcpServer(
   const issueLinkFor = async (service: string, path: ConnectLinkPath): Promise<{ id: string; url: string } | null> => {
     if (surface !== "mcp" || !opts?.baseUrl || !isDuplicateProvider(service)) return null;
     try {
-      return await issueConnectLink(db, { userId, provider: service, path, clientName: clientName(), baseUrl: opts.baseUrl });
+      const link = await issueConnectLink(db, { userId, provider: service, path, clientName: clientName(), baseUrl: opts.baseUrl });
+      void trackConnectLinkEvent(userId, EVENTS.CONNECT_LINK_ISSUED, { provider: service, path, clientName: clientName() });
+      return link;
     } catch (err) {
       console.error("[connect-links] could not issue a link:", err instanceof Error ? err.message : err);
       return null;

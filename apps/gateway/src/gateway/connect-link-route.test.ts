@@ -188,7 +188,7 @@ describe("GET /connect/done", () => {
 describe("GET /connect/resume/<provider>", () => {
   it("sends a browser with no session to sign in, and back here after", async () => {
     const res = await request("GET", "/connect/resume/atlassian");
-    expect(res.headers.get("location")).toBe("/auth/login?next=%2Fconnect%2Fresume%2Fatlassian");
+    expect(res.headers.get("location")).toBe("/auth/google?next=%2Fconnect%2Fresume%2Fatlassian");
   });
 
   it("restarts the connect for a signed-in browser", async () => {

@@ -20,6 +20,7 @@ import { Router, type Request, type Response } from "express";
 import { eq } from "drizzle-orm";
 import { users, type Database } from "@datatorag-mcp/db";
 import { liveWebSessionUserId } from "../lib/web-session";
+import { signInHref } from "../lib/sign-in";
 import { OAUTH_STATE_TTL_MS, sameOriginRequest } from "./oauth/csrf";
 import {
   claimConnectLink,
@@ -97,7 +98,7 @@ export function createConnectLinkRouter(db: Database, opts: { baseUrl: string })
       return;
     }
     if (!(await liveWebSessionUserId(db, req.cookies?.dtrmcp_session))) {
-      res.redirect(`/auth/login?next=${encodeURIComponent(`/connect/resume/${provider}`)}`);
+      res.redirect(signInHref(`/connect/resume/${provider}`));
       return;
     }
     res.redirect(connectStartFromLink(provider));

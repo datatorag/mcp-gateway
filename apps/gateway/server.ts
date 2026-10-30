@@ -31,6 +31,7 @@ import { createAuthRouter } from "./src/gateway/auth";
 import { createConnectLinkRouter } from "./src/gateway/connect-link-route";
 import { serverInstructions } from "./src/gateway/server-instructions";
 import { connectLinkDone } from "./src/gateway/connect-elicitation";
+import { mcpChallenge, mcpUnauthorizedBody } from "./src/gateway/mcp-unauthorized";
 import { launchedServiceIds } from "./src/gateway/service-launch";
 import { getPluginManager } from "./src/lib/plugin-manager";
 import { mcpBearerGate, resolveBearer, type McpAuthState } from "./src/gateway/bearer-auth";
@@ -277,14 +278,10 @@ async function main() {
     error: string,
     challengeParams: string[] = []
   ) {
-    const challenge = [
-      ...challengeParams,
-      `resource_metadata="${resourceMetadataUrl}"`,
-    ].join(", ");
     res
       .status(401)
-      .set("WWW-Authenticate", `Bearer ${challenge}`)
-      .json({ error, resource_metadata: resourceMetadataUrl });
+      .set("WWW-Authenticate", mcpChallenge(resourceMetadataUrl, challengeParams))
+      .json(mcpUnauthorizedBody(error, resourceMetadataUrl, baseUrl));
   }
 
   // The bearer is checked before the body is parsed, so only an

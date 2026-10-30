@@ -711,6 +711,25 @@ export async function trackConnectDuplicate(
   });
 }
 
+/** SCRUM-466: the two connect-from-chat events, under the user's id so
+ * they join the funnel, and with no email: activation by path is read from
+ * these. Never throws. */
+export async function trackConnectLinkEvent(
+  userId: string,
+  event: typeof EVENTS.CONNECT_LINK_ISSUED | typeof EVENTS.CONNECT_COMPLETED,
+  props: { provider: string; path: "tool_result" | "elicitation" | "website"; clientName: string | null }
+): Promise<void> {
+  try {
+    getPosthog()?.capture({
+      distinctId: userId,
+      event,
+      properties: { provider: props.provider, path: props.path, client_name: props.clientName },
+    });
+  } catch (err) {
+    console.warn(`[track] ${event} failed:`, err instanceof Error ? err.message : err);
+  }
+}
+
 /** SCRUM-226 (and the scheduler's events on its own branch): a skill
  * lifecycle event (`skill_created`, `skill_updated`, `skill_forked`,
  * `skill_deleted`, `skill_run_*`, `skill_schedule_*`), captured the same way

@@ -15,7 +15,9 @@ import cookieParser from "cookie-parser";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Database } from "@datatorag-mcp/db";
 
+const trackConnectLinkEvent = vi.fn(async (..._a: unknown[]) => undefined);
 vi.mock("./track", () => ({
+  trackConnectLinkEvent: (...a: unknown[]) => trackConnectLinkEvent(...a),
   trackLogin: vi.fn(),
   trackOAuthCompleted: vi.fn(async () => undefined),
   trackConnectDuplicate: vi.fn(async () => undefined),
@@ -153,6 +155,11 @@ describe("a link-started connect with no session", () => {
     expect(upsertServiceAccount.mock.calls[0][1]).toBe("link-user");
     expect(createWebSession).toHaveBeenCalledWith(expect.anything(), expect.anything(), "link-user");
     expect(onConnected).toHaveBeenCalledWith({ userId: "link-user", provider: "google-workspace", link: link("google-workspace") });
+    expect(trackConnectLinkEvent).toHaveBeenCalledWith("link-user", "connect_completed", {
+      provider: "google-workspace",
+      path: "tool_result",
+      clientName: "Claude",
+    });
     expect(cleared(res, "dtr_connect_link")).toBe(true);
   });
 
@@ -167,6 +174,7 @@ describe("a link-started connect with no session", () => {
     expect(upsertServiceAccount).not.toHaveBeenCalled();
     expect(createWebSession).not.toHaveBeenCalled();
     expect(onConnected).not.toHaveBeenCalled();
+    expect(trackConnectLinkEvent).not.toHaveBeenCalled();
     expect(cleared(res, "dtr_connect_link")).toBe(true);
   });
 
@@ -223,6 +231,12 @@ describe("a link-started connect with a session", () => {
     expect(res.status).toBe(302);
     expect(upsertServiceAccount.mock.calls[0][1]).toBe("session-user");
     expect(onConnected.mock.calls[0][0]).toEqual({ userId: "session-user", provider: "google-workspace", link: null });
+    // Not from a link: the website baseline.
+    expect(trackConnectLinkEvent).toHaveBeenCalledWith("session-user", "connect_completed", {
+      provider: "google-workspace",
+      path: "website",
+      clientName: null,
+    });
   });
 });
 

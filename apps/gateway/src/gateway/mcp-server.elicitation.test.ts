@@ -13,7 +13,8 @@ import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import { ElicitRequestSchema } from "@modelcontextprotocol/sdk/types.js";
 
-vi.mock("./track", () => ({ trackToolCall: vi.fn(async () => undefined) }));
+vi.mock("./track", () => ({
+  trackConnectLinkEvent: vi.fn(async () => undefined), trackToolCall: vi.fn(async () => undefined) }));
 vi.mock("./mcp-analytics", () => ({ trackMcpToolsListed: vi.fn(async () => undefined) }));
 vi.mock("./connected-accounts", () => ({
   listConnectedAccounts: vi.fn(async () => []),

@@ -59,6 +59,12 @@ export const INTERNAL_TOOL_DISPLAY: Record<
     label: "Checking your connected accounts",
     icon: Link2Icon,
   },
+  // SCRUM-466: served to MCP clients only, never to the agent; named here
+  // because the map covers every built-in.
+  connect: {
+    label: "Checking what is connected",
+    icon: Link2Icon,
+  },
   echo: {
     label: "Testing the connection",
     icon: PlugIcon,

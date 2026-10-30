@@ -24,6 +24,15 @@ export const EVENTS = {
    * identity like every event; never the other user's email or the address
    * of the account being connected. */
   ACCOUNT_CONNECT_DUPLICATE: "account_connect_duplicate",
+  /** SCRUM-466: a one-click connect link was made, by a not-connected tool
+   * result or the connect tool (`path: tool_result`) or a URL elicitation
+   * (`path: elicitation`). `provider`, `path`, `client_name`; no email. */
+  CONNECT_LINK_ISSUED: "connect_link_issued",
+  /** SCRUM-466: a connect stored its account. `path` is the link's, or
+   * `website` for a connect that did not start from a link, which is the
+   * baseline the chat paths are read against. `provider`, `path`,
+   * `client_name` (null for `website`); no email. */
+  CONNECT_COMPLETED: "connect_completed",
   /** SCRUM-96: a connect with no return path landed in the agent and the
    * landing rendered. `service` only. */
   CONNECT_LANDING_SHOWN: "connect_landing_shown",
