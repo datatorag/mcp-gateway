@@ -3,7 +3,8 @@
  *
  * GET  /connect/<token>         the page; spends nothing, because chat clients
  *                               and link unfurlers fetch URLs on their own
- * POST /connect/<token>         spends the link, leaves its id in a one-shot
+ * POST /connect/<token>         spends the link, leaves its token (never the
+ *                               row id) in a one-shot
  *                               cookie, and hands over to the provider's
  *                               own connect start
  * GET  /connect/done            where a link-started connect ends
@@ -160,7 +161,7 @@ export function createConnectLinkRouter(db: Database, opts: { baseUrl: string })
       res.status(410).type("html").send(renderConnectLinkExpired());
       return;
     }
-    res.cookie(CONNECT_LINK_COOKIE, link.id, {
+    res.cookie(CONNECT_LINK_COOKIE, token, {
       httpOnly: true,
       secure,
       sameSite: "lax",

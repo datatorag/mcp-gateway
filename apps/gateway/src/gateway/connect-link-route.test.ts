@@ -128,7 +128,9 @@ describe("POST /connect/<token>", () => {
     expect(res.headers.get("location")).toBe("/auth/google/connect?proceed=1&next=%2Fconnect%2Fdone");
     expect(claimConnectLink).toHaveBeenCalledTimes(1);
     const cookie = res.headers.getSetCookie().find((c) => c.startsWith("dtr_connect_link="));
-    expect(cookie).toContain(`dtr_connect_link=${link().id}`);
+    // The link's own token, so only its holder can carry it; never the row id.
+    expect(cookie).toContain(`dtr_connect_link=${TOKEN}`);
+    expect(cookie).not.toContain(link().id);
     expect(cookie).toMatch(/HttpOnly/i);
     expect(cookie).toMatch(/SameSite=Lax/i);
     expect(cookie).toMatch(/Max-Age=600/);

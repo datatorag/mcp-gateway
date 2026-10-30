@@ -252,11 +252,11 @@ export function createAuthRouter(
 
   async function connectUser(
     sessionToken: unknown,
-    linkId: unknown,
+    linkToken: unknown,
     provider: DuplicateProvider
   ): Promise<ConnectUser | null> {
     const sessionUserId = await liveWebSessionUserId(db, typeof sessionToken === "string" ? sessionToken : undefined);
-    const spent = linkId ? await spentConnectLink(db, linkId, OAUTH_STATE_TTL_MS) : null;
+    const spent = linkToken ? await spentConnectLink(db, linkToken, OAUTH_STATE_TTL_MS) : null;
     const link = spent && spent.provider === provider ? spent : null;
     if (sessionUserId) {
       return { userId: sessionUserId, link: link?.userId === sessionUserId ? link : null, viaLink: false };
@@ -275,7 +275,8 @@ export function createAuthRouter(
   }
 
   /** A connect that only a link vouches for completes when the provider
-   * account is the link user's own sign-in email. Then the browser gets that
+   * account is the link user's own sign-in email, and the provider says it
+   * verified that email. Then the browser gets that
    * user's web session, and the connect goes on. Otherwise nothing is stored
    * and the page asks for a sign-in, which is what stops a link sent to
    * somebody else from attaching THEIR account to its user. True when the
@@ -284,11 +285,12 @@ export function createAuthRouter(
     res: Parameters<typeof refusedAsDuplicate>[0] & Parameters<typeof createWebSession>[1],
     who: ConnectUser,
     provider: DuplicateProvider,
-    accountEmail: string
+    accountEmail: string,
+    emailVerified: boolean
   ): Promise<boolean> {
     if (!who.viaLink) return false;
     const [owner] = await db.select({ email: users.email }).from(users).where(eq(users.id, who.userId)).limit(1);
-    if (owner && owner.email.toLowerCase() === accountEmail.toLowerCase()) {
+    if (emailVerified && owner && owner.email.toLowerCase() === accountEmail.toLowerCase()) {
       await createWebSession(db, res, who.userId);
       return false;
     }
@@ -728,9 +730,9 @@ export function createAuthRouter(
     const attribution = takeAttribution(req, res);
     const requestedPath = takeConnectNext(req, res);
     const duplicateAck = takeDuplicateAck(req, res);
-    const linkId = takeConnectLink(req, res);
+    const linkToken = takeConnectLink(req, res);
 
-    if (!sessionToken && !linkId) {
+    if (!sessionToken && !linkToken) {
       res.redirect("/auth/login");
       return;
     }
@@ -767,7 +769,7 @@ export function createAuthRouter(
     // SCRUM-374: a live WEB session, not just any row: a revoked or expired
     // session, or an MCP client's token set as the cookie, goes to sign in.
     // With no session, a connect link spent in this browser (SCRUM-466).
-    const who = await connectUser(sessionToken, linkId, PROVIDERS.GOOGLE_WORKSPACE);
+    const who = await connectUser(sessionToken, linkToken, PROVIDERS.GOOGLE_WORKSPACE);
     if (!who) {
       res.redirect("/auth/login");
       return;
@@ -862,7 +864,7 @@ export function createAuthRouter(
       }
       // A connect only a link vouches for keeps that link for the retry, which
       // starts over at the same route (SCRUM-466).
-      if (who.viaLink && who.link) res.cookie(CONNECT_LINK_COOKIE, who.link.id, oneShot);
+      if (who.viaLink && linkToken) res.cookie(CONNECT_LINK_COOKIE, linkToken, oneShot);
       // And they land on the page that names what to tick, with Try again,
       // carrying the place they started from. That page's "back" link is the
       // destination this used to redirect to, so nothing about where a
@@ -873,14 +875,18 @@ export function createAuthRouter(
 
     // Fetch the email of the connected Google account
     let accountEmail: string | null = null;
+    // Whether Google verified that address: a link with no session trusts
+    // only a verified one (SCRUM-466).
+    let emailVerified = false;
     try {
       const userInfoRes = await fetch(
         "https://www.googleapis.com/oauth2/v2/userinfo",
         { headers: { Authorization: `Bearer ${tokens.access_token}` } }
       );
       if (userInfoRes.ok) {
-        const userInfo = (await userInfoRes.json()) as { email: string };
+        const userInfo = (await userInfoRes.json()) as { email: string; verified_email?: unknown };
         accountEmail = userInfo.email;
+        emailVerified = userInfo.verified_email === true;
       }
     } catch {
       // Fall through — accountEmail stays null
@@ -906,7 +912,7 @@ export function createAuthRouter(
     // never reaches this line — the SCRUM-149 gate above refused it.
     // SCRUM-363: already held by another DataToRAG user? Warn, store nothing.
     // SCRUM-466: a connect only a link vouches for must be the link user's own.
-    if (await refusedUnconfirmed(res, who, PROVIDERS.GOOGLE_WORKSPACE, accountEmail)) {
+    if (await refusedUnconfirmed(res, who, PROVIDERS.GOOGLE_WORKSPACE, accountEmail, emailVerified)) {
       return;
     }
 
@@ -1046,9 +1052,9 @@ export function createAuthRouter(
     const attribution = takeAttribution(req, res);
     const requestedPath = takeConnectNext(req, res);
     const duplicateAck = takeDuplicateAck(req, res);
-    const linkId = takeConnectLink(req, res);
+    const linkToken = takeConnectLink(req, res);
 
-    if (!sessionToken && !linkId) {
+    if (!sessionToken && !linkToken) {
       res.redirect("/auth/login");
       return;
     }
@@ -1071,7 +1077,7 @@ export function createAuthRouter(
     // SCRUM-374: a live WEB session, not just any row: a revoked or expired
     // session, or an MCP client's token set as the cookie, goes to sign in.
     // With no session, a connect link spent in this browser (SCRUM-466).
-    const who = await connectUser(sessionToken, linkId, PROVIDERS.ATLASSIAN);
+    const who = await connectUser(sessionToken, linkToken, PROVIDERS.ATLASSIAN);
     if (!who) {
       res.redirect("/auth/login");
       return;
@@ -1113,13 +1119,16 @@ export function createAuthRouter(
 
     // Fetch the email of the connected Atlassian account
     let accountEmail: string | null = null;
+    // As for Google: a link with no session trusts only a verified address.
+    let emailVerified = false;
     try {
       const meRes = await fetch("https://api.atlassian.com/me", {
         headers: { Authorization: `Bearer ${tokens.access_token}` },
       });
       if (meRes.ok) {
-        const me = (await meRes.json()) as { email: string };
+        const me = (await meRes.json()) as { email: string; email_verified?: unknown };
         accountEmail = me.email;
+        emailVerified = me.email_verified === true;
       }
     } catch {
       // Fall through — accountEmail stays null
@@ -1136,7 +1145,7 @@ export function createAuthRouter(
     }
 
     // SCRUM-466: a connect only a link vouches for must be the link user's own.
-    if (await refusedUnconfirmed(res, who, PROVIDERS.ATLASSIAN, accountEmail)) {
+    if (await refusedUnconfirmed(res, who, PROVIDERS.ATLASSIAN, accountEmail, emailVerified)) {
       return;
     }
 
@@ -1246,9 +1255,9 @@ export function createAuthRouter(
     const attribution = takeAttribution(req, res);
     const requestedPath = takeConnectNext(req, res);
     const duplicateAck = takeDuplicateAck(req, res);
-    const linkId = takeConnectLink(req, res);
+    const linkToken = takeConnectLink(req, res);
 
-    if (!sessionToken && !linkId) {
+    if (!sessionToken && !linkToken) {
       res.redirect("/auth/login");
       return;
     }
@@ -1270,7 +1279,7 @@ export function createAuthRouter(
     // SCRUM-374: a live WEB session, not just any row: a revoked or expired
     // session, or an MCP client's token set as the cookie, goes to sign in.
     // With no session, a connect link spent in this browser (SCRUM-466).
-    const who = await connectUser(sessionToken, linkId, PROVIDERS.NOTION);
+    const who = await connectUser(sessionToken, linkToken, PROVIDERS.NOTION);
     if (!who) {
       res.redirect("/auth/login");
       return;
@@ -1344,7 +1353,9 @@ export function createAuthRouter(
     const workspaceName = cleanWorkspaceName(tokens.workspace_name);
 
     // SCRUM-466: a connect only a link vouches for must be the link user's own.
-    if (await refusedUnconfirmed(res, who, PROVIDERS.NOTION, accountEmail)) {
+    // Notion reports no verified flag; the address is the one its own
+    // sign-in uses.
+    if (await refusedUnconfirmed(res, who, PROVIDERS.NOTION, accountEmail, true)) {
       return;
     }
 

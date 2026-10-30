@@ -13,6 +13,7 @@ import {
   dropConnectLinksForUser,
   issueConnectLink,
   peekConnectLink,
+  spentConnectLink,
   sweepConnectLinks,
 } from "./connect-links";
 
@@ -78,6 +79,19 @@ describe.skipIf(!dockerAvailable)("connect links (real db)", () => {
     expect(await claimConnectLink(db, tokenOf(url))).toBeNull();
     expect(await claimConnectLink(db, "A".repeat(43))).toBeNull();
     expect(await claimConnectLink(db, "not a token")).toBeNull();
+  });
+
+  it("a round trip finds its link by token, only once spent and only within the window", async () => {
+    const userId = await insertTestUser(db);
+    const { id, url } = await issue(userId);
+    const token = tokenOf(url);
+    expect(await spentConnectLink(db, token, 600_000)).toBeNull();
+    await claimConnectLink(db, token);
+    expect(await spentConnectLink(db, token, 600_000)).toMatchObject({ id, userId });
+    // The row id is no credential.
+    expect(await spentConnectLink(db, id, 600_000)).toBeNull();
+    await db.update(connectLinks).set({ spentAt: new Date(Date.now() - 700_000) }).where(eq(connectLinks.id, id));
+    expect(await spentConnectLink(db, token, 600_000)).toBeNull();
   });
 
   it("drops a user's links and nobody else's", async () => {

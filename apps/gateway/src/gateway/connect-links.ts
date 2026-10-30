@@ -16,7 +16,8 @@ import { cleanClientName } from "./untrusted-text";
 export const CONNECT_LINK_TTL_MS = 10 * 60 * 1000;
 
 /** The one-shot cookie a spent link leaves in the browser that spent it,
- * holding the link's id: what tells the provider's connect routes who the
+ * holding the link's own token, so only a holder of the link can carry it
+ * (never the row id, which is not a secret): what tells the provider's connect routes who the
  * connect is for when the browser has no session, and which link a connect
  * came from. Cleared at the top of every connect callback. */
 export const CONNECT_LINK_COOKIE = "dtr_connect_link";
@@ -93,20 +94,21 @@ export async function claimConnectLink(db: Database, token: string): Promise<Con
   return (row as ConnectLink | undefined) ?? null;
 }
 
-const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-
-/** The link a connect round trip carries in its cookie: spent, and spent
- * within `withinMs`, the round trip's own lifetime. Anything else is no link. */
+/** The link a connect round trip carries in its cookie, by its token: spent,
+ * and spent within `withinMs`, the round trip's own lifetime. Anything else
+ * is no link. */
 export async function spentConnectLink(
   db: Database,
-  id: unknown,
+  token: unknown,
   withinMs: number
 ): Promise<ConnectLink | null> {
-  if (typeof id !== "string" || !UUID.test(id)) return null;
+  if (typeof token !== "string" || !TOKEN.test(token)) return null;
   const [row] = await db
     .select(columns)
     .from(connectLinks)
-    .where(and(eq(connectLinks.id, id), gt(connectLinks.spentAt, new Date(Date.now() - withinMs))))
+    .where(
+      and(eq(connectLinks.tokenHash, hashToken(token)), gt(connectLinks.spentAt, new Date(Date.now() - withinMs)))
+    )
     .limit(1);
   return (row as ConnectLink | undefined) ?? null;
 }

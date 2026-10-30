@@ -50,6 +50,8 @@ import { createAuthRouter } from "./auth";
 import { GWS_SCOPE_LIST } from "./scope-grant";
 
 const LINK_ID = "0b6c1f0e-6a1d-4c35-9a77-2f9a7f1f9a10";
+/** The cookie carries the link's own token, never its row id. */
+const LINK_TOKEN = "T".repeat(43);
 const signInEmail = vi.fn();
 const dbMock = {
   select: () => ({ from: () => ({ where: () => ({ limit: signInEmail }) }) }),
@@ -91,6 +93,7 @@ afterAll(async () => {
 
 /** What each provider says the connected account is. */
 let providerEmail = "jane@example.com";
+let emailVerified = true;
 const FULL_SCOPE = GWS_SCOPE_LIST.join(" ");
 let googleScope = FULL_SCOPE;
 
@@ -103,7 +106,8 @@ beforeEach(() => {
   providerEmail = "jane@example.com";
   googleScope = FULL_SCOPE;
   liveWebSessionUserId.mockResolvedValue(null);
-  spentConnectLink.mockImplementation(async (_db: unknown, id: unknown) => (id === LINK_ID ? link("google-workspace") : null));
+  spentConnectLink.mockImplementation(async (_db: unknown, token: unknown) => (token === LINK_TOKEN ? link("google-workspace") : null));
+  emailVerified = true;
   signInEmail.mockResolvedValue([{ email: "Jane@Example.com" }]);
   vi.stubGlobal(
     "fetch",
@@ -113,13 +117,13 @@ beforeEach(() => {
         return new Response(JSON.stringify({ access_token: "at", expires_in: 3600, scope: googleScope }), { status: 200 });
       }
       if (u.startsWith("https://www.googleapis.com/oauth2/v2/userinfo")) {
-        return new Response(JSON.stringify({ email: providerEmail }), { status: 200 });
+        return new Response(JSON.stringify({ email: providerEmail, verified_email: emailVerified }), { status: 200 });
       }
       if (u.startsWith("https://auth.atlassian.com/oauth/token")) {
         return new Response(JSON.stringify({ access_token: "at", expires_in: 3600 }), { status: 200 });
       }
       if (u.startsWith("https://api.atlassian.com/me")) {
-        return new Response(JSON.stringify({ email: providerEmail }), { status: 200 });
+        return new Response(JSON.stringify({ email: providerEmail, email_verified: emailVerified }), { status: 200 });
       }
       if (u.startsWith("https://api.notion.com/v1/oauth/token")) {
         return new Response(
@@ -141,7 +145,7 @@ function request(path: string, cookie: string) {
 }
 
 const GOOGLE_CB = "/auth/google/connect/callback?code=c&state=n1";
-const GOOGLE_LINK = `gws_connect_nonce=n1; dtr_connect_link=${LINK_ID}; dtr_connect_next=%2Fconnect%2Fdone`;
+const GOOGLE_LINK = `gws_connect_nonce=n1; dtr_connect_link=${LINK_TOKEN}; dtr_connect_next=%2Fconnect%2Fdone`;
 
 function cleared(res: Response, name: string): boolean {
   return res.headers.getSetCookie().some((c) => c.startsWith(`${name}=;`));
@@ -185,12 +189,33 @@ describe("a link-started connect with no session", () => {
       ["notion", "/auth/notion/connect/callback?code=c&state=n1", "notion_connect_nonce"],
     ]) {
       spentConnectLink.mockResolvedValue(link(provider));
-      const res = await request(path, `${nonce}=n1; dtr_connect_link=${LINK_ID}`);
+      const res = await request(path, `${nonce}=n1; dtr_connect_link=${LINK_TOKEN}`);
       expect(res.status).toBe(200);
       expect(await res.text()).toContain(`%2Fconnect%2Fresume%2F${provider}`);
     }
     expect(upsertServiceAccount).not.toHaveBeenCalled();
     expect(createWebSession).not.toHaveBeenCalled();
+  });
+
+  it("trusts the matching email only when the provider verified it", async () => {
+    emailVerified = false;
+    for (const [provider, path, nonce] of [
+      ["google-workspace", GOOGLE_CB, "gws_connect_nonce"],
+      ["atlassian", "/auth/atlassian/connect/callback?code=c&state=n1", "atl_connect_nonce"],
+    ]) {
+      spentConnectLink.mockResolvedValue(link(provider));
+      const res = await request(path, `${nonce}=n1; dtr_connect_link=${LINK_TOKEN}`);
+      expect(res.status).toBe(200);
+      expect(await res.text()).toContain("Sign in to continue");
+    }
+    expect(upsertServiceAccount).not.toHaveBeenCalled();
+    expect(createWebSession).not.toHaveBeenCalled();
+  });
+
+  it("a cookie holding the row id, not the token, vouches for nothing", async () => {
+    const res = await request(GOOGLE_CB, `gws_connect_nonce=n1; dtr_connect_link=${LINK_ID}`);
+    expect(res.headers.get("location")).toBe("/auth/login");
+    expect(upsertServiceAccount).not.toHaveBeenCalled();
   });
 
   it("a link for another provider vouches for nothing", async () => {
@@ -209,7 +234,7 @@ describe("a link-started connect with no session", () => {
     googleScope = "openid email";
     const res = await request(GOOGLE_CB, GOOGLE_LINK);
     const set = res.headers.getSetCookie().filter((c) => c.startsWith("dtr_connect_link="));
-    expect(set.some((c) => c.startsWith(`dtr_connect_link=${LINK_ID}`))).toBe(true);
+    expect(set.some((c) => c.startsWith(`dtr_connect_link=${LINK_TOKEN}`))).toBe(true);
     expect(upsertServiceAccount).not.toHaveBeenCalled();
   });
 });
@@ -243,13 +268,13 @@ describe("a link-started connect with a session", () => {
 describe("the connect starts", () => {
   it("go on with a spent link and no session", async () => {
     spentConnectLink.mockResolvedValue(link("atlassian"));
-    const res = await request("/auth/atlassian/connect", `dtr_connect_link=${LINK_ID}`);
+    const res = await request("/auth/atlassian/connect", `dtr_connect_link=${LINK_TOKEN}`);
     expect(res.headers.get("location")).toMatch(/^https:\/\/auth\.atlassian\.com\/authorize/);
   });
 
   it("send everyone else to sign in", async () => {
     spentConnectLink.mockResolvedValue(null);
-    const res = await request("/auth/notion/connect", `dtr_connect_link=${LINK_ID}`);
+    const res = await request("/auth/notion/connect", `dtr_connect_link=${LINK_TOKEN}`);
     expect(res.headers.get("location")).toBe("/auth/login");
   });
 });

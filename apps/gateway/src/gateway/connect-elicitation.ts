@@ -12,6 +12,7 @@
  * call carried a progress token, so a stream that holds the call open is not
  * idle the whole time.
  */
+import { randomUUID } from "node:crypto";
 import type { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import type { RequestHandlerExtra } from "@modelcontextprotocol/sdk/shared/protocol.js";
 import type { ServerNotification, ServerRequest } from "@modelcontextprotocol/sdk/types.js";
@@ -109,10 +110,12 @@ export async function elicitConnect(input: {
 }): Promise<ElicitOutcome> {
   const link = await input.issueLink();
   if (!link) return "unavailable";
+  // Its own random id: the link's row id is a database key, never sent out.
+  const elicitationId = randomUUID();
   let action: string;
   try {
     const result = await input.server.elicitInput(
-      { mode: "url", elicitationId: link.id, url: link.url, message: elicitationMessage(input.serviceName) },
+      { mode: "url", elicitationId, url: link.url, message: elicitationMessage(input.serviceName) },
       // On the tool call's own stream: a client need not hold the standalone
       // one open, and this request belongs to the call.
       { timeout: CONNECT_LINK_TTL_MS, signal: input.extra.signal, relatedRequestId: input.extra.requestId }
@@ -126,7 +129,7 @@ export async function elicitConnect(input: {
   const connected = await waitForConnect(input.db, link.id, input.extra, CONNECT_WAIT_MS);
   if (!connected) return "timed_out";
   try {
-    await input.server.createElicitationCompletionNotifier(link.id, { relatedRequestId: input.extra.requestId })();
+    await input.server.createElicitationCompletionNotifier(elicitationId, { relatedRequestId: input.extra.requestId })();
   } catch {
     // The client hears it from the retried call's answer anyway.
   }

@@ -65,7 +65,7 @@ async function clientWith(elicitation: Record<string, unknown> | undefined, answ
     asked.push(p);
     if (answer === "decline") return { action: "decline" };
     // The user opens the link and finishes the provider's consent screen.
-    if (answer === "accept-and-connect") setTimeout(() => void connectLinkDone(db, p.elicitationId!), 10);
+    if (answer === "accept-and-connect") setTimeout(() => void connectLinkDone(db, `link-${linkSeq}`), 10);
     return { action: "accept" };
   });
   const server = createMcpServer("user-1", db, pool, { baseUrl: BASE });
@@ -104,8 +104,10 @@ describe("a client that declared URL elicitation", () => {
     const result = await client.callTool({ name: "gws-mcp__drive_search", arguments: { query: "q", account: "work@example.com" } });
 
     expect(asked).toEqual([
-      { mode: "url", elicitationId: "link-1", url: `${BASE}/connect/elicitation-1`, message: "Connect Google Workspace to continue." },
+      { mode: "url", elicitationId: expect.stringMatching(/^[0-9a-f-]{36}$/), url: `${BASE}/connect/elicitation-1`, message: "Connect Google Workspace to continue." },
     ]);
+    // Its own random id: the link's row id is never sent out.
+    expect(asked[0].elicitationId).not.toBe("link-1");
     expect(textOf(result)).toBe("3 files");
     expect(result.isError).toBeFalsy();
     // The re-run asked for the same account the call named.

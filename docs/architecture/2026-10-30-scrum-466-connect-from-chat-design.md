@@ -409,6 +409,11 @@ Where the build differs from the text above, and why.
 - **A client's own call timeout can end the wait first.** The SDK's default for a client request
   is 60 seconds; a client that does not reset it on progress sees its own timeout. This is
   checked per client after the deploy, with the edge question.
+- **The round trip's cookie holds the link's token**, looked up by hash, not the link's id: the id
+  is a database key and no secret. An elicitation gets its own random id for the same reason.
+- **The email match needs a verified email.** With no session, the connect completes only when
+  Google (`verified_email`) or Atlassian (`email_verified`) say they verified the address; Notion
+  reports no flag and its owner email is accepted. An unverified address asks for a sign-in.
 - **After "Sign in to continue"**, the resumed connect carries no link, so a call waiting on the
   first link ends at the wait and answers with a fresh one.
 - **Copy added in the build**, beyond what was proposed: the `connect` tool's "Connect another
