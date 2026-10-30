@@ -1,4 +1,5 @@
-import type { Request, RequestHandler } from "express";
+import type { RequestHandler } from "express";
+import { requestClientIp as getClientIp } from "@/gateway/client-ip";
 import { createRateLimiter } from "@/gateway/usage/rate-limit";
 
 // Per-IP limits for the OAuth endpoints (register / authorize / token / revoke).
@@ -15,22 +16,6 @@ if (typeof setInterval !== "undefined") {
     oauthMinuteLimiter.sweep();
     oauthHourLimiter.sweep();
   }, 5 * 60_000).unref?.();
-}
-
-// Client IP for bucketing. Production is fronted by Cloudflare, which sets
-// `CF-Connecting-IP` to the authoritative client IP and overwrites any
-// client-supplied value — so it cannot be spoofed. We deliberately do NOT trust
-// `X-Forwarded-For`: Cloudflare *appends* the real IP to it, leaving any
-// client-sent leftmost entry attacker-controlled, and the origin is also
-// reachable directly on :80 where XFF is fully forgeable. When CF-Connecting-IP
-// is absent (a direct-to-origin hit, or local dev) we fall back to the real TCP
-// peer — never a client-supplied header, which would let an attacker evade the
-// cap or pin it onto a victim's IP.
-function getClientIp(req: Request): string {
-  const cf = req.headers["cf-connecting-ip"];
-  const cfIp = Array.isArray(cf) ? cf[0] : cf;
-  if (cfIp) return cfIp.trim();
-  return req.socket?.remoteAddress ?? "0.0.0.0";
 }
 
 /**

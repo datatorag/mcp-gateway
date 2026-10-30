@@ -29,6 +29,7 @@ import { oauthRateLimit } from "./src/gateway/oauth/rate-limit";
 import { createAuthRouter } from "./src/gateway/auth";
 import { getPluginManager } from "./src/lib/plugin-manager";
 import { mcpBearerGate, resolveBearer, type McpAuthState } from "./src/gateway/bearer-auth";
+import { authFailureContext } from "./src/gateway/auth-failure-context";
 import { shutdownPosthog, trackFileDownload } from "./src/gateway/track";
 import {
   extractClientInfo,
@@ -292,13 +293,17 @@ async function main() {
     const unauthAction = () =>
       classifyMcpRequest({ method: req.method, sessionId, known: false });
 
+    // SCRUM-464: who a refused caller was, for the event and for one log
+    // line, both without a token, a token hash or an email.
+    const refusal = (reason: string, userId: string | null) => {
+      const context = authFailureContext(req, authState, clientInfo, env.LEADS_IP_SALT);
+      console.log(`[mcp-auth] refused ${JSON.stringify({ reason, http_method: req.method, ...context })}`);
+      return { userId, method: req.method, context };
+    };
+
     if (authState.header === "missing") {
       receiveRequest(null, unauthAction());
-      void trackMcpAuthFailed(db, {
-        userId: null,
-        reason: "missing_credential",
-        method: req.method,
-      });
+      void trackMcpAuthFailed(db, { reason: "missing_credential", ...refusal("missing_credential", null) });
       send401(res, "unauthorized");
       return;
     }
@@ -306,11 +311,7 @@ async function main() {
     const auth = authState.auth;
     if (!auth.ok) {
       receiveRequest(auth.userId, unauthAction());
-      void trackMcpAuthFailed(db, {
-        userId: auth.userId,
-        reason: auth.reason,
-        method: req.method,
-      });
+      void trackMcpAuthFailed(db, { reason: auth.reason, ...refusal(auth.reason, auth.userId) });
       send401(res, "invalid_token", [
         `error="invalid_token"`,
         `error_description="The access token is invalid or expired"`,

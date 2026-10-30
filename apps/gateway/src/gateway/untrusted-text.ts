@@ -71,3 +71,11 @@ export const REGISTERED_CLIENT_NAME_MAX = 100;
 export function cleanRegisteredClientName(value: unknown): string | null {
   return cleanUntrustedText(value, REGISTERED_CLIENT_NAME_MAX);
 }
+
+/** The longest User-Agent kept on an auth-failure event (SCRUM-464). */
+export const USER_AGENT_MAX = 120;
+
+/** A request's User-Agent, which the caller chose, safe to store. */
+export function cleanUserAgent(value: unknown): string | null {
+  return cleanUntrustedText(value, USER_AGENT_MAX);
+}

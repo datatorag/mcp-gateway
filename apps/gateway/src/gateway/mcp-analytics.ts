@@ -2,6 +2,7 @@ import type { Database } from "@datatorag-mcp/db";
 import { EVENTS } from "../lib/analytics";
 import { getPosthog } from "../lib/posthog-server";
 import { resolveUserEmail, identityProps } from "./user-email";
+import type { AuthFailureContext } from "./auth-failure-context";
 import type { McpSessionAction } from "./mcp-session";
 
 /**
@@ -146,11 +147,21 @@ export async function trackMcpSessionInitialized(
  * (expired/revoked) — those failures attribute to the real user. */
 export async function trackMcpAuthFailed(
   db: Database,
-  opts: { userId: string | null; reason: AuthFailureReason; method: string }
+  opts: {
+    userId: string | null;
+    reason: AuthFailureReason;
+    method: string;
+    /** Who the refused caller was, as far as a request can say (SCRUM-464):
+     * see `auth-failure-context.ts`. Never a token or an email. */
+    context?: AuthFailureContext;
+  }
 ): Promise<void> {
+  // reason and http_method keep their names and values: the daily reader's
+  // series is built on them.
   return captureMcpEvent(db, opts.userId, EVENTS.MCP_AUTH_FAILED, {
     reason: opts.reason,
     http_method: opts.method,
+    ...(opts.context ?? {}),
   });
 }
 
