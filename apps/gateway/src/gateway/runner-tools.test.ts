@@ -68,6 +68,7 @@ describe("the read tools refuse an empty call as a VALIDATION error", () => {
       userId: "u",
       connectionsUrl: "",
       pool: {} as never,
+      connectLink: async () => null,
     });
     expect(result.isError).toBe(true);
     const text = (result.content as { text?: string }[]).map((c) => c.text ?? "").join(" ");
@@ -84,6 +85,7 @@ describe("the read tools refuse an empty call as a VALIDATION error", () => {
       userId: "u",
       connectionsUrl: "",
       pool: {} as never,
+      connectLink: async () => null,
     });
     expect(result.isError).toBe(true);
   });

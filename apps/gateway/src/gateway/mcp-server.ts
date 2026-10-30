@@ -61,7 +61,7 @@ import {
 import { pluginFailureOf } from "./usage/classify";
 import { grantLine, type ConnectedAccountLine } from "./account-grant-line";
 import { cleanWorkspaceName } from "./untrusted-text";
-import { getConnectableService } from "@/app/dashboard/connections/service-registry";
+import { CONNECTABLE_SERVICES, getConnectableService } from "@/app/dashboard/connections/service-registry";
 import { connectionDead } from "./refresh-failure";
 import { crossFile, filePathsFor } from "./file-crossing";
 import { createDownloadLink, createUploadLink, DOWNLOAD_TOOL, revokeCarriedLinks, UPLOAD_TOOL } from "./file-download";
@@ -71,6 +71,7 @@ import type { Surface } from "./scope-grant";
 import { NOT_CONNECTED_ERROR_MARKER, notConnectedResult, type NotConnectedReason } from "./not-connected";
 import { issueConnectLink, type ConnectLinkPath } from "./connect-links";
 import { isDuplicateProvider } from "./connect-duplicate";
+import { CONNECT_TOOL, CONNECT_TOOL_DESCRIPTION, connectToolResult } from "./connect-tool";
 
 const ACCOUNT_PARAM_SCHEMA = {
   type: "string",
@@ -162,6 +163,7 @@ function writeAnswer(result: WriteResult, verb: string): string {
 
 type BuiltinResult = {
   content: { type: "text"; text: string }[];
+  structuredContent?: Record<string, unknown>;
   isError?: boolean;
 };
 
@@ -232,6 +234,10 @@ export const BUILT_IN_TOOLS: {
    * person can act on. Hidden from, and refused in, a session built with
    * `unattended` (a skill run), in both the listing and the call lookup. */
   attended?: true;
+  /** The surfaces the tool is served on; absent means every one. `connect`
+   * is MCP only (SCRUM-466): the agent has its own connect card. Applied with
+   * `attended`, to the listing and the call lookup alike. */
+  surfaces?: Surface[];
   handler: (
     args: Record<string, unknown> | undefined,
     /** `pool` is here for the test runner (SCRUM-303), which builds a second
@@ -248,6 +254,9 @@ export const BUILT_IN_TOOLS: {
        * without one. */
       baseUrl: string;
       surface: Surface;
+      /** A connect link for this user and provider, or null when none can be
+       * made on this surface (SCRUM-466). */
+      connectLink: (service: string) => Promise<string | null>;
     }
   ) => Promise<BuiltinResult>;
 }[] = [
@@ -605,6 +614,30 @@ export const BUILT_IN_TOOLS: {
       };
     },
   },
+  /* SCRUM-466: what is connected, and a one-click link for what is not. A
+   * read: it changes nothing the user owns, and a link does nothing until
+   * the user opens it. Attended, because a link nobody is there to open is
+   * no use; MCP only, because the agent has its own connect card. */
+  {
+    approval: "read",
+    attended: true,
+    surfaces: ["mcp"],
+    definition: {
+      name: CONNECT_TOOL,
+      description: CONNECT_TOOL_DESCRIPTION,
+      inputSchema: {
+        type: "object" as const,
+        properties: {
+          service: {
+            type: "string",
+            enum: CONNECTABLE_SERVICES.map((s) => s.id),
+            description: "One provider to report on, with a link even when it is already connected. Omit it to report on all of them.",
+          },
+        },
+      },
+    },
+    handler: (args, ctx) => connectToolResult(ctx.db, ctx.userId, args?.service, ctx.connectLink),
+  },
   {
     approval: "read",
     definition: {
@@ -882,7 +915,9 @@ export function createMcpServer(
   const baseUrl = opts?.downloadBaseUrl ?? opts?.baseUrl ?? "";
   /** The built-ins this session has at all. The listing filter and the call
    * lookup below both read this one list, so the two cannot disagree. */
-  const builtinEntries = opts?.unattended ? BUILT_IN_TOOLS.filter((t) => !t.attended) : BUILT_IN_TOOLS;
+  const builtinEntries = BUILT_IN_TOOLS.filter(
+    (t) => !(opts?.unattended && t.attended) && (!t.surfaces || t.surfaces.includes(surface))
+  );
   const server = new Server(
     { name: "datatorag-mcp", version: "0.1.0" },
     // Prompts (SCRUM-224): the skill catalogue as the native "apply a
@@ -1055,7 +1090,15 @@ export function createMcpServer(
       try {
         const result = await builtin.handler(
           rawArgs as Record<string, unknown> | undefined,
-          { db, userId, connectionsUrl, pool, baseUrl, surface }
+          {
+            db,
+            userId,
+            connectionsUrl,
+            pool,
+            baseUrl,
+            surface,
+            connectLink: (service) => connectLinkFor(service, "tool_result"),
+          }
         );
         const refused = builtin.metered ? !!result.isError : false;
         // Same fire-and-forget shape as the plugin path below. This call
