@@ -8,6 +8,7 @@ import {
   ListPromptsRequestSchema,
   ListToolsRequestSchema,
   McpError,
+  type CallToolRequest,
   type CallToolResult,
 } from "@modelcontextprotocol/sdk/types.js";
 import { getAllSkills } from "@/lib/skills";
@@ -72,6 +73,7 @@ import { NOT_CONNECTED_ERROR_MARKER, notConnectedResult, type NotConnectedReason
 import { issueConnectLink, type ConnectLinkPath } from "./connect-links";
 import { isDuplicateProvider } from "./connect-duplicate";
 import { CONNECT_TOOL, CONNECT_TOOL_DESCRIPTION, connectToolResult } from "./connect-tool";
+import { elicitConnect, supportsUrlElicitation, type CallExtra, type ElicitOutcome } from "./connect-elicitation";
 
 const ACCOUNT_PARAM_SCHEMA = {
   type: "string",
@@ -257,6 +259,9 @@ export const BUILT_IN_TOOLS: {
       /** A connect link for this user and provider, or null when none can be
        * made on this surface (SCRUM-466). */
       connectLink: (service: string) => Promise<string | null>;
+      /** Asks the client to open a connect link and waits for the connect,
+       * or null when the client cannot be asked by URL (SCRUM-466). */
+      elicitConnect?: ((service: string) => Promise<ElicitOutcome>) | null;
     }
   ) => Promise<BuiltinResult>;
 }[] = [
@@ -636,7 +641,7 @@ export const BUILT_IN_TOOLS: {
         },
       },
     },
-    handler: (args, ctx) => connectToolResult(ctx.db, ctx.userId, args?.service, ctx.connectLink),
+    handler: (args, ctx) => connectToolResult(ctx.db, ctx.userId, args?.service, ctx.connectLink, ctx.elicitConnect),
   },
   {
     approval: "read",
@@ -942,15 +947,29 @@ export function createMcpServer(
    * its own connect card, and a link needs an absolute origin to be
    * clickable outside the dashboard (SCRUM-466). Never throws: a refusal
    * without a link still says where to connect. */
-  const connectLinkFor = async (service: string, path: ConnectLinkPath): Promise<string | null> => {
+  const issueLinkFor = async (service: string, path: ConnectLinkPath): Promise<{ id: string; url: string } | null> => {
     if (surface !== "mcp" || !opts?.baseUrl || !isDuplicateProvider(service)) return null;
     try {
-      return (await issueConnectLink(db, { userId, provider: service, path, clientName: clientName(), baseUrl: opts.baseUrl })).url;
+      return await issueConnectLink(db, { userId, provider: service, path, clientName: clientName(), baseUrl: opts.baseUrl });
     } catch (err) {
       console.error("[connect-links] could not issue a link:", err instanceof Error ? err.message : err);
       return null;
     }
   };
+  const connectLinkFor = async (service: string, path: ConnectLinkPath) => (await issueLinkFor(service, path))?.url ?? null;
+  /** Asks the client to open a connect link and waits for the connect, when
+   * the client can be asked by URL (SCRUM-466); null when it cannot. */
+  const elicitFor = (extra: CallExtra) =>
+    surface === "mcp" && supportsUrlElicitation(server)
+      ? (service: string) =>
+          elicitConnect({
+            server,
+            db,
+            extra,
+            serviceName: getConnectableService(service)?.name ?? service,
+            issueLink: () => issueLinkFor(service, "elicitation"),
+          })
+      : null;
 
   server.setRequestHandler(ListPromptsRequestSchema, async () => ({
     prompts: (await getAllSkills(userId)).map((skill) => ({
@@ -1057,8 +1076,13 @@ export function createMcpServer(
     return { tools: toolList };
   });
 
-  server.setRequestHandler(CallToolRequestSchema, async (request) => {
+  /** One tool call. `retried` is true on the single re-run after a connect
+   * the call itself asked for (SCRUM-466), which never asks again. */
+  const callTool = async (request: CallToolRequest, extra: CallExtra, retried: boolean) => {
     const { name, arguments: rawArgs } = request.params;
+    // The dispatch takes `account` out of the arguments it hands on; a re-run
+    // needs the call as it was asked.
+    const askedAccount = (rawArgs as Record<string, unknown> | undefined)?.account;
 
     // SCRUM-420: the gateway does not carry its own download link. Before
     // any tool, built-in or plugin: arguments that hold a live link of this
@@ -1107,6 +1131,7 @@ export function createMcpServer(
             baseUrl,
             surface,
             connectLink: (service) => connectLinkFor(service, "tool_result"),
+            elicitConnect: elicitFor(extra),
           }
         );
         const refused = builtin.metered ? !!result.isError : false;
@@ -1311,6 +1336,14 @@ export function createMcpServer(
         errorMessage,
         outcome: { thrown: false, isError: true, errorMessage, source: surface, toolName: name, notConnected: true },
       });
+      // URL elicitation, once per call: on a completed connect the call runs
+      // again as it was asked, and its answer is the call's answer.
+      const elicit = retried ? null : elicitFor(extra);
+      if (elicit && (await elicit(service)) === "connected") {
+        const args = rawArgs as Record<string, unknown> | undefined;
+        const again = args && askedAccount !== undefined ? { ...args, account: askedAccount } : args;
+        return (await callTool({ ...request, params: { ...request.params, arguments: again } }, extra, true)) as CallToolResult;
+      }
       return notConnectedResult({
         service,
         reason,
@@ -1591,7 +1624,8 @@ export function createMcpServer(
         isError: true,
       };
     }
-  });
+  };
+  server.setRequestHandler(CallToolRequestSchema, (request, extra) => callTool(request, extra, false));
 
   return server;
 }

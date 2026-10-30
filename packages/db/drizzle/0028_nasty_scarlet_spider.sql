@@ -7,6 +7,7 @@ CREATE TABLE "connect_links" (
 	"client_name" text,
 	"expires_at" timestamp with time zone NOT NULL,
 	"spent_at" timestamp with time zone,
+	"completed_at" timestamp with time zone,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
 	CONSTRAINT "connect_links_token_hash_unique" UNIQUE("token_hash")
 );

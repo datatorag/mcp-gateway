@@ -30,6 +30,7 @@ import { oauthRateLimit } from "./src/gateway/oauth/rate-limit";
 import { createAuthRouter } from "./src/gateway/auth";
 import { createConnectLinkRouter } from "./src/gateway/connect-link-route";
 import { serverInstructions } from "./src/gateway/server-instructions";
+import { connectLinkDone } from "./src/gateway/connect-elicitation";
 import { launchedServiceIds } from "./src/gateway/service-launch";
 import { getPluginManager } from "./src/lib/plugin-manager";
 import { mcpBearerGate, resolveBearer, type McpAuthState } from "./src/gateway/bearer-auth";
@@ -195,8 +196,10 @@ async function main() {
       notionClientSecret: env.NOTION_OAUTH_CLIENT_SECRET,
       baseUrl,
       // SCRUM-466: a connect changes which tools the user's sessions list.
-      onConnected: ({ userId }) => {
+      onConnected: ({ userId, link }) => {
         void notifyToolsChangedForUser(sessions, userId);
+        // A tool call waiting on this link's connect can go on.
+        if (link) void connectLinkDone(db, link.id);
       },
     })
   );

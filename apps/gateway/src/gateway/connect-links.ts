@@ -111,6 +111,21 @@ export async function spentConnectLink(
   return (row as ConnectLink | undefined) ?? null;
 }
 
+/** The connect a link started has stored its account. */
+export async function markConnectLinkCompleted(db: Database, id: string): Promise<void> {
+  await db.update(connectLinks).set({ completedAt: new Date() }).where(eq(connectLinks.id, id));
+}
+
+/** Whether the connect a link started has stored its account. */
+export async function connectLinkCompleted(db: Database, id: string): Promise<boolean> {
+  const [row] = await db
+    .select({ completedAt: connectLinks.completedAt })
+    .from(connectLinks)
+    .where(eq(connectLinks.id, id))
+    .limit(1);
+  return row?.completedAt != null;
+}
+
 /** Signing out or revoking a grant takes the user's links with it. */
 export async function dropConnectLinksForUser(db: Database, userId: string): Promise<void> {
   await db.delete(connectLinks).where(eq(connectLinks.userId, userId));
