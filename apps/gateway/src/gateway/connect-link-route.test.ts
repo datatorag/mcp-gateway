@@ -207,6 +207,6 @@ describe("the pages' words", () => {
     const all = Object.values(CONNECT_LINK_COPY)
       .map((v) => (typeof v === "function" ? (v as (x: string) => string)("X") : v))
       .join("\n");
-    expect(all).not.toMatch(/[–—]/);
+    expect(all).not.toMatch(/[\u2013\u2014]/);
   });
 });

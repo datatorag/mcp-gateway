@@ -138,7 +138,7 @@ describe("connectToolResult", () => {
       CONNECT_TOOL_DESCRIPTION,
       ...Object.values(CONNECT_TOOL_COPY).map((v) => (typeof v === "function" ? (v as (a: string, b?: string) => string)("X", "Y") : v)),
     ].join("\n");
-    expect(words).not.toMatch(/[–—]/);
+    expect(words).not.toMatch(/[\u2013\u2014]/);
   });
 });
 

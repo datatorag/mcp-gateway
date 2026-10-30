@@ -1,7 +1,7 @@
 # Connect Google, Atlassian and Notion from inside the chat (SCRUM-466)
 
-Status: spec, written from the code at `98e952e6`. Nothing here is built until a go. The
-questions that need a ruling are collected at the end.
+Status: built, to the rulings at the end. Written from the code at `98e952e6`; where the build
+differs from the text above the rulings, "As built" says so.
 
 The bet: a user lives in their agent's UI (Claude.ai, Claude Code, ChatGPT, Gemini) and should
 be able to connect a provider without going looking for our dashboard. Six pieces, in build
@@ -382,3 +382,36 @@ the funnel.
    page, "Sign in to continue", the connect-done page, the not-connected sentence, the `connect`
    result, the three instruction lines and the 401 sentence. Every string above is a proposal;
    each one lands in code with a test that it has no em-dash.
+
+Ruled (per SCRUM-466, 2026-10-30): 1, the hashed token, no new secret; 2, the email match, otherwise
+sign in first; 3, tracked and unmetered, the missing-scope pre-check included; 4, five minutes
+inside the link's ten; 5, the copy as proposed, each string with a no-em-dash test.
+
+## As built
+
+Where the build differs from the text above, and why.
+
+- **The 401 sentence points at sign-in itself**, `<base>/auth/google`, not `/auth/login`: since
+  SCRUM-408 nothing but a lapsed or unfinished sign-in points at the login page, and a test holds
+  it. The resume after "Sign in to continue" goes the same way.
+- **`connect_links` has a `completed_at` column.** The callback sets it, so a tool call waiting
+  on a link finds the connect from any process; the in-process waiter is the fast path.
+- **Links are not dropped on disconnect**, only on sign-out, account switch and grant revoke. A
+  link only connects, so a disconnect gives no reason to cancel one.
+- **The done page names a partial Google grant**: "connected, with some access missing", and what
+  was not allowed.
+- **A provider's 401 on a live token** gets the link and is unmetered, like the gateway's own
+  refusals.
+- **The elicitation goes on the tool call's own stream** (`relatedRequestId`), because a client
+  need not hold the standalone stream open.
+- **No SSE comment while waiting**: the SDK exposes none. Progress notifications go out every 20
+  seconds when the call carried a progress token, and nothing otherwise.
+- **A client's own call timeout can end the wait first.** The SDK's default for a client request
+  is 60 seconds; a client that does not reset it on progress sees its own timeout. This is
+  checked per client after the deploy, with the edge question.
+- **After "Sign in to continue"**, the resumed connect carries no link, so a call waiting on the
+  first link ends at the wait and answers with a fresh one.
+- **Copy added in the build**, beyond what was proposed: the `connect` tool's "Connect another
+  account here:", "Reconnect it here:", "needs reconnecting" and its no-link line; the partial
+  grant page; the tool's description; the elicitation message "Connect <service> to continue.";
+  the docs section "Connect accounts from your assistant".

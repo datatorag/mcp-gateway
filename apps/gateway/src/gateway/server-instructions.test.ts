@@ -35,7 +35,7 @@ describe("serverInstructions", () => {
   });
 
   it("carries no em-dash or en-dash", () => {
-    expect(serverInstructions(ALL)).not.toMatch(/[–—]/);
+    expect(serverInstructions(ALL)).not.toMatch(/[\u2013\u2014]/);
   });
 });
 

@@ -27,6 +27,6 @@ describe("the /mcp 401", () => {
   });
 
   it("carries no em-dash or en-dash", () => {
-    expect(mcpUnauthorizedBody("unauthorized", META, BASE).message).not.toMatch(/[–—]/);
+    expect(mcpUnauthorizedBody("unauthorized", META, BASE).message).not.toMatch(/[\u2013\u2014]/);
   });
 });
