@@ -199,7 +199,7 @@ async function main() {
       // SCRUM-466: a connect changes which tools the user's sessions list.
       onConnected: ({ userId, link }) => {
         void notifyToolsChangedForUser(sessions, userId);
-        // A tool call waiting on this link's connect can go on.
+        // Mark the link used, and clear the client's prompt for it if one is up.
         if (link) void connectLinkDone(db, link.id);
       },
     })

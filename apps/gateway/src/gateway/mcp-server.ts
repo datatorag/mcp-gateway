@@ -73,7 +73,7 @@ import { NOT_CONNECTED_ERROR_MARKER, notConnectedResult, type NotConnectedReason
 import { issueConnectLink, type ConnectLinkPath } from "./connect-links";
 import { isDuplicateProvider } from "./connect-duplicate";
 import { CONNECT_TOOL, CONNECT_TOOL_DESCRIPTION, connectToolResult } from "./connect-tool";
-import { elicitConnect, supportsUrlElicitation, type CallExtra, type ElicitOutcome } from "./connect-elicitation";
+import { promptConnect, supportsUrlElicitation, type CallExtra } from "./connect-elicitation";
 
 const ACCOUNT_PARAM_SCHEMA = {
   type: "string",
@@ -258,10 +258,11 @@ export const BUILT_IN_TOOLS: {
       surface: Surface;
       /** A connect link for this user and provider, or null when none can be
        * made on this surface (SCRUM-466). */
-      connectLink: (service: string) => Promise<string | null>;
-      /** Asks the client to open a connect link and waits for the connect,
-       * or null when the client cannot be asked by URL (SCRUM-466). */
-      elicitConnect?: ((service: string) => Promise<ElicitOutcome>) | null;
+      /** A connect link for this user and provider, or null when none can
+       * be made on this surface (SCRUM-466). With `prompt`, the link is also
+       * sent as a URL elicitation when the client declared one, never
+       * awaited. */
+      connectLink: (service: string, prompt?: boolean) => Promise<string | null>;
     }
   ) => Promise<BuiltinResult>;
 }[] = [
@@ -641,7 +642,7 @@ export const BUILT_IN_TOOLS: {
         },
       },
     },
-    handler: (args, ctx) => connectToolResult(ctx.db, ctx.userId, args?.service, ctx.connectLink, ctx.elicitConnect),
+    handler: (args, ctx) => connectToolResult(ctx.db, ctx.userId, args?.service, ctx.connectLink),
   },
   {
     approval: "read",
@@ -958,20 +959,17 @@ export function createMcpServer(
       return null;
     }
   };
-  const connectLinkFor = async (service: string, path: ConnectLinkPath) => (await issueLinkFor(service, path))?.url ?? null;
-  /** Asks the client to open a connect link and waits for the connect, when
-   * the client can be asked by URL (SCRUM-466); null when it cannot. */
-  const elicitFor = (extra: CallExtra) =>
-    surface === "mcp" && supportsUrlElicitation(server)
-      ? (service: string) =>
-          elicitConnect({
-            server,
-            db,
-            extra,
-            serviceName: getConnectableService(service)?.name ?? service,
-            issueLink: () => issueLinkFor(service, "elicitation"),
-          })
-      : null;
+  /** A connect link for a provider; with `prompt`, and when the client
+   * declared URL elicitation, the same link also goes out as a prompt that is
+   * never awaited (SCRUM-466). A tool call never waits on a person. */
+  const offerConnectLink = async (service: string, extra: CallExtra, prompt = true): Promise<string | null> => {
+    const asks = prompt && surface === "mcp" && supportsUrlElicitation(server);
+    const link = await issueLinkFor(service, asks ? "elicitation" : "tool_result");
+    if (link && asks) {
+      promptConnect({ server, extra, serviceName: getConnectableService(service)?.name ?? service, link });
+    }
+    return link?.url ?? null;
+  };
 
   server.setRequestHandler(ListPromptsRequestSchema, async () => ({
     prompts: (await getAllSkills(userId)).map((skill) => ({
@@ -1078,13 +1076,9 @@ export function createMcpServer(
     return { tools: toolList };
   });
 
-  /** One tool call. `retried` is true on the single re-run after a connect
-   * the call itself asked for (SCRUM-466), which never asks again. */
-  const callTool = async (request: CallToolRequest, extra: CallExtra, retried: boolean) => {
+  /** One tool call. */
+  const callTool = async (request: CallToolRequest, extra: CallExtra) => {
     const { name, arguments: rawArgs } = request.params;
-    // The dispatch takes `account` out of the arguments it hands on; a re-run
-    // needs the call as it was asked.
-    const askedAccount = (rawArgs as Record<string, unknown> | undefined)?.account;
 
     // SCRUM-420: the gateway does not carry its own download link. Before
     // any tool, built-in or plugin: arguments that hold a live link of this
@@ -1132,8 +1126,7 @@ export function createMcpServer(
             pool,
             baseUrl,
             surface,
-            connectLink: (service) => connectLinkFor(service, "tool_result"),
-            elicitConnect: elicitFor(extra),
+            connectLink: (service, prompt) => offerConnectLink(service, extra, prompt === true),
           }
         );
         const refused = builtin.metered ? !!result.isError : false;
@@ -1338,19 +1331,13 @@ export function createMcpServer(
         errorMessage,
         outcome: { thrown: false, isError: true, errorMessage, source: surface, toolName: name, notConnected: true },
       });
-      // URL elicitation, once per call: on a completed connect the call runs
-      // again as it was asked, and its answer is the call's answer.
-      const elicit = retried ? null : elicitFor(extra);
-      if (elicit && (await elicit(service)) === "connected") {
-        const args = rawArgs as Record<string, unknown> | undefined;
-        const again = args && askedAccount !== undefined ? { ...args, account: askedAccount } : args;
-        return (await callTool({ ...request, params: { ...request.params, arguments: again } }, extra, true)) as CallToolResult;
-      }
+      // The answer goes out now, with the link; the prompt, if any, rides
+      // beside it and is never waited on.
       return notConnectedResult({
         service,
         reason,
         sentence,
-        link: await connectLinkFor(service, "tool_result"),
+        link: await offerConnectLink(service, extra),
       });
     };
     // Whether the account holds every scope we request (SCRUM-154): a scope
@@ -1551,7 +1538,7 @@ export function createMcpServer(
       const failure = isError ? pluginFailureOf(result) : null;
       const reconnect = !!requiredService && failure?.kind === "http" && failure.status === 401;
       if (reconnect) {
-        const link = await connectLinkFor(requiredService, "tool_result");
+        const link = await offerConnectLink(requiredService, extra);
         if (link) {
           const text = ((result as CallToolResult).content ?? [])
             .map((c) => (c.type === "text" ? c.text : ""))
@@ -1627,7 +1614,7 @@ export function createMcpServer(
       };
     }
   };
-  server.setRequestHandler(CallToolRequestSchema, (request, extra) => callTool(request, extra, false));
+  server.setRequestHandler(CallToolRequestSchema, (request, extra) => callTool(request, extra));
 
   return server;
 }

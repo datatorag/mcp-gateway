@@ -387,6 +387,26 @@ Ruled (per SCRUM-466, 2026-10-30): 1, the hashed token, no new secret; 2, the em
 sign in first; 3, tracked and unmetered, the missing-scope pre-check included; 4, five minutes
 inside the link's ten; 5, the copy as proposed, each string with a no-em-dash test.
 
+## Changed after the deploy (ruled 2026-10-31)
+
+The first build held the tool call open on the elicitation: up to ten minutes for the client to
+answer the prompt, then five after an accept, then a re-run of the call. In production a client
+showed the prompt, nobody answered, the edge had cut the call's stream, and the client stayed
+parked. Section 4 above is replaced by this:
+
+- A not-connected refusal and `connect` answer at once, with the link in the result, for every
+  client.
+- When the client declared URL elicitation, the same link also goes out as `elicitation/create`,
+  never awaited. Accept, decline or no answer change nothing, and nothing re-runs the call.
+- When the link's connect completes, the callback marks `completed_at` and, best effort, sends
+  `elicitation/complete` so the client can clear its prompt.
+- `connect` naming a provider that is connected and working sends no prompt, only the add-account
+  link.
+- Routines and tests never call `connect` with a `service`.
+
+The rule underneath: a tool call never waits on a person. The edge cuts an idle stream, and the
+client cuts an idle call after five minutes on its own.
+
 ## As built
 
 Where the build differs from the text above, and why.

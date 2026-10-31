@@ -19,8 +19,8 @@ export const connectLinks = pgTable(
     clientName: text("client_name"),
     expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
     spentAt: timestamp("spent_at", { withTimezone: true }),
-    // Set when the connect the link started stores its account: what a tool
-    // call waiting on the link reads, from whichever process it is on.
+    // Set when the connect the link started stores its account. Nothing
+    // waits on it; it records that the link was used to the end.
     completedAt: timestamp("completed_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
