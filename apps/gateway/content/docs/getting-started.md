@@ -79,7 +79,7 @@ Once your client completes its sign-in, ask it something like "search my email f
 
 Once your client is connected, you can also connect accounts without leaving the conversation. Ask your assistant to connect Google Workspace, Atlassian or Notion. It calls the `connect` tool, which says what is already connected and gives you a link for anything that is not. Open the link in your browser, approve the provider's consent screen, then go back to the conversation. The link works once and expires after ten minutes.
 
-When a tool needs an account you have not connected, its answer carries the same kind of link. A client that supports it shows the link itself and carries on with your request once you have connected.
+When a tool needs an account you have not connected, its answer carries the same kind of link. A client that supports it also shows the link as a prompt of its own. Once you have connected, ask your assistant to try again.
 
 If the account you connect has a different email from the one you signed in to DataToRAG with, and your browser is not already signed in to DataToRAG, you are asked to sign in first. That stops a link meant for someone else from adding your account to theirs.
 

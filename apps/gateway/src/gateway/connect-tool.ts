@@ -15,7 +15,6 @@ import { launchedServiceIds } from "./service-launch";
 import { connectionDead } from "./refresh-failure";
 import { cleanWorkspaceName } from "./untrusted-text";
 import { CONNECT_LINK_LEAD } from "./not-connected";
-import type { ElicitOutcome } from "./connect-elicitation";
 
 export const CONNECT_TOOL = "connect";
 
@@ -56,10 +55,9 @@ export async function connectToolResult(
   db: Database,
   userId: string,
   service: unknown,
-  issueLink: (service: string) => Promise<string | null>,
-  /** URL elicitation (SCRUM-466), when the client can be asked by URL: for
-   * the named provider, or the first one not connected. */
-  elicit?: ((service: string) => Promise<ElicitOutcome>) | null
+  /** A link for a provider; `prompt` asks for it to go out as a URL
+   * elicitation too, which is never awaited (SCRUM-466). */
+  issueLink: (service: string, prompt: boolean) => Promise<string | null>
 ): Promise<{
   content: { type: "text"; text: string }[];
   structuredContent?: Record<string, unknown>;
@@ -75,15 +73,11 @@ export async function connectToolResult(
     };
   }
 
-  // Asked first, so the answer below is read after the connect.
-  let elicited: string | null = null;
-  if (elicit) {
-    const before = await listConnectedAccounts(db, userId);
-    const target = asked ?? providers.find((p) => !before.some((r) => r.connectorType === p.id))?.id ?? null;
-    if (typeof target === "string" && (await elicit(target)) === "connected") elicited = target;
-  }
-
   const rows = await listConnectedAccounts(db, userId);
+  // At most one prompt, for the named provider or the first one not
+  // connected; never for a provider that is connected and working, whose
+  // link is only for adding another account.
+  const target = asked ?? providers.find((p) => !rows.some((r) => r.connectorType === p.id))?.id ?? null;
   const report: ConnectToolProvider[] = [];
   const lines: string[] = [];
   for (const p of providers) {
@@ -100,9 +94,8 @@ export async function connectToolResult(
       });
     const connected = accounts.length > 0;
     const broken = accounts.some((a) => a.needs_reconnect);
-    // A provider just connected through the elicitation needs no link.
-    const wantsLink = p.id !== elicited && (!connected || broken || asked !== null);
-    const link = wantsLink ? await issueLink(p.id) : null;
+    const wantsLink = !connected || broken || asked !== null;
+    const link = wantsLink ? await issueLink(p.id, p.id === target && (!connected || broken)) : null;
     report.push({ id: p.id, name: p.name, connected, accounts, connect_url: link });
 
     const linkPart = (lead: string) => (link ? ` ${lead} ${link}` : wantsLink ? ` ${CONNECT_TOOL_COPY.linkFailed}` : "");
