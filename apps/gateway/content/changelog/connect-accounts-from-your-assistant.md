@@ -11,8 +11,8 @@ Workspace, Atlassian or Notion.
   is not. Open the link, approve the provider's consent screen, and go back to the conversation.
   The link works once and expires after ten minutes.
 - **A link when a tool needs an account.** If a tool needs an account you have not connected, its
-  answer carries the same kind of link. A client that supports it shows the link itself and
-  carries on with your request once you have connected.
+  answer carries the same kind of link. A client that supports it also shows the link as a
+  prompt of its own. Once you have connected, ask your assistant to try again.
 - **The server describes its tools when your client connects**, so the assistant knows what it can
   do before you ask.
 
