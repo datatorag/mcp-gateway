@@ -90,6 +90,7 @@ export const SCENARIOS: Scenario[] = [
       "B1", // a stored token authenticates a call to each provider
       "B2", // the same tool answers differently for two accounts
       "GW1", // the connected accounts built-in answers for this identity
+      "GW2", // the connect built-in reports this identity and makes no link for what is connected
       "E5", // read-only annotations match the names
       "E8", // the served schema carries the registry's parameters
       "F1", // a write prompts for approval and a reviewed read does not

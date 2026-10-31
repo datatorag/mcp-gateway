@@ -114,6 +114,7 @@ export const PUBLIC_TITLES: Readonly<Record<string, string>> = {
   "GM8": "Mark an email as spam, and undo it",
   "GM9": "Label or trash a whole conversation at once",
   "GW1": "List your connected accounts",
+  "GW2": "See what is connected, with a link only for what is not",
   "JR1": "List the fields your Jira site uses",
   "JR2": "Find people on your Jira site",
   "JR3": "Change an issue's summary",

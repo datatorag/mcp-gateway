@@ -56,6 +56,7 @@ import { f7NonOauthBearerRefused } from "./f7-non-oauth-bearer-refused";
 import { g1ErrorShape } from "./g1-error-shape";
 import { g2ArgumentRefusal } from "./g2-argument-refusal";
 import { gw1ConnectedAccounts } from "./gw1-connected-accounts";
+import { gw2ConnectTool } from "./gw2-connect-tool";
 import { sh1SheetsCreate } from "./sh1-sheets-create";
 import { sh2SheetsBatch } from "./sh2-sheets-batch";
 import { sh3SheetsFormatTable } from "./sh3-sheets-format-table";
@@ -236,6 +237,7 @@ export const CASES: TestCase[] = [
   g1ErrorShape,
   g2ArgumentRefusal,
   gw1ConnectedAccounts,
+  gw2ConnectTool,
   sh1SheetsCreate,
   sh2SheetsBatch,
   sh3SheetsFormatTable,
