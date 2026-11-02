@@ -33,6 +33,9 @@ export const SURFACES = [
   // exist the runner records Notion's cases as skipped, and a "not run"
   // section would announce a connector nobody can connect yet (SCRUM-366).
   { key: "notion", name: "Notion", servedOnly: true },
+  // Shown only once one of its tools is served to the public, and its tools
+  // are not while Brevo is offered to admins only (SCRUM-468).
+  { key: "brevo", name: "Brevo", servedOnly: true },
   { key: "skills", name: "Skills" },
   { key: "gateway", name: "Platform" },
 ] as const;

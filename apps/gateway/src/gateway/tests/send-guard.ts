@@ -332,9 +332,15 @@ export async function checkSend(
     /** What a Notion write may reach (SCRUM-366). Absent refuses every
      * Notion write; Notion reads pass either way. */
     notion?: NotionScope;
+    /** What a Brevo write may reach (SCRUM-468). Absent refuses every Brevo
+     * write; Brevo reads pass either way. */
+    brevo?: BrevoScope;
   }
 ): Promise<SendCheck> {
   const name = toolSuffix(tool);
+
+  // Before anything keyed on the bare name: Brevo's names carry no prefix.
+  if (tool.startsWith("brevo-mcp__")) return checkBrevo(name, args, opts.brevo, opts.readerEmail);
 
   if (name.startsWith("notion_")) return checkNotion(name, args, opts.notion, opts.runStamp ?? "");
   const reader = opts.readerEmail?.trim().toLowerCase() ?? null;
@@ -1015,5 +1021,87 @@ function checkNotion(name: string, args: Record<string, unknown>, scope: NotionS
 
     default:
       return refuse("is a Notion write with no rule in the send guard, so a test run may not call it");
+  }
+}
+
+/* ---------------------------------------------------------------------------
+ * BREVO (SCRUM-468)
+ *
+ * A Brevo write can reach every contact on a list in one call, and a sent
+ * email cannot be recalled. So the rule is the narrowest of any connector:
+ *
+ *  - the reads pass;
+ *  - `campaign_send` and `email_send` are refused, always: a test run never
+ *    sends a real campaign or a transactional email (both are uncovered on
+ *    purpose, in scenarios.ts);
+ *  - `campaign_send_test` only for the fixture draft campaign, and only to
+ *    the reader mailbox;
+ *  - `contact_update` only on the fixture contact; `list_members_update`
+ *    only that contact, only on the fixture second list;
+ *  - `campaign_update` and `campaign_set_status` only on the fixture draft
+ *    campaign, and the status only one that sends nothing (draft, archive,
+ *    darchive);
+ *  - every other write is refused: a new write tool fails closed until it
+ *    has a rule here.
+ *
+ * Keyed on the plugin's namespace, not the bare name: Brevo's tool names
+ * carry no service prefix, and `campaign_send` must never fall through to
+ * the mail rule above.
+ * ------------------------------------------------------------------------- */
+
+const BREVO_READS = new Set([
+  "account_get",
+  "contacts_search",
+  "contact_get",
+  "lists_get",
+  "campaigns_list",
+  "campaign_get",
+  "campaign_export_recipients",
+  "process_get",
+  "email_stats",
+  "templates_get",
+  "email_log",
+]);
+
+/** The fixtures a Brevo write may reach, by key. Null when not configured,
+ * which refuses every write that needs it. */
+export type BrevoScope = {
+  contact: string | null;
+  secondList: string | null;
+  draftCampaign: string | null;
+};
+
+const lc = (v: unknown) => (typeof v === "string" ? v.trim().toLowerCase() : null);
+const sameId = (v: unknown, fixture: string | null) => fixture !== null && v !== undefined && String(v) === fixture;
+
+export function checkBrevo(name: string, args: Record<string, unknown>, scope: BrevoScope | undefined, readerEmail: string | null): SendCheck {
+  if (BREVO_READS.has(name)) return { ok: true };
+  const no = (reason: string): SendCheck => ({ ok: false, reason: `brevo refused: ${reason}` });
+  if (!scope) return no("no Brevo scope for this run");
+  switch (name) {
+    case "campaign_send":
+    case "email_send":
+      return no(`${name} sends real email, and a test run never does`);
+    case "campaign_send_test": {
+      if (!sameId(args.campaign_id, scope.draftCampaign)) return no("a test send only of the fixture draft campaign");
+      const reader = lc(readerEmail);
+      const emails = Array.isArray(args.emails) ? args.emails.map(lc) : [];
+      if (reader === null || emails.length === 0 || emails.some((e) => e !== reader)) return no("a test send only to the reader mailbox");
+      return { ok: true };
+    }
+    case "contact_update":
+      return lc(args.identifier) !== null && lc(args.identifier) === lc(scope.contact) ? { ok: true } : no("contact_update only on the fixture contact");
+    case "list_members_update": {
+      if (!sameId(args.list_id, scope.secondList)) return no("list_members_update only on the fixture second list");
+      const all = [...(Array.isArray(args.add) ? args.add : []), ...(Array.isArray(args.remove) ? args.remove : [])].map(lc);
+      return all.length > 0 && all.every((e) => e !== null && e === lc(scope.contact)) ? { ok: true } : no("list_members_update only the fixture contact");
+    }
+    case "campaign_update":
+      return sameId(args.campaign_id, scope.draftCampaign) ? { ok: true } : no("campaign_update only on the fixture draft campaign");
+    case "campaign_set_status":
+      if (!sameId(args.campaign_id, scope.draftCampaign)) return no("campaign_set_status only on the fixture draft campaign");
+      return ["draft", "archive", "darchive"].includes(String(args.status)) ? { ok: true } : no("a status that sends nothing: draft, archive or darchive");
+    default:
+      return no(`${name} has no rule for a test run`);
   }
 }

@@ -44,6 +44,7 @@ export const SCENARIO_KEYS = [
   "confluence",
   "skills",
   "notion",
+  "brevo",
 ] as const;
 
 export type ScenarioKey = (typeof SCENARIO_KEYS)[number];
@@ -363,6 +364,23 @@ export const SCENARIOS: Scenario[] = [
       "NT14", // a view created, queried through, renamed
     ],
   },
+  {
+    key: "brevo",
+    title: "Brevo: the account, contacts and lists, a draft campaign, and the reports",
+    steps: [
+      /* SCRUM-468. On a test Brevo account, far under Brevo's hourly limits.
+       * BR1 needs no fixture, so a red BR1 says the token is the problem.
+       * Every write is a restoring pair on a fixture: the connector cannot
+       * delete a contact or a campaign, so no case creates one, and no case
+       * sends anything but a test to the reader (send-guard.ts). */
+      "BR1", // the account and its campaigns answer
+      "BR2", // a list, its members and a contact read back
+      "BR3", // a contact's attribute changed and restored
+      "BR4", // a contact added to a list and taken off it
+      "BR5", // a draft campaign renamed and restored, and sent as a test to the reader
+      "BR6", // templates, statistics, the event log and a recipients export
+    ],
+  },
 ];
 
 /**
@@ -379,6 +397,14 @@ export const SCENARIOS: Scenario[] = [
  * it has to say why in terms a reader can check.
  */
 export const UNCOVERED_ON_PURPOSE: Record<string, string> = {
+  "brevo-mcp__contact_create":
+    "creates what the connector cannot delete: no Brevo tool removes a contact, so a case covering this would leave one behind on every run",
+  "brevo-mcp__campaign_create":
+    "creates what the connector cannot delete: no Brevo tool removes a campaign, so a case covering this would leave one behind on every run",
+  "brevo-mcp__campaign_send":
+    "sends a real campaign to every recipient on its lists, which cannot be recalled; a test run never sends one, and the send guard refuses it",
+  "brevo-mcp__email_send":
+    "sends a real email, which cannot be recalled; a test run sends only campaign tests to the reader, and the send guard refuses this",
   "gws-mcp__tasks_create_tasklist":
     "creates what the connector cannot delete: no tasks tool removes a tasklist, and gws_run is read-only for every service, so a case covering this would leave one list behind on every run",
 };

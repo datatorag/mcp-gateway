@@ -1,14 +1,14 @@
 ---
 name: gws-mcp-dev
-description: Use when developing a connector plugin under plugins/ (gws-mcp, atlassian-mcp, notion-mcp): adding or changing tools. Where the plugins live now, tool-definition patterns, the client and auth model, build and test, the freeze window, and the ship tail back into the gateway.
+description: Use when developing a connector plugin under plugins/ (gws-mcp, atlassian-mcp, notion-mcp, brevo-mcp): adding or changing tools. Where the plugins live now, tool-definition patterns, the client and auth model, build and test, the freeze window, and the ship tail back into the gateway.
 ---
 
-# Plugin development (gws-mcp, atlassian-mcp, notion-mcp)
+# Plugin development (gws-mcp, atlassian-mcp, notion-mcp, brevo-mcp)
 
 The connector plugins live in this repository, at `plugins/gws-mcp`,
-`plugins/atlassian-mcp` and `plugins/notion-mcp`, as workspace packages
+`plugins/atlassian-mcp`, `plugins/notion-mcp` and `plugins/brevo-mcp`, as workspace packages
 `@datatorag-mcp/<slug>`. The first two were imported from their own
-repositories with their history (SCRUM-390); `notion-mcp` started here. Those repositories are frozen:
+repositories with their history (SCRUM-390); `notion-mcp` and `brevo-mcp` started here. Those repositories are frozen:
 `main` is locked on both, and nothing new goes there.
 
 Each plugin's `CLAUDE.md` (`plugins/<slug>/CLAUDE.md`) holds the facts about

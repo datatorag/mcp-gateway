@@ -114,6 +114,13 @@ export const PUBLIC_TITLES: Readonly<Record<string, string>> = {
   "GM8": "Mark an email as spam, and undo it",
   "GM9": "Label or trash a whole conversation at once",
   "GW1": "List your connected accounts",
+  // SCRUM-468. Not shown in public while Brevo is offered to admins only.
+  "BR1": "Your Brevo account and its campaigns answer",
+  "BR2": "Read a Brevo list, its members and a contact",
+  "BR3": "Change a Brevo contact and change it back",
+  "BR4": "Add a contact to a Brevo list and take it off",
+  "BR5": "Change a draft Brevo campaign back and forth, and send a test",
+  "BR6": "Read Brevo templates, statistics, the email log and an export",
   "GW2": "See what is connected, with a link only for what is not",
   "JR1": "List the fields your Jira site uses",
   "JR2": "Find people on your Jira site",

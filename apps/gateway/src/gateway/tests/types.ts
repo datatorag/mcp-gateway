@@ -23,8 +23,10 @@
  * `notion` and `notionSecond` (SCRUM-366) name two Notion WORKSPACES, and
  * what is mapped for each is the workspace id, not an email: one email can
  * hold both workspaces, and the gateway refuses an email that matches two
- * accounts rather than picking one. */
-export const ACCOUNT_ROLES = ["sender", "reader", "atlassian", "nonAdmin", "notion", "notionSecond"] as const;
+ * accounts rather than picking one.
+ *
+ * `brevo` (SCRUM-468) names the connected Brevo account, by its email. */
+export const ACCOUNT_ROLES = ["sender", "reader", "atlassian", "nonAdmin", "notion", "notionSecond", "brevo"] as const;
 export type AccountRole = (typeof ACCOUNT_ROLES)[number];
 
 /** Named by KEY, never by id, for the same reason. */
@@ -82,6 +84,15 @@ export const FIXTURE_KEYS = [
   /** A page in the `notionSecond` workspace, shared with that workspace's
    * connection, for the step proving each workspace sees only its own. */
   "notionSecondPage",
+  /** Brevo (SCRUM-468), on a test account: a contact (by its email), the
+   * list it is on, a second list it is added to and taken off, a draft
+   * campaign that is changed and set back but never sent, and a campaign
+   * already sent, for the recipients export. */
+  "brevoContact",
+  "brevoList",
+  "brevoSecondList",
+  "brevoDraftCampaign",
+  "brevoSentCampaign",
 ] as const;
 export type FixtureKey = (typeof FIXTURE_KEYS)[number];
 

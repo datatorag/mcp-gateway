@@ -55,6 +55,12 @@ import { f2UnapprovedScopes } from "./f2-unapproved-scopes";
 import { f7NonOauthBearerRefused } from "./f7-non-oauth-bearer-refused";
 import { g1ErrorShape } from "./g1-error-shape";
 import { g2ArgumentRefusal } from "./g2-argument-refusal";
+import { br1BrevoAccount } from "./br1-brevo-account";
+import { br2BrevoContactsRead } from "./br2-brevo-contacts-read";
+import { br3BrevoContactUpdate } from "./br3-brevo-contact-update";
+import { br4BrevoListMembers } from "./br4-brevo-list-members";
+import { br5BrevoDraftCampaign } from "./br5-brevo-draft-campaign";
+import { br6BrevoReports } from "./br6-brevo-reports";
 import { gw1ConnectedAccounts } from "./gw1-connected-accounts";
 import { gw2ConnectTool } from "./gw2-connect-tool";
 import { sh1SheetsCreate } from "./sh1-sheets-create";
@@ -237,6 +243,12 @@ export const CASES: TestCase[] = [
   g1ErrorShape,
   g2ArgumentRefusal,
   gw1ConnectedAccounts,
+  br1BrevoAccount,
+  br2BrevoContactsRead,
+  br3BrevoContactUpdate,
+  br4BrevoListMembers,
+  br5BrevoDraftCampaign,
+  br6BrevoReports,
   gw2ConnectTool,
   sh1SheetsCreate,
   sh2SheetsBatch,

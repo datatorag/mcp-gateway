@@ -82,6 +82,8 @@ export const PLUGIN_ROLES: Record<string, readonly AccountRole[]> = {
   /* Two workspaces, mapped by workspace id (SCRUM-366). The first is the one
    * a contract probe runs as. */
   "notion-mcp": ["notion", "notionSecond"],
+  /* One Brevo account (SCRUM-468). */
+  "brevo-mcp": ["brevo"],
 };
 
 /** The plugin a namespaced tool belongs to, or null for a built-in. */
@@ -1009,6 +1011,11 @@ export function makeContextParts(opts: {
         dataSource: fixtures.fixture("notionDataSource"),
         database: fixtures.fixture("notionDatabase"),
         created: notionCreated,
+      },
+      brevo: {
+        contact: fixtures.fixture("brevoContact"),
+        secondList: fixtures.fixture("brevoSecondList"),
+        draftCampaign: fixtures.fixture("brevoDraftCampaign"),
       },
     });
     if (!verdict.ok) throw new Error(verdict.reason);
