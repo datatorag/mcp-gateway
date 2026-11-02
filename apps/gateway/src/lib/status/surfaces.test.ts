@@ -20,6 +20,11 @@ describe("the status page's surfaces (SCRUM-431)", () => {
     }
   });
 
+  it("leave out the tools of a service offered to admins only (SCRUM-468)", () => {
+    expect(isPublicTool("brevo-mcp__campaign_send")).toBe(false);
+    expect(isPublicTool("notion-mcp__notion_search")).toBe(true);
+  });
+
   it("place the gateway's own tools under Platform, and the skills tools under Skills", () => {
     for (const name of ["echo", "list_connected_accounts", "file_download_link"]) expect(surfaceOfTool(name)).toBe("gateway");
     expect(surfaceOfTool("skills_search")).toBe("skills");

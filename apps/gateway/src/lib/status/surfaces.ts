@@ -1,5 +1,12 @@
 import { ADMIN_ONLY_BUILTINS } from "@/gateway/admin-builtins";
 import { PUBLICLY_UNLISTED_TOOLS } from "@/gateway/gws-run-access";
+import { CONNECTABLE_SERVICES } from "@/app/dashboard/connections/service-registry";
+
+/** The plugins of services offered to admins only (SCRUM-468): their tools
+ * are not offered to the public, so the public page does not show them. */
+const ADMIN_ONLY_PLUGINS = new Set(
+  CONNECTABLE_SERVICES.filter((s) => s.audience === "admin" && s.launchPluginSlug).map((s) => s.launchPluginSlug as string)
+);
 
 /**
  * The surfaces of the public status page (SCRUM-431), in the order it shows
@@ -52,11 +59,12 @@ export function surfaceOfTool(name: string): SurfaceKey {
 /**
  * Whether a member of the public is offered this tool. A run lists tools as
  * the admin who started it, so what it was served includes the runner's own
- * admin-only built-ins, and `gws_run`, which is never listed in public. The
- * page shows neither.
+ * admin-only built-ins, `gws_run`, which is never listed in public, and the
+ * tools of a service offered to admins only. The page shows none of them.
  */
 export function isPublicTool(name: string): boolean {
   if (ADMIN_ONLY_BUILTINS.includes(name)) return false;
   if (PUBLICLY_UNLISTED_TOOLS.includes(name)) return false;
+  if (ADMIN_ONLY_PLUGINS.has(name.split("__")[0])) return false;
   return true;
 }
