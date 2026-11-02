@@ -39,6 +39,12 @@ export const tools = pgTable("tools", {
   // security property is worse than none: it makes the next reader mis-price
   // the risk, which is exactly what it did.)
   readOnlyHint: boolean("read_only_hint"),
+  // MCP annotation destructiveHint, captured the same way (SCRUM-468): true =
+  // the plugin says a call can do what cannot be undone, false = it says the
+  // write is reversible, null = it did not say. Recorded, never trusted, like
+  // read_only_hint above: served to external clients beside readOnlyHint for
+  // a tool that is not read-only, and read by nothing that decides.
+  destructiveHint: boolean("destructive_hint"),
   creditsPerCall: integer("credits_per_call").notNull().default(1),
   enabled: boolean("enabled").notNull().default(true),
   createdAt: timestamp("created_at", { withTimezone: true })

@@ -39,6 +39,8 @@ apps/gateway/src/gateway/mcp-server.ts
   │           connected services ("lazy tool loading"); injects `account` param;
   │           serves `annotations.readOnlyHint` from the row's read_only_hint
   │           (absent when NULL) and from a built-in's `approval` (SCRUM-326)
+  │           and, for a write only, `destructiveHint` from destructive_hint
+  │           when the row holds one (SCRUM-468); both recorded, never trusted
   │ CallTool:  split tool name on "__" → serverSlug / toolName
   ▼
   ├─ service-mapped plugin → getServiceToken() → ONE-SHOT client,

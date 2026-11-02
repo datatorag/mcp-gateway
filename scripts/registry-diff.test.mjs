@@ -81,7 +81,7 @@ test("a new tool is an INSERT forward and a guarded DELETE back; a removed tool 
   const { forward, rollback } = changeFiles("some-plugin", A, B, diff);
   assert.ok(forward.includes("'fresh', 'some-plugin__fresh'"));
   assert.ok(forward.includes("NOT EXISTS (SELECT 1 FROM tools t WHERE t.namespaced_name = 'some-plugin__fresh')"));
-  assert.match(forward, /\n    NULL\n/, "an absent hint is NULL, not false");
+  assert.match(forward, /\n    NULL, NULL\n/, "an absent hint is NULL, not false");
   assert.match(forward, /DELETE FROM tools t USING mcp_servers s\n  WHERE .* t\.name = 'gone'/);
   assert.match(rollback, /DELETE FROM tools t USING mcp_servers s\n  WHERE .* t\.name = 'fresh'/);
   assert.ok(rollback.includes("'gone', 'some-plugin__gone'"));
@@ -113,6 +113,19 @@ test("nothing a tool file holds can end a SQL string early", () => {
   assert.equal(sqlString("a'b'c"), "'a''b''c'");
 });
 
+test("a changed destructive hint is a change, guarded by the old one; a file from before the hint reads it as null (SCRUM-468)", () => {
+  const old = file(tool("send", { readOnlyHint: false }));
+  delete old.tools[0].destructiveHint;
+  const diff = diffTools(old, file(tool("send", { readOnlyHint: false, destructiveHint: true })));
+  assert.deepEqual(diff.changed[0].fields, ["destructive_hint"]);
+  const { forward, rollback } = changeFiles("some-plugin", A, B, diff);
+  assert.ok(forward.includes("destructive_hint = true"));
+  assert.ok(forward.includes("t.destructive_hint IS NOT DISTINCT FROM NULL"));
+  assert.ok(rollback.includes("destructive_hint = NULL"));
+  assert.ok(rollback.includes("t.destructive_hint IS NOT DISTINCT FROM true"));
+  assert.throws(() => diffTools(file(tool("x", { destructiveHint: "yes" })), file(tool("x"))), /destructive hint/);
+});
+
 test("a tool file is sorted by name and keeps only what a registry row is made from", () => {
   const made = toToolFile([
     { name: "b", description: "B", inputSchema: { type: "object" }, annotations: { readOnlyHint: true, title: "T" }, extra: 1 },
@@ -120,11 +133,14 @@ test("a tool file is sorted by name and keeps only what a registry row is made f
   ]);
   assert.deepEqual(made, {
     tools: [
-      { name: "a", description: null, inputSchema: { type: "object" }, readOnlyHint: null },
-      { name: "b", description: "B", inputSchema: { type: "object" }, readOnlyHint: true },
+      { name: "a", description: null, inputSchema: { type: "object" }, readOnlyHint: null, destructiveHint: null },
+      { name: "b", description: "B", inputSchema: { type: "object" }, readOnlyHint: true, destructiveHint: null },
     ],
   });
   assert.throws(() => toToolFile([{ name: "a" }, { name: "a" }]), /twice/);
+  // SCRUM-468: the destructive hint is kept the same way, null when not said.
+  const hinted = toToolFile([{ name: "s", inputSchema: { type: "object" }, annotations: { readOnlyHint: false, destructiveHint: true } }]);
+  assert.equal(hinted.tools[0].destructiveHint, true);
 });
 
 test("comparing two tool files names every difference, tool by tool", () => {
@@ -323,11 +339,11 @@ BEGIN
   IF n <> 1 THEN RAISE EXCEPTION 'forward mcp_servers some-plugin: expected 1 row on its port, found %', n; END IF;
 
   -- read_it: a new row
-  INSERT INTO tools (mcp_server_id, name, namespaced_name, description, input_schema_json, read_only_hint)
+  INSERT INTO tools (mcp_server_id, name, namespaced_name, description, input_schema_json, read_only_hint, destructive_hint)
   SELECT s.id, 'read_it', 'some-plugin__read_it',
     'Reads it.',
     ${NEW_SCHEMA},
-    true
+    true, NULL
   FROM mcp_servers s
   WHERE s.slug = 'some-plugin'
     AND NOT EXISTS (SELECT 1 FROM tools t WHERE t.namespaced_name = 'some-plugin__read_it');
@@ -338,7 +354,7 @@ BEGIN
   IF n <> 1 THEN RAISE EXCEPTION 'rows for some-plugin: expected 1, found %', n; END IF;
 END
 $registry_change$;
-SELECT t.name, md5(t.description) AS description_md5, md5(t.input_schema_json::text) AS schema_md5, t.read_only_hint, t.updated_at
+SELECT t.name, md5(t.description) AS description_md5, md5(t.input_schema_json::text) AS schema_md5, t.read_only_hint, t.destructive_hint, t.updated_at
 FROM mcp_servers s JOIN tools t ON s.id = t.mcp_server_id
 WHERE s.slug = 'some-plugin' AND t.name IN ('read_it');
 COMMIT;
@@ -393,7 +409,7 @@ BEGIN
   IF n <> 0 THEN RAISE EXCEPTION 'rows for some-plugin: expected 0, found %', n; END IF;
 END
 $registry_change$;
-SELECT t.name, md5(t.description) AS description_md5, md5(t.input_schema_json::text) AS schema_md5, t.read_only_hint, t.updated_at
+SELECT t.name, md5(t.description) AS description_md5, md5(t.input_schema_json::text) AS schema_md5, t.read_only_hint, t.destructive_hint, t.updated_at
 FROM mcp_servers s JOIN tools t ON s.id = t.mcp_server_id
 WHERE s.slug = 'some-plugin' AND t.name IN ('read_it');
 COMMIT;

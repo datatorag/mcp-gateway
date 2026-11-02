@@ -153,8 +153,8 @@ describe.skipIf(!dockerAvailable)("a new plugin's registry pair, on real Postgre
       ...["container_port", "description", "github_repo_name", "github_repo_owner", "github_repo_url", "license_spdx", "manifest_json", "name", "slug", "status"].map((c) => `mcp_servers INSERT ${c}`),
       "mcp_server_env_vars SELECT mcp_server_id",
       "plugin_connections SELECT mcp_server_id",
-      ...["description", "input_schema_json", "mcp_server_id", "name", "namespaced_name", "read_only_hint"].map((c) => `tools INSERT ${c}`),
-      ...["description", "input_schema_json", "read_only_hint", "updated_at"].map((c) => `tools UPDATE ${c}`),
+      ...["description", "destructive_hint", "input_schema_json", "mcp_server_id", "name", "namespaced_name", "read_only_hint"].map((c) => `tools INSERT ${c}`),
+      ...["description", "destructive_hint", "input_schema_json", "read_only_hint", "updated_at"].map((c) => `tools UPDATE ${c}`),
     ].sort());
     const otherTables = await db.execute(
       sql.raw("SELECT c.relname FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace WHERE n.nspname = 'public' AND c.relkind IN ('r', 'p', 'v', 'm') AND c.relname NOT IN ('tools', 'mcp_servers') AND (has_table_privilege('registry_writer', c.oid, 'SELECT') OR has_table_privilege('registry_writer', c.oid, 'INSERT') OR has_table_privilege('registry_writer', c.oid, 'UPDATE') OR has_table_privilege('registry_writer', c.oid, 'DELETE'))")

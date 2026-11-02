@@ -36,6 +36,9 @@ export type UserToolRow = {
    * auditing a plugin, and since SCRUM-326 tools/list serves it to external
    * clients as a hint (their approval decision, not ours). */
   readOnlyHint: boolean | null;
+  /** MCP destructiveHint as the plugin declared it (SCRUM-468), null when it
+   * did not. Recorded and served as a hint, never trusted, like readOnlyHint. */
+  destructiveHint: boolean | null;
 };
 
 /**
@@ -62,6 +65,7 @@ export async function listUserToolRows(
         description: tools.description,
         inputSchemaJson: tools.inputSchemaJson,
         readOnlyHint: tools.readOnlyHint,
+        destructiveHint: tools.destructiveHint,
         serverSlug: mcpServers.slug,
       })
       .from(tools)
@@ -89,6 +93,7 @@ export async function listUserToolRows(
       },
       requiredService,
       readOnlyHint: t.readOnlyHint,
+      destructiveHint: t.destructiveHint,
     });
   }
 

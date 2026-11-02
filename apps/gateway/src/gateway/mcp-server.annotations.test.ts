@@ -81,6 +81,39 @@ const ROWS = [
     requiredService: undefined,
     readOnlyHint: null,
   },
+  // SCRUM-468: destructiveHint, served beside readOnlyHint for a write.
+  {
+    namespacedName: "legacy-mcp__send_campaign",
+    description: "Sends to every recipient; cannot be recalled.",
+    schema: { type: "object", properties: {} },
+    requiredService: undefined,
+    readOnlyHint: false,
+    destructiveHint: true,
+  },
+  {
+    namespacedName: "legacy-mcp__update_contact",
+    description: "Changes a contact; can be changed back.",
+    schema: { type: "object", properties: {} },
+    requiredService: undefined,
+    readOnlyHint: false,
+    destructiveHint: false,
+  },
+  {
+    namespacedName: "legacy-mcp__read_said_destructive",
+    description: "A read whose plugin also said destructive.",
+    schema: { type: "object", properties: {} },
+    requiredService: undefined,
+    readOnlyHint: true,
+    destructiveHint: true,
+  },
+  {
+    namespacedName: "legacy-mcp__destructive_unannotated",
+    description: "A destructive hint with no read-only hint.",
+    schema: { type: "object", properties: {} },
+    requiredService: undefined,
+    readOnlyHint: null,
+    destructiveHint: true,
+  },
 ];
 
 async function listTools() {
@@ -114,6 +147,20 @@ describe("tools/list serves readOnlyHint from the registry row (SCRUM-326)", () 
     expect(tool).toBeDefined();
     expect(tool?.annotations?.readOnlyHint).toBeUndefined();
     expect(tool && "annotations" in tool).toBe(false);
+  });
+
+  it("serves destructiveHint beside readOnlyHint for a write whose row records one, true or false (SCRUM-468)", async () => {
+    const tools = await listTools();
+    expect(tools.get("legacy-mcp__send_campaign")?.annotations).toEqual({ readOnlyHint: false, destructiveHint: true });
+    expect(tools.get("legacy-mcp__update_contact")?.annotations).toEqual({ readOnlyHint: false, destructiveHint: false });
+  });
+
+  it("serves no destructiveHint for a read, for a write that recorded none, or with no readOnlyHint", async () => {
+    const tools = await listTools();
+    expect(tools.get("legacy-mcp__read_said_destructive")?.annotations).toEqual({ readOnlyHint: true });
+    expect(tools.get("gws-mcp__gmail_send")?.annotations).toEqual({ readOnlyHint: false });
+    const bare = tools.get("legacy-mcp__destructive_unannotated");
+    expect(bare && "annotations" in bare).toBe(false);
   });
 
   it("serves each built-in the hint its declared approval implies", async () => {

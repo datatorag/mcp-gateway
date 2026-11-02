@@ -118,12 +118,13 @@ const C = COM;
 
 const UPDATE = T(
   `  ${C}`,
-  `  UPDATE tools t SET description = ${S}, input_schema_json = ${S}::jsonb, read_only_hint = ${BOOL}, updated_at = now\\(\\)`,
+  `  UPDATE tools t SET description = ${S}, input_schema_json = ${S}::jsonb, read_only_hint = ${BOOL}(?:, destructive_hint = ${BOOL})?, updated_at = now\\(\\)`,
   `  FROM mcp_servers s`,
   `  WHERE s\\.id = t\\.mcp_server_id AND s\\.slug = ${S} AND t\\.name = ${S}`,
   `    AND md5\\(t\\.description\\) = ${S}`,
   `    AND md5\\(t\\.input_schema_json::text\\) = ${S}`,
-  `    AND t\\.read_only_hint IS NOT DISTINCT FROM ${BOOL}`,
+  // The destructive_hint guard (SCRUM-468) is absent from files made before it.
+  `    AND t\\.read_only_hint IS NOT DISTINCT FROM ${BOOL}(?:\\n    AND t\\.destructive_hint IS NOT DISTINCT FROM ${BOOL})?`,
   `  ;`,
   `  GET DIAGNOSTICS n = ROW_COUNT;`,
   `  IF n <> 1 THEN RAISE EXCEPTION ${S}, n; END IF;`,
@@ -131,11 +132,11 @@ const UPDATE = T(
 );
 const INSERT = T(
   `  ${C}`,
-  `  INSERT INTO tools \\(mcp_server_id, name, namespaced_name, description, input_schema_json, read_only_hint\\)`,
+  `  INSERT INTO tools \\(mcp_server_id, name, namespaced_name, description, input_schema_json, read_only_hint(?:, destructive_hint)?\\)`,
   `  SELECT s\\.id, ${S}, ${S},`,
   `    ${S},`,
   `    ${S}::jsonb,`,
-  `    ${BOOL}`,
+  `    ${BOOL}(?:, ${BOOL})?`,
   `  FROM mcp_servers s`,
   `  WHERE s\\.slug = ${S}`,
   `    AND NOT EXISTS \\(SELECT 1 FROM tools t WHERE t\\.namespaced_name = ${S}\\);`,
@@ -193,7 +194,7 @@ const TAIL = new RegExp(
     `  IF n <> (\\d+) THEN RAISE EXCEPTION ${S}, n; END IF;`,
     `END`,
     `${esc(TAG)};`,
-    `SELECT t\\.name, md5\\(t\\.description\\) AS description_md5, md5\\(t\\.input_schema_json::text\\) AS schema_md5, t\\.read_only_hint, t\\.updated_at`,
+    `SELECT t\\.name, md5\\(t\\.description\\) AS description_md5, md5\\(t\\.input_schema_json::text\\) AS schema_md5, t\\.read_only_hint, (?:t\\.destructive_hint, )?t\\.updated_at`,
     `FROM mcp_servers s JOIN tools t ON s\\.id = t\\.mcp_server_id`,
     `WHERE s\\.slug = ${S} AND t\\.name IN \\(${S}(?:, ${S})*\\);`,
     `COMMIT;`,

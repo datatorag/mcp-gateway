@@ -7,9 +7,11 @@
 //   node scripts/plugin-tools.mjs --compare <a> <b>    # exit 1 unless equal
 //
 // The tool file is what a registry row is made from, and nothing else:
-//   { "tools": [ { name, description, inputSchema, readOnlyHint } ] }
+//   { "tools": [ { name, description, inputSchema, readOnlyHint, destructiveHint } ] }
 // sorted by name, so two files from the same plugin compare byte for byte.
-// `readOnlyHint` is true, false, or null when the plugin did not say.
+// `readOnlyHint` and `destructiveHint` are true, false, or null when the
+// plugin did not say. A file kept before destructiveHint existed has no such
+// key, which reads as null.
 //
 // It speaks plain MCP over Streamable HTTP with fetch, so it needs no install
 // and runs on a CI runner as it is. The token it sends is a dummy: listing
@@ -44,6 +46,7 @@ export function toToolFile(tools) {
     description: t.description ?? null,
     inputSchema: t.inputSchema ?? null,
     readOnlyHint: typeof t.annotations?.readOnlyHint === "boolean" ? t.annotations.readOnlyHint : null,
+    destructiveHint: typeof t.annotations?.destructiveHint === "boolean" ? t.annotations.destructiveHint : null,
   }));
   rows.sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0));
   const names = new Set(rows.map((r) => r.name));
@@ -104,8 +107,9 @@ export function compareToolFiles(a, b) {
     if (!ta) out.push(`${name}: only in the second`);
     else if (!tb) out.push(`${name}: only in the first`);
     else {
-      for (const field of ["description", "inputSchema", "readOnlyHint"]) {
-        if (JSON.stringify(ta[field]) !== JSON.stringify(tb[field])) out.push(`${name}: ${field} differs`);
+      for (const field of ["description", "inputSchema", "readOnlyHint", "destructiveHint"]) {
+        // A file from before destructiveHint was kept has no such key: null.
+        if (JSON.stringify(ta[field] ?? null) !== JSON.stringify(tb[field] ?? null)) out.push(`${name}: ${field} differs`);
       }
     }
   }
@@ -119,7 +123,7 @@ async function main(argv) {
     for (const line of diff) console.log(line);
     console.log(
       diff.length === 0
-        ? `equal: ${a.tools.length} tools, name, description, schema and read-only hint`
+        ? `equal: ${a.tools.length} tools, name, description, schema and both hints`
         : `${diff.length} difference(s) across ${a.tools.length} and ${b.tools.length} tools`
     );
     process.exit(diff.length === 0 ? 0 : 1);
