@@ -1,0 +1,23 @@
+{
+  "name": "Brevo",
+  "description": "Brevo: contacts and lists, email campaigns and their reports, transactional email, templates and the send log",
+  "oauth": {
+    "provider": "brevo",
+    "authorizeUrl": "https://oauth.brevo.com/realms/partner/oauth/authorize",
+    "tokenUrl": "https://oauth.brevo.com/realms/partner/oauth/token",
+    "clientIdEnv": "$BREVO_OAUTH_CLIENT_ID",
+    "clientSecretEnv": "$BREVO_OAUTH_CLIENT_SECRET",
+    "scopes": [
+      "account:read",
+      "contacts:read",
+      "contacts:write",
+      "campaigns.email:read",
+      "campaigns.email:write",
+      "transactional.email:read",
+      "transactional.email:write",
+      "offline_access",
+      "openid",
+      "email"
+    ]
+  }
+}

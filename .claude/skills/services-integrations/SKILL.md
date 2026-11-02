@@ -27,6 +27,8 @@ No env var/token → warned no-op, not a throw. Non-2xx or a network error → w
 
 ### Brevo (transactional email)
 
+Not the Brevo connector (SCRUM-468, `plugins/brevo-mcp`), which is a user's own Brevo account connected by OAuth with `BREVO_OAUTH_CLIENT_ID/SECRET`; this section is DataToRAG's own lifecycle email through `BREVO_API_KEY`. The two never share a credential.
+
 Entry file: `apps/gateway/src/lib/brevo.ts`. Single internal `brevoPost()` helper (follows the shape above) wraps all HTTP calls; two public functions call it: `upsertBrevoContact()` (`POST /contacts`) and `sendBrevoTemplate()` (`POST /smtp/email`).
 
 - List/template IDs (`BREVO_LIST_PRODUCT_USERS`, `BREVO_TEMPLATE_WELCOME`, `BREVO_TEMPLATE_NO_ACTIVATION`, `BREVO_TEMPLATE_FOLLOWUP_{CONNECT,PERMISSIONS,TRY_THIS}`) are hardcoded constants, not env vars — they're managed in the Brevo console. Template params are flat strings; anything list-shaped is rendered to a string in code (`listInProse`) and the template owns every other word.

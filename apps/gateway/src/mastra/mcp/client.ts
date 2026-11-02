@@ -13,7 +13,7 @@ import { EPHEMERAL_CACHE_OPTIONS } from "@/mastra/agents/datatorag";
 import { getDb } from "@/lib/db";
 import { getEnv } from "@datatorag-mcp/config";
 import { buildIntrospectionTools } from "@/mastra/tools/introspection";
-import { launchedServiceIds } from "@/gateway/service-launch";
+import { offeredServiceIdsFor } from "@/gateway/service-launch";
 import { skillRunApproval } from "./skill-run-gate";
 import { skillRunIntrospection, skillRunTools } from "./skill-run-tools";
 
@@ -262,7 +262,7 @@ export async function resolveUserPluginTools({
   // on an MCP tool schema, which is the large invariant block worth caching.
   // SCRUM-366: request_connection offers only services whose plugin has
   // launched.
-  const launchedServices = await launchedServiceIds(db);
+  const launchedServices = await offeredServiceIdsFor(db, userId);
   const introspection = buildIntrospectionTools({ db, userId, launchedServices });
   const handed = {
     ...wrapped,

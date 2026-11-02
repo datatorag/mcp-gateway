@@ -14,6 +14,7 @@ const ACCOUNT_NOUN: Record<DuplicateProvider, string> = {
   "google-workspace": "Google account",
   atlassian: "Atlassian account",
   notion: "Notion workspace",
+  brevo: "Brevo account",
 };
 
 /** The pages' words, in one place for review. */
@@ -44,6 +45,7 @@ const PROVIDER_NAME: Record<DuplicateProvider, string> = {
   "google-workspace": "Google",
   atlassian: "Atlassian",
   notion: "Notion",
+  brevo: "Brevo",
 };
 
 const escapeHtml = (text: string): string =>

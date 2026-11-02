@@ -100,7 +100,9 @@ function normalize(scope: string): string {
  * Notion's is the pages a workspace shares with the integration: its connect
  * requests no scopes and stores none, so a null there is not a grant that
  * went unrecorded, and reconnecting would record nothing either. */
-const CONNECTORS_WITHOUT_SCOPES = new Set(["notion"]);
+// Brevo's scopes are fixed on its app and cannot be unticked on its consent
+// screen (SCRUM-468), so a stored grant says nothing a check could use.
+const CONNECTORS_WITHOUT_SCOPES = new Set(["notion", "brevo"]);
 
 /** Whether `service` grants access by OAuth scope, so that a stored grant
  * (or its absence) means something. True for anything not listed above,

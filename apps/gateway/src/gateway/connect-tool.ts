@@ -11,7 +11,7 @@
 import type { Database } from "@datatorag-mcp/db";
 import { CONNECTABLE_SERVICES, offeredServices } from "../app/dashboard/connections/service-registry";
 import { listConnectedAccounts } from "./connected-accounts";
-import { launchedServiceIds } from "./service-launch";
+import { offeredServiceIdsFor } from "./service-launch";
 import { connectionDead } from "./refresh-failure";
 import { cleanWorkspaceName } from "./untrusted-text";
 import { CONNECT_LINK_LEAD } from "./not-connected";
@@ -63,7 +63,7 @@ export async function connectToolResult(
   structuredContent?: Record<string, unknown>;
   isError?: boolean;
 }> {
-  const launched = offeredServices(CONNECTABLE_SERVICES, await launchedServiceIds(db));
+  const launched = offeredServices(CONNECTABLE_SERVICES, await offeredServiceIdsFor(db, userId));
   const asked = service === undefined || service === null || service === "" ? null : service;
   const providers = asked === null ? launched : launched.filter((s) => s.id === asked);
   if (asked !== null && providers.length === 0) {

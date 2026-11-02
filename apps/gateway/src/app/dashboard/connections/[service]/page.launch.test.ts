@@ -10,6 +10,9 @@ vi.mock("@/lib/db", () => ({ db: { marker: "db" } }));
 const isServiceLaunched = vi.fn();
 vi.mock("@/gateway/service-launch", () => ({
   isServiceLaunched: (...args: unknown[]) => isServiceLaunched(...args),
+  // The page asks whether this user may be offered the service (SCRUM-468);
+  // for the services here that is the launch gate.
+  serviceOfferedTo: (db: unknown, serviceId: unknown) => isServiceLaunched(db, serviceId),
 }));
 vi.mock("next/navigation", () => ({
   notFound: () => {

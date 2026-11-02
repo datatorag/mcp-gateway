@@ -1,0 +1,5 @@
+node_modules/
+server/
+*.js
+*.d.ts
+!src/**

@@ -63,6 +63,8 @@ vi.mock("@/gateway/connected-accounts", () => ({
 const launchedServiceIds = vi.fn();
 vi.mock("@/gateway/service-launch", () => ({
   launchedServiceIds: (...args: unknown[]) => launchedServiceIds(...args),
+  // Per user since SCRUM-468; for the services here, the launch gate.
+  offeredServiceIdsFor: (db: unknown) => launchedServiceIds(db),
 }));
 
 const selectLimit = vi.fn();

@@ -3,6 +3,7 @@ import type { Database } from "@datatorag-mcp/db";
 import { serviceConnections, connectedAccounts, pluginConnections } from "@datatorag-mcp/db";
 import { revokeGoogleToken } from "@/lib/google-revoke";
 import { NOTION_REVOKE_URL, NOTION_TOKEN_URL, notionBasicAuth } from "./notion-oauth";
+import { BREVO_REVOKE_URL, BREVO_TOKEN_URL, brevoClientCredentials } from "./brevo-oauth";
 import { cleanWorkspaceName } from "./untrusted-text";
 import { openToken, sealedColumns, TokenOpenError, type TokenRow } from "./token-crypto";
 import {
@@ -58,6 +59,7 @@ export const PLUGIN_SERVICE_MAP: Record<string, string> = {
   "gws-mcp": "google-workspace",
   "atlassian-mcp": "atlassian",
   "notion-mcp": "notion",
+  "brevo-mcp": "brevo",
 };
 
 /** Reverse mapping: service name to plugin slug. */
@@ -187,47 +189,46 @@ async function refreshAtlassianToken(
   }
 }
 
-/** How long a Notion token call may hold the row lock before giving up. */
-const NOTION_TOKEN_TIMEOUT_MS = 10_000;
+/** How long a provider token call may hold the row lock before giving up. */
+const LOCKED_TOKEN_TIMEOUT_MS = 10_000;
 
 /**
- * Refresh a Notion access token (SCRUM-366), under a row lock.
+ * Refresh a token pair that the provider ROTATES, under a row lock
+ * (SCRUM-366 for Notion; SCRUM-468 moved it here for Brevo too).
  *
  * Notion rotates BOTH tokens on every refresh, and stage 0 observed the rule
  * that makes an unlocked refresh dangerous: the old pair stays valid until the
  * new access token is first used, and until then presenting the old refresh
  * token again SUCCEEDS and invalidates the newer, unused pair. Two calls
  * refreshing at once with the same refresh token therefore both succeed, and
- * one caller walks away with a token Notion has already killed. So:
+ * one caller walks away with a token the provider has already killed. Brevo
+ * may also return a new refresh token, so it takes the same lock. So:
  *
  * - The row is read `FOR UPDATE` inside a transaction, and the stored refresh
  *   token is compared with the one this caller presented. If another caller
- *   already rotated it, the stored access token is the answer and Notion is
- *   not asked again.
- * - Notion is called while the lock is held, and the new pair is written in
- *   the same transaction, so it is persisted before anyone is handed the new
- *   access token. If the commit fails, the old pair still stands at Notion,
- *   because the new access token was never used.
+ *   already rotated it, the stored access token is the answer and the provider
+ *   is not asked again.
+ * - The provider is called while the lock is held, and the new pair is written
+ *   in the same transaction, so it is persisted before anyone is handed the
+ *   new access token.
  * - On `invalid_grant` the row is read again (locked, so a writer queued
  *   behind this one, such as a reconnect, lands first) before the grant is
  *   called dead: if its refresh token has moved, the stored access token is
  *   used.
- *
- * Exported for its tests. Reached through REFRESH_FN only when a stored
- * expiry has passed, and Notion rows store none (Notion sends no
- * `expires_in`, and stage 0 has not yet observed one), so this does not run
- * on any call path today.
  */
-export async function refreshNotionToken(
+async function refreshRotatingToken(
   db: Database,
   conn: ConnectionRef,
-  presentedRefreshToken: string
+  presentedRefreshToken: string,
+  provider: {
+    label: string;
+    /** The provider's refresh call for this refresh token. */
+    call: (refreshToken: string, signal: AbortSignal) => Promise<Response>;
+    /** When the new access token expires, from the provider's answer. */
+    expiresAt: (data: Record<string, unknown>) => Date | null;
+  }
 ): Promise<RefreshOutcome> {
   const connectionId = conn.id;
-  const clientId = process.env.NOTION_OAUTH_CLIENT_ID;
-  const clientSecret = process.env.NOTION_OAUTH_CLIENT_SECRET;
-  if (!clientId || !clientSecret) return null;
-
   type Outcome = { token: string } | { rejected: true } | { failure: RefreshFailure };
   let outcome: Outcome;
   try {
@@ -252,18 +253,7 @@ export async function refreshNotionToken(
 
       let res: Response;
       try {
-        res = await fetch(NOTION_TOKEN_URL, {
-          method: "POST",
-          headers: {
-            Authorization: notionBasicAuth(clientId, clientSecret),
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            grant_type: "refresh_token",
-            refresh_token: presentedRefreshToken,
-          }),
-          signal: AbortSignal.timeout(NOTION_TOKEN_TIMEOUT_MS),
-        });
+        res = await provider.call(presentedRefreshToken, AbortSignal.timeout(LOCKED_TOKEN_TIMEOUT_MS));
       } catch (err) {
         return { failure: classifyRefreshFailure(null, err) };
       }
@@ -272,10 +262,7 @@ export async function refreshNotionToken(
         // invalid_grant is looked at again below, after the lock is let go.
         return refused.failure.reason === "invalid_grant" ? { rejected: true } : refused;
       }
-      const data = (await res.json()) as {
-        access_token?: unknown;
-        refresh_token?: unknown;
-      };
+      const data = (await res.json()) as Record<string, unknown>;
       if (typeof data.access_token !== "string") return UNEXPECTED;
 
       const rotated = {
@@ -288,8 +275,7 @@ export async function refreshNotionToken(
         .set({
           ...rotated,
           ...sealedFor(conn, rotated),
-          // Notion sends no expiry, and none is invented.
-          tokenExpiresAt: null,
+          tokenExpiresAt: provider.expiresAt(data),
           updatedAt: new Date(),
           ...refreshSucceededFields(),
         })
@@ -323,8 +309,72 @@ export async function refreshNotionToken(
   } catch {
     return UNEXPECTED;
   }
-  console.warn("[service-token] notion refresh refused (invalid_grant); the workspace needs reconnecting");
+  console.warn(`[service-token] ${provider.label} refresh refused (invalid_grant); the account needs reconnecting`);
   return { failure: { kind: "permanent", reason: "invalid_grant" } };
+}
+
+/**
+ * Refresh a Notion access token (SCRUM-366), under the rotating-token lock.
+ *
+ * Exported for its tests. Reached through REFRESH_FN only when a stored
+ * expiry has passed, and Notion rows store none (Notion sends no
+ * `expires_in`, and stage 0 has not yet observed one), so this does not run
+ * on any call path today.
+ */
+export async function refreshNotionToken(
+  db: Database,
+  conn: ConnectionRef,
+  presentedRefreshToken: string
+): Promise<RefreshOutcome> {
+  const clientId = process.env.NOTION_OAUTH_CLIENT_ID;
+  const clientSecret = process.env.NOTION_OAUTH_CLIENT_SECRET;
+  if (!clientId || !clientSecret) return null;
+  return refreshRotatingToken(db, conn, presentedRefreshToken, {
+    label: "notion",
+    call: (refreshToken, signal) =>
+      fetch(NOTION_TOKEN_URL, {
+        method: "POST",
+        headers: {
+          Authorization: notionBasicAuth(clientId, clientSecret),
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ grant_type: "refresh_token", refresh_token: refreshToken }),
+        signal,
+      }),
+    // Notion sends no expiry, and none is invented.
+    expiresAt: () => null,
+  });
+}
+
+/**
+ * Refresh a Brevo access token (SCRUM-468), under the rotating-token lock:
+ * Brevo's access tokens last an hour, and a refresh may hand back a new
+ * refresh token, which replaces the stored one. Exported for its tests.
+ */
+export async function refreshBrevoToken(
+  db: Database,
+  conn: ConnectionRef,
+  presentedRefreshToken: string
+): Promise<RefreshOutcome> {
+  const creds = brevoClientCredentials();
+  if (!creds) return null;
+  return refreshRotatingToken(db, conn, presentedRefreshToken, {
+    label: "brevo",
+    call: (refreshToken, signal) =>
+      fetch(BREVO_TOKEN_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: new URLSearchParams({
+          grant_type: "refresh_token",
+          client_id: creds.clientId,
+          client_secret: creds.clientSecret,
+          refresh_token: refreshToken,
+        }),
+        signal,
+      }),
+    expiresAt: (data) =>
+      typeof data.expires_in === "number" ? new Date(Date.now() + data.expires_in * 1000) : null,
+  });
 }
 
 /** Service-specific refresh function lookup. */
@@ -335,6 +385,7 @@ const REFRESH_FN: Record<
   "google-workspace": refreshGoogleToken,
   atlassian: refreshAtlassianToken,
   notion: refreshNotionToken,
+  brevo: refreshBrevoToken,
 };
 
 /** Revoke one Notion token. Never throws. */
@@ -350,7 +401,7 @@ async function revokeNotionToken(token: string): Promise<boolean> {
         "Content-Type": "application/json",
       },
       body: JSON.stringify({ token }),
-      signal: AbortSignal.timeout(NOTION_TOKEN_TIMEOUT_MS),
+      signal: AbortSignal.timeout(LOCKED_TOKEN_TIMEOUT_MS),
     });
     return res.ok;
   } catch {
@@ -390,9 +441,35 @@ async function revokeGoogleGrant(tokens: RevokeTokens): Promise<boolean> {
   return revokeGoogleToken(token);
 }
 
+/** Revoke both Brevo tokens, as Notion's are: which of the pair kills the
+ * grant is not documented. True when either call was accepted. Never throws. */
+async function revokeBrevoGrant(tokens: RevokeTokens): Promise<boolean> {
+  const creds = brevoClientCredentials();
+  if (!creds) return false;
+  const results = await Promise.all(
+    [tokens.accessToken, tokens.refreshToken]
+      .filter((t): t is string => typeof t === "string" && t !== "")
+      .map(async (token) => {
+        try {
+          const res = await fetch(BREVO_REVOKE_URL, {
+            method: "POST",
+            headers: { "Content-Type": "application/x-www-form-urlencoded" },
+            body: new URLSearchParams({ token, client_id: creds.clientId, client_secret: creds.clientSecret }),
+            signal: AbortSignal.timeout(LOCKED_TOKEN_TIMEOUT_MS),
+          });
+          return res.ok;
+        } catch {
+          return false;
+        }
+      })
+  );
+  return results.some(Boolean);
+}
+
 const REVOKE_FN = new Map<string, (tokens: RevokeTokens) => Promise<boolean>>([
   ["google-workspace", revokeGoogleGrant],
   ["notion", revokeNotionGrant],
+  ["brevo", revokeBrevoGrant],
 ]);
 
 /** Tell the provider to drop a connection's grant before we forget it
