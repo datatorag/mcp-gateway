@@ -149,6 +149,16 @@ import { nt11NotionCommentLifecycle } from "./nt11-notion-comment-lifecycle";
 import { nt12NotionDatabase } from "./nt12-notion-database";
 import { nt13NotionRowProperties } from "./nt13-notion-row-properties";
 import { nt14NotionView } from "./nt14-notion-view";
+import { sl1SlackUsersLookup } from "./sl1-slack-users-lookup";
+import { sl2SlackChannelsList } from "./sl2-slack-channels-list";
+import { sl3SlackChannelHistory } from "./sl3-slack-channel-history";
+import { sl4SlackMessagePost } from "./sl4-slack-message-post";
+import { sl5SlackThreadRead } from "./sl5-slack-thread-read";
+import { sl6SlackMessageUpdate } from "./sl6-slack-message-update";
+import { sl7SlackReactionsAdd } from "./sl7-slack-reactions-add";
+import { sl8SlackMessagesSearch } from "./sl8-slack-messages-search";
+import { sl9SlackFilesList } from "./sl9-slack-files-list";
+import { sl10SlackDmSend } from "./sl10-slack-dm-send";
 
 /**
  * Every registered case (SCRUM-303).
@@ -334,6 +344,16 @@ export const CASES: TestCase[] = [
   nt12NotionDatabase,
   nt13NotionRowProperties,
   nt14NotionView,
+  sl1SlackUsersLookup,
+  sl2SlackChannelsList,
+  sl3SlackChannelHistory,
+  sl4SlackMessagePost,
+  sl5SlackThreadRead,
+  sl6SlackMessageUpdate,
+  sl7SlackReactionsAdd,
+  sl8SlackMessagesSearch,
+  sl9SlackFilesList,
+  sl10SlackDmSend,
   r1FrontDoor,
   r2AdminOnly,
 ];

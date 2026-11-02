@@ -257,7 +257,12 @@ gateway deploy carries it. What goes with it:
   fixture page, data source and database and what the run created (known by
   the id each create answered with, not by title), every create is titled
   with the smoke prefix and run stamp, and a comment or page content may not
-  mention a person. A new `notion_` write tool is refused until it has a rule.
+  mention a person. A new `notion_` write tool is refused until it has a rule. Slack (SCRUM-454): a write reaches only the
+  fixture channel, by its configured id (a `#name` is refused), and an edit,
+  reaction or reply only a message the run posted there (known by the ts its
+  post answered with); a DM goes only to the `slack` role's own address;
+  every message carries the label and no "@" or `<@`, `<!`, `<#`. A new
+  `slack_` write tool is refused until it has a rule.
 
 ## Gotchas
 

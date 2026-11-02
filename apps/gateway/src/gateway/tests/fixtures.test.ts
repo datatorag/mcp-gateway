@@ -168,3 +168,20 @@ describe("a role that names a Notion workspace", () => {
     expect(mapped.configuredAddresses()).toEqual(["sender@example.test"]);
   });
 });
+
+/* SCRUM-454: the slack role names the test user's Slack address: an address
+ * like sender's, so it is lowercased and held back by the evidence scrub. */
+describe("the slack role", () => {
+  const map = parseFixtureMap(
+    JSON.stringify({ accounts: { slack: " Runner@Example.test " }, fixtures: { slackChannel: " C000TEST1 " } })
+  );
+
+  it("resolves the address lowercased and the channel id trimmed", () => {
+    expect(map.account("slack")).toBe("runner@example.test");
+    expect(map.fixture("slackChannel")).toBe("C000TEST1");
+  });
+
+  it("is listed among the configured addresses", () => {
+    expect(map.configuredAddresses()).toContain("runner@example.test");
+  });
+});

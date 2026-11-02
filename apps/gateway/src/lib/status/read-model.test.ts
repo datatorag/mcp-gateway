@@ -86,6 +86,21 @@ describe("a surface shown only once its tools are served (SCRUM-366)", () => {
   });
 });
 
+describe("an admin-only service's surface (SCRUM-454)", () => {
+  // Slack's cases run as the admin who starts the run, and its tools are
+  // served to that admin, but no member of the public can connect it.
+  it("never shows Slack, even with passing cases and a served tool", () => {
+    const model = buildStatusModel(
+      RUN,
+      [row("A0", "case", "pass"), row("SL1", "case", "pass"), row("SL4", "case", "fail"), row("contract:slack-mcp__slack_users_lookup", "contract", "pass")],
+      [],
+      NOW
+    );
+    expect(model.surfaces.map((s) => s.key)).not.toContain("slack");
+    expect(JSON.stringify(model)).not.toMatch(/slack/i);
+  });
+});
+
 describe("the model", () => {
   const results = [
     row("A0", "case", "pass"), // the runner's gate: Platform, not retired

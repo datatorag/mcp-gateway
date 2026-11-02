@@ -30,6 +30,10 @@ export const SURFACES = [
   // Shown only once one of its tools is served to the public, and its tools
   // are not while Brevo is offered to admins only (SCRUM-468).
   { key: "brevo", name: "Brevo", servedOnly: true },
+  // Never shown (SCRUM-454): an admin-only service, so none of its tools is
+  // public (`isPublicTool`) and a servedOnly surface with no public tool is
+  // left out. Listed because every scenario has a surface.
+  { key: "slack", name: "Slack", servedOnly: true },
   { key: "skills", name: "Skills" },
   { key: "gateway", name: "Platform" },
 ] as const;

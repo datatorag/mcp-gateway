@@ -6,7 +6,8 @@
  * Approved through HQ's voice and claims passes and Manuel's review. A new
  * case needs its title here before it ships: `public-titles.test.ts` requires
  * one entry per registered case (and the runner's gate row, A0) and none for
- * a retired one.
+ * a retired one. A case about an admin-only service needs none, since the
+ * page never shows it: Slack's (SCRUM-454) have none, Brevo's keep theirs.
  */
 export const PUBLIC_TITLES: Readonly<Record<string, string>> = {
   "A0": "The service is up and lists the tools you can use",

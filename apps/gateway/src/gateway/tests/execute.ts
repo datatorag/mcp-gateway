@@ -20,10 +20,13 @@ import { isWorkspaceRole, parseFixtureMap } from "./fixtures";
 import {
   checkSend,
   newNotionCreated,
+  newSlackPosted,
   recordNotionCreated,
+  recordSlackPosted,
   SUBJECT_PREFIX,
   type GuardLookups,
   type NotionCreated,
+  type SlackPosted,
 } from "./send-guard";
 import type { AccountRole, FixtureKey, TestCase, ToolResult } from "./types";
 import { finishRun, recordResult, startRun } from "./store";
@@ -84,6 +87,8 @@ export const PLUGIN_ROLES: Record<string, readonly AccountRole[]> = {
   "notion-mcp": ["notion", "notionSecond"],
   /* One Brevo account (SCRUM-468). */
   "brevo-mcp": ["brevo"],
+  /* The test user in the company workspace (SCRUM-454). */
+  "slack-mcp": ["slack"],
 };
 
 /** The plugin a namespaced tool belongs to, or null for a built-in. */
@@ -448,6 +453,9 @@ async function driveRun(opts: {
      * created page is another's parent, and a cleanup must still be allowed
      * to reach it. Per run, never per process. */
     const notionCreated = newNotionCreated();
+    /* The messages this run posted in the Slack fixture channel, for the
+     * same reason: SL6 edits and SL7 reacts to SL4's post (SCRUM-454). */
+    const slackPosted = newSlackPosted();
     const failed = new Set<string>();
 
     const servedNames = new Set(served.map((t) => t.name));
@@ -562,6 +570,7 @@ async function driveRun(opts: {
             shared,
             caseId,
             notionCreated,
+            slackPosted,
           }),
       });
       if (outcome.status !== "pass") failed.add(testCase.id);
@@ -845,12 +854,18 @@ export function makeContextParts(opts: {
    * answer as it passes through `dispatch`, so later writes in the run may
    * reach them (SCRUM-366). Absent in unit tests, which get an empty set. */
   notionCreated?: NotionCreated;
+  /** The ts of each message this RUN posted in the Slack fixture channel,
+   * recorded from each post's answer as it passes through `dispatch`, so
+   * later writes in the run may reach them (SCRUM-454). Absent in unit
+   * tests, which get an empty set. */
+  slackPosted?: SlackPosted;
 }): ContextParts {
   const { client, fixtures, called } = opts;
   // A value nothing can contain, so an absent stamp refuses every trash
   // rather than permitting any.
   const runStamp = opts.runStamp ?? "\u0000no-stamp";
   const notionCreated = opts.notionCreated ?? newNotionCreated();
+  const slackPosted = opts.slackPosted ?? newSlackPosted();
 
   const needs = (what: string) => {
     throw new Error(`ctx.gateway.${what}: this run has no database or plugin pool`);
@@ -1017,11 +1032,19 @@ export function makeContextParts(opts: {
         secondList: fixtures.fixture("brevoSecondList"),
         draftCampaign: fixtures.fixture("brevoDraftCampaign"),
       },
+      slack: {
+        channel: fixtures.fixture("slackChannel"),
+        self: fixtures.account("slack"),
+        posted: slackPosted,
+      },
     });
     if (!verdict.ok) throw new Error(verdict.reason);
     const result = await client.callTool(tool, sent);
     // Only an answer that is not an error names something the run created.
-    if (!result.isError) recordNotionCreated(notionCreated, tool, resultText(result));
+    if (!result.isError) {
+      recordNotionCreated(notionCreated, tool, resultText(result));
+      recordSlackPosted(slackPosted, fixtures.fixture("slackChannel"), tool, resultText(result));
+    }
     return result;
   };
 
