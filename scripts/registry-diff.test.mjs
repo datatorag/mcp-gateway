@@ -2,7 +2,7 @@
 // (SCRUM-390). Run with: node --test scripts/registry-diff.test.mjs
 import test from "node:test";
 import assert from "node:assert/strict";
-import { baseToolFile, changeFiles, chooseBaseToolFile, chooseToolFile, diffTools, FIXTURES, jsonbText, md5, selfTest, serverRow, sqlString } from "./registry-diff.mjs";
+import { baseToolFile, changeFiles, CHUNK_ROWS, chunkDiff, chooseBaseToolFile, chooseToolFile, diffTools, FIXTURES, jsonbText, md5, selfTest, serverRow, sqlString } from "./registry-diff.mjs";
 import { compareToolFiles, toToolFile } from "./plugin-tools.mjs";
 
 const tool = (name, over = {}) => ({
@@ -483,4 +483,27 @@ test("a forced file says so in its header, and is otherwise the same file", () =
   assert.equal(body(forced.forward), body(NEW.forward));
   assert.equal(body(forced.rollback), body(NEW.rollback));
   assert.throws(() => changeFiles("some-plugin", A, B, diffTools(file(tool("a")), file(tool("a"), NEW_TOOL)), null, { forced: true }), /--new-plugin needs a new plugin's diff/);
+});
+
+test("a change too large for one file splits into parts the file check accepts, each standing alone (SCRUM-468)", async () => {
+  const { MAX_ROW_STATEMENTS, checkRegistryFile } = await import("./registry-file-check.mjs");
+  assert.equal(CHUNK_ROWS, MAX_ROW_STATEMENTS);
+  const names = Array.from({ length: 87 }, (_, i) => `t${String(i).padStart(3, "0")}`);
+  const from = file(...names.map((n) => tool(n, { readOnlyHint: false })));
+  const to = file(...names.map((n) => tool(n, { readOnlyHint: false, destructiveHint: true })));
+  const whole = diffTools(from, to);
+  const covered = [];
+  for (let k = 1; ; k++) {
+    const part = chunkDiff(whole, k);
+    if (part === null) break;
+    assert.ok(part.changed.length <= CHUNK_ROWS);
+    covered.push(...part.changed.map((c) => c.name));
+    const { forward, rollback } = changeFiles("some-plugin", A, B, part);
+    assert.match(forward, new RegExp(`Part ${k} of 3`));
+    // Each part keeps the plugin's row count, so its guard holds on its own.
+    assert.match(forward, /rows for some-plugin: expected 87/);
+    for (const text of [forward, rollback]) assert.doesNotThrow(() => checkRegistryFile(text));
+  }
+  assert.deepEqual(covered, names);
+  assert.throws(() => chunkDiff(diffTools(file(tool("a")), file(tool("a"), tool("b"))), 1), /adds or removes none/);
 });
