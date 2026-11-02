@@ -29,6 +29,7 @@ const SERVICE_ID_BY_CONNECTOR: Record<string, string> = {
   "Google Workspace": "google-workspace",
   Atlassian: "atlassian",
   Notion: "notion",
+  Slack: "slack",
 };
 
 /** The service ids a skill needs connected, in `connectorsFor` order. */
@@ -108,6 +109,8 @@ export function connectorsFor(tools: string[]): string[] {
       out.add("Atlassian");
     } else if (/^notion_/.test(tool)) {
       out.add("Notion");
+    } else if (/^slack_/.test(tool)) {
+      out.add("Slack");
     }
   }
   return [...out];

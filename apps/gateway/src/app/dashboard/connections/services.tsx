@@ -140,9 +140,8 @@ const SERVICE_PRESENTATION: Record<
       </svg>
     ),
   },
-  // SCRUM-454: admins only (audience "admin" on the registry entry). The row
-  // exists because a registry entry without one throws below. The icon is a
-  // neutral placeholder until the brand mark lands with its provenance line.
+  // SCRUM-454: admins only (audience "admin" on the registry entry), so this
+  // card renders only for an admin.
   slack: {
     description: "Channels, messages, threads, and people",
     capabilities: [
@@ -159,9 +158,14 @@ const SERVICE_PRESENTATION: Record<
         services: ["slack"],
       },
     ],
+    // Slack's mark, the same artwork as public/icons/services/slack.svg
+    // (provenance in SOURCES.md there).
     icon: (
-      <svg viewBox="0 0 24 24" className="h-8 w-8" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
-        <path d="M9 3 7 21M17 3l-2 18M4 8h17M3 16h17" />
+      <svg viewBox="0 0 127 127" className="h-8 w-8">
+        <path d="M27.2 80c0 7.3-5.9 13.2-13.2 13.2C6.7 93.2.8 87.3.8 80c0-7.3 5.9-13.2 13.2-13.2h13.2V80zm6.6 0c0-7.3 5.9-13.2 13.2-13.2 7.3 0 13.2 5.9 13.2 13.2v33c0 7.3-5.9 13.2-13.2 13.2-7.3 0-13.2-5.9-13.2-13.2V80z" fill="#E01E5A" />
+        <path d="M47 27c-7.3 0-13.2-5.9-13.2-13.2C33.8 6.5 39.7.6 47 .6c7.3 0 13.2 5.9 13.2 13.2V27H47zm0 6.7c7.3 0 13.2 5.9 13.2 13.2 0 7.3-5.9 13.2-13.2 13.2H13.9C6.6 60.1.7 54.2.7 46.9c0-7.3 5.9-13.2 13.2-13.2H47z" fill="#36C5F0" />
+        <path d="M99.9 46.9c0-7.3 5.9-13.2 13.2-13.2 7.3 0 13.2 5.9 13.2 13.2 0 7.3-5.9 13.2-13.2 13.2H99.9V46.9zm-6.6 0c0 7.3-5.9 13.2-13.2 13.2-7.3 0-13.2-5.9-13.2-13.2V13.8C66.9 6.5 72.8.6 80.1.6c7.3 0 13.2 5.9 13.2 13.2v33.1z" fill="#2EB67D" />
+        <path d="M80.1 99.8c7.3 0 13.2 5.9 13.2 13.2 0 7.3-5.9 13.2-13.2 13.2-7.3 0-13.2-5.9-13.2-13.2V99.8h13.2zm0-6.6c-7.3 0-13.2-5.9-13.2-13.2 0-7.3 5.9-13.2 13.2-13.2h33.1c7.3 0 13.2 5.9 13.2 13.2 0 7.3-5.9 13.2-13.2 13.2H80.1z" fill="#ECB22E" />
       </svg>
     ),
   },

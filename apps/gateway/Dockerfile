@@ -39,6 +39,7 @@ COPY plugins/gws-mcp/package.json plugins/gws-mcp/
 COPY plugins/atlassian-mcp/package.json plugins/atlassian-mcp/
 COPY plugins/notion-mcp/package.json plugins/notion-mcp/
 COPY plugins/brevo-mcp/package.json plugins/brevo-mcp/
+COPY plugins/slack-mcp/package.json plugins/slack-mcp/
 
 
 FROM base AS build
@@ -71,7 +72,8 @@ RUN pnpm run build --filter=@datatorag-mcp/gateway && rm -rf apps/gateway/.next/
 RUN pnpm --filter @datatorag-mcp/gws-mcp run build \
  && pnpm --filter @datatorag-mcp/atlassian-mcp run build \
  && pnpm --filter @datatorag-mcp/notion-mcp run build \
- && pnpm --filter @datatorag-mcp/brevo-mcp run build
+ && pnpm --filter @datatorag-mcp/brevo-mcp run build \
+ && pnpm --filter @datatorag-mcp/slack-mcp run build
 
 
 FROM base AS runtime
@@ -99,10 +101,12 @@ COPY --from=build /app/plugins/gws-mcp/server plugins/gws-mcp/server
 COPY --from=build /app/plugins/atlassian-mcp/server plugins/atlassian-mcp/server
 COPY --from=build /app/plugins/notion-mcp/server plugins/notion-mcp/server
 COPY --from=build /app/plugins/brevo-mcp/server plugins/brevo-mcp/server
+COPY --from=build /app/plugins/slack-mcp/server plugins/slack-mcp/server
 COPY plugins/gws-mcp/datatorag.json plugins/gws-mcp/README.md plugins/gws-mcp/
 COPY plugins/atlassian-mcp/datatorag.json plugins/atlassian-mcp/README.md plugins/atlassian-mcp/
 COPY plugins/notion-mcp/datatorag.json plugins/notion-mcp/README.md plugins/notion-mcp/
 COPY plugins/brevo-mcp/datatorag.json plugins/brevo-mcp/README.md plugins/brevo-mcp/
+COPY plugins/slack-mcp/datatorag.json plugins/slack-mcp/README.md plugins/slack-mcp/
 # A client secret file is written beside the compiled code only by the desktop
 # bundle's own build script, and git ignores it. It must never be in an image.
 RUN if find /app/plugins -name oauth.json -not -path '*/node_modules/*' | grep -q .; then \
@@ -121,7 +125,9 @@ RUN groupadd --system --gid 901 plugin-gws-mcp \
  && groupadd --system --gid 903 plugin-notion-mcp \
  && useradd --system --uid 903 --gid 903 --no-create-home --home-dir /nonexistent --shell /usr/sbin/nologin plugin-notion-mcp \
  && groupadd --system --gid 904 plugin-brevo-mcp \
- && useradd --system --uid 904 --gid 904 --no-create-home --home-dir /nonexistent --shell /usr/sbin/nologin plugin-brevo-mcp
+ && useradd --system --uid 904 --gid 904 --no-create-home --home-dir /nonexistent --shell /usr/sbin/nologin plugin-brevo-mcp \
+ && groupadd --system --gid 905 plugin-slack-mcp \
+ && useradd --system --uid 905 --gid 905 --no-create-home --home-dir /nonexistent --shell /usr/sbin/nologin plugin-slack-mcp
 RUN for dir in /app/plugins/*/; do \
       name="plugin-$(basename "$dir")"; \
       uid="$(id -u "$name" 2>/dev/null)" || { echo "no account $name for $dir" >&2; exit 1; }; \

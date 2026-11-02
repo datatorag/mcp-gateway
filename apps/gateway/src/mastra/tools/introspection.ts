@@ -78,7 +78,8 @@ export function buildIntrospectionTools({
   // What request_connection may offer: its enum, its description and its
   // lookup are all this list, so a service that has not launched is not
   // named to the model at all and cannot be asked for.
-  const connectable = offeredServices(CONNECTABLE_SERVICES, launchedServices);
+  const launched = new Set(launchedServices);
+  const connectable = offeredServices(CONNECTABLE_SERVICES, launched);
   const connectableIds = connectable.map((s) => s.id);
   // account_status is GONE (SCRUM-188), deliberately deleted rather than
   // patched: it was a second, older copy of "what am I connected to" that
@@ -307,8 +308,15 @@ export function buildIntrospectionTools({
           // Derived from the registry, exactly as request_connection does
           // above, so a third connector is disconnectable the moment it is
           // connectable rather than rejected here by a stale hardcoded list.
+          // Not limited to the launched set: a connection made before its
+          // plugin was paused must still be removable. An audience-gated
+          // service (SCRUM-454) is named only when the launched set holds
+          // it: the caller passes offeredServiceIdsFor, which applied the
+          // role.
           .enum(
-            CONNECTABLE_SERVICES.map((s) => s.id) as [string, ...string[]]
+            CONNECTABLE_SERVICES.filter(
+              (s) => !s.audience || launched.has(s.id)
+            ).map((s) => s.id) as [string, ...string[]]
           )
           .describe("Which connected service to disconnect."),
       }),

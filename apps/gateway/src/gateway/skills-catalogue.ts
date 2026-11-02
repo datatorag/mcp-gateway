@@ -26,6 +26,7 @@ const SERVICE_NAMES: Record<string, string> = {
   "google-workspace": "Google Workspace",
   atlassian: "Atlassian",
   notion: "Notion",
+  slack: "Slack",
 };
 
 export function serviceName(id: string): string {

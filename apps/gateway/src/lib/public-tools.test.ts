@@ -24,7 +24,7 @@ vi.mock("@/lib/db", () => ({
   },
 }));
 
-import { publicServerTools, publicToolCount } from "./public-tools";
+import { isPublicServerSlug, publicServerTools, publicToolCount } from "./public-tools";
 import { GET as listServers } from "@/app/api/servers/route";
 
 const render = (cond: SQL | undefined) => new PgDialect().sqlToQuery(cond!);
@@ -62,5 +62,38 @@ describe("public reads of the tools table (SCRUM-419)", () => {
     const res = await listServers(new (await import("next/server")).NextRequest("http://localhost/api/servers"));
     expect(res.status).toBe(200);
     expectUnlisted(captured.join);
+  });
+});
+
+/* SCRUM-454: a plugin whose service only admins are offered (Slack) is not
+ * advertised either: not in the counts, not on /tools/<slug>, not in the
+ * sitemap. Read from the registry's audience field. */
+describe("public reads leave out an admin-only service's plugin (SCRUM-454)", () => {
+  function expectNoAdminPlugin(cond: SQL | undefined) {
+    const { sql, params } = render(cond);
+    expect(sql).toMatch(/not starts_with\("tools"\."namespaced_name", \$\d+\)/);
+    expect(params).toContain("slack-mcp__");
+  }
+
+  it("the home and pricing count", async () => {
+    await publicToolCount(capturingDb([{ count: 1 }]));
+    expectNoAdminPlugin(captured.where);
+  });
+
+  it("a server's tool list", async () => {
+    await publicServerTools(capturingDb([]), "srv-1");
+    expectNoAdminPlugin(captured.where);
+  });
+
+  it("the servers listing's counts", async () => {
+    await listServers(new (await import("next/server")).NextRequest("http://localhost/api/servers"));
+    expectNoAdminPlugin(captured.join);
+  });
+
+  it("names no admin-only plugin as a public server, and every other one", () => {
+    expect(isPublicServerSlug("slack-mcp")).toBe(false);
+    // The same list leaves Brevo out too (SCRUM-468), with no edit of its own.
+    expect(isPublicServerSlug("brevo-mcp")).toBe(false);
+    for (const slug of ["gws-mcp", "atlassian-mcp", "notion-mcp"]) expect(isPublicServerSlug(slug), slug).toBe(true);
   });
 });

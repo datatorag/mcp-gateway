@@ -3,11 +3,15 @@ import { db } from "@/lib/db";
 import { withRoute } from "@/lib/with-route";
 import { buildSuggestions } from "@/gateway/agent/suggestions";
 import type { SuggestionContext } from "@/gateway/agent/suggestion-generator";
+import { CONNECTABLE_SERVICES } from "@/app/dashboard/connections/service-registry";
 
 export const dynamic = "force-dynamic";
 
 const CONTEXTS: readonly SuggestionContext[] = ["first_run", "post_connect", "dashboard"];
-const SERVICES = ["google-workspace", "atlassian", "notion"];
+/** Every connectable service, from the registry. Naming one only steers the
+ * order after its connect; an admin-only service (Slack) has no suggestion
+ * of its own, so it changes nothing a non-admin could see. */
+const SERVICES = CONNECTABLE_SERVICES.map((s) => s.id);
 
 /**
  * The empty-state suggestions for the session user (SCRUM-110, SCRUM-321):

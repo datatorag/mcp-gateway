@@ -58,3 +58,16 @@ describe("the Notion mark", () => {
     expect(sources).toMatch(/\| notion\.svg \| File:Notion-logo\.svg \(https:\/\/commons\.wikimedia\.org\//);
   });
 });
+
+/* SCRUM-454: the Slack mark, the same way as Notion's. */
+describe("the Slack mark", () => {
+  it("is known by tool name, self-hosted, carries no script, and is listed in SOURCES.md with its source", () => {
+    expect(serviceFromToolName("slack-mcp__slack_message_post")).toBe("slack");
+    expect(serviceFromToolName("slack_channels_list")).toBe("slack");
+    const svg = readFileSync(join(ICON_DIR, "slack.svg"), "utf8");
+    expect(svg.startsWith("<svg")).toBe(true);
+    expect(svg).not.toMatch(/<script|on\w+=|href=/i);
+    const sources = readFileSync(join(ICON_DIR, "SOURCES.md"), "utf8");
+    expect(sources).toMatch(/\| slack\.svg \| File:Slack icon 2019\.svg \(https:\/\/commons\.wikimedia\.org\//);
+  });
+});

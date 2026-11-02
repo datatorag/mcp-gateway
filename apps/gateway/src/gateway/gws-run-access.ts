@@ -1,7 +1,8 @@
-import { notInArray } from "drizzle-orm";
+import { and, notInArray, sql } from "drizzle-orm";
 import type { Database } from "@datatorag-mcp/db";
 import { tools } from "@datatorag-mcp/db";
 import { resolveUserEmail } from "./user-email";
+import { ADMIN_AUDIENCE_PLUGIN_SLUGS } from "@/app/dashboard/connections/service-registry";
 
 /**
  * Who may see and call gws_run (SCRUM-419, part 3).
@@ -36,8 +37,19 @@ export const PUBLICLY_UNLISTED_TOOLS: readonly string[] = [GWS_RUN_TOOL];
 /** The where-clause every public read of the tools table carries: the home
  * and pricing counts, /tools/<slug> and the servers listing. A filter here
  * rather than a mark on the row, because the only mark the row has is
- * `enabled`, and clearing it would hide the tool from the allowlist too. */
-export const publiclyListedTool = () => notInArray(tools.namespacedName, [...PUBLICLY_UNLISTED_TOOLS]);
+ * `enabled`, and clearing it would hide the tool from the allowlist too.
+ *
+ * It also leaves out every tool of a plugin whose service only admins are
+ * offered (SCRUM-454, `ADMIN_AUDIENCE_PLUGIN_SLUGS`): a public count must not
+ * grow by tools nobody outside the company can connect. `starts_with`, not
+ * LIKE, because `_` in the separator is a LIKE wildcard. */
+export const publiclyListedTool = () =>
+  and(
+    notInArray(tools.namespacedName, [...PUBLICLY_UNLISTED_TOOLS]),
+    ...ADMIN_AUDIENCE_PLUGIN_SLUGS.map(
+      (slug) => sql`not starts_with(${tools.namespacedName}, ${`${slug}__`})`
+    )
+  )!;
 
 function allowedAccounts(): Set<string> {
   return new Set(

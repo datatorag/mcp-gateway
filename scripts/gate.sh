@@ -35,7 +35,7 @@ PLACEHOLDER_DATABASE_URL="unset://database.invalid/unset"
 #   gateway  typecheck and tests of apps/gateway
 #   scripts  the self-tests of the scripts in scripts/
 #   canary   the test of the do-nothing container in docker/canary
-#   gws-mcp, atlassian-mcp, notion-mcp, brevo-mcp
+#   gws-mcp, atlassian-mcp, notion-mcp, brevo-mcp, slack-mcp
 #            a plugin's build and tests. A plugin path selects its own row
 #            AND the gateway: the plugins ship inside the gateway's image, so
 #            a plugin change is a gateway change wherever an image is decided
@@ -49,6 +49,7 @@ classify_path() {
     plugins/atlassian-mcp/*) echo atlassian-mcp ;;
     plugins/notion-mcp/*) echo notion-mcp ;;
     plugins/brevo-mcp/*) echo brevo-mcp ;;
+    plugins/slack-mcp/*) echo slack-mcp ;;
     apps/gateway/*|packages/*|docker/*) echo gateway ;;
     scripts/*) echo scripts ;;
     registry/*) echo scripts ;; # its files are checked by the scripts' tests
@@ -61,7 +62,7 @@ classify_path() {
 }
 
 surfaces_for() {
-  local path surface want_gateway=0 want_scripts=0 want_canary=0 want_gws=0 want_atlassian=0 want_notion=0 want_brevo=0
+  local path surface want_gateway=0 want_scripts=0 want_canary=0 want_gws=0 want_atlassian=0 want_notion=0 want_brevo=0 want_slack=0
   while IFS= read -r path; do
     [ -n "$path" ] || continue
     surface=$(classify_path "$path")
@@ -73,7 +74,8 @@ surfaces_for() {
       atlassian-mcp) want_gateway=1; want_atlassian=1 ;;
       notion-mcp) want_gateway=1; want_notion=1 ;;
       brevo-mcp) want_gateway=1; want_brevo=1 ;;
-      all) want_gateway=1; want_scripts=1; want_canary=1; want_gws=1; want_atlassian=1; want_notion=1; want_brevo=1 ;;
+      slack-mcp) want_gateway=1; want_slack=1 ;;
+      all) want_gateway=1; want_scripts=1; want_canary=1; want_gws=1; want_atlassian=1; want_notion=1; want_brevo=1; want_slack=1 ;;
       none) ;;
     esac
   done
@@ -84,6 +86,7 @@ surfaces_for() {
   [ "$want_atlassian" = 1 ] && echo atlassian-mcp
   [ "$want_notion" = 1 ] && echo notion-mcp
   [ "$want_brevo" = 1 ] && echo brevo-mcp
+  [ "$want_slack" = 1 ] && echo slack-mcp
   return 0
 }
 
@@ -110,19 +113,20 @@ self_test() {
   expect "the example env file is read by a gateway test" "gateway" ".env.example"
   expect "a file moved out of the gateway still names where it was" "gateway" "apps/gateway/src/guard.test.ts" "docs/guard.test.ts"
   expect "documentation beside code still selects the code" "gateway" "docs/x.md" "apps/gateway/server.ts"
-  expect "the lockfile selects everything" "gateway scripts canary gws-mcp atlassian-mcp notion-mcp brevo-mcp" "pnpm-lock.yaml"
-  expect "a workflow selects everything" "gateway scripts canary gws-mcp atlassian-mcp notion-mcp brevo-mcp" ".github/workflows/ci.yml"
+  expect "the lockfile selects everything" "gateway scripts canary gws-mcp atlassian-mcp notion-mcp brevo-mcp slack-mcp" "pnpm-lock.yaml"
+  expect "a workflow selects everything" "gateway scripts canary gws-mcp atlassian-mcp notion-mcp brevo-mcp slack-mcp" ".github/workflows/ci.yml"
   # The known-bad cases: a path nobody listed must never come out as nothing.
-  expect "an unknown top-level directory selects everything" "gateway scripts canary gws-mcp atlassian-mcp notion-mcp brevo-mcp" "services/new-thing/src/index.ts"
-  expect "a plugin nobody listed selects everything" "gateway scripts canary gws-mcp atlassian-mcp notion-mcp brevo-mcp" "plugins/new-thing/src/index.ts"
+  expect "an unknown top-level directory selects everything" "gateway scripts canary gws-mcp atlassian-mcp notion-mcp brevo-mcp slack-mcp" "services/new-thing/src/index.ts"
+  expect "a plugin nobody listed selects everything" "gateway scripts canary gws-mcp atlassian-mcp notion-mcp brevo-mcp slack-mcp" "plugins/new-thing/src/index.ts"
   expect "a plugin selects its own tests and the gateway" "gateway gws-mcp" "plugins/gws-mcp/src/tools/gmail.ts"
   expect "the other plugin does not run the first one's tests" "gateway atlassian-mcp" "plugins/atlassian-mcp/src/index.ts"
   expect "the Notion plugin selects its own tests and the gateway, no other plugin's" "gateway notion-mcp" "plugins/notion-mcp/src/notion-client.ts"
   expect "the Brevo plugin selects its own tests and the gateway, no other plugin's" "gateway brevo-mcp" "plugins/brevo-mcp/src/brevo-client.ts"
+  expect "the Slack plugin selects its own tests and the gateway, no other plugin's" "gateway slack-mcp" "plugins/slack-mcp/src/slack-client.ts"
   expect "two plugins select both, and the gateway once" "gateway gws-mcp notion-mcp" "plugins/gws-mcp/src/index.ts" "plugins/notion-mcp/README.md"
   expect "a plugin's documentation is still the plugin" "gateway gws-mcp" "plugins/gws-mcp/README.md"
-  expect "an unknown root file selects everything" "gateway scripts canary gws-mcp atlassian-mcp notion-mcp brevo-mcp" "Makefile"
-  expect "a path that only looks like docs selects everything" "gateway scripts canary gws-mcp atlassian-mcp notion-mcp brevo-mcp" "docs-private/x.md"
+  expect "an unknown root file selects everything" "gateway scripts canary gws-mcp atlassian-mcp notion-mcp brevo-mcp slack-mcp" "Makefile"
+  expect "a path that only looks like docs selects everything" "gateway scripts canary gws-mcp atlassian-mcp notion-mcp brevo-mcp slack-mcp" "docs-private/x.md"
   if [ "$failed" = 1 ]; then
     exit 2
   fi
@@ -218,7 +222,7 @@ main() {
       gateway) run_gateway ;;
       scripts) run_scripts ;;
       canary) run_canary ;;
-      gws-mcp|atlassian-mcp|notion-mcp|brevo-mcp) run_plugin "$s" ;;
+      gws-mcp|atlassian-mcp|notion-mcp|brevo-mcp|slack-mcp) run_plugin "$s" ;;
     esac
   done
   echo "gate: ok for: $(echo $surfaces). Not covered: the security review, the leak scan, the production build, and any suite that reported skipped."

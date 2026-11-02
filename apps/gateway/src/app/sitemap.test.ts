@@ -1,9 +1,12 @@
 import { describe, expect, it, vi } from "vitest";
 
-// The tools query is best-effort and irrelevant here; keep it off the network.
+// The tools query is best-effort; keep it off the network. Two active rows,
+// one of them an admin-only service's plugin (SCRUM-454).
 vi.mock("@/lib/db", () => ({
   db: {
-    select: () => ({ from: () => ({ where: () => Promise.resolve([]) }) }),
+    select: () => ({
+      from: () => ({ where: () => Promise.resolve([{ slug: "notion-mcp" }, { slug: "slack-mcp" }]) }),
+    }),
   },
 }));
 
@@ -22,5 +25,11 @@ describe("sitemap", () => {
     for (const slug of Object.keys(SHARE_LINKS)) {
       expect(urls).not.toContain(`https://datatorag.com/r/${slug}`);
     }
+  });
+
+  it("lists an active plugin's page, and never an admin-only service's (SCRUM-454)", async () => {
+    const urls = (await sitemap()).map((e) => e.url);
+    expect(urls).toContain("https://datatorag.com/tools/notion-mcp");
+    expect(urls).not.toContain("https://datatorag.com/tools/slack-mcp");
   });
 });
