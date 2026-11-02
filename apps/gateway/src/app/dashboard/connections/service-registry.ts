@@ -62,6 +62,12 @@ export const CONNECTABLE_SERVICES: ConnectableService[] = [
 export const ALWAYS_OFFERED_SERVICE_IDS: readonly string[] =
   CONNECTABLE_SERVICES.filter((s) => !s.launchPluginSlug).map((s) => s.id);
 
+/** The services offered to every user once launched: the ids a schema every
+ * client sees (the `connect` tool's `service` enum) may name. Never one with
+ * an `audience` (Brevo, SCRUM-468; Slack, SCRUM-454): a client's schema is the
+ * same for every user, so naming one would announce it to all of them. */
+export const PUBLIC_SERVICE_IDS: readonly string[] = CONNECTABLE_SERVICES.filter((s) => !s.audience).map((s) => s.id);
+
 /** The entries of `services` a surface may offer, given the launched ids
  * (`launchedServiceIds` on the server, `launchedServices` in the connections
  * view in the browser). Generic so it filters the dashboard's decorated list
