@@ -185,6 +185,8 @@ makes every connected user reconnect:
 
 ### Who sees it: an admin audience on a connectable service
 
+> Superseded by the shared `offeredServiceIdsFor`/`serviceOfferedTo` helper from the Brevo connector (SCRUM-468); `launchedServiceIds` stays global and Slack rides on that helper.
+
 The launch gate (`service-launch.ts`) is global: once the plugin's
 `mcp_servers` row is active, every user is offered the service. A Slack
 card shown to every user would fail at Slack's consent screen for anyone
@@ -343,7 +345,7 @@ Each item mirrors the Notion connector.
 - **Packaging:**
   - `plugins/slack-mcp` as a workspace package;
   - the gateway Dockerfile's COPY lines and a `plugin-slack-mcp` system
-    account (the next free uid);
+    account on uid 905 (904 is the Brevo plugin's);
   - `scripts/gate.sh` row and self-test lines;
   - `datatorag.json` naming the three config keys.
 - **Registry:** the generated pair, `registry:diff slack-mcp
@@ -359,7 +361,8 @@ Each item mirrors the Notion connector.
 - **Send guard:** a Slack rule. In a test run, writes may target only the
   fixture channel, and DMs only the test user's own DM. It is proven by
   an attempt to write elsewhere against the real handler.
-- **Docs:** none public while the audience is admin (open question 1).
+- **Docs:** none public while the audience is admin: no docs page, no
+  docs nav entry and no changelog entry (decided 2026-11-01).
   The skills (`codebase-map`, `gws-mcp-dev`, `gateway-dev`) gain the
   fourth connector and the `audience` field in the commits that add them.
 
@@ -372,8 +375,11 @@ second rebases and says so in the pull request:
   and the enum comes from `CONNECTABLE_SERVICES`.
 - **Connect surfaces:** `CONNECTABLE_SERVICES`, `services.tsx` and
   `PROVIDERS`.
-- **Dockerfile system accounts:** both will reach for the next free uid.
-  The second to merge takes the one after.
+- **Dockerfile system accounts:** Brevo takes uid 904 and Slack 905.
+- **The audience field:** the Brevo spec adds the same `audience` field
+  and a `serviceOfferedTo` helper read on every surface. Whichever
+  connector merges second reuses the first one's field and helper rather
+  than adding a second gate.
 - **`scripts/gate.sh`** path table.
 - **The registry file pair:** each plugin has its own pair, but both are
   generated against the running sha, so the second is regenerated after
@@ -417,15 +423,14 @@ second rebases and says so in the pull request:
   - HQ runs it and deploys on the founder's go.
   - The founder connects.
 
+## Decided
+
+- 2026-11-01: no public docs page, docs nav entry or changelog entry
+  while only admins can connect.
+
 ## Open questions
 
-1. **The docs page.** While only admins can connect, a public docs page
-   describes something no reader can use. Recommended: no public page,
-   docs nav entry or changelog until the audience opens. The alternative
-   is a page that says Slack is available only to workspaces that
-   install their own app; that implies a bring-your-own-app flow this
-   design does not build.
-2. **Bring-your-own app for other workspaces.** That would need per-user
+1. **Bring-your-own app for other workspaces.** That would need per-user
    client credentials in storage, which this design does not add. It is
    out of scope and recorded so the `audience` field is not mistaken for
    the whole path to opening it.

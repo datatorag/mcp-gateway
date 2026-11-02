@@ -77,6 +77,8 @@ The founder does the registration, through HQ. This session does the observation
 - Test: `apps/gateway/src/gateway/service-launch.test.ts` (extend or create).
 - Modify skill: `.claude/skills/codebase-map` (connectable-service gating paragraph).
 
+**If the Brevo branch merged first:** it adds the same `audience` field and a `serviceOfferedTo` helper. Reuse both, keep this task's tests against them, and drop the duplicate code below.
+
 **Interfaces:**
 - Produces:
   - `launchedServiceIds(db: Database, userId: string): Promise<Set<string>>`
@@ -251,7 +253,7 @@ The founder does the registration, through HQ. This session does the observation
 ### Task 7: Packaging, presentation and catalogue
 
 **Files:**
-- Modify: `apps/gateway/Dockerfile`: COPY lines beside notion-mcp's (40, 72, 98, 101), plus a `plugin-slack-mcp` group and user on the next free uid. If the Brevo branch has merged, take the uid after its account.
+- Modify: `apps/gateway/Dockerfile`: COPY lines beside notion-mcp's (40, 72, 98, 101), plus a `plugin-slack-mcp` group and user on uid and gid 905 (904 is the Brevo plugin's).
 - Modify: `scripts/gate.sh`: a `slack-mcp` path row, surface and self-test lines.
 - Modify the presentation and catalogue:
   - `src/app/dashboard/connections/services.tsx` (presentation row);
