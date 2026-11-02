@@ -227,6 +227,7 @@ export const PROVIDERS = {
   ATLASSIAN: "atlassian",
   NOTION: "notion",
   BREVO: "brevo",
+  SLACK: "slack",
 } as const;
 
 export type EventName = (typeof EVENTS)[keyof typeof EVENTS];

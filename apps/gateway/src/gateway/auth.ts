@@ -27,6 +27,7 @@ import {
 import {
   CONNECT_ERROR_CONNECTED_ELSEWHERE,
   CONNECT_ERROR_NO_SERVICES,
+  CONNECT_ERROR_NOT_CONFIGURED,
   CONNECT_ERROR_NOT_LAUNCHED,
   postConnectDestination,
 } from "./post-connect-destination";
@@ -34,6 +35,14 @@ import { googleConnectRefusedUrl, renderConnectInterstitial } from "./connect-in
 import { GWS_SCOPE_LIST, grantedServiceCount, scopeDelta, serviceGrantStates } from "./scope-grant";
 import { NOTION_AUTHORIZE_URL, NOTION_TOKEN_URL, notionBasicAuth } from "./notion-oauth";
 import { BREVO_ACCOUNT_URL, BREVO_AUTHORIZE_URL, BREVO_SCOPES, BREVO_TOKEN_URL, BREVO_USERINFO_URL } from "./brevo-oauth";
+import {
+  exchangeSlackCode,
+  SLACK_AUTHORIZE_URL,
+  SLACK_USER_SCOPES,
+  SlackExchangeError,
+  slackUserEmail,
+  type SlackGrant,
+} from "./slack-oauth";
 import { hashToken } from "@datatorag-mcp/auth";
 import { isServiceLaunched, serviceOfferedTo } from "./service-launch";
 import { cleanWorkspaceName } from "./untrusted-text";
@@ -67,6 +76,10 @@ const NOTION_CONNECT_NONCE_COOKIE = "notion_connect_nonce";
 /** The Brevo connect flow's one-shot CSRF nonce (SCRUM-468), its own cookie
  * like every sibling. */
 const BREVO_CONNECT_NONCE_COOKIE = "brevo_connect_nonce";
+
+/** The Slack connect flow's one-shot CSRF nonce (SCRUM-454). Its own cookie,
+ * like every sibling. */
+const SLACK_CONNECT_NONCE_COOKIE = "slack_connect_nonce";
 
 /** Which Google account a refused connect was attempted with (SCRUM-410), so
  * the retry can go straight to Google's consent screen for that account and
@@ -128,6 +141,7 @@ const GWS_SCOPES = GWS_SCOPE_LIST.join(" ");
  * GET /auth/google/connect/callback — store GWS tokens for user
  * GET /auth/atlassian/connect(/callback) — Jira + Confluence
  * GET /auth/notion/connect(/callback)    — one Notion workspace per grant
+ * GET /auth/slack/connect(/callback)     — the company Slack workspace, admins only
  */
 /** The fields of Brevo's token response this file reads (SCRUM-468). */
 type BrevoTokenResponse = { access_token?: unknown; refresh_token?: unknown; expires_in?: unknown };
@@ -156,6 +170,12 @@ export function createAuthRouter(
      * then not offered. Optional so a test router can leave it out. */
     brevoClientId?: string;
     brevoClientSecret?: string;
+    /** SCRUM-454. Empty strings mean not configured: the Slack connect then
+     * refuses before anything is set or sent. */
+    slackClientId?: string;
+    slackClientSecret?: string;
+    /** The one Slack workspace allowed to connect. */
+    slackTeamId?: string;
     baseUrl: string;
     /** After a connect stores its account (SCRUM-466): which link it came
      * from, if any, for the events, the waiting tool call and the client's
@@ -1587,6 +1607,199 @@ export function createAuthRouter(
     connected(who, PROVIDERS.BREVO);
 
     res.redirect(postConnectDestination({ requestedPath, provider: PROVIDERS.BREVO }));
+  });
+
+  // --- Slack connection (SCRUM-454) ---
+  //
+  // The Notion pair's shape, for one workspace and admins only. Slack is an
+  // audience-gated connectable service, so `serviceOfferedTo` is false for
+  // anyone who is not an admin, and both routes then answer a plain 404: the
+  // same answer as a path that does not exist, like every admin refusal. The
+  // callback asks again, because a nonce proves who started a connect, not
+  // that they may still finish it. User scopes only (no bot), and the team id
+  // is checked against SLACK_CONNECTOR_TEAM_ID before the new token is used
+  // for anything: the app's own distribution setting is the first guarantee
+  // that only the company workspace connects, this is the second.
+
+  const slackConfigured = (): boolean =>
+    Boolean(config.slackClientId && config.slackClientSecret && config.slackTeamId);
+
+  router.get("/auth/slack/connect", async (req, res) => {
+    const slackUser = await connectUser(req.cookies?.dtrmcp_session, req.cookies?.[CONNECT_LINK_COOKIE], PROVIDERS.SLACK);
+    if (!slackUser) {
+      res.redirect("/auth/login");
+      return;
+    }
+
+    if (!(await serviceOfferedTo(db, PROVIDERS.SLACK, slackUser.userId))) {
+      res.status(404).end();
+      return;
+    }
+
+    if (!slackConfigured()) {
+      res.redirect(
+        postConnectDestination({ requestedPath: req.query.next, error: CONNECT_ERROR_NOT_CONFIGURED })
+      );
+      return;
+    }
+
+    stashAttribution(req, res, cookiesAreSecure);
+    stashConnectNext(req, res);
+
+    const nonce = randomBytes(16).toString("base64url");
+    res.cookie(SLACK_CONNECT_NONCE_COOKIE, nonce, {
+      httpOnly: true,
+      secure: cookiesAreSecure,
+      sameSite: "lax",
+      path: "/",
+      maxAge: OAUTH_STATE_TTL_MS,
+    });
+    armDuplicateAck(req, res, PROVIDERS.SLACK, nonce);
+
+    const url = new URL(SLACK_AUTHORIZE_URL);
+    url.searchParams.set("client_id", config.slackClientId!);
+    // User scopes only; `scope` is the bot's and is never sent.
+    url.searchParams.set("user_scope", SLACK_USER_SCOPES);
+    url.searchParams.set("redirect_uri", `${config.baseUrl}/auth/slack/connect/callback`);
+    // Opens the consent screen on the company workspace; the callback's team
+    // check is what enforces it.
+    url.searchParams.set("team", config.slackTeamId!);
+    url.searchParams.set("state", nonce);
+
+    res.redirect(url.toString());
+  });
+
+  router.get("/auth/slack/connect/callback", async (req, res) => {
+    const code = req.query.code as string | undefined;
+    const state = req.query.state as string | undefined;
+    // Identity comes from the session cookie only, never from `state`.
+    const sessionToken = req.cookies?.dtrmcp_session as string | undefined;
+    const cookieNonce = req.cookies?.[SLACK_CONNECT_NONCE_COOKIE] as string | undefined;
+    res.clearCookie(SLACK_CONNECT_NONCE_COOKIE, { path: "/" });
+    const attribution = takeAttribution(req, res);
+    const requestedPath = takeConnectNext(req, res);
+    const duplicateAck = takeDuplicateAck(req, res);
+    const linkToken = takeConnectLink(req, res);
+
+    if (!sessionToken && !linkToken) {
+      res.redirect("/auth/login");
+      return;
+    }
+
+    if (!nonceMatches(cookieNonce, state)) {
+      res.redirect(postConnectDestination({ requestedPath, error: "invalid_state" }));
+      return;
+    }
+
+    if (!code) {
+      res.redirect(postConnectDestination({ requestedPath, error: "missing_code" }));
+      return;
+    }
+
+    const who = await connectUser(sessionToken, linkToken, PROVIDERS.SLACK);
+    if (!who) {
+      res.redirect("/auth/login");
+      return;
+    }
+
+    if (!(await serviceOfferedTo(db, PROVIDERS.SLACK, who.userId))) {
+      res.status(404).end();
+      return;
+    }
+
+    if (!slackConfigured()) {
+      res.redirect(postConnectDestination({ requestedPath, error: CONNECT_ERROR_NOT_CONFIGURED }));
+      return;
+    }
+
+    let grant: SlackGrant;
+    try {
+      grant = await exchangeSlackCode(code, `${config.baseUrl}/auth/slack/connect/callback`, {
+        clientId: config.slackClientId!,
+        clientSecret: config.slackClientSecret!,
+      });
+    } catch (err) {
+      // Slack's short error code only; never a body or a token.
+      console.warn(
+        "[auth] slack exchange refused:",
+        err instanceof SlackExchangeError ? err.code : "unknown"
+      );
+      res.redirect(postConnectDestination({ requestedPath, error: "token_exchange_failed" }));
+      return;
+    }
+
+    // An org-wide Enterprise Grid install is not one workspace.
+    if (grant.enterprise) {
+      res.redirect(postConnectDestination({ requestedPath, error: "enterprise_install_not_supported" }));
+      return;
+    }
+
+    // Only the company workspace, checked before the token is used at all.
+    if (grant.teamId !== config.slackTeamId) {
+      res.redirect(postConnectDestination({ requestedPath, error: "workspace_not_allowed" }));
+      return;
+    }
+
+    // connected_accounts.account_email is NOT NULL: a grant whose email
+    // cannot be read is refused, not stored.
+    const accountEmail = await slackUserEmail(grant.accessToken, grant.userId);
+    if (!accountEmail) {
+      res.redirect(postConnectDestination({ requestedPath, error: "could_not_resolve_account_email" }));
+      return;
+    }
+    // Set by whoever administers the workspace, and shown to the model and
+    // in the dashboard: cleaned and capped before it is stored.
+    const teamName = cleanWorkspaceName(grant.teamName);
+
+    // SCRUM-466: a connect only a link vouches for must be the link user's
+    // own. Slack reports no verified flag; the address is the workspace
+    // profile's, which Slack confirmed when the person joined.
+    if (await refusedUnconfirmed(res, who, PROVIDERS.SLACK, accountEmail, true)) {
+      return;
+    }
+
+    if (
+      await refusedAsDuplicate(res, {
+        userId: who.userId,
+        provider: PROVIDERS.SLACK,
+        accountEmail,
+        externalAccountId: grant.teamId,
+        acknowledged: nonceMatches(duplicateAck, cookieNonce),
+        requestedPath,
+      })
+    ) {
+      return;
+    }
+
+    await upsertServiceAccount(
+      db,
+      who.userId,
+      PROVIDERS.SLACK,
+      accountEmail,
+      {
+        access_token: grant.accessToken,
+        refresh_token: grant.refreshToken ?? undefined,
+        // Space-separated, the form every stored grant uses.
+        scope: grant.scopes.join(" "),
+      },
+      null,
+      grant.expiresIn ? new Date(Date.now() + grant.expiresIn * 1000) : null,
+      { externalAccountId: grant.teamId, label: teamName }
+    );
+
+    await trackOAuthCompleted(
+      db,
+      who.userId,
+      PROVIDERS.SLACK,
+      accountEmail,
+      attribution,
+      undefined,
+      { skill: skillSlugFromPath(requestedPath), entry: connectEntry(requestedPath) }
+    );
+
+    connected(who, PROVIDERS.SLACK);
+
+    res.redirect(postConnectDestination({ requestedPath, provider: PROVIDERS.SLACK }));
   });
 
   /** Park a validated `?next=` for the length of one connect round trip.

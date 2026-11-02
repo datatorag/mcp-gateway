@@ -54,6 +54,14 @@ export const CONNECTABLE_SERVICES: ConnectableService[] = [
     launchPluginSlug: "brevo-mcp",
     audience: "admin",
   },
+  {
+    // SCRUM-454: the company workspace only, so admins only.
+    id: "slack",
+    name: "Slack",
+    connectUrl: "/auth/slack/connect",
+    launchPluginSlug: "slack-mcp",
+    audience: "admin",
+  },
 ];
 
 /** The services offered with no registry check: what a surface shows before

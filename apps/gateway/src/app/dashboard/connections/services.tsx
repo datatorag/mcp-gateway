@@ -140,6 +140,31 @@ const SERVICE_PRESENTATION: Record<
       </svg>
     ),
   },
+  // SCRUM-454: admins only (audience "admin" on the registry entry). The row
+  // exists because a registry entry without one throws below. The icon is a
+  // neutral placeholder until the brand mark lands with its provenance line.
+  slack: {
+    description: "Channels, messages, threads, and people",
+    capabilities: [
+      {
+        text: "Search and read channels, threads and direct messages",
+        services: ["slack"],
+      },
+      {
+        text: "Post, edit and react to messages, and send direct messages",
+        services: ["slack"],
+      },
+      {
+        text: "Look up people and list shared files",
+        services: ["slack"],
+      },
+    ],
+    icon: (
+      <svg viewBox="0 0 24 24" className="h-8 w-8" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
+        <path d="M9 3 7 21M17 3l-2 18M4 8h17M3 16h17" />
+      </svg>
+    ),
+  },
 };
 
 export const SERVICES: ServiceConfig[] = CONNECTABLE_SERVICES.map((service) => {

@@ -197,6 +197,9 @@ async function main() {
       notionClientSecret: env.NOTION_OAUTH_CLIENT_SECRET,
       brevoClientId: env.BREVO_OAUTH_CLIENT_ID,
       brevoClientSecret: env.BREVO_OAUTH_CLIENT_SECRET,
+      slackClientId: env.SLACK_CONNECTOR_CLIENT_ID,
+      slackClientSecret: env.SLACK_CONNECTOR_CLIENT_SECRET,
+      slackTeamId: env.SLACK_CONNECTOR_TEAM_ID,
       baseUrl,
       // SCRUM-466: a connect changes which tools the user's sessions list.
       onConnected: ({ userId, link }) => {

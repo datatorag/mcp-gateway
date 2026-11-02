@@ -16,6 +16,11 @@ export const CONNECT_ERROR_NOT_LAUNCHED = "service_not_available";
  * the user went back from the warning page. Nothing was stored. */
 export const CONNECT_ERROR_CONNECTED_ELSEWHERE = "connected_elsewhere";
 
+/** SCRUM-454: a connect started on a service whose client credentials this
+ * deployment does not have. Refused before any cookie is set or the provider
+ * is contacted. */
+export const CONNECT_ERROR_NOT_CONFIGURED = "service_not_configured";
+
 /**
  * Where the retired `/dashboard/connections` index forwards to (SCRUM-149).
  *
