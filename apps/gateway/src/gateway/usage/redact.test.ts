@@ -217,3 +217,37 @@ describe("redactErrorMessage keeps a Notion error envelope's code and status (SC
     expect(out).toContain("Gone.");
   });
 });
+
+/* SCRUM-454: Slack's envelope is `{ok: false, error: "<code>"}`, often with
+ * fields that echo the request (`needed`, `provided`, `response_metadata`).
+ * The code is the whole diagnostic; nothing else of the body is kept. */
+describe("redactErrorMessage keeps only error from a Slack ok:false body (SCRUM-454)", () => {
+  it("redact keeps only error from a Slack ok:false body", () => {
+    const out = redactErrorMessage(
+      'Slack API error: {"ok":false,"error":"missing_scope","needed":"chat:write","provided":"channels:read,person@example.test","warning":"superfluous_charset","response_metadata":{"warnings":["superfluous_charset"],"messages":["hello from a user message"]}}'
+    )!;
+    const json = JSON.parse(out.slice(out.indexOf("{"), out.lastIndexOf("}") + 1)) as Record<string, unknown>;
+    expect(json).toEqual({ ok: false, error: "missing_scope" });
+    expect(out.startsWith("Slack API error: ")).toBe(true);
+    expect(out).not.toContain("person@example.test");
+    expect(out).not.toContain("hello from a user message");
+    expect(out).not.toContain("needed");
+  });
+
+  it("keeps a long code whole, which the id pattern would otherwise mask", () => {
+    const out = redactErrorMessage('{"ok":false,"error":"not_allowed_token_type_for_method"}')!;
+    expect(out).toBe('{"ok":false,"error":"not_allowed_token_type_for_method"}');
+  });
+
+  it("drops an error that is not a plain code, keeping the envelope", () => {
+    const out = redactErrorMessage('{"ok":false,"error":"the user typed this whole sentence"}')!;
+    expect(out).toBe('{"ok":false}');
+  });
+
+  it("leaves an object with a non-string error, or ok:true, on the old paths", () => {
+    const google = 'Error: API error: {"error":{"code":400,"message":"Bad request.","status":"INVALID_ARGUMENT"}}';
+    expect(redactErrorMessage(google)).toBe(google);
+    const okTrue = '{"ok":true,"error":"weird"}';
+    expect(redactErrorMessage(okTrue)).toBe(okTrue);
+  });
+});
