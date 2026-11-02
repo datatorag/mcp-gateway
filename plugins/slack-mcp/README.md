@@ -14,6 +14,14 @@ This server is the Slack connector of [DataToRAG](https://datatorag.com), a host
 | `slack_thread_read` | One message and its replies, the parent first (limit default 50, max 200) | `conversations.replies` |
 | `slack_users_lookup` | One person, by email or by user id | `users.lookupByEmail`, `users.info` |
 | `slack_files_list` | Files in a channel or by a person, metadata only, never file contents or download links (count default 20, max 100) | `files.list` |
+| `slack_reactions_add` | Add an emoji reaction to a message | `reactions.add` |
+| `slack_message_update` | Replace the text of a message the user posted; requires `expected_channel_name` | `chat.update` |
+| `slack_message_post` | Post a message, or a reply in a thread, as the user; requires `expected_channel_name` | `chat.postMessage` |
+| `slack_dm_send` | Send a direct message to one person (user id or email) as the user; requires `expected_user_email` | `conversations.open`, then `chat.postMessage` |
+
+### The expected-target guard
+
+A post notifies people the moment it lands, and deleting it does not undo the notification. So `slack_message_post` and `slack_message_update` take a required `expected_channel_name`, and `slack_dm_send` a required `expected_user_email`. The target is resolved first; unless its name (compared without `#` and without case) or its Slack email (without case) equals the expectation, the call is refused and nothing is sent, and the refusal names what the target resolved to. A post that got no answer is not sent again, and says it may have posted.
 
 ### What the tools return
 

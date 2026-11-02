@@ -11,10 +11,10 @@ const READS = [
 ];
 
 /** Writes that notify people or replace what they read: destructive. */
-const DESTRUCTIVE_WRITES: string[] = [];
+const DESTRUCTIVE_WRITES = ["slack_message_update", "slack_message_post", "slack_dm_send"];
 
 /** Writes that are small, reversible and notify no one: not destructive. */
-const ADDITIVE_WRITES: string[] = [];
+const ADDITIVE_WRITES = ["slack_reactions_add"];
 
 describe("the tool list", () => {
   it("serves exactly the reads and writes listed here, each with a handler", () => {
@@ -28,6 +28,11 @@ describe("the tool list", () => {
       expect(t.annotations, name).toMatchObject({ readOnlyHint: true, destructiveHint: false });
       expect(toolReadOnly.get(name), name).toBe(true);
     }
+  });
+
+  it("destructive writes carry destructiveHint true, the additive one false", () => {
+    for (const name of DESTRUCTIVE_WRITES) expect(allTools.find((x) => x.name === name)!.annotations.destructiveHint, name).toBe(true);
+    for (const name of ADDITIVE_WRITES) expect(allTools.find((x) => x.name === name)!.annotations.destructiveHint, name).toBe(false);
   });
 
   it("every write is not read-only, so it is never retried", () => {

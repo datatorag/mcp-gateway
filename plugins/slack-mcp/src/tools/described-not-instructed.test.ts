@@ -13,6 +13,10 @@ const DESCRIBED = [
   "slack_thread_read",
   "slack_users_lookup",
   "slack_files_list",
+  "slack_reactions_add",
+  "slack_message_update",
+  "slack_message_post",
+  "slack_dm_send",
 ];
 
 /** Words that address the reader's behaviour instead of the tool's. */

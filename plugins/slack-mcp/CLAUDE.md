@@ -40,6 +40,13 @@ writes. Design and stages:
   mentions resolved and trimmed, thread_ts, reply_count, permalink);
   `slack_files_list` returns metadata only, no `url_private*`, thumbnails,
   previews or public links. Counts above a maximum are read as the maximum
+- `src/tools/slack-write.ts`: the four write schemas and
+  `handleSlackWrite()`. Post and update resolve the channel and call
+  `checkExpectedChannel`, DM resolves the person (id through `users.info`,
+  email through `users.lookupByEmail`) and calls `checkExpectedUser`, all
+  before anything is sent (`src/tools/expected-target.ts`). The expectation
+  arguments are required in the schemas. `already_reacted` is reported, not
+  failed
 - `src/tools/annotations.ts`: `READ`, `WRITE` (destructive: a post, a DM, an
   edit) and `ADDITIVE` (a reaction: a write, not destructive)
 - `src/fixtures/`: test support, excluded from the build. The `.json` files
