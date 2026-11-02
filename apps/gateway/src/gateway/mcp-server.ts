@@ -62,7 +62,7 @@ import {
 import { pluginFailureOf } from "./usage/classify";
 import { grantLine, type ConnectedAccountLine } from "./account-grant-line";
 import { cleanWorkspaceName } from "./untrusted-text";
-import { CONNECTABLE_SERVICES, getConnectableService } from "@/app/dashboard/connections/service-registry";
+import { getConnectableService, PUBLIC_SERVICE_IDS } from "@/app/dashboard/connections/service-registry";
 import { connectionDead } from "./refresh-failure";
 import { crossFile, filePathsFor } from "./file-crossing";
 import { createDownloadLink, createUploadLink, DOWNLOAD_TOOL, revokeCarriedLinks, UPLOAD_TOOL } from "./file-download";
@@ -636,7 +636,11 @@ export const BUILT_IN_TOOLS: {
         properties: {
           service: {
             type: "string",
-            enum: CONNECTABLE_SERVICES.map((s) => s.id),
+            // Never an audience-gated service (SCRUM-454): this schema is
+            // served to every client, so it names only what anyone may
+            // connect. An admin still gets such a service in the report,
+            // which reads offeredServiceIdsFor.
+            enum: [...PUBLIC_SERVICE_IDS],
             description: "One provider to report on, with a link even when it is already connected. Omit it to report on all of them.",
           },
         },

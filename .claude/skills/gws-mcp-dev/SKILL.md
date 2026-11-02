@@ -1,19 +1,20 @@
 ---
 name: gws-mcp-dev
-description: Use when developing a connector plugin under plugins/ (gws-mcp, atlassian-mcp, notion-mcp, brevo-mcp): adding or changing tools. Where the plugins live now, tool-definition patterns, the client and auth model, build and test, the freeze window, and the ship tail back into the gateway.
+description: Use when developing a connector plugin under plugins/ (gws-mcp, atlassian-mcp, notion-mcp, brevo-mcp, slack-mcp): adding or changing tools. Where the plugins live now, tool-definition patterns, the client and auth model, build and test, the freeze window, and the ship tail back into the gateway.
 ---
 
-# Plugin development (gws-mcp, atlassian-mcp, notion-mcp, brevo-mcp)
+# Plugin development (gws-mcp, atlassian-mcp, notion-mcp, brevo-mcp, slack-mcp)
 
 The connector plugins live in this repository, at `plugins/gws-mcp`,
-`plugins/atlassian-mcp`, `plugins/notion-mcp` and `plugins/brevo-mcp`, as workspace packages
-`@datatorag-mcp/<slug>`. The first two were imported from their own
-repositories with their history (SCRUM-390); `notion-mcp` and `brevo-mcp` started here. Those repositories are frozen:
+`plugins/atlassian-mcp`, `plugins/notion-mcp`, `plugins/brevo-mcp` and
+`plugins/slack-mcp`, as workspace packages `@datatorag-mcp/<slug>`. The first
+two were imported from their own repositories with their history (SCRUM-390);
+`notion-mcp`, `brevo-mcp` and `slack-mcp` started here. Those repositories are frozen:
 `main` is locked on both, and nothing new goes there.
 
 Each plugin's `CLAUDE.md` (`plugins/<slug>/CLAUDE.md`) holds the facts about
 that plugin and is the first thing to read. This skill holds what is common
-to both and what crosses into the gateway.
+to all of them and what crosses into the gateway.
 
 **A connector is a service plugin of the gateway, not a standalone MCP
 server.** The gateway starts it as a child process, gives it a port, and
@@ -92,11 +93,30 @@ and a duplicate is a read plus a create. Its writes have rules in the
 runner's send guard (see Conventions). It was born in this repository
 (SCRUM-366), so it has no imported history.
 
+**`slack-mcp` specifics** (SCRUM-454). Calls Slack's Web API through
+`src/slack-client.ts` with the user's own token (user scopes, no bot
+token): GET for reads, POST JSON for writes. Slack refuses with HTTP 200
+and `ok: false`; the client throws `SlackApiError` with Slack's `error`
+code. Ten tools: six reads (`src/tools/slack-read.ts`) and four writes
+(`src/tools/slack-write.ts`). Every write but `slack_reactions_add` takes a
+REQUIRED expected target (`expected_channel_name`, `expected_user_email`,
+`src/tools/expected-target.ts`): the plugin resolves the channel or person
+first and sends nothing unless it matches, because a post notifies people
+and deleting it does not undo that. Reads retry rate refusals by the tool's
+read-only hint (`src/rate-limit-retry.ts`); a write is never retried and a
+write with no answer says it may have landed. Its service is admin-only
+(`audience: "admin"` on the registry entry, see `gateway-dev`), so it has no
+public docs page, no changelog entry and no public `/tools` page; its
+Docker account is uid and gid 905 (904 is held for another plugin).
+
 **Adding a plugin.** Three places name each plugin one by one and refuse or
-skip an unknown one: the gateway `Dockerfile` (its files and a
-`plugin-<slug>` account, without which it is never started),
+skip an unknown one: the gateway `Dockerfile` (its files, beside the other
+plugins' COPY lines, and a `plugin-<slug>` account on the next free uid,
+without which it is never started),
 `scripts/gate.sh`'s path table (an unlisted plugin path falls to `all`,
-which runs every suite except the new plugin's), and `PLUGIN_SERVICE_MAP`.
+which runs every suite except the new plugin's; the row, its `want_` flag,
+the `run_plugin` case and the self-test lines all name it), and
+`PLUGIN_SERVICE_MAP`.
 CI's tool-file step loops over `plugins/` and needs nothing. Its
 `mcp_servers` row, without which the manager never starts it, comes from
 the registry pair like its first tools (Ship tail), never by hand.
@@ -237,7 +257,12 @@ gateway deploy carries it. What goes with it:
   fixture page, data source and database and what the run created (known by
   the id each create answered with, not by title), every create is titled
   with the smoke prefix and run stamp, and a comment or page content may not
-  mention a person. A new `notion_` write tool is refused until it has a rule.
+  mention a person. A new `notion_` write tool is refused until it has a rule. Slack (SCRUM-454): a write reaches only the
+  fixture channel, by its configured id (a `#name` is refused), and an edit,
+  reaction or reply only a message the run posted there (known by the ts its
+  post answered with); a DM goes only to the `slack` role's own address;
+  every message carries the label and no "@" or `<@`, `<!`, `<#`. A new
+  `slack_` write tool is refused until it has a rule.
 
 ## Gotchas
 

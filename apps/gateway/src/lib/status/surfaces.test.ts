@@ -34,4 +34,10 @@ describe("the status page's surfaces (SCRUM-431)", () => {
     for (const name of ["tests_run", "tests_status", "tests_results", "gws-mcp__gws_run"]) expect(isPublicTool(name), name).toBe(false);
     for (const name of ["gws-mcp__gmail_send", "file_download_link", "skills_get"]) expect(isPublicTool(name), name).toBe(true);
   });
+
+  it("leave out the tools of an admin-only service (SCRUM-454)", () => {
+    for (const name of ["slack-mcp__slack_message_post", "slack-mcp__slack_channels_list"]) expect(isPublicTool(name), name).toBe(false);
+    // A prefix match on the slug with its separator, not on the word.
+    expect(isPublicTool("notion-mcp__notion_search")).toBe(true);
+  });
 });

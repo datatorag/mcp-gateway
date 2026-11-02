@@ -154,6 +154,7 @@ The full list, with comments, is in [`.env.example`](.env.example), and the sche
 | `GOOGLE_GWS_CLIENT_ID`, `GOOGLE_GWS_CLIENT_SECRET` | Google Workspace connections |
 | `ATLASSIAN_CLIENT_ID`, `ATLASSIAN_CLIENT_SECRET` | Jira and Confluence connections |
 | `NOTION_OAUTH_CLIENT_ID`, `NOTION_OAUTH_CLIENT_SECRET` | Notion connections |
+| `SLACK_CONNECTOR_CLIENT_ID`, `SLACK_CONNECTOR_CLIENT_SECRET`, `SLACK_CONNECTOR_TEAM_ID` | Slack connections, for one workspace and admins only; optional |
 | `ANTHROPIC_API_KEY`, `PLAYGROUND_MODEL` | The dashboard agent; empty turns it off |
 | `STRIPE_*` | Billing; optional |
 | `POSTHOG_API_KEY`, `SLACK_BOT_TOKEN`, `BREVO_API_KEY` | Analytics, notifications and email; each is off when empty |

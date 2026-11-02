@@ -77,6 +77,7 @@ const CALLBACKS: Array<{ path: string; nonceClear: string }> = [
   { path: "/auth/notion/connect/callback", nonceClear: "res.clearCookie(NOTION_CONNECT_NONCE_COOKIE" },
   // SCRUM-468.
   { path: "/auth/brevo/connect/callback", nonceClear: "res.clearCookie(BREVO_CONNECT_NONCE_COOKIE" },
+  { path: "/auth/slack/connect/callback", nonceClear: "res.clearCookie(SLACK_CONNECT_NONCE_COOKIE" },
 ];
 
 /** The Google consumers, kept as the self-check's reference set. */

@@ -60,6 +60,12 @@ const envSchema = z.object({
   // lifecycle email. Optional, so a deploy without them still boots.
   BREVO_OAUTH_CLIENT_ID: z.string().default(""),
   BREVO_OAUTH_CLIENT_SECRET: z.string().default(""),
+  // Slack connector OAuth (SCRUM-454): the internal app's user-token flow,
+  // for the company workspace only. Not the notification bot's
+  // SLACK_BOT_TOKEN. Without all three the connect answers not configured.
+  SLACK_CONNECTOR_CLIENT_ID: z.string().default(""),
+  SLACK_CONNECTOR_CLIENT_SECRET: z.string().default(""),
+  SLACK_CONNECTOR_TEAM_ID: z.string().default(""),
   // PostHog
   POSTHOG_API_KEY: z.string().default(""),
   /** SCRUM-228: analytics is off outside production unless this is "1". */

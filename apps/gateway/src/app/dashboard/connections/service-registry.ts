@@ -54,6 +54,14 @@ export const CONNECTABLE_SERVICES: ConnectableService[] = [
     launchPluginSlug: "brevo-mcp",
     audience: "admin",
   },
+  {
+    // SCRUM-454: the company workspace only, so admins only.
+    id: "slack",
+    name: "Slack",
+    connectUrl: "/auth/slack/connect",
+    launchPluginSlug: "slack-mcp",
+    audience: "admin",
+  },
 ];
 
 /** The services offered with no registry check: what a surface shows before
@@ -61,6 +69,21 @@ export const CONNECTABLE_SERVICES: ConnectableService[] = [
  * surface that has not heard back yet fails closed. */
 export const ALWAYS_OFFERED_SERVICE_IDS: readonly string[] =
   CONNECTABLE_SERVICES.filter((s) => !s.launchPluginSlug).map((s) => s.id);
+
+/** The services offered to every user once launched: the ids a schema every
+ * client sees (the `connect` tool's `service` enum) may name. Never one with
+ * an `audience` (Brevo, SCRUM-468; Slack, SCRUM-454): a client's schema is the
+ * same for every user, so naming one would announce it to all of them. */
+export const PUBLIC_SERVICE_IDS: readonly string[] = CONNECTABLE_SERVICES.filter((s) => !s.audience).map((s) => s.id);
+
+/** The plugins whose service only some users are offered: the
+ * `launchPluginSlug` of every entry with an `audience` (Brevo, SCRUM-468;
+ * Slack, SCRUM-454). The one list the public surfaces leave out (the status
+ * page's tools, the public tool counts, `/tools/<slug>` and the sitemap), so
+ * another admin-only service needs no edit there. */
+export const ADMIN_AUDIENCE_PLUGIN_SLUGS: readonly string[] = CONNECTABLE_SERVICES.filter(
+  (s) => s.audience && s.launchPluginSlug
+).map((s) => s.launchPluginSlug!);
 
 /** The entries of `services` a surface may offer, given the launched ids
  * (`launchedServiceIds` on the server, `launchedServices` in the connections

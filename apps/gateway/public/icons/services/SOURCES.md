@@ -28,3 +28,11 @@ Labs, Inc.
 | File | Commons source |
 |------|----------------|
 | notion.svg | File:Notion-logo.svg (https://commons.wikimedia.org/wiki/File:Notion-logo.svg; public domain, trademarked; author Notion Labs, Inc.; file byte-identical to the Commons original, SHA-1 98857e3665e526f7a21744b5f84ad18a530488e9) |
+
+Slack's mark, fetched 2026-11-01 from Wikimedia Commons, used unmodified to
+indicate interoperability, not endorsement. Slack is a trademark of Slack
+Technologies, LLC.
+
+| File | Commons source |
+|------|----------------|
+| slack.svg | File:Slack icon 2019.svg (https://commons.wikimedia.org/wiki/File:Slack_icon_2019.svg; public domain, trademarked; author Slack Technologies; file byte-identical to the Commons original, SHA-1 e6348a809fecba8504b00d4c04cfc53a76002afd) |

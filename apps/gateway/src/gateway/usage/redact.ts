@@ -130,8 +130,22 @@ function sanitizeNotionEnvelope(asRecord: Record<string, unknown>): Sanitized | 
   return out;
 }
 
+/** A Slack error code: a snake_case word from Slack's own vocabulary
+ * ("missing_scope", "not_in_channel"). Kept whole, like Notion's. */
+const SLACK_CODE_RE = /^[a-z][a-z0-9_]{0,63}$/;
+
+/** Slack's envelope, `{ok: false, error: "<code>"}` (SCRUM-454). Everything
+ * else in it (`needed`, `provided`, `warning`, `response_metadata`) can echo
+ * the request and is dropped: the code is the whole diagnostic. Recognised
+ * only on `ok: false` with a string `error`, so no other shape changes. */
+function sanitizeSlackEnvelope(asRecord: Record<string, unknown>): Sanitized | null {
+  if (asRecord.ok !== false || typeof asRecord.error !== "string") return null;
+  return SLACK_CODE_RE.test(asRecord.error) ? { ok: false, error: asRecord.error } : { ok: false };
+}
+
 /** True when the parsed object looks like an error envelope we understand:
- * either `{ error: {...} }`, Notion's `{ object: "error", ... }`, or a bare
+ * either `{ error: {...} }`, Notion's `{ object: "error", ... }`, Slack's
+ * `{ ok: false, error: "<code>" }`, or a bare
  * object carrying diagnostic fields. */
 function sanitizeRecognisedEnvelope(parsed: unknown): Sanitized | null {
   if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
@@ -140,6 +154,8 @@ function sanitizeRecognisedEnvelope(parsed: unknown): Sanitized | null {
   const asRecord = parsed as Record<string, unknown>;
   const notion = sanitizeNotionEnvelope(asRecord);
   if (notion) return notion;
+  const slack = sanitizeSlackEnvelope(asRecord);
+  if (slack) return slack;
   if (typeof asRecord.error === "object" && asRecord.error !== null) {
     const inner = sanitizeEnvelopeObject(asRecord.error, 1);
     return inner ? { error: inner } : null;

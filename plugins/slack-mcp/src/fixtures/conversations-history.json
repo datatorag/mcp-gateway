@@ -1,0 +1,33 @@
+{
+  "ok": true,
+  "messages": [
+    {
+      "type": "message",
+      "user": "U000TEST1",
+      "text": "Shipping today, <@U000TEST2> can you check <#C000TEST2|random>?",
+      "ts": "1700000300.000300",
+      "thread_ts": "1700000300.000300",
+      "reply_count": 2,
+      "reply_users_count": 1,
+      "latest_reply": "1700000400.000500"
+    },
+    {
+      "type": "message",
+      "subtype": "bot_message",
+      "bot_id": "B000TEST1",
+      "username": "Deploy Bot",
+      "text": "",
+      "ts": "1700000200.000200",
+      "attachments": [{ "fallback": "Deploy finished: build 42", "text": "Deploy finished: build 42" }]
+    },
+    {
+      "type": "message",
+      "user": "U000TEST2",
+      "text": "Morning all",
+      "ts": "1700000100.000100"
+    }
+  ],
+  "has_more": true,
+  "pin_count": 0,
+  "response_metadata": { "next_cursor": "bmV4dF90czoxNzAwMDAwMDAwMDAwMDAw" }
+}

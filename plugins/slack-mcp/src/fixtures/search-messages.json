@@ -1,0 +1,33 @@
+{
+  "ok": true,
+  "query": "release notes",
+  "messages": {
+    "total": 2,
+    "pagination": { "total_count": 2, "page": 1, "per_page": 20, "page_count": 1, "first": 1, "last": 2 },
+    "paging": { "count": 20, "total": 2, "page": 1, "pages": 1 },
+    "matches": [
+      {
+        "iid": "00000000-0000-0000-0000-000000000001",
+        "team": "T000TEST1",
+        "type": "message",
+        "user": "U000TEST1",
+        "username": "test.one",
+        "ts": "1700000500.000600",
+        "text": "Release notes are in the doc, thanks <@U000TEST2>",
+        "permalink": "https://example.test/archives/C000TEST1/p1700000500000600",
+        "channel": { "id": "C000TEST1", "name": "general", "is_private": false }
+      },
+      {
+        "iid": "00000000-0000-0000-0000-000000000002",
+        "team": "T000TEST1",
+        "type": "message",
+        "user": "U000TEST2",
+        "username": "test.two",
+        "ts": "1700000600.000700",
+        "text": "Draft release notes attached",
+        "permalink": "https://example.test/archives/C000TEST3/p1700000600000700?thread_ts=1700000550.000650",
+        "channel": { "id": "C000TEST3", "name": "smoke-tests", "is_private": true }
+      }
+    ]
+  }
+}

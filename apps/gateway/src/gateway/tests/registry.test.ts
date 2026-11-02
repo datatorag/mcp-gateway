@@ -118,6 +118,30 @@ describe("the Notion connector's coverage", () => {
   });
 });
 
+/**
+ * The Slack connector arrives with a case per tool too (SCRUM-454), checked
+ * against the reviewed snapshot so it holds without a database.
+ */
+describe("the Slack connector's coverage", () => {
+  it("every slack-mcp tool has a case, all in the slack scenario", async () => {
+    const { REGISTRY_CLASSIFICATION } = await import("../playground/registry-snapshot");
+    const { scenarioOf } = await import("./scenarios");
+    const tools = REGISTRY_CLASSIFICATION.map(([name]) => name).filter((n) => n.startsWith("slack-mcp__"));
+    // Six reads and four writes.
+    expect(tools.length).toBe(10);
+    const covered = new Set(CASES.flatMap((c) => c.covers));
+    expect(tools.filter((t) => !covered.has(t))).toEqual([]);
+    const slackCases = CASES.filter((c) => c.covers.some((t) => t.startsWith("slack-mcp__")));
+    expect(slackCases.filter((c) => scenarioOf(c.id)?.key !== "slack").map((c) => c.id)).toEqual([]);
+  });
+
+  it("runs every Slack case as the slack role and nothing else", () => {
+    const slackCases = CASES.filter((c) => c.covers.some((t) => t.startsWith("slack-mcp__")));
+    expect(slackCases.length).toBeGreaterThan(0);
+    for (const c of slackCases) expect(c.accounts, c.id).toEqual(["slack"]);
+  });
+});
+
 describe("what it rejects", () => {
   it("accepts a well-formed set, so the rejections below are not blanket", () => {
     expect(checkRegistry([c({ id: "D10" }), c({ id: "D11", needs: ["D10"] })])).toEqual([]);

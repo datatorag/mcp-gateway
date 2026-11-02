@@ -118,6 +118,37 @@ describe("registry write/read classification snapshot", () => {
     }
   });
 
+  /** The Slack connector (SCRUM-454) ships ten tools: six reads and four
+   * writes. Pinned as a set for the same reason as Notion's. Every write is
+   * caught by the verb floor: `send`, `update` and `add` already were verbs,
+   * and `post` joined the list for `slack_message_post`, which would
+   * otherwise have been a write only by the fail-closed default. */
+  it("records the six Slack reads as reads and the four writes as writes, each write caught by a verb", () => {
+    const slack = REGISTRY_CLASSIFICATION.filter(([name]) => name.startsWith("slack-mcp__"));
+    expect(slack).toEqual([
+      ["slack-mcp__slack_channel_history", "read"],
+      ["slack-mcp__slack_channels_list", "read"],
+      ["slack-mcp__slack_dm_send", "write"],
+      ["slack-mcp__slack_files_list", "read"],
+      ["slack-mcp__slack_message_post", "write"],
+      ["slack-mcp__slack_message_update", "write"],
+      ["slack-mcp__slack_messages_search", "read"],
+      ["slack-mcp__slack_reactions_add", "write"],
+      ["slack-mcp__slack_thread_read", "read"],
+      ["slack-mcp__slack_users_lookup", "read"],
+    ]);
+    for (const [name, recorded] of slack) {
+      expect(classifyWrite(name), name).toBe(recorded === "write");
+      expect(isWriteTool(name), `${name} by its verb`).toBe(recorded === "write");
+    }
+  });
+
+  it("slack_message_post classifies as write by the post verb", () => {
+    expect(isWriteTool("slack-mcp__slack_message_post")).toBe(true);
+    // The floor, not the default: an allowlist entry cannot lower it.
+    expect(classifyWrite("slack-mcp__slack_message_post", new Set(), new Set(["slack-mcp__slack_message_post"]))).toBe(true);
+  });
+
   it("KNOWN_READ_TOOLS is exactly this snapshot's read set", () => {
     // The gate's allowlist and this review record must be the same list, or
     // one of them is lying: an entry only here would fail closed at runtime

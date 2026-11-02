@@ -462,3 +462,33 @@ describe("request_connection and the launch gate (SCRUM-366)", () => {
     ]);
   });
 });
+
+/* SCRUM-454: disconnect_service names an admin-only service (Slack) only to a
+ * user the launched set says may have it, so the schema a non-admin's agent
+ * sees never names it. Every other service stays disconnectable whether or
+ * not it is launched now, so a connection made before a plugin was paused
+ * can still be removed. */
+describe("disconnect_service and the admin audience (SCRUM-454)", () => {
+  const build = (launchedServices?: string[]) =>
+    (buildIntrospectionTools({
+      db: {} as never,
+      userId: "user-1",
+      launchedServices,
+    }).disconnect_service.inputSchema as unknown as z.ZodTypeAny);
+
+  it("does not name slack for a user who is not offered it", () => {
+    for (const schema of [build(), build(["google-workspace", "atlassian", "notion"])]) {
+      expect(schema.safeParse({ service: "slack" }).success).toBe(false);
+      for (const service of ["google-workspace", "atlassian", "notion"]) {
+        expect(schema.safeParse({ service }).success, service).toBe(true);
+      }
+    }
+    const options = ((build() as unknown as z.ZodObject<z.ZodRawShape>).shape.service as z.ZodEnum<[string, ...string[]]>).options;
+    expect(options).not.toContain("slack");
+  });
+
+  it("names slack for a user whose launched set holds it", () => {
+    const schema = build(["google-workspace", "atlassian", "notion", "slack"]);
+    expect(schema.safeParse({ service: "slack" }).success).toBe(true);
+  });
+});

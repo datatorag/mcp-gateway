@@ -6,6 +6,7 @@ import { getAllPosts } from "@/lib/blog";
 import { getAllDocs } from "@/lib/docs";
 import { getAllSkills } from "@/lib/skills";
 import { getAllPersonas } from "@/lib/personas";
+import { isPublicServerSlug } from "@/lib/public-tools";
 
 // Request-time so the tools query runs against the live DB, not at build.
 export const dynamic = "force-dynamic";
@@ -71,7 +72,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       .select({ slug: mcpServers.slug })
       .from(mcpServers)
       .where(eq(mcpServers.status, "active"));
-    tools = servers.map((s) => ({
+    tools = servers.filter((s) => isPublicServerSlug(s.slug)).map((s) => ({
       url: `${BASE}/tools/${s.slug}`,
       changeFrequency: "monthly",
       priority: 0.5,

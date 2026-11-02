@@ -4,10 +4,12 @@ import { serviceConnections, connectedAccounts, pluginConnections } from "@datat
 import { revokeGoogleToken } from "@/lib/google-revoke";
 import { NOTION_REVOKE_URL, NOTION_TOKEN_URL, notionBasicAuth } from "./notion-oauth";
 import { BREVO_REVOKE_URL, BREVO_TOKEN_URL, brevoClientCredentials } from "./brevo-oauth";
+import { SLACK_REVOKE_URL, SLACK_TOKEN_TIMEOUT_MS, SLACK_TOKEN_URL } from "./slack-oauth";
 import { cleanWorkspaceName } from "./untrusted-text";
 import { openToken, sealedColumns, TokenOpenError, type TokenRow } from "./token-crypto";
 import {
   classifyRefreshFailure,
+  classifySlackRefusal,
   recordRefreshFailure,
   refreshSucceededFields,
   type RefreshFailure,
@@ -60,6 +62,7 @@ export const PLUGIN_SERVICE_MAP: Record<string, string> = {
   "atlassian-mcp": "atlassian",
   "notion-mcp": "notion",
   "brevo-mcp": "brevo",
+  "slack-mcp": "slack",
 };
 
 /** Reverse mapping: service name to plugin slug. */
@@ -194,7 +197,8 @@ const LOCKED_TOKEN_TIMEOUT_MS = 10_000;
 
 /**
  * Refresh a token pair that the provider ROTATES, under a row lock
- * (SCRUM-366 for Notion; SCRUM-468 moved it here for Brevo too).
+ * (SCRUM-366 for Notion; SCRUM-468 moved it here for Brevo too; SCRUM-454
+ * Slack, whose refresh token works only once).
  *
  * Notion rotates BOTH tokens on every refresh, and stage 0 observed the rule
  * that makes an unlocked refresh dangerous: the old pair stays valid until the
@@ -211,10 +215,10 @@ const LOCKED_TOKEN_TIMEOUT_MS = 10_000;
  * - The provider is called while the lock is held, and the new pair is written
  *   in the same transaction, so it is persisted before anyone is handed the
  *   new access token.
- * - On `invalid_grant` the row is read again (locked, so a writer queued
- *   behind this one, such as a reconnect, lands first) before the grant is
- *   called dead: if its refresh token has moved, the stored access token is
- *   used.
+ * - On `invalid_grant` (or a provider's own dead-grant code, through
+ *   `refusalIn`) the row is read again (locked, so a writer queued behind
+ *   this one, such as a reconnect, lands first) before the grant is called
+ *   dead: if its refresh token has moved, the stored access token is used.
  */
 async function refreshRotatingToken(
   db: Database,
@@ -226,10 +230,15 @@ async function refreshRotatingToken(
     call: (refreshToken: string, signal: AbortSignal) => Promise<Response>;
     /** When the new access token expires, from the provider's answer. */
     expiresAt: (data: Record<string, unknown>) => Date | null;
+    /** For a provider that refuses with HTTP 200 and its own error field
+     * (Slack's `ok: false`, SCRUM-454): the refusal a 2xx body carries,
+     * classified, or null when the body is a success. A permanent one is
+     * checked against the row again like `invalid_grant`. */
+    refusalIn?: (data: Record<string, unknown>) => RefreshFailure | null;
   }
 ): Promise<RefreshOutcome> {
   const connectionId = conn.id;
-  type Outcome = { token: string } | { rejected: true } | { failure: RefreshFailure };
+  type Outcome = { token: string } | { rejected: string } | { failure: RefreshFailure };
   let outcome: Outcome;
   try {
     outcome = await db.transaction(async (tx): Promise<Outcome> => {
@@ -260,9 +269,11 @@ async function refreshRotatingToken(
       if (!res.ok) {
         const refused = await refusedRefresh(res);
         // invalid_grant is looked at again below, after the lock is let go.
-        return refused.failure.reason === "invalid_grant" ? { rejected: true } : refused;
+        return refused.failure.reason === "invalid_grant" ? { rejected: "invalid_grant" } : refused;
       }
       const data = (await res.json()) as Record<string, unknown>;
+      const refusal = provider.refusalIn?.(data) ?? null;
+      if (refusal) return refusal.kind === "permanent" ? { rejected: refusal.reason } : { failure: refusal };
       if (typeof data.access_token !== "string") return UNEXPECTED;
 
       const rotated = {
@@ -289,7 +300,7 @@ async function refreshRotatingToken(
   if ("token" in outcome) return outcome;
   if ("failure" in outcome) return outcome;
 
-  // invalid_grant. Before calling the grant dead, look again: a writer that
+  // A dead-grant refusal. Before calling the grant dead, look again: a writer that
   // does not take this lock (a reconnect) may have been queued behind it.
   try {
     const [locked] = await db.transaction((tx) =>
@@ -309,8 +320,8 @@ async function refreshRotatingToken(
   } catch {
     return UNEXPECTED;
   }
-  console.warn(`[service-token] ${provider.label} refresh refused (invalid_grant); the account needs reconnecting`);
-  return { failure: { kind: "permanent", reason: "invalid_grant" } };
+  console.warn(`[service-token] ${provider.label} refresh refused (${outcome.rejected}); the account needs reconnecting`);
+  return { failure: { kind: "permanent", reason: outcome.rejected } };
 }
 
 /**
@@ -377,6 +388,49 @@ export async function refreshBrevoToken(
   });
 }
 
+/**
+ * Refresh a Slack user token (SCRUM-454), under the rotating-token lock.
+ *
+ * With token rotation on, an access token lasts `expires_in` seconds and each
+ * refresh token works once, so the lock is what keeps two concurrent calls
+ * from spending it twice. The refresh is `oauth.v2.access` with
+ * `grant_type=refresh_token`, form-encoded with the client credentials, and
+ * answers HTTP 200 with `ok`; `classifySlackRefusal` decides which `ok: false`
+ * codes mean the grant is dead. The expiry is stored from `expires_in`.
+ *
+ * Exported for its tests.
+ */
+export async function refreshSlackToken(
+  db: Database,
+  conn: ConnectionRef,
+  presentedRefreshToken: string
+): Promise<RefreshOutcome> {
+  const clientId = process.env.SLACK_CONNECTOR_CLIENT_ID;
+  const clientSecret = process.env.SLACK_CONNECTOR_CLIENT_SECRET;
+  if (!clientId || !clientSecret) return null;
+  return refreshRotatingToken(db, conn, presentedRefreshToken, {
+    label: "slack",
+    call: (refreshToken, signal) =>
+      fetch(SLACK_TOKEN_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: new URLSearchParams({
+          client_id: clientId,
+          client_secret: clientSecret,
+          grant_type: "refresh_token",
+          refresh_token: refreshToken,
+        }).toString(),
+        signal,
+      }),
+    expiresAt: (data) =>
+      typeof data.expires_in === "number" && data.expires_in > 0
+        ? new Date(Date.now() + data.expires_in * 1000)
+        : null,
+    // A 429 or a 5xx is a non-2xx; Slack sends its refusals as 200 ok:false.
+    refusalIn: (data) => (data.ok === true ? null : classifySlackRefusal(data.error)),
+  });
+}
+
 /** Service-specific refresh function lookup. */
 const REFRESH_FN: Record<
   string,
@@ -386,6 +440,7 @@ const REFRESH_FN: Record<
   atlassian: refreshAtlassianToken,
   notion: refreshNotionToken,
   brevo: refreshBrevoToken,
+  slack: refreshSlackToken,
 };
 
 /** Revoke one Notion token. Never throws. */
@@ -466,10 +521,30 @@ async function revokeBrevoGrant(tokens: RevokeTokens): Promise<boolean> {
   return results.some(Boolean);
 }
 
+/** Revoke a Slack grant (SCRUM-454): `auth.revoke` with the access token as
+ * the bearer. True only when Slack answers `ok`. Never throws, and never
+ * sends the refresh token. */
+async function revokeSlackGrant(tokens: RevokeTokens): Promise<boolean> {
+  if (!tokens.accessToken) return false;
+  try {
+    const res = await fetch(SLACK_REVOKE_URL, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${tokens.accessToken}` },
+      signal: AbortSignal.timeout(SLACK_TOKEN_TIMEOUT_MS),
+    });
+    if (!res.ok) return false;
+    const data = (await res.json()) as { ok?: unknown };
+    return data.ok === true;
+  } catch {
+    return false;
+  }
+}
+
 const REVOKE_FN = new Map<string, (tokens: RevokeTokens) => Promise<boolean>>([
   ["google-workspace", revokeGoogleGrant],
   ["notion", revokeNotionGrant],
   ["brevo", revokeBrevoGrant],
+  ["slack", revokeSlackGrant],
 ]);
 
 /** Tell the provider to drop a connection's grant before we forget it

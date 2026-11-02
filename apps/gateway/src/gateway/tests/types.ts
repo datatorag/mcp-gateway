@@ -25,8 +25,12 @@
  * hold both workspaces, and the gateway refuses an email that matches two
  * accounts rather than picking one.
  *
- * `brevo` (SCRUM-468) names the connected Brevo account, by its email. */
-export const ACCOUNT_ROLES = ["sender", "reader", "atlassian", "nonAdmin", "notion", "notionSecond", "brevo"] as const;
+ * `brevo` (SCRUM-468) names the connected Brevo account, by its email.
+ *
+ * `slack` (SCRUM-454) names the test user's address in the company Slack
+ * workspace: the account the Slack cases run as, and the only person a
+ * test run may send a direct message to (its own DM). */
+export const ACCOUNT_ROLES = ["sender", "reader", "atlassian", "nonAdmin", "notion", "notionSecond", "brevo", "slack"] as const;
 export type AccountRole = (typeof ACCOUNT_ROLES)[number];
 
 /** Named by KEY, never by id, for the same reason. */
@@ -93,6 +97,11 @@ export const FIXTURE_KEYS = [
   "brevoSecondList",
   "brevoDraftCampaign",
   "brevoSentCampaign",
+  /** The Slack channel id (C or G, then letters and digits) every Slack
+   * write in a test run lands in, a channel only the suite posts in. The
+   * send guard refuses a write anywhere else; its name is read from Slack
+   * by SL2, never configured. */
+  "slackChannel",
 ] as const;
 export type FixtureKey = (typeof FIXTURE_KEYS)[number];
 

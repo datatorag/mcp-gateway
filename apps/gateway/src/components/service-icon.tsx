@@ -27,6 +27,7 @@ const KNOWN_SERVICES = new Set([
   "jira",
   "confluence",
   "notion",
+  "slack",
 ]);
 
 /** The service key for a docs/page slug ("gmail" → "gmail"), or null when the

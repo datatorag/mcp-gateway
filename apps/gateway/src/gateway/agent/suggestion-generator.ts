@@ -13,7 +13,7 @@
  */
 
 export type SuggestionContext = "first_run" | "post_connect" | "dashboard";
-export type ServiceId = "google-workspace" | "atlassian" | "notion";
+export type ServiceId = "google-workspace" | "atlassian" | "notion" | "slack";
 export type ShapeKind = "chain" | "write" | "multi_account" | "read";
 
 export type Capability = {

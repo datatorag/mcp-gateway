@@ -206,6 +206,20 @@ export const REGISTRY_CLASSIFICATION: ReadonlyArray<readonly [string, "read" | "
   ["notion-mcp__notion_update_page", "write"],
   ["notion-mcp__notion_update_page_content", "write"],
   ["notion-mcp__notion_update_view", "write"],
+  ["slack-mcp__slack_channel_history", "read"],
+  ["slack-mcp__slack_channels_list", "read"],
+  // Sends as the user, by the `send` verb. Guarded in the plugin by a
+  // required expected_user_email.
+  ["slack-mcp__slack_dm_send", "write"],
+  // Metadata only; the plugin returns no URL that serves a file's bytes.
+  ["slack-mcp__slack_files_list", "read"],
+  // `post` joined the verb list for this one (SCRUM-454).
+  ["slack-mcp__slack_message_post", "write"],
+  ["slack-mcp__slack_message_update", "write"],
+  ["slack-mcp__slack_messages_search", "read"],
+  ["slack-mcp__slack_reactions_add", "write"],
+  ["slack-mcp__slack_thread_read", "read"],
+  ["slack-mcp__slack_users_lookup", "read"],
 ];
 
 /** The same tools addressed the way a skill file addresses them: bare names,

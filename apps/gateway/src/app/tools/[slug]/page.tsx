@@ -3,7 +3,7 @@ import { eq } from "drizzle-orm";
 import { marked } from "marked";
 import { db } from "@/lib/db";
 import { mcpServers } from "@datatorag-mcp/db";
-import { publicServerTools } from "@/lib/public-tools";
+import { isPublicServerSlug, publicServerTools } from "@/lib/public-tools";
 import { PLUGINS_DIR } from "@/gateway/plugins-dir";
 import { readPluginReadme } from "@/gateway/plugin-readme";
 import { Navbar } from "@/components/navbar";
@@ -26,7 +26,7 @@ async function getServer(slug: string) {
     .where(eq(mcpServers.slug, slug))
     .limit(1);
 
-  if (!server || server.status !== "active") return null;
+  if (!server || server.status !== "active" || !isPublicServerSlug(slug)) return null;
 
   const [serverTools, readmeHtml] = await Promise.all([
     publicServerTools(db, server.id),

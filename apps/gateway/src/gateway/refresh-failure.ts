@@ -51,6 +51,24 @@ export function classifyRefreshFailure(status: number | null, body: unknown): Re
   return { kind: "transient", reason: "unexpected" };
 }
 
+/** Slack's `ok: false` codes that mean the grant itself is gone (SCRUM-454),
+ * matched exactly. A spent or revoked refresh token is refused this way. */
+const SLACK_PERMANENT_ERRORS = new Set(["invalid_grant", "invalid_refresh_token", "token_revoked"]);
+
+/**
+ * Classify a Slack refresh refused with `ok: false`. Slack answers HTTP 200
+ * with an `error` code rather than an OAuth status, so `classifyRefreshFailure`
+ * cannot read it; a 429 or a 5xx still goes there. Any code not known to mean
+ * a dead grant is transient and stored as `unexpected`, never written
+ * through.
+ */
+export function classifySlackRefusal(error: unknown): RefreshFailure {
+  if (typeof error === "string" && SLACK_PERMANENT_ERRORS.has(error)) {
+    return { kind: "permanent", reason: error };
+  }
+  return { kind: "transient", reason: "unexpected" };
+}
+
 const GOOGLE_WORKSPACE = "google-workspace";
 
 /**

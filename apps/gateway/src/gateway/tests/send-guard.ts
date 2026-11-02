@@ -20,7 +20,9 @@ import { AddressParseError, parseAddressList } from "./address-list";
  * comment, not that this function would stop one.
  *
  * Notion writes have rules of their own, at the end of this file: the
- * fixtures and what the run created, and nothing else (SCRUM-366).
+ * fixtures and what the run created, and nothing else (SCRUM-366). So do
+ * Slack writes, after them: the fixture channel and the test user's own DM
+ * (SCRUM-454).
  */
 
 export const SUBJECT_PREFIX = "[smoke]";
@@ -335,6 +337,9 @@ export async function checkSend(
     /** What a Brevo write may reach (SCRUM-468). Absent refuses every Brevo
      * write; Brevo reads pass either way. */
     brevo?: BrevoScope;
+    /** What a Slack write may reach (SCRUM-454). Absent refuses every Slack
+     * write; Slack reads pass either way. */
+    slack?: SlackScope;
   }
 ): Promise<SendCheck> {
   const name = toolSuffix(tool);
@@ -343,6 +348,7 @@ export async function checkSend(
   if (tool.startsWith("brevo-mcp__")) return checkBrevo(name, args, opts.brevo, opts.readerEmail);
 
   if (name.startsWith("notion_")) return checkNotion(name, args, opts.notion, opts.runStamp ?? "");
+  if (name.startsWith("slack_")) return checkSlack(name, args, opts.slack, opts.runStamp ?? "");
   const reader = opts.readerEmail?.trim().toLowerCase() ?? null;
   const sender = opts.senderEmail?.trim().toLowerCase() ?? null;
 
@@ -1103,5 +1109,132 @@ export function checkBrevo(name: string, args: Record<string, unknown>, scope: B
       return ["draft", "archive", "darchive"].includes(String(args.status)) ? { ok: true } : no("a status that sends nothing: draft, archive or darchive");
     default:
       return no(`${name} has no rule for a test run`);
+  }
+}
+
+/* ---------------------------------------------------------------------------
+ * SLACK (SCRUM-454)
+ *
+ * A Slack post or direct message notifies people the moment it lands, and
+ * the connector has nothing that takes the notification back. So a test
+ * run's Slack writes are held to two places, checked before dispatch:
+ *
+ *  - the fixture channel `slackChannel`, named by its bare id exactly as
+ *    configured (a `#name` is refused rather than resolved, so the guard can
+ *    never read a different channel out of an argument than the plugin does).
+ *    A post may start a message there, or reply in a thread this run
+ *    started; an edit or a reaction reaches only a message this run posted,
+ *    known BY TS: the dispatch records the ts each post in the fixture
+ *    channel answered with (`recordSlackPosted`);
+ *  - the test user's own DM: `slack_dm_send` only to the address the `slack`
+ *    role maps to, by that address (an id is refused, since the guard cannot
+ *    compare one without a lookup), with the same address as the expectation.
+ *
+ * Every message carries the smoke prefix and the run stamp, and none may
+ * hold "@" or a "<@", "<!" or "<#" token: a mention, @here, @channel or a
+ * user group would notify people outside the run.
+ *
+ * WHAT IT CANNOT SEE: what Slack does with a reaction's emoji name (passed
+ * through), and whether the configured channel has members besides the test
+ * user. The fixture channel is meant to be one only the suite posts in.
+ * ------------------------------------------------------------------------- */
+
+/** The reads. Every other `slack_` tool is a write and needs a rule below,
+ * or it is refused: a new write tool fails closed until it has one. */
+const SLACK_READS = new Set([
+  "slack_channels_list",
+  "slack_messages_search",
+  "slack_channel_history",
+  "slack_thread_read",
+  "slack_users_lookup",
+  "slack_files_list",
+]);
+
+/** The ts of every message this run posted in the fixture channel. */
+export type SlackPosted = Set<string>;
+
+export function newSlackPosted(): SlackPosted {
+  return new Set();
+}
+
+/** What a run may write to in Slack. A null channel or self is not
+ * configured, and the writes that need it are refused. */
+export type SlackScope = {
+  /** The fixture channel's id (`slackChannel`). */
+  channel: string | null;
+  /** The address the `slack` role maps to: the only DM recipient. */
+  self: string | null;
+  posted: SlackPosted;
+};
+
+/**
+ * Record the ts a post in the fixture channel answered with, so later writes
+ * in the run may reach that message. Reads the plugin's answer for
+ * `slack_message_post` only, and only when it names the fixture channel.
+ * Never throws: a post the guard cannot read is one the run cannot touch
+ * again.
+ */
+export function recordSlackPosted(posted: SlackPosted, fixtureChannel: string | null, tool: string, text: string): void {
+  if (toolSuffix(tool) !== "slack_message_post" || !fixtureChannel) return;
+  try {
+    const body: unknown = JSON.parse(text);
+    if (!body || typeof body !== "object" || Array.isArray(body)) return;
+    const { channel, ts } = body as { channel?: { id?: unknown }; ts?: unknown };
+    if (channel?.id === fixtureChannel && typeof ts === "string" && ts !== "") posted.add(ts);
+  } catch {
+    return;
+  }
+}
+
+/** A mention, @here, @channel, @everyone, a user group or a channel link. */
+const SLACK_NOTIFYING = /@|<[@!#]/;
+
+function checkSlack(name: string, args: Record<string, unknown>, scope: SlackScope | undefined, runStamp: string): SendCheck {
+  if (SLACK_READS.has(name)) return { ok: true };
+  const refuse = (why: string): SendCheck => ({ ok: false, reason: `send refused: ${name} ${why}` });
+
+  if (!scope) return refuse("is a Slack write, and this run was given no Slack scope");
+  if (runStamp === "") return refuse("needs this run's stamp to label what it sends, and none was given");
+
+  const textOk = (): SendCheck | null => {
+    const text = args.text;
+    if (typeof text !== "string" || !text.includes(SUBJECT_PREFIX) || !text.includes(runStamp)) {
+      return refuse(`must carry ${SUBJECT_PREFIX} and this run's stamp in its text`);
+    }
+    if (SLACK_NOTIFYING.test(text)) return refuse("may not mention or notify anyone: no @ and no <@, <! or <# in a test run");
+    return null;
+  };
+  const inFixture = (): SendCheck | null => {
+    if (!scope.channel) return refuse("is a Slack write, and no fixture channel is configured for this run");
+    return args.channel === scope.channel
+      ? null
+      : refuse("may only reach the fixture channel, named by its id exactly as configured");
+  };
+  const ownMessage = (key: string): SendCheck | null => {
+    const ts = args[key];
+    return typeof ts === "string" && scope.posted.has(ts) ? null : refuse(`may only reach a message this run posted (${key})`);
+  };
+
+  switch (name) {
+    case "slack_message_post": {
+      const thread = args.thread_ts !== undefined && args.thread_ts !== null && args.thread_ts !== "";
+      return inFixture() ?? (thread ? ownMessage("thread_ts") : null) ?? textOk() ?? { ok: true };
+    }
+    case "slack_message_update":
+      return inFixture() ?? ownMessage("ts") ?? textOk() ?? { ok: true };
+    case "slack_reactions_add":
+      return inFixture() ?? ownMessage("ts") ?? { ok: true };
+    case "slack_dm_send": {
+      if (!scope.self) return refuse("is a direct message, and no test user is mapped for this run");
+      const self = scope.self.trim().toLowerCase();
+      const user = typeof args.user === "string" ? args.user.trim().toLowerCase() : "";
+      const expected = typeof args.expected_user_email === "string" ? args.expected_user_email.trim().toLowerCase() : "";
+      if (user !== self || expected !== self) {
+        return refuse("may only message the test user's own DM, named by the address the slack role maps to");
+      }
+      return textOk() ?? { ok: true };
+    }
+    default:
+      return refuse("is a Slack tool the send guard has no rule for, so it is refused in a test run");
   }
 }

@@ -53,6 +53,9 @@ const WRITE_VERBS = new Set([
   // write only by the fail-closed default, one allowlist entry from running
   // unprompted.
   "duplicate",
+  // SCRUM-454: `slack_message_post` posts a message as the user. Without this
+  // it was a write only by the fail-closed default.
+  "post",
 ]);
 
 /** The floor of the write classification: whether a namespaced tool mutates
@@ -171,6 +174,12 @@ export const KNOWN_READ_TOOLS: ReadonlySet<string> = new Set<string>([
   "notion-mcp__notion_list_users",
   "notion-mcp__notion_query_data_source",
   "notion-mcp__notion_search",
+  "slack-mcp__slack_channel_history",
+  "slack-mcp__slack_channels_list",
+  "slack-mcp__slack_files_list",
+  "slack-mcp__slack_messages_search",
+  "slack-mcp__slack_thread_read",
+  "slack-mcp__slack_users_lookup",
 ]);
 
 /**

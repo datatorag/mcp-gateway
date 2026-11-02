@@ -82,6 +82,8 @@ describe("gws_run allowlist", () => {
   it("the public filter excludes gws_run by its namespaced name", () => {
     const { sql, params } = new PgDialect().sqlToQuery(publiclyListedTool());
     expect(sql).toMatch(/"namespaced_name" not in \(\$1\)/);
-    expect(params).toEqual([GWS_RUN_TOOL]);
+    // $1 is gws_run; what follows is the admin-only plugins' prefixes
+    // (SCRUM-454), pinned in public-tools.test.ts.
+    expect(params[0]).toBe(GWS_RUN_TOOL);
   });
 });

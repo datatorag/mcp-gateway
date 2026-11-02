@@ -1,0 +1,54 @@
+{
+  "ok": true,
+  "channels": [
+    {
+      "id": "C000TEST1",
+      "name": "general",
+      "is_channel": true,
+      "is_group": false,
+      "is_im": false,
+      "is_mpim": false,
+      "is_private": false,
+      "is_archived": false,
+      "is_general": true,
+      "is_member": true,
+      "num_members": 4,
+      "created": 1700000000,
+      "topic": { "value": "Company-wide announcements", "creator": "U000TEST1", "last_set": 1700000000 },
+      "purpose": { "value": "This channel is for workspace-wide communication.", "creator": "U000TEST1", "last_set": 1700000000 }
+    },
+    {
+      "id": "C000TEST2",
+      "name": "random",
+      "is_channel": true,
+      "is_group": false,
+      "is_im": false,
+      "is_mpim": false,
+      "is_private": false,
+      "is_archived": false,
+      "is_general": false,
+      "is_member": true,
+      "num_members": 3,
+      "created": 1700000100,
+      "topic": { "value": "", "creator": "", "last_set": 0 },
+      "purpose": { "value": "Non-work banter.", "creator": "U000TEST1", "last_set": 1700000100 }
+    },
+    {
+      "id": "C000TEST3",
+      "name": "smoke-tests",
+      "is_channel": true,
+      "is_group": false,
+      "is_im": false,
+      "is_mpim": false,
+      "is_private": true,
+      "is_archived": false,
+      "is_general": false,
+      "is_member": true,
+      "num_members": 2,
+      "created": 1700000200,
+      "topic": { "value": "Test fixture channel", "creator": "U000TEST1", "last_set": 1700000200 },
+      "purpose": { "value": "", "creator": "", "last_set": 0 }
+    }
+  ],
+  "response_metadata": { "next_cursor": "" }
+}

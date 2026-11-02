@@ -45,6 +45,7 @@ export const SCENARIO_KEYS = [
   "skills",
   "notion",
   "brevo",
+  "slack",
 ] as const;
 
 export type ScenarioKey = (typeof SCENARIO_KEYS)[number];
@@ -379,6 +380,30 @@ export const SCENARIOS: Scenario[] = [
       "BR4", // a contact added to a list and taken off it
       "BR5", // a draft campaign renamed and restored, and sent as a test to the reader
       "BR6", // templates, statistics, the event log and a recipients export
+    ],
+  },
+  {
+    key: "slack",
+    title: "find the person and the channel, read it, post, reply, edit and restore, react, search, message yourself",
+    steps: [
+      /* SCRUM-454. Admin-only: the run's admin is the one Slack user, and the
+       * public status page never shows this scenario. The reads come first
+       * and touch nothing. Every write lands in the fixture channel or the
+       * test user's own DM and carries the run stamp; the send guard refuses
+       * anything else, and lets an edit, a reaction or a reply reach only a
+       * message this run posted. The connector has no delete, so SL4's post,
+       * SL5's reply, SL7's reaction and SL10's DM stay as labelled residue;
+       * SL6 restores what it edits. */
+      "SL1", // the test user's address resolves to a Slack user
+      "SL2", // the fixture channel is listed, and its name read
+      "SL3", // the fixture channel's history answers in the message shape
+      "SL4", // a wrong expected name sends nothing; the labelled post lands
+      "SL5", // a reply in the run's own thread reads back with the thread
+      "SL6", // an edit to the run's message reads back, and so does restoring it
+      "SL7", // a reaction lands on the run's message; a repeat says already there
+      "SL8", // a search by the run's stamp finds the post
+      "SL9", // the fixture channel's files are metadata, with no download links
+      "SL10", // a DM to the test user's own address lands in their own DM
     ],
   },
 ];
