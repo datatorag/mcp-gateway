@@ -18,6 +18,8 @@ vi.mock("./connected-accounts", () => ({
 const launchedServiceIds = vi.fn();
 vi.mock("./service-launch", () => ({
   launchedServiceIds: (...a: unknown[]) => launchedServiceIds(...a),
+  // Per user since SCRUM-468; for the services here, the launch gate.
+  offeredServiceIdsFor: (db: unknown) => launchedServiceIds(db),
 }));
 vi.mock("./track", () => ({
   trackConnectLinkEvent: vi.fn(async () => undefined), trackToolCall: vi.fn(async () => undefined) }));

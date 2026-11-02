@@ -76,12 +76,11 @@ user's connection.
   `postConnectDestination`.
 
 **Identity.** The account's email comes from Brevo's `userinfo` endpoint (`openid email`), with
-`email_verified` read when present; the external account id is Brevo's organisation or account
-id from `GET /v3/account`, and the label its company name, cleaned by `untrusted-text.ts`. One
-email can sit in more than one Brevo organisation, so the organisation id is the external id, as a
-Notion workspace is. If `userinfo` reports no verified flag, the verified-email rule treats the
-address as Notion's is treated (Brevo's sign-in proves it), and the spec says so where the rule
-is written.
+`email_verified` read; the label is its company name from `GET /v3/account`, cleaned by
+`untrusted-text.ts`. As built, the account is keyed by its email, as Google's and Atlassian's
+are, because `GET /v3/account` documents no organisation id. For the link-only rule the address
+counts as verified only when Brevo says `email_verified: true`, as for Google and Atlassian; a
+missing claim is not verified.
 
 **Public app, later.** The public app sends a PKCE `code_challenge` on authorize and a
 `code_verifier` instead of the secret on the exchange and the refresh. The verifier is held in an

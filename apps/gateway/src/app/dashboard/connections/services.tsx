@@ -122,6 +122,24 @@ const SERVICE_PRESENTATION: Record<
       </svg>
     ),
   },
+  // SCRUM-468; offered to admins only while the Brevo app is private. The copy
+  // names what the tools do, never a count. The glyph is a plain envelope of
+  // our own, not Brevo's mark: the mark goes in with its provenance recorded,
+  // as every other logo here is.
+  brevo: {
+    description: "Contacts, lists, email campaigns and transactional email",
+    capabilities: [
+      { text: "Find and update contacts and the lists they are on", services: ["brevo"] },
+      { text: "Draft, test and send email campaigns, and read their reports", services: ["brevo"] },
+      { text: "Send transactional email from templates, and see what happened to it", services: ["brevo"] },
+    ],
+    icon: (
+      <svg viewBox="0 0 24 24" className="h-8 w-8" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true">
+        <rect x="3" y="5" width="18" height="14" rx="2" />
+        <path d="M3.5 6.5l8.5 6 8.5-6" />
+      </svg>
+    ),
+  },
 };
 
 export const SERVICES: ServiceConfig[] = CONNECTABLE_SERVICES.map((service) => {

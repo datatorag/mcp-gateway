@@ -226,6 +226,7 @@ export const PROVIDERS = {
   GOOGLE_WORKSPACE: "google-workspace",
   ATLASSIAN: "atlassian",
   NOTION: "notion",
+  BREVO: "brevo",
 } as const;
 
 export type EventName = (typeof EVENTS)[keyof typeof EVENTS];

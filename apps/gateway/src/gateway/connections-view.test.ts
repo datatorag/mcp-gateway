@@ -8,6 +8,8 @@ vi.mock("./connected-accounts", () => ({
 const launchedServiceIds = vi.fn();
 vi.mock("./service-launch", () => ({
   launchedServiceIds: (...args: unknown[]) => launchedServiceIds(...args),
+  // Per user since SCRUM-468; for the services here, the launch gate.
+  offeredServiceIdsFor: (db: unknown) => launchedServiceIds(db),
 }));
 
 const { loadConnectionsView } = await import("./connections-view");

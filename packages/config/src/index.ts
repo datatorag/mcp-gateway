@@ -56,6 +56,10 @@ const envSchema = z.object({
   // without them still boots.
   NOTION_OAUTH_CLIENT_ID: z.string().default(""),
   NOTION_OAUTH_CLIENT_SECRET: z.string().default(""),
+  // Brevo OAuth (SCRUM-468): a user's connection, not BREVO_API_KEY's
+  // lifecycle email. Optional, so a deploy without them still boots.
+  BREVO_OAUTH_CLIENT_ID: z.string().default(""),
+  BREVO_OAUTH_CLIENT_SECRET: z.string().default(""),
   // PostHog
   POSTHOG_API_KEY: z.string().default(""),
   /** SCRUM-228: analytics is off outside production unless this is "1". */

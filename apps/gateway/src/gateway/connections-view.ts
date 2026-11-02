@@ -3,7 +3,7 @@ import type { Database } from "@datatorag-mcp/db";
 import { serviceConnections, connectedAccounts } from "@datatorag-mcp/db";
 import { listConnectedAccounts } from "./connected-accounts";
 import { connectorGrantsScopes, scopeDelta, serviceGrantStates } from "./scope-grant";
-import { launchedServiceIds } from "./service-launch";
+import { offeredServiceIdsFor } from "./service-launch";
 import { connectionDead } from "./refresh-failure";
 import type {
   ConnectedAccount,
@@ -97,7 +97,7 @@ export async function loadConnectionsView(
           )
         )
       ),
-    launchedServiceIds(db),
+    offeredServiceIdsFor(db, userId),
   ]);
 
   // SCRUM-136 (the SCRUM-105 shape): callers get the finished DELTA, not a

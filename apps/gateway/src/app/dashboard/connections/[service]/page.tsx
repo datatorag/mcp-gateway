@@ -2,7 +2,7 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { getSessionUserId } from "@/lib/session";
 import { db } from "@/lib/db";
-import { isServiceLaunched } from "@/gateway/service-launch";
+import { serviceOfferedTo } from "@/gateway/service-launch";
 import { getService } from "../services";
 import { ConnectionDetailClient } from "./client";
 
@@ -24,7 +24,8 @@ export default async function ConnectionDetailPage({ params }: Props) {
   if (!service) notFound();
   // SCRUM-366: a service whose plugin has not launched has no page yet, the
   // same answer as a service that does not exist.
-  if (!(await isServiceLaunched(db, serviceId))) notFound();
+  // SCRUM-468: nor a service this user may not be offered.
+  if (!(await serviceOfferedTo(db, serviceId, userId))) notFound();
 
   return (
     <div>

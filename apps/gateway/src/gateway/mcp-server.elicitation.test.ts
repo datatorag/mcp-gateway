@@ -25,6 +25,7 @@ vi.mock("./connected-accounts", () => ({
 }));
 vi.mock("./service-launch", () => ({
   launchedServiceIds: vi.fn(async () => new Set(["google-workspace", "atlassian", "notion"])),
+  offeredServiceIdsFor: vi.fn(async () => new Set(["google-workspace", "atlassian", "notion"])),
 }));
 const callPluginToolOnce = vi.fn();
 vi.mock("./user-tools", () => ({

@@ -15,7 +15,7 @@
  * `postConnectDestination`.
  */
 
-export type DuplicateProvider = "google-workspace" | "atlassian" | "notion";
+export type DuplicateProvider = "google-workspace" | "atlassian" | "notion" | "brevo";
 
 /** Where each provider's connect starts, past Google's interstitial: the
  * duplicate page's restart and a connect link (SCRUM-466) both hand over
@@ -24,6 +24,7 @@ export const CONNECT_START: Record<DuplicateProvider, string> = {
   "google-workspace": "/auth/google/connect?proceed=1",
   atlassian: "/auth/atlassian/connect",
   notion: "/auth/notion/connect",
+  brevo: "/auth/brevo/connect",
 };
 
 export const isDuplicateProvider = (v: unknown): v is DuplicateProvider =>
@@ -34,6 +35,7 @@ const ACCOUNT_NOUN: Record<DuplicateProvider, string> = {
   "google-workspace": "Google account",
   atlassian: "Atlassian account",
   notion: "Notion workspace",
+  brevo: "Brevo account",
 };
 
 /** The page's words, in one place for review. */

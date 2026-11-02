@@ -23,6 +23,11 @@ export interface ConnectableService {
    * must never be able to connect a service that has nothing to call. The
    * check is `launchedServiceIds` in `src/gateway/service-launch.ts`. */
   launchPluginSlug?: string;
+  /** Who may be offered it (SCRUM-468). `"admin"` offers it to admins only,
+   * on every surface and at its connect route, through `serviceOfferedTo`;
+   * absent offers it to everyone. Brevo is admin-only while its OAuth app is
+   * private to our own Brevo organisation, which nobody else can authorize. */
+  audience?: "admin";
 }
 
 export const CONNECTABLE_SERVICES: ConnectableService[] = [
@@ -41,6 +46,13 @@ export const CONNECTABLE_SERVICES: ConnectableService[] = [
     name: "Notion",
     connectUrl: "/auth/notion/connect",
     launchPluginSlug: "notion-mcp",
+  },
+  {
+    id: "brevo",
+    name: "Brevo",
+    connectUrl: "/auth/brevo/connect",
+    launchPluginSlug: "brevo-mcp",
+    audience: "admin",
   },
 ];
 

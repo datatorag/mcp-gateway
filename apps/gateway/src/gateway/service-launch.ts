@@ -1,6 +1,7 @@
 import { and, eq, inArray } from "drizzle-orm";
 import type { Database } from "@datatorag-mcp/db";
 import { mcpServers } from "@datatorag-mcp/db";
+import { isAdmin } from "./admin";
 import {
   ALWAYS_OFFERED_SERVICE_IDS,
   CONNECTABLE_SERVICES,
@@ -65,4 +66,30 @@ export async function isServiceLaunched(
   if (!entry) return false;
   if (!entry.launchPluginSlug) return true;
   return (await launchedServiceIds(db)).has(serviceId);
+}
+
+/**
+ * The launched services this user may be offered (SCRUM-468): the launch gate
+ * above, and each service's `audience`. Every surface that offers a connect to
+ * a known user reads this, and the connect routes read `serviceOfferedTo`, so
+ * the listing and the route cannot disagree. Fails closed like the gate: a
+ * role that cannot be read is not an admin.
+ */
+export async function offeredServiceIdsFor(db: Database, userId: string): Promise<Set<string>> {
+  const launched = await launchedServiceIds(db);
+  const gated = CONNECTABLE_SERVICES.filter((s) => s.audience === "admin" && launched.has(s.id));
+  if (gated.length === 0) return launched;
+  let admin = false;
+  try {
+    admin = await isAdmin(db, userId);
+  } catch {
+    admin = false;
+  }
+  if (!admin) for (const s of gated) launched.delete(s.id);
+  return launched;
+}
+
+/** Whether one service may be offered to, and connected by, this user. */
+export async function serviceOfferedTo(db: Database, serviceId: string, userId: string): Promise<boolean> {
+  return (await offeredServiceIdsFor(db, userId)).has(serviceId);
 }

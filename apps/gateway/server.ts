@@ -32,7 +32,7 @@ import { createConnectLinkRouter } from "./src/gateway/connect-link-route";
 import { serverInstructions } from "./src/gateway/server-instructions";
 import { connectLinkDone } from "./src/gateway/connect-elicitation";
 import { mcpChallenge, mcpUnauthorizedBody } from "./src/gateway/mcp-unauthorized";
-import { launchedServiceIds } from "./src/gateway/service-launch";
+import { offeredServiceIdsFor } from "./src/gateway/service-launch";
 import { getPluginManager } from "./src/lib/plugin-manager";
 import { mcpBearerGate, resolveBearer, type McpAuthState } from "./src/gateway/bearer-auth";
 import { authFailureContext } from "./src/gateway/auth-failure-context";
@@ -195,6 +195,8 @@ async function main() {
       atlassianClientSecret: env.ATLASSIAN_CLIENT_SECRET,
       notionClientId: env.NOTION_OAUTH_CLIENT_ID,
       notionClientSecret: env.NOTION_OAUTH_CLIENT_SECRET,
+      brevoClientId: env.BREVO_OAUTH_CLIENT_ID,
+      brevoClientSecret: env.BREVO_OAUTH_CLIENT_SECRET,
       baseUrl,
       // SCRUM-466: a connect changes which tools the user's sessions list.
       onConnected: ({ userId, link }) => {
@@ -404,7 +406,7 @@ async function main() {
         baseUrl,
         clientId: auth.clientId,
         protocolVersion: clientInfo.protocolVersion,
-        instructions: serverInstructions(await launchedServiceIds(db)),
+        instructions: serverInstructions(await offeredServiceIdsFor(db, auth.userId)),
       });
       await server.connect(transport);
 
