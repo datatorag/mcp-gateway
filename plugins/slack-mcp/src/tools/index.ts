@@ -1,5 +1,6 @@
 import type { SlackClient } from "../slack-client.js";
 import type { ToolDef } from "./annotations.js";
+import { handleSlackRead, slackReadTools } from "./slack-read.js";
 
 export type ToolHandler = (
   client: SlackClient,
@@ -7,7 +8,7 @@ export type ToolHandler = (
   args: Record<string, unknown>
 ) => Promise<{ content: Array<{ type: "text"; text: string }>; isError?: boolean }>;
 
-export const allTools: ToolDef[] = [];
+export const allTools: ToolDef[] = [...slackReadTools];
 
 function register(
   toolDefs: ReadonlyArray<{ readonly name: string }>,
@@ -16,8 +17,7 @@ function register(
   return toolDefs.map((t) => [t.name, handler]);
 }
 
-export const toolHandlers = new Map<string, ToolHandler>([]);
-void register;
+export const toolHandlers = new Map<string, ToolHandler>([...register(slackReadTools, handleSlackRead)]);
 
 /** Each tool's read-only hint, by name. The client retries a refusal for rate
  * only when the calling tool's hint is true (see rate-limit-retry.ts). */

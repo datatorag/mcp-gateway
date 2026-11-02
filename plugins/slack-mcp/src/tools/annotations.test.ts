@@ -1,7 +1,14 @@
 import { describe, expect, it } from "vitest";
 import { allTools, toolHandlers, toolReadOnly } from "./index.js";
 
-const READS: string[] = [];
+const READS = [
+  "slack_channels_list",
+  "slack_messages_search",
+  "slack_channel_history",
+  "slack_thread_read",
+  "slack_users_lookup",
+  "slack_files_list",
+];
 
 /** Writes that notify people or replace what they read: destructive. */
 const DESTRUCTIVE_WRITES: string[] = [];

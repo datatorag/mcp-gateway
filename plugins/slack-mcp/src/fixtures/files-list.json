@@ -1,0 +1,49 @@
+{
+  "ok": true,
+  "files": [
+    {
+      "id": "F000TEST1",
+      "created": 1700000700,
+      "timestamp": 1700000700,
+      "name": "roadmap.pdf",
+      "title": "Roadmap",
+      "mimetype": "application/pdf",
+      "filetype": "pdf",
+      "pretty_type": "PDF",
+      "user": "U000TEST1",
+      "size": 48213,
+      "is_public": true,
+      "url_private": "https://files.example.test/files-pri/T000TEST1-F000TEST1/roadmap.pdf",
+      "url_private_download": "https://files.example.test/files-pri/T000TEST1-F000TEST1/download/roadmap.pdf",
+      "thumb_pdf": "https://files.example.test/files-tmb/T000TEST1-F000TEST1/roadmap_thumb_pdf.png",
+      "permalink": "https://example.test/files/U000TEST1/F000TEST1/roadmap.pdf",
+      "permalink_public": "https://slack-files.example.test/T000TEST1-F000TEST1-0000000000",
+      "channels": ["C000TEST1"],
+      "groups": [],
+      "ims": [],
+      "comments_count": 0
+    },
+    {
+      "id": "F000TEST2",
+      "created": 1700000800,
+      "timestamp": 1700000800,
+      "name": "notes.txt",
+      "title": "notes.txt",
+      "mimetype": "text/plain",
+      "filetype": "text",
+      "pretty_type": "Plain Text",
+      "user": "U000TEST2",
+      "size": 512,
+      "is_public": false,
+      "url_private": "https://files.example.test/files-pri/T000TEST1-F000TEST2/notes.txt",
+      "url_private_download": "https://files.example.test/files-pri/T000TEST1-F000TEST2/download/notes.txt",
+      "preview": "first line of the notes",
+      "permalink": "https://example.test/files/U000TEST2/F000TEST2/notes.txt",
+      "channels": [],
+      "groups": ["C000TEST3"],
+      "ims": [],
+      "comments_count": 0
+    }
+  ],
+  "paging": { "count": 20, "total": 2, "page": 1, "pages": 1 }
+}

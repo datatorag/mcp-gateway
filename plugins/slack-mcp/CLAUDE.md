@@ -35,6 +35,11 @@ writes. Design and stages:
   for Slack (HTTP 429 or `ratelimited`, three attempts, `Retry-After` in
   whole seconds, 8 s budget), keyed on the TOOL being read-only. A write is
   never retried; a write that got no answer says it may have landed
+- `src/tools/slack-read.ts`: the six read schemas and `handleSlackRead()`.
+  `messageOut` is the one message shape (ts, user as a name, text with
+  mentions resolved and trimmed, thread_ts, reply_count, permalink);
+  `slack_files_list` returns metadata only, no `url_private*`, thumbnails,
+  previews or public links. Counts above a maximum are read as the maximum
 - `src/tools/annotations.ts`: `READ`, `WRITE` (destructive: a post, a DM, an
   edit) and `ADDITIVE` (a reaction: a write, not destructive)
 - `src/fixtures/`: test support, excluded from the build. The `.json` files

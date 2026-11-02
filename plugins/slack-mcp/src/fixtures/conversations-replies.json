@@ -1,0 +1,33 @@
+{
+  "ok": true,
+  "messages": [
+    {
+      "type": "message",
+      "user": "U000TEST1",
+      "text": "Shipping today, <@U000TEST2> can you check <#C000TEST2|random>?",
+      "ts": "1700000300.000300",
+      "thread_ts": "1700000300.000300",
+      "reply_count": 2,
+      "reply_users_count": 1,
+      "latest_reply": "1700000400.000500"
+    },
+    {
+      "type": "message",
+      "user": "U000TEST2",
+      "text": "On it",
+      "ts": "1700000350.000400",
+      "thread_ts": "1700000300.000300",
+      "parent_user_id": "U000TEST1"
+    },
+    {
+      "type": "message",
+      "user": "U000TEST2",
+      "text": "Looks good",
+      "ts": "1700000400.000500",
+      "thread_ts": "1700000300.000300",
+      "parent_user_id": "U000TEST1"
+    }
+  ],
+  "has_more": false,
+  "response_metadata": { "next_cursor": "" }
+}

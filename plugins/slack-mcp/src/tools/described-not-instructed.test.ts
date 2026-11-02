@@ -6,7 +6,14 @@ import { allTools } from "./index.js";
  * One that INSTRUCTS tells the reader's model how to behave, which is the
  * shape a directory reviewer reads as a tool steering its caller. The pattern
  * is gws-mcp's (src/tools/described-not-instructed.test.ts). */
-const DESCRIBED: string[] = [];
+const DESCRIBED = [
+  "slack_channels_list",
+  "slack_messages_search",
+  "slack_channel_history",
+  "slack_thread_read",
+  "slack_users_lookup",
+  "slack_files_list",
+];
 
 /** Words that address the reader's behaviour instead of the tool's. */
 const INSTRUCTING_WORDS = /\b(always|never|must|should|do not|don't|only use|make sure|be sure|remember to|you|your|prefer|instead of|first)\b/i;

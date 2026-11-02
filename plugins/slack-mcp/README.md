@@ -8,6 +8,12 @@ This server is the Slack connector of [DataToRAG](https://datatorag.com), a host
 
 | Tool | What it does | Slack method |
 |------|--------------|--------------|
+| `slack_channels_list` | Channels the user can see: id, name, type, member count, topic (limit default 50, max 200) | `conversations.list` |
+| `slack_messages_search` | Messages the user can see, with Slack's search syntax, each with its permalink (count default 20, max 50) | `search.messages` |
+| `slack_channel_history` | Recent messages in one channel, newest first (limit default 20, max 100) | `conversations.history` |
+| `slack_thread_read` | One message and its replies, the parent first (limit default 50, max 200) | `conversations.replies` |
+| `slack_users_lookup` | One person, by email or by user id | `users.lookupByEmail`, `users.info` |
+| `slack_files_list` | Files in a channel or by a person, metadata only, never file contents or download links (count default 20, max 100) | `files.list` |
 
 ### What the tools return
 
