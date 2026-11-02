@@ -1,0 +1,20 @@
+{
+  "ok": true,
+  "user": {
+    "id": "U000TEST1",
+    "team_id": "T000TEST1",
+    "name": "test.one",
+    "deleted": false,
+    "real_name": "Test User One",
+    "tz": "America/Los_Angeles",
+    "is_admin": false,
+    "is_bot": false,
+    "profile": {
+      "title": "Engineer",
+      "real_name": "Test User One",
+      "display_name": "testone",
+      "email": "test.one@example.test",
+      "image_72": "https://example.test/avatar-72.png"
+    }
+  }
+}

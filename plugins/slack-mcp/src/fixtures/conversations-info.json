@@ -1,0 +1,13 @@
+{
+  "ok": true,
+  "channel": {
+    "id": "C000TEST1",
+    "name": "general",
+    "is_channel": true,
+    "is_private": false,
+    "is_archived": false,
+    "is_member": true,
+    "topic": { "value": "Company-wide announcements", "creator": "U000TEST1", "last_set": 1700000000 },
+    "purpose": { "value": "This channel is for workspace-wide communication.", "creator": "U000TEST1", "last_set": 1700000000 }
+  }
+}

@@ -1,0 +1,31 @@
+{
+  "name": "Slack",
+  "description": "Slack: channels, message search, channel history and threads, people, files, reactions, and posting as the user",
+  "oauth": {
+    "provider": "slack",
+    "authorizeUrl": "https://slack.com/oauth/v2/authorize",
+    "tokenUrl": "https://slack.com/api/oauth.v2.access",
+    "clientIdEnv": "$SLACK_CONNECTOR_CLIENT_ID",
+    "clientSecretEnv": "$SLACK_CONNECTOR_CLIENT_SECRET",
+    "teamIdEnv": "$SLACK_CONNECTOR_TEAM_ID",
+    "scopeParam": "user_scope",
+    "scopes": [
+      "channels:read",
+      "groups:read",
+      "im:read",
+      "mpim:read",
+      "channels:history",
+      "groups:history",
+      "im:history",
+      "mpim:history",
+      "search:read",
+      "chat:write",
+      "reactions:write",
+      "im:write",
+      "users:read",
+      "users:read.email",
+      "files:read"
+    ],
+    "owner": "user"
+  }
+}
