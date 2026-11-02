@@ -611,6 +611,8 @@ export class PluginManager {
             // classification agree; a plugin controls this value, so trusting
             // it would let a server opt its own delete tool out of approval.
             readOnlyHint: t.annotations?.readOnlyHint ?? null,
+            // The same claim, for a write that cannot be undone (SCRUM-468).
+            destructiveHint: typeof t.annotations?.destructiveHint === "boolean" ? t.annotations.destructiveHint : null,
             creditsPerCall: 1,
           }))
         );

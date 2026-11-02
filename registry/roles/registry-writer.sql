@@ -27,6 +27,11 @@
 -- and re-runs the checks at the end, before the workflow can run a
 -- new-plugin file. Until then a person runs such a file.
 --
+-- SCRUM-468, the same way: the two tools grants now name destructive_hint.
+-- HQ grants INSERT (destructive_hint) and UPDATE (destructive_hint) on tools to
+-- the existing role, after the migration that adds the column and before the
+-- workflow runs a file that writes it.
+--
 -- CREATED HERE BY SQL, NEVER IN THE PROVIDER'S CONSOLE: a role made in the
 -- console is given membership of the provider's administrative role, which
 -- would undo every line below.
@@ -48,8 +53,9 @@ CREATE ROLE registry_writer NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERI
 GRANT USAGE ON SCHEMA public TO registry_writer;
 GRANT SELECT ON mcp_servers TO registry_writer;
 GRANT SELECT, DELETE ON tools TO registry_writer;
-GRANT INSERT (mcp_server_id, name, namespaced_name, description, input_schema_json, read_only_hint) ON tools TO registry_writer;
-GRANT UPDATE (description, input_schema_json, read_only_hint, updated_at) ON tools TO registry_writer;
+-- destructive_hint: SCRUM-468, applied to the existing role by HQ like the SCRUM-366 lines.
+GRANT INSERT (mcp_server_id, name, namespaced_name, description, input_schema_json, read_only_hint, destructive_hint) ON tools TO registry_writer;
+GRANT UPDATE (description, input_schema_json, read_only_hint, destructive_hint, updated_at) ON tools TO registry_writer;
 -- SCRUM-366: a new plugin's server row, its insert and its rollback's delete.
 GRANT INSERT (slug, name, description, github_repo_url, github_repo_owner, github_repo_name, license_spdx, manifest_json, status, container_port) ON mcp_servers TO registry_writer;
 GRANT DELETE ON mcp_servers TO registry_writer;
@@ -82,8 +88,8 @@ FROM pg_roles WHERE rolname = 'registry_writer';
 SELECT table_name, privilege_type FROM information_schema.role_table_grants
 WHERE grantee = 'registry_writer' ORDER BY table_name, privilege_type;
 --
--- Column rights for writing are exactly these (expected: INSERT on the six
--- columns above, UPDATE on the four). The table-wide SELECT also lists every
+-- Column rights for writing are exactly these (expected: INSERT on the seven
+-- columns above, UPDATE on the five; destructive_hint since SCRUM-468). The table-wide SELECT also lists every
 -- column as SELECT, which is why the query keeps to INSERT and UPDATE:
 SELECT privilege_type, column_name FROM information_schema.column_privileges
 WHERE grantee = 'registry_writer' AND table_name = 'tools' AND privilege_type IN ('INSERT', 'UPDATE')

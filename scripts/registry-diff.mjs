@@ -102,8 +102,10 @@ function checkFile(file, label) {
     if (typeof t.description !== "string") throw new Error(`${label}: ${t.name} has no description`);
     if (t.inputSchema === null || typeof t.inputSchema !== "object") throw new Error(`${label}: ${t.name} has no input schema`);
     if (![true, false, null].includes(t.readOnlyHint)) throw new Error(`${label}: ${t.name} has a read-only hint that is not true, false or null`);
+    // Absent in a file kept before the hint was (SCRUM-468): read as null.
+    if (![true, false, null, undefined].includes(t.destructiveHint)) throw new Error(`${label}: ${t.name} has a destructive hint that is not true, false or null`);
   }
-  return new Map(file.tools.map((t) => [t.name, t]));
+  return new Map(file.tools.map((t) => [t.name, { ...t, destructiveHint: t.destructiveHint ?? null }]));
 }
 
 const hashes = (t) => ({ description: md5(t.description), schema: md5(jsonbText(t.inputSchema)) });
@@ -126,6 +128,7 @@ export function diffTools(from, to) {
       if (ta.description !== tb.description) fields.push("description");
       if (jsonbText(ta.inputSchema) !== jsonbText(tb.inputSchema)) fields.push("input_schema_json");
       if (ta.readOnlyHint !== tb.readOnlyHint) fields.push("read_only_hint");
+      if (ta.destructiveHint !== tb.destructiveHint) fields.push("destructive_hint");
       if (fields.length > 0) changed.push({ name, from: ta, to: tb, fields });
     }
   }
@@ -139,12 +142,13 @@ function updateBlock(slug, name, was, becomes, label) {
   const g = hashes(was);
   return [
     `  -- ${name}`,
-    `  UPDATE tools t SET description = ${sqlString(becomes.description)}, input_schema_json = ${schemaLiteral(becomes)}, read_only_hint = ${sqlBool(becomes.readOnlyHint)}, updated_at = now()`,
+    `  UPDATE tools t SET description = ${sqlString(becomes.description)}, input_schema_json = ${schemaLiteral(becomes)}, read_only_hint = ${sqlBool(becomes.readOnlyHint)}, destructive_hint = ${sqlBool(becomes.destructiveHint)}, updated_at = now()`,
     `  FROM mcp_servers s`,
     `  WHERE s.id = t.mcp_server_id AND s.slug = ${sqlString(slug)} AND t.name = ${sqlString(name)}`,
     `    AND md5(t.description) = '${g.description}'`,
     `    AND md5(t.input_schema_json::text) = '${g.schema}'`,
     `    AND t.read_only_hint IS NOT DISTINCT FROM ${sqlBool(was.readOnlyHint)}`,
+    `    AND t.destructive_hint IS NOT DISTINCT FROM ${sqlBool(was.destructiveHint)}`,
     `  ;`,
     `  GET DIAGNOSTICS n = ROW_COUNT;`,
     `  IF n <> 1 THEN RAISE EXCEPTION '${label} ${name}: expected 1 row, updated %', n; END IF;`,
@@ -156,11 +160,11 @@ function insertBlock(slug, tool, label) {
   const namespaced = `${slug}__${tool.name}`;
   return [
     `  -- ${tool.name}: a new row`,
-    `  INSERT INTO tools (mcp_server_id, name, namespaced_name, description, input_schema_json, read_only_hint)`,
+    `  INSERT INTO tools (mcp_server_id, name, namespaced_name, description, input_schema_json, read_only_hint, destructive_hint)`,
     `  SELECT s.id, ${sqlString(tool.name)}, ${sqlString(namespaced)},`,
     `    ${sqlString(tool.description)},`,
     `    ${schemaLiteral(tool)},`,
-    `    ${sqlBool(tool.readOnlyHint)}`,
+    `    ${sqlBool(tool.readOnlyHint)}, ${sqlBool(tool.destructiveHint)}`,
     `  FROM mcp_servers s`,
     `  WHERE s.slug = ${sqlString(slug)}`,
     `    AND NOT EXISTS (SELECT 1 FROM tools t WHERE t.namespaced_name = ${sqlString(namespaced)});`,
@@ -310,7 +314,7 @@ function wrap(header, blocks, slug, names, expectedCount) {
     `DO ${BLOCK_TAG}`,
     ...body,
     `${BLOCK_TAG};`,
-    `SELECT t.name, md5(t.description) AS description_md5, md5(t.input_schema_json::text) AS schema_md5, t.read_only_hint, t.updated_at`,
+    `SELECT t.name, md5(t.description) AS description_md5, md5(t.input_schema_json::text) AS schema_md5, t.read_only_hint, t.destructive_hint, t.updated_at`,
     `FROM mcp_servers s JOIN tools t ON s.id = t.mcp_server_id`,
     `WHERE s.slug = ${sqlString(slug)} AND t.name IN (${list || "''"});`,
     `COMMIT;`,

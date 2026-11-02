@@ -50,7 +50,7 @@ change. What to do instead depends on what changed:
   `RETURNING` read back. The served count stays flat; say so in the report.
 - **A new tool**: one `INSERT` for that row (columns as `discoverTools`
   writes them: `mcp_server_id`, `name`, `namespaced_name`, `description`,
-  `input_schema_json`, `read_only_hint`, `credits_per_call`), landed in the
+  `input_schema_json`, `read_only_hint`, `destructive_hint` (SCRUM-468, null when the plugin said nothing), `credits_per_call`), landed in the
   same change as the playground classification commit. The served count
   moves by exactly one, and the smoke suite is told in advance so its count
   assertion is updated, not surprised.

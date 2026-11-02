@@ -204,6 +204,13 @@
       "when": 1793401064693,
       "tag": "0028_nasty_scarlet_spider",
       "breakpoints": true
+    },
+    {
+      "idx": 29,
+      "version": "7",
+      "when": 1793602537617,
+      "tag": "0029_quiet_princess_powerful",
+      "breakpoints": true
     }
   ]
 }

@@ -1,0 +1,1 @@
+ALTER TABLE "tools" ADD COLUMN "destructive_hint" boolean;

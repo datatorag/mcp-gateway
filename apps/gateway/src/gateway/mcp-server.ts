@@ -1023,7 +1023,7 @@ export function createMcpServer(
       name: string;
       description: string;
       inputSchema: Record<string, unknown>;
-      annotations?: { readOnlyHint: boolean };
+      annotations?: { readOnlyHint: boolean; destructiveHint?: boolean };
     }[] = [];
 
     for (const t of rows) {
@@ -1031,8 +1031,15 @@ export function createMcpServer(
       // row as the description (SCRUM-326). A row that recorded nothing serves
       // nothing, never a guessed false. The agent's own write gate does not
       // read it; see classifyWrite.
+      //
+      // destructiveHint (SCRUM-468) rides beside it only for a tool that is
+      // not read-only and only when the row recorded one: MCP defaults it to
+      // true for any write, so serving false is what tells a client a write
+      // can be undone.
+      const destructive =
+        t.readOnlyHint === false && typeof t.destructiveHint === "boolean" ? { destructiveHint: t.destructiveHint } : {};
       const annotations =
-        typeof t.readOnlyHint === "boolean" ? { annotations: { readOnlyHint: t.readOnlyHint } } : {};
+        typeof t.readOnlyHint === "boolean" ? { annotations: { readOnlyHint: t.readOnlyHint, ...destructive } } : {};
       if (t.requiredService) {
         const properties = {
           ...(t.schema.properties as Record<string, unknown>),
