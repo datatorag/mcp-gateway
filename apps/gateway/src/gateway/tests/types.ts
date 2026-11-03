@@ -29,8 +29,11 @@
  *
  * `slack` (SCRUM-454) names the test user's address in the company Slack
  * workspace: the account the Slack cases run as, and the only person a
- * test run may send a direct message to (its own DM). */
-export const ACCOUNT_ROLES = ["sender", "reader", "atlassian", "nonAdmin", "notion", "notionSecond", "brevo", "slack"] as const;
+ * test run may send a direct message to (its own DM).
+ *
+ * `posthog` (SCRUM-471) is a PostHog PROJECT ID, not an email: one
+ * connection is one project, and the project id is the account. */
+export const ACCOUNT_ROLES = ["sender", "reader", "atlassian", "nonAdmin", "notion", "notionSecond", "brevo", "slack", "posthog"] as const;
 export type AccountRole = (typeof ACCOUNT_ROLES)[number];
 
 /** Named by KEY, never by id, for the same reason. */
@@ -102,6 +105,9 @@ export const FIXTURE_KEYS = [
    * send guard refuses a write anywhere else; its name is read from Slack
    * by SL2, never configured. */
   "slackChannel",
+  /** The short id of a saved insight in the `posthog` project (SCRUM-471),
+   * read and never changed. */
+  "posthogInsight",
 ] as const;
 export type FixtureKey = (typeof FIXTURE_KEYS)[number];
 

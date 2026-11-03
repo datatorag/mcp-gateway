@@ -89,6 +89,8 @@ export const PLUGIN_ROLES: Record<string, readonly AccountRole[]> = {
   "brevo-mcp": ["brevo"],
   /* The test user in the company workspace (SCRUM-454). */
   "slack-mcp": ["slack"],
+  /* HQ's own PostHog project, read-only (SCRUM-471). */
+  "posthog-mcp": ["posthog"],
 };
 
 /** The plugin a namespaced tool belongs to, or null for a built-in. */

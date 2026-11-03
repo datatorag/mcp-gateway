@@ -34,6 +34,8 @@ export const SURFACES = [
   // public (`isPublicTool`) and a servedOnly surface with no public tool is
   // left out. Listed because every scenario has a surface.
   { key: "slack", name: "Slack", servedOnly: true },
+  // Never shown, as Slack (SCRUM-471): admins only.
+  { key: "posthog", name: "PostHog", servedOnly: true },
   { key: "skills", name: "Skills" },
   { key: "gateway", name: "Platform" },
 ] as const;

@@ -105,3 +105,35 @@ describe("slack", () => {
     expect(await serviceOfferedTo(withSlack, "slack", "admin-1")).toBe(false);
   });
 });
+
+/** SCRUM-471: PostHog is the third, on the same helper. */
+describe("posthog", () => {
+  const withPostHog = {
+    select: () => ({ from: () => ({ where: async () => [{ slug: "posthog-mcp" }] }) }),
+  } as unknown as Database;
+
+  beforeEach(() => {
+    roleReadFails = false;
+  });
+
+  it("is declared admin-only and is never in the public ids", () => {
+    expect(CONNECTABLE_SERVICES.find((s) => s.id === "posthog")).toMatchObject({
+      name: "PostHog",
+      connectUrl: "/auth/posthog/connect",
+      launchPluginSlug: "posthog-mcp",
+      audience: "admin",
+    });
+    expect(PUBLIC_SERVICE_IDS).not.toContain("posthog");
+  });
+
+  it("is offered to an admin once posthog-mcp is active, never to anyone else, and not when the role cannot be read", async () => {
+    isAdmin.mockResolvedValue(false);
+    expect((await offeredServiceIdsFor(withPostHog, "user-1")).has("posthog")).toBe(false);
+    expect(await serviceOfferedTo(withPostHog, "posthog", "user-1")).toBe(false);
+    isAdmin.mockResolvedValue(true);
+    expect(await serviceOfferedTo(withPostHog, "posthog", "admin-1")).toBe(true);
+    expect(await serviceOfferedTo(db, "posthog", "admin-1")).toBe(false);
+    roleReadFails = true;
+    expect(await serviceOfferedTo(withPostHog, "posthog", "admin-1")).toBe(false);
+  });
+});
