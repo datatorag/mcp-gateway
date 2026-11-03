@@ -37,6 +37,7 @@ import {
   ambiguousAccountMessage,
   resolveServiceToken,
   resolvePluginConnectionToken,
+  pluginContextHeaders,
 } from "./service-token";
 import {
   listUserToolRows,
@@ -1354,6 +1355,9 @@ export function createMcpServer(
     // Whether the account holds every scope we request (SCRUM-154): a scope
     // refusal on a complete grant is for a scope we never asked for.
     let grantComplete = false;
+    // SCRUM-471: what the plugin is handed beside the token, from the same
+    // account row the token came from.
+    let contextHeaders: Record<string, string> = {};
     if (requiredService) {
       const requestedAccount = args.account as string | undefined;
       delete args.account;
@@ -1403,6 +1407,7 @@ export function createMcpServer(
       // so the two agree; the legacy path has no account and reports the
       // request as made.
       accountEmail = resolved?.accountEmail ?? requestedAccount;
+      contextHeaders = pluginContextHeaders(requiredService, resolved);
       grantComplete =
         requiredService === GOOGLE_WORKSPACE_SERVICE &&
         resolved?.scopes != null &&
@@ -1501,6 +1506,7 @@ export function createMcpServer(
           toolName,
           args: args as Record<string, unknown>,
           clientName: "datatorag-mcp",
+          contextHeaders,
         });
       } else {
         const pooledClient = await pool.acquire(mcpServer.id, serverUrl);

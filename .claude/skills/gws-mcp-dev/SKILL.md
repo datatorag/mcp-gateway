@@ -1,15 +1,15 @@
 ---
 name: gws-mcp-dev
-description: Use when developing a connector plugin under plugins/ (gws-mcp, atlassian-mcp, notion-mcp, brevo-mcp, slack-mcp): adding or changing tools. Where the plugins live now, tool-definition patterns, the client and auth model, build and test, the freeze window, and the ship tail back into the gateway.
+description: Use when developing a connector plugin under plugins/ (gws-mcp, atlassian-mcp, notion-mcp, brevo-mcp, slack-mcp, posthog-mcp): adding or changing tools. Where the plugins live now, tool-definition patterns, the client and auth model, build and test, the freeze window, and the ship tail back into the gateway.
 ---
 
-# Plugin development (gws-mcp, atlassian-mcp, notion-mcp, brevo-mcp, slack-mcp)
+# Plugin development (gws-mcp, atlassian-mcp, notion-mcp, brevo-mcp, slack-mcp, posthog-mcp)
 
 The connector plugins live in this repository, at `plugins/gws-mcp`,
-`plugins/atlassian-mcp`, `plugins/notion-mcp`, `plugins/brevo-mcp` and
-`plugins/slack-mcp`, as workspace packages `@datatorag-mcp/<slug>`. The first
+`plugins/atlassian-mcp`, `plugins/notion-mcp`, `plugins/brevo-mcp`,
+`plugins/slack-mcp` and `plugins/posthog-mcp`, as workspace packages `@datatorag-mcp/<slug>`. The first
 two were imported from their own repositories with their history (SCRUM-390);
-`notion-mcp`, `brevo-mcp` and `slack-mcp` started here. Those repositories are frozen:
+`notion-mcp`, `brevo-mcp`, `slack-mcp` and `posthog-mcp` started here. Those repositories are frozen:
 `main` is locked on both, and nothing new goes there.
 
 Each plugin's `CLAUDE.md` (`plugins/<slug>/CLAUDE.md`) holds the facts about
@@ -108,6 +108,17 @@ write with no answer says it may have landed. Its service is admin-only
 (`audience: "admin"` on the registry entry, see `gateway-dev`), so it has no
 public docs page, no changelog entry and no public `/tools` page; its
 Docker account is uid and gid 905 (904 is held for another plugin).
+
+**`posthog-mcp` specifics** (SCRUM-471). Ten tools, all reads, in ONE
+project. It is the one plugin handed more than the token: the gateway's
+`pluginContextHeaders` (`service-token.ts`) adds `X-PostHog-Host` and
+`X-PostHog-Project`, and `src/session-context.ts` refuses a session whose
+host is not exactly one of the two regional hosts or whose project is not
+digits, before any request. Every path is under `/api/projects/{project}/`
+(`src/posthog-client.ts`), at most two requests at once, a 429 retried once
+inside 8 seconds. Six tools post to `/query/` with a `name` naming the tool;
+values reach HogQL as placeholders in `values`, never in the text. Every
+range takes its end. Admin-only like Slack; uid and gid 906.
 
 **Adding a plugin.** Three places name each plugin one by one and refuse or
 skip an unknown one: the gateway `Dockerfile` (its files, beside the other

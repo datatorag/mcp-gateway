@@ -46,6 +46,7 @@ export const SCENARIO_KEYS = [
   "notion",
   "brevo",
   "slack",
+  "posthog",
 ] as const;
 
 export type ScenarioKey = (typeof SCENARIO_KEYS)[number];
@@ -404,6 +405,21 @@ export const SCENARIOS: Scenario[] = [
       "SL8", // a search by the run's stamp finds the post
       "SL9", // the fixture channel's files are metadata, with no download links
       "SL10", // a DM to the test user's own address lands in their own DM
+    ],
+  },
+  {
+    key: "posthog",
+    title: "PostHog, read-only: the project, a trend and web analytics, HogQL and events, insights, people and errors",
+    steps: [
+      /* SCRUM-471. Admin-only and read-only, on HQ's own project: nothing is
+       * written, so nothing is restored and no send-guard rule is needed.
+       * PH1 needs no fixture beyond the account, so a red PH1 says the token
+       * or the project is the problem. Every range ends on an explicit date. */
+      "PH1", // the project answers as the connection's, without its API token
+      "PH2", // a closed-range trend answers one series; web analytics answers
+      "PH3", // a HogQL LIMIT over the cap is lowered; events answer
+      "PH4", // the fixture insight reads back; insights and dashboards list
+      "PH5", // people search and error issues answer in their shape
     ],
   },
 ];

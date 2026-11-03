@@ -212,6 +212,8 @@ describe.skipIf(!isDockerAvailable())("SCRUM-366: Notion workspaces as accounts"
         token: "access-b1",
         accountEmail: EMAIL,
         scopes: null,
+        // SCRUM-471: the account's own id travels with its token.
+        externalAccountId: "ws-b",
       });
       expect(await resolveServiceToken(db, userId, NOTION, "Acme")).toMatchObject({ token: "access-a1" });
     });

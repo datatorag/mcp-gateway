@@ -16,6 +16,7 @@ const ACCOUNT_NOUN: Record<DuplicateProvider, string> = {
   notion: "Notion workspace",
   brevo: "Brevo account",
   slack: "Slack workspace",
+  posthog: "PostHog project",
 };
 
 /** The pages' words, in one place for review. */
@@ -48,6 +49,7 @@ const PROVIDER_NAME: Record<DuplicateProvider, string> = {
   notion: "Notion",
   brevo: "Brevo",
   slack: "Slack",
+  posthog: "PostHog",
 };
 
 const escapeHtml = (text: string): string =>

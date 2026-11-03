@@ -31,6 +31,7 @@ describe("tools of an admin-only service, from the registry (SCRUM-454)", () => 
     expect(isPublicTool("example-mcp__example_read")).toBe(false);
     expect(isPublicTool("slack-mcp__slack_channels_list")).toBe(false);
     expect(isPublicTool("brevo-mcp__campaign_send")).toBe(false);
+    expect(isPublicTool("posthog-mcp__posthog_trends_query")).toBe(false);
   });
 
   it("keeps a plugin whose service has no audience", () => {

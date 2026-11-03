@@ -36,6 +36,7 @@ vi.mock("./billing/enforce", () => ({
 const resolveServiceToken = vi.fn();
 vi.mock("./service-token", () => ({
   PLUGIN_SERVICE_MAP: { "atlassian-mcp": "atlassian", "gws-mcp": "google-workspace" },
+  pluginContextHeaders: () => ({}),
   resolveServiceToken: (...args: unknown[]) => resolveServiceToken(...args),
 }));
 

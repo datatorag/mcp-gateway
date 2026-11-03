@@ -169,6 +169,22 @@ const SERVICE_PRESENTATION: Record<
       </svg>
     ),
   },
+  // SCRUM-471: admins only, read-only, one project per connection. A plain
+  // chart glyph of our own, not PostHog's mark, as Brevo's.
+  posthog: {
+    description: "Product analytics for one project, read-only",
+    capabilities: [
+      { text: "Run trends, web analytics and HogQL queries over a date range", services: ["posthog"] },
+      { text: "Read saved insights and dashboards", services: ["posthog"] },
+      { text: "Look up events, people and error tracking issues", services: ["posthog"] },
+    ],
+    icon: (
+      <svg viewBox="0 0 24 24" className="h-8 w-8" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true">
+        <path d="M4 20h16" />
+        <path d="M7 16v-5M12 16V6M17 16v-8" />
+      </svg>
+    ),
+  },
 };
 
 export const SERVICES: ServiceConfig[] = CONNECTABLE_SERVICES.map((service) => {

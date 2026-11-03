@@ -159,6 +159,11 @@ import { sl7SlackReactionsAdd } from "./sl7-slack-reactions-add";
 import { sl8SlackMessagesSearch } from "./sl8-slack-messages-search";
 import { sl9SlackFilesList } from "./sl9-slack-files-list";
 import { sl10SlackDmSend } from "./sl10-slack-dm-send";
+import { ph1PostHogProject } from "./ph1-posthog-project";
+import { ph2PostHogTrends } from "./ph2-posthog-trends";
+import { ph3PostHogHogQL } from "./ph3-posthog-hogql";
+import { ph4PostHogInsights } from "./ph4-posthog-insights";
+import { ph5PostHogPeopleErrors } from "./ph5-posthog-people-errors";
 
 /**
  * Every registered case (SCRUM-303).
@@ -354,6 +359,11 @@ export const CASES: TestCase[] = [
   sl8SlackMessagesSearch,
   sl9SlackFilesList,
   sl10SlackDmSend,
+  ph1PostHogProject,
+  ph2PostHogTrends,
+  ph3PostHogHogQL,
+  ph4PostHogInsights,
+  ph5PostHogPeopleErrors,
   r1FrontDoor,
   r2AdminOnly,
 ];

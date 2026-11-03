@@ -62,6 +62,14 @@ export const CONNECTABLE_SERVICES: ConnectableService[] = [
     launchPluginSlug: "slack-mcp",
     audience: "admin",
   },
+  {
+    // SCRUM-471: our own project first, so admins only.
+    id: "posthog",
+    name: "PostHog",
+    connectUrl: "/auth/posthog/connect",
+    launchPluginSlug: "posthog-mcp",
+    audience: "admin",
+  },
 ];
 
 /** The services offered with no registry check: what a surface shows before

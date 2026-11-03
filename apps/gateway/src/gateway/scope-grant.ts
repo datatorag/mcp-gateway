@@ -102,7 +102,9 @@ function normalize(scope: string): string {
  * went unrecorded, and reconnecting would record nothing either. */
 // Brevo's scopes are fixed on its app and cannot be unticked on its consent
 // screen (SCRUM-468), so a stored grant says nothing a check could use.
-const CONNECTORS_WITHOUT_SCOPES = new Set(["notion", "brevo"]);
+// PostHog's are capped by its client metadata document and locked on its
+// consent screen (SCRUM-471).
+const CONNECTORS_WITHOUT_SCOPES = new Set(["notion", "brevo", "posthog"]);
 
 /** Whether `service` grants access by OAuth scope, so that a stored grant
  * (or its absence) means something. True for anything not listed above,

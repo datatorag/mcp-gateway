@@ -78,6 +78,9 @@ const CALLBACKS: Array<{ path: string; nonceClear: string }> = [
   // SCRUM-468.
   { path: "/auth/brevo/connect/callback", nonceClear: "res.clearCookie(BREVO_CONNECT_NONCE_COOKIE" },
   { path: "/auth/slack/connect/callback", nonceClear: "res.clearCookie(SLACK_CONNECT_NONCE_COOKIE" },
+  // SCRUM-471. Its PKCE verifier is cleared beside the nonce; the connect
+  // test proves a refused round trip clears both.
+  { path: "/auth/posthog/connect/callback", nonceClear: "res.clearCookie(POSTHOG_CONNECT_NONCE_COOKIE" },
 ];
 
 /** The Google consumers, kept as the self-check's reference set. */

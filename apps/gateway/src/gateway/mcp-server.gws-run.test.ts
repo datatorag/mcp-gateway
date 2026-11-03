@@ -36,6 +36,7 @@ vi.mock("./billing/enforce", () => ({
 }));
 vi.mock("./service-token", () => ({
   PLUGIN_SERVICE_MAP: { "gws-mcp": "google-workspace" },
+  pluginContextHeaders: () => ({}),
   resolveServiceToken: vi.fn().mockResolvedValue({
     token: "tok",
     accountEmail: "a@example.com",
