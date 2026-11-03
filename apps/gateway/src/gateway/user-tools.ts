@@ -132,9 +132,12 @@ export async function callPluginToolOnce(opts: {
   toolName: string;
   args: Record<string, unknown>;
   clientName: string;
+  /** What the plugin is handed beside the token (SCRUM-471,
+   * `pluginContextHeaders`). The token is set last, so none replaces it. */
+  contextHeaders?: Record<string, string>;
 }): Promise<Awaited<ReturnType<Client["callTool"]>>> {
   const transport = new StreamableHTTPClientTransport(new URL(opts.serverUrl), {
-    requestInit: { headers: { "X-User-Token": opts.userToken } },
+    requestInit: { headers: { ...opts.contextHeaders, "X-User-Token": opts.userToken } },
   });
   const client = new Client(
     { name: opts.clientName, version: "0.1.0" },

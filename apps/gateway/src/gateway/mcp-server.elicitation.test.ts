@@ -38,6 +38,7 @@ vi.mock("./admin", () => ({ isAdmin: vi.fn(async () => false) }));
 const resolveServiceToken = vi.fn();
 vi.mock("./service-token", async () => ({
   PLUGIN_SERVICE_MAP: { "gws-mcp": "google-workspace" },
+  pluginContextHeaders: () => ({}),
   resolveServiceToken: (...a: unknown[]) => resolveServiceToken(...a),
   ambiguousAccountMessage: (await vi.importActual<typeof import("./service-token")>("./service-token"))
     .ambiguousAccountMessage,

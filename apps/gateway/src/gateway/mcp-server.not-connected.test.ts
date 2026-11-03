@@ -35,6 +35,7 @@ vi.mock("./billing/enforce", () => ({
 const resolveServiceToken = vi.fn();
 vi.mock("./service-token", async () => ({
   PLUGIN_SERVICE_MAP: { "gws-mcp": "google-workspace", "notion-mcp": "notion" },
+  pluginContextHeaders: () => ({}),
   resolveServiceToken: (...args: unknown[]) => resolveServiceToken(...args),
   ambiguousAccountMessage: (await vi.importActual<typeof import("./service-token")>("./service-token"))
     .ambiguousAccountMessage,

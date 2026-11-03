@@ -4,6 +4,7 @@ import { serviceConnections, connectedAccounts, pluginConnections } from "@datat
 import { revokeGoogleToken } from "@/lib/google-revoke";
 import { NOTION_REVOKE_URL, NOTION_TOKEN_URL, notionBasicAuth } from "./notion-oauth";
 import { BREVO_REVOKE_URL, BREVO_TOKEN_URL, brevoClientCredentials } from "./brevo-oauth";
+import { posthogClientId, posthogEndpoints, posthogHost } from "./posthog-oauth";
 import { SLACK_REVOKE_URL, SLACK_TOKEN_TIMEOUT_MS, SLACK_TOKEN_URL } from "./slack-oauth";
 import { cleanWorkspaceName } from "./untrusted-text";
 import { openToken, sealedColumns, TokenOpenError, type TokenRow } from "./token-crypto";
@@ -63,7 +64,26 @@ export const PLUGIN_SERVICE_MAP: Record<string, string> = {
   "notion-mcp": "notion",
   "brevo-mcp": "brevo",
   "slack-mcp": "slack",
+  "posthog-mcp": "posthog",
 };
+
+/** What a plugin is handed beside its token (SCRUM-471), per service. Most
+ * need nothing. A PostHog call needs the regional host and the one project
+ * the connection was granted, which is the account's external id. The token
+ * header is set after these, so a context header can never replace it. */
+const PLUGIN_CONTEXT: Record<string, (account: { externalAccountId?: string }) => Record<string, string>> = {
+  posthog: (account) => ({
+    "X-PostHog-Host": posthogHost(),
+    ...(account.externalAccountId ? { "X-PostHog-Project": account.externalAccountId } : {}),
+  }),
+};
+
+/** The context headers for a call to `service`'s plugin, as the resolved
+ * account gives them. Empty for a service that declares none. */
+export function pluginContextHeaders(service: string, account: { externalAccountId?: string } | null): Record<string, string> {
+  const context = PLUGIN_CONTEXT[service];
+  return context ? context(account ?? {}) : {};
+}
 
 /** Reverse mapping: service name to plugin slug. */
 export const SERVICE_PLUGIN_MAP: Record<string, string> = Object.fromEntries(
@@ -431,6 +451,39 @@ export async function refreshSlackToken(
   });
 }
 
+/**
+ * Refresh a PostHog access token (SCRUM-471), under the rotating-token lock.
+ * A metadata-document client has no secret: the form carries the client id,
+ * which is the document's URL. PostHog does not rotate this client's refresh
+ * token today; the lock costs nothing and keeps a later change on PostHog's
+ * side from losing one. The expiry is stored from `expires_in`, never assumed.
+ * Exported for its tests.
+ */
+export async function refreshPostHogToken(
+  db: Database,
+  conn: ConnectionRef,
+  presentedRefreshToken: string
+): Promise<RefreshOutcome> {
+  const baseUrl = process.env.GATEWAY_BASE_URL;
+  if (!baseUrl) return null;
+  return refreshRotatingToken(db, conn, presentedRefreshToken, {
+    label: "posthog",
+    call: (refreshToken, signal) =>
+      fetch(posthogEndpoints(posthogHost()).token, {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: new URLSearchParams({
+          grant_type: "refresh_token",
+          client_id: posthogClientId(baseUrl),
+          refresh_token: refreshToken,
+        }),
+        signal,
+      }),
+    expiresAt: (data) =>
+      typeof data.expires_in === "number" && data.expires_in > 0 ? new Date(Date.now() + data.expires_in * 1000) : null,
+  });
+}
+
 /** Service-specific refresh function lookup. */
 const REFRESH_FN: Record<
   string,
@@ -441,6 +494,7 @@ const REFRESH_FN: Record<
   notion: refreshNotionToken,
   brevo: refreshBrevoToken,
   slack: refreshSlackToken,
+  posthog: refreshPostHogToken,
 };
 
 /** Revoke one Notion token. Never throws. */
@@ -540,11 +594,32 @@ async function revokeSlackGrant(tokens: RevokeTokens): Promise<boolean> {
   }
 }
 
+/** Revoke a PostHog grant (SCRUM-471): the refresh token, which outlives
+ * any access token and is valid until revoked, with the access token as the
+ * fallback. Never throws. */
+async function revokePostHogGrant(tokens: RevokeTokens): Promise<boolean> {
+  const baseUrl = process.env.GATEWAY_BASE_URL;
+  const token = tokens.refreshToken ?? tokens.accessToken;
+  if (!baseUrl || !token) return false;
+  try {
+    const res = await fetch(posthogEndpoints(posthogHost()).revoke, {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({ token, client_id: posthogClientId(baseUrl) }),
+      signal: AbortSignal.timeout(LOCKED_TOKEN_TIMEOUT_MS),
+    });
+    return res.ok;
+  } catch {
+    return false;
+  }
+}
+
 const REVOKE_FN = new Map<string, (tokens: RevokeTokens) => Promise<boolean>>([
   ["google-workspace", revokeGoogleGrant],
   ["notion", revokeNotionGrant],
   ["brevo", revokeBrevoGrant],
   ["slack", revokeSlackGrant],
+  ["posthog", revokePostHogGrant],
 ]);
 
 /** Tell the provider to drop a connection's grant before we forget it
@@ -597,6 +672,9 @@ export type ResolvedServiceToken = {
    * the call will actually run as, not "the" connection. Null on legacy rows
    * that never stored one. */
   scopes: string | null;
+  /** The account's provider-side id, present only when it has one: a Notion
+   * workspace, a PostHog project (SCRUM-471). */
+  externalAccountId?: string;
 };
 
 /** A connected account whose token could not be refreshed (SCRUM-190). The
@@ -715,6 +793,7 @@ export async function resolveServiceToken(
     /** Null only on the legacy path, where no connected_accounts row exists
      * and there is genuinely no account identity to report. */
     accountEmail: string | null;
+    externalAccountId: string | null;
   };
 
   const connColumns = {
@@ -724,6 +803,7 @@ export async function resolveServiceToken(
     tokenExpiresAt: serviceConnections.tokenExpiresAt,
     scopes: serviceConnections.scopes,
     accountEmail: connectedAccounts.accountEmail,
+    externalAccountId: connectedAccounts.externalAccountId,
   };
   const forUser = [
     eq(connectedAccounts.userId, userId),
@@ -739,7 +819,6 @@ export async function resolveServiceToken(
       .select({
         ...connColumns,
         label: connectedAccounts.label,
-        externalAccountId: connectedAccounts.externalAccountId,
       })
       .from(connectedAccounts)
       .innerJoin(
@@ -801,11 +880,12 @@ export async function resolveServiceToken(
         serviceConnections.id
       )
       .limit(1);
-    if (legacy) conn = { ...legacy, accountEmail: null };
+    if (legacy) conn = { ...legacy, accountEmail: null, externalAccountId: null };
   }
 
   if (!conn) return null;
   const resolvedEmail = conn.accountEmail;
+  const external = conn.externalAccountId ? { externalAccountId: conn.externalAccountId } : {};
 
   // Read sealed, never plain (SCRUM-442). A row with no sealed token would
   // be a defect, since the backfill gate keeps any from reaching this
@@ -833,6 +913,7 @@ export async function resolveServiceToken(
       token: accessToken,
       accountEmail: resolvedEmail,
       scopes: conn.scopes,
+      ...external,
     };
 
   if (tokens.refreshToken) {
@@ -841,7 +922,7 @@ export async function resolveServiceToken(
       const outcome = await refreshFn(db, { id: conn.id, userId }, tokens.refreshToken);
       // A refresh never widens the grant, so the stored scopes still hold.
       if (outcome && "token" in outcome)
-        return { token: outcome.token, accountEmail: resolvedEmail, scopes: conn.scopes };
+        return { token: outcome.token, accountEmail: resolvedEmail, scopes: conn.scopes, ...external };
       if (outcome && "failure" in outcome) {
         const reconnectNeeded = await recordRefreshFailure(db, { id: conn.id, userId }, service, outcome.failure);
         return { refreshFailed: true, service, accountEmail: resolvedEmail, reconnectNeeded };

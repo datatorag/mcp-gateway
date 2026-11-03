@@ -37,6 +37,7 @@ vi.mock("./billing/enforce", () => ({
 vi.mock("./admin", () => ({ isAdmin: vi.fn().mockResolvedValue(false) }));
 vi.mock("./service-token", () => ({
   PLUGIN_SERVICE_MAP: { "gws-mcp": "google-workspace", "atlassian-mcp": "atlassian" },
+  pluginContextHeaders: () => ({}),
   resolveServiceToken: vi.fn().mockResolvedValue({
     token: "source-token-fixture",
     accountEmail: "mail@example.com",

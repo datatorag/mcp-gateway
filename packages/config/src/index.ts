@@ -66,6 +66,12 @@ const envSchema = z.object({
   SLACK_CONNECTOR_CLIENT_ID: z.string().default(""),
   SLACK_CONNECTOR_CLIENT_SECRET: z.string().default(""),
   SLACK_CONNECTOR_TEAM_ID: z.string().default(""),
+  // PostHog connector (SCRUM-471): the regional host a user's PostHog
+  // connection talks to. Not the analytics keys below. Only the two regional
+  // hosts, because the PostHog plugin is handed this as where to send a token.
+  POSTHOG_CONNECTOR_BASE_URL: z
+    .enum(["https://us.posthog.com", "https://eu.posthog.com"])
+    .default("https://us.posthog.com"),
   // PostHog
   POSTHOG_API_KEY: z.string().default(""),
   /** SCRUM-228: analytics is off outside production unless this is "1". */
