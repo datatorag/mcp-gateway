@@ -44,12 +44,13 @@ What PostHog adds:
 
 ## 1. The metadata document
 
-`GET /oauth/posthog/client.json`, an Express route in `server.ts` mounted before the Next
-catch-all, built by `posthogClientMetadata(baseUrl)` in `gateway/posthog-oauth.ts`:
+`GET /auth/posthog/client.json`, in the auth router beside the connect pair (so it is outside
+the rate limit on our own OAuth server's `/oauth` paths), built by `posthogClientMetadata(baseUrl)`
+in `gateway/posthog-oauth.ts` from the configured base URL, never the request's host:
 
 ```json
 {
-  "client_id": "<base>/oauth/posthog/client.json",
+  "client_id": "<base>/auth/posthog/client.json",
   "client_name": "DataToRAG",
   "client_uri": "<base>",
   "logo_uri": "<base>/datatorag-logo-256.png",
@@ -75,7 +76,7 @@ catch-all, built by `posthogClientMetadata(baseUrl)` in `gateway/posthog-oauth.t
 
 ## 2. The connect
 
-**Configuration.** One new key, `POSTHOG_BASE_URL`, default `https://us.posthog.com`, through the
+**Configuration.** One new key, `POSTHOG_CONNECTOR_BASE_URL`, default `https://us.posthog.com`, through the
 usual hops (schema, compose environment list); it is not a secret, so no parameter store entry.
 The gateway refuses to start if it is not one of `https://us.posthog.com` and
 `https://eu.posthog.com`, because the plugin is handed this value as the host to send a token to.
@@ -97,7 +98,7 @@ The gateway refuses to start if it is not one of `https://us.posthog.com` and
 
 **The project.** `required_access_level=project` makes the consent screen ask for projects. The
 token response carries `scoped_teams`. The callback requires **exactly one**; zero or several is
-refused with "Choose one PostHog project when you connect", nothing stored. One connection is one
+refused with the error code `choose_one_project`, nothing stored. One connection is one
 project: its id is the account's `externalAccountId`, as a Notion workspace id is, so a second
 project is a second account under the same email. The label is the project's name from
 `GET <host>/api/projects/{id}/`, cleaned by `untrusted-text.ts`.
@@ -110,7 +111,7 @@ the first live connect returns.
 **Tokens.** PostHog's source gives a metadata-document client a seven-day access token and a
 refresh token that does not rotate and does not expire with age (valid until revoked); the
 `expires_in` in the response is stored as the expiry, never assumed. The token response's
-`posthog_base_url` is compared with `POSTHOG_BASE_URL` and a mismatch is refused.
+`posthog_base_url` is compared with `POSTHOG_CONNECTOR_BASE_URL` and a mismatch is refused.
 
 - `refreshPostHogToken` through `refreshRotatingToken`: form body `grant_type=refresh_token`,
   `refresh_token`, `client_id`. Rotation is off today, but the row lock costs nothing and keeps a
@@ -129,13 +130,15 @@ that a non-admin sees PostHog nowhere.
 Today the gateway sends a plugin one header, `X-User-Token`. A PostHog call also needs the host
 and the project.
 
-- The service entry gains an optional `pluginContext(account) => Record<string, string>`; only
-  PostHog declares it, returning `X-PostHog-Host` (from `POSTHOG_BASE_URL`) and
+- `service-token.ts`, beside `PLUGIN_SERVICE_MAP`, gains a per-service `PLUGIN_CONTEXT`, read
+  through `pluginContextHeaders(service, account)`; only PostHog declares one, returning `X-PostHog-Host` (from `POSTHOG_CONNECTOR_BASE_URL`) and
   `X-PostHog-Project` (the account's `externalAccountId`).
 - `resolveServiceToken` already selects the account row; it returns `externalAccountId` beside the
   token, and `callPluginToolOnce` adds the context headers to the one-shot request.
-- The plugin refuses a host header whose parsed origin is not one of the two regional hosts and a project that is
-  not digits, before any call. The token is never sent anywhere else.
+- The token header is set after the context headers, so none can replace it.
+- The plugin refuses a host header that is not exactly one of the two regional hosts (a trailing
+  slash aside) and a project that is not digits, before any call. The token is never sent
+  anywhere else.
 
 ## 5. The plugin
 
@@ -157,7 +160,7 @@ characters with `truncated: true` and the count it dropped.
 
 | Tool | Arguments | Wraps | Cap |
 |---|---|---|---|
-| `posthog_project_get` | none | `GET /api/projects/{id}/` | id, name, organization, timezone, enabled products. Never the project's API token or its test-account filter values |
+| `posthog_project_get` | none | `GET /api/projects/{id}/` | id, name, organization, timezone, week start day. Never the project's API token or its test-account filter values |
 | `posthog_trends_query` | `series` (1 to 5 of `{event, math?, properties?}`), `date_from`, `date_to` (both required), `interval?`, `breakdown?`, `filter_test_accounts?` (default true) | `/query/`, `TrendsQuery` | 25 breakdown values |
 | `posthog_hogql_query` | `query` (one `SELECT`), `limit?` (default 100, max 1,000) | `/query/`, `HogQLQuery` | `LIMIT` appended or clamped |
 | `posthog_insights_list` | `search?`, `saved?` (default true), `limit?` (20, max 100), `offset?` | `GET /insights/` | id, short_id, name, description, last_refresh |
@@ -184,21 +187,30 @@ The checklist, one entry each: the Dockerfile (files and `plugin-posthog-mcp` at
 906), `scripts/gate.sh`'s path table and self-test, `PLUGIN_SERVICE_MAP`, `CONNECTABLE_SERVICES`,
 `SERVICE_PRESENTATION`, `PROVIDERS`, the connect-link maps, `CONNECTORS_WITHOUT_SCOPES` (the
 scopes are fixed by the document's ceiling), `KNOWN_READ_TOOLS`, the classification snapshot,
-the logo, the plugin README, and the registry pair `pnpm registry:diff posthog-mcp --new-plugin`
-(ten inserts and the server row), which HQ runs. No docs page, changelog or `/tools` page while
+the plugin README, and the registry pair `pnpm registry:diff posthog-mcp --new-plugin` (ten
+inserts and the server row), which HQ runs. The pair is generated from the tool files CI keeps
+for a build on `main`, so it follows the merge as its own pull request, as Brevo's and Slack's
+did. No docs page, changelog or `/tools` page while
 it is admin-only.
 
 ## 7. Runner
 
-A `posthog` scenario against HQ's own project, read-only, with fixture keys for the project id
-and one known saved insight:
+A `posthog` scenario against HQ's own project, read-only, covering all ten tools. The account
+role `posthog` is the project id; one fixture key, `posthogInsight`, names a saved insight. Until
+both are mapped, and until the registry rows exist, every case skips.
 
-- PH1 `posthog_project_get` names the fixture project.
-- PH2 `posthog_trends_query` with an explicit `date_to` returns one series.
-- PH3 `posthog_hogql_query` with a `LIMIT` above the cap comes back clamped.
-- PH4 `posthog_insight_get` on the fixture insight returns its name.
+- PH1 `posthog_project_get` answers as the connection's project, with no API token.
+- PH2 `posthog_trends_query` over a closed range returns one series; `posthog_web_overview`
+  answers its metrics.
+- PH3 `posthog_hogql_query` with a `LIMIT` above the one asked for comes back lowered;
+  `posthog_events_list` answers in its shape.
+- PH4 `posthog_insight_get` reads the fixture insight back; `posthog_insights_list` and
+  `posthog_dashboards_list` answer.
+- PH5 `posthog_persons_search` and `posthog_error_issues_list` answer in their shape, with only
+  counts in the evidence.
 
-No send-guard rules: nothing writes. Public status titles for each case.
+No send-guard rules: nothing writes. No public status titles: like Slack's, an admin-only
+service's cases are never shown.
 
 ## Tests, by section
 
@@ -208,7 +220,7 @@ No send-guard rules: nothing writes. Public status titles for each case.
   outcome (one project stored, zero or several refused, link-only with and without
   `email_verified`, duplicate, refused exchange, host mismatch); the ordering test extended; a
   non-admin refused at start and at callback.
-- Config: the gateway refuses a `POSTHOG_BASE_URL` outside the two hosts.
+- Config: the gateway refuses a `POSTHOG_CONNECTOR_BASE_URL` outside the two hosts.
 - Context headers: sent only for a service that declares them, carrying the account's project.
 - Refresh: through the real-Postgres rotating-lock test, as Brevo's.
 - Plugin: each tool's request shape against a stubbed fetch, every cap, the host and project

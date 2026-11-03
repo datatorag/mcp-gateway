@@ -18,7 +18,7 @@ accepted for own use, no app verification.
 
 ## Global constraints
 
-- Every PostHog call goes to `POSTHOG_BASE_URL` (`https://us.posthog.com` by default; only the
+- Every PostHog call goes to `POSTHOG_CONNECTOR_BASE_URL` (`https://us.posthog.com` by default; only the
   US and EU hosts are accepted) under `/api/projects/{project}/`, with `Authorization: Bearer`.
 - No client secret anywhere; PKCE S256 on every connect.
 - Nothing logs a token, a query, a body or a parameter value; paths are logged as templates.
@@ -40,7 +40,7 @@ accepted for own use, no app verification.
 
 ### Task 1: the metadata document and configuration
 
-**Files:** `packages/config/src/index.ts` (`POSTHOG_BASE_URL`, refused outside the two hosts),
+**Files:** `packages/config/src/index.ts` (`POSTHOG_CONNECTOR_BASE_URL`, refused outside the two hosts),
 `.env.example`, `docker/docker-compose.prod.yml` environment list; create
 `apps/gateway/src/gateway/posthog-oauth.ts` (constants, `posthogClientMetadata`, `pkcePair`) and
 its test; the route in `server.ts` before the Next catch-all.
@@ -49,7 +49,7 @@ its test; the route in `server.ts` before the Next catch-all.
 `posthogEndpoints(host): { authorize, token, revoke, userinfo, project(id) }`;
 `posthogClientMetadata(baseUrl): object`; `pkcePair(): { verifier: string; challenge: string }`.
 
-- [ ] Failing tests: the document's `client_id` equals `<base>/oauth/posthog/client.json`; its
+- [ ] Failing tests: the document's `client_id` equals `<base>/auth/posthog/client.json`; its
   serialised size is under 5,120 bytes; `com.posthog.scopes` joined equals `POSTHOG_SCOPES`;
   `client_name` matches none of PostHog's banned words; the route answers 200 JSON with
   `Cache-Control: public, max-age=3600` and no session; `pkcePair` gives a 43-character verifier
@@ -58,12 +58,12 @@ its test; the route in `server.ts` before the Next catch-all.
 
 ### Task 2: context headers to the plugin
 
-**Files:** `service-registry.ts` (optional `pluginContext` on a service entry),
-`service-token.ts` (`resolveServiceToken` returns `externalAccountId`), `user-tools.ts`
+**Files:** `service-token.ts` (`PLUGIN_CONTEXT` and `pluginContextHeaders`, and
+`resolveServiceToken` returns `externalAccountId`), `user-tools.ts`
 (`callPluginToolOnce` takes `contextHeaders?: Record<string, string>`), `mcp-server.ts` (passes
 them); tests.
 
-- [ ] Failing tests: a service with no `pluginContext` sends only `X-User-Token`, unchanged; the
+- [ ] Failing tests: a service with no context sends only `X-User-Token`, unchanged; the
   PostHog entry sends `X-PostHog-Host` and `X-PostHog-Project` from config and the account's
   external id; an account with no external id sends no project header.
 - [ ] Implement; commit.
@@ -140,15 +140,16 @@ them); tests.
 
 **Files:** `apps/gateway/Dockerfile` (files, `plugin-posthog-mcp` uid and gid 906),
 `scripts/gate.sh` and its self-test, `SERVICE_PRESENTATION`, `KNOWN_READ_TOOLS`, the
-classification snapshot, the logo; `tests/cases/ph1..ph4-*.ts`, `tests/scenarios.ts` (`posthog`),
+classification snapshot, the logo; `tests/cases/ph1..ph5-*.ts`, `tests/scenarios.ts` (`posthog`),
 `tests/types.ts` and `.env.example` (fixture keys for the project and a saved insight),
-`lib/status/public-titles.ts`; the registry pair from
-`pnpm registry:diff posthog-mcp --new-plugin`; `codebase-map` and `services-integrations` skills.
+`codebase-map` and `services-integrations` skills. No public titles (admin-only, as Slack). The
+registry pair from `pnpm registry:diff posthog-mcp --new-plugin` follows the merge, in its own
+pull request: it is generated from CI's build record on `main`.
 
 - [ ] The gate's self-test knows the path; the build's account check passes; snapshot and
   `KNOWN_READ_TOOLS` agree with the declared annotations; runner cases as the spec lists.
 - [ ] `scripts/gate.sh origin/main`, `pnpm build`, the leak scan, merge-base, the security
   review; PR. No merge, no deploy, no registry write.
-- [ ] Before the deploy (HQ's): `POSTHOG_BASE_URL` in the host render if not the default, the
+- [ ] Before the deploy (HQ's): `POSTHOG_CONNECTOR_BASE_URL` in the host render if not the default, the
   runner fixtures on HQ's project. After it: the first live connect records the token lifetime,
   rotation and `email_verified` against what the spec took from source.

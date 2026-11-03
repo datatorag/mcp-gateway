@@ -52,6 +52,8 @@ Entry file: `apps/gateway/src/lib/stripe.ts`. `getStripe()` is a lazy singleton 
 
 ### PostHog (server / Node)
 
+Not the PostHog connector (SCRUM-471, `plugins/posthog-mcp`), which is a user's own PostHog project connected by OAuth with a client metadata document and PKCE, host `POSTHOG_CONNECTOR_BASE_URL`; this section is DataToRAG's own analytics. The two never share a key.
+
 Entry file: `apps/gateway/src/lib/posthog-server.ts`. `getPosthog()` is a lazy singleton that returns `null` (not throw, not warn) when `POSTHOG_API_KEY` is unset — every caller must null-check (`const c = getPosthog(); if (!c) return;`) rather than relying on a warn log. `flushAt: 20`, `flushInterval: 10_000`. Host is hardcoded (`https://us.i.posthog.com`), not env-driven. `shutdownPosthog()` resets the client for clean process exit — call it on graceful shutdown so buffered events flush. Env var: `POSTHOG_API_KEY`.
 
 ### PostHog (client / browser)
