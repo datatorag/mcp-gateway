@@ -34,6 +34,21 @@ Rename the two files it writes to `<date>-<change>.sql` and `<date>-<change>.rol
 check them with `node scripts/registry-file-check.mjs <file>`, and commit them in a pull request.
 A hand-written change has to be written in the same shape, or the check refuses it.
 
+### A change too large for one file
+
+The file check refuses more than 40 row statements in one file. A change that touches more rows
+of one plugin and adds or removes none (one new annotation on every tool, as in SCRUM-468) is
+generated in parts:
+
+```
+pnpm registry:diff <plugin slug> --from <running sha> --to <new sha> --out <dir> --chunk <k>
+```
+
+Part `k` holds the rows in name order, at most 40 to a part, and its header says "Part k of n".
+Each part keeps the plugin's row count where it was, so each one's guard holds on its own and the
+parts can run, or roll back, in any order. A part past the last writes nothing and says how many
+there are. A diff that adds or removes rows is never split.
+
 ### A new plugin
 
 A new plugin goes through the same command, from the running sha to the sha that adds it. When

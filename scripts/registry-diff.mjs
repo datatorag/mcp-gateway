@@ -322,6 +322,29 @@ function wrap(header, blocks, slug, names, expectedCount) {
   ].join("\n");
 }
 
+/** Rows one file may change, the file check's own cap (MAX_ROW_STATEMENTS in
+ * registry-file-check.mjs; a test holds the two equal). */
+export const CHUNK_ROWS = 40;
+
+/**
+ * The k-th slice (1-based) of a diff too large for one file (SCRUM-468: one
+ * new annotation changes every row of a plugin). Only a diff that changes
+ * rows and adds or removes none can be split: then every part leaves the
+ * plugin's row count where it was, so each part's count guard holds on its
+ * own and the parts can run, or roll back, in any order. Rows are split in
+ * name order, CHUNK_ROWS to a part. Null for a k past the last part.
+ */
+export function chunkDiff(diff, k) {
+  if (!Number.isInteger(k) || k < 1) throw new Error("--chunk takes a part number from 1");
+  if (diff.added.length > 0 || diff.removed.length > 0 || diff.newPlugin) {
+    throw new Error("only a diff that changes rows and adds or removes none can be split into parts");
+  }
+  const changed = [...diff.changed].sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0));
+  const parts = Math.ceil(changed.length / CHUNK_ROWS);
+  if (k > parts) return null;
+  return { ...diff, changed: changed.slice((k - 1) * CHUNK_ROWS, k * CHUNK_ROWS), part: k, parts };
+}
+
 /** forward.sql and rollback.sql for a diff, or null when nothing changes.
  * `server` is the serverRow of a new plugin, and is given exactly when the
  * diff is a new plugin's. */
@@ -337,6 +360,7 @@ export function changeFiles(slug, fromSha, toSha, diff, server = null, { forced 
   if (changed.length + added.length + removed.length === 0) return null;
   const names = [...changed.map((c) => c.name), ...added.map((t) => t.name), ...removed.map((t) => t.name)].sort();
   const summary = [
+    ...(diff.part ? [`Part ${diff.part} of ${diff.parts}: rows split in name order, at most ${CHUNK_ROWS} to a part; each part stands alone.`] : []),
     `${changed.length} row(s) change, ${added.length} added, ${removed.length} removed.`,
     `Rows for ${slug}: ${fromCount} before, ${toCount} after.`,
     ...changed.map((c) => `  changes ${c.name}: ${c.fields.join(", ")}`),
@@ -643,13 +667,19 @@ function main(argv) {
   };
   const [from, to, out] = [opt("--from"), opt("--to"), opt("--out") ?? "."];
   const forced = argv.includes("--new-plugin");
+  const chunk = opt("--chunk");
   if (!slug || !SLUG.test(slug) || !from || !to) {
-    console.error("usage: registry-diff.mjs <slug> --from <sha> --to <sha> [--out <dir>] [--new-plugin]");
+    console.error("usage: registry-diff.mjs <slug> --from <sha> --to <sha> [--out <dir>] [--new-plugin] [--chunk <k>]");
     process.exit(2);
   }
   if (forced) commitHere(from); // only a header line under --new-plugin, but a real commit
   const base = baseToolFile({ forced, slug, from, to, pluginDirAt, fetchBase: fetchBaseToolFile });
-  const diff = diffTools(base, fetchToolFile(slug, to));
+  const whole = diffTools(base, fetchToolFile(slug, to));
+  const diff = chunk === undefined ? whole : chunkDiff(whole, Number(chunk));
+  if (diff === null) {
+    console.log(`${slug}: there is no part ${chunk}; the change has ${Math.ceil(whole.changed.length / CHUNK_ROWS)}. No file written.`);
+    return;
+  }
   const server = diff.newPlugin
     ? serverRow(slug, jsonAt(to, `plugins/${slug}/datatorag.json`), jsonAt(to, `plugins/${slug}/package.json`))
     : null;
@@ -662,7 +692,7 @@ function main(argv) {
   writeFileSync(join(out, "forward.sql"), files.forward);
   writeFileSync(join(out, "rollback.sql"), files.rollback);
   if (diff.newPlugin) console.log(`${slug}: a NEW plugin${forced ? " (--new-plugin)" : ""}. The forward file inserts its mcp_servers row first.`);
-  console.log(`${slug}: ${diff.changed.length} changed, ${diff.added.length} added, ${diff.removed.length} removed.`);
+  console.log(`${slug}: ${diff.changed.length} changed, ${diff.added.length} added, ${diff.removed.length} removed${diff.part ? ` (part ${diff.part} of ${diff.parts})` : ""}.`);
   console.log(`Wrote ${join(out, "forward.sql")} and ${join(out, "rollback.sql")}. NOT RUN. This command opened no database connection.`);
 }
 
