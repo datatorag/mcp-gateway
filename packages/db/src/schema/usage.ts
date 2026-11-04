@@ -58,6 +58,10 @@ export const usageEvents = pgTable(
       table.toolName,
       table.createdAt.desc()
     ),
+    // A poll across every user, newest first: "created_at > $1 order by
+    // created_at". The two above lead with user_id, so without this the
+    // poll is a sequential scan.
+    index("idx_usage_events_created_at").on(table.createdAt.desc()),
   ]
 );
 

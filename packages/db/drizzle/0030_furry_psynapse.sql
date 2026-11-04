@@ -1,0 +1,19 @@
+-- An index for a poll across every user, newest first (the HQ dashboard).
+--
+-- Why the statement below is a plain CREATE INDEX: drizzle's migrator runs
+-- every pending migration inside one transaction, where Postgres refuses
+-- CREATE INDEX CONCURRENTLY. A CONCURRENTLY here would fail every fresh
+-- db:migrate, the test databases included.
+--
+-- Why production does not run it: a plain CREATE INDEX holds a lock that
+-- stalls the gateway's writes to usage_events while it builds. On production
+-- the sequence is, by hand and outside any transaction:
+--   1. CREATE INDEX CONCURRENTLY IF NOT EXISTS "idx_usage_events_created_at" ON "usage_events" USING btree ("created_at" DESC NULLS LAST);
+--   2. Check the index is valid (pg_index.indisvalid); a failed CONCURRENTLY
+--      build leaves an invalid index, which is dropped and built again.
+--   3. Insert this migration's row into drizzle.__drizzle_migrations, so a
+--      later db:migrate sees 0030 journaled and does nothing.
+-- If db:migrate ever runs first against the hand-built index, IF NOT EXISTS
+-- makes this statement a no-op. Everywhere else (a fresh or test database)
+-- it runs as it is.
+CREATE INDEX IF NOT EXISTS "idx_usage_events_created_at" ON "usage_events" USING btree ("created_at" DESC NULLS LAST);
