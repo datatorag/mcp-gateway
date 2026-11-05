@@ -39,7 +39,7 @@ export async function refreshBrevoToken(
         signal,
       }),
     expiresAt: (data) =>
-      typeof data.expires_in === "number" ? new Date(Date.now() + data.expires_in * 1000) : null,
+      typeof data.expires_in === "number" && data.expires_in > 0 ? new Date(Date.now() + data.expires_in * 1000) : null,
   });
 }
 

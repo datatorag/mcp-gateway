@@ -45,7 +45,7 @@ vi.mock("./service-launch", () => ({
 }));
 
 import { createAuthRouter } from "./auth";
-import { SLACK_USER_SCOPES } from "./slack-oauth";
+import { SLACK_USER_SCOPES } from "./connectors/slack/oauth";
 
 const selectLimit = vi.fn();
 const dbMock = {

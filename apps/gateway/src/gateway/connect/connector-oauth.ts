@@ -12,6 +12,10 @@ export interface ConnectConfig {
   baseUrl: string;
   brevoClientId?: string;
   brevoClientSecret?: string;
+  slackClientId?: string;
+  slackClientSecret?: string;
+  /** The one Slack workspace allowed to connect. */
+  slackTeamId?: string;
 }
 
 export interface ConnectContext {
@@ -51,8 +55,12 @@ export interface ConnectorOAuth {
   path: string;
   /** The one-shot cookie holding this round trip's nonce. */
   nonceCookie: string;
-  /** The scopes stored with the account. */
-  scopes: string;
+  /** The scopes stored with the account, or null to store none beyond
+   * what the grant reports (see `storesGrantedScope`). */
+  scopes: string | null;
+  /** Store the scope the provider reports for this grant (the exchange's
+   * `scope`), not only `scopes`. */
+  storesGrantedScope?: boolean;
   /** Hidden until its registry row is launched, and re-checked at the
    * callback. */
   gated: boolean;

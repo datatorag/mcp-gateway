@@ -80,7 +80,6 @@ const CALLBACKS: Array<{ path: string; nonceClear: string }> = [
   { path: "/auth/google/connect/callback", nonceClear: "res.clearCookie(GWS_CONNECT_NONCE_COOKIE" },
   { path: "/auth/atlassian/connect/callback", nonceClear: 'res.clearCookie("atl_connect_nonce"' },
   { path: "/auth/notion/connect/callback", nonceClear: "res.clearCookie(NOTION_CONNECT_NONCE_COOKIE" },
-  { path: "/auth/slack/connect/callback", nonceClear: "res.clearCookie(SLACK_CONNECT_NONCE_COOKIE" },
   // SCRUM-471. Its PKCE verifier is cleared beside the nonce; the connect
   // test proves a refused round trip clears both.
   { path: "/auth/posthog/connect/callback", nonceClear: "res.clearCookie(POSTHOG_CONNECT_NONCE_COOKIE" },

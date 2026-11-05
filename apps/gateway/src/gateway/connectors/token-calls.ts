@@ -7,6 +7,7 @@ import type { Database } from "@datatorag-mcp/db";
 import type { ConnectionRef, RefreshOutcome, RevokeTokens } from "../service-token";
 import type { ConnectorId } from "./registry";
 import { refreshBrevoToken, revokeBrevoGrant } from "./brevo/tokens";
+import { refreshSlackToken, revokeSlackGrant } from "./slack/tokens";
 
 export interface ConnectorTokenCalls {
   refresh(db: Database, conn: ConnectionRef, refreshToken: string): Promise<RefreshOutcome>;
@@ -15,4 +16,5 @@ export interface ConnectorTokenCalls {
 
 export const CONNECTOR_TOKENS = {
   brevo: { refresh: refreshBrevoToken, revoke: revokeBrevoGrant },
+  slack: { refresh: refreshSlackToken, revoke: revokeSlackGrant },
 } satisfies Partial<Record<ConnectorId, ConnectorTokenCalls>>;

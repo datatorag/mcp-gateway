@@ -1,8 +1,6 @@
 /**
- * Slack's OAuth v2 endpoints and the code exchange (SCRUM-454), shared by
- * the connect callback (`auth.ts`) and the refresh and revoke in
- * `service-token.ts`. Its own module, as `notion-oauth.ts` is, because those
- * two files cannot import each other without a cycle.
+ * Slack's OAuth v2 (SCRUM-454): its endpoints, the code exchange, and its
+ * connect for the shared flow. The refresh and revoke are in `tokens.ts`.
  *
  * Built against Slack's documented behaviour for an internal app that
  * requests user scopes only, with token rotation on:
@@ -17,6 +15,8 @@
  *
  * Nothing here logs a token, a code or a response body.
  */
+import { cleanWorkspaceName } from "../../untrusted-text";
+import type { ConnectorOAuth } from "../../connect/connector-oauth";
 
 export const SLACK_AUTHORIZE_URL = "https://slack.com/oauth/v2/authorize";
 export const SLACK_TOKEN_URL = "https://slack.com/api/oauth.v2.access";
@@ -152,3 +152,78 @@ export async function slackUserEmail(token: string, userId: string): Promise<str
     return null;
   }
 }
+
+// The company workspace only, for admins only. Slack is audience-gated, so a
+// user it is not offered to gets a plain 404 at both ends: the same answer as
+// a path that does not exist, like every admin refusal. User scopes only (no
+// bot), and the team id is checked against SLACK_CONNECTOR_TEAM_ID before the
+// new token is used for anything: the app's own distribution setting is the
+// first guarantee that only the company workspace connects, this the second.
+export const SLACK_CONNECT: ConnectorOAuth = {
+  provider: "slack",
+  path: "/auth/slack/connect",
+  nonceCookie: "slack_connect_nonce",
+  // The grant's own scopes are stored, from the exchange.
+  scopes: null,
+  storesGrantedScope: true,
+  gated: true,
+  notOffered: "404",
+  isConfigured: (config) => Boolean(config.slackClientId && config.slackClientSecret && config.slackTeamId),
+
+  authorizeUrl(ctx, nonce) {
+    const url = new URL(SLACK_AUTHORIZE_URL);
+    url.searchParams.set("client_id", ctx.config.slackClientId!);
+    // User scopes only; `scope` is the bot's and is never sent.
+    url.searchParams.set("user_scope", SLACK_USER_SCOPES);
+    url.searchParams.set("redirect_uri", ctx.redirectUri);
+    // Opens the consent screen on the company workspace; the identity step's
+    // team check is what enforces it.
+    url.searchParams.set("team", ctx.config.slackTeamId!);
+    url.searchParams.set("state", nonce);
+    return url;
+  },
+
+  async exchange(code, ctx) {
+    let grant: SlackGrant;
+    try {
+      grant = await exchangeSlackCode(code, ctx.redirectUri, {
+        clientId: ctx.config.slackClientId!,
+        clientSecret: ctx.config.slackClientSecret!,
+      });
+    } catch (err) {
+      // Slack's short error code only; never a body or a token.
+      console.warn("[auth] slack exchange refused:", err instanceof SlackExchangeError ? err.code : "unknown");
+      return null;
+    }
+    return {
+      access_token: grant.accessToken,
+      refresh_token: grant.refreshToken ?? undefined,
+      expires_in: grant.expiresIn,
+      // Space-separated, the form every stored grant uses.
+      scope: grant.scopes.join(" "),
+      grant,
+    };
+  },
+
+  async identify(tokens, ctx) {
+    const grant = tokens.raw.grant as SlackGrant;
+    // An org-wide Enterprise Grid install is not one workspace.
+    if (grant.enterprise) return { error: "enterprise_install_not_supported" };
+    // Only the company workspace, checked before the token is used at all.
+    if (grant.teamId !== ctx.config.slackTeamId) return { error: "workspace_not_allowed" };
+    // connected_accounts.account_email is NOT NULL: a grant whose email
+    // cannot be read is refused, not stored.
+    const email = await slackUserEmail(grant.accessToken, grant.userId);
+    if (!email) return null;
+    return {
+      email,
+      // Slack reports no verified flag; the address is the workspace
+      // profile's, which Slack confirmed when the person joined.
+      emailVerified: true,
+      externalAccountId: grant.teamId,
+      // Set by whoever administers the workspace, and shown to the model and
+      // in the dashboard: cleaned and capped before it is stored.
+      label: cleanWorkspaceName(grant.teamName),
+    };
+  },
+};

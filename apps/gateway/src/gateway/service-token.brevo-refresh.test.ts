@@ -22,6 +22,7 @@ class FakeBrevo {
   generation = 1;
   calls: Array<Record<string, string>> = [];
   delayMs = 150;
+  expiresIn: unknown = 3600;
   async handle(init: RequestInit): Promise<Response> {
     const body = Object.fromEntries(new URLSearchParams(String(init.body)));
     this.calls.push(body);
@@ -31,7 +32,7 @@ class FakeBrevo {
     }
     this.generation += 1;
     return new Response(
-      JSON.stringify({ access_token: `access-${this.generation}`, refresh_token: `refresh-${this.generation}`, expires_in: 3600 }),
+      JSON.stringify({ access_token: `access-${this.generation}`, refresh_token: `refresh-${this.generation}`, expires_in: this.expiresIn }),
       { status: 200 }
     );
   }
@@ -86,6 +87,17 @@ describe.skipIf(!isDockerAvailable())("SCRUM-468: refreshBrevoToken", () => {
       .where(eq(serviceConnections.id, connId));
     return row;
   }
+
+  it("stores no expiry unless Brevo answers a positive number of seconds", async () => {
+    for (const expiresIn of [0, -5, "3600", null]) {
+      brevo = new FakeBrevo();
+      brevo.delayMs = 0;
+      brevo.expiresIn = expiresIn;
+      const { connId, userId } = await connected();
+      expect(await refreshBrevoToken(db, { id: connId, userId }, "refresh-1")).toEqual({ token: "access-2" });
+      expect((await stored(connId)).expires, String(expiresIn)).toBeNull();
+    }
+  });
 
   it("refreshes with the client secret in the form body, stores the new pair and the hour's expiry", async () => {
     const { connId, userId } = await connected();
