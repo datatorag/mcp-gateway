@@ -54,8 +54,10 @@ export function connectStartFromLink(provider: DuplicateProvider): string {
 function baseHeaders(res: Response): void {
   res.setHeader("Cache-Control", "no-store");
   res.setHeader("X-Robots-Tag", "noindex, nofollow");
-  // The token is in this page's URL: never in a Referer.
-  res.setHeader("Referrer-Policy", "no-referrer");
+  // The token is in this page's URL: never in a Referer to another site. Not
+  // no-referrer: under it a browser posts the page's own form with
+  // Origin: null, which the POST's same-origin check refuses (SCRUM-472).
+  res.setHeader("Referrer-Policy", "same-origin");
 }
 
 function serviceName(provider: string): string {
