@@ -13,6 +13,8 @@ export interface ConnectConfig {
   baseUrl: string;
   brevoClientId?: string;
   brevoClientSecret?: string;
+  notionClientId?: string;
+  notionClientSecret?: string;
   slackClientId?: string;
   slackClientSecret?: string;
   /** The one Slack workspace allowed to connect. */

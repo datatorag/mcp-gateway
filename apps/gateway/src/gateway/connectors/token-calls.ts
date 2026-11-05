@@ -9,6 +9,7 @@ import type { ConnectorId } from "./registry";
 import { refreshBrevoToken, revokeBrevoGrant } from "./brevo/tokens";
 import { refreshSlackToken, revokeSlackGrant } from "./slack/tokens";
 import { refreshPostHogToken, revokePostHogGrant } from "./posthog/tokens";
+import { refreshNotionToken, revokeNotionGrant } from "./notion/tokens";
 
 export interface ConnectorTokenCalls {
   refresh(db: Database, conn: ConnectionRef, refreshToken: string): Promise<RefreshOutcome>;
@@ -19,4 +20,5 @@ export const CONNECTOR_TOKENS = {
   brevo: { refresh: refreshBrevoToken, revoke: revokeBrevoGrant },
   slack: { refresh: refreshSlackToken, revoke: revokeSlackGrant },
   posthog: { refresh: refreshPostHogToken, revoke: revokePostHogGrant },
+  notion: { refresh: refreshNotionToken, revoke: revokeNotionGrant },
 } satisfies Partial<Record<ConnectorId, ConnectorTokenCalls>>;

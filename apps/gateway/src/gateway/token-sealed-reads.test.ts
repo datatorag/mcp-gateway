@@ -18,7 +18,8 @@ import { connectedAccounts, serviceConnections, type Database } from "@datatorag
 import { revokeGoogleToken } from "@/lib/google-revoke";
 import { getTestDb, stopTestDb, insertTestUser, isDockerAvailable } from "../test-utils/db";
 import { upsertServiceAccount } from "./connected-accounts";
-import { refreshNotionToken, resolveServiceToken, revokeUpstream } from "./service-token";
+import { resolveServiceToken, revokeUpstream } from "./service-token";
+import { refreshNotionToken } from "./connectors/notion/tokens";
 import { sealToken, sealedColumns } from "./token-crypto";
 
 describe.skipIf(!isDockerAvailable())("SCRUM-442: provider tokens are read sealed", () => {

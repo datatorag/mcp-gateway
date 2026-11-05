@@ -34,7 +34,6 @@ import {
 } from "./post-connect-destination";
 import { googleConnectRefusedUrl, renderConnectInterstitial } from "./connect-interstitial";
 import { GWS_SCOPE_LIST, grantedServiceCount, scopeDelta, serviceGrantStates } from "./scope-grant";
-import { NOTION_AUTHORIZE_URL, NOTION_TOKEN_URL, notionBasicAuth } from "./notion-oauth";
 import { mountConnectFlow, type ConnectFlowDeps } from "./connect/mount-connect-flow";
 import { CONNECTOR_OAUTH } from "./connectors/connect-flows";
 import { hashToken } from "@datatorag-mcp/auth";
@@ -62,10 +61,6 @@ const NEXT_COOKIE = "dtr_next";
  * Its own cookie per flow, so concurrent connects cannot consume each
  * other's binding. */
 const GWS_CONNECT_NONCE_COOKIE = "gws_connect_nonce";
-
-/** The Notion connect flow's one-shot CSRF nonce (SCRUM-366). Its own cookie,
- * like every sibling, so concurrent connects cannot consume each other's. */
-const NOTION_CONNECT_NONCE_COOKIE = "notion_connect_nonce";
 
 
 
@@ -132,15 +127,6 @@ const GWS_SCOPES = GWS_SCOPE_LIST.join(" ");
  * GET /auth/slack/connect(/callback)     — the company Slack workspace, admins only
  * GET /auth/posthog/connect(/callback)   — one PostHog project per grant, admins only
  */
-
-/** The fields of Notion's token response this file reads. */
-type NotionTokenResponse = {
-  access_token?: unknown;
-  refresh_token?: string | null;
-  workspace_id?: unknown;
-  workspace_name?: unknown;
-  owner?: { type?: string; user?: { person?: { email?: unknown } } };
-};
 
 export function createAuthRouter(
   db: Database,
@@ -1169,215 +1155,6 @@ export function createAuthRouter(
 
     res.redirect(
       postConnectDestination({ requestedPath, provider: PROVIDERS.ATLASSIAN })
-    );
-  });
-
-  // --- Notion connection (SCRUM-366) ---
-  //
-  // The Atlassian pair's shape: session to begin, attribution and `next`
-  // parked, a one-shot nonce echoed in `state`, all consumed before any
-  // return. No consent interstitial, because Notion has no per-scope opt-out
-  // to coach around: the user picks pages, and capabilities are fixed on the
-  // registered connection. One grant is one person in one workspace, so the
-  // workspace id is stored as the account's external id and its name as the
-  // label; a second workspace under the same email is a second account.
-
-  router.get("/auth/notion/connect", async (req, res) => {
-    // A live web session, or a spent connect link, as for Google.
-    if (!(await connectUser(req.cookies?.[SESSION_COOKIE], req.cookies?.[CONNECT_LINK_COOKIE], PROVIDERS.NOTION))) {
-      res.redirect("/auth/login");
-      return;
-    }
-
-    // The launch gate (SCRUM-366): until the notion-mcp server row is active
-    // there are no Notion tools, so nothing is connected. Refused before any
-    // cookie is set or Notion is contacted.
-    if (!(await isServiceLaunched(db, PROVIDERS.NOTION))) {
-      res.redirect(
-        postConnectDestination({
-          requestedPath: req.query.next,
-          error: CONNECT_ERROR_NOT_LAUNCHED,
-        })
-      );
-      return;
-    }
-
-    stashAttribution(req, res, cookiesAreSecure);
-    stashConnectNext(req, res);
-
-    const nonce = randomBytes(16).toString("base64url");
-    res.cookie(NOTION_CONNECT_NONCE_COOKIE, nonce, oneShotCookie(cookiesAreSecure));
-    armDuplicateAck(req, res, PROVIDERS.NOTION, nonce);
-
-    const url = new URL(NOTION_AUTHORIZE_URL);
-    url.searchParams.set("client_id", config.notionClientId);
-    url.searchParams.set("response_type", "code");
-    url.searchParams.set("owner", "user");
-    url.searchParams.set(
-      "redirect_uri",
-      `${config.baseUrl}/auth/notion/connect/callback`
-    );
-    url.searchParams.set("state", nonce);
-
-    res.redirect(url.toString());
-  });
-
-  router.get("/auth/notion/connect/callback", async (req, res) => {
-    const code = req.query.code as string | undefined;
-    const state = req.query.state as string | undefined;
-    // Identity comes from the session cookie only, never from `state`.
-    const sessionToken = req.cookies?.[SESSION_COOKIE] as string | undefined;
-    const cookieNonce = req.cookies?.[NOTION_CONNECT_NONCE_COOKIE] as string | undefined;
-    res.clearCookie(NOTION_CONNECT_NONCE_COOKIE, { path: "/" });
-    const attribution = takeAttribution(req, res);
-    const requestedPath = takeConnectNext(req, res);
-    const duplicateAck = takeDuplicateAck(req, res);
-    const linkToken = takeConnectLink(req, res);
-
-    if (!sessionToken && !linkToken) {
-      res.redirect("/auth/login");
-      return;
-    }
-
-    if (!nonceMatches(cookieNonce, state)) {
-      res.redirect(
-        postConnectDestination({ requestedPath, error: "invalid_state" })
-      );
-      return;
-    }
-
-    if (!code) {
-      res.redirect(
-        postConnectDestination({ requestedPath, error: "missing_code" })
-      );
-      return;
-    }
-
-    // SCRUM-374: a live WEB session, not just any row: a revoked or expired
-    // session, or an MCP client's token set as the cookie, goes to sign in.
-    // With no session, a connect link spent in this browser (SCRUM-466).
-    const who = await connectUser(sessionToken, linkToken, PROVIDERS.NOTION);
-    if (!who) {
-      res.redirect("/auth/login");
-      return;
-    }
-    const session = { userId: who.userId };
-
-    let tokens: NotionTokenResponse | null = null;
-    try {
-      const tokenResponse = await fetch(NOTION_TOKEN_URL, {
-        method: "POST",
-        headers: {
-          Authorization: notionBasicAuth(
-            config.notionClientId,
-            config.notionClientSecret
-          ),
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          grant_type: "authorization_code",
-          code,
-          redirect_uri: `${config.baseUrl}/auth/notion/connect/callback`,
-        }),
-      });
-      if (tokenResponse.ok) {
-        tokens = (await tokenResponse.json()) as NotionTokenResponse;
-      }
-    } catch {
-      // Falls through as a failed exchange.
-    }
-
-    if (!tokens || typeof tokens.access_token !== "string") {
-      res.redirect(
-        postConnectDestination({ requestedPath, error: "token_exchange_failed" })
-      );
-      return;
-    }
-
-    // The person who authorized, from the token response itself: Notion has
-    // no userinfo call to make. Absent when the connection lacks the "user
-    // information with email" capability, and then there is no routing key.
-    const email = tokens.owner?.user?.person?.email;
-    const accountEmail = typeof email === "string" && email !== "" ? email : null;
-    if (!accountEmail) {
-      res.redirect(
-        postConnectDestination({
-          requestedPath,
-          error: "could_not_resolve_account_email",
-        })
-      );
-      return;
-    }
-
-    // Without the workspace id a second workspace under the same email would
-    // overwrite the first one's tokens, which is the thing the key exists to
-    // prevent, so a grant with none is refused rather than stored keyless.
-    const workspaceId =
-      typeof tokens.workspace_id === "string" && tokens.workspace_id !== ""
-        ? tokens.workspace_id
-        : null;
-    if (!workspaceId) {
-      res.redirect(
-        postConnectDestination({
-          requestedPath,
-          error: "could_not_resolve_workspace",
-        })
-      );
-      return;
-    }
-    // Set by whoever administers the workspace, and shown to the model and
-    // in the dashboard: cleaned and capped before it is stored.
-    const workspaceName = cleanWorkspaceName(tokens.workspace_name);
-
-    // SCRUM-466: a connect only a link vouches for must be the link user's own.
-    // Notion reports no verified flag; the address is the one its own
-    // sign-in uses.
-    if (await refusedUnconfirmed(res, who, PROVIDERS.NOTION, accountEmail, true)) {
-      return;
-    }
-
-    if (
-      await refusedAsDuplicate(res, {
-        userId: session.userId,
-        provider: PROVIDERS.NOTION,
-        accountEmail,
-        externalAccountId: workspaceId,
-        acknowledged: nonceMatches(duplicateAck, cookieNonce),
-        requestedPath,
-      })
-    ) {
-      return;
-    }
-
-    // No expiry: Notion's token response carries none, and none is invented.
-    await upsertServiceAccount(
-      db,
-      session.userId,
-      PROVIDERS.NOTION,
-      accountEmail,
-      {
-        access_token: tokens.access_token,
-        refresh_token: tokens.refresh_token ?? undefined,
-      },
-      null,
-      null,
-      { externalAccountId: workspaceId, label: workspaceName }
-    );
-
-    await trackOAuthCompleted(
-      db,
-      session.userId,
-      PROVIDERS.NOTION,
-      accountEmail,
-      attribution,
-      undefined,
-      { skill: skillSlugFromPath(requestedPath), entry: connectEntry(requestedPath) }
-    );
-
-    connected(who, PROVIDERS.NOTION);
-
-    res.redirect(
-      postConnectDestination({ requestedPath, provider: PROVIDERS.NOTION })
     );
   });
 
