@@ -44,7 +44,8 @@ vi.mock("./connect-links", async (orig) => ({
 }));
 
 import { createAuthRouter } from "./auth";
-import { BREVO_ACCOUNT_URL, BREVO_SCOPES, BREVO_TOKEN_URL, BREVO_USERINFO_URL } from "./brevo-oauth";
+import { CONNECT_ERROR_NOT_CONFIGURED } from "./post-connect-destination";
+import { BREVO_ACCOUNT_URL, BREVO_SCOPES, BREVO_TOKEN_URL, BREVO_USERINFO_URL } from "./connectors/brevo/oauth";
 
 const signInEmail = vi.fn();
 const dbMock = {
@@ -144,10 +145,10 @@ describe("the Brevo connect start", () => {
     expect(res.headers.getSetCookie().some((c) => c.startsWith("brevo_connect_nonce="))).toBe(false);
   });
 
-  it("refuses when the app's credentials are not configured", async () => {
+  it("refuses when the app's credentials are not configured, as every connector does", async () => {
     useCreds = false;
     const res = await request("/auth/brevo/connect");
-    expect(res.headers.get("location")).toContain("service_not_available");
+    expect(res.headers.get("location")).toContain(CONNECT_ERROR_NOT_CONFIGURED);
   });
 });
 

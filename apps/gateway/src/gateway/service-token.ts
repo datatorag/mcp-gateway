@@ -3,7 +3,7 @@ import type { Database } from "@datatorag-mcp/db";
 import { serviceConnections, connectedAccounts } from "@datatorag-mcp/db";
 import { revokeGoogleToken } from "@/lib/google-revoke";
 import { NOTION_REVOKE_URL, NOTION_TOKEN_URL, notionBasicAuth } from "./notion-oauth";
-import { BREVO_REVOKE_URL, BREVO_TOKEN_URL, brevoClientCredentials } from "./brevo-oauth";
+import { CONNECTOR_TOKENS } from "./connectors/token-calls";
 import { posthogClientId, posthogEndpoints, posthogHost } from "./posthog-oauth";
 import { SLACK_REVOKE_URL, SLACK_TOKEN_TIMEOUT_MS, SLACK_TOKEN_URL } from "./slack-oauth";
 import { cleanWorkspaceName } from "./untrusted-text";
@@ -21,7 +21,7 @@ import {
 
 /** The row a refresh writes, and the user it belongs to: what each sealed
  * value it writes is bound to (SCRUM-442). */
-type ConnectionRef = { id: string; userId: string };
+export type ConnectionRef = { id: string; userId: string };
 
 /** The sealed columns for a service_connections write, beside the plain
  * ones while releases 1 and 2 write both. */
@@ -47,7 +47,7 @@ function openPair(row: TokenRow, sealed: SealedPair): { accessToken: string | nu
  * provider's refusal classified. Null only when the deployment has no client
  * credentials for the provider, which is a fault of ours and says nothing
  * about the user's grant, so it records nothing on the row. */
-type RefreshOutcome = { token: string } | { failure: RefreshFailure } | null;
+export type RefreshOutcome = { token: string } | { failure: RefreshFailure } | null;
 
 /** A refused refresh's classification, from the answer's status and its
  * OAuth `error` field alone. */
@@ -210,7 +210,7 @@ async function refreshAtlassianToken(
 }
 
 /** How long a provider token call may hold the row lock before giving up. */
-const LOCKED_TOKEN_TIMEOUT_MS = 10_000;
+export const LOCKED_TOKEN_TIMEOUT_MS = 10_000;
 
 /**
  * Refresh a token pair that the provider ROTATES, under a row lock
@@ -237,7 +237,7 @@ const LOCKED_TOKEN_TIMEOUT_MS = 10_000;
  *   this one, such as a reconnect, lands first) before the grant is called
  *   dead: if its refresh token has moved, the stored access token is used.
  */
-async function refreshRotatingToken(
+export async function refreshRotatingToken(
   db: Database,
   conn: ConnectionRef,
   presentedRefreshToken: string,
@@ -374,37 +374,6 @@ export async function refreshNotionToken(
 }
 
 /**
- * Refresh a Brevo access token (SCRUM-468), under the rotating-token lock:
- * Brevo's access tokens last an hour, and a refresh may hand back a new
- * refresh token, which replaces the stored one. Exported for its tests.
- */
-export async function refreshBrevoToken(
-  db: Database,
-  conn: ConnectionRef,
-  presentedRefreshToken: string
-): Promise<RefreshOutcome> {
-  const creds = brevoClientCredentials();
-  if (!creds) return null;
-  return refreshRotatingToken(db, conn, presentedRefreshToken, {
-    label: "brevo",
-    call: (refreshToken, signal) =>
-      fetch(BREVO_TOKEN_URL, {
-        method: "POST",
-        headers: { "Content-Type": "application/x-www-form-urlencoded" },
-        body: new URLSearchParams({
-          grant_type: "refresh_token",
-          client_id: creds.clientId,
-          client_secret: creds.clientSecret,
-          refresh_token: refreshToken,
-        }),
-        signal,
-      }),
-    expiresAt: (data) =>
-      typeof data.expires_in === "number" ? new Date(Date.now() + data.expires_in * 1000) : null,
-  });
-}
-
-/**
  * Refresh a Slack user token (SCRUM-454), under the rotating-token lock.
  *
  * With token rotation on, an access token lasts `expires_in` seconds and each
@@ -480,7 +449,10 @@ export async function refreshPostHogToken(
 }
 
 /** Service-specific refresh function lookup: one per connector, so a
- * connector added to the registry without one fails to compile. */
+ * connector added to the registry without one fails to compile. A connector
+ * that has moved to its own folder is read through CONNECTOR_TOKENS when
+ * called, not when this module loads: its token calls import this module for
+ * the lock, so at load time either side may not have finished. */
 const REFRESH_FN: Record<
   ConnectorId,
   (db: Database, conn: ConnectionRef, rt: string) => Promise<RefreshOutcome>
@@ -488,7 +460,7 @@ const REFRESH_FN: Record<
   "google-workspace": refreshGoogleToken,
   atlassian: refreshAtlassianToken,
   notion: refreshNotionToken,
-  brevo: refreshBrevoToken,
+  brevo: (db, conn, rt) => CONNECTOR_TOKENS.brevo.refresh(db, conn, rt),
   slack: refreshSlackToken,
   posthog: refreshPostHogToken,
 };
@@ -535,7 +507,7 @@ async function revokeNotionGrant(tokens: {
  *
  * Atlassian is absent deliberately: its revocation story is its own piece of
  * work and guessing at it would be worse than the honest gap. */
-type RevokeTokens = { accessToken?: string | null; refreshToken?: string | null };
+export type RevokeTokens = { accessToken?: string | null; refreshToken?: string | null };
 
 /** Revoking the REFRESH token kills a Google grant including its derived
  * access tokens, so prefer it and fall back to the access token. */
@@ -543,31 +515,6 @@ async function revokeGoogleGrant(tokens: RevokeTokens): Promise<boolean> {
   const token = tokens.refreshToken ?? tokens.accessToken;
   if (!token) return false;
   return revokeGoogleToken(token);
-}
-
-/** Revoke both Brevo tokens, as Notion's are: which of the pair kills the
- * grant is not documented. True when either call was accepted. Never throws. */
-async function revokeBrevoGrant(tokens: RevokeTokens): Promise<boolean> {
-  const creds = brevoClientCredentials();
-  if (!creds) return false;
-  const results = await Promise.all(
-    [tokens.accessToken, tokens.refreshToken]
-      .filter((t): t is string => typeof t === "string" && t !== "")
-      .map(async (token) => {
-        try {
-          const res = await fetch(BREVO_REVOKE_URL, {
-            method: "POST",
-            headers: { "Content-Type": "application/x-www-form-urlencoded" },
-            body: new URLSearchParams({ token, client_id: creds.clientId, client_secret: creds.clientSecret }),
-            signal: AbortSignal.timeout(LOCKED_TOKEN_TIMEOUT_MS),
-          });
-          return res.ok;
-        } catch {
-          return false;
-        }
-      })
-  );
-  return results.some(Boolean);
 }
 
 /** Revoke a Slack grant (SCRUM-454): `auth.revoke` with the access token as
@@ -614,7 +561,7 @@ async function revokePostHogGrant(tokens: RevokeTokens): Promise<boolean> {
 const REVOKE_BY_CONNECTOR: Record<RevokingConnectorId, (tokens: RevokeTokens) => Promise<boolean>> = {
   "google-workspace": revokeGoogleGrant,
   notion: revokeNotionGrant,
-  brevo: revokeBrevoGrant,
+  brevo: (tokens) => CONNECTOR_TOKENS.brevo.revoke(tokens),
   slack: revokeSlackGrant,
   posthog: revokePostHogGrant,
 };
