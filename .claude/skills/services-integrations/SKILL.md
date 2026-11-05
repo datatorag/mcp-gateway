@@ -7,7 +7,7 @@ description: Use when touching datatorag-mcp's third-party integrations — Brev
 
 Third-party service clients for the gateway app. See `codebase-map` for how these fit into the overall gateway request flow — this skill is the per-service detail.
 
-**The shared shape, once, so each service section below can just say "follows the pattern":** every side-channel client (Brevo, Slack) is a never-throw HTTP wrapper —
+**The shared shape, once, so each service section below can just say "follows the pattern":** every side-channel client (Brevo, Slack) is a never-throw HTTP wrapper, reading its key through `getEnv()` (or `envValue()` for a call-time read), never `process.env` (the gate's `scripts/env-reads-check.mjs` fails on that):
 
 ```ts
 async function callThing(...): Promise<boolean> {

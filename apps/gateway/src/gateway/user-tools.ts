@@ -6,6 +6,7 @@ import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/
 import { PLUGIN_SERVICE_MAP } from "./service-token";
 import { listConnectedServiceIds } from "./connected-services";
 import { gwsRunHiddenFrom } from "./gws-run-access";
+import { envValue } from "@datatorag-mcp/config";
 
 /**
  * The single definition of "which registry tools can this user see" plus the
@@ -116,7 +117,7 @@ export function buildPluginServerUrl(server: PluginServerRow): string {
   if (server.githubRepoUrl) {
     return `http://localhost:${server.containerPort}/mcp`;
   }
-  const dockerHostOverride = process.env.DOCKER_HOST_OVERRIDE;
+  const dockerHostOverride = envValue("DOCKER_HOST_OVERRIDE");
   if (dockerHostOverride) {
     return `http://${dockerHostOverride}/mcp`;
   }

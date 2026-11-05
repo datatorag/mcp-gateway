@@ -16,6 +16,7 @@
  * connector DOES (refresh, revoke, context headers) stays in the modules that
  * own it, in maps typed by `ConnectorId`.
  */
+import type { ConnectorCredentialPrefix } from "@datatorag-mcp/config";
 import type { AccountRole } from "../tests/types";
 
 export interface ConnectorRecord {
@@ -34,8 +35,10 @@ export interface ConnectorRecord {
   readonly providerKey: string;
   /** The prefix of its OAuth client credentials in the environment
    * (`<prefix>_CLIENT_ID`, `<prefix>_CLIENT_SECRET`), or null when the
-   * connector has no client secret (PostHog's client is a metadata URL). */
-  readonly envPrefix: string | null;
+   * connector has no client secret (PostHog's client is a metadata URL).
+   * Typed by the config schema, so a prefix whose two keys are not declared
+   * there fails to compile. */
+  readonly envPrefix: ConnectorCredentialPrefix | null;
   /** The Express route that starts its connect. */
   readonly connectUrl: string;
   /** Where a connect restarts past any interstitial: the duplicate page's
@@ -175,6 +178,8 @@ type Entry = (typeof CONNECTOR_REGISTRY)[number];
 export type ConnectorId = Entry["id"];
 /** The connectors whose provider can be told to drop a grant. */
 export type RevokingConnectorId = Extract<Entry, { revokes: true }>["id"];
+/** The connectors that have OAuth client credentials in the environment. */
+export type CredentialedConnectorId = Extract<Entry, { envPrefix: string }>["id"];
 /** The connectors whose plugin is handed context headers. */
 export type ContextConnectorId = Extract<Entry, { contextHeaders: true }>["id"];
 

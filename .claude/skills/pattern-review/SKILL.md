@@ -76,9 +76,11 @@ which ones you did not read — a silent cap reads as coverage.
 ### 2. Mechanical first, and never re-derive what it already answered.
 
 `scripts/pattern-check.mjs` owns the rules with exactly one right answer:
-extensionless relative imports, `process.env` reads that duplicate the zod env
-schema, client-IP ordering behind Cloudflare, the `createDb()` singleton, and
-the `withRoute` wrapper on session-gated API routes. Each is self-tested against
+extensionless relative imports, client-IP ordering behind Cloudflare, the
+`createDb()` singleton, and the `withRoute` wrapper on session-gated API
+routes. Direct `process.env` reads in the gateway are not a pattern-check rule
+any more: `scripts/env-reads-check.mjs` checks the whole tree on every gate
+run. Each is self-tested against
 a known-bad and a known-good string before it runs, so a matcher that has gone
 blind exits 2 instead of reporting clean.
 

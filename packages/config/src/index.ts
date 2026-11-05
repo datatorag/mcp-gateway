@@ -131,6 +131,16 @@ const envSchema = z.object({
    * a file id. Absent means every case needing a mapping skips with the
    * reason named; it never falls back to a default account. */
   TEST_RUNNER_FIXTURES: z.string().default(""),
+  /** Dev only: the host plugin calls go to instead of localhost, for a
+   * gateway run against plugins on another machine. Empty = localhost. */
+  DOCKER_HOST_OVERRIDE: z.string().default(""),
+  /** Read by test suites that run only when it is set, never by the running
+   * gateway. A path to the private skills denylist, one entry per line. */
+  SKILLS_DENYLIST: z.string().default(""),
+  /** Read by test suites that run only when it is set, never by the running
+   * gateway. `slug=url` pairs, comma-separated, naming live plugin endpoints
+   * for the registry ground-truth check. */
+  PLUGIN_MCP_URLS: z.string().default(""),
   INTERNAL_EXCLUDE_IDS: z.string().default(""),
   // Dashboard playground (capped LLM chat). Empty ANTHROPIC_API_KEY = playground disabled.
   ANTHROPIC_API_KEY: z.string().default(""),
@@ -168,5 +178,33 @@ export function getEnv(): Env {
   }
   return _env!;
 }
+
+/**
+ * One variable, validated by its own schema entry when it is read, with the
+ * schema's default. For code that reads a value at call time rather than at
+ * start (a token refresh reading its client credentials): one source for the
+ * default, the schema's, and the same validation `getEnv()` applies, without
+ * `getEnv()`'s memo. Throws a zod error when a value does not parse; for an
+ * enum key that error includes the value it received, so a caller never logs
+ * it for a key that holds a secret.
+ */
+export function envValue<K extends keyof Env>(key: K): Env[K] {
+  return envSchema.shape[key].parse(process.env[key]) as Env[K];
+}
+
+/** A connector's OAuth client credentials, by the prefix its registry entry
+ * names: `<prefix>_CLIENT_ID` and `<prefix>_CLIENT_SECRET`, read at call
+ * time. Empty strings when unset, as the schema defaults them. */
+export function connectorCredentials(prefix: ConnectorCredentialPrefix): { clientId: string; clientSecret: string } {
+  return {
+    clientId: envValue(`${prefix}_CLIENT_ID`),
+    clientSecret: envValue(`${prefix}_CLIENT_SECRET`),
+  };
+}
+
+/** The prefixes whose `_CLIENT_ID` and `_CLIENT_SECRET` the schema declares. */
+export type ConnectorCredentialPrefix = {
+  [K in keyof Env]: K extends `${infer P}_CLIENT_ID` ? (`${P}_CLIENT_SECRET` extends keyof Env ? P : never) : never;
+}[keyof Env];
 
 export { envSchema };

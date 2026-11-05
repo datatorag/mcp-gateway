@@ -9,6 +9,7 @@
  * send a PKCE verifier instead (not built yet). Access tokens last an hour,
  * and a refresh may hand back a new refresh token, which replaces the old.
  */
+import { credentialsFor } from "./connectors/credentials";
 
 const REALM = "https://oauth.brevo.com/realms/partner/oauth";
 export const BREVO_AUTHORIZE_URL = `${REALM}/authorize`;
@@ -36,7 +37,6 @@ export const BREVO_SCOPES = [
 /** The app's credentials from the environment, or null when Brevo is not
  * configured, in which case it is not offered and nothing calls Brevo. */
 export function brevoClientCredentials(): { clientId: string; clientSecret: string } | null {
-  const clientId = process.env.BREVO_OAUTH_CLIENT_ID;
-  const clientSecret = process.env.BREVO_OAUTH_CLIENT_SECRET;
+  const { clientId, clientSecret } = credentialsFor("brevo");
   return clientId && clientSecret ? { clientId, clientSecret } : null;
 }
