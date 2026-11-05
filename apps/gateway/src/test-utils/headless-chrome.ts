@@ -114,11 +114,19 @@ export async function launchChrome(executable: string): Promise<Chrome> {
     async close() {
       toChrome.end();
       await new Promise<void>((resolve) => {
-        if (child.exitCode !== null) return resolve();
+        if (child.exitCode !== null || child.signalCode !== null) return resolve();
         child.once("exit", () => resolve());
         child.kill();
       });
-      rmSync(profile, { recursive: true, force: true });
+      // Chrome's helper processes can still be writing into the profile for a
+      // moment after the browser exits, and the removal then meets a directory
+      // that is not empty (seen once in CI). Retried, and never a test
+      // failure: a leftover directory in the temp dir harms nothing.
+      try {
+        rmSync(profile, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
+      } catch (e) {
+        console.warn(`[headless-chrome] profile left behind: ${(e as Error).message}`);
+      }
     },
   };
 }
