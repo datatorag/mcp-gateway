@@ -4,13 +4,17 @@
  * exchange and the identity lookup) and the few settings that do. Everything
  * else in a connect round trip is the flow's.
  */
-import type { Router } from "express";
+import type { Request, Response, Router } from "express";
+import type { Database } from "@datatorag-mcp/db";
+import type { takeAttribution } from "../attribution";
 import type { DuplicateProvider } from "../connect-duplicate";
 
 /** The app credentials and base URL a connector reads; the auth router's
  * config, narrowed to what connectors use. */
 export interface ConnectConfig {
   baseUrl: string;
+  gwsClientId?: string;
+  gwsClientSecret?: string;
   atlassianClientId?: string;
   atlassianClientSecret?: string;
   brevoClientId?: string;
@@ -79,8 +83,14 @@ export interface ConnectorOAuth {
    * it is refused as a bad state. */
   pkce?: { cookie: string; cookiePath: string };
   isConfigured(config: ConnectConfig): boolean;
-  /** `codeChallenge` is the S256 challenge, for a connector with `pkce`. */
-  authorizeUrl(ctx: ConnectContext, nonce: string, codeChallenge?: string): URL;
+  /** At the start route, after the user, offered and configured checks and
+   * before anything is parked: answer the request itself and return true
+   * (Google's consent interstitial), or return false to go on. */
+  interceptStart?(req: Request, res: Response): boolean;
+  /** `codeChallenge` is the S256 challenge, for a connector with `pkce`.
+   * `start` is the start request, for a connector that reads a cookie of
+   * its own there (Google's retry hint). */
+  authorizeUrl(ctx: ConnectContext, nonce: string, codeChallenge?: string, start?: { req: Request; res: Response }): URL;
   /** The provider's answer to the code, parsed, or null when it refused.
    * May throw; the flow treats a throw as a refused exchange.
    * `codeVerifier` is the round trip's verifier, for a connector with `pkce`. */
@@ -88,7 +98,32 @@ export interface ConnectorOAuth {
   /** The account behind the tokens; null when its email cannot be read, or a
    * connect error of the provider's own (a grant with no workspace). */
   identify(tokens: ConnectTokens, ctx: ConnectContext): Promise<ConnectIdentity | { error: string } | null>;
+  /** After the exchange and before the identity is looked up: refuse a
+   * grant that can serve nothing, answering the request itself, and return
+   * true (Google's zero-service consent). */
+  refuseGrant?(tokens: ConnectTokens, call: GrantCheck): Promise<boolean>;
+  /** How much of what was asked the grant covers, for the completion event
+   * and the success redirect (Google's per-scope consent). */
+  grantReport?(tokens: ConnectTokens): {
+    delta: { complete: boolean; missing: Array<{ displayName: string }> };
+    partialMissing?: string[];
+  };
   /** Any further public route the connector needs (a client metadata
    * document), mounted beside its connect routes. */
   extraRoutes?(router: Router, config: ConnectConfig): void;
+}
+
+/** What a `refuseGrant` is handed: the callback's request and response, and
+ * the round trip's user, link and parked values. */
+export interface GrantCheck {
+  req: Request;
+  res: Response;
+  db: Database;
+  cookiesAreSecure: boolean;
+  userId: string;
+  /** True when only a connect link vouches for this connect. */
+  viaLink: boolean;
+  linkToken: string | undefined;
+  attribution: ReturnType<typeof takeAttribution>;
+  requestedPath: unknown;
 }
