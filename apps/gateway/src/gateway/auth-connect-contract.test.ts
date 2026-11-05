@@ -62,9 +62,9 @@ vi.mock("./connect-links", async (orig) => ({
 }));
 
 import { createAuthRouter } from "./auth";
-import { postConnectDestination, CONNECT_ERROR_NOT_LAUNCHED } from "./post-connect-destination";
+import { postConnectDestination, CONNECT_ERROR_NOT_CONFIGURED, CONNECT_ERROR_NOT_LAUNCHED } from "./post-connect-destination";
 import { GWS_SCOPE_LIST } from "./scope-grant";
-import { NOTION_TOKEN_URL } from "./notion-oauth";
+import { NOTION_TOKEN_URL } from "./connectors/notion/oauth";
 import { BREVO_ACCOUNT_URL, BREVO_TOKEN_URL, BREVO_USERINFO_URL } from "./connectors/brevo/oauth";
 import { posthogEndpoints } from "./connectors/posthog/oauth";
 import { SLACK_TOKEN_URL, SLACK_USERS_INFO_URL } from "./connectors/slack/oauth";
@@ -91,7 +91,14 @@ type Row = {
   /** Served by the shared connect flow: its token endpoint, and the body of
    * a grant with these fields, in the provider's own shape, for the cases the
    * flow decides the same way for every connector it serves. */
-  sharedFlow?: { tokenUrl: string; grant: (fields: { accessToken?: string; expiresIn?: number }) => unknown };
+  sharedFlow?: {
+    tokenUrl: string;
+    grant: (fields: { accessToken?: string; expiresIn?: number }) => unknown;
+    /** No app credentials to configure (PostHog's client has no secret). */
+    alwaysConfigured?: boolean;
+    /** Its start route. */
+    start: string;
+  };
 };
 
 const json = (body: unknown) => new Response(JSON.stringify(body), { status: 200 });
@@ -131,9 +138,20 @@ const ROWS: Row[] = [
       u === NOTION_TOKEN_URL
         ? json({ access_token: "at", refresh_token: "rt", owner: { user: { person: { email: EMAIL } } }, workspace_id: "ws-1", workspace_name: "Workspace" })
         : undefined,
-    // Its start checks the launch gate; its callback does not check again.
-    notOffered: "not-checked",
+    // The launch gate, at the start and again at the callback.
+    notOffered: "redirect",
     externalAccountId: "ws-1",
+    sharedFlow: {
+      tokenUrl: NOTION_TOKEN_URL,
+      start: "/auth/notion/connect",
+      grant: (f) => ({
+        access_token: f.accessToken,
+        refresh_token: "rt",
+        expires_in: f.expiresIn,
+        owner: { user: { person: { email: EMAIL } } },
+        workspace_id: "ws-1",
+      }),
+    },
   },
   {
     provider: "brevo",
@@ -151,6 +169,7 @@ const ROWS: Row[] = [
     externalAccountId: null,
     sharedFlow: {
       tokenUrl: BREVO_TOKEN_URL,
+      start: "/auth/brevo/connect",
       grant: (f) => ({ access_token: f.accessToken, refresh_token: "rt", expires_in: f.expiresIn }),
     },
   },
@@ -171,6 +190,8 @@ const ROWS: Row[] = [
     externalAccountId: "42",
     sharedFlow: {
       tokenUrl: POSTHOG.token,
+      start: "/auth/posthog/connect",
+      alwaysConfigured: true,
       grant: (f) => ({ access_token: f.accessToken, refresh_token: "rt", expires_in: f.expiresIn, scoped_teams: [42] }),
     },
   },
@@ -189,6 +210,7 @@ const ROWS: Row[] = [
     externalAccountId: "T1",
     sharedFlow: {
       tokenUrl: SLACK_TOKEN_URL,
+      start: "/auth/slack/connect",
       grant: (f) => ({
         ok: true,
         team: { id: "T1", name: "Company" },
@@ -206,6 +228,9 @@ const onConnected = vi.fn();
 
 let server: Server;
 let base: string;
+/** The same router with no connector's app credentials set. */
+let unconfiguredServer: Server;
+let unconfiguredBase: string;
 const realFetch = globalThis.fetch;
 const outbound = vi.fn();
 let row: Row;
@@ -237,10 +262,32 @@ beforeAll(async () => {
   const addr = server.address();
   if (typeof addr === "string" || addr === null) throw new Error("no port");
   base = `http://127.0.0.1:${addr.port}`;
+
+  const bare = express();
+  bare.use(cookieParser());
+  bare.use(
+    createAuthRouter(dbMock, {
+      googleClientId: "",
+      googleClientSecret: "",
+      gwsClientId: "",
+      gwsClientSecret: "",
+      atlassianClientId: "",
+      atlassianClientSecret: "",
+      notionClientId: "",
+      notionClientSecret: "",
+      baseUrl: "http://127.0.0.1",
+    })
+  );
+  unconfiguredServer = createServer(bare);
+  await new Promise<void>((r) => unconfiguredServer.listen(0, "127.0.0.1", r));
+  const bareAddr = unconfiguredServer.address();
+  if (typeof bareAddr === "string" || bareAddr === null) throw new Error("no port");
+  unconfiguredBase = `http://127.0.0.1:${bareAddr.port}`;
 });
 
 afterAll(async () => {
   await new Promise<void>((r) => server.close(() => r()));
+  await new Promise<void>((r) => unconfiguredServer.close(() => r()));
 });
 
 beforeEach(() => {
@@ -430,3 +477,23 @@ describe.each(ROWS.filter((r) => r.sharedFlow))("the $provider connect callback,
     expect(upsertServiceAccount.mock.calls[0][6]).toBeNull();
   });
 });
+
+/** A connector with app credentials, none of them set. */
+describe.each(ROWS.filter((r) => r.sharedFlow && !r.sharedFlow.alwaysConfigured))(
+  "the $provider connect start, unconfigured",
+  (r) => {
+    beforeEach(() => {
+      row = r;
+    });
+
+    it("refuses an unconfigured app at the start, before any cookie or call", async () => {
+      const res = await realFetch(`${unconfiguredBase}${r.sharedFlow!.start}`, {
+        redirect: "manual",
+        headers: { cookie: "dtrmcp_session=session-1" },
+      });
+      expect(location(res)).toBe(postConnectDestination({ error: CONNECT_ERROR_NOT_CONFIGURED }));
+      expect(res.headers.getSetCookie().some((c) => c.startsWith(`${r.nonceCookie}=`))).toBe(false);
+      expect(outbound).not.toHaveBeenCalled();
+    });
+  }
+);

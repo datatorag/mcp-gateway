@@ -2,7 +2,6 @@ import { eq, and, desc, sql } from "drizzle-orm";
 import type { Database } from "@datatorag-mcp/db";
 import { serviceConnections, connectedAccounts } from "@datatorag-mcp/db";
 import { revokeGoogleToken } from "@/lib/google-revoke";
-import { NOTION_REVOKE_URL, NOTION_TOKEN_URL, notionBasicAuth } from "./notion-oauth";
 import { CONNECTOR_TOKENS } from "./connectors/token-calls";
 import { posthogHost } from "./connectors/posthog/oauth";
 import { cleanWorkspaceName } from "./untrusted-text";
@@ -338,38 +337,6 @@ export async function refreshRotatingToken(
   return { failure: { kind: "permanent", reason: outcome.rejected } };
 }
 
-/**
- * Refresh a Notion access token (SCRUM-366), under the rotating-token lock.
- *
- * Exported for its tests. Reached through REFRESH_FN only when a stored
- * expiry has passed, and Notion rows store none (Notion sends no
- * `expires_in`, and stage 0 has not yet observed one), so this does not run
- * on any call path today.
- */
-export async function refreshNotionToken(
-  db: Database,
-  conn: ConnectionRef,
-  presentedRefreshToken: string
-): Promise<RefreshOutcome> {
-  const { clientId, clientSecret } = credentialsFor("notion");
-  if (!clientId || !clientSecret) return null;
-  return refreshRotatingToken(db, conn, presentedRefreshToken, {
-    label: "notion",
-    call: (refreshToken, signal) =>
-      fetch(NOTION_TOKEN_URL, {
-        method: "POST",
-        headers: {
-          Authorization: notionBasicAuth(clientId, clientSecret),
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ grant_type: "refresh_token", refresh_token: refreshToken }),
-        signal,
-      }),
-    // Notion sends no expiry, and none is invented.
-    expiresAt: () => null,
-  });
-}
-
 /** Service-specific refresh function lookup: one per connector, so a
  * connector added to the registry without one fails to compile. A connector
  * that has moved to its own folder is read through CONNECTOR_TOKENS when
@@ -381,46 +348,11 @@ const REFRESH_FN: Record<
 > = {
   "google-workspace": refreshGoogleToken,
   atlassian: refreshAtlassianToken,
-  notion: refreshNotionToken,
+  notion: (db, conn, rt) => CONNECTOR_TOKENS.notion.refresh(db, conn, rt),
   brevo: (db, conn, rt) => CONNECTOR_TOKENS.brevo.refresh(db, conn, rt),
   slack: (db, conn, rt) => CONNECTOR_TOKENS.slack.refresh(db, conn, rt),
   posthog: (db, conn, rt) => CONNECTOR_TOKENS.posthog.refresh(db, conn, rt),
 };
-
-/** Revoke one Notion token. Never throws. */
-async function revokeNotionToken(token: string): Promise<boolean> {
-  const { clientId, clientSecret } = credentialsFor("notion");
-  if (!clientId || !clientSecret) return false;
-  try {
-    const res = await fetch(NOTION_REVOKE_URL, {
-      method: "POST",
-      headers: {
-        Authorization: notionBasicAuth(clientId, clientSecret),
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({ token }),
-      signal: AbortSignal.timeout(LOCKED_TOKEN_TIMEOUT_MS),
-    });
-    return res.ok;
-  } catch {
-    return false;
-  }
-}
-
-/** Revoke BOTH Notion tokens. Stage 0 saw a revoked token die at once, but
- * not whether revoking one of the pair kills the other, so neither is left
- * to chance. True when either call was accepted. */
-async function revokeNotionGrant(tokens: {
-  accessToken?: string | null;
-  refreshToken?: string | null;
-}): Promise<boolean> {
-  const results = await Promise.all(
-    [tokens.accessToken, tokens.refreshToken]
-      .filter((t): t is string => typeof t === "string" && t !== "")
-      .map(revokeNotionToken)
-  );
-  return results.some(Boolean);
-}
 
 /** Service-specific upstream revocation, beside REFRESH_FN because this is
  * the same dispatch: per-provider OAuth mechanics keyed by service. A
@@ -443,7 +375,7 @@ async function revokeGoogleGrant(tokens: RevokeTokens): Promise<boolean> {
  * disagree without a compile error. */
 const REVOKE_BY_CONNECTOR: Record<RevokingConnectorId, (tokens: RevokeTokens) => Promise<boolean>> = {
   "google-workspace": revokeGoogleGrant,
-  notion: revokeNotionGrant,
+  notion: (tokens) => CONNECTOR_TOKENS.notion.revoke(tokens),
   brevo: (tokens) => CONNECTOR_TOKENS.brevo.revoke(tokens),
   slack: (tokens) => CONNECTOR_TOKENS.slack.revoke(tokens),
   posthog: (tokens) => CONNECTOR_TOKENS.posthog.revoke(tokens),

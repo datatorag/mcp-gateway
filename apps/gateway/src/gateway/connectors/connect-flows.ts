@@ -9,9 +9,11 @@ import type { ConnectorId } from "./registry";
 import { BREVO_CONNECT } from "./brevo/oauth";
 import { SLACK_CONNECT } from "./slack/oauth";
 import { POSTHOG_CONNECT } from "./posthog/oauth";
+import { NOTION_CONNECT } from "./notion/oauth";
 
 export const CONNECTOR_OAUTH = {
   brevo: BREVO_CONNECT,
   slack: SLACK_CONNECT,
   posthog: POSTHOG_CONNECT,
+  notion: NOTION_CONNECT,
 } satisfies Partial<Record<ConnectorId, ConnectorOAuth>>;

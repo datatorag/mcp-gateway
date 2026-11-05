@@ -29,7 +29,8 @@ import {
   isDockerAvailable,
 } from "../test-utils/db";
 import { upsertServiceAccount } from "./connected-accounts";
-import { refreshNotionToken, resolveServiceToken, revokeUpstream } from "./service-token";
+import { resolveServiceToken, revokeUpstream } from "./service-token";
+import { refreshNotionToken } from "./connectors/notion/tokens";
 import { sealedColumns } from "./token-crypto";
 
 const TOKEN_URL = "https://api.notion.com/v1/oauth/token";

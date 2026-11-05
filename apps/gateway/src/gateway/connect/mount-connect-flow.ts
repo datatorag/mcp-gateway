@@ -25,7 +25,8 @@ import { upsertServiceAccount } from "../connected-accounts";
 import { trackOAuthCompleted } from "../track";
 import { skillSlugFromPath } from "../../lib/skills";
 import { CONNECT_ERROR_NOT_CONFIGURED, CONNECT_ERROR_NOT_LAUNCHED, postConnectDestination } from "../post-connect-destination";
-import { serviceOfferedTo } from "../service-launch";
+import { isServiceLaunched, serviceOfferedTo } from "../service-launch";
+import { connectorById } from "../connectors/registry";
 import { CONNECT_LINK_COOKIE, type ConnectLink } from "../connect-links";
 import type { DuplicateProvider } from "../connect-duplicate";
 import type { ConnectConfig, ConnectContext, ConnectIdentity, ConnectorOAuth, ConnectTokens } from "./connector-oauth";
@@ -98,7 +99,14 @@ export function mountConnectFlow(router: Router, oauth: ConnectorOAuth, deps: Co
 
   /** True when the service may not be connected now, after answering. */
   async function refusedNotOffered(res: Response, userId: string, requestedPath: unknown): Promise<boolean> {
-    if (oauth.gated && !(await serviceOfferedTo(db, provider, userId))) {
+    // A connector offered to some users only asks who this is; one offered
+    // to everyone once launched asks only whether it has launched.
+    const offered = !oauth.gated
+      ? true
+      : connectorById(provider)?.audience
+        ? await serviceOfferedTo(db, provider, userId)
+        : await isServiceLaunched(db, provider);
+    if (!offered) {
       if (oauth.notOffered === "404") res.status(404).end();
       else res.redirect(postConnectDestination({ requestedPath, error: CONNECT_ERROR_NOT_LAUNCHED }));
       return true;
