@@ -1,4 +1,5 @@
 import { spawn, type ChildProcess } from "node:child_process";
+import type { Readable, Writable } from "node:stream";
 import { existsSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -7,8 +8,8 @@ import path from "node:path";
  * A real headless Chrome, driven over the DevTools protocol, for the few
  * tests whose subject is what a browser does rather than what the server
  * parses (SCRUM-472: which Origin a form POST carries depends on the page's
- * referrer policy, and no HTTP client reproduces that). No dependency: Node's
- * own WebSocket speaks the protocol.
+ * referrer policy, and no HTTP client reproduces that). No dependency: the
+ * protocol runs over a pipe to the browser.
  *
  * Chrome is looked for at CHROME_PATH, then where macOS and the CI runner
  * keep it. With none, `findChrome` answers null and the suite skips.
@@ -41,11 +42,14 @@ export interface Chrome {
 
 export async function launchChrome(executable: string): Promise<Chrome> {
   const profile = mkdtempSync(path.join(tmpdir(), "dtr-chrome-"));
+  // The protocol over a pipe, not a port: Chrome reads commands on fd 3 and
+  // writes replies on fd 4, each a JSON message ended by a NUL byte. Node 20,
+  // which CI runs, has no global WebSocket.
   const child: ChildProcess = spawn(
     executable,
     [
       "--headless=new",
-      "--remote-debugging-port=0",
+      "--remote-debugging-pipe",
       `--user-data-dir=${profile}`,
       // The CI runner's Ubuntu refuses the sandbox's user namespaces; the
       // browser only ever loads a page this test serves on loopback.
@@ -54,56 +58,43 @@ export async function launchChrome(executable: string): Promise<Chrome> {
       "--no-default-browser-check",
       "about:blank",
     ],
-    { stdio: ["ignore", "ignore", "pipe"] }
+    { stdio: ["ignore", "ignore", "ignore", "pipe", "pipe"] }
   );
-
-  const wsUrl = await new Promise<string>((resolve, reject) => {
-    let seen = "";
-    const timer = setTimeout(() => reject(new Error("Chrome did not open its DevTools port")), 15_000);
-    child.stderr?.on("data", (chunk: Buffer) => {
-      seen += chunk.toString();
-      const match = seen.match(/DevTools listening on (ws:\/\/\S+)/);
-      if (match) {
-        clearTimeout(timer);
-        resolve(match[1]);
-      }
-    });
-    child.on("exit", (code) => {
-      clearTimeout(timer);
-      reject(new Error(`Chrome exited before it was ready (${code})`));
-    });
-  });
-
-  const ws = new WebSocket(wsUrl);
-  await new Promise<void>((resolve, reject) => {
-    ws.addEventListener("open", () => resolve(), { once: true });
-    ws.addEventListener("error", () => reject(new Error("could not reach Chrome's DevTools port")), { once: true });
-  });
+  const toChrome = child.stdio[3] as Writable;
+  const fromChrome = child.stdio[4] as Readable;
 
   let nextId = 1;
   const pending = new Map<number, { resolve: (v: Record<string, unknown>) => void; reject: (e: Error) => void }>();
   const bySession = new Map<string, CdpEvent[]>();
-  ws.addEventListener("message", (msg) => {
-    const data = JSON.parse(String(msg.data));
-    if (typeof data.id === "number") {
-      const waiter = pending.get(data.id);
-      pending.delete(data.id);
-      if (data.error) waiter?.reject(new Error(`${data.error.message}`));
-      else waiter?.resolve(data.result ?? {});
-      return;
+  let buffered = "";
+  fromChrome.on("data", (chunk: Buffer) => {
+    buffered += chunk.toString();
+    let end: number;
+    while ((end = buffered.indexOf("\0")) !== -1) {
+      const data = JSON.parse(buffered.slice(0, end));
+      buffered = buffered.slice(end + 1);
+      if (typeof data.id === "number") {
+        const waiter = pending.get(data.id);
+        pending.delete(data.id);
+        if (data.error) waiter?.reject(new Error(`${data.error.message}`));
+        else waiter?.resolve(data.result ?? {});
+      } else if (data.sessionId) {
+        const list = bySession.get(data.sessionId) ?? [];
+        list.push(data);
+        bySession.set(data.sessionId, list);
+      }
     }
-    if (data.sessionId) {
-      const list = bySession.get(data.sessionId) ?? [];
-      list.push(data);
-      bySession.set(data.sessionId, list);
-    }
+  });
+  child.on("exit", (code) => {
+    for (const waiter of pending.values()) waiter.reject(new Error(`Chrome exited (${code})`));
+    pending.clear();
   });
 
   const send: Chrome["send"] = (method, params = {}, sessionId) =>
     new Promise((resolve, reject) => {
       const id = nextId++;
       pending.set(id, { resolve, reject });
-      ws.send(JSON.stringify({ id, method, params, ...(sessionId ? { sessionId } : {}) }));
+      toChrome.write(`${JSON.stringify({ id, method, params, ...(sessionId ? { sessionId } : {}) })}\0`);
     });
 
   return {
@@ -121,7 +112,7 @@ export async function launchChrome(executable: string): Promise<Chrome> {
       return sessionId as string;
     },
     async close() {
-      ws.close();
+      toChrome.end();
       await new Promise<void>((resolve) => {
         if (child.exitCode !== null) return resolve();
         child.once("exit", () => resolve());
