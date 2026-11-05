@@ -1,6 +1,6 @@
 import { randomBytes } from "node:crypto";
 import { Router } from "express";
-import { eq, and, isNull } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import type { Database } from "@datatorag-mcp/db";
 import { oauthAccessTokens, users } from "@datatorag-mcp/db";
 import { nonceMatches, OAUTH_STATE_TTL_MS, sameOriginRequest } from "./oauth/csrf";
@@ -8,37 +8,21 @@ import { oneShotCookie, SESSION_COOKIE } from "@/lib/cookies";
 import { createWebSession, liveWebSessionUserId } from "../lib/web-session";
 import { signInHref } from "../lib/sign-in";
 import { stashAttribution, takeAttribution } from "./attribution";
-import { connectedElsewhere, upsertServiceAccount } from "./connected-accounts";
+import { connectedElsewhere } from "./connected-accounts";
 import { CONNECT_START, isDuplicateProvider, renderConnectDuplicate, type DuplicateProvider } from "./connect-duplicate";
-import { EVENTS, PROVIDERS } from "../lib/analytics";
-import {
-  trackConnectDuplicate,
-  trackConnectLinkEvent,
-  trackConnectRefused,
-  trackLogin,
-  trackOAuthCompleted,
-} from "./track";
+import { EVENTS } from "../lib/analytics";
+import { trackConnectDuplicate, trackConnectLinkEvent, trackLogin } from "./track";
 import { findOrCreateGoogleUser, onNewUser } from "./signup";
 import { skillSlugFromPath } from "../lib/skills";
-import { parseAttribution, toWireParams } from "../lib/attribution";
 import {
   postLoginDestination,
   resolveNextPath,
 } from "./post-login-destination";
-import {
-  CONNECT_ERROR_CONNECTED_ELSEWHERE,
-  CONNECT_ERROR_NO_SERVICES,
-  CONNECT_ERROR_NOT_CONFIGURED,
-  CONNECT_ERROR_NOT_LAUNCHED,
-  postConnectDestination,
-} from "./post-connect-destination";
-import { googleConnectRefusedUrl, renderConnectInterstitial } from "./connect-interstitial";
-import { GWS_SCOPE_LIST, grantedServiceCount, scopeDelta, serviceGrantStates } from "./scope-grant";
+import { CONNECT_ERROR_CONNECTED_ELSEWHERE, postConnectDestination } from "./post-connect-destination";
 import { mountConnectFlow, type ConnectFlowDeps } from "./connect/mount-connect-flow";
+import { GWS_CONNECT_HINT_COOKIE } from "./connectors/google/oauth";
 import { CONNECTOR_OAUTH } from "./connectors/connect-flows";
 import { hashToken } from "@datatorag-mcp/auth";
-import { isServiceLaunched, serviceOfferedTo } from "./service-launch";
-import { cleanWorkspaceName } from "./untrusted-text";
 import { dropLinksForUser } from "./file-download";
 import {
   CONNECT_LINK_COOKIE,
@@ -55,42 +39,6 @@ import { renderConnectLinkConfirm } from "./connect-link-page";
  * on the way out (inside postLoginDestination), because the redirect is the
  * moment an open redirect becomes real. */
 const NEXT_COOKIE = "dtr_next";
-
-/** The Google Workspace connect flow's one-shot CSRF nonce (SCRUM-86), the
- * sibling of `atl_connect_nonce` and the plugin flow's `dtr_connect_nonce`.
- * Its own cookie per flow, so concurrent connects cannot consume each
- * other's binding. */
-const GWS_CONNECT_NONCE_COOKIE = "gws_connect_nonce";
-
-
-
-/** Which Google account a refused connect was attempted with (SCRUM-410), so
- * the retry can go straight to Google's consent screen for that account and
- * skip the account chooser, which read to users as being made to sign in all
- * over again. An email address, so it lives in an httpOnly cookie and never
- * in a URL. Short-lived, used by the retry link alone, and cleared by every
- * connect that starts, whether or not it used it. It is a hint to Google and
- * nothing else: no decision here ever reads it. */
-const GWS_CONNECT_HINT_COOKIE = "gws_connect_hint";
-
-/** The email in an id_token's payload, unverified. Good enough for a hint
- * that only preselects an account on Google's own screen; never for
- * identity, which this file takes from the session and from userinfo. */
-export function emailFromIdToken(idToken: unknown): string | null {
-  if (typeof idToken !== "string") return null;
-  const payload = idToken.split(".")[1];
-  if (!payload) return null;
-  try {
-    const claims = JSON.parse(Buffer.from(payload, "base64url").toString("utf8")) as { email?: unknown };
-    return isPlausibleEmail(claims.email) ? claims.email : null;
-  } catch {
-    return null;
-  }
-}
-
-function isPlausibleEmail(value: unknown): value is string {
-  return typeof value === "string" && value.length <= 254 && /^[^\s@<>"']+@[^\s@<>"']+\.[^\s@<>"']+$/.test(value);
-}
 
 /** The dashboard LOGIN flow's one-shot CSRF nonce (SCRUM-124). Login was the
  * one OAuth-initiating flow here that bound nothing: it built the Google URL
@@ -111,9 +59,6 @@ const LOGIN_NONCE_COOKIE = "login_state_nonce";
  * be parked at the same time, so no two of these may consume each other. */
 const CONNECT_NEXT_COOKIE = "dtr_connect_next";
 
-// The list itself lives in scope-grant.ts, next to the code that compares a
-// user's grant against it — one list, not a string here and a copy there.
-const GWS_SCOPES = GWS_SCOPE_LIST.join(" ");
 
 /**
  * Dashboard authentication and service connection routes.
@@ -594,350 +539,6 @@ export function createAuthRouter(
   });
 
   // --- Google Workspace connection (full scopes) ---
-
-  router.get("/auth/google/connect", async (req, res) => {
-    // Require a live web session (SCRUM-374): an expired or revoked one goes
-    // to sign in before the round trip to Google, not after it. Or a connect
-    // link spent in this browser (SCRUM-466).
-    if (!(await connectUser(req.cookies?.[SESSION_COOKIE], req.cookies?.[CONNECT_LINK_COOKIE], PROVIDERS.GOOGLE_WORKSPACE))) {
-      res.redirect("/auth/login");
-      return;
-    }
-
-    // SCRUM-150: the instruction page before the handoff. Google's granular
-    // consent brings the service checkboxes up unticked, and the moment
-    // before the redirect is the only lever we hold — held HERE, at the one
-    // route every connect control links to, so no render site needs to know
-    // it exists. The proceed leg below is byte-identical to the old flow;
-    // nothing one-shot (nonce, attribution, next) is stashed for a page view.
-    if (req.query.proceed !== "1") {
-      const next = typeof req.query.next === "string" ? req.query.next : null;
-      // The attribution snapshot on the clicked link, by its known names
-      // only, handed on to the proceed leg where `stashAttribution` reads it.
-      const carry = toWireParams(parseAttribution(req.query as Record<string, unknown>, { ownHost: req.hostname }));
-      // SCRUM-410: the same page in its refused form, where a connect that
-      // came back from Google with nothing granted is sent. It names what to
-      // tick and its button tries again. "Back" returns to wherever the
-      // connect started, still carrying the refusal, so that page can say
-      // what happened too. `next` is validated before it is used for either.
-      if (req.query.refused === "1") {
-        const validNext = resolveNextPath(next);
-        res
-          .status(200)
-          .type("html")
-          .send(
-            renderConnectInterstitial(validNext, {
-              services: serviceGrantStates(PROVIDERS.GOOGLE_WORKSPACE, "").map((s) => s.displayName),
-              cancelHref: postConnectDestination({
-                requestedPath: validNext,
-                error: CONNECT_ERROR_NO_SERVICES,
-              }),
-            }, carry)
-          );
-        return;
-      }
-      res.status(200).type("html").send(renderConnectInterstitial(next, undefined, carry));
-      return;
-    }
-
-    stashAttribution(req, res, cookiesAreSecure);
-    stashConnectNext(req, res);
-
-    // The account hint from a refused attempt is used by the retry link
-    // alone, and is gone after ANY connect starts: an ordinary Connect click
-    // minutes later must offer the account chooser as it always did.
-    const hint = req.query.retry === "1" ? req.cookies?.[GWS_CONNECT_HINT_COOKIE] : undefined;
-    res.clearCookie(GWS_CONNECT_HINT_COOKIE, { path: "/" });
-
-    // CSRF (SCRUM-86): bind the round trip to the browser that began it, the
-    // same way every other OAuth-initiating flow here already does (Atlassian
-    // connect, plugin connect, the gateway's own authorize endpoint). Without
-    // `state`, the callback would exchange ANY code arriving on a valid
-    // session, which is an account-linking CSRF (threat detail in the private
-    // tracker). The nonce is random, one-shot, and never the session token
-    // (which must not leak into URLs, referrers, or Google's logs).
-    const nonce = randomBytes(16).toString("base64url");
-    res.cookie(GWS_CONNECT_NONCE_COOKIE, nonce, oneShotCookie(cookiesAreSecure));
-    armDuplicateAck(req, res, PROVIDERS.GOOGLE_WORKSPACE, nonce);
-
-    const googleAuthUrl = new URL(
-      "https://accounts.google.com/o/oauth2/v2/auth"
-    );
-    googleAuthUrl.searchParams.set("client_id", config.gwsClientId);
-    googleAuthUrl.searchParams.set(
-      "redirect_uri",
-      `${config.baseUrl}/auth/google/connect/callback`
-    );
-    googleAuthUrl.searchParams.set("response_type", "code");
-    googleAuthUrl.searchParams.set("scope", GWS_SCOPES);
-    googleAuthUrl.searchParams.set("access_type", "offline");
-    if (isPlausibleEmail(hint)) {
-      // Straight to the consent screen for the account just tried. The
-      // screen still offers "use another account".
-      googleAuthUrl.searchParams.set("prompt", "consent");
-      googleAuthUrl.searchParams.set("login_hint", hint);
-    } else {
-      googleAuthUrl.searchParams.set("prompt", "consent select_account");
-    }
-    googleAuthUrl.searchParams.set("state", nonce);
-
-    res.redirect(googleAuthUrl.toString());
-  });
-
-  router.get("/auth/google/connect/callback", async (req, res) => {
-    // INVARIANT — READ THIS BEFORE ADDING AN EARLY RETURN.
-    //
-    // Three one-shot cookies are consumed at the very top of this handler and
-    // MUST run before ANY response is issued, on every path including the
-    // rejections: the CSRF nonce clear, `takeAttribution` (SCRUM-87), and
-    // `takeConnectNext` (SCRUM-78). Each was added by a different feature, and
-    // each is correct only because it sits ABOVE every `res.redirect` below.
-    // An early return added above any of them would leave its cookie alive to
-    // attach to a LATER, unrelated flow — mis-attributing acquisition or
-    // mis-routing a connect for some other user, days later, with no error and
-    // nothing pointing back here. Add new early returns BELOW this block, or
-    // move a consumer up with it. `auth-callback-ordering.test.ts` pins this
-    // by source order so a violation fails the suite instead of shipping quiet.
-    const googleCode = req.query.code as string | undefined;
-    const state = req.query.state as string | undefined;
-    // Identity comes from the session cookie only — never from `state`.
-    const sessionToken = req.cookies?.[SESSION_COOKIE];
-    const cookieNonce = req.cookies?.[GWS_CONNECT_NONCE_COOKIE] as
-      | string
-      | undefined;
-    // One-shot: cleared on EVERY outcome, so a nonce cannot survive a failed
-    // callback and be replayed within its TTL.
-    res.clearCookie(GWS_CONNECT_NONCE_COOKIE, { path: "/" });
-    const attribution = takeAttribution(req, res);
-    const requestedPath = takeConnectNext(req, res);
-    const duplicateAck = takeDuplicateAck(req, res);
-    const linkToken = takeConnectLink(req, res);
-
-    if (!sessionToken && !linkToken) {
-      res.redirect("/auth/login");
-      return;
-    }
-
-    // CSRF (SCRUM-86): the echoed state must match the nonce cookie from
-    // initiation — BEFORE the code is looked at and long before any token
-    // exchange. A rejected callback must never spend the code it carried:
-    // exchanging first and rejecting after would still burn a victim's
-    // session into validating an attacker's code.
-    //
-    // The rejection routes through postConnectDestination like every other
-    // failure (SCRUM-78), so a connect started from a thread returns to that
-    // thread with its inline error notice rather than a bare page — the parked
-    // next was same-origin-validated and already cleared by takeConnectNext
-    // above, and an attacker forcing this callback never controls it (it was
-    // set on the LEGITIMATE session that began the flow), so honouring it only
-    // ever returns the real user to where they actually were. A connect
-    // started elsewhere has no parked next and still falls to the connections
-    // page — that page's retired-route handling is SCRUM-92, out of scope here.
-    if (!nonceMatches(cookieNonce, state)) {
-      res.redirect(
-        postConnectDestination({ requestedPath, error: "invalid_state" })
-      );
-      return;
-    }
-
-    if (!googleCode) {
-      res.redirect(
-        postConnectDestination({ requestedPath, error: "missing_code" })
-      );
-      return;
-    }
-
-    // SCRUM-374: a live WEB session, not just any row: a revoked or expired
-    // session, or an MCP client's token set as the cookie, goes to sign in.
-    // With no session, a connect link spent in this browser (SCRUM-466).
-    const who = await connectUser(sessionToken, linkToken, PROVIDERS.GOOGLE_WORKSPACE);
-    if (!who) {
-      res.redirect("/auth/login");
-      return;
-    }
-    const session = { userId: who.userId };
-
-    const tokenResponse = await fetch(
-      "https://oauth2.googleapis.com/token",
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/x-www-form-urlencoded" },
-        body: new URLSearchParams({
-          code: googleCode,
-          client_id: config.gwsClientId,
-          client_secret: config.gwsClientSecret,
-          redirect_uri: `${config.baseUrl}/auth/google/connect/callback`,
-          grant_type: "authorization_code",
-        }),
-      }
-    );
-
-    if (!tokenResponse.ok) {
-      res.redirect(
-        postConnectDestination({ requestedPath, error: "token_exchange_failed" })
-      );
-      return;
-    }
-
-    const tokens = (await tokenResponse.json()) as {
-      access_token: string;
-      refresh_token?: string;
-      expires_in?: number;
-      scope?: string;
-      id_token?: string;
-    };
-
-    const expiresAt = tokens.expires_in
-      ? new Date(Date.now() + tokens.expires_in * 1000)
-      : null;
-
-    // SCRUM-149: a consent that granted ZERO services is a failed connect,
-    // not a connection. Google's granular consent brings the service
-    // checkboxes up unticked, so "Continue" alone comes back with identity
-    // scopes only — a grant that can serve no tool ever. Storing it poisoned
-    // every downstream surface (the connections page, the lifecycle cron, the
-    // follow-up email) and, before SCRUM-145, could hold the default account
-    // forever. Nothing is written and the user lands on a distinct error code
-    // with a retry path. Gated BEFORE the userinfo fetch: we do not resolve
-    // an identity for a connection we refuse.
-    //
-    // The refusal requires POSITIVE observation: `tokens.scope` present and
-    // covering zero services. A response with no scope field stays fail-open
-    // and is stored exactly as before — refusing what we could not read would
-    // lock out working connections. Google-only by construction: this is the
-    // Google callback, and only Google has a per-scope opt-out.
-    const grantDelta = scopeDelta(PROVIDERS.GOOGLE_WORKSPACE, tokens.scope ?? null);
-    if (
-      tokens.scope != null &&
-      grantedServiceCount(PROVIDERS.GOOGLE_WORKSPACE, tokens.scope) === 0
-    ) {
-      void trackConnectRefused(
-        db,
-        session.userId,
-        PROVIDERS.GOOGLE_WORKSPACE,
-        attribution
-      );
-      // SCRUM-410. Three things for the person this just happened to.
-      //
-      // The note under the connect button comes back, whatever they did
-      // with it before: it says to tick every box, and they did not.
-      // Best-effort, because a preference must never fail a connect flow.
-      try {
-        await db
-          .update(users)
-          .set({ connectHelperDismissedAt: null })
-          .where(eq(users.id, session.userId));
-      } catch (err) {
-        console.error("[auth] could not restore the connect note:", err instanceof Error ? err.message : err);
-      }
-      // The account they tried is remembered for the retry, so Google goes
-      // straight to its consent screen. From the id_token already in hand:
-      // still no userinfo call for a connection we refuse.
-      const tried = emailFromIdToken(tokens.id_token);
-      if (tried) {
-        res.cookie(GWS_CONNECT_HINT_COOKIE, tried, oneShotCookie(cookiesAreSecure));
-      }
-      // A connect only a link vouches for keeps that link for the retry, which
-      // starts over at the same route (SCRUM-466).
-      if (who.viaLink && linkToken) res.cookie(CONNECT_LINK_COOKIE, linkToken, oneShot);
-      // And they land on the page that names what to tick, with Try again,
-      // carrying the place they started from. That page's "back" link is the
-      // destination this used to redirect to, so nothing about where a
-      // refusal can end up has been lost.
-      res.redirect(googleConnectRefusedUrl(resolveNextPath(requestedPath)));
-      return;
-    }
-
-    // Fetch the email of the connected Google account
-    let accountEmail: string | null = null;
-    // Whether Google verified that address: a link with no session trusts
-    // only a verified one (SCRUM-466).
-    let emailVerified = false;
-    try {
-      const userInfoRes = await fetch(
-        "https://www.googleapis.com/oauth2/v2/userinfo",
-        { headers: { Authorization: `Bearer ${tokens.access_token}` } }
-      );
-      if (userInfoRes.ok) {
-        const userInfo = (await userInfoRes.json()) as { email: string; verified_email?: unknown };
-        accountEmail = userInfo.email;
-        emailVerified = userInfo.verified_email === true;
-      }
-    } catch {
-      // Fall through — accountEmail stays null
-    }
-
-    if (!accountEmail) {
-      res.redirect(
-        postConnectDestination({
-          requestedPath,
-          error: "could_not_resolve_account_email",
-        })
-      );
-      return;
-    }
-
-    // SCRUM-136: the consent screen lets the user untick individual scopes,
-    // and Google reports what actually came back in `tokens.scope`. A PARTIAL
-    // grant is upserted — the granted subset genuinely works, and the tokens
-    // have to live somewhere for it to — but never recorded as clean: the
-    // event carries the delta and the redirect names it, so the landing
-    // surface can offer re-consent (the connect URL already sends
-    // prompt=consent with the full set, so Google re-prompts). The ZERO case
-    // never reaches this line — the SCRUM-149 gate above refused it.
-    // SCRUM-363: already held by another DataToRAG user? Warn, store nothing.
-    // SCRUM-466: a connect only a link vouches for must be the link user's own.
-    if (await refusedUnconfirmed(res, who, PROVIDERS.GOOGLE_WORKSPACE, accountEmail, emailVerified)) {
-      return;
-    }
-
-    if (
-      await refusedAsDuplicate(res, {
-        userId: session.userId,
-        provider: PROVIDERS.GOOGLE_WORKSPACE,
-        accountEmail,
-        externalAccountId: null,
-        acknowledged: nonceMatches(duplicateAck, cookieNonce),
-        requestedPath,
-      })
-    ) {
-      return;
-    }
-
-    await upsertServiceAccount(
-      db,
-      session.userId,
-      PROVIDERS.GOOGLE_WORKSPACE,
-      accountEmail,
-      tokens,
-      GWS_SCOPES,
-      expiresAt
-    );
-
-    await trackOAuthCompleted(
-      db,
-      session.userId,
-      PROVIDERS.GOOGLE_WORKSPACE,
-      accountEmail,
-      attribution,
-      grantDelta,
-      // SCRUM-223: a connect made on a skill's behalf carries its slug, from
-      // the same parked `next` the return redirect redeems.
-      { skill: skillSlugFromPath(requestedPath), entry: connectEntry(requestedPath) }
-    );
-
-    connected(who, PROVIDERS.GOOGLE_WORKSPACE);
-
-    res.redirect(
-      postConnectDestination({
-        requestedPath,
-        provider: PROVIDERS.GOOGLE_WORKSPACE,
-        partialMissing: grantDelta.complete
-          ? undefined
-          : grantDelta.missing.map((m) => m.displayName),
-      })
-    );
-  });
 
   // --- Connectors on the shared connect flow ---
   //

@@ -126,6 +126,7 @@ export function mountConnectFlow(router: Router, oauth: ConnectorOAuth, deps: Co
     }
     // Refused before any cookie is set or the provider is contacted.
     if (await refusedNotOffered(res, who.userId, req.query.next)) return;
+    if (oauth.interceptStart?.(req, res)) return;
 
     stashAttribution(req, res, cookiesAreSecure);
     deps.stashConnectNext(req, res);
@@ -136,7 +137,7 @@ export function mountConnectFlow(router: Router, oauth: ConnectorOAuth, deps: Co
     if (oauth.pkce && pkce) res.cookie(oauth.pkce.cookie, pkce.verifier, oneShotCookie(cookiesAreSecure, oauth.pkce.cookiePath));
     deps.armDuplicateAck(req, res, provider, nonce);
 
-    res.redirect(oauth.authorizeUrl(ctx, nonce, pkce?.challenge).toString());
+    res.redirect(oauth.authorizeUrl(ctx, nonce, pkce?.challenge, { req, res }).toString());
   });
 
   router.get(callbackPath, async (req, res) => {
@@ -180,6 +181,23 @@ export function mountConnectFlow(router: Router, oauth: ConnectorOAuth, deps: Co
       res.redirect(postConnectDestination({ requestedPath, error: "token_exchange_failed" }));
       return;
     }
+    if (
+      oauth.refuseGrant &&
+      (await oauth.refuseGrant(tokens, {
+        req,
+        res,
+        db,
+        cookiesAreSecure,
+        userId: who.userId,
+        viaLink: who.viaLink,
+        linkToken,
+        attribution,
+        requestedPath,
+      }))
+    ) {
+      return;
+    }
+    const report = oauth.grantReport?.(tokens);
 
     let identity: ConnectIdentity | { error: string } | null;
     try {
@@ -229,12 +247,12 @@ export function mountConnectFlow(router: Router, oauth: ConnectorOAuth, deps: Co
       }
     );
 
-    await trackOAuthCompleted(db, who.userId, provider, identity.email, attribution, undefined, {
+    await trackOAuthCompleted(db, who.userId, provider, identity.email, attribution, report?.delta, {
       skill: skillSlugFromPath(requestedPath),
       entry: deps.connectEntry(requestedPath),
     });
     deps.connected(who, provider);
 
-    res.redirect(postConnectDestination({ requestedPath, provider }));
+    res.redirect(postConnectDestination({ requestedPath, provider, partialMissing: report?.partialMissing }));
   });
 }

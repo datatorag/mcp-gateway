@@ -116,6 +116,11 @@ const ROWS: Row[] = [
           : undefined,
     notOffered: "not-checked",
     externalAccountId: null,
+    sharedFlow: {
+      tokenUrl: "https://oauth2.googleapis.com/token",
+      start: "/auth/google/connect?proceed=1",
+      grant: (f) => ({ access_token: f.accessToken, refresh_token: "rt", expires_in: f.expiresIn, scope: GWS_SCOPE_LIST.join(" ") }),
+    },
   },
   {
     provider: "atlassian",

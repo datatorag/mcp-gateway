@@ -1,7 +1,8 @@
 /**
  * Each moved connector's token calls, by connector id: the refresh and the
  * revoke the dispatch maps in `service-token.ts` hand a connection to. Server
- * only. Filled one connector at a time as each moves into its own folder.
+ * only. One entry per connector: a connector added to the registry without
+ * its token calls fails to compile.
  */
 import type { Database } from "@datatorag-mcp/db";
 import type { ConnectionRef, RefreshOutcome, RevokeTokens } from "../service-token";
@@ -11,6 +12,7 @@ import { refreshSlackToken, revokeSlackGrant } from "./slack/tokens";
 import { refreshPostHogToken, revokePostHogGrant } from "./posthog/tokens";
 import { refreshNotionToken, revokeNotionGrant } from "./notion/tokens";
 import { refreshAtlassianToken } from "./atlassian/tokens";
+import { refreshGoogleToken, revokeGoogleGrant } from "./google/tokens";
 
 export interface ConnectorTokenCalls {
   refresh(db: Database, conn: ConnectionRef, refreshToken: string): Promise<RefreshOutcome>;
@@ -24,4 +26,5 @@ export const CONNECTOR_TOKENS = {
   posthog: { refresh: refreshPostHogToken, revoke: revokePostHogGrant },
   notion: { refresh: refreshNotionToken, revoke: revokeNotionGrant },
   atlassian: { refresh: refreshAtlassianToken },
-} satisfies Partial<Record<ConnectorId, ConnectorTokenCalls>>;
+  "google-workspace": { refresh: refreshGoogleToken, revoke: revokeGoogleGrant },
+} satisfies Record<ConnectorId, ConnectorTokenCalls>;

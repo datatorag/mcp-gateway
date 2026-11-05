@@ -50,7 +50,7 @@ function stripComments(src: string): string {
 /** The body of one route handler, by its path literal, comments removed. The
  * slice runs to the next `router.get(` — the connect callback is followed by
  * the Atlassian connect route, so that boundary captures exactly this one. */
-function handlerBody(pathLiteral: string, src: string = AUTH_SRC, opener = `router.get("${pathLiteral}"`): string {
+function handlerBody(pathLiteral: string, src: string, opener: string): string {
   // Sliced from the RAW source, then stripped: the regex stripper reads a
   // `/*` inside a line comment elsewhere in the file (the Atlassian scope
   // list has `// Confluence — /wiki/api/v2/*`) as a block opener and eats
@@ -73,15 +73,8 @@ function handlerBody(pathLiteral: string, src: string = AUTH_SRC, opener = `rout
 // takeConnectLink (SCRUM-466): the connect link this round trip came from.
 const SHARED_CONSUMERS = ["takeAttribution(", "takeConnectNext(", "takeDuplicateAck(", "takeConnectLink("];
 
-/** Every service-connect callback, with the call that retires its own CSRF
- * nonce (SCRUM-366 added Notion and, with it, the Atlassian pair, which had
- * the same three consumers and no guard). */
-const CALLBACKS: Array<{ path: string; nonceClear: string }> = [
-  { path: "/auth/google/connect/callback", nonceClear: "res.clearCookie(GWS_CONNECT_NONCE_COOKIE" },
-];
-
-/** The Google consumers, kept as the self-check's reference set. */
-const CONSUMERS = [CALLBACKS[0].nonceClear, ...SHARED_CONSUMERS];
+/** The self-check's reference set: a nonce clear and the shared consumers. */
+const CONSUMERS = ["res.clearCookie(GWS_CONNECT_NONCE_COOKIE", ...SHARED_CONSUMERS];
 
 /** Anything that issues a response and can end the handler. The connect
  * callback only uses redirect today; the rest are here so that adding one
@@ -119,22 +112,10 @@ function consumersRunBeforeFirstResponse(
 }
 
 describe("connect callback: one-shot cookie consumers run before any response", () => {
-  it.each(CALLBACKS)("every consumer precedes the first response in $path", ({ path, nonceClear }) => {
-    const consumers = [nonceClear, ...SHARED_CONSUMERS];
-    const body = handlerBody(path);
-    // Guard against a silent extraction failure: if the slice missed the body,
-    // the consumers would be 'absent' and the test could pass vacuously.
-    for (const consumer of consumers) {
-      expect(body, `handler body should contain ${consumer}`).toContain(consumer);
-    }
-    expect(firstResponseIndex(body), "handler should issue a response").toBeGreaterThan(-1);
-
-    const result = consumersRunBeforeFirstResponse(body, consumers);
-    expect(
-      result.ok,
-      `${result.offender ?? "a consumer"} must run before the first response — ` +
-        "a new early return was added above the one-shot cookie block"
-    ).toBe(true);
+  it("auth.ts serves no connect callback: every one is the shared flow's", () => {
+    // A connect pair added back to auth.ts would have no ordering guard; it
+    // belongs on the shared flow, as a ConnectorOAuth.
+    expect(stripComments(AUTH_SRC)).not.toMatch(/router\.get\([^)]*\/connect\/callback/);
   });
 
   it("every consumer precedes the first response in the shared flow's callback", () => {

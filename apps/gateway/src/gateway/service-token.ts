@@ -1,11 +1,9 @@
 import { eq, and, desc, sql } from "drizzle-orm";
 import type { Database } from "@datatorag-mcp/db";
 import { serviceConnections, connectedAccounts } from "@datatorag-mcp/db";
-import { revokeGoogleToken } from "@/lib/google-revoke";
 import { CONNECTOR_TOKENS } from "./connectors/token-calls";
 import { posthogHost } from "./connectors/posthog/oauth";
-import { cleanWorkspaceName } from "./untrusted-text";
-import { credentialsFor } from "./connectors/credentials";
+import { accountMatches, choiceFor, type AmbiguousAccount, type AccountRow } from "./account-choice";
 import { CONNECTOR_REGISTRY, isConnectorId, type ConnectorId, type ContextConnectorId, type RevokingConnectorId } from "./connectors/registry";
 import { openToken, sealedColumns, TokenOpenError, type TokenRow } from "./token-crypto";
 import {
@@ -84,62 +82,6 @@ export function pluginContextHeaders(service: string, account: { externalAccount
 export const SERVICE_PLUGIN_MAP: Record<string, string> = Object.fromEntries(
   Object.entries(PLUGIN_SERVICE_MAP).map(([slug, service]) => [service, slug])
 );
-
-/**
- * Refresh a Google access token using the stored refresh token.
- */
-async function refreshGoogleToken(
-  db: Database,
-  conn: ConnectionRef,
-  refreshToken: string
-): Promise<RefreshOutcome> {
-  const { clientId, clientSecret } = credentialsFor("google-workspace");
-  if (!clientId || !clientSecret) return null;
-
-  let res: Response;
-  try {
-    res = await fetch("https://oauth2.googleapis.com/token", {
-      method: "POST",
-      headers: { "Content-Type": "application/x-www-form-urlencoded" },
-      body: new URLSearchParams({
-        client_id: clientId,
-        client_secret: clientSecret,
-        refresh_token: refreshToken,
-        grant_type: "refresh_token",
-      }),
-    });
-  } catch (err) {
-    return { failure: classifyRefreshFailure(null, err) };
-  }
-  if (!res.ok) return refusedRefresh(res);
-
-  try {
-    const data = (await res.json()) as {
-      access_token?: unknown;
-      expires_in?: number;
-    };
-    if (typeof data.access_token !== "string") return UNEXPECTED;
-
-    const expiresAt = data.expires_in
-      ? new Date(Date.now() + data.expires_in * 1000)
-      : null;
-
-    await db
-      .update(serviceConnections)
-      .set({
-        accessToken: data.access_token,
-        ...sealedFor(conn, { accessToken: data.access_token }),
-        tokenExpiresAt: expiresAt,
-        updatedAt: new Date(),
-        ...refreshSucceededFields(),
-      })
-      .where(eq(serviceConnections.id, conn.id));
-
-    return { token: data.access_token };
-  } catch {
-    return UNEXPECTED;
-  }
-}
 
 /** How long a provider token call may hold the row lock before giving up. */
 export const LOCKED_TOKEN_TIMEOUT_MS = 10_000;
@@ -282,7 +224,7 @@ const REFRESH_FN: Record<
   ConnectorId,
   (db: Database, conn: ConnectionRef, rt: string) => Promise<RefreshOutcome>
 > = {
-  "google-workspace": refreshGoogleToken,
+  "google-workspace": (db, conn, rt) => CONNECTOR_TOKENS["google-workspace"].refresh(db, conn, rt),
   atlassian: (db, conn, rt) => CONNECTOR_TOKENS.atlassian.refresh(db, conn, rt),
   notion: (db, conn, rt) => CONNECTOR_TOKENS.notion.refresh(db, conn, rt),
   brevo: (db, conn, rt) => CONNECTOR_TOKENS.brevo.refresh(db, conn, rt),
@@ -299,18 +241,10 @@ const REFRESH_FN: Record<
  * work and guessing at it would be worse than the honest gap. */
 export type RevokeTokens = { accessToken?: string | null; refreshToken?: string | null };
 
-/** Revoking the REFRESH token kills a Google grant including its derived
- * access tokens, so prefer it and fall back to the access token. */
-async function revokeGoogleGrant(tokens: RevokeTokens): Promise<boolean> {
-  const token = tokens.refreshToken ?? tokens.accessToken;
-  if (!token) return false;
-  return revokeGoogleToken(token);
-}
-
 /** One per connector the registry marks `revokes`, so the two cannot
  * disagree without a compile error. */
 const REVOKE_BY_CONNECTOR: Record<RevokingConnectorId, (tokens: RevokeTokens) => Promise<boolean>> = {
-  "google-workspace": revokeGoogleGrant,
+  "google-workspace": (tokens) => CONNECTOR_TOKENS["google-workspace"].revoke(tokens),
   notion: (tokens) => CONNECTOR_TOKENS.notion.revoke(tokens),
   brevo: (tokens) => CONNECTOR_TOKENS.brevo.revoke(tokens),
   slack: (tokens) => CONNECTOR_TOKENS.slack.revoke(tokens),
@@ -387,81 +321,7 @@ export type RefreshFailed = {
   scopes?: never;
 };
 
-/** One account an ambiguous `account` value could have meant, and the value
- * that names it alone. */
-export type AccountChoice = {
-  /** What to pass as `account` to reach this one and nothing else. */
-  account: string;
-  email: string;
-  /** The workspace name, for connectors with one (Notion). */
-  workspace: string | null;
-};
-
-/** An `account` value that names more than one connected account. Refused,
- * never guessed: a guess is a call that may run, or write, as an account the
- * caller did not mean (SCRUM-366). */
-export type AmbiguousAccount = {
-  ambiguous: true;
-  choices: AccountChoice[];
-  /** Never present, so a caller that reads a token off a refusal without
-   * checking `ambiguous` gets nothing and fails closed, as if no account
-   * matched, rather than failing to compile at every existing call site. */
-  token?: never;
-  accountEmail?: never;
-  scopes?: never;
-};
-
-/** The words for an ambiguous account. `requested` is shown as given, so the
- * caller passes it already made safe to echo.
- *
- * A workspace name is set by whoever administers that workspace (SCRUM-366),
- * so it is cleaned and capped (`cleanWorkspaceName`) and only ever appears as
- * a JSON-quoted value: a quote inside it is escaped and cannot close the
- * value, and no newline survives to start a line of its own. */
-export function ambiguousAccountMessage(
-  requested: string,
-  choices: AccountChoice[]
-): string {
-  const quoted = (v: string) => JSON.stringify(v);
-  const listed = choices
-    .map((c) => {
-      if (c.workspace === null) return `${quoted(c.account)} (${c.email})`;
-      const workspace = cleanWorkspaceName(c.workspace) ?? "";
-      // The value to pass is the workspace name itself when that is what
-      // names the account alone; show it exactly as it is shown above.
-      const account = c.account === c.workspace ? workspace : c.account;
-      return `${quoted(account)} (${c.email}, workspace ${quoted(workspace)})`;
-    })
-    .join("; ");
-  return `${quoted(requested)} matches more than one connected account. Pass one of these as the account argument: ${listed}.`;
-}
-
-type AccountRow = {
-  email: string;
-  label: string | null;
-  externalAccountId: string | null;
-};
-
-/** Whether `value` names this account. An email always does. A label or
- * external id does only on a row that carries an external id, which today
- * means a Notion workspace: a Google or Atlassian label is a display string,
- * never an address, so their routing is exactly what it was. */
-function accountMatches(row: AccountRow, value: string): boolean {
-  if (row.email === value) return true;
-  if (row.externalAccountId === null) return false;
-  return row.label === value || row.externalAccountId === value;
-}
-
-/** The value that reaches `row` alone among `all`: the workspace name when it
- * is unique, else the workspace id, else the email. */
-function choiceFor(row: AccountRow, all: AccountRow[]): AccountChoice {
-  const unique = (v: string | null): v is string =>
-    v !== null && all.filter((r) => accountMatches(r, v)).length === 1;
-  const account = [row.label, row.externalAccountId, row.email].find(unique) ??
-    row.externalAccountId ??
-    row.email;
-  return { account, email: row.email, workspace: row.externalAccountId !== null ? row.label : null };
-}
+export { ambiguousAccountMessage, type AccountChoice, type AmbiguousAccount } from "./account-choice";
 
 /**
  * Get a valid access token for a user's service connection, together with the
