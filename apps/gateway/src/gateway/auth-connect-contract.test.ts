@@ -67,7 +67,7 @@ import { GWS_SCOPE_LIST } from "./scope-grant";
 import { NOTION_TOKEN_URL } from "./notion-oauth";
 import { BREVO_ACCOUNT_URL, BREVO_TOKEN_URL, BREVO_USERINFO_URL } from "./connectors/brevo/oauth";
 import { posthogEndpoints } from "./posthog-oauth";
-import { SLACK_TOKEN_URL, SLACK_USERS_INFO_URL } from "./slack-oauth";
+import { SLACK_TOKEN_URL, SLACK_USERS_INFO_URL } from "./connectors/slack/oauth";
 import { CONNECT_LINK_COPY } from "./connect-link-page";
 import { DUPLICATE_COPY } from "./connect-duplicate";
 import type { ConnectorId } from "./connectors/registry";
@@ -88,9 +88,10 @@ type Row = {
   notOffered: "redirect" | "404" | "not-checked";
   /** The account's external id, when the provider keys one. */
   externalAccountId: string | null;
-  /** Served by the shared connect flow: its token endpoint, for the cases
-   * the flow decides the same way for every connector it serves. */
-  sharedFlow?: { tokenUrl: string };
+  /** Served by the shared connect flow: its token endpoint, and the body of
+   * a grant with these fields, in the provider's own shape, for the cases the
+   * flow decides the same way for every connector it serves. */
+  sharedFlow?: { tokenUrl: string; grant: (fields: { accessToken?: string; expiresIn?: number }) => unknown };
 };
 
 const json = (body: unknown) => new Response(JSON.stringify(body), { status: 200 });
@@ -148,7 +149,10 @@ const ROWS: Row[] = [
             : undefined,
     notOffered: "redirect",
     externalAccountId: null,
-    sharedFlow: { tokenUrl: BREVO_TOKEN_URL },
+    sharedFlow: {
+      tokenUrl: BREVO_TOKEN_URL,
+      grant: (f) => ({ access_token: f.accessToken, refresh_token: "rt", expires_in: f.expiresIn }),
+    },
   },
   {
     provider: "posthog",
@@ -179,6 +183,14 @@ const ROWS: Row[] = [
     // Admin-only: a refusal looks like a path that does not exist.
     notOffered: "404",
     externalAccountId: "T1",
+    sharedFlow: {
+      tokenUrl: SLACK_TOKEN_URL,
+      grant: (f) => ({
+        ok: true,
+        team: { id: "T1", name: "Company" },
+        authed_user: { id: "U1", access_token: f.accessToken, expires_in: f.expiresIn, scope: "search:read" },
+      }),
+    },
   },
 ];
 
@@ -402,14 +414,14 @@ describe.each(ROWS.filter((r) => r.sharedFlow))("the $provider connect callback,
   });
 
   it("refuses an answer without an access token", async () => {
-    tokenAnswer(json({ token_type: "bearer", refresh_token: "rt" }));
+    tokenAnswer(json(r.sharedFlow!.grant({})));
     const res = await callback();
     expect(location(res)).toBe(postConnectDestination({ error: "token_exchange_failed" }));
     expect(upsertServiceAccount).not.toHaveBeenCalled();
   });
 
   it("stores no expiry unless the answer gives a positive number of seconds", async () => {
-    tokenAnswer(json({ access_token: "at", expires_in: 0 }));
+    tokenAnswer(json(r.sharedFlow!.grant({ accessToken: "at", expiresIn: 0 })));
     await callback();
     expect(upsertServiceAccount.mock.calls[0][6]).toBeNull();
   });

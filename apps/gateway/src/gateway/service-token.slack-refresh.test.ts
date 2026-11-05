@@ -25,7 +25,8 @@ import { eq } from "drizzle-orm";
 import { serviceConnections, type Database } from "@datatorag-mcp/db";
 import { getTestDb, stopTestDb, insertTestUser, isDockerAvailable } from "../test-utils/db";
 import { upsertServiceAccount } from "./connected-accounts";
-import { PLUGIN_SERVICE_MAP, refreshSlackToken, resolveServiceToken, revokeUpstream } from "./service-token";
+import { PLUGIN_SERVICE_MAP, resolveServiceToken, revokeUpstream } from "./service-token";
+import { refreshSlackToken } from "./connectors/slack/tokens";
 import { sealedColumns } from "./token-crypto";
 import { scopeDelta } from "./scope-grant";
 

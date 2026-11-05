@@ -5,7 +5,6 @@ import { revokeGoogleToken } from "@/lib/google-revoke";
 import { NOTION_REVOKE_URL, NOTION_TOKEN_URL, notionBasicAuth } from "./notion-oauth";
 import { CONNECTOR_TOKENS } from "./connectors/token-calls";
 import { posthogClientId, posthogEndpoints, posthogHost } from "./posthog-oauth";
-import { SLACK_REVOKE_URL, SLACK_TOKEN_TIMEOUT_MS, SLACK_TOKEN_URL } from "./slack-oauth";
 import { cleanWorkspaceName } from "./untrusted-text";
 import { envValue } from "@datatorag-mcp/config";
 import { credentialsFor } from "./connectors/credentials";
@@ -13,7 +12,6 @@ import { CONNECTOR_REGISTRY, isConnectorId, type ConnectorId, type ContextConnec
 import { openToken, sealedColumns, TokenOpenError, type TokenRow } from "./token-crypto";
 import {
   classifyRefreshFailure,
-  classifySlackRefusal,
   recordRefreshFailure,
   refreshSucceededFields,
   type RefreshFailure,
@@ -374,48 +372,6 @@ export async function refreshNotionToken(
 }
 
 /**
- * Refresh a Slack user token (SCRUM-454), under the rotating-token lock.
- *
- * With token rotation on, an access token lasts `expires_in` seconds and each
- * refresh token works once, so the lock is what keeps two concurrent calls
- * from spending it twice. The refresh is `oauth.v2.access` with
- * `grant_type=refresh_token`, form-encoded with the client credentials, and
- * answers HTTP 200 with `ok`; `classifySlackRefusal` decides which `ok: false`
- * codes mean the grant is dead. The expiry is stored from `expires_in`.
- *
- * Exported for its tests.
- */
-export async function refreshSlackToken(
-  db: Database,
-  conn: ConnectionRef,
-  presentedRefreshToken: string
-): Promise<RefreshOutcome> {
-  const { clientId, clientSecret } = credentialsFor("slack");
-  if (!clientId || !clientSecret) return null;
-  return refreshRotatingToken(db, conn, presentedRefreshToken, {
-    label: "slack",
-    call: (refreshToken, signal) =>
-      fetch(SLACK_TOKEN_URL, {
-        method: "POST",
-        headers: { "Content-Type": "application/x-www-form-urlencoded" },
-        body: new URLSearchParams({
-          client_id: clientId,
-          client_secret: clientSecret,
-          grant_type: "refresh_token",
-          refresh_token: refreshToken,
-        }).toString(),
-        signal,
-      }),
-    expiresAt: (data) =>
-      typeof data.expires_in === "number" && data.expires_in > 0
-        ? new Date(Date.now() + data.expires_in * 1000)
-        : null,
-    // A 429 or a 5xx is a non-2xx; Slack sends its refusals as 200 ok:false.
-    refusalIn: (data) => (data.ok === true ? null : classifySlackRefusal(data.error)),
-  });
-}
-
-/**
  * Refresh a PostHog access token (SCRUM-471), under the rotating-token lock.
  * A metadata-document client has no secret: the form carries the client id,
  * which is the document's URL. PostHog does not rotate this client's refresh
@@ -461,7 +417,7 @@ const REFRESH_FN: Record<
   atlassian: refreshAtlassianToken,
   notion: refreshNotionToken,
   brevo: (db, conn, rt) => CONNECTOR_TOKENS.brevo.refresh(db, conn, rt),
-  slack: refreshSlackToken,
+  slack: (db, conn, rt) => CONNECTOR_TOKENS.slack.refresh(db, conn, rt),
   posthog: refreshPostHogToken,
 };
 
@@ -517,25 +473,6 @@ async function revokeGoogleGrant(tokens: RevokeTokens): Promise<boolean> {
   return revokeGoogleToken(token);
 }
 
-/** Revoke a Slack grant (SCRUM-454): `auth.revoke` with the access token as
- * the bearer. True only when Slack answers `ok`. Never throws, and never
- * sends the refresh token. */
-async function revokeSlackGrant(tokens: RevokeTokens): Promise<boolean> {
-  if (!tokens.accessToken) return false;
-  try {
-    const res = await fetch(SLACK_REVOKE_URL, {
-      method: "POST",
-      headers: { Authorization: `Bearer ${tokens.accessToken}` },
-      signal: AbortSignal.timeout(SLACK_TOKEN_TIMEOUT_MS),
-    });
-    if (!res.ok) return false;
-    const data = (await res.json()) as { ok?: unknown };
-    return data.ok === true;
-  } catch {
-    return false;
-  }
-}
-
 /** Revoke a PostHog grant (SCRUM-471): the refresh token, which outlives
  * any access token and is valid until revoked, with the access token as the
  * fallback. Never throws. */
@@ -562,7 +499,7 @@ const REVOKE_BY_CONNECTOR: Record<RevokingConnectorId, (tokens: RevokeTokens) =>
   "google-workspace": revokeGoogleGrant,
   notion: revokeNotionGrant,
   brevo: (tokens) => CONNECTOR_TOKENS.brevo.revoke(tokens),
-  slack: revokeSlackGrant,
+  slack: (tokens) => CONNECTOR_TOKENS.slack.revoke(tokens),
   posthog: revokePostHogGrant,
 };
 const REVOKE_FN = new Map<string, (tokens: RevokeTokens) => Promise<boolean>>(Object.entries(REVOKE_BY_CONNECTOR));

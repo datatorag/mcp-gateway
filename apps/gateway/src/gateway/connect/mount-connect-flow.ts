@@ -197,7 +197,11 @@ export function mountConnectFlow(router: Router, oauth: ConnectorOAuth, deps: Co
       who.userId,
       provider,
       identity.email,
-      { access_token: tokens.accessToken, refresh_token: tokens.refreshToken },
+      {
+        access_token: tokens.accessToken,
+        refresh_token: tokens.refreshToken,
+        ...(oauth.storesGrantedScope && tokens.scope !== undefined ? { scope: tokens.scope } : {}),
+      },
       oauth.scopes,
       expiryFrom(tokens.expiresIn),
       {
