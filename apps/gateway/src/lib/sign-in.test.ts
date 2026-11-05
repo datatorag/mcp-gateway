@@ -38,6 +38,7 @@ describe("who may point at the login page", () => {
   const ALLOWED: Record<string, string> = {
     "proxy.ts": "the middleware bounces a signed-out dashboard request",
     "gateway/auth.ts": "a sign-in or connect that did not finish comes back here",
+    "gateway/connect/mount-connect-flow.ts": "a connect on the shared flow that did not finish, as in auth.ts",
     "app/robots.ts": "a comment about indexing",
     "app/dashboard/billing/portal-client.ts": "a session that lapsed under the open billing page",
     "gateway/leads/confirmation.ts": "an email link, which no click listener can attribute",

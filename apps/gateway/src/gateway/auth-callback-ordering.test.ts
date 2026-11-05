@@ -31,6 +31,11 @@ const AUTH_SRC = readFileSync(
   fileURLToPath(new URL("./auth.ts", import.meta.url)),
   "utf8"
 );
+/** The shared connect flow, which serves the connectors moved out of auth.ts. */
+const FLOW_SRC = readFileSync(
+  fileURLToPath(new URL("./connect/mount-connect-flow.ts", import.meta.url)),
+  "utf8"
+);
 
 /** Strip line and block comments so a call quoted in prose cannot satisfy the
  * guard. Deliberately not a full JS parser — string literals in this handler
@@ -45,7 +50,7 @@ function stripComments(src: string): string {
 /** The body of one route handler, by its path literal, comments removed. The
  * slice runs to the next `router.get(` — the connect callback is followed by
  * the Atlassian connect route, so that boundary captures exactly this one. */
-function handlerBody(pathLiteral: string): string {
+function handlerBody(pathLiteral: string, src: string = AUTH_SRC, opener = `router.get("${pathLiteral}"`): string {
   // Sliced from the RAW source, then stripped: the regex stripper reads a
   // `/*` inside a line comment elsewhere in the file (the Atlassian scope
   // list has `// Confluence — /wiki/api/v2/*`) as a block opener and eats
@@ -53,9 +58,9 @@ function handlerBody(pathLiteral: string): string {
   // the handler that mentions the next-route marker would cut the slice
   // short; the extraction guard in the test (every consumer present) catches
   // that.
-  const start = AUTH_SRC.indexOf(`router.get("${pathLiteral}"`);
+  const start = src.indexOf(opener);
   if (start === -1) throw new Error(`handler not found: ${pathLiteral}`);
-  const rest = AUTH_SRC.slice(start + pathLiteral.length);
+  const rest = src.slice(start + opener.length);
   const nextRoute = rest.indexOf("router.get(");
   return stripComments(nextRoute === -1 ? rest : rest.slice(0, nextRoute));
 }
@@ -75,8 +80,6 @@ const CALLBACKS: Array<{ path: string; nonceClear: string }> = [
   { path: "/auth/google/connect/callback", nonceClear: "res.clearCookie(GWS_CONNECT_NONCE_COOKIE" },
   { path: "/auth/atlassian/connect/callback", nonceClear: 'res.clearCookie("atl_connect_nonce"' },
   { path: "/auth/notion/connect/callback", nonceClear: "res.clearCookie(NOTION_CONNECT_NONCE_COOKIE" },
-  // SCRUM-468.
-  { path: "/auth/brevo/connect/callback", nonceClear: "res.clearCookie(BREVO_CONNECT_NONCE_COOKIE" },
   { path: "/auth/slack/connect/callback", nonceClear: "res.clearCookie(SLACK_CONNECT_NONCE_COOKIE" },
   // SCRUM-471. Its PKCE verifier is cleared beside the nonce; the connect
   // test proves a refused round trip clears both.
@@ -138,6 +141,17 @@ describe("connect callback: one-shot cookie consumers run before any response", 
       `${result.offender ?? "a consumer"} must run before the first response — ` +
         "a new early return was added above the one-shot cookie block"
     ).toBe(true);
+  });
+
+  it("every consumer precedes the first response in the shared flow's callback", () => {
+    const consumers = ["res.clearCookie(oauth.nonceCookie", ...SHARED_CONSUMERS];
+    const body = handlerBody("the shared callback", FLOW_SRC, "router.get(callbackPath,");
+    for (const consumer of consumers) {
+      expect(body, `handler body should contain ${consumer}`).toContain(consumer);
+    }
+    expect(firstResponseIndex(body), "handler should issue a response").toBeGreaterThan(-1);
+    const result = consumersRunBeforeFirstResponse(body, consumers);
+    expect(result.ok, `${result.offender ?? "a consumer"} must run before the first response`).toBe(true);
   });
 
   it("goes red when a response is placed before a consumer (self-check)", () => {

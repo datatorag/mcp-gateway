@@ -13,8 +13,8 @@ import { eq } from "drizzle-orm";
 import { serviceConnections, type Database } from "@datatorag-mcp/db";
 import { getTestDb, stopTestDb, insertTestUser, isDockerAvailable } from "../test-utils/db";
 import { upsertServiceAccount } from "./connected-accounts";
-import { refreshBrevoToken } from "./service-token";
-import { BREVO_TOKEN_URL } from "./brevo-oauth";
+import { refreshBrevoToken } from "./connectors/brevo/tokens";
+import { BREVO_TOKEN_URL } from "./connectors/brevo/oauth";
 
 /** Brevo's token endpoint as its guide describes it: a new access token, and
  * a new refresh token that replaces the old. The old one is refused after. */

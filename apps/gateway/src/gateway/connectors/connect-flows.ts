@@ -1,0 +1,13 @@
+/**
+ * Each moved connector's connect, by connector id, for the shared flow
+ * (`connect/mount-connect-flow.ts`). Server only, and kept apart from the
+ * token calls so the connect routes load nothing from `service-token.ts`.
+ * Filled one connector at a time as each moves into its own folder.
+ */
+import type { ConnectorOAuth } from "../connect/connector-oauth";
+import type { ConnectorId } from "./registry";
+import { BREVO_CONNECT } from "./brevo/oauth";
+
+export const CONNECTOR_OAUTH = {
+  brevo: BREVO_CONNECT,
+} satisfies Partial<Record<ConnectorId, ConnectorOAuth>>;

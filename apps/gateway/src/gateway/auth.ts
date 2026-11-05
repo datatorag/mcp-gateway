@@ -45,7 +45,8 @@ import {
   posthogEndpoints,
   posthogHost,
 } from "./posthog-oauth";
-import { BREVO_ACCOUNT_URL, BREVO_AUTHORIZE_URL, BREVO_SCOPES, BREVO_TOKEN_URL, BREVO_USERINFO_URL } from "./brevo-oauth";
+import { mountConnectFlow, type ConnectFlowDeps } from "./connect/mount-connect-flow";
+import { CONNECTOR_OAUTH } from "./connectors/connect-flows";
 import {
   exchangeSlackCode,
   SLACK_AUTHORIZE_URL,
@@ -84,9 +85,6 @@ const GWS_CONNECT_NONCE_COOKIE = "gws_connect_nonce";
  * like every sibling, so concurrent connects cannot consume each other's. */
 const NOTION_CONNECT_NONCE_COOKIE = "notion_connect_nonce";
 
-/** The Brevo connect flow's one-shot CSRF nonce (SCRUM-468), its own cookie
- * like every sibling. */
-const BREVO_CONNECT_NONCE_COOKIE = "brevo_connect_nonce";
 
 /** The PostHog connect flow's one-shot CSRF nonce and PKCE verifier
  * (SCRUM-471). The verifier is the code exchange's only proof, PostHog's
@@ -173,8 +171,6 @@ type PostHogTokenResponse = {
   posthog_base_url?: unknown;
 };
 
-/** The fields of Brevo's token response this file reads (SCRUM-468). */
-type BrevoTokenResponse = { access_token?: unknown; refresh_token?: unknown; expires_in?: unknown };
 
 /** The fields of Notion's token response this file reads. */
 type NotionTokenResponse = {
@@ -1424,172 +1420,26 @@ export function createAuthRouter(
     );
   });
 
-  // --- Brevo connection (SCRUM-468) ---
+  // --- Connectors on the shared connect flow ---
   //
-  // The Notion pair's shape, against Brevo's partner OAuth with a private
-  // app's client secret. Brevo's scopes are fixed at the app, so there is no
-  // consent interstitial. The account is keyed by its email, as Google's and
-  // Atlassian's are; its company name is the label.
-
-  router.get("/auth/brevo/connect", async (req, res) => {
-    const who = await connectUser(req.cookies?.[SESSION_COOKIE], req.cookies?.[CONNECT_LINK_COOKIE], PROVIDERS.BREVO);
-    if (!who) {
-      res.redirect("/auth/login");
-      return;
-    }
-    // Offered only where serviceOfferedTo says so, and never without the app's
-    // credentials. Refused before any cookie is set or Brevo is contacted.
-    if (!config.brevoClientId || !config.brevoClientSecret || !(await serviceOfferedTo(db, PROVIDERS.BREVO, who.userId))) {
-      res.redirect(postConnectDestination({ requestedPath: req.query.next, error: CONNECT_ERROR_NOT_LAUNCHED }));
-      return;
-    }
-
-    stashAttribution(req, res, cookiesAreSecure);
-    stashConnectNext(req, res);
-
-    const nonce = randomBytes(16).toString("base64url");
-    res.cookie(BREVO_CONNECT_NONCE_COOKIE, nonce, oneShotCookie(cookiesAreSecure));
-    armDuplicateAck(req, res, PROVIDERS.BREVO, nonce);
-
-    const url = new URL(BREVO_AUTHORIZE_URL);
-    url.searchParams.set("client_id", config.brevoClientId);
-    url.searchParams.set("redirect_uri", `${config.baseUrl}/auth/brevo/connect/callback`);
-    url.searchParams.set("response_type", "code");
-    url.searchParams.set("scope", BREVO_SCOPES);
-    url.searchParams.set("state", nonce);
-    res.redirect(url.toString());
-  });
-
-  router.get("/auth/brevo/connect/callback", async (req, res) => {
-    const code = req.query.code as string | undefined;
-    const state = req.query.state as string | undefined;
-    // Identity comes from the session cookie or a spent link, never from `state`.
-    const sessionToken = req.cookies?.[SESSION_COOKIE] as string | undefined;
-    const cookieNonce = req.cookies?.[BREVO_CONNECT_NONCE_COOKIE] as string | undefined;
-    res.clearCookie(BREVO_CONNECT_NONCE_COOKIE, { path: "/" });
-    const attribution = takeAttribution(req, res);
-    const requestedPath = takeConnectNext(req, res);
-    const duplicateAck = takeDuplicateAck(req, res);
-    const linkToken = takeConnectLink(req, res);
-
-    if (!sessionToken && !linkToken) {
-      res.redirect("/auth/login");
-      return;
-    }
-    if (!nonceMatches(cookieNonce, state)) {
-      res.redirect(postConnectDestination({ requestedPath, error: "invalid_state" }));
-      return;
-    }
-    if (!code) {
-      res.redirect(postConnectDestination({ requestedPath, error: "missing_code" }));
-      return;
-    }
-    const who = await connectUser(sessionToken, linkToken, PROVIDERS.BREVO);
-    if (!who) {
-      res.redirect("/auth/login");
-      return;
-    }
-    const brevoClientId = config.brevoClientId;
-    const brevoClientSecret = config.brevoClientSecret;
-    // Checked again here, not only at the start: whether Brevo is offered to
-    // this user can change during the round trip.
-    if (!brevoClientId || !brevoClientSecret || !(await serviceOfferedTo(db, PROVIDERS.BREVO, who.userId))) {
-      res.redirect(postConnectDestination({ requestedPath, error: CONNECT_ERROR_NOT_LAUNCHED }));
-      return;
-    }
-
-    let tokens: BrevoTokenResponse | null = null;
-    try {
-      const tokenResponse = await fetch(BREVO_TOKEN_URL, {
-        method: "POST",
-        headers: { "Content-Type": "application/x-www-form-urlencoded" },
-        body: new URLSearchParams({
-          grant_type: "authorization_code",
-          client_id: brevoClientId,
-          client_secret: brevoClientSecret,
-          code,
-          redirect_uri: `${config.baseUrl}/auth/brevo/connect/callback`,
-        }),
-      });
-      if (tokenResponse.ok) tokens = (await tokenResponse.json()) as BrevoTokenResponse;
-    } catch {
-      // Falls through as a failed exchange.
-    }
-    if (!tokens || typeof tokens.access_token !== "string") {
-      res.redirect(postConnectDestination({ requestedPath, error: "token_exchange_failed" }));
-      return;
-    }
-    const accessToken = tokens.access_token;
-
-    // The person who authorized, from Brevo's userinfo (openid email), and the
-    // company the account belongs to, for the label.
-    let accountEmail: string | null = null;
-    let emailVerified = false;
-    let company: string | null = null;
-    try {
-      const [userInfoRes, accountRes] = await Promise.all([
-        fetch(BREVO_USERINFO_URL, { headers: { Authorization: `Bearer ${accessToken}` } }),
-        fetch(BREVO_ACCOUNT_URL, { headers: { Authorization: `Bearer ${accessToken}`, Accept: "application/json" } }),
-      ]);
-      if (userInfoRes.ok) {
-        const info = (await userInfoRes.json()) as { email?: unknown; email_verified?: unknown };
-        if (typeof info.email === "string" && info.email !== "") accountEmail = info.email;
-        // Verified only when Brevo says so, as for Google and Atlassian: a
-        // missing claim is not a verified address (OIDC defines the claim).
-        emailVerified = info.email_verified === true;
-      }
-      if (accountRes.ok) {
-        const account = (await accountRes.json()) as { companyName?: unknown };
-        company = cleanWorkspaceName(account.companyName);
-      }
-    } catch {
-      // Fall through: accountEmail stays null.
-    }
-    if (!accountEmail) {
-      res.redirect(postConnectDestination({ requestedPath, error: "could_not_resolve_account_email" }));
-      return;
-    }
-
-    // SCRUM-466: a connect only a link vouches for must be the link user's own.
-    if (await refusedUnconfirmed(res, who, PROVIDERS.BREVO, accountEmail, emailVerified)) {
-      return;
-    }
-    if (
-      await refusedAsDuplicate(res, {
-        userId: who.userId,
-        provider: PROVIDERS.BREVO,
-        accountEmail,
-        externalAccountId: null,
-        acknowledged: nonceMatches(duplicateAck, cookieNonce),
-        requestedPath,
-      })
-    ) {
-      return;
-    }
-
-    const expiresAt = typeof tokens.expires_in === "number" ? new Date(Date.now() + tokens.expires_in * 1000) : null;
-    await upsertServiceAccount(
-      db,
-      who.userId,
-      PROVIDERS.BREVO,
-      accountEmail,
-      {
-        access_token: accessToken,
-        refresh_token: typeof tokens.refresh_token === "string" ? tokens.refresh_token : undefined,
-      },
-      BREVO_SCOPES,
-      expiresAt,
-      { label: company }
-    );
-
-    await trackOAuthCompleted(db, who.userId, PROVIDERS.BREVO, accountEmail, attribution, undefined, {
-      skill: skillSlugFromPath(requestedPath),
-      entry: connectEntry(requestedPath),
-    });
-    connected(who, PROVIDERS.BREVO);
-
-    res.redirect(postConnectDestination({ requestedPath, provider: PROVIDERS.BREVO }));
-  });
+  // Each moved connector's start route and callback, from its ConnectorOAuth
+  // and this router's shared steps (connect/mount-connect-flow.ts).
+  const connectFlowDeps: ConnectFlowDeps = {
+    db,
+    config,
+    cookiesAreSecure,
+    connectUser,
+    armDuplicateAck,
+    takeDuplicateAck,
+    takeConnectLink,
+    stashConnectNext,
+    takeConnectNext,
+    refusedUnconfirmed,
+    refusedAsDuplicate,
+    connected,
+    connectEntry,
+  };
+  for (const oauth of Object.values(CONNECTOR_OAUTH)) mountConnectFlow(router, oauth, connectFlowDeps);
 
   // --- PostHog connection (SCRUM-471) ---
   //

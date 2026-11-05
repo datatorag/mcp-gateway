@@ -65,7 +65,7 @@ import { createAuthRouter } from "./auth";
 import { postConnectDestination, CONNECT_ERROR_NOT_LAUNCHED } from "./post-connect-destination";
 import { GWS_SCOPE_LIST } from "./scope-grant";
 import { NOTION_TOKEN_URL } from "./notion-oauth";
-import { BREVO_ACCOUNT_URL, BREVO_TOKEN_URL, BREVO_USERINFO_URL } from "./brevo-oauth";
+import { BREVO_ACCOUNT_URL, BREVO_TOKEN_URL, BREVO_USERINFO_URL } from "./connectors/brevo/oauth";
 import { posthogEndpoints } from "./posthog-oauth";
 import { SLACK_TOKEN_URL, SLACK_USERS_INFO_URL } from "./slack-oauth";
 import { CONNECT_LINK_COPY } from "./connect-link-page";
@@ -88,6 +88,9 @@ type Row = {
   notOffered: "redirect" | "404" | "not-checked";
   /** The account's external id, when the provider keys one. */
   externalAccountId: string | null;
+  /** Served by the shared connect flow: its token endpoint, for the cases
+   * the flow decides the same way for every connector it serves. */
+  sharedFlow?: { tokenUrl: string };
 };
 
 const json = (body: unknown) => new Response(JSON.stringify(body), { status: 200 });
@@ -145,6 +148,7 @@ const ROWS: Row[] = [
             : undefined,
     notOffered: "redirect",
     externalAccountId: null,
+    sharedFlow: { tokenUrl: BREVO_TOKEN_URL },
   },
   {
     provider: "posthog",
@@ -367,5 +371,46 @@ describe.each(ROWS)("the $provider connect callback", (r) => {
     // Every one-shot cookie is cleared on the way out.
     const cleared = res.headers.getSetCookie().filter((c) => /Expires=Thu, 01 Jan 1970/.test(c)).map((c) => c.split("=")[0]);
     expect(cleared).toEqual(expect.arrayContaining([row.nonceCookie, "dtr_connect_next", "dtr_dup_ack", "dtr_connect_link"]));
+  });
+});
+
+/** The cases the shared connect flow decides the same way for every
+ * connector it serves (the rows with `sharedFlow`). */
+describe.each(ROWS.filter((r) => r.sharedFlow))("the $provider connect callback, on the shared flow", (r) => {
+  beforeEach(() => {
+    row = r;
+  });
+
+  /** The token endpoint answers `answer` (or fails with it); the rest as the row says. */
+  function tokenAnswer(answer: Response | Error) {
+    outbound.mockImplementation(async (url: string | URL) => {
+      if (String(url) === r.sharedFlow!.tokenUrl) {
+        if (answer instanceof Error) throw answer;
+        return answer;
+      }
+      const ok = row.respond(String(url));
+      if (!ok) throw new Error(`unexpected fetch in test: ${String(url)}`);
+      return ok;
+    });
+  }
+
+  it("treats a token call that fails outright as a refused exchange, and stores nothing", async () => {
+    tokenAnswer(new TypeError("fetch failed"));
+    const res = await callback();
+    expect(location(res)).toBe(postConnectDestination({ error: "token_exchange_failed" }));
+    expect(upsertServiceAccount).not.toHaveBeenCalled();
+  });
+
+  it("refuses an answer without an access token", async () => {
+    tokenAnswer(json({ token_type: "bearer", refresh_token: "rt" }));
+    const res = await callback();
+    expect(location(res)).toBe(postConnectDestination({ error: "token_exchange_failed" }));
+    expect(upsertServiceAccount).not.toHaveBeenCalled();
+  });
+
+  it("stores no expiry unless the answer gives a positive number of seconds", async () => {
+    tokenAnswer(json({ access_token: "at", expires_in: 0 }));
+    await callback();
+    expect(upsertServiceAccount.mock.calls[0][6]).toBeNull();
   });
 });
