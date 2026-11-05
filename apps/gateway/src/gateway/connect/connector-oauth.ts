@@ -11,6 +11,8 @@ import type { DuplicateProvider } from "../connect-duplicate";
  * config, narrowed to what connectors use. */
 export interface ConnectConfig {
   baseUrl: string;
+  atlassianClientId?: string;
+  atlassianClientSecret?: string;
   brevoClientId?: string;
   brevoClientSecret?: string;
   notionClientId?: string;
@@ -49,7 +51,9 @@ export interface ConnectIdentity {
   /** The provider's id for the account (a workspace, a project), when one
    * email can hold several. */
   externalAccountId: string | null;
-  label: string | null;
+  /** The account's name. Absent leaves a stored name as it is, which is how
+   * a connector without one keeps a name the user gave the account. */
+  label?: string | null;
 }
 
 export interface ConnectorOAuth {

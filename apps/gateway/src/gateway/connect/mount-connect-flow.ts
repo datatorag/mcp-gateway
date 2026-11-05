@@ -225,7 +225,7 @@ export function mountConnectFlow(router: Router, oauth: ConnectorOAuth, deps: Co
       expiryFrom(tokens.expiresIn),
       {
         ...(identity.externalAccountId !== null ? { externalAccountId: identity.externalAccountId } : {}),
-        label: identity.label,
+        ...(identity.label !== undefined ? { label: identity.label } : {}),
       }
     );
 
