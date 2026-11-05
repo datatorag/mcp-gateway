@@ -13,7 +13,8 @@ import { eq } from "drizzle-orm";
 import { serviceConnections, type Database } from "@datatorag-mcp/db";
 import { getTestDb, stopTestDb, insertTestUser, isDockerAvailable } from "../test-utils/db";
 import { upsertServiceAccount } from "./connected-accounts";
-import { refreshPostHogToken, revokeUpstream } from "./service-token";
+import { revokeUpstream } from "./service-token";
+import { refreshPostHogToken } from "./connectors/posthog/tokens";
 import { sealedColumns } from "./token-crypto";
 
 const TOKEN_URL = "https://us.posthog.com/oauth/token/";

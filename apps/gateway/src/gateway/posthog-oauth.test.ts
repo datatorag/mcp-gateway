@@ -9,10 +9,10 @@ import { envSchema } from "@datatorag-mcp/config";
 import {
   POSTHOG_CLIENT_METADATA_PATH,
   POSTHOG_SCOPES,
-  pkcePair,
   posthogClientMetadata,
   posthogHost,
-} from "./posthog-oauth";
+} from "./connectors/posthog/oauth";
+import { pkcePair } from "./connect/pkce";
 
 const BASE = "https://gateway.example";
 

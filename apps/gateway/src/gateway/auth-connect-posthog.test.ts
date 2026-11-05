@@ -47,7 +47,7 @@ vi.mock("./connect-links", async (orig) => ({
 }));
 
 import { createAuthRouter } from "./auth";
-import { POSTHOG_SCOPES } from "./posthog-oauth";
+import { POSTHOG_SCOPES } from "./connectors/posthog/oauth";
 
 const HOST = "https://us.posthog.com";
 const BASE = "http://127.0.0.1";

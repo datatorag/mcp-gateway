@@ -8,6 +8,7 @@ import type { ConnectionRef, RefreshOutcome, RevokeTokens } from "../service-tok
 import type { ConnectorId } from "./registry";
 import { refreshBrevoToken, revokeBrevoGrant } from "./brevo/tokens";
 import { refreshSlackToken, revokeSlackGrant } from "./slack/tokens";
+import { refreshPostHogToken, revokePostHogGrant } from "./posthog/tokens";
 
 export interface ConnectorTokenCalls {
   refresh(db: Database, conn: ConnectionRef, refreshToken: string): Promise<RefreshOutcome>;
@@ -17,4 +18,5 @@ export interface ConnectorTokenCalls {
 export const CONNECTOR_TOKENS = {
   brevo: { refresh: refreshBrevoToken, revoke: revokeBrevoGrant },
   slack: { refresh: refreshSlackToken, revoke: revokeSlackGrant },
+  posthog: { refresh: refreshPostHogToken, revoke: revokePostHogGrant },
 } satisfies Partial<Record<ConnectorId, ConnectorTokenCalls>>;

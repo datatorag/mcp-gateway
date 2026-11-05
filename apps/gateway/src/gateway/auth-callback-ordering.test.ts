@@ -80,9 +80,6 @@ const CALLBACKS: Array<{ path: string; nonceClear: string }> = [
   { path: "/auth/google/connect/callback", nonceClear: "res.clearCookie(GWS_CONNECT_NONCE_COOKIE" },
   { path: "/auth/atlassian/connect/callback", nonceClear: 'res.clearCookie("atl_connect_nonce"' },
   { path: "/auth/notion/connect/callback", nonceClear: "res.clearCookie(NOTION_CONNECT_NONCE_COOKIE" },
-  // SCRUM-471. Its PKCE verifier is cleared beside the nonce; the connect
-  // test proves a refused round trip clears both.
-  { path: "/auth/posthog/connect/callback", nonceClear: "res.clearCookie(POSTHOG_CONNECT_NONCE_COOKIE" },
 ];
 
 /** The Google consumers, kept as the self-check's reference set. */
@@ -143,7 +140,8 @@ describe("connect callback: one-shot cookie consumers run before any response", 
   });
 
   it("every consumer precedes the first response in the shared flow's callback", () => {
-    const consumers = ["res.clearCookie(oauth.nonceCookie", ...SHARED_CONSUMERS];
+    // The PKCE verifier (PostHog) is spent beside the nonce.
+    const consumers = ["res.clearCookie(oauth.nonceCookie", "res.clearCookie(oauth.pkce.cookie", ...SHARED_CONSUMERS];
     const body = handlerBody("the shared callback", FLOW_SRC, "router.get(callbackPath,");
     for (const consumer of consumers) {
       expect(body, `handler body should contain ${consumer}`).toContain(consumer);

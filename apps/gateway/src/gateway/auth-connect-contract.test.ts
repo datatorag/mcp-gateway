@@ -66,7 +66,7 @@ import { postConnectDestination, CONNECT_ERROR_NOT_LAUNCHED } from "./post-conne
 import { GWS_SCOPE_LIST } from "./scope-grant";
 import { NOTION_TOKEN_URL } from "./notion-oauth";
 import { BREVO_ACCOUNT_URL, BREVO_TOKEN_URL, BREVO_USERINFO_URL } from "./connectors/brevo/oauth";
-import { posthogEndpoints } from "./posthog-oauth";
+import { posthogEndpoints } from "./connectors/posthog/oauth";
 import { SLACK_TOKEN_URL, SLACK_USERS_INFO_URL } from "./connectors/slack/oauth";
 import { CONNECT_LINK_COPY } from "./connect-link-page";
 import { DUPLICATE_COPY } from "./connect-duplicate";
@@ -169,6 +169,10 @@ const ROWS: Row[] = [
             : undefined,
     notOffered: "redirect",
     externalAccountId: "42",
+    sharedFlow: {
+      tokenUrl: POSTHOG.token,
+      grant: (f) => ({ access_token: f.accessToken, refresh_token: "rt", expires_in: f.expiresIn, scoped_teams: [42] }),
+    },
   },
   {
     provider: "slack",

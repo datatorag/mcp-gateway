@@ -35,16 +35,6 @@ import {
 import { googleConnectRefusedUrl, renderConnectInterstitial } from "./connect-interstitial";
 import { GWS_SCOPE_LIST, grantedServiceCount, scopeDelta, serviceGrantStates } from "./scope-grant";
 import { NOTION_AUTHORIZE_URL, NOTION_TOKEN_URL, notionBasicAuth } from "./notion-oauth";
-import {
-  POSTHOG_CALLBACK_PATH,
-  POSTHOG_CLIENT_METADATA_PATH,
-  POSTHOG_SCOPES,
-  pkcePair,
-  posthogClientId,
-  posthogClientMetadata,
-  posthogEndpoints,
-  posthogHost,
-} from "./posthog-oauth";
 import { mountConnectFlow, type ConnectFlowDeps } from "./connect/mount-connect-flow";
 import { CONNECTOR_OAUTH } from "./connectors/connect-flows";
 import { hashToken } from "@datatorag-mcp/auth";
@@ -77,14 +67,6 @@ const GWS_CONNECT_NONCE_COOKIE = "gws_connect_nonce";
  * like every sibling, so concurrent connects cannot consume each other's. */
 const NOTION_CONNECT_NONCE_COOKIE = "notion_connect_nonce";
 
-
-/** The PostHog connect flow's one-shot CSRF nonce and PKCE verifier
- * (SCRUM-471). The verifier is the code exchange's only proof, PostHog's
- * client having no secret, so it is httpOnly and scoped to the connect pair's
- * own path. */
-const POSTHOG_CONNECT_NONCE_COOKIE = "posthog_connect_nonce";
-const POSTHOG_PKCE_COOKIE = "posthog_connect_pkce";
-const POSTHOG_PKCE_COOKIE_PATH = "/auth/posthog/connect";
 
 
 /** Which Google account a refused connect was attempted with (SCRUM-410), so
@@ -150,16 +132,6 @@ const GWS_SCOPES = GWS_SCOPE_LIST.join(" ");
  * GET /auth/slack/connect(/callback)     — the company Slack workspace, admins only
  * GET /auth/posthog/connect(/callback)   — one PostHog project per grant, admins only
  */
-/** The fields of PostHog's token response this file reads (SCRUM-471).
- * `scoped_teams` is the projects the user granted on the consent screen. */
-type PostHogTokenResponse = {
-  access_token?: unknown;
-  refresh_token?: unknown;
-  expires_in?: unknown;
-  scoped_teams?: unknown;
-  posthog_base_url?: unknown;
-};
-
 
 /** The fields of Notion's token response this file reads. */
 type NotionTokenResponse = {
@@ -1429,205 +1401,6 @@ export function createAuthRouter(
     connectEntry,
   };
   for (const oauth of Object.values(CONNECTOR_OAUTH)) mountConnectFlow(router, oauth, connectFlowDeps);
-
-  // --- PostHog connection (SCRUM-471) ---
-  //
-  // The Brevo pair's shape, against one PostHog regional host, with a client
-  // metadata document for a client id and PKCE in place of a secret. One
-  // connection is one project: the consent screen asks for projects, and a
-  // grant of none or several is refused. The project id is the account's
-  // external id, as a Notion workspace's is; its name is the label.
-
-  // The document PostHog fetches as our client id. Public, no session: it
-  // names nothing but our own URLs. Built from the configured base URL, never
-  // the request's host, since PostHog caches it for an hour.
-  router.get(POSTHOG_CLIENT_METADATA_PATH, (_req, res) => {
-    res.set("Cache-Control", "public, max-age=3600");
-    res.json(posthogClientMetadata(config.baseUrl));
-  });
-
-  router.get("/auth/posthog/connect", async (req, res) => {
-    const who = await connectUser(req.cookies?.[SESSION_COOKIE], req.cookies?.[CONNECT_LINK_COOKIE], PROVIDERS.POSTHOG);
-    if (!who) {
-      res.redirect("/auth/login");
-      return;
-    }
-    // Refused before any cookie is set or PostHog is contacted.
-    if (!(await serviceOfferedTo(db, PROVIDERS.POSTHOG, who.userId))) {
-      res.redirect(postConnectDestination({ requestedPath: req.query.next, error: CONNECT_ERROR_NOT_LAUNCHED }));
-      return;
-    }
-
-    stashAttribution(req, res, cookiesAreSecure);
-    stashConnectNext(req, res);
-
-    const nonce = randomBytes(16).toString("base64url");
-    res.cookie(POSTHOG_CONNECT_NONCE_COOKIE, nonce, oneShotCookie(cookiesAreSecure));
-    const pkce = pkcePair();
-    res.cookie(POSTHOG_PKCE_COOKIE, pkce.verifier, oneShotCookie(cookiesAreSecure, POSTHOG_PKCE_COOKIE_PATH));
-    armDuplicateAck(req, res, PROVIDERS.POSTHOG, nonce);
-
-    const url = new URL(posthogEndpoints(posthogHost()).authorize);
-    url.searchParams.set("client_id", posthogClientId(config.baseUrl));
-    url.searchParams.set("redirect_uri", `${config.baseUrl}${POSTHOG_CALLBACK_PATH}`);
-    url.searchParams.set("response_type", "code");
-    url.searchParams.set("scope", POSTHOG_SCOPES);
-    url.searchParams.set("state", nonce);
-    url.searchParams.set("code_challenge", pkce.challenge);
-    url.searchParams.set("code_challenge_method", "S256");
-    url.searchParams.set("required_access_level", "project");
-    res.redirect(url.toString());
-  });
-
-  // The literal path, not POSTHOG_CALLBACK_PATH, so the ordering test finds it.
-  router.get("/auth/posthog/connect/callback", async (req, res) => {
-    const code = req.query.code as string | undefined;
-    const state = req.query.state as string | undefined;
-    // Identity comes from the session cookie or a spent link, never from `state`.
-    const sessionToken = req.cookies?.[SESSION_COOKIE] as string | undefined;
-    const cookieNonce = req.cookies?.[POSTHOG_CONNECT_NONCE_COOKIE] as string | undefined;
-    const verifier = req.cookies?.[POSTHOG_PKCE_COOKIE] as string | undefined;
-    res.clearCookie(POSTHOG_CONNECT_NONCE_COOKIE, { path: "/" });
-    res.clearCookie(POSTHOG_PKCE_COOKIE, { path: POSTHOG_PKCE_COOKIE_PATH });
-    const attribution = takeAttribution(req, res);
-    const requestedPath = takeConnectNext(req, res);
-    const duplicateAck = takeDuplicateAck(req, res);
-    const linkToken = takeConnectLink(req, res);
-
-    if (!sessionToken && !linkToken) {
-      res.redirect("/auth/login");
-      return;
-    }
-    if (!nonceMatches(cookieNonce, state) || !verifier) {
-      res.redirect(postConnectDestination({ requestedPath, error: "invalid_state" }));
-      return;
-    }
-    if (!code) {
-      res.redirect(postConnectDestination({ requestedPath, error: "missing_code" }));
-      return;
-    }
-    const who = await connectUser(sessionToken, linkToken, PROVIDERS.POSTHOG);
-    if (!who) {
-      res.redirect("/auth/login");
-      return;
-    }
-    // Checked again here: whether PostHog is offered to this user can change
-    // during the round trip.
-    if (!(await serviceOfferedTo(db, PROVIDERS.POSTHOG, who.userId))) {
-      res.redirect(postConnectDestination({ requestedPath, error: CONNECT_ERROR_NOT_LAUNCHED }));
-      return;
-    }
-
-    const host = posthogHost();
-    const endpoints = posthogEndpoints(host);
-    let tokens: PostHogTokenResponse | null = null;
-    try {
-      const tokenResponse = await fetch(endpoints.token, {
-        method: "POST",
-        headers: { "Content-Type": "application/x-www-form-urlencoded" },
-        body: new URLSearchParams({
-          grant_type: "authorization_code",
-          client_id: posthogClientId(config.baseUrl),
-          code,
-          code_verifier: verifier,
-          redirect_uri: `${config.baseUrl}${POSTHOG_CALLBACK_PATH}`,
-        }),
-      });
-      if (tokenResponse.ok) tokens = (await tokenResponse.json()) as PostHogTokenResponse;
-    } catch {
-      // Falls through as a failed exchange.
-    }
-    if (!tokens || typeof tokens.access_token !== "string") {
-      res.redirect(postConnectDestination({ requestedPath, error: "token_exchange_failed" }));
-      return;
-    }
-    const accessToken = tokens.access_token;
-
-    // A token is valid only on its own region's host, so one that says it
-    // belongs elsewhere is refused, not stored.
-    if (tokens.posthog_base_url !== undefined && tokens.posthog_base_url !== host) {
-      res.redirect(postConnectDestination({ requestedPath, error: "region_not_allowed" }));
-      return;
-    }
-    // One connection is one project.
-    const teams = tokens.scoped_teams;
-    if (!Array.isArray(teams) || teams.length !== 1 || !Number.isSafeInteger(teams[0]) || teams[0] <= 0) {
-      res.redirect(postConnectDestination({ requestedPath, error: "choose_one_project" }));
-      return;
-    }
-    const projectId = teams[0] as number;
-
-    // The person who authorized, from PostHog's userinfo (openid email), and
-    // the project's name for the label.
-    let accountEmail: string | null = null;
-    let emailVerified = false;
-    let projectName: string | null = null;
-    try {
-      const [userInfoRes, projectRes] = await Promise.all([
-        fetch(endpoints.userinfo, { headers: { Authorization: `Bearer ${accessToken}` } }),
-        fetch(endpoints.project(projectId), { headers: { Authorization: `Bearer ${accessToken}`, Accept: "application/json" } }),
-      ]);
-      if (userInfoRes.ok) {
-        const info = (await userInfoRes.json()) as { email?: unknown; email_verified?: unknown };
-        if (typeof info.email === "string" && info.email !== "") accountEmail = info.email;
-        // Verified only when PostHog says so: a missing claim is not a
-        // verified address (OIDC defines the claim).
-        emailVerified = info.email_verified === true;
-      }
-      if (projectRes.ok) {
-        const project = (await projectRes.json()) as { name?: unknown };
-        projectName = cleanWorkspaceName(project.name);
-      }
-    } catch {
-      // Fall through: accountEmail stays null.
-    }
-    if (!accountEmail) {
-      res.redirect(postConnectDestination({ requestedPath, error: "could_not_resolve_account_email" }));
-      return;
-    }
-
-    // SCRUM-466: a connect only a link vouches for must be the link user's own.
-    if (await refusedUnconfirmed(res, who, PROVIDERS.POSTHOG, accountEmail, emailVerified)) {
-      return;
-    }
-    const externalAccountId = String(projectId);
-    if (
-      await refusedAsDuplicate(res, {
-        userId: who.userId,
-        provider: PROVIDERS.POSTHOG,
-        accountEmail,
-        externalAccountId,
-        acknowledged: nonceMatches(duplicateAck, cookieNonce),
-        requestedPath,
-      })
-    ) {
-      return;
-    }
-
-    const expiresAt =
-      typeof tokens.expires_in === "number" && tokens.expires_in > 0 ? new Date(Date.now() + tokens.expires_in * 1000) : null;
-    await upsertServiceAccount(
-      db,
-      who.userId,
-      PROVIDERS.POSTHOG,
-      accountEmail,
-      {
-        access_token: accessToken,
-        refresh_token: typeof tokens.refresh_token === "string" ? tokens.refresh_token : undefined,
-      },
-      POSTHOG_SCOPES,
-      expiresAt,
-      { externalAccountId, label: projectName }
-    );
-
-    await trackOAuthCompleted(db, who.userId, PROVIDERS.POSTHOG, accountEmail, attribution, undefined, {
-      skill: skillSlugFromPath(requestedPath),
-      entry: connectEntry(requestedPath),
-    });
-    connected(who, PROVIDERS.POSTHOG);
-
-    res.redirect(postConnectDestination({ requestedPath, provider: PROVIDERS.POSTHOG }));
-  });
 
   /** Park a validated `?next=` for the length of one connect round trip.
    * Validated BEFORE stashing — an off-origin value never reaches the cookie
