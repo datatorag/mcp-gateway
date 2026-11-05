@@ -104,6 +104,7 @@ A **testcontainers-based real-Postgres helper exists** (`apps/gateway/src/test-u
 - Tests: `pnpm vitest run` (in `apps/gateway`)
 - Typecheck: `pnpm typecheck` at the root (turbo builds the packages first, then typechecks the gateway and every plugin), or `pnpm run typecheck` inside one package. A bare `tsc` in `apps/gateway` reads the packages' built `dist`, so on a checkout whose packages were built long ago it reports errors that are not in the code; build them first or use the script.
 - Build (root): `pnpm build`
+- Unused code report (root): `pnpm knip` (config in `knip.json`; the vendored `components/ui` and `components/ai-elements` and the runner cases are ignored). CI runs it as a report that never fails the job. A finding is a candidate to check by reading its call sites, not a deletion order: dynamic imports and string-keyed registries are invisible to it.
 - Dev server: `pnpm dev` in `apps/gateway` (no local postgres to start first — `DATABASE_URL` in the root `.env` points at a Neon branch). Port comes from the root `.env` (`GATEWAY_PORT`) — not Next's default 3000.
 
 ## Ship ritual

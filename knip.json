@@ -1,0 +1,22 @@
+{
+  "$schema": "https://unpkg.com/knip@6/schema.json",
+  "workspaces": {
+    ".": {
+      "entry": ["scripts/**/*.mjs", "docker/canary/*.mjs"]
+    },
+    "apps/gateway": {
+      "entry": ["scripts/*.ts"]
+    },
+    "plugins/gws-mcp": {
+      "entry": ["src/index.ts", "scripts/*.mjs"]
+    }
+  },
+  "ignore": [
+    "apps/gateway/src/gateway/tests/cases/**",
+    "apps/gateway/src/components/ui/**",
+    "apps/gateway/src/components/ai-elements/**",
+    "tools/**",
+    "docs/**",
+    ".claude/**"
+  ]
+}
