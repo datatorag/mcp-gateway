@@ -126,12 +126,15 @@ image:
 
 ## Scripted path (the gateway's fallback)
 
-`scripts/deploy-gateway.sh <full-sha>` runs steps 2 to 4 below in one go, with
+The pipeline (`release.yml`) is the deploy path. This script is the fallback
+for a GitHub outage, kept on purpose; it builds on the host from a checkout.
+
+`scripts/deploy-gateway-fallback.sh <full-sha>` runs steps 2 to 4 below in one go, with
 the host and key taken from the environment so no live value lives in the
 repo:
 
 ```bash
-DEPLOY_HOST=ubuntu@<ip> DEPLOY_KEY=<pem> scripts/deploy-gateway.sh <full-sha>
+DEPLOY_HOST=ubuntu@<ip> DEPLOY_KEY=<pem> scripts/deploy-gateway-fallback.sh <full-sha>
 ```
 
 What it guarantees, and the manual path must match:
@@ -172,7 +175,7 @@ It does not render the env file (step 2b) and does not touch plugins (step 5).
    ```
    - The file is `/opt/datatorag-deploy/env/gateway.env`, beside the pipeline's
      compose files and outside the checkout. Both deploy paths read that one
-     file: the host script names it, and `scripts/deploy-gateway.sh` passes it
+     file: the host script names it, and `scripts/deploy-gateway-fallback.sh` passes it
      to compose (`DEPLOY_ENV_FILE` overrides it). It is no longer
      `~/datatorag-mcp/.env`.
    - `/opt/datatorag-deploy/bin/render-env` is a copy of `scripts/render-env.sh`

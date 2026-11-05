@@ -42,8 +42,9 @@ every GitHub setting and every host step here is in that class until its step re
 11. **A second copy of the gateway is never started to prove the pipeline.** Two gateways
     would both run the scheduled jobs, and the test runner assumes one process. The proof uses
     a surface that does nothing (section 8).
-12. **`deploy-gateway.sh` is not deleted** until the pipeline has done a real gateway deploy.
-    It stays as the documented fallback after that.
+12. **The pipeline (`release.yml`) is the deploy path; the host-build script is kept on purpose**
+    as the fallback for a GitHub outage, renamed `scripts/deploy-gateway-fallback.sh` once the
+    pipeline had done real gateway deploys.
 
 ## 2. Today
 
