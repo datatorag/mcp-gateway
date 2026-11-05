@@ -7,6 +7,7 @@ import { BREVO_REVOKE_URL, BREVO_TOKEN_URL, brevoClientCredentials } from "./bre
 import { posthogClientId, posthogEndpoints, posthogHost } from "./posthog-oauth";
 import { SLACK_REVOKE_URL, SLACK_TOKEN_TIMEOUT_MS, SLACK_TOKEN_URL } from "./slack-oauth";
 import { cleanWorkspaceName } from "./untrusted-text";
+import { CONNECTOR_REGISTRY, isConnectorId, type ConnectorId, type ContextConnectorId, type RevokingConnectorId } from "./connectors/registry";
 import { openToken, sealedColumns, TokenOpenError, type TokenRow } from "./token-crypto";
 import {
   classifyRefreshFailure,
@@ -57,21 +58,17 @@ async function refusedRefresh(res: Response): Promise<{ failure: RefreshFailure 
  * left alone and the next call tries again. */
 const UNEXPECTED: { failure: RefreshFailure } = { failure: { kind: "transient", reason: "unexpected" } };
 
-/** Mapping from plugin slug to the service connection it needs. */
-export const PLUGIN_SERVICE_MAP: Record<string, string> = {
-  "gws-mcp": "google-workspace",
-  "atlassian-mcp": "atlassian",
-  "notion-mcp": "notion",
-  "brevo-mcp": "brevo",
-  "slack-mcp": "slack",
-  "posthog-mcp": "posthog",
-};
+/** Mapping from plugin slug to the service connection it needs, from the
+ * connector registry. */
+export const PLUGIN_SERVICE_MAP: Record<string, string> = Object.fromEntries(
+  CONNECTOR_REGISTRY.map((c) => [c.pluginSlug, c.id])
+);
 
 /** What a plugin is handed beside its token (SCRUM-471), per service. Most
  * need nothing. A PostHog call needs the regional host and the one project
  * the connection was granted, which is the account's external id. The token
  * header is set after these, so a context header can never replace it. */
-const PLUGIN_CONTEXT: Record<string, (account: { externalAccountId?: string }) => Record<string, string>> = {
+const PLUGIN_CONTEXT: Record<ContextConnectorId, (account: { externalAccountId?: string }) => Record<string, string>> = {
   posthog: (account) => ({
     "X-PostHog-Host": posthogHost(),
     ...(account.externalAccountId ? { "X-PostHog-Project": account.externalAccountId } : {}),
@@ -81,7 +78,7 @@ const PLUGIN_CONTEXT: Record<string, (account: { externalAccountId?: string }) =
 /** The context headers for a call to `service`'s plugin, as the resolved
  * account gives them. Empty for a service that declares none. */
 export function pluginContextHeaders(service: string, account: { externalAccountId?: string } | null): Record<string, string> {
-  const context = PLUGIN_CONTEXT[service];
+  const context = Object.hasOwn(PLUGIN_CONTEXT, service) ? PLUGIN_CONTEXT[service as ContextConnectorId] : undefined;
   return context ? context(account ?? {}) : {};
 }
 
@@ -484,9 +481,10 @@ export async function refreshPostHogToken(
   });
 }
 
-/** Service-specific refresh function lookup. */
+/** Service-specific refresh function lookup: one per connector, so a
+ * connector added to the registry without one fails to compile. */
 const REFRESH_FN: Record<
-  string,
+  ConnectorId,
   (db: Database, conn: ConnectionRef, rt: string) => Promise<RefreshOutcome>
 > = {
   "google-workspace": refreshGoogleToken,
@@ -614,13 +612,16 @@ async function revokePostHogGrant(tokens: RevokeTokens): Promise<boolean> {
   }
 }
 
-const REVOKE_FN = new Map<string, (tokens: RevokeTokens) => Promise<boolean>>([
-  ["google-workspace", revokeGoogleGrant],
-  ["notion", revokeNotionGrant],
-  ["brevo", revokeBrevoGrant],
-  ["slack", revokeSlackGrant],
-  ["posthog", revokePostHogGrant],
-]);
+/** One per connector the registry marks `revokes`, so the two cannot
+ * disagree without a compile error. */
+const REVOKE_BY_CONNECTOR: Record<RevokingConnectorId, (tokens: RevokeTokens) => Promise<boolean>> = {
+  "google-workspace": revokeGoogleGrant,
+  notion: revokeNotionGrant,
+  brevo: revokeBrevoGrant,
+  slack: revokeSlackGrant,
+  posthog: revokePostHogGrant,
+};
+const REVOKE_FN = new Map<string, (tokens: RevokeTokens) => Promise<boolean>>(Object.entries(REVOKE_BY_CONNECTOR));
 
 /** Tell the provider to drop a connection's grant before we forget it
  * locally.
@@ -917,7 +918,7 @@ export async function resolveServiceToken(
     };
 
   if (tokens.refreshToken) {
-    const refreshFn = REFRESH_FN[service];
+    const refreshFn = isConnectorId(service) ? REFRESH_FN[service] : undefined;
     if (refreshFn) {
       const outcome = await refreshFn(db, { id: conn.id, userId }, tokens.refreshToken);
       // A refresh never widens the grant, so the stored scopes still hold.

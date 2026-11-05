@@ -2,6 +2,7 @@ import {
   CONNECTABLE_SERVICES,
   type ConnectableService,
 } from "./service-registry";
+import type { ConnectorId } from "@/gateway/connectors/registry";
 
 export interface ServiceConfig extends ConnectableService {
   description: string;
@@ -11,10 +12,10 @@ export interface ServiceConfig extends ConnectableService {
 }
 
 /** The presentation each service adds on top of the shared registry entry.
- * Keyed by registry id so a connector added to the registry without a row
- * here fails loudly below instead of silently rendering without an icon. */
+ * Keyed by connector id, so a connector added to the registry without a row
+ * here fails to compile instead of rendering without an icon. */
 const SERVICE_PRESENTATION: Record<
-  string,
+  ConnectorId,
   Omit<ServiceConfig, keyof ConnectableService>
 > = {
   "google-workspace": {

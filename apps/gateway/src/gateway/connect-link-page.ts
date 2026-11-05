@@ -8,16 +8,10 @@
  * the account a link was made for.
  */
 import type { DuplicateProvider } from "./connect-duplicate";
+import { byConnector } from "./connectors/registry";
 
 /** What the account is called on these pages, per provider. */
-const ACCOUNT_NOUN: Record<DuplicateProvider, string> = {
-  "google-workspace": "Google account",
-  atlassian: "Atlassian account",
-  notion: "Notion workspace",
-  brevo: "Brevo account",
-  slack: "Slack workspace",
-  posthog: "PostHog project",
-};
+const ACCOUNT_NOUN: Record<DuplicateProvider, string> = byConnector("accountNoun");
 
 /** The pages' words, in one place for review. */
 export const CONNECT_LINK_COPY = {
@@ -43,14 +37,7 @@ export const CONNECT_LINK_COPY = {
 } as const;
 
 /** The provider's own name on the button. */
-const PROVIDER_NAME: Record<DuplicateProvider, string> = {
-  "google-workspace": "Google",
-  atlassian: "Atlassian",
-  notion: "Notion",
-  brevo: "Brevo",
-  slack: "Slack",
-  posthog: "PostHog",
-};
+const PROVIDER_NAME: Record<DuplicateProvider, string> = byConnector("providerName");
 
 const escapeHtml = (text: string): string =>
   text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");

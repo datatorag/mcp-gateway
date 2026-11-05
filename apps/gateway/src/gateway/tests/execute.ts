@@ -33,6 +33,7 @@ import { finishRun, recordResult, startRun } from "./store";
 import { missingCheckouts, pluginShasFor } from "./plugin-sha";
 import { mcpServers, serviceConnections } from "@datatorag-mcp/db";
 import { PLUGIN_SERVICE_MAP } from "../service-token";
+import { CONNECTOR_REGISTRY } from "../connectors/registry";
 import { eq } from "drizzle-orm";
 
 /**
@@ -79,19 +80,9 @@ const PROBE_CONCURRENCY = 4;
  * too, and handed to a Google tool it would select whatever Google account
  * shares it.
  */
-export const PLUGIN_ROLES: Record<string, readonly AccountRole[]> = {
-  "gws-mcp": ["sender", "reader"],
-  "atlassian-mcp": ["atlassian"],
-  /* Two workspaces, mapped by workspace id (SCRUM-366). The first is the one
-   * a contract probe runs as. */
-  "notion-mcp": ["notion", "notionSecond"],
-  /* One Brevo account (SCRUM-468). */
-  "brevo-mcp": ["brevo"],
-  /* The test user in the company workspace (SCRUM-454). */
-  "slack-mcp": ["slack"],
-  /* HQ's own PostHog project, read-only (SCRUM-471). */
-  "posthog-mcp": ["posthog"],
-};
+export const PLUGIN_ROLES: Record<string, readonly AccountRole[]> = Object.fromEntries(
+  CONNECTOR_REGISTRY.map((c) => [c.pluginSlug, c.runnerRoles])
+);
 
 /** The plugin a namespaced tool belongs to, or null for a built-in. */
 function pluginOf(tool: string): string | null {

@@ -15,6 +15,8 @@
  * would drift the first time either side changed.
  */
 
+import { CONNECTOR_REGISTRY } from "./connectors/registry";
+
 /** The full Google Workspace request, as a list. `auth.ts` joins this for the
  * consent redirect; this module compares against it. One list, not a string
  * and a copy. */
@@ -103,8 +105,10 @@ function normalize(scope: string): string {
 // Brevo's scopes are fixed on its app and cannot be unticked on its consent
 // screen (SCRUM-468), so a stored grant says nothing a check could use.
 // PostHog's are capped by its client metadata document and locked on its
-// consent screen (SCRUM-471).
-const CONNECTORS_WITHOUT_SCOPES = new Set(["notion", "brevo", "posthog"]);
+// consent screen (SCRUM-471). Each is `scopeModel: "none"` in the registry.
+const CONNECTORS_WITHOUT_SCOPES: ReadonlySet<string> = new Set(
+  CONNECTOR_REGISTRY.filter((c) => c.scopeModel === "none").map((c) => c.id)
+);
 
 /** Whether `service` grants access by OAuth scope, so that a stored grant
  * (or its absence) means something. True for anything not listed above,

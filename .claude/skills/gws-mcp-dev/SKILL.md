@@ -127,7 +127,9 @@ without which it is never started),
 `scripts/gate.sh`'s path table (an unlisted plugin path falls to `all`,
 which runs every suite except the new plugin's; the row, its `want_` flag,
 the `run_plugin` case and the self-test lines all name it), and
-`PLUGIN_SERVICE_MAP`.
+its record in `CONNECTOR_REGISTRY`
+(`apps/gateway/src/gateway/connectors/registry.ts`), from which the
+service map and every other per-connector map derive.
 CI's tool-file step loops over `plugins/` and needs nothing. Its
 `mcp_servers` row, without which the manager never starts it, comes from
 the registry pair like its first tools (Ship tail), never by hand.
