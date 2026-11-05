@@ -179,8 +179,9 @@ const SERVER_DELETE = T(
   `  WHERE s\\.slug = ${S}`,
   `    AND md5\\(jsonb_build_array\\(s\\.name, s\\.description, s\\.github_repo_url, s\\.github_repo_owner, s\\.github_repo_name, s\\.license_spdx, s\\.manifest_json, s\\.status\\)::text\\) = ${S}`,
   `    AND NOT EXISTS \\(SELECT 1 FROM tools t WHERE t\\.mcp_server_id = s\\.id\\)`,
-  `    AND NOT EXISTS \\(SELECT 1 FROM mcp_server_env_vars e WHERE e\\.mcp_server_id = s\\.id\\)`,
-  `    AND NOT EXISTS \\(SELECT 1 FROM plugin_connections c WHERE c\\.mcp_server_id = s\\.id\\);`,
+  // A file written before plugin_connections was dropped also guards on it;
+  // the generator no longer writes that line.
+  `    AND NOT EXISTS \\(SELECT 1 FROM mcp_server_env_vars e WHERE e\\.mcp_server_id = s\\.id\\)(?:;|\n    AND NOT EXISTS \\(SELECT 1 FROM plugin_connections c WHERE c\\.mcp_server_id = s\\.id\\);)`,
   `  GET DIAGNOSTICS n = ROW_COUNT;`,
   `  IF n <> 1 THEN RAISE EXCEPTION ${S}, n; END IF;`,
   ``

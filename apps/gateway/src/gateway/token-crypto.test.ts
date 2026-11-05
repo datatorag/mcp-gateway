@@ -102,13 +102,12 @@ describe("token-crypto", () => {
   describe("binding", () => {
     const sealed = () => sealToken(TOKEN, ctx);
 
-    it("opens only for the user, row, table and column it was written for", () => {
+    it("opens only for the user, row and column it was written for", () => {
       expect(openToken(sealed(), { ...ctx })).toBe(TOKEN);
       for (const other of [
         { ...ctx, userId: "user-b" },
         { ...ctx, rowId: "row-s" },
         { ...ctx, column: "refresh_token" as const },
-        { ...ctx, table: "plugin_connections" as const },
       ]) {
         expect(() => openToken(sealed(), other)).toThrow(TokenOpenError);
       }

@@ -87,15 +87,17 @@ needs to start it from the image:
 
 The insert raises if a row with that slug exists. The rollback deletes the tool rows and then the
 server row, guarded by the md5 of every column the forward wrote except the port, and refuses while
-any `tools`, `mcp_server_env_vars` or `plugin_connections` row points at it. Those three tables
-cascade on delete, so without the guard a rollback could take a user's plugin connection with it. The check accepts the server insert only as a forward file's first
+any `tools` or `mcp_server_env_vars` row points at it. Those tables cascade on delete, so without
+the guard a rollback could take a row with it. (Files written before `plugin_connections` was
+dropped also guard on that table; the check still accepts the line in them, and such a file cannot
+run after the drop: the missing table aborts its transaction, which changes nothing.) The check accepts the server insert only as a forward file's first
 statement followed by tool inserts alone, and the delete only as a rollback's last statement after
 tool deletes alone.
 
 **The role needs a grant change first, and applying it is HQ's.** `roles/registry-writer.sql`
 carries the four new GRANT lines, marked SCRUM-366: INSERT on exactly the ten columns the forward
 writes, DELETE on `mcp_servers`, and SELECT on the `mcp_server_id` column alone of
-`mcp_server_env_vars` and `plugin_connections` for the rollback's guard. The role already exists
+`mcp_server_env_vars` (and, until it was dropped, `plugin_connections`) for the rollback's guard. The role already exists
 on production, so the file is not re-run; HQ applies those four lines to it and re-runs the
 file's checks. Until then the workflow cannot run a new-plugin file, and a person runs it.
 

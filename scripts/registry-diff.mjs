@@ -265,11 +265,12 @@ function serverInsertBlock(row) {
   ];
 }
 
-/** Runs after the tool rows are deleted. Three tables point at mcp_servers
- * with ON DELETE CASCADE: tools, mcp_server_env_vars and plugin_connections
- * (a user's row). The delete refuses while any of them holds a row for the
- * server, so the cascade can never remove one. The registry role reads only
- * the mcp_server_id column of the last two (registry/roles). */
+/** Runs after the tool rows are deleted. Two tables point at mcp_servers
+ * with ON DELETE CASCADE: tools and mcp_server_env_vars. The delete refuses
+ * while either holds a row for the server, so the cascade can never remove
+ * one. The registry role reads only the mcp_server_id column of the second
+ * (registry/roles). Files written before plugin_connections was dropped also
+ * guard on it; registry-file-check still accepts that line in them. */
 function serverDeleteBlock(row) {
   return [
     `  -- ${row.slug}: the new plugin's server row goes`,
@@ -277,8 +278,7 @@ function serverDeleteBlock(row) {
     `  WHERE s.slug = ${sqlString(row.slug)}`,
     `    AND md5(jsonb_build_array(s.name, s.description, s.github_repo_url, s.github_repo_owner, s.github_repo_name, s.license_spdx, s.manifest_json, s.status)::text) = '${serverGuard(row)}'`,
     `    AND NOT EXISTS (SELECT 1 FROM tools t WHERE t.mcp_server_id = s.id)`,
-    `    AND NOT EXISTS (SELECT 1 FROM mcp_server_env_vars e WHERE e.mcp_server_id = s.id)`,
-    `    AND NOT EXISTS (SELECT 1 FROM plugin_connections c WHERE c.mcp_server_id = s.id);`,
+    `    AND NOT EXISTS (SELECT 1 FROM mcp_server_env_vars e WHERE e.mcp_server_id = s.id);`,
     `  GET DIAGNOSTICS n = ROW_COUNT;`,
     `  IF n <> 1 THEN RAISE EXCEPTION 'rollback mcp_servers ${row.slug}: expected 1 row, deleted %', n; END IF;`,
     ``,

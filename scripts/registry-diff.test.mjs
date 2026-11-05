@@ -400,8 +400,7 @@ BEGIN
   WHERE s.slug = 'some-plugin'
     AND md5(jsonb_build_array(s.name, s.description, s.github_repo_url, s.github_repo_owner, s.github_repo_name, s.license_spdx, s.manifest_json, s.status)::text) = '${ROW_MD5}'
     AND NOT EXISTS (SELECT 1 FROM tools t WHERE t.mcp_server_id = s.id)
-    AND NOT EXISTS (SELECT 1 FROM mcp_server_env_vars e WHERE e.mcp_server_id = s.id)
-    AND NOT EXISTS (SELECT 1 FROM plugin_connections c WHERE c.mcp_server_id = s.id);
+    AND NOT EXISTS (SELECT 1 FROM mcp_server_env_vars e WHERE e.mcp_server_id = s.id);
   GET DIAGNOSTICS n = ROW_COUNT;
   IF n <> 1 THEN RAISE EXCEPTION 'rollback mcp_servers some-plugin: expected 1 row, deleted %', n; END IF;
 

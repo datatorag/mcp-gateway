@@ -19,7 +19,7 @@ import { parseConnectionTokenKeys, type ConnectionTokenKeys } from "@datatorag-m
  */
 
 export type SealContext = {
-  table: "service_connections" | "plugin_connections";
+  table: "service_connections";
   column: "access_token" | "refresh_token";
   userId: string;
   rowId: string;
