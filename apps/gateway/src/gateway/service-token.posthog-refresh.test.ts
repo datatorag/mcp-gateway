@@ -132,11 +132,13 @@ describe.skipIf(!isDockerAvailable())("SCRUM-471: refreshPostHogToken", () => {
     });
   });
 
-  it("does nothing without the gateway's base URL, which the client id is built from", async () => {
+  it("builds the client id from the config schema's base URL when none is set", async () => {
+    // The schema defaults GATEWAY_BASE_URL, so an unset one is the default,
+    // never a second fallback here (production always sets it).
     delete process.env.GATEWAY_BASE_URL;
     const { connId, userId } = await connected();
-    expect(await refreshPostHogToken(db, { id: connId, userId }, "refresh-1")).toBeNull();
-    expect(posthog.calls).toHaveLength(0);
+    await refreshPostHogToken(db, { id: connId, userId }, "refresh-1");
+    expect(posthog.calls[0]?.client_id).toBe("http://localhost:8285/auth/posthog/client.json");
   });
 
   it("a disconnect revokes the refresh token, which outlives any access token", async () => {

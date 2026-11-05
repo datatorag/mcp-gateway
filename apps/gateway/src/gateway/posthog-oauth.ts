@@ -11,6 +11,7 @@
  * the client id alone, and a metadata-document client has one id for everyone.
  */
 import { createHash, randomBytes } from "node:crypto";
+import { envValue } from "@datatorag-mcp/config";
 
 /** The hosts a PostHog connection may talk to. The plugin refuses any other,
  * because it is handed the host as where to send the token. */
@@ -18,10 +19,15 @@ export const POSTHOG_HOSTS = ["https://us.posthog.com", "https://eu.posthog.com"
 export type PostHogHost = (typeof POSTHOG_HOSTS)[number];
 export const DEFAULT_POSTHOG_HOST: PostHogHost = "https://us.posthog.com";
 
-/** The configured host, or the default when it is unset or not one of the two. */
+/** The configured host, or the default when it is unset or not one of the
+ * two. A value the schema refuses stops the gateway at start; read at call
+ * time it still falls back rather than throwing. */
 export function posthogHost(): PostHogHost {
-  const configured = process.env.POSTHOG_CONNECTOR_BASE_URL;
-  return (POSTHOG_HOSTS as readonly string[]).includes(configured ?? "") ? (configured as PostHogHost) : DEFAULT_POSTHOG_HOST;
+  try {
+    return envValue("POSTHOG_CONNECTOR_BASE_URL");
+  } catch {
+    return DEFAULT_POSTHOG_HOST;
+  }
 }
 
 /** PostHog's paths keep their trailing slashes. */

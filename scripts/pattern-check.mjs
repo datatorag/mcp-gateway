@@ -59,28 +59,6 @@ function git(args, { allowFail = false } = {}) {
 }
 
 // ---------------------------------------------------------------------------
-// The env schema is READ, not restated. packages/config owns the list of
-// variables; a copy here would be a second source of truth inside the very
-// script that exists to find second sources of truth.
-// ---------------------------------------------------------------------------
-function configSchemaKeys() {
-  const p = join(REPO_ROOT, "packages/config/src/index.ts");
-  if (!existsSync(p)) {
-    process.stderr.write(`pattern-check: cannot find ${p}; the env rule cannot run\n`);
-    process.exit(2);
-  }
-  const src = readFileSync(p, "utf8");
-  const keys = [...src.matchAll(/^\s{2}([A-Z][A-Z0-9_]*):\s*z\./gm)].map((m) => m[1]);
-  if (keys.length < 10) {
-    process.stderr.write(
-      `pattern-check: parsed only ${keys.length} keys from the env schema; the parser has gone blind\n`
-    );
-    process.exit(2);
-  }
-  return new Set(keys);
-}
-
-// ---------------------------------------------------------------------------
 // THE BOUNDARY. Most rules below share one premise: **this file runs inside the
 // long-lived gateway server process.** Everything they assert follows from it --
 // use the pooled db singleton, read env through the validated schema, rely on
@@ -159,54 +137,6 @@ const RULES = [
     selfTest: {
       bad: 'import { sendSlack } from "../lib/slack.js";',
       good: 'import { Client } from "@modelcontextprotocol/sdk/client/index.js";',
-    },
-  },
-
-  {
-    id: "env-second-source",
-    mode: "added",
-    applies: (f) => /^(apps|packages)\/.*\.tsx?$/.test(f) && isApplicationCode(f),
-    scope: {
-      inScope: ["apps/gateway/src/gateway/service-token.ts"],
-      outOfScope: [
-        "apps/gateway/vitest.config.ts",
-        "apps/gateway/scripts/run-digest.ts",
-      ],
-    },
-    // Built lazily so the schema is read once, at run time, from packages/config.
-    build: (ctx) => (line) => {
-      // An ASSIGNMENT to process.env is not a read, and this rule is about
-      // reads. A test bootstrap that SETS process.env.DATABASE_URL is supplying
-      // the value getEnv() would later validate, not bypassing it -- flagging
-      // it inverts the rule. `==`/`===` are comparisons and stay in scope.
-      const m = line.match(/process\.env\.([A-Z][A-Z0-9_]*)/);
-      if (!m) return false;
-      if (new RegExp(`process\\.env\\.${m[1]}\\s*=(?!=)`).test(line)) return false;
-      const key = m[1];
-      // NEXT_PUBLIC_* must be process.env -- Next inlines them at build time and
-      // getEnv() runs server-side only. NODE_ENV likewise. Neither is a finding.
-      if (key.startsWith("NEXT_PUBLIC_") || key === "NODE_ENV") return false;
-      return ctx.schemaKeys.has(key);
-    },
-    exempt: {
-      "apps/gateway/src/lib/db.ts":
-        "The db singleton is imported by packages that must not depend on @datatorag-mcp/config; " +
-        "it reads DATABASE_URL directly on purpose.",
-      "apps/gateway/src/gateway/token-crypto.ts":
-        "CONNECTION_TOKEN_KEYS has no default, so there is no second value to drift, and it is " +
-        "parsed by the same parseConnectionTokenKeys the schema validates it with at start. Read " +
-        "directly so sealing a token does not make every write path depend on the whole config.",
-    },
-    message:
-      "reads a variable directly from process.env that packages/config already declares in the " +
-      "zod schema, usually with a default. That is two sources for one value: the schema default " +
-      "and the ?? fallback at the call site drift independently, and the call site skips the " +
-      "validation getEnv() exists to perform. Use getEnv().<KEY>. If the variable genuinely must " +
-      "not go through getEnv(), add it to the exempt list in scripts/pattern-check.mjs with the " +
-      "reason.",
-    selfTest: {
-      bad: 'const baseUrl = process.env.GATEWAY_BASE_URL ?? "http://localhost:8285";',
-      good: 'const key = process.env.NEXT_PUBLIC_POSTHOG_KEY;',
     },
   },
 
@@ -467,7 +397,7 @@ if (argv.includes("--help") || argv.includes("-h")) {
   process.exit(0);
 }
 
-const ctx = { schemaKeys: configSchemaKeys() };
+const ctx = {};
 runSelfTests(ctx);
 
 const target = resolveRange(argv);

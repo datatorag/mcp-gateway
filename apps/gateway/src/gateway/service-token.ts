@@ -7,6 +7,8 @@ import { BREVO_REVOKE_URL, BREVO_TOKEN_URL, brevoClientCredentials } from "./bre
 import { posthogClientId, posthogEndpoints, posthogHost } from "./posthog-oauth";
 import { SLACK_REVOKE_URL, SLACK_TOKEN_TIMEOUT_MS, SLACK_TOKEN_URL } from "./slack-oauth";
 import { cleanWorkspaceName } from "./untrusted-text";
+import { envValue } from "@datatorag-mcp/config";
+import { credentialsFor } from "./connectors/credentials";
 import { CONNECTOR_REGISTRY, isConnectorId, type ConnectorId, type ContextConnectorId, type RevokingConnectorId } from "./connectors/registry";
 import { openToken, sealedColumns, TokenOpenError, type TokenRow } from "./token-crypto";
 import {
@@ -95,8 +97,7 @@ async function refreshGoogleToken(
   conn: ConnectionRef,
   refreshToken: string
 ): Promise<RefreshOutcome> {
-  const clientId = process.env.GOOGLE_GWS_CLIENT_ID;
-  const clientSecret = process.env.GOOGLE_GWS_CLIENT_SECRET;
+  const { clientId, clientSecret } = credentialsFor("google-workspace");
   if (!clientId || !clientSecret) return null;
 
   let res: Response;
@@ -154,8 +155,7 @@ async function refreshAtlassianToken(
   conn: ConnectionRef,
   refreshToken: string
 ): Promise<RefreshOutcome> {
-  const clientId = process.env.ATLASSIAN_CLIENT_ID;
-  const clientSecret = process.env.ATLASSIAN_CLIENT_SECRET;
+  const { clientId, clientSecret } = credentialsFor("atlassian");
   if (!clientId || !clientSecret) return null;
 
   let res: Response;
@@ -354,8 +354,7 @@ export async function refreshNotionToken(
   conn: ConnectionRef,
   presentedRefreshToken: string
 ): Promise<RefreshOutcome> {
-  const clientId = process.env.NOTION_OAUTH_CLIENT_ID;
-  const clientSecret = process.env.NOTION_OAUTH_CLIENT_SECRET;
+  const { clientId, clientSecret } = credentialsFor("notion");
   if (!clientId || !clientSecret) return null;
   return refreshRotatingToken(db, conn, presentedRefreshToken, {
     label: "notion",
@@ -422,8 +421,7 @@ export async function refreshSlackToken(
   conn: ConnectionRef,
   presentedRefreshToken: string
 ): Promise<RefreshOutcome> {
-  const clientId = process.env.SLACK_CONNECTOR_CLIENT_ID;
-  const clientSecret = process.env.SLACK_CONNECTOR_CLIENT_SECRET;
+  const { clientId, clientSecret } = credentialsFor("slack");
   if (!clientId || !clientSecret) return null;
   return refreshRotatingToken(db, conn, presentedRefreshToken, {
     label: "slack",
@@ -461,7 +459,7 @@ export async function refreshPostHogToken(
   conn: ConnectionRef,
   presentedRefreshToken: string
 ): Promise<RefreshOutcome> {
-  const baseUrl = process.env.GATEWAY_BASE_URL;
+  const baseUrl = envValue("GATEWAY_BASE_URL");
   if (!baseUrl) return null;
   return refreshRotatingToken(db, conn, presentedRefreshToken, {
     label: "posthog",
@@ -497,8 +495,7 @@ const REFRESH_FN: Record<
 
 /** Revoke one Notion token. Never throws. */
 async function revokeNotionToken(token: string): Promise<boolean> {
-  const clientId = process.env.NOTION_OAUTH_CLIENT_ID;
-  const clientSecret = process.env.NOTION_OAUTH_CLIENT_SECRET;
+  const { clientId, clientSecret } = credentialsFor("notion");
   if (!clientId || !clientSecret) return false;
   try {
     const res = await fetch(NOTION_REVOKE_URL, {
@@ -596,7 +593,7 @@ async function revokeSlackGrant(tokens: RevokeTokens): Promise<boolean> {
  * any access token and is valid until revoked, with the access token as the
  * fallback. Never throws. */
 async function revokePostHogGrant(tokens: RevokeTokens): Promise<boolean> {
-  const baseUrl = process.env.GATEWAY_BASE_URL;
+  const baseUrl = envValue("GATEWAY_BASE_URL");
   const token = tokens.refreshToken ?? tokens.accessToken;
   if (!baseUrl || !token) return false;
   try {

@@ -14,7 +14,8 @@
 #   3. Checks that every repo path the skills, READMEs and CLAUDE.md files
 #      name exists (scripts/doc-paths-check.mjs). Every run, whatever changed:
 #      it reads the whole tree in well under a second, and a doc change selects
-#      no surface.
+#      no surface. Likewise that the gateway reads no process.env outside
+#      packages/config and a short exempt list (scripts/env-reads-check.mjs).
 #   4. Runs typecheck and tests for the surfaces that changed, and nothing for
 #      a change that touches no surface.
 #
@@ -197,6 +198,7 @@ run_scripts() {
   node scripts/registry-diff.mjs --self-test
   node --test scripts/registry-diff.test.mjs
   node --test scripts/doc-paths-check.test.mjs
+  node --test scripts/env-reads-check.test.mjs
   node --test scripts/registry-file-check.test.mjs
   node --test scripts/registry-apply.test.mjs
   local t
@@ -236,6 +238,8 @@ main() {
 
   echo "##### docs: every repo path a living doc names exists"
   node scripts/doc-paths-check.mjs
+  echo "##### env: the gateway reads its environment through packages/config"
+  node scripts/env-reads-check.mjs
 
   local changed surfaces
   # --no-renames: with rename detection a moved file shows only where it went,
