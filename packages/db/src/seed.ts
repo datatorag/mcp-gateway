@@ -1,7 +1,6 @@
 import { drizzle } from "drizzle-orm/postgres-js";
 import postgres from "postgres";
 import { users } from "./schema/users";
-import { creditBalances } from "./schema/credits";
 
 const DATABASE_URL =
   process.env.DATABASE_URL ??
@@ -34,12 +33,6 @@ async function seed() {
     console.log(`Using existing user: ${user.email}`);
   } else {
     console.log(`Created user: ${user.email} (${user.id})`);
-
-    await db
-      .insert(creditBalances)
-      .values({ userId: user.id, balance: 100 })
-      .onConflictDoNothing();
-    console.log("Added 100 free credits");
   }
 
   await client.end();

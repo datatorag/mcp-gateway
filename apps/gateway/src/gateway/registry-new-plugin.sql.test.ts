@@ -7,7 +7,6 @@ import type { Database } from "@datatorag-mcp/db";
 import {
   getTestDb,
   stopTestDb,
-  insertTestUser,
   isDockerAvailable,
 } from "@/test-utils/db";
 
@@ -99,17 +98,15 @@ describe.skipIf(!dockerAvailable)("a new plugin's registry pair, on real Postgre
       )
     );
     const envVars = await db.execute(sql.raw("SELECT id, mcp_server_id, key FROM mcp_server_env_vars ORDER BY id"));
-    const connections = await db.execute(sql.raw("SELECT id, mcp_server_id FROM plugin_connections ORDER BY id"));
     return {
       servers: [...servers],
       tools: [...tools],
       envVars: [...envVars],
-      connections: [...connections],
     };
   }
 
   async function seed(ports: [number, number] = [40000, 40001]) {
-    for (const table of ["plugin_connections", "mcp_server_env_vars", "tools", "mcp_servers"]) {
+    for (const table of ["mcp_server_env_vars", "tools", "mcp_servers"]) {
       await db.execute(sql.raw(`DELETE FROM ${table}`));
     }
     await db.execute(
@@ -146,13 +143,12 @@ describe.skipIf(!dockerAvailable)("a new plugin's registry pair, on real Postgre
       "tools SELECT",
     ]);
     const writeColumns = await db.execute(
-      sql.raw("SELECT table_name, privilege_type, column_name FROM information_schema.column_privileges WHERE grantee = 'registry_writer' AND (privilege_type IN ('INSERT', 'UPDATE') OR table_name IN ('mcp_server_env_vars', 'plugin_connections')) ORDER BY table_name, privilege_type, column_name")
+      sql.raw("SELECT table_name, privilege_type, column_name FROM information_schema.column_privileges WHERE grantee = 'registry_writer' AND (privilege_type IN ('INSERT', 'UPDATE') OR table_name = 'mcp_server_env_vars') ORDER BY table_name, privilege_type, column_name")
     );
     // Sorted here, not by the database's collation, which orders "_" and "s" its own way.
     expect([...writeColumns].map((r) => `${r.table_name} ${r.privilege_type} ${r.column_name}`).sort()).toEqual([
       ...["container_port", "description", "github_repo_name", "github_repo_owner", "github_repo_url", "license_spdx", "manifest_json", "name", "slug", "status"].map((c) => `mcp_servers INSERT ${c}`),
       "mcp_server_env_vars SELECT mcp_server_id",
-      "plugin_connections SELECT mcp_server_id",
       ...["description", "destructive_hint", "input_schema_json", "mcp_server_id", "name", "namespaced_name", "read_only_hint"].map((c) => `tools INSERT ${c}`),
       ...["description", "destructive_hint", "input_schema_json", "read_only_hint", "updated_at"].map((c) => `tools UPDATE ${c}`),
     ].sort());
@@ -260,18 +256,6 @@ describe.skipIf(!dockerAvailable)("a new plugin's registry pair, on real Postgre
     );
     const held = await snapshot();
     expect(held.envVars).toHaveLength(1);
-    expect(await refusal(rollback)).toBe(`rollback mcp_servers ${SLUG}: expected 1 row, deleted 0`);
-    expect(await snapshot()).toEqual(held);
-  });
-
-  it("known-bad: the rollback refuses, and a user's plugin connection survives, while one points at the server", async () => {
-    await runAsRole(forward);
-    const userId = await insertTestUser(db);
-    await db.execute(
-      sql`INSERT INTO plugin_connections (user_id, mcp_server_id, provider, access_token) SELECT ${userId}::uuid, id, 'notion', 'not-a-token' FROM mcp_servers WHERE slug = ${SLUG}`
-    );
-    const held = await snapshot();
-    expect(held.connections).toHaveLength(1);
     expect(await refusal(rollback)).toBe(`rollback mcp_servers ${SLUG}: expected 1 row, deleted 0`);
     expect(await snapshot()).toEqual(held);
   });

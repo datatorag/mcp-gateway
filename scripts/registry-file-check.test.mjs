@@ -249,7 +249,7 @@ const serverNearMisses = [
   ["a server delete guarded on fewer columns", backNew, (s) => s.replace("s.manifest_json, s.status)::text", "s.status)::text"), /not one the generator|does not close/],
   ["a server delete without its tools guard", backNew, (s) => s.replace("\n    AND NOT EXISTS (SELECT 1 FROM tools t WHERE t.mcp_server_id = s.id)", ""), /not one the generator|does not close/],
   ["a server delete without its env var guard", backNew, (s) => s.replace("\n    AND NOT EXISTS (SELECT 1 FROM mcp_server_env_vars e WHERE e.mcp_server_id = s.id)", ""), /not one the generator|does not close/],
-  ["a server delete without its plugin connection guard", backNew, (s) => s.replace("\n    AND NOT EXISTS (SELECT 1 FROM plugin_connections c WHERE c.mcp_server_id = s.id);", ";"), /not one the generator|does not close/],
+  ["a plugin connection guard in place of the env var guard", backNew, (s) => s.replace("FROM mcp_server_env_vars e WHERE e.mcp_server_id = s.id);", "FROM plugin_connections c WHERE c.mcp_server_id = s.id);"), /not one the generator|does not close/],
   ["a server delete whose md5 is not one", backNew, (s) => s.replace(/::text\) = '[0-9a-f]{32}'/, "::text) = 'nope'"), /not an md5/],
   ["a server delete before the tool deletes", backNew, (s) => {
     const tools = s.slice(s.indexOf("  -- read_page: the row goes"), s.indexOf("  -- notion-like: the new plugin's"));

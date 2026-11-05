@@ -59,9 +59,9 @@ GRANT UPDATE (description, input_schema_json, read_only_hint, destructive_hint, 
 -- SCRUM-366: a new plugin's server row, its insert and its rollback's delete.
 GRANT INSERT (slug, name, description, github_repo_url, github_repo_owner, github_repo_name, license_spdx, manifest_json, status, container_port) ON mcp_servers TO registry_writer;
 GRANT DELETE ON mcp_servers TO registry_writer;
--- SCRUM-366: the rollback's cascade guards read this one column, and no other.
+-- SCRUM-366: the rollback's cascade guard reads this one column, and no other.
+-- (plugin_connections had the same grant; it went with the table.)
 GRANT SELECT (mcp_server_id) ON mcp_server_env_vars TO registry_writer;
-GRANT SELECT (mcp_server_id) ON plugin_connections TO registry_writer;
 
 -- The check reads string literals with standard_conforming_strings on; the
 -- server must read them the same way. The workflow also sets it on connect
@@ -101,10 +101,10 @@ SELECT privilege_type, column_name FROM information_schema.column_privileges
 WHERE grantee = 'registry_writer' AND table_name = 'mcp_servers' AND privilege_type IN ('INSERT', 'UPDATE')
 ORDER BY privilege_type, column_name;
 --
--- On the two tables the cascade guards read (expected: two rows, SELECT on
--- mcp_server_id of each; no other column, so no token or env var value):
+-- On the table the cascade guard reads (expected: one row, SELECT on
+-- mcp_server_id; no other column, so no env var value):
 SELECT table_name, privilege_type, column_name FROM information_schema.column_privileges
-WHERE grantee = 'registry_writer' AND table_name IN ('mcp_server_env_vars', 'plugin_connections')
+WHERE grantee = 'registry_writer' AND table_name = 'mcp_server_env_vars'
 ORDER BY table_name, column_name;
 --
 -- No right to create in the schema (expected: false):

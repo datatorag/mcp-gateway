@@ -14,7 +14,7 @@ pnpm workspace (`pnpm-workspace.yaml`: `apps/*` + `packages/*` + `plugins/*`), t
 | Package | Role | Internal deps |
 |---|---|---|
 | `apps/gateway` | The whole product: Express + Next.js server — MCP gateway, OAuth server, marketing site, dashboard, cron jobs | auth, config, db, types |
-| `packages/db` | Drizzle schema (17 tables, one file per table under `src/schema/`) + `createDb()` (`prepare: false` for Neon's pooled endpoint); dual exports `.` and `./schema` | none |
+| `packages/db` | Drizzle schema (one file per table or table group under `src/schema/`) + `createDb()` (`prepare: false` for Neon's pooled endpoint); dual exports `.` and `./schema` | none |
 | `packages/config` | Single zod env schema; `getEnv()` memoized, `process.exit(1)` on invalid. `DATABASE_URL` is the only var without a default. For a value read at call time, `envValue(key)` parses that one key with its schema entry and default, unmemoized, and `connectorCredentials(prefix)` reads a connector's `<prefix>_CLIENT_ID`/`_CLIENT_SECRET` (the gateway's `credentialsFor(id)` in `gateway/connectors/credentials.ts` passes the registry's prefix). The gateway reads no `process.env` outside a short exempt list; `scripts/env-reads-check.mjs` enforces it in the gate | none |
 | `packages/auth` | `hashToken` (SHA-256 hex, refresh tokens) and `safeStringEqual` (constant-time SHA-256 compare). No dependencies since SCRUM-451 removed the key helpers | none |
 | `packages/types` | `McpGatewayManifest` (the `datatorag.json` plugin manifest shape) | none |

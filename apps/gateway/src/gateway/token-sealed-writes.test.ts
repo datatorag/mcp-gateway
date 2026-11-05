@@ -16,12 +16,7 @@ vi.mock("@/lib/google-revoke", () => ({
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { eq, sql } from "drizzle-orm";
-import {
-  mcpServers,
-  pluginConnections,
-  serviceConnections,
-  type Database,
-} from "@datatorag-mcp/db";
+import { serviceConnections, type Database } from "@datatorag-mcp/db";
 import { getTestDb, stopTestDb, insertTestUser, isDockerAvailable } from "../test-utils/db";
 import { upsertServiceAccount } from "./connected-accounts";
 import { resolveServiceToken } from "./service-token";
@@ -162,24 +157,27 @@ describe.skipIf(!isDockerAvailable())("SCRUM-442: provider tokens are written se
     });
   });
 
-  describe("the legacy plugin_connections table", () => {
-    async function server(): Promise<string> {
-      const [row] = await db
-        .insert(mcpServers)
-        .values({ slug: `legacy-${Math.random().toString(36).slice(2)}`, name: "Legacy" })
-        .returning({ id: mcpServers.id });
-      return row.id;
-    }
+  describe("migration 0031, which drops the legacy tables", () => {
+    // The migrations have already run here, so the two tables are gone. The
+    // guard is tried against stand-ins of the same names, then they go too.
+    const guard = () =>
+      readFileSync(path.resolve(__dirname, "../../../../packages/db/drizzle/0031_many_mongu.sql"), "utf8").split(
+        "--> statement-breakpoint"
+      )[0];
 
-    it("migration 1 refuses while the table holds a row", async () => {
-      const userId = await insertTestUser(db);
-      const mcpServerId = await server();
-      await db.insert(pluginConnections).values({ userId, mcpServerId, provider: "legacy" });
-      const file = path.resolve(__dirname, "../../../../packages/db/drizzle/0023_provider_tokens_sealed.sql");
-      const guard = readFileSync(file, "utf8").split("--> statement-breakpoint")[0];
-      await expect(db.execute(sql.raw(guard))).rejects.toThrow(/plugin_connections has rows/);
-      await db.delete(pluginConnections).where(eq(pluginConnections.userId, userId));
-      await expect(db.execute(sql.raw(guard))).resolves.toBeDefined();
+    it("refuses while any plugin connection or more than one credit balance is left", async () => {
+      await db.execute(sql.raw("CREATE TABLE plugin_connections (id int); CREATE TABLE credit_balances (id int)"));
+      try {
+        await expect(db.execute(sql.raw(guard()))).resolves.toBeDefined();
+        await db.execute(sql.raw("INSERT INTO credit_balances VALUES (1)"));
+        await expect(db.execute(sql.raw(guard()))).resolves.toBeDefined();
+        await db.execute(sql.raw("INSERT INTO credit_balances VALUES (2)"));
+        await expect(db.execute(sql.raw(guard()))).rejects.toThrow(/credit_balances has more than one row/);
+        await db.execute(sql.raw("DELETE FROM credit_balances; INSERT INTO plugin_connections VALUES (1)"));
+        await expect(db.execute(sql.raw(guard()))).rejects.toThrow(/plugin_connections has rows/);
+      } finally {
+        await db.execute(sql.raw("DROP TABLE IF EXISTS plugin_connections; DROP TABLE IF EXISTS credit_balances"));
+      }
     });
   });
 });
