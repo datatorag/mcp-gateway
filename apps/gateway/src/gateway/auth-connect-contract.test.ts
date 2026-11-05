@@ -129,6 +129,11 @@ const ROWS: Row[] = [
           : undefined,
     notOffered: "not-checked",
     externalAccountId: null,
+    sharedFlow: {
+      tokenUrl: "https://auth.atlassian.com/oauth/token",
+      start: "/auth/atlassian/connect",
+      grant: (f) => ({ access_token: f.accessToken, refresh_token: "rt", expires_in: f.expiresIn }),
+    },
   },
   {
     provider: "notion",
@@ -418,8 +423,13 @@ describe.each(ROWS)("the $provider connect callback", (r) => {
     const res = await callback({ cookies: { dtr_connect_next: encodeURIComponent(next) } });
     expect(location(res)).toBe(postConnectDestination({ requestedPath: next, provider: r.provider }));
     expect(upsertServiceAccount).toHaveBeenCalledTimes(1);
-    const [, userId, provider, email] = upsertServiceAccount.mock.calls[0];
+    const [, userId, provider, email, , , , identity] = upsertServiceAccount.mock.calls[0];
     expect({ userId, provider, email }).toEqual({ userId: "user-1", provider: r.provider, email: EMAIL });
+    // A provider that names no account leaves the name the user gave it:
+    // no label is passed, so a reconnect never clears one.
+    if (r.provider === "google-workspace" || r.provider === "atlassian") {
+      expect(Object.keys((identity as object | undefined) ?? {})).not.toContain("label");
+    }
     expect(trackOAuthCompleted).toHaveBeenCalledWith(
       dbMock,
       "user-1",

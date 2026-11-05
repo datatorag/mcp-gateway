@@ -21,7 +21,7 @@ export type ConnectionRef = { id: string; userId: string };
 
 /** The sealed columns for a service_connections write, beside the plain
  * ones while releases 1 and 2 write both. */
-function sealedFor(conn: ConnectionRef, tokens: { accessToken?: string | null; refreshToken?: string | null }) {
+export function sealedFor(conn: ConnectionRef, tokens: { accessToken?: string | null; refreshToken?: string | null }) {
   return sealedColumns("service_connections", { userId: conn.userId, rowId: conn.id }, tokens);
 }
 
@@ -47,14 +47,14 @@ export type RefreshOutcome = { token: string } | { failure: RefreshFailure } | n
 
 /** A refused refresh's classification, from the answer's status and its
  * OAuth `error` field alone. */
-async function refusedRefresh(res: Response): Promise<{ failure: RefreshFailure }> {
+export async function refusedRefresh(res: Response): Promise<{ failure: RefreshFailure }> {
   const body = (await res.json().catch(() => null)) as unknown;
   return { failure: classifyRefreshFailure(res.status, body) };
 }
 
 /** A success that could not be read or written: transient, so the count is
  * left alone and the next call tries again. */
-const UNEXPECTED: { failure: RefreshFailure } = { failure: { kind: "transient", reason: "unexpected" } };
+export const UNEXPECTED: { failure: RefreshFailure } = { failure: { kind: "transient", reason: "unexpected" } };
 
 /** Mapping from plugin slug to the service connection it needs, from the
  * connector registry. */
@@ -129,70 +129,6 @@ async function refreshGoogleToken(
       .set({
         accessToken: data.access_token,
         ...sealedFor(conn, { accessToken: data.access_token }),
-        tokenExpiresAt: expiresAt,
-        updatedAt: new Date(),
-        ...refreshSucceededFields(),
-      })
-      .where(eq(serviceConnections.id, conn.id));
-
-    return { token: data.access_token };
-  } catch {
-    return UNEXPECTED;
-  }
-}
-
-/**
- * Refresh an Atlassian access token.
- * Atlassian uses rotating refresh tokens — the response includes a new
- * refresh_token that must replace the old one.
- */
-async function refreshAtlassianToken(
-  db: Database,
-  conn: ConnectionRef,
-  refreshToken: string
-): Promise<RefreshOutcome> {
-  const { clientId, clientSecret } = credentialsFor("atlassian");
-  if (!clientId || !clientSecret) return null;
-
-  let res: Response;
-  try {
-    res = await fetch("https://auth.atlassian.com/oauth/token", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        grant_type: "refresh_token",
-        client_id: clientId,
-        client_secret: clientSecret,
-        refresh_token: refreshToken,
-      }),
-    });
-  } catch (err) {
-    return { failure: classifyRefreshFailure(null, err) };
-  }
-  if (!res.ok) return refusedRefresh(res);
-
-  try {
-    const data = (await res.json()) as {
-      access_token?: unknown;
-      refresh_token?: string;
-      expires_in?: number;
-    };
-    if (typeof data.access_token !== "string") return UNEXPECTED;
-
-    const expiresAt = data.expires_in
-      ? new Date(Date.now() + data.expires_in * 1000)
-      : null;
-
-    // Atlassian rotates refresh tokens — store the new one
-    const rotated = {
-      accessToken: data.access_token,
-      refreshToken: data.refresh_token ?? refreshToken,
-    };
-    await db
-      .update(serviceConnections)
-      .set({
-        ...rotated,
-        ...sealedFor(conn, rotated),
         tokenExpiresAt: expiresAt,
         updatedAt: new Date(),
         ...refreshSucceededFields(),
@@ -347,7 +283,7 @@ const REFRESH_FN: Record<
   (db: Database, conn: ConnectionRef, rt: string) => Promise<RefreshOutcome>
 > = {
   "google-workspace": refreshGoogleToken,
-  atlassian: refreshAtlassianToken,
+  atlassian: (db, conn, rt) => CONNECTOR_TOKENS.atlassian.refresh(db, conn, rt),
   notion: (db, conn, rt) => CONNECTOR_TOKENS.notion.refresh(db, conn, rt),
   brevo: (db, conn, rt) => CONNECTOR_TOKENS.brevo.refresh(db, conn, rt),
   slack: (db, conn, rt) => CONNECTOR_TOKENS.slack.refresh(db, conn, rt),

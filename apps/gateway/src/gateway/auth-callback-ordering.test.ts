@@ -78,7 +78,6 @@ const SHARED_CONSUMERS = ["takeAttribution(", "takeConnectNext(", "takeDuplicate
  * the same three consumers and no guard). */
 const CALLBACKS: Array<{ path: string; nonceClear: string }> = [
   { path: "/auth/google/connect/callback", nonceClear: "res.clearCookie(GWS_CONNECT_NONCE_COOKIE" },
-  { path: "/auth/atlassian/connect/callback", nonceClear: 'res.clearCookie("atl_connect_nonce"' },
 ];
 
 /** The Google consumers, kept as the self-check's reference set. */
