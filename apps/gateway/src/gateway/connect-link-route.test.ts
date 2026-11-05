@@ -72,7 +72,7 @@ describe("GET /connect/<token>", () => {
   it("shows Google's consent page posting to the link, names the account masked, and spends nothing", async () => {
     const res = await request("GET", `/connect/${TOKEN}`);
     expect(res.status).toBe(200);
-    expect(res.headers.get("referrer-policy")).toBe("no-referrer");
+    expect(res.headers.get("referrer-policy")).toBe("same-origin");
     expect(res.headers.get("cache-control")).toBe("no-store");
     const html = await res.text();
     expect(html).toContain(`<form method="post" action="/connect/${TOKEN}">`);
@@ -147,6 +147,12 @@ describe("POST /connect/<token>", () => {
     expect(res.status).toBe(403);
     expect(peekConnectLink).not.toHaveBeenCalled();
     expect(claimConnectLink).not.toHaveBeenCalled();
+  });
+
+  it("refuses Origin: null, which a sandboxed or no-referrer page elsewhere sends", async () => {
+    const res = await request("POST", `/connect/${TOKEN}`, { origin: "null" });
+    expect(res.status).toBe(403);
+    expect(peekConnectLink).not.toHaveBeenCalled();
   });
 
   it("refuses a browser signed in as someone else, leaving the link unspent", async () => {
