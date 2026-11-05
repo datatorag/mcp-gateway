@@ -4,9 +4,8 @@ import { serviceConnections, connectedAccounts } from "@datatorag-mcp/db";
 import { revokeGoogleToken } from "@/lib/google-revoke";
 import { NOTION_REVOKE_URL, NOTION_TOKEN_URL, notionBasicAuth } from "./notion-oauth";
 import { CONNECTOR_TOKENS } from "./connectors/token-calls";
-import { posthogClientId, posthogEndpoints, posthogHost } from "./posthog-oauth";
+import { posthogHost } from "./connectors/posthog/oauth";
 import { cleanWorkspaceName } from "./untrusted-text";
-import { envValue } from "@datatorag-mcp/config";
 import { credentialsFor } from "./connectors/credentials";
 import { CONNECTOR_REGISTRY, isConnectorId, type ConnectorId, type ContextConnectorId, type RevokingConnectorId } from "./connectors/registry";
 import { openToken, sealedColumns, TokenOpenError, type TokenRow } from "./token-crypto";
@@ -371,39 +370,6 @@ export async function refreshNotionToken(
   });
 }
 
-/**
- * Refresh a PostHog access token (SCRUM-471), under the rotating-token lock.
- * A metadata-document client has no secret: the form carries the client id,
- * which is the document's URL. PostHog does not rotate this client's refresh
- * token today; the lock costs nothing and keeps a later change on PostHog's
- * side from losing one. The expiry is stored from `expires_in`, never assumed.
- * Exported for its tests.
- */
-export async function refreshPostHogToken(
-  db: Database,
-  conn: ConnectionRef,
-  presentedRefreshToken: string
-): Promise<RefreshOutcome> {
-  const baseUrl = envValue("GATEWAY_BASE_URL");
-  if (!baseUrl) return null;
-  return refreshRotatingToken(db, conn, presentedRefreshToken, {
-    label: "posthog",
-    call: (refreshToken, signal) =>
-      fetch(posthogEndpoints(posthogHost()).token, {
-        method: "POST",
-        headers: { "Content-Type": "application/x-www-form-urlencoded" },
-        body: new URLSearchParams({
-          grant_type: "refresh_token",
-          client_id: posthogClientId(baseUrl),
-          refresh_token: refreshToken,
-        }),
-        signal,
-      }),
-    expiresAt: (data) =>
-      typeof data.expires_in === "number" && data.expires_in > 0 ? new Date(Date.now() + data.expires_in * 1000) : null,
-  });
-}
-
 /** Service-specific refresh function lookup: one per connector, so a
  * connector added to the registry without one fails to compile. A connector
  * that has moved to its own folder is read through CONNECTOR_TOKENS when
@@ -418,7 +384,7 @@ const REFRESH_FN: Record<
   notion: refreshNotionToken,
   brevo: (db, conn, rt) => CONNECTOR_TOKENS.brevo.refresh(db, conn, rt),
   slack: (db, conn, rt) => CONNECTOR_TOKENS.slack.refresh(db, conn, rt),
-  posthog: refreshPostHogToken,
+  posthog: (db, conn, rt) => CONNECTOR_TOKENS.posthog.refresh(db, conn, rt),
 };
 
 /** Revoke one Notion token. Never throws. */
@@ -473,26 +439,6 @@ async function revokeGoogleGrant(tokens: RevokeTokens): Promise<boolean> {
   return revokeGoogleToken(token);
 }
 
-/** Revoke a PostHog grant (SCRUM-471): the refresh token, which outlives
- * any access token and is valid until revoked, with the access token as the
- * fallback. Never throws. */
-async function revokePostHogGrant(tokens: RevokeTokens): Promise<boolean> {
-  const baseUrl = envValue("GATEWAY_BASE_URL");
-  const token = tokens.refreshToken ?? tokens.accessToken;
-  if (!baseUrl || !token) return false;
-  try {
-    const res = await fetch(posthogEndpoints(posthogHost()).revoke, {
-      method: "POST",
-      headers: { "Content-Type": "application/x-www-form-urlencoded" },
-      body: new URLSearchParams({ token, client_id: posthogClientId(baseUrl) }),
-      signal: AbortSignal.timeout(LOCKED_TOKEN_TIMEOUT_MS),
-    });
-    return res.ok;
-  } catch {
-    return false;
-  }
-}
-
 /** One per connector the registry marks `revokes`, so the two cannot
  * disagree without a compile error. */
 const REVOKE_BY_CONNECTOR: Record<RevokingConnectorId, (tokens: RevokeTokens) => Promise<boolean>> = {
@@ -500,7 +446,7 @@ const REVOKE_BY_CONNECTOR: Record<RevokingConnectorId, (tokens: RevokeTokens) =>
   notion: revokeNotionGrant,
   brevo: (tokens) => CONNECTOR_TOKENS.brevo.revoke(tokens),
   slack: (tokens) => CONNECTOR_TOKENS.slack.revoke(tokens),
-  posthog: revokePostHogGrant,
+  posthog: (tokens) => CONNECTOR_TOKENS.posthog.revoke(tokens),
 };
 const REVOKE_FN = new Map<string, (tokens: RevokeTokens) => Promise<boolean>>(Object.entries(REVOKE_BY_CONNECTOR));
 

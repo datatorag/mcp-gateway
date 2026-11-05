@@ -18,6 +18,7 @@ import { randomBytes } from "node:crypto";
 import type { Router, Request, Response } from "express";
 import type { Database } from "@datatorag-mcp/db";
 import { nonceMatches } from "../oauth/csrf";
+import { pkcePair } from "./pkce";
 import { oneShotCookie, SESSION_COOKIE } from "@/lib/cookies";
 import { stashAttribution, takeAttribution } from "../attribution";
 import { upsertServiceAccount } from "../connected-accounts";
@@ -66,10 +67,15 @@ function expiryFrom(expiresIn: unknown): Date | null {
 
 /** The exchange, never throwing: null for a refusal, a failed call, or an
  * answer without a string access token. */
-async function exchanged(oauth: ConnectorOAuth, code: string, ctx: ConnectContext): Promise<ConnectTokens | null> {
+async function exchanged(
+  oauth: ConnectorOAuth,
+  code: string,
+  ctx: ConnectContext,
+  codeVerifier: string | undefined
+): Promise<ConnectTokens | null> {
   let raw: Record<string, unknown> | null;
   try {
-    raw = await oauth.exchange(code, ctx);
+    raw = await oauth.exchange(code, ctx, codeVerifier);
   } catch {
     return null;
   }
@@ -88,6 +94,7 @@ export function mountConnectFlow(router: Router, oauth: ConnectorOAuth, deps: Co
   const provider = oauth.provider;
   const callbackPath = `${oauth.path}/callback`;
   const ctx: ConnectContext = { config, redirectUri: `${config.baseUrl}${callbackPath}` };
+  oauth.extraRoutes?.(router, config);
 
   /** True when the service may not be connected now, after answering. */
   async function refusedNotOffered(res: Response, userId: string, requestedPath: unknown): Promise<boolean> {
@@ -117,9 +124,11 @@ export function mountConnectFlow(router: Router, oauth: ConnectorOAuth, deps: Co
 
     const nonce = randomBytes(16).toString("base64url");
     res.cookie(oauth.nonceCookie, nonce, oneShotCookie(cookiesAreSecure));
+    const pkce = oauth.pkce ? pkcePair() : null;
+    if (oauth.pkce && pkce) res.cookie(oauth.pkce.cookie, pkce.verifier, oneShotCookie(cookiesAreSecure, oauth.pkce.cookiePath));
     deps.armDuplicateAck(req, res, provider, nonce);
 
-    res.redirect(oauth.authorizeUrl(ctx, nonce).toString());
+    res.redirect(oauth.authorizeUrl(ctx, nonce, pkce?.challenge).toString());
   });
 
   router.get(callbackPath, async (req, res) => {
@@ -132,6 +141,8 @@ export function mountConnectFlow(router: Router, oauth: ConnectorOAuth, deps: Co
     const sessionToken = req.cookies?.[SESSION_COOKIE] as string | undefined;
     const cookieNonce = req.cookies?.[oauth.nonceCookie] as string | undefined;
     res.clearCookie(oauth.nonceCookie, { path: "/" });
+    const verifier = oauth.pkce ? (req.cookies?.[oauth.pkce.cookie] as string | undefined) : undefined;
+    if (oauth.pkce) res.clearCookie(oauth.pkce.cookie, { path: oauth.pkce.cookiePath });
     const attribution = takeAttribution(req, res);
     const requestedPath = deps.takeConnectNext(req, res);
     const duplicateAck = deps.takeDuplicateAck(req, res);
@@ -141,7 +152,7 @@ export function mountConnectFlow(router: Router, oauth: ConnectorOAuth, deps: Co
       res.redirect("/auth/login");
       return;
     }
-    if (!nonceMatches(cookieNonce, state)) {
+    if (!nonceMatches(cookieNonce, state) || (oauth.pkce && !verifier)) {
       res.redirect(postConnectDestination({ requestedPath, error: "invalid_state" }));
       return;
     }
@@ -156,7 +167,7 @@ export function mountConnectFlow(router: Router, oauth: ConnectorOAuth, deps: Co
     }
     if (await refusedNotOffered(res, who.userId, requestedPath)) return;
 
-    const tokens = await exchanged(oauth, code, ctx);
+    const tokens = await exchanged(oauth, code, ctx, verifier);
     if (!tokens) {
       res.redirect(postConnectDestination({ requestedPath, error: "token_exchange_failed" }));
       return;

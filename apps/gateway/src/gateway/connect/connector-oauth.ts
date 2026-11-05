@@ -4,6 +4,7 @@
  * exchange and the identity lookup) and the few settings that do. Everything
  * else in a connect round trip is the flow's.
  */
+import type { Router } from "express";
 import type { DuplicateProvider } from "../connect-duplicate";
 
 /** The app credentials and base URL a connector reads; the auth router's
@@ -67,12 +68,21 @@ export interface ConnectorOAuth {
   /** How a service not offered to this user is refused: a connect error, or
    * a plain 404 for one only admins may see. */
   notOffered: "redirect" | "404";
+  /** A PKCE verifier kept for the round trip in this one-shot cookie, which
+   * only `cookiePath` (the start and callback) is sent. A callback without
+   * it is refused as a bad state. */
+  pkce?: { cookie: string; cookiePath: string };
   isConfigured(config: ConnectConfig): boolean;
-  authorizeUrl(ctx: ConnectContext, nonce: string): URL;
+  /** `codeChallenge` is the S256 challenge, for a connector with `pkce`. */
+  authorizeUrl(ctx: ConnectContext, nonce: string, codeChallenge?: string): URL;
   /** The provider's answer to the code, parsed, or null when it refused.
-   * May throw; the flow treats a throw as a refused exchange. */
-  exchange(code: string, ctx: ConnectContext): Promise<Record<string, unknown> | null>;
+   * May throw; the flow treats a throw as a refused exchange.
+   * `codeVerifier` is the round trip's verifier, for a connector with `pkce`. */
+  exchange(code: string, ctx: ConnectContext, codeVerifier?: string): Promise<Record<string, unknown> | null>;
   /** The account behind the tokens; null when its email cannot be read, or a
    * connect error of the provider's own (a grant with no workspace). */
   identify(tokens: ConnectTokens, ctx: ConnectContext): Promise<ConnectIdentity | { error: string } | null>;
+  /** Any further public route the connector needs (a client metadata
+   * document), mounted beside its connect routes. */
+  extraRoutes?(router: Router, config: ConnectConfig): void;
 }
