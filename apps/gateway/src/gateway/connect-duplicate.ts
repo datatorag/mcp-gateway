@@ -15,32 +15,19 @@
  * `postConnectDestination`.
  */
 
-export type DuplicateProvider = "google-workspace" | "atlassian" | "notion" | "brevo" | "slack" | "posthog";
+import { byConnector, isConnectorId, type ConnectorId } from "./connectors/registry";
+
+export type DuplicateProvider = ConnectorId;
 
 /** Where each provider's connect starts, past Google's interstitial: the
  * duplicate page's restart and a connect link (SCRUM-466) both hand over
  * here, after their own page has been shown. */
-export const CONNECT_START: Record<DuplicateProvider, string> = {
-  "google-workspace": "/auth/google/connect?proceed=1",
-  atlassian: "/auth/atlassian/connect",
-  notion: "/auth/notion/connect",
-  brevo: "/auth/brevo/connect",
-  slack: "/auth/slack/connect",
-  posthog: "/auth/posthog/connect",
-};
+export const CONNECT_START: Record<DuplicateProvider, string> = byConnector("connectStart");
 
-export const isDuplicateProvider = (v: unknown): v is DuplicateProvider =>
-  typeof v === "string" && Object.prototype.hasOwnProperty.call(CONNECT_START, v);
+export const isDuplicateProvider = (v: unknown): v is DuplicateProvider => isConnectorId(v);
 
 /** What the account is called on the page, per provider. */
-const ACCOUNT_NOUN: Record<DuplicateProvider, string> = {
-  "google-workspace": "Google account",
-  atlassian: "Atlassian account",
-  notion: "Notion workspace",
-  brevo: "Brevo account",
-  slack: "Slack workspace",
-  posthog: "PostHog project",
-};
+const ACCOUNT_NOUN: Record<DuplicateProvider, string> = byConnector("accountNoun");
 
 /** The page's words, in one place for review. */
 export const DUPLICATE_COPY = {

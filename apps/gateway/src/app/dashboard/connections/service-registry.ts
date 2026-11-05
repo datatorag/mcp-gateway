@@ -10,8 +10,10 @@
  * time a connector is added. So the data half lives here and `services.tsx`
  * decorates it with the icons and capability copy only the dashboard needs.
  */
+import { CONNECTOR_REGISTRY, type ConnectorId } from "@/gateway/connectors/registry";
+
 export interface ConnectableService {
-  id: string;
+  id: ConnectorId;
   name: string;
   /** The Express OAuth route that starts this service's connect flow. */
   connectUrl: string;
@@ -30,47 +32,16 @@ export interface ConnectableService {
   audience?: "admin";
 }
 
-export const CONNECTABLE_SERVICES: ConnectableService[] = [
-  {
-    id: "google-workspace",
-    name: "Google Workspace",
-    connectUrl: "/auth/google/connect",
-  },
-  {
-    id: "atlassian",
-    name: "Atlassian",
-    connectUrl: "/auth/atlassian/connect",
-  },
-  {
-    id: "notion",
-    name: "Notion",
-    connectUrl: "/auth/notion/connect",
-    launchPluginSlug: "notion-mcp",
-  },
-  {
-    id: "brevo",
-    name: "Brevo",
-    connectUrl: "/auth/brevo/connect",
-    launchPluginSlug: "brevo-mcp",
-    audience: "admin",
-  },
-  {
-    // SCRUM-454: the company workspace only, so admins only.
-    id: "slack",
-    name: "Slack",
-    connectUrl: "/auth/slack/connect",
-    launchPluginSlug: "slack-mcp",
-    audience: "admin",
-  },
-  {
-    // SCRUM-471: our own project first, so admins only.
-    id: "posthog",
-    name: "PostHog",
-    connectUrl: "/auth/posthog/connect",
-    launchPluginSlug: "posthog-mcp",
-    audience: "admin",
-  },
-];
+/** From the connector registry, in its order. `launchPluginSlug` is the
+ * plugin of every connector that launches on its registry row, `audience`
+ * is copied as it is. */
+export const CONNECTABLE_SERVICES: ConnectableService[] = CONNECTOR_REGISTRY.map((c) => ({
+  id: c.id,
+  name: c.displayName,
+  connectUrl: c.connectUrl,
+  ...(c.launch === "registry" ? { launchPluginSlug: c.pluginSlug } : {}),
+  ...("audience" in c ? { audience: c.audience } : {}),
+}));
 
 /** The services offered with no registry check: what a surface shows before
  * it knows which gated services have launched. Never a gated one, so a

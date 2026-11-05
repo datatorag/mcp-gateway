@@ -1,3 +1,5 @@
+import { CONNECTOR_REGISTRY } from "@/gateway/connectors/registry";
+
 export const EVENTS = {
   /** EVERY tool call, from every surface. There is deliberately no second
    * event name: origin travels as the `surface` property, with `run_id` set
@@ -222,13 +224,11 @@ export const EVENTS = {
   WIZARD_STEP_COMPLETED: "wizard_step_completed",
 } as const;
 
-export const PROVIDERS = {
-  GOOGLE_WORKSPACE: "google-workspace",
-  ATLASSIAN: "atlassian",
-  NOTION: "notion",
-  BREVO: "brevo",
-  SLACK: "slack",
-  POSTHOG: "posthog",
-} as const;
+type ConnectorEntry = (typeof CONNECTOR_REGISTRY)[number];
+
+/** The connector ids by their analytics key, from the connector registry. */
+export const PROVIDERS = Object.fromEntries(CONNECTOR_REGISTRY.map((c) => [c.providerKey, c.id])) as {
+  readonly [C in ConnectorEntry as C["providerKey"]]: C["id"];
+};
 
 export type ProviderId = (typeof PROVIDERS)[keyof typeof PROVIDERS];
