@@ -1,8 +1,12 @@
 # The gateway image. Build context is the repository root.
 #
-# Three stages:
-#   base     the pinned Node image, the tools the running gateway's operators
-#            use inside the container, pnpm, and the workspace's manifests.
+# Stages:
+#   tools    the pinned Node image, the tools the running gateway's operators
+#            use inside the container, and pnpm.
+#   plugin-manifests
+#            picks each plugin's package.json out of plugins/, so the plugin
+#            list is the directory and not a list here. Not shipped.
+#   base     tools plus the workspace's manifests.
 #   build    every dependency and the whole source; builds the workspace
 #            packages, the Next.js app and the custom server. Not shipped.
 #   runtime  what ships: production dependencies only, and the build's
@@ -17,13 +21,27 @@
 # only the digest is used. To move it: look up the new digest
 # (`docker buildx imagetools inspect node:<line>-slim`), change it here, and
 # let a pull request build it.
-FROM node:20-slim@sha256:2cf067cfed83d5ea958367df9f966191a942351a2df77d6f0193e162b5febfc0 AS base
+FROM node:20-slim@sha256:2cf067cfed83d5ea958367df9f966191a942351a2df77d6f0193e162b5febfc0 AS tools
 # Runtime tools, not build tools: plugins are updated in place in the running
 # container (git, pnpm), and a plugin's own build fetches a binary (curl,
 # unzip). See the deploy skill.
 RUN apt-get update && apt-get install -y --no-install-recommends git ca-certificates curl unzip && rm -rf /var/lib/apt/lists/*
 RUN corepack enable && corepack prepare pnpm@9.15.0 --activate
 WORKDIR /app
+
+
+# Every plugin's package.json, at its own path. Any change under plugins/
+# reruns this stage, but what it hands on changes only with a manifest, so
+# the install below stays cached for a source-only change.
+FROM tools AS plugin-manifests
+COPY plugins/ plugins/
+RUN for dir in plugins/*/; do \
+      dir="${dir%/}"; \
+      mkdir -p "/manifests/$dir" && cp "$dir/package.json" "/manifests/$dir/" || exit 1; \
+    done
+
+
+FROM tools AS base
 
 # Workspace root files and package manifests: all an install needs.
 COPY package.json pnpm-workspace.yaml pnpm-lock.yaml turbo.json tsconfig.base.json ./
@@ -35,12 +53,7 @@ COPY packages/auth/package.json packages/auth/
 COPY apps/gateway/package.json apps/gateway/
 # The plugins are workspace members, so the frozen install needs their
 # manifests to match the lockfile.
-COPY plugins/gws-mcp/package.json plugins/gws-mcp/
-COPY plugins/atlassian-mcp/package.json plugins/atlassian-mcp/
-COPY plugins/notion-mcp/package.json plugins/notion-mcp/
-COPY plugins/brevo-mcp/package.json plugins/brevo-mcp/
-COPY plugins/slack-mcp/package.json plugins/slack-mcp/
-COPY plugins/posthog-mcp/package.json plugins/posthog-mcp/
+COPY --from=plugin-manifests /manifests/plugins/ plugins/
 
 
 FROM base AS build
@@ -70,12 +83,15 @@ ENV NEXT_PUBLIC_GOOGLE_ADS_SIGNUP_CONVERSION_LABEL=$NEXT_PUBLIC_GOOGLE_ADS_SIGNU
 RUN pnpm run build --filter=@datatorag-mcp/gateway && rm -rf apps/gateway/.next/cache
 # Each plugin is compiled here (tsc into server/), from the same commit as
 # the gateway. Nothing is compiled in the running container.
-RUN pnpm --filter @datatorag-mcp/gws-mcp run build \
- && pnpm --filter @datatorag-mcp/atlassian-mcp run build \
- && pnpm --filter @datatorag-mcp/notion-mcp run build \
- && pnpm --filter @datatorag-mcp/brevo-mcp run build \
- && pnpm --filter @datatorag-mcp/slack-mcp run build \
- && pnpm --filter @datatorag-mcp/posthog-mcp run build
+RUN for dir in plugins/*/; do pnpm --filter "./${dir%/}" run build || exit 1; done
+# What ships of each plugin, gathered at /plugins-out/plugins/<slug>: the
+# compiled server, the plugin manifest and the README. No source, no git
+# metadata, no dev dependencies.
+RUN for dir in plugins/*/; do \
+      dir="${dir%/}"; \
+      mkdir -p "/plugins-out/$dir" \
+        && cp -R "$dir/server" "$dir/datatorag.json" "$dir/README.md" "/plugins-out/$dir/" || exit 1; \
+    done
 
 
 FROM base AS runtime
@@ -95,22 +111,10 @@ COPY apps/gateway/next.config.ts apps/gateway/
 COPY apps/gateway/public apps/gateway/public
 COPY apps/gateway/content apps/gateway/content
 
-# The plugins, at /app/plugins/<slug>: the compiled server, and from the tree
-# the manifest the manager reads for the entry point (already copied above),
-# the plugin manifest and the README. No source, no git metadata, no dev
-# dependencies; the production install above already covers their packages.
-COPY --from=build /app/plugins/gws-mcp/server plugins/gws-mcp/server
-COPY --from=build /app/plugins/atlassian-mcp/server plugins/atlassian-mcp/server
-COPY --from=build /app/plugins/notion-mcp/server plugins/notion-mcp/server
-COPY --from=build /app/plugins/brevo-mcp/server plugins/brevo-mcp/server
-COPY --from=build /app/plugins/slack-mcp/server plugins/slack-mcp/server
-COPY --from=build /app/plugins/posthog-mcp/server plugins/posthog-mcp/server
-COPY plugins/gws-mcp/datatorag.json plugins/gws-mcp/README.md plugins/gws-mcp/
-COPY plugins/atlassian-mcp/datatorag.json plugins/atlassian-mcp/README.md plugins/atlassian-mcp/
-COPY plugins/notion-mcp/datatorag.json plugins/notion-mcp/README.md plugins/notion-mcp/
-COPY plugins/brevo-mcp/datatorag.json plugins/brevo-mcp/README.md plugins/brevo-mcp/
-COPY plugins/slack-mcp/datatorag.json plugins/slack-mcp/README.md plugins/slack-mcp/
-COPY plugins/posthog-mcp/datatorag.json plugins/posthog-mcp/README.md plugins/posthog-mcp/
+# The plugins, at /app/plugins/<slug>: what the build gathered for each, beside
+# the package.json the manager reads for the entry point (already copied
+# above). The production install above already covers their packages.
+COPY --from=build /plugins-out/plugins/ plugins/
 # A client secret file is written beside the compiled code only by the desktop
 # bundle's own build script, and git ignores it. It must never be in an image.
 RUN if find /app/plugins -name oauth.json -not -path '*/node_modules/*' | grep -q .; then \
