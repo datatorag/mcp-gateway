@@ -4,6 +4,7 @@ import { eq, and, isNull } from "drizzle-orm";
 import type { Database } from "@datatorag-mcp/db";
 import { oauthAccessTokens, users } from "@datatorag-mcp/db";
 import { nonceMatches, OAUTH_STATE_TTL_MS, sameOriginRequest } from "./oauth/csrf";
+import { oneShotCookie, SESSION_COOKIE } from "@/lib/cookies";
 import { createWebSession, liveWebSessionUserId } from "../lib/web-session";
 import { signInHref } from "../lib/sign-in";
 import { stashAttribution, takeAttribution } from "./attribution";
@@ -226,13 +227,7 @@ export function createAuthRouter(
   // by a link (no query parameter skips the check), and is spent either way.
   const DUP_ACK_PENDING_COOKIE = "dtr_dup_ack_pending";
   const DUP_ACK_COOKIE = "dtr_dup_ack";
-  const oneShot = {
-    httpOnly: true,
-    secure: cookiesAreSecure,
-    sameSite: "lax" as const,
-    path: "/",
-    maxAge: OAUTH_STATE_TTL_MS,
-  };
+  const oneShot = oneShotCookie(cookiesAreSecure);
 
   /** At a connect start, after its nonce is minted: arm the acknowledgement
    * for this nonce if the duplicate page asked for this provider; otherwise
@@ -397,7 +392,7 @@ export function createAuthRouter(
       res.status(403).end();
       return;
     }
-    const sessionToken = req.cookies?.dtrmcp_session;
+    const sessionToken = req.cookies?.[SESSION_COOKIE];
     const sessionUserId = await liveWebSessionUserId(db, sessionToken);
     if (!sessionUserId) {
       res.redirect(303, "/auth/login");
@@ -421,7 +416,7 @@ export function createAuthRouter(
       res.status(403).end();
       return;
     }
-    const sessionToken = req.cookies?.dtrmcp_session;
+    const sessionToken = req.cookies?.[SESSION_COOKIE];
     if (sessionToken) {
       const revoked = await db
         .update(oauthAccessTokens)
@@ -438,7 +433,7 @@ export function createAuthRouter(
         }
       }
     }
-    res.clearCookie("dtrmcp_session", { path: "/" });
+    res.clearCookie(SESSION_COOKIE, { path: "/" });
     res.clearCookie(GWS_CONNECT_HINT_COOKIE, { path: "/" });
     res.clearCookie(DUP_ACK_PENDING_COOKIE, { path: "/" });
     res.clearCookie(DUP_ACK_COOKIE, { path: "/" });
@@ -459,13 +454,7 @@ export function createAuthRouter(
     // rejected values simply fall back to the normal destination table.
     const next = resolveNextPath(req.query.next);
     if (next !== null) {
-      res.cookie(NEXT_COOKIE, next, {
-        httpOnly: true,
-        secure: cookiesAreSecure,
-        sameSite: "lax",
-        path: "/",
-        maxAge: OAUTH_STATE_TTL_MS,
-      });
+      res.cookie(NEXT_COOKIE, next, oneShotCookie(cookiesAreSecure));
     } else {
       // No return path asked for, so none may be left over. A sign-in begun
       // from a button that names one and then abandoned leaves its cookie
@@ -481,13 +470,7 @@ export function createAuthRouter(
     // the login-CSRF that lets an attacker seat a victim in the attacker's
     // account. Random, single-use, never the session token.
     const nonce = randomBytes(16).toString("base64url");
-    res.cookie(LOGIN_NONCE_COOKIE, nonce, {
-      httpOnly: true,
-      secure: cookiesAreSecure,
-      sameSite: "lax",
-      path: "/",
-      maxAge: OAUTH_STATE_TTL_MS,
-    });
+    res.cookie(LOGIN_NONCE_COOKIE, nonce, oneShotCookie(cookiesAreSecure));
 
     const googleAuthUrl = new URL(
       "https://accounts.google.com/o/oauth2/v2/auth"
@@ -640,7 +623,7 @@ export function createAuthRouter(
   // --- Logout ---
 
   router.post("/auth/logout", async (req, res) => {
-    const sessionToken = req.cookies?.dtrmcp_session;
+    const sessionToken = req.cookies?.[SESSION_COOKIE];
     if (sessionToken) {
       const revoked = await db
         .update(oauthAccessTokens)
@@ -655,7 +638,7 @@ export function createAuthRouter(
         await dropConnectLinksQuietly(db, row.userId);
       }
     }
-    res.clearCookie("dtrmcp_session", { path: "/" });
+    res.clearCookie(SESSION_COOKIE, { path: "/" });
     // The account a refused connect was tried with belongs to the person
     // who is signing out; the next person at this browser must not find it
     // preselected on Google's screen.
@@ -673,7 +656,7 @@ export function createAuthRouter(
     // Require a live web session (SCRUM-374): an expired or revoked one goes
     // to sign in before the round trip to Google, not after it. Or a connect
     // link spent in this browser (SCRUM-466).
-    if (!(await connectUser(req.cookies?.dtrmcp_session, req.cookies?.[CONNECT_LINK_COOKIE], PROVIDERS.GOOGLE_WORKSPACE))) {
+    if (!(await connectUser(req.cookies?.[SESSION_COOKIE], req.cookies?.[CONNECT_LINK_COOKIE], PROVIDERS.GOOGLE_WORKSPACE))) {
       res.redirect("/auth/login");
       return;
     }
@@ -731,13 +714,7 @@ export function createAuthRouter(
     // tracker). The nonce is random, one-shot, and never the session token
     // (which must not leak into URLs, referrers, or Google's logs).
     const nonce = randomBytes(16).toString("base64url");
-    res.cookie(GWS_CONNECT_NONCE_COOKIE, nonce, {
-      httpOnly: true,
-      secure: cookiesAreSecure,
-      sameSite: "lax",
-      path: "/",
-      maxAge: OAUTH_STATE_TTL_MS,
-    });
+    res.cookie(GWS_CONNECT_NONCE_COOKIE, nonce, oneShotCookie(cookiesAreSecure));
     armDuplicateAck(req, res, PROVIDERS.GOOGLE_WORKSPACE, nonce);
 
     const googleAuthUrl = new URL(
@@ -781,7 +758,7 @@ export function createAuthRouter(
     const googleCode = req.query.code as string | undefined;
     const state = req.query.state as string | undefined;
     // Identity comes from the session cookie only — never from `state`.
-    const sessionToken = req.cookies?.dtrmcp_session;
+    const sessionToken = req.cookies?.[SESSION_COOKIE];
     const cookieNonce = req.cookies?.[GWS_CONNECT_NONCE_COOKIE] as
       | string
       | undefined;
@@ -915,13 +892,7 @@ export function createAuthRouter(
       // still no userinfo call for a connection we refuse.
       const tried = emailFromIdToken(tokens.id_token);
       if (tried) {
-        res.cookie(GWS_CONNECT_HINT_COOKIE, tried, {
-          httpOnly: true,
-          secure: cookiesAreSecure,
-          sameSite: "lax",
-          path: "/",
-          maxAge: OAUTH_STATE_TTL_MS,
-        });
+        res.cookie(GWS_CONNECT_HINT_COOKIE, tried, oneShotCookie(cookiesAreSecure));
       }
       // A connect only a link vouches for keeps that link for the retry, which
       // starts over at the same route (SCRUM-466).
@@ -1067,7 +1038,7 @@ export function createAuthRouter(
 
   router.get("/auth/atlassian/connect", async (req, res) => {
     // A live web session, or a spent connect link, as for Google.
-    if (!(await connectUser(req.cookies?.dtrmcp_session, req.cookies?.[CONNECT_LINK_COOKIE], PROVIDERS.ATLASSIAN))) {
+    if (!(await connectUser(req.cookies?.[SESSION_COOKIE], req.cookies?.[CONNECT_LINK_COOKIE], PROVIDERS.ATLASSIAN))) {
       res.redirect("/auth/login");
       return;
     }
@@ -1079,13 +1050,7 @@ export function createAuthRouter(
     stashConnectNext(req, res);
 
     const nonce = randomBytes(16).toString("base64url");
-    res.cookie("atl_connect_nonce", nonce, {
-      httpOnly: true,
-      secure: config.baseUrl.startsWith("https"),
-      sameSite: "lax",
-      path: "/",
-      maxAge: OAUTH_STATE_TTL_MS,
-    });
+    res.cookie("atl_connect_nonce", nonce, oneShotCookie(config.baseUrl.startsWith("https")));
     armDuplicateAck(req, res, PROVIDERS.ATLASSIAN, nonce);
 
     const url = new URL("https://auth.atlassian.com/authorize");
@@ -1107,7 +1072,7 @@ export function createAuthRouter(
     const code = req.query.code as string | undefined;
     const state = req.query.state as string | undefined;
     // Identity comes from the session cookie only — never from `state`.
-    const sessionToken = req.cookies?.dtrmcp_session as string | undefined;
+    const sessionToken = req.cookies?.[SESSION_COOKIE] as string | undefined;
     const cookieNonce = req.cookies?.atl_connect_nonce as string | undefined;
     res.clearCookie("atl_connect_nonce", { path: "/" });
     const attribution = takeAttribution(req, res);
@@ -1262,7 +1227,7 @@ export function createAuthRouter(
 
   router.get("/auth/notion/connect", async (req, res) => {
     // A live web session, or a spent connect link, as for Google.
-    if (!(await connectUser(req.cookies?.dtrmcp_session, req.cookies?.[CONNECT_LINK_COOKIE], PROVIDERS.NOTION))) {
+    if (!(await connectUser(req.cookies?.[SESSION_COOKIE], req.cookies?.[CONNECT_LINK_COOKIE], PROVIDERS.NOTION))) {
       res.redirect("/auth/login");
       return;
     }
@@ -1284,13 +1249,7 @@ export function createAuthRouter(
     stashConnectNext(req, res);
 
     const nonce = randomBytes(16).toString("base64url");
-    res.cookie(NOTION_CONNECT_NONCE_COOKIE, nonce, {
-      httpOnly: true,
-      secure: cookiesAreSecure,
-      sameSite: "lax",
-      path: "/",
-      maxAge: OAUTH_STATE_TTL_MS,
-    });
+    res.cookie(NOTION_CONNECT_NONCE_COOKIE, nonce, oneShotCookie(cookiesAreSecure));
     armDuplicateAck(req, res, PROVIDERS.NOTION, nonce);
 
     const url = new URL(NOTION_AUTHORIZE_URL);
@@ -1310,7 +1269,7 @@ export function createAuthRouter(
     const code = req.query.code as string | undefined;
     const state = req.query.state as string | undefined;
     // Identity comes from the session cookie only, never from `state`.
-    const sessionToken = req.cookies?.dtrmcp_session as string | undefined;
+    const sessionToken = req.cookies?.[SESSION_COOKIE] as string | undefined;
     const cookieNonce = req.cookies?.[NOTION_CONNECT_NONCE_COOKIE] as string | undefined;
     res.clearCookie(NOTION_CONNECT_NONCE_COOKIE, { path: "/" });
     const attribution = takeAttribution(req, res);
@@ -1473,7 +1432,7 @@ export function createAuthRouter(
   // Atlassian's are; its company name is the label.
 
   router.get("/auth/brevo/connect", async (req, res) => {
-    const who = await connectUser(req.cookies?.dtrmcp_session, req.cookies?.[CONNECT_LINK_COOKIE], PROVIDERS.BREVO);
+    const who = await connectUser(req.cookies?.[SESSION_COOKIE], req.cookies?.[CONNECT_LINK_COOKIE], PROVIDERS.BREVO);
     if (!who) {
       res.redirect("/auth/login");
       return;
@@ -1489,13 +1448,7 @@ export function createAuthRouter(
     stashConnectNext(req, res);
 
     const nonce = randomBytes(16).toString("base64url");
-    res.cookie(BREVO_CONNECT_NONCE_COOKIE, nonce, {
-      httpOnly: true,
-      secure: cookiesAreSecure,
-      sameSite: "lax",
-      path: "/",
-      maxAge: OAUTH_STATE_TTL_MS,
-    });
+    res.cookie(BREVO_CONNECT_NONCE_COOKIE, nonce, oneShotCookie(cookiesAreSecure));
     armDuplicateAck(req, res, PROVIDERS.BREVO, nonce);
 
     const url = new URL(BREVO_AUTHORIZE_URL);
@@ -1511,7 +1464,7 @@ export function createAuthRouter(
     const code = req.query.code as string | undefined;
     const state = req.query.state as string | undefined;
     // Identity comes from the session cookie or a spent link, never from `state`.
-    const sessionToken = req.cookies?.dtrmcp_session as string | undefined;
+    const sessionToken = req.cookies?.[SESSION_COOKIE] as string | undefined;
     const cookieNonce = req.cookies?.[BREVO_CONNECT_NONCE_COOKIE] as string | undefined;
     res.clearCookie(BREVO_CONNECT_NONCE_COOKIE, { path: "/" });
     const attribution = takeAttribution(req, res);
@@ -1655,7 +1608,7 @@ export function createAuthRouter(
   });
 
   router.get("/auth/posthog/connect", async (req, res) => {
-    const who = await connectUser(req.cookies?.dtrmcp_session, req.cookies?.[CONNECT_LINK_COOKIE], PROVIDERS.POSTHOG);
+    const who = await connectUser(req.cookies?.[SESSION_COOKIE], req.cookies?.[CONNECT_LINK_COOKIE], PROVIDERS.POSTHOG);
     if (!who) {
       res.redirect("/auth/login");
       return;
@@ -1670,21 +1623,9 @@ export function createAuthRouter(
     stashConnectNext(req, res);
 
     const nonce = randomBytes(16).toString("base64url");
-    res.cookie(POSTHOG_CONNECT_NONCE_COOKIE, nonce, {
-      httpOnly: true,
-      secure: cookiesAreSecure,
-      sameSite: "lax",
-      path: "/",
-      maxAge: OAUTH_STATE_TTL_MS,
-    });
+    res.cookie(POSTHOG_CONNECT_NONCE_COOKIE, nonce, oneShotCookie(cookiesAreSecure));
     const pkce = pkcePair();
-    res.cookie(POSTHOG_PKCE_COOKIE, pkce.verifier, {
-      httpOnly: true,
-      secure: cookiesAreSecure,
-      sameSite: "lax",
-      path: POSTHOG_PKCE_COOKIE_PATH,
-      maxAge: OAUTH_STATE_TTL_MS,
-    });
+    res.cookie(POSTHOG_PKCE_COOKIE, pkce.verifier, oneShotCookie(cookiesAreSecure, POSTHOG_PKCE_COOKIE_PATH));
     armDuplicateAck(req, res, PROVIDERS.POSTHOG, nonce);
 
     const url = new URL(posthogEndpoints(posthogHost()).authorize);
@@ -1704,7 +1645,7 @@ export function createAuthRouter(
     const code = req.query.code as string | undefined;
     const state = req.query.state as string | undefined;
     // Identity comes from the session cookie or a spent link, never from `state`.
-    const sessionToken = req.cookies?.dtrmcp_session as string | undefined;
+    const sessionToken = req.cookies?.[SESSION_COOKIE] as string | undefined;
     const cookieNonce = req.cookies?.[POSTHOG_CONNECT_NONCE_COOKIE] as string | undefined;
     const verifier = req.cookies?.[POSTHOG_PKCE_COOKIE] as string | undefined;
     res.clearCookie(POSTHOG_CONNECT_NONCE_COOKIE, { path: "/" });
@@ -1865,7 +1806,7 @@ export function createAuthRouter(
     Boolean(config.slackClientId && config.slackClientSecret && config.slackTeamId);
 
   router.get("/auth/slack/connect", async (req, res) => {
-    const slackUser = await connectUser(req.cookies?.dtrmcp_session, req.cookies?.[CONNECT_LINK_COOKIE], PROVIDERS.SLACK);
+    const slackUser = await connectUser(req.cookies?.[SESSION_COOKIE], req.cookies?.[CONNECT_LINK_COOKIE], PROVIDERS.SLACK);
     if (!slackUser) {
       res.redirect("/auth/login");
       return;
@@ -1887,13 +1828,7 @@ export function createAuthRouter(
     stashConnectNext(req, res);
 
     const nonce = randomBytes(16).toString("base64url");
-    res.cookie(SLACK_CONNECT_NONCE_COOKIE, nonce, {
-      httpOnly: true,
-      secure: cookiesAreSecure,
-      sameSite: "lax",
-      path: "/",
-      maxAge: OAUTH_STATE_TTL_MS,
-    });
+    res.cookie(SLACK_CONNECT_NONCE_COOKIE, nonce, oneShotCookie(cookiesAreSecure));
     armDuplicateAck(req, res, PROVIDERS.SLACK, nonce);
 
     const url = new URL(SLACK_AUTHORIZE_URL);
@@ -1913,7 +1848,7 @@ export function createAuthRouter(
     const code = req.query.code as string | undefined;
     const state = req.query.state as string | undefined;
     // Identity comes from the session cookie only, never from `state`.
-    const sessionToken = req.cookies?.dtrmcp_session as string | undefined;
+    const sessionToken = req.cookies?.[SESSION_COOKIE] as string | undefined;
     const cookieNonce = req.cookies?.[SLACK_CONNECT_NONCE_COOKIE] as string | undefined;
     res.clearCookie(SLACK_CONNECT_NONCE_COOKIE, { path: "/" });
     const attribution = takeAttribution(req, res);
@@ -2053,13 +1988,7 @@ export function createAuthRouter(
   ): void {
     const next = resolveNextPath(req.query.next);
     if (next === null) return;
-    res.cookie(CONNECT_NEXT_COOKIE, next, {
-      httpOnly: true,
-      secure: cookiesAreSecure,
-      sameSite: "lax",
-      path: "/",
-      maxAge: OAUTH_STATE_TTL_MS,
-    });
+    res.cookie(CONNECT_NEXT_COOKIE, next, oneShotCookie(cookiesAreSecure));
   }
 
   /** Read and clear the parked `next`. Always cleared, on every callback

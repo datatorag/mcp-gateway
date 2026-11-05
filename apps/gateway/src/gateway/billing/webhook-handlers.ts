@@ -47,17 +47,6 @@ import { getPosthog } from "../../lib/posthog-server";
  * delivery that rolled back, sends nothing.
  */
 
-/** Events this gateway reacts to. Anything else is claimed (so a later
- * subscribe-to-more in the Stripe dashboard can't double-apply old
- * deliveries) and acknowledged without action. */
-export const HANDLED_EVENTS = [
-  "checkout.session.completed",
-  "customer.subscription.created",
-  "customer.subscription.updated",
-  "customer.subscription.deleted",
-  "invoice.payment_failed",
-] as const;
-
 export function planForSubscriptionStatus(status: Stripe.Subscription.Status): Plan {
   // `trialing` maps to pro for Stripe-side completeness only — we never
   // create trialing subscriptions (the free tier is the trial).

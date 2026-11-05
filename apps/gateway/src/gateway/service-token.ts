@@ -1,6 +1,6 @@
 import { eq, and, desc, sql } from "drizzle-orm";
 import type { Database } from "@datatorag-mcp/db";
-import { serviceConnections, connectedAccounts, pluginConnections } from "@datatorag-mcp/db";
+import { serviceConnections, connectedAccounts } from "@datatorag-mcp/db";
 import { revokeGoogleToken } from "@/lib/google-revoke";
 import { NOTION_REVOKE_URL, NOTION_TOKEN_URL, notionBasicAuth } from "./notion-oauth";
 import { BREVO_REVOKE_URL, BREVO_TOKEN_URL, brevoClientCredentials } from "./brevo-oauth";
@@ -943,33 +943,4 @@ export async function getServiceToken(
   const resolved = await resolveServiceToken(db, userId, service, accountEmail);
   if (!resolved || "ambiguous" in resolved || "refreshFailed" in resolved) return null;
   return resolved.token;
-}
-
-/** The token for a legacy manifest-OAuth plugin (`plugin_connections`),
- * opened here because this table is sealed-only (SCRUM-442). Null when the
- * user has no connection, or when the stored value does not open, which is
- * logged by table and column alone. */
-export async function resolvePluginConnectionToken(
-  db: Database,
-  userId: string,
-  mcpServerId: string
-): Promise<string | null> {
-  const [row] = await db
-    .select({ id: pluginConnections.id, sealed: pluginConnections.accessTokenSealed })
-    .from(pluginConnections)
-    .where(and(eq(pluginConnections.userId, userId), eq(pluginConnections.mcpServerId, mcpServerId)))
-    .limit(1);
-  if (!row?.sealed) return null;
-  try {
-    return openToken(row.sealed, {
-      table: "plugin_connections",
-      column: "access_token",
-      userId,
-      rowId: row.id,
-    });
-  } catch (e) {
-    if (!(e instanceof TokenOpenError)) throw e;
-    console.warn(`[service-token] ${e.message}`);
-    return null;
-  }
 }

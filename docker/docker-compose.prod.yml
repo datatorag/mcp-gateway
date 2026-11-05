@@ -5,7 +5,9 @@
 #                   registry reference by digest and starts with --no-build
 #                   and --pull never, so the `build` block is not used and its
 #                   context does not need to exist there.
-#   Scripted path   scripts/deploy-gateway.sh, from a checkout, with --build.
+#   Fallback path   scripts/deploy-gateway-fallback.sh, from a checkout, with
+#                   --build, for a GitHub outage only; the pipeline is the
+#                   deploy path.
 #                   GATEWAY_IMAGE is not set, so the image built is named
 #                   docker-gateway, the name it has always had.
 #

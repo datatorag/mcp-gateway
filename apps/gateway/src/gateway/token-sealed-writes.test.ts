@@ -1,6 +1,6 @@
 /**
  * SCRUM-442, release 1: every write of a provider token also writes it
- * sealed, and the legacy plugin table is written sealed only.
+ * sealed.
  *
  * Real Postgres with the migrations applied, because what is under test is
  * what reaches the row: each sealed value must open, bound to that row's
@@ -24,8 +24,7 @@ import {
 } from "@datatorag-mcp/db";
 import { getTestDb, stopTestDb, insertTestUser, isDockerAvailable } from "../test-utils/db";
 import { upsertServiceAccount } from "./connected-accounts";
-import { upsertPluginConnection } from "./plugin-connections";
-import { resolvePluginConnectionToken, resolveServiceToken } from "./service-token";
+import { resolveServiceToken } from "./service-token";
 import { openToken, type SealContext } from "./token-crypto";
 
 describe.skipIf(!isDockerAvailable())("SCRUM-442: provider tokens are written sealed", () => {
@@ -171,47 +170,6 @@ describe.skipIf(!isDockerAvailable())("SCRUM-442: provider tokens are written se
         .returning({ id: mcpServers.id });
       return row.id;
     }
-
-    async function pluginRow(userId: string, mcpServerId: string) {
-      const [row] = await db
-        .select()
-        .from(pluginConnections)
-        .where(eq(pluginConnections.userId, userId));
-      expect(row.mcpServerId).toBe(mcpServerId);
-      return row;
-    }
-
-    it("is written sealed only, and the token reads back opened", async () => {
-      const userId = await insertTestUser(db);
-      const mcpServerId = await server();
-      const fields = { provider: "legacy", tokenExpiresAt: null, scopes: "s" };
-      await upsertPluginConnection(db, userId, mcpServerId, { ...fields, accessToken: "pat-1", refreshToken: "prt-1" });
-      const first = await pluginRow(userId, mcpServerId);
-      expect(first).toMatchObject({ accessToken: null, refreshToken: null });
-      expect(
-        openToken(first.accessTokenSealed!, {
-          table: "plugin_connections",
-          column: "access_token",
-          userId,
-          rowId: first.id,
-        })
-      ).toBe("pat-1");
-      expect(await resolvePluginConnectionToken(db, userId, mcpServerId)).toBe("pat-1");
-
-      // A reconnect updates the same row, sealed under its id.
-      await upsertPluginConnection(db, userId, mcpServerId, { ...fields, accessToken: "pat-2", refreshToken: null });
-      const second = await pluginRow(userId, mcpServerId);
-      expect(second.id).toBe(first.id);
-      expect(second.refreshTokenSealed).toBeNull();
-      expect(await resolvePluginConnectionToken(db, userId, mcpServerId)).toBe("pat-2");
-
-      await db.delete(pluginConnections).where(eq(pluginConnections.userId, userId));
-    });
-
-    it("resolves nothing for a user with no connection", async () => {
-      const userId = await insertTestUser(db);
-      expect(await resolvePluginConnectionToken(db, userId, await server())).toBeNull();
-    });
 
     it("migration 1 refuses while the table holds a row", async () => {
       const userId = await insertTestUser(db);

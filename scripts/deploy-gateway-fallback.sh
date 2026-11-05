@@ -1,10 +1,15 @@
 #!/bin/bash
+# The fallback for a GitHub outage, kept on purpose. The deploy path is the
+# pipeline (.github/workflows/release.yml), which ships an image built in CI;
+# this script builds on the host from a checkout, for when that pipeline
+# cannot run.
+#
 # Deploy one exact commit of main to the gateway host, with a rollback image
 # tagged from what is RUNNING before the build, and only the newest few
 # rollback tags kept.
 #
 # Usage:
-#   DEPLOY_HOST=ubuntu@<host> DEPLOY_KEY=<path-to-pem> scripts/deploy-gateway.sh <full-sha>
+#   DEPLOY_HOST=ubuntu@<host> DEPLOY_KEY=<path-to-pem> scripts/deploy-gateway-fallback.sh <full-sha>
 #
 # Optional: DEPLOY_ENV_FILE: the gateway's env file on the host (default
 #             /opt/datatorag-deploy/env/gateway.env, the file the pipeline

@@ -5,6 +5,7 @@ import type { Database } from "@datatorag-mcp/db";
 import { oauthAccessTokens } from "@datatorag-mcp/db";
 import { hashToken } from "@datatorag-mcp/auth";
 import { liveTokenConditions } from "./token-liveness";
+import { SESSION_COOKIE } from "./cookies";
 
 /** The client id every dashboard sign-in is stored under. A web session and an
  * MCP access token share `oauth_access_tokens`; this is what tells them apart. */
@@ -60,7 +61,7 @@ export async function createWebSession(db: Database, res: Response, userId: stri
     scope: null,
     expiresAt,
   });
-  res.cookie("dtrmcp_session", token, {
+  res.cookie(SESSION_COOKIE, token, {
     httpOnly: true,
     secure: true,
     sameSite: "lax",

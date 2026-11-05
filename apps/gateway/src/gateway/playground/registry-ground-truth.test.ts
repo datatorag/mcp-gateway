@@ -21,8 +21,8 @@ import { getDb } from "@/lib/db";
  * agreement. The registry also kept advertising two tools the plugin had
  * withheld, for the same reason and in the same silence.
  *
- * So this asks the plugin itself. `listTools()` over the same transport
- * `discoverTools` uses is the only thing here that is not our own bookkeeping.
+ * So this asks the plugin itself. `listTools()` over the plugin's own MCP
+ * transport is the only thing here that is not our own bookkeeping.
  *
  * WHY IT IS ENV-GATED, and why that is a real limitation rather than a
  * detail: it needs a running plugin process, which exists in the deployed

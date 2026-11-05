@@ -1,22 +1,18 @@
 import { createDb } from "@datatorag-mcp/db";
-import { ConnectionPool } from "@/gateway/pool";
 import { PluginManager } from "@/gateway/plugin-manager";
 
 const globalForPm = globalThis as unknown as {
   pluginManager: PluginManager | undefined;
 };
 
-export function getPluginManager(
-  db?: ReturnType<typeof createDb>,
-  pool?: ConnectionPool
-): PluginManager {
+export function getPluginManager(db?: ReturnType<typeof createDb>): PluginManager {
   if (!globalForPm.pluginManager) {
-    if (!db || !pool) {
+    if (!db) {
       throw new Error(
-        "PluginManager not initialized — must provide db and pool on first call"
+        "PluginManager not initialized: provide db on the first call"
       );
     }
-    globalForPm.pluginManager = new PluginManager(db, pool);
+    globalForPm.pluginManager = new PluginManager(db);
   }
   return globalForPm.pluginManager;
 }

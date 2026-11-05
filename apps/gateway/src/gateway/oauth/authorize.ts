@@ -4,7 +4,8 @@ import { eq } from "drizzle-orm";
 import type { Database } from "@datatorag-mcp/db";
 import { oauthClients } from "@datatorag-mcp/db";
 import { safeStringEqual } from "@datatorag-mcp/auth";
-import { nonceMatches, OAUTH_STATE_TTL_MS } from "./csrf";
+import { nonceMatches } from "./csrf";
+import { oneShotCookie } from "@/lib/cookies";
 import { findOrCreateGoogleUser, onNewUser } from "../signup";
 import { cleanClientName, cleanRegisteredClientName } from "../untrusted-text";
 import { hasConsent, issueAuthorizationCode, startConsent } from "./consent";
@@ -107,13 +108,7 @@ export function createAuthorizeRouter(
       })
     ).toString("base64url");
 
-    res.cookie("mcp_oauth_nonce", nonce, {
-      httpOnly: true,
-      secure: config.baseUrl.startsWith("https"),
-      sameSite: "lax",
-      path: "/",
-      maxAge: OAUTH_STATE_TTL_MS,
-    });
+    res.cookie("mcp_oauth_nonce", nonce, oneShotCookie(config.baseUrl.startsWith("https")));
 
     const googleAuthUrl = new URL(
       "https://accounts.google.com/o/oauth2/v2/auth"
