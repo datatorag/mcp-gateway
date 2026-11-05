@@ -35,26 +35,46 @@ set -euo pipefail
 # for connection strings has nothing to object to. See run_gateway.
 PLACEHOLDER_DATABASE_URL="unset://database.invalid/unset"
 
+# The plugins: every directory under plugins/ that carries a plugin
+# manifest, read from the tree being tested, so a new plugin is a surface
+# without an edit here. Sorted, so the order is the same everywhere.
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+plugin_slugs() {
+  local manifest slug
+  for manifest in "$REPO_ROOT"/plugins/*/datatorag.json; do
+    [ -f "$manifest" ] || continue
+    slug="${manifest%/datatorag.json}"
+    echo "${slug##*/}"
+  done | LC_ALL=C sort
+}
+PLUGINS="$(plugin_slugs | tr '\n' ' ' | sed 's/ $//')"
+
+is_plugin() {
+  case "$1" in ""|*[[:space:]]*) return 1 ;; esac # one name, never two
+  case " $PLUGINS " in *" $1 "*) return 0 ;; esac
+  return 1
+}
+
 # One line per changed path on stdin; one surface per line on stdout.
 #   gateway  typecheck and tests of apps/gateway
 #   scripts  the self-tests of the scripts in scripts/
 #   canary   the test of the do-nothing container in docker/canary
-#   gws-mcp, atlassian-mcp, notion-mcp, brevo-mcp, slack-mcp, posthog-mcp
-#            a plugin's build and tests. A plugin path selects its own row
-#            AND the gateway: the plugins ship inside the gateway's image, so
-#            a plugin change is a gateway change wherever an image is decided
+#   <slug>   one per plugin in $PLUGINS: its build and tests. A plugin path
+#            selects its own row AND the gateway: the plugins ship inside the
+#            gateway's image, so a plugin change is a gateway change wherever
+#            an image is decided. A path under plugins/ that names no plugin
+#            directory is unknown, and selects everything
 #   none     nothing this gate has tests for: documentation, agent guidance,
 #            and tools/, which has no suite of its own
 #   all      unknown, or a file every surface depends on
 classify_path() {
   case "$1" in
     docker/canary/*) echo canary ;; # before docker/*, which is the gateway's
-    plugins/gws-mcp/*) echo gws-mcp ;;
-    plugins/atlassian-mcp/*) echo atlassian-mcp ;;
-    plugins/notion-mcp/*) echo notion-mcp ;;
-    plugins/brevo-mcp/*) echo brevo-mcp ;;
-    plugins/slack-mcp/*) echo slack-mcp ;;
-    plugins/posthog-mcp/*) echo posthog-mcp ;;
+    plugins/*/*)
+      local slug="${1#plugins/}"
+      slug="${slug%%/*}"
+      if is_plugin "$slug"; then echo "$slug"; else echo all; fi
+      ;;
     apps/gateway/*|packages/*|docker/*) echo gateway ;;
     scripts/*) echo scripts ;;
     registry/*) echo scripts ;; # its files are checked by the scripts' tests
@@ -67,7 +87,7 @@ classify_path() {
 }
 
 surfaces_for() {
-  local path surface want_gateway=0 want_scripts=0 want_canary=0 want_gws=0 want_atlassian=0 want_notion=0 want_brevo=0 want_slack=0 want_posthog=0
+  local path surface want_gateway=0 want_scripts=0 want_canary=0 want_plugins=" " p
   while IFS= read -r path; do
     [ -n "$path" ] || continue
     surface=$(classify_path "$path")
@@ -75,25 +95,17 @@ surfaces_for() {
       gateway) want_gateway=1 ;;
       scripts) want_scripts=1 ;;
       canary) want_canary=1 ;;
-      gws-mcp) want_gateway=1; want_gws=1 ;;
-      atlassian-mcp) want_gateway=1; want_atlassian=1 ;;
-      notion-mcp) want_gateway=1; want_notion=1 ;;
-      brevo-mcp) want_gateway=1; want_brevo=1 ;;
-      slack-mcp) want_gateway=1; want_slack=1 ;;
-      posthog-mcp) want_gateway=1; want_posthog=1 ;;
-      all) want_gateway=1; want_scripts=1; want_canary=1; want_gws=1; want_atlassian=1; want_notion=1; want_brevo=1; want_slack=1; want_posthog=1 ;;
+      all) want_gateway=1; want_scripts=1; want_canary=1; want_plugins=" $PLUGINS " ;;
       none) ;;
+      *) want_gateway=1; want_plugins="$want_plugins$surface " ;;
     esac
   done
   [ "$want_gateway" = 1 ] && echo gateway
   [ "$want_scripts" = 1 ] && echo scripts
   [ "$want_canary" = 1 ] && echo canary
-  [ "$want_gws" = 1 ] && echo gws-mcp
-  [ "$want_atlassian" = 1 ] && echo atlassian-mcp
-  [ "$want_notion" = 1 ] && echo notion-mcp
-  [ "$want_brevo" = 1 ] && echo brevo-mcp
-  [ "$want_slack" = 1 ] && echo slack-mcp
-  [ "$want_posthog" = 1 ] && echo posthog-mcp
+  for p in $PLUGINS; do
+    case "$want_plugins" in *" $p "*) echo "$p" ;; esac
+  done
   return 0
 }
 
@@ -108,6 +120,16 @@ self_test() {
       failed=1
     fi
   }
+  # The plugin list is read from the tree. An empty one (the glob ran
+  # somewhere else) would quietly drop every plugin's tests.
+  local all="gateway scripts canary $PLUGINS" slug
+  if [ -z "$PLUGINS" ]; then
+    echo "gate self-test FAILED: no plugin directory found under $REPO_ROOT/plugins"
+    failed=1
+  fi
+  for slug in $PLUGINS; do
+    expect "the $slug plugin selects its own tests and the gateway" "gateway $slug" "plugins/$slug/src/index.ts"
+  done
   expect "a gateway source file" "gateway" "apps/gateway/src/gateway/health.ts"
   expect "gateway content is the gateway" "gateway" "apps/gateway/content/docs/gmail.md"
   expect "a shared package" "gateway" "packages/db/src/index.ts"
@@ -120,11 +142,13 @@ self_test() {
   expect "the example env file is read by a gateway test" "gateway" ".env.example"
   expect "a file moved out of the gateway still names where it was" "gateway" "apps/gateway/src/guard.test.ts" "docs/guard.test.ts"
   expect "documentation beside code still selects the code" "gateway" "docs/x.md" "apps/gateway/server.ts"
-  expect "the lockfile selects everything" "gateway scripts canary gws-mcp atlassian-mcp notion-mcp brevo-mcp slack-mcp posthog-mcp" "pnpm-lock.yaml"
-  expect "a workflow selects everything" "gateway scripts canary gws-mcp atlassian-mcp notion-mcp brevo-mcp slack-mcp posthog-mcp" ".github/workflows/ci.yml"
+  expect "the lockfile selects everything" "$all" "pnpm-lock.yaml"
+  expect "a workflow selects everything" "$all" ".github/workflows/ci.yml"
   # The known-bad cases: a path nobody listed must never come out as nothing.
-  expect "an unknown top-level directory selects everything" "gateway scripts canary gws-mcp atlassian-mcp notion-mcp brevo-mcp slack-mcp posthog-mcp" "services/new-thing/src/index.ts"
-  expect "a plugin nobody listed selects everything" "gateway scripts canary gws-mcp atlassian-mcp notion-mcp brevo-mcp slack-mcp posthog-mcp" "plugins/new-thing/src/index.ts"
+  expect "an unknown top-level directory selects everything" "$all" "services/new-thing/src/index.ts"
+  expect "a plugin directory that does not exist selects everything" "$all" "plugins/new-thing/src/index.ts"
+  expect "a file directly under plugins/ selects everything" "$all" "plugins/README.md"
+  expect "a directory whose name holds two plugins' names selects everything" "$all" "plugins/gws-mcp notion-mcp/x.ts"
   expect "a plugin selects its own tests and the gateway" "gateway gws-mcp" "plugins/gws-mcp/src/tools/gmail.ts"
   expect "the other plugin does not run the first one's tests" "gateway atlassian-mcp" "plugins/atlassian-mcp/src/index.ts"
   expect "the Notion plugin selects its own tests and the gateway, no other plugin's" "gateway notion-mcp" "plugins/notion-mcp/src/notion-client.ts"
@@ -133,8 +157,8 @@ self_test() {
   expect "the PostHog plugin selects its own tests and the gateway, no other plugin's" "gateway posthog-mcp" "plugins/posthog-mcp/src/posthog-client.ts"
   expect "two plugins select both, and the gateway once" "gateway gws-mcp notion-mcp" "plugins/gws-mcp/src/index.ts" "plugins/notion-mcp/README.md"
   expect "a plugin's documentation is still the plugin" "gateway gws-mcp" "plugins/gws-mcp/README.md"
-  expect "an unknown root file selects everything" "gateway scripts canary gws-mcp atlassian-mcp notion-mcp brevo-mcp slack-mcp posthog-mcp" "Makefile"
-  expect "a path that only looks like docs selects everything" "gateway scripts canary gws-mcp atlassian-mcp notion-mcp brevo-mcp slack-mcp posthog-mcp" "docs-private/x.md"
+  expect "an unknown root file selects everything" "$all" "Makefile"
+  expect "a path that only looks like docs selects everything" "$all" "docs-private/x.md"
   if [ "$failed" = 1 ]; then
     exit 2
   fi
@@ -234,7 +258,7 @@ main() {
       gateway) run_gateway ;;
       scripts) run_scripts ;;
       canary) run_canary ;;
-      gws-mcp|atlassian-mcp|notion-mcp|brevo-mcp|slack-mcp|posthog-mcp) run_plugin "$s" ;;
+      *) is_plugin "$s" && run_plugin "$s" ;;
     esac
   done
   echo "gate: ok for: $(echo $surfaces). Not covered: the security review, the leak scan, the production build, and any suite that reported skipped."

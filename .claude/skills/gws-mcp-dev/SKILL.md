@@ -120,16 +120,16 @@ inside 8 seconds. Six tools post to `/query/` with a `name` naming the tool;
 values reach HogQL as placeholders in `values`, never in the text. Every
 range takes its end. Admin-only like Slack; uid and gid 906.
 
-**Adding a plugin.** Three places name each plugin one by one and refuse or
-skip an unknown one: the gateway `Dockerfile` (its files, beside the other
-plugins' COPY lines, and a `plugin-<slug>` account on the next free uid,
-without which it is never started),
-`scripts/gate.sh`'s path table (an unlisted plugin path falls to `all`,
-which runs every suite except the new plugin's; the row, its `want_` flag,
-the `run_plugin` case and the self-test lines all name it), and
-its record in `CONNECTOR_REGISTRY`
-(`apps/gateway/src/gateway/connectors/registry.ts`), from which the
-service map and every other per-connector map derive.
+**Adding a plugin.** The directory `plugins/<slug>/` with its
+`datatorag.json` is the plugin list. The gateway `Dockerfile` copies,
+builds and ships every directory there, and `scripts/gate.sh` makes each
+one a surface, so neither needs an edit. Two places still name it: a
+`plugin-<slug>` account in the `Dockerfile` on the next free uid (the build
+fails without it, and the manager would never start it), and its record in
+`CONNECTOR_REGISTRY` (`apps/gateway/src/gateway/connectors/registry.ts`),
+from which the service map and every other per-connector map derive;
+`connectors/registry.test.ts` fails until the record and the directory
+agree.
 CI's tool-file step loops over `plugins/` and needs nothing. Its
 `mcp_servers` row, without which the manager never starts it, comes from
 the registry pair like its first tools (Ship tail), never by hand.
