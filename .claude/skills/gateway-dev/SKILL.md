@@ -102,14 +102,15 @@ A **testcontainers-based real-Postgres helper exists** (`apps/gateway/src/test-u
 ## Commands
 
 - Tests: `pnpm vitest run` (in `apps/gateway`)
-- Typecheck: `pnpm exec tsc --noEmit` (in `apps/gateway` — there's no root `tsconfig.json`, so this must run from inside the package)
+- Typecheck: `pnpm typecheck` at the root (turbo builds the packages first, then typechecks the gateway and every plugin), or `pnpm run typecheck` inside one package. A bare `tsc` in `apps/gateway` reads the packages' built `dist`, so on a checkout whose packages were built long ago it reports errors that are not in the code; build them first or use the script.
 - Build (root): `pnpm build`
+- Unused code report (root): `pnpm knip` (config in `knip.json`; the vendored `components/ui` and `components/ai-elements` and the runner cases are ignored). CI runs it as a report that never fails the job. A finding is a candidate to check by reading its call sites, not a deletion order: dynamic imports and string-keyed registries are invisible to it.
 - Dev server: `pnpm dev` in `apps/gateway` (no local postgres to start first — `DATABASE_URL` in the root `.env` points at a Neon branch). Port comes from the root `.env` (`GATEWAY_PORT`) — not Next's default 3000.
 
 ## Ship ritual
 
 1. Branch off `main`.
-2. Tests + typecheck + build all pass (`pnpm vitest run` in `apps/gateway`, `pnpm exec tsc --noEmit`, `pnpm build`). `scripts/gate.sh` runs the first two for whatever the diff touches, and CI runs the same script on the pull request; it does not run the build, so the build is still yours to run.
+2. Tests + typecheck + build all pass (`pnpm vitest run` in `apps/gateway`, `pnpm exec tsc --noEmit`, `pnpm build`). `scripts/gate.sh` runs the first two for whatever the diff touches, and CI runs the same script on the pull request. On every run it also checks that every repo path a skill, README or CLAUDE.md names in backticks exists (`scripts/doc-paths-check.mjs`), so a skill pointing at a moved file goes red; it does not run the build, so the build is still yours to run.
 3. Content-coverage check: run the `content-marketer` agent if the change touches anything user-facing (new route, new capability, changed billing behavior) that should be reflected in docs/changelog/blog.
 4. Run the `security-reviewer` agent (`.claude/agents/security-reviewer.md`) on `origin/main...HEAD` — this repo is public, this gate is mandatory, not optional. Only proceed on `VERDICT: PASS`.
 5. `gh auth status` — confirm the org account, not a personal one, before pushing.

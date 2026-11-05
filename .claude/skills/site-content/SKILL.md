@@ -124,7 +124,7 @@ Two docs-specific mechanisms added by SCRUM-24:
   old `SetupWizard` that bundled the two is gone; SCRUM-118/122). Its
   `sourcePrefix` prop keeps analytics separable: `copy_mcp_config` fires with source
   `wizard_${client}` (dashboard, historical values preserved) vs `docs_${client}`.
-- **Docs CTA**: `docs/cta.tsx` renders a sign-in/get-started CTA in the docs layout
+- **Docs CTA**: `apps/gateway/src/app/docs/cta.tsx` renders a sign-in/get-started CTA in the docs layout
   (mobile header + desktop sidebar, every `/docs/*` page), firing `docs_cta_clicked`
   (PostHog) with the page path. It starts Google sign-in itself (`signInHref()`, a plain anchor; see the sign-in rule under Page conventions); the gtag signup conversion
   needs no wiring here because the dashboard fires it on `?signup=1`. The layout

@@ -51,6 +51,11 @@ jobs:
         run: corepack enable && corepack prepare pnpm@9.15.0 --activate
       - name: Install with a frozen lockfile
         run: pnpm install --frozen-lockfile
+      # Report only: unused files, dependencies and exports, for a person to
+      # read. It never fails the job; nothing is pruned on its word alone.
+      - name: knip (report only)
+        continue-on-error: true
+        run: pnpm knip
       - name: Gate
         run: scripts/gate.sh "$BASE_SHA"
 

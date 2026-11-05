@@ -214,8 +214,8 @@ Do not add a rule to `pattern-check.mjs` that one of those five tests already
 covers. Two authorities that can disagree is the durable defect, even when the
 pick happens to be right.
 
-**There is no ESLint in this repo and `pnpm lint` runs zero tasks** — it exits 0
-having executed nothing. So "add a lint rule" is not the cheap option here that
+**There is no ESLint in this repo and no `lint` task** (the old one ran zero
+tasks and exited 0, so it was removed rather than left passing). So "add a lint rule" is not the cheap option here that
 it is elsewhere; a guard test is. If you propose introducing a linter, propose it
 as its own piece of work, not as a side effect of a review.
 
