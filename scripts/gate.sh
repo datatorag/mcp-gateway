@@ -141,7 +141,7 @@ run_gateway() {
   echo "##### gateway: build the packages it imports"
   pnpm exec turbo run build --filter='@datatorag-mcp/gateway^...'
   echo "##### gateway: typecheck"
-  (cd apps/gateway && pnpm exec tsc --noEmit)
+  pnpm --filter @datatorag-mcp/gateway run typecheck
   echo "##### gateway: tests"
   # The config schema requires DATABASE_URL and exits the process without it,
   # which takes down suites that never open a connection. Where none is set

@@ -102,7 +102,7 @@ A **testcontainers-based real-Postgres helper exists** (`apps/gateway/src/test-u
 ## Commands
 
 - Tests: `pnpm vitest run` (in `apps/gateway`)
-- Typecheck: `pnpm exec tsc --noEmit` (in `apps/gateway` — there's no root `tsconfig.json`, so this must run from inside the package)
+- Typecheck: `pnpm typecheck` at the root (turbo builds the packages first, then typechecks the gateway and every plugin), or `pnpm run typecheck` inside one package. A bare `tsc` in `apps/gateway` reads the packages' built `dist`, so on a checkout whose packages were built long ago it reports errors that are not in the code; build them first or use the script.
 - Build (root): `pnpm build`
 - Dev server: `pnpm dev` in `apps/gateway` (no local postgres to start first — `DATABASE_URL` in the root `.env` points at a Neon branch). Port comes from the root `.env` (`GATEWAY_PORT`) — not Next's default 3000.
 
