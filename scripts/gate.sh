@@ -11,7 +11,11 @@
 #   1. Ancestry: <base> must be an ancestor of HEAD. A branch that has fallen
 #      behind is tested against a tree that is not the one it would merge into.
 #   2. Maps every changed path to a surface (the table in classify_path).
-#   3. Runs typecheck and tests for the surfaces that changed, and nothing for
+#   3. Checks that every repo path the skills, READMEs and CLAUDE.md files
+#      name exists (scripts/doc-paths-check.mjs). Every run, whatever changed:
+#      it reads the whole tree in well under a second, and a doc change selects
+#      no surface.
+#   4. Runs typecheck and tests for the surfaces that changed, and nothing for
 #      a change that touches no surface.
 #
 # What it does NOT do, so a pass is not read as more than it is:
@@ -168,6 +172,7 @@ run_scripts() {
   python3 -m unittest scripts/test_leak_scan.py
   node scripts/registry-diff.mjs --self-test
   node --test scripts/registry-diff.test.mjs
+  node --test scripts/doc-paths-check.test.mjs
   node --test scripts/registry-file-check.test.mjs
   node --test scripts/registry-apply.test.mjs
   local t
@@ -204,6 +209,9 @@ main() {
     || { echo "gate: base '$base' is not a commit here. Fetch it first."; exit 2; }
   git merge-base --is-ancestor "$base" HEAD \
     || { echo "gate: FAILED. $base is not an ancestor of HEAD: bring the branch up to date."; exit 1; }
+
+  echo "##### docs: every repo path a living doc names exists"
+  node scripts/doc-paths-check.mjs
 
   local changed surfaces
   # --no-renames: with rename detection a moved file shows only where it went,

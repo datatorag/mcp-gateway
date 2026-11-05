@@ -219,14 +219,14 @@ edit means the design-time check was skipped.
 | Brevo welcome + no-activation follow-up emails | `apps/gateway/src/gateway/lifecycle.ts` |
 | Slack / Brevo / Stripe / PostHog-server clients | `apps/gateway/src/lib/{slack,brevo,stripe,posthog-server}.ts` |
 | Session cookie → userId | `apps/gateway/src/lib/session.ts` |
-| Playground agentic loop (8-iteration cap, prompt caching, system prompt) | `apps/gateway/src/gateway/playground/engine.ts` |
+| Agent (Mastra): system prompt, prompt-cache markers, model resolution | `apps/gateway/src/mastra/agents/datatorag.ts` |
+| Agent step caps (chat and skill runs) | `apps/gateway/src/mastra/run-steps.ts` |
 | Playground tool listing/execution (thin shaping over shared `user-tools.ts`) | `apps/gateway/src/gateway/playground/tools.ts` |
 | Shared "which tools can this user see" policy + plugin URL + one-shot call | `apps/gateway/src/gateway/user-tools.ts` |
 | Per-period allowance: run claim/refund, tool-call counter, lazy roll | `apps/gateway/src/gateway/usage/period.ts` |
 | Tool-result size cap fed back to the model | `apps/gateway/src/gateway/playground/cap.ts` |
 | Per-model-call LLM token telemetry, keyed by run id | `apps/gateway/src/mastra/llm-usage.ts` |
 | Playground SSE chat + feedback routes (401/403/429/400 mapping) | `apps/gateway/src/app/api/playground/{chat,feedback}/route.ts` |
-| Playground LLM model factory (Anthropic) | `apps/gateway/src/lib/llm.ts` |
 | Playground chat UI (`PlaygroundHandle.runPrompt`, feedback controls, `layout="panel" \| "page"`) | `apps/gateway/src/app/dashboard/playground.tsx` |
 | Dashboard shell: sidebar/rail, `FULL_HEIGHT_ROUTES` | `apps/gateway/src/app/dashboard/layout.tsx` |
 | MCP setup page (client picker + config snippets, live status polling below) | `apps/gateway/src/app/dashboard/mcp-config/page.tsx`, `apps/gateway/src/app/dashboard/mcp-config/connection-status.tsx` |

@@ -109,7 +109,7 @@ A **testcontainers-based real-Postgres helper exists** (`apps/gateway/src/test-u
 ## Ship ritual
 
 1. Branch off `main`.
-2. Tests + typecheck + build all pass (`pnpm vitest run` in `apps/gateway`, `pnpm exec tsc --noEmit`, `pnpm build`). `scripts/gate.sh` runs the first two for whatever the diff touches, and CI runs the same script on the pull request; it does not run the build, so the build is still yours to run.
+2. Tests + typecheck + build all pass (`pnpm vitest run` in `apps/gateway`, `pnpm exec tsc --noEmit`, `pnpm build`). `scripts/gate.sh` runs the first two for whatever the diff touches, and CI runs the same script on the pull request. On every run it also checks that every repo path a skill, README or CLAUDE.md names in backticks exists (`scripts/doc-paths-check.mjs`), so a skill pointing at a moved file goes red; it does not run the build, so the build is still yours to run.
 3. Content-coverage check: run the `content-marketer` agent if the change touches anything user-facing (new route, new capability, changed billing behavior) that should be reflected in docs/changelog/blog.
 4. Run the `security-reviewer` agent (`.claude/agents/security-reviewer.md`) on `origin/main...HEAD` — this repo is public, this gate is mandatory, not optional. Only proceed on `VERDICT: PASS`.
 5. `gh auth status` — confirm the org account, not a personal one, before pushing.
