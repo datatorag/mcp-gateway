@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { SESSION_COOKIE } from "@/lib/cookies";
 
 const PROTECTED_PATHS = ["/dashboard"];
 
@@ -6,7 +7,7 @@ export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
   if (PROTECTED_PATHS.some((p) => pathname.startsWith(p))) {
-    const session = request.cookies.get("dtrmcp_session");
+    const session = request.cookies.get(SESSION_COOKIE);
     if (!session?.value) {
       const loginUrl = new URL("/auth/login", request.url);
       // PATH AND QUERY (SCRUM-223). The campaign's deep link is

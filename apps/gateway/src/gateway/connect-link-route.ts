@@ -22,7 +22,8 @@ import { eq } from "drizzle-orm";
 import { users, type Database } from "@datatorag-mcp/db";
 import { liveWebSessionUserId } from "../lib/web-session";
 import { signInHref } from "../lib/sign-in";
-import { OAUTH_STATE_TTL_MS, sameOriginRequest } from "./oauth/csrf";
+import { sameOriginRequest } from "./oauth/csrf";
+import { oneShotCookie, SESSION_COOKIE } from "@/lib/cookies";
 import {
   claimConnectLink,
   CONNECT_LINK_COOKIE,
@@ -76,7 +77,7 @@ export function createConnectLinkRouter(db: Database, opts: { baseUrl: string })
 
   /** True when the browser is signed in as a user other than the link's. */
   async function signedInAsSomeoneElse(req: Request, link: ConnectLink): Promise<boolean> {
-    const sessionUserId = await liveWebSessionUserId(db, req.cookies?.dtrmcp_session);
+    const sessionUserId = await liveWebSessionUserId(db, req.cookies?.[SESSION_COOKIE]);
     return sessionUserId !== null && sessionUserId !== link.userId;
   }
 
@@ -100,7 +101,7 @@ export function createConnectLinkRouter(db: Database, opts: { baseUrl: string })
       res.status(404).type("html").send(renderConnectLinkExpired());
       return;
     }
-    if (!(await liveWebSessionUserId(db, req.cookies?.dtrmcp_session))) {
+    if (!(await liveWebSessionUserId(db, req.cookies?.[SESSION_COOKIE]))) {
       res.redirect(signInHref(`/connect/resume/${provider}`));
       return;
     }
@@ -163,13 +164,7 @@ export function createConnectLinkRouter(db: Database, opts: { baseUrl: string })
       res.status(410).type("html").send(renderConnectLinkExpired());
       return;
     }
-    res.cookie(CONNECT_LINK_COOKIE, token, {
-      httpOnly: true,
-      secure,
-      sameSite: "lax",
-      path: "/",
-      maxAge: OAUTH_STATE_TTL_MS,
-    });
+    res.cookie(CONNECT_LINK_COOKIE, token, oneShotCookie(secure));
     res.redirect(303, connectStartFromLink(link.provider));
   });
 

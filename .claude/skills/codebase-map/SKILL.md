@@ -205,6 +205,7 @@ edit means the design-time check was skipped.
 | Session starts per default account + the shape alert query (`quietConnections`, SCRUM-164) | `apps/gateway/src/gateway/session-starts.ts` |
 | Multi-account list/default/disconnect | `apps/gateway/src/gateway/connected-accounts.ts` |
 | Dashboard page gating (`dtrmcp_session`) | `apps/gateway/src/proxy.ts` |
+| Session cookie name (`SESSION_COOKIE`, never renamed) and the one-OAuth-round-trip cookie options (`oneShotCookie`) | `apps/gateway/src/lib/cookies.ts` |
 | Plan caps + free-tier hard-stop gate | `apps/gateway/src/gateway/billing/{plans,enforce}.ts` |
 | Stripe webhook lifecycle + idempotency claim | `apps/gateway/src/gateway/billing/webhook-handlers.ts`, `apps/gateway/src/app/api/stripe/webhook/route.ts` |
 | Stripe Checkout / Billing Portal routes | `apps/gateway/src/app/api/billing/{checkout,portal}/route.ts` |
