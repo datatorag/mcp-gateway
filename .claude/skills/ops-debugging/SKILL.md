@@ -37,7 +37,7 @@ table gets exactly the rows that changed. Not a re-discovery.
 
 **The registry rule (SCRUM-138, SCRUM-235).** The `tools` table does not
 resync itself on a plugin deploy: `startAll()` only respawns processes, and
-`discoverTools()` runs at install time only. It is also never regenerated
+nothing in the gateway discovers tools. It is also never regenerated
 wholesale by hand. A full re-discovery (delete every row, reinsert what the
 plugin reports) once left seven tools live in the plugin and invisible in the
 registry, and its unconditional DELETE is the wrong tool for every routine
@@ -48,8 +48,8 @@ change. What to do instead depends on what changed:
   WHERE namespaced_name = '<slug>__<tool>'`, guarded on the old description
   text so it touches nothing if the row is not the one you expect, with
   `RETURNING` read back. The served count stays flat; say so in the report.
-- **A new tool**: one `INSERT` for that row (columns as `discoverTools`
-  writes them: `mcp_server_id`, `name`, `namespaced_name`, `description`,
+- **A new tool**: one `INSERT` for that row (the columns `pnpm registry:diff`
+  writes: `mcp_server_id`, `name`, `namespaced_name`, `description`,
   `input_schema_json`, `read_only_hint`, `destructive_hint` (SCRUM-468, null when the plugin said nothing), `credits_per_call`), landed in the
   same change as the playground classification commit. The served count
   moves by exactly one, and the smoke suite is told in advance so its count
@@ -84,8 +84,8 @@ new description or the new name.
    `RETURNING`. For an `INSERT`, `read_only_hint` is not optional: the
    cross-check in `tool-classification.test.ts` treats NULL as "the plugin
    said nothing", so a row written without it disables the guard rather than
-   tripping it. Match `discoverTools` in `plugin-manager.ts` column for
-   column. (The retired wholesale script lived here until SCRUM-235; it is
+   tripping it. Generate the row with `pnpm registry:diff` rather than
+   writing its columns by hand. (The retired wholesale script lived here until SCRUM-235; it is
    gone on purpose, and the unconditional DELETE it carried is the reason.)
 4. **No gateway restart is needed for the registry.** `listUserToolRows`
    (`user-tools.ts`) queries `tools` on every ListTools request and caches

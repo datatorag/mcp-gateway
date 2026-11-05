@@ -45,7 +45,7 @@ function makeManager(servers: Server[], rows: Row[] = [], userFor?: PluginUserLo
       }),
     }),
   };
-  return new PluginManager(db as never, {} as never, userFor ? { userFor } : {});
+  return new PluginManager(db as never, userFor ? { userFor } : {});
 }
 
 function writePlugin(slug: string, source: string): string {

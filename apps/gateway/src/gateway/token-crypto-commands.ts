@@ -47,8 +47,7 @@ const ctxFor = (table: Table, column: Column, row: Row): SealContext => ({
  * concurrent write can be made to land. */
 export type CommandHooks = { afterRead?: () => Promise<void> };
 
-/** Rows with a token held only in plain text. Only service_connections can
- * have one: plugin_connections has been written sealed-only from the start. */
+/** Rows with a token held only in plain text. */
 export async function countUnsealed(db: Database): Promise<number> {
   const [row] = (await db.execute(sql`
     SELECT count(*)::int AS n FROM service_connections
@@ -99,8 +98,8 @@ export async function backfillSealed(
   return { sealed, skipped, unsealed: await countUnsealed(db) };
 }
 
-/** Re-seal under the first listed key every value sealed under another, in
- * both tables. Once it reports nothing, the old key can leave the list. */
+/** Re-seal under the first listed key every value sealed under another. Once
+ * it reports nothing, the old key can leave the list. */
 export async function reencryptSealed(
   db: Database
 ): Promise<{ resealed: number; skipped: number; failed: number }> {
@@ -108,7 +107,7 @@ export async function reencryptSealed(
   let resealed = 0;
   let skipped = 0;
   let failed = 0;
-  for (const table of ["service_connections", "plugin_connections"] as const) {
+  for (const table of ["service_connections"] as const) {
     for (const column of COLUMNS) {
       const sealedColumn = sql.identifier(sealedOf(column));
       const candidates = await rows(

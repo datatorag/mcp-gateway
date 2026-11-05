@@ -283,10 +283,6 @@ const RULES = [
       "apps/gateway/src/app/api/leads/route.ts":
         "Public unauthenticated intake. Has its own dedicated limiters, zod body schema, honeypot " +
         "and IP hashing -- deliberately not the session-gated shape.",
-      "apps/gateway/src/app/api/servers/[slug]/connect/route.ts":
-        "OAuth connect redirect flow with bespoke CSRF-cookie handling; returns a redirect, not JSON.",
-      "apps/gateway/src/app/api/servers/[slug]/connect/callback/route.ts":
-        "OAuth callback redirect flow with bespoke CSRF-cookie handling; returns a redirect, not JSON.",
     },
     message:
       "exports an HTTP handler without going through withRoute (apps/gateway/src/lib/with-route.ts). " +

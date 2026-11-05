@@ -1,23 +1,3 @@
-import { z } from "zod";
-
-export const mcpServerStatusSchema = z.enum([
-  "pending",
-  "building",
-  "active",
-  "error",
-  "disabled",
-]);
-export type McpServerStatus = z.infer<typeof mcpServerStatusSchema>;
-
-export const creditTransactionTypeSchema = z.enum([
-  "purchase",
-  "usage",
-  "refund",
-  "bonus",
-  "adjustment",
-]);
-export type CreditTransactionType = z.infer<typeof creditTransactionTypeSchema>;
-
 export interface McpGatewayManifest {
   name: string;
   description?: string;
@@ -33,11 +13,6 @@ export interface McpGatewayManifest {
     port: number;
     path: string;
     healthCheckPath?: string;
-    buildCommand?: string;
-    startCommand?: string;
-  };
-  pricing?: {
-    creditsPerCall: Record<string, number>;
   };
   env?: {
     required?: string[];
@@ -52,5 +27,4 @@ export interface McpGatewayManifest {
     scopes: string[];
     [key: string]: string | string[];
   };
-  dockerfile?: string;
 }

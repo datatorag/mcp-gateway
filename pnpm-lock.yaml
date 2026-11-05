@@ -276,10 +276,6 @@ importers:
         version: 5.9.3
 
   packages/types:
-    dependencies:
-      zod:
-        specifier: ^3.24.0
-        version: 3.25.76
     devDependencies:
       tsup:
         specifier: ^8.3.0

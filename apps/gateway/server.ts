@@ -96,7 +96,7 @@ async function main() {
   // row would otherwise stay `running` and hold the one-run claim forever.
   // The two are independent, so boot does not wait for one before the
   // other. Best effort: a failure marking runs must not stop the server.
-  const pluginManager = getPluginManager(db, pool);
+  const pluginManager = getPluginManager(db);
   await Promise.all([
     pluginManager.startAll(),
     markInterruptedRuns(db).catch((err) =>

@@ -9,12 +9,7 @@
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { randomBytes, randomUUID } from "node:crypto";
 import { eq, sql } from "drizzle-orm";
-import {
-  mcpServers,
-  pluginConnections,
-  serviceConnections,
-  type Database,
-} from "@datatorag-mcp/db";
+import { serviceConnections, type Database } from "@datatorag-mcp/db";
 import { getTestDb, stopTestDb, insertTestUser, isDockerAvailable } from "../test-utils/db";
 import {
   backfillSealed,
@@ -48,7 +43,6 @@ describe.skipIf(!isDockerAvailable())("SCRUM-442: token commands", () => {
   beforeEach(async () => {
     process.env.CONNECTION_TOKEN_KEYS = keyA;
     await db.delete(serviceConnections);
-    await db.delete(pluginConnections);
   });
 
   afterEach(() => {
@@ -154,38 +148,25 @@ describe.skipIf(!isDockerAvailable())("SCRUM-442: token commands", () => {
   });
 
   describe("re-encrypt", () => {
-    it("re-seals every value under an old key with the first key, in both tables, and leaves current ones", async () => {
+    it("re-seals every value under an old key with the first key, and leaves current ones", async () => {
       const a = await row({ accessToken: "at-1", refreshToken: "rt-1" });
       await backfillSealed(db);
-      const userId = await insertTestUser(db);
-      const [server] = await db.insert(mcpServers).values({ slug: `s-${randomUUID()}`, name: "S" }).returning({ id: mcpServers.id });
-      const pluginId = randomUUID();
-      const pluginCtx: SealContext = { table: "plugin_connections", column: "access_token", userId, rowId: pluginId };
-      await db.insert(pluginConnections).values({
-        id: pluginId,
-        userId,
-        mcpServerId: server.id,
-        provider: "p",
-        accessTokenSealed: sealToken("pat-1", pluginCtx),
-      });
 
       process.env.CONNECTION_TOKEN_KEYS = `${keyB},${keyA}`;
       const b = await row({ accessToken: "at-2", refreshToken: null });
       await backfillSealed(db);
       const bSealed = (await read(b.id)).accessTokenSealed;
 
-      expect(await reencryptSealed(db)).toEqual({ resealed: 3, skipped: 0, failed: 0 });
+      expect(await reencryptSealed(db)).toEqual({ resealed: 2, skipped: 0, failed: 0 });
       const ra = await read(a.id);
       expect(sealedKeyId(ra.accessTokenSealed!)).toBe("b");
       expect(sealedKeyId(ra.refreshTokenSealed!)).toBe("b");
       expect(openToken(ra.refreshTokenSealed!, at(a.userId, a.id, "refresh_token"))).toBe("rt-1");
       expect((await read(b.id)).accessTokenSealed).toBe(bSealed);
-      const [p] = await db.select().from(pluginConnections).where(eq(pluginConnections.id, pluginId));
-      expect(sealedKeyId(p.accessTokenSealed!)).toBe("b");
 
       // Once nothing carries `a`, it can leave the list.
       process.env.CONNECTION_TOKEN_KEYS = keyB;
-      expect(openToken(p.accessTokenSealed!, pluginCtx)).toBe("pat-1");
+      expect(openToken(ra.accessTokenSealed!, at(a.userId, a.id, "access_token"))).toBe("at-1");
       expect(await reencryptSealed(db)).toEqual({ resealed: 0, skipped: 0, failed: 0 });
     });
   });

@@ -192,11 +192,11 @@ const REPO_NAME = /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/;
 
 /**
  * The mcp_servers row of a new plugin, from its datatorag.json and
- * package.json at the --to commit. The values are the ones the manager's own
- * install path wrote (plugin-manager.ts, installAsync), and the ones it needs
+ * package.json at the --to commit. The values are the ones the manager's old
+ * install path wrote (since removed), and the ones the manager needs
  * to start the plugin from the image and route calls to it:
  *   name, description  manifest name; manifest description, else package.json's
- *   manifest_json      the manifest as it is (the legacy connect routes read it)
+ *   manifest_json      the manifest as it is
  *   license_spdx       package.json's license, else NULL
  *   github_repo_*      this repository and the plugin's directory in it. NOT
  *                      decorative: buildPluginServerUrl (user-tools.ts) calls
@@ -240,9 +240,8 @@ const sqlText = (v) => (v === null ? "NULL" : sqlString(v));
 const serverGuard = (row) =>
   md5(jsonbText([row.name, row.description, row.githubRepoUrl, row.githubRepoOwner, row.githubRepoName, row.licenseSpdx, row.manifest, row.status]));
 
-/** The port rule: the lowest port from 40000 (the manager's BASE_PORT) that no
- * mcp_servers row holds, which is the database half of the manager's own
- * nextAvailablePort. Chosen by the statement, so the file needs no database
+/** The port rule: the lowest port from 40000 that no mcp_servers row holds,
+ * the rule the manager's old install path used for a new plugin. Chosen by the statement, so the file needs no database
  * to be written; checked after the insert, so a port another row took in the
  * meantime raises instead of being shared. */
 function serverInsertBlock(row) {

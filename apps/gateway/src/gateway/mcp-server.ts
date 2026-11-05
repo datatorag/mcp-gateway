@@ -36,7 +36,6 @@ import {
   PLUGIN_SERVICE_MAP,
   ambiguousAccountMessage,
   resolveServiceToken,
-  resolvePluginConnectionToken,
   pluginContextHeaders,
 } from "./service-token";
 import {
@@ -1466,12 +1465,6 @@ export function createMcpServer(
           refusalText,
           `${MISSING_SCOPE_ERROR_MARKER} ${scopeCheck.missing.displayName} not granted`
         );
-      }
-    } else if (mcpServer.githubRepoUrl) {
-      // Legacy: the pluginConnections table, sealed (SCRUM-442).
-      const legacyToken = await resolvePluginConnectionToken(db, userId, mcpServer.id);
-      if (legacyToken) {
-        userToken = legacyToken;
       }
     }
 

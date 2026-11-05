@@ -400,12 +400,6 @@ export function skillRunMessage(
   );
 }
 
-/** Which layer a skill is, in the words every surface uses (per HQ
- * decision: the card, the run preface, `skills_get` and `prompts/get`). */
-export function layerLabel(skill: Pick<Skill, "layer">): "your version" | "published" {
-  return skill.layer === "yours" ? "your version" : "published";
-}
-
 /** What the accuracy check says about a skill's tool list (SCRUM-238): the
  * names we do not ship at all (a failure, the skill would fail on a reader),
  * and the fallback gws_run named explicitly (a warning: a skill that needs

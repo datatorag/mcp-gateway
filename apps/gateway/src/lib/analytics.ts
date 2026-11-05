@@ -231,5 +231,4 @@ export const PROVIDERS = {
   POSTHOG: "posthog",
 } as const;
 
-export type EventName = (typeof EVENTS)[keyof typeof EVENTS];
 export type ProviderId = (typeof PROVIDERS)[keyof typeof PROVIDERS];
