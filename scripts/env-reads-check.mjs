@@ -46,9 +46,8 @@ export const EXEMPT = new Map([
   ],
   [
     "apps/gateway/src/gateway/token-crypto.ts",
-    "CONNECTION_TOKEN_KEYS has no default, so there is no second value to drift, and it is parsed by the same " +
-      "parseConnectionTokenKeys the schema validates it with at start. Read directly so sealing a token does not " +
-      "make every write path depend on the whole config.",
+    "A call-time read, like gws-run-access: CONNECTION_TOKEN_KEYS is re-parsed whenever its value changes, by the " +
+      "same parseConnectionTokenKeys the schema validates it with at start, and has no default to drift.",
   ],
 ]);
 
