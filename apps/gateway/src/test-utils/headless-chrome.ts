@@ -37,6 +37,8 @@ export interface Chrome {
   events(sessionId: string): CdpEvent[];
   /** A blank page with the network domain on, ready to navigate. */
   newPage(): Promise<string>;
+  /** Closes a page from `newPage`; its later events are no longer recorded. */
+  closePage(sessionId: string): Promise<void>;
   close(): Promise<void>;
 }
 
@@ -66,6 +68,7 @@ export async function launchChrome(executable: string): Promise<Chrome> {
   let nextId = 1;
   const pending = new Map<number, { resolve: (v: Record<string, unknown>) => void; reject: (e: Error) => void }>();
   const bySession = new Map<string, CdpEvent[]>();
+  const targets = new Map<string, string>();
   let buffered = "";
   fromChrome.on("data", (chunk: Buffer) => {
     buffered += chunk.toString();
@@ -107,9 +110,15 @@ export async function launchChrome(executable: string): Promise<Chrome> {
     async newPage() {
       const { targetId } = await send("Target.createTarget", { url: "about:blank" });
       const { sessionId } = await send("Target.attachToTarget", { targetId, flatten: true });
+      targets.set(sessionId as string, targetId as string);
       await send("Page.enable", {}, sessionId as string);
       await send("Network.enable", {}, sessionId as string);
       return sessionId as string;
+    },
+    async closePage(sessionId) {
+      const targetId = targets.get(sessionId);
+      targets.delete(sessionId);
+      if (targetId) await send("Target.closeTarget", { targetId }).catch(() => undefined);
     },
     async close() {
       toChrome.end();

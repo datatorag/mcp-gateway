@@ -29,7 +29,10 @@ vi.mock("../lib/web-session", () => ({
 import { createConnectLinkRouter } from "./connect-link-route";
 
 const chromePath = findChrome();
-const TOKEN = "A".repeat(43);
+/** Generous: the gate runs this beside the whole suite, and a loaded runner
+ * has taken over thirty seconds for one case. */
+const CASE_TIMEOUT_MS = 90_000;
+const WAIT_MS = 30_000;
 const dbMock = {
   select: () => ({ from: () => ({ where: () => ({ limit: async () => [{ email: "jane.doe@example.com" }] }) }) }),
 } as unknown as Database;
@@ -68,45 +71,54 @@ describe.runIf(!!chromePath)("the connect link's button in a real browser", () =
     vi.clearAllMocks();
   });
 
+  // Each case has its own link token, so a late request from one case can
+  // never be counted as another's, and closes its own page when it ends.
   it.each([
-    ["atlassian", "Atlassian's own page", "/auth/atlassian/connect?next=%2Fconnect%2Fdone"],
-    ["google-workspace", "Google's consent page", "/auth/google/connect?proceed=1&next=%2Fconnect%2Fdone"],
-  ])("%s: %s posts with our Origin and is handed to the connect start", async (provider, _page, start) => {
+    ["atlassian", "Atlassian's own page", "/auth/atlassian/connect?next=%2Fconnect%2Fdone", "A"],
+    ["google-workspace", "Google's consent page", "/auth/google/connect?proceed=1&next=%2Fconnect%2Fdone", "B"],
+  ])("%s: %s posts with our Origin and is handed to the connect start", async (provider, _page, start, letter) => {
+    const token = letter.repeat(43);
     peekConnectLink.mockResolvedValue(link(provider));
     claimConnectLink.mockResolvedValue(link(provider));
     const page = await chrome.newPage();
-    const url = `${base}/connect/${TOKEN}`;
+    try {
+      const url = `${base}/connect/${token}`;
 
-    await chrome.send("Page.navigate", { url }, page);
-    await waitForEvent(chrome, page, (evs) => evs.find((e) => e.method === "Page.loadEventFired"));
-    const clicked = await chrome.send(
-      "Runtime.evaluate",
-      { expression: `(() => { const b = document.querySelector('form[method="post"] button'); if (!b) return false; b.click(); return true; })()` },
-      page
-    );
-    expect((clicked.result as { value: unknown }).value).toBe(true);
+      await chrome.send("Page.navigate", { url }, page);
+      await waitForEvent(chrome, page, (evs) => evs.find((e) => e.method === "Page.loadEventFired"), WAIT_MS);
+      const clicked = await chrome.send(
+        "Runtime.evaluate",
+        { expression: `(() => { const b = document.querySelector('form[method="post"] button'); if (!b) return false; b.click(); return true; })()` },
+        page
+      );
+      expect((clicked.result as { value: unknown }).value).toBe(true);
 
-    // The POST's own request id, then its outcome: a redirect is reported as
-    // the next request under the same id, carrying the response it followed.
-    const post = await waitForEvent(chrome, page, (evs) =>
-      evs.find((e) => e.method === "Network.requestWillBeSent" && (e.params.request as { method: string }).method === "POST")
-    );
-    const requestId = post.params.requestId;
-    const outcome = await waitForEvent(chrome, page, (evs) => {
-      const hop = evs.find((e) => e.method === "Network.requestWillBeSent" && e.params.requestId === requestId && e.params.redirectResponse);
-      if (hop) return { status: (hop.params.redirectResponse as { status: number }).status, to: (hop.params.request as { url: string }).url };
-      const answered = evs.find((e) => e.method === "Network.responseReceived" && e.params.requestId === requestId);
-      if (answered) return { status: (answered.params.response as { status: number }).status, to: null };
-      return undefined;
-    });
-    // What went on the wire, as the browser actually sent it.
-    const sent = await waitForEvent(chrome, page, (evs) =>
-      evs.find((e) => e.method === "Network.requestWillBeSentExtraInfo" && e.params.requestId === requestId)
-    );
-    const headers = sent.params.headers as Record<string, string>;
+      // The POST's own request id, then its outcome: a redirect is reported as
+      // the next request under the same id, carrying the response it followed.
+      const post = await waitForEvent(chrome, page, (evs) =>
+        evs.find((e) => e.method === "Network.requestWillBeSent" && (e.params.request as { method: string }).method === "POST"),
+        WAIT_MS
+      );
+      const requestId = post.params.requestId;
+      const outcome = await waitForEvent(chrome, page, (evs) => {
+        const hop = evs.find((e) => e.method === "Network.requestWillBeSent" && e.params.requestId === requestId && e.params.redirectResponse);
+        if (hop) return { status: (hop.params.redirectResponse as { status: number }).status, to: (hop.params.request as { url: string }).url };
+        const answered = evs.find((e) => e.method === "Network.responseReceived" && e.params.requestId === requestId);
+        if (answered) return { status: (answered.params.response as { status: number }).status, to: null };
+        return undefined;
+      }, WAIT_MS);
+      // What went on the wire, as the browser actually sent it.
+      const sent = await waitForEvent(chrome, page, (evs) =>
+        evs.find((e) => e.method === "Network.requestWillBeSentExtraInfo" && e.params.requestId === requestId),
+        WAIT_MS
+      );
+      const headers = sent.params.headers as Record<string, string>;
 
-    expect({ origin: headers.origin ?? headers.Origin, status: outcome.status }).toEqual({ origin: base, status: 303 });
-    expect(outcome.to).toBe(`${base}${start}`);
-    expect(claimConnectLink).toHaveBeenCalledTimes(1);
-  }, 30_000);
+      expect({ origin: headers.origin ?? headers.Origin, status: outcome.status }).toEqual({ origin: base, status: 303 });
+      expect(outcome.to).toBe(`${base}${start}`);
+      expect(claimConnectLink.mock.calls.filter((call) => call[1] === token)).toHaveLength(1);
+    } finally {
+      await chrome.closePage(page);
+    }
+  }, CASE_TIMEOUT_MS);
 });
