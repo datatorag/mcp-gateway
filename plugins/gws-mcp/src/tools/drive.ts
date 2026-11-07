@@ -89,7 +89,7 @@ export const driveTools: ToolDef[] = [
   {
     name: "drive_copy_file",
     description:
-      "Copies a file in Google Drive and names the copy in the same call. The copy carries the original's tabs, formatting and formulas, so a copied template matches its source. With convert set to true, an Excel, Word or PowerPoint file is copied as a Google Sheet, Doc or Slides file, which the sheets_, docs_ and slides_ tools open; the original is left as it was. Returns the copy's id, name, MIME type, folders and link. Folders are not copyable: Drive refuses them with a 403 \"This file cannot be copied by the user\", a limit of the API rather than of permissions.",
+      "Copies a file in Google Drive and names the copy in the same call. The copy carries the original's tabs, formatting and formulas, so a copied template matches its source. With convert set to true, an Excel, Word or PowerPoint file is copied as a Google Sheet, Doc or Slides file, which the sheets_, docs_ and slides_ tools open; the original is left as it was. With target_mime_type, the copy is converted to the Google type named, which is how a PDF or an image becomes a Google Doc with its text recognised (ocr_language sets the language for that recognition); when convert and target_mime_type are both given, target_mime_type decides the type. Returns the copy's id, name, MIME type, folders and link. Folders are not copyable: Drive refuses them with a 403 \"This file cannot be copied by the user\", a limit of the API rather than of permissions.",
     inputSchema: {
       type: "object",
       properties: {
@@ -110,7 +110,19 @@ export const driveTools: ToolDef[] = [
         convert: {
           type: "boolean",
           description:
-            "When true, the copy of an Excel, Word or PowerPoint file is a Google Sheet, Doc or Slides file (.xlsx and .xls to Sheets, .docx and .doc to Docs, .pptx and .ppt to Slides). A file of any other type is refused and nothing is copied. Defaults to false, a copy of the same type.",
+            "When true, the copy of an Excel, Word or PowerPoint file is a Google Sheet, Doc or Slides file (.xlsx and .xls to Sheets, .docx and .doc to Docs, .pptx and .ppt to Slides). A file of any other type is refused and nothing is copied. Defaults to false, a copy of the same type. Ignored when target_mime_type is given.",
+        },
+        target_mime_type: {
+          type: "string",
+          minLength: 1,
+          description:
+            "The Google type the copy is converted to, e.g. application/vnd.google-apps.document for a Google Doc (a PDF or image copied this way has its text recognised), application/vnd.google-apps.spreadsheet or application/vnd.google-apps.presentation. Sent to Drive as the copy's mimeType, with no lookup of the source's type; Drive refuses a conversion it does not support. Optional; takes precedence over convert.",
+        },
+        ocr_language: {
+          type: "string",
+          minLength: 1,
+          description:
+            "Language hint for the text recognition when a PDF or image is converted to a Google Doc, as a BCP-47 code such as en, de or ja. Optional; Drive detects the language when it is absent.",
         },
       },
       required: ["file_id", "name"],
@@ -350,11 +362,16 @@ export async function handleDrive(
       // one thing the caller cannot see without a second call, and
       // `mimeType` because it is how a converted copy says what it became.
       const fields = "id,name,mimeType,parents,webViewLink";
+      // SCRUM-473: a named target type is the copy's mimeType as given, and
+      // wins over convert. OCR's language is a query parameter of files.copy.
+      const ocrLanguage = typeof args.ocr_language === "string" && args.ocr_language ? args.ocr_language : undefined;
+      const target = typeof args.target_mime_type === "string" && args.target_mime_type ? args.target_mime_type : undefined;
       // SCRUM-455: with convert, the copy of an Office file is the Google type.
-      const result =
-        args.convert === true
-          ? await convertCopy(client, args.file_id as string, body, fields)
-          : await copyDriveFile(client, args.file_id as string, body, fields);
+      const result = target
+        ? await copyDriveFile(client, args.file_id as string, { ...body, mimeType: target }, fields, ocrLanguage)
+        : args.convert === true
+          ? await convertCopy(client, args.file_id as string, body, fields, undefined, ocrLanguage)
+          : await copyDriveFile(client, args.file_id as string, body, fields, ocrLanguage);
       return jsonResponse(result.data);
     }
 

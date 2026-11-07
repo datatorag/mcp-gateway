@@ -22,10 +22,16 @@ export function copyDriveFile(
   client: GwsClient,
   fileId: unknown,
   body: Record<string, unknown>,
-  fields?: string
+  fields?: string,
+  ocrLanguage?: string
 ) {
   return client.api("drive", "files", "copy", {
-    params: { fileId, supportsAllDrives: true, ...(fields ? { fields } : {}) },
+    params: {
+      fileId,
+      supportsAllDrives: true,
+      ...(fields ? { fields } : {}),
+      ...(ocrLanguage ? { ocrLanguage } : {}),
+    },
     jsonBody: body,
   });
 }
@@ -60,12 +66,13 @@ export async function convertCopy(
   fileId: unknown,
   body: Record<string, unknown>,
   fields?: string,
-  sourceType?: string
+  sourceType?: string,
+  ocrLanguage?: string
 ) {
   const type = sourceType ?? (await getDriveFileMeta<{ mimeType?: string }>(client, fileId, "mimeType")).mimeType;
   const target = googleTypeFor(type);
   if (!target) throw new Error(NOT_CONVERTIBLE);
-  return copyDriveFile(client, fileId, { ...body, mimeType: target }, fields);
+  return copyDriveFile(client, fileId, { ...body, mimeType: target }, fields, ocrLanguage);
 }
 
 /** The delete-and-confirm shape shared by docs_delete, sheets_delete, and
