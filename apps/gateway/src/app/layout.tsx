@@ -1,25 +1,30 @@
 import type { Metadata } from "next";
-import { Montserrat, Inter, PT_Mono } from "next/font/google";
+import localFont from "next/font/local";
 import { PostHogProvider } from "@/components/posthog-provider";
 import { GoogleAds } from "@/components/google-ads";
 import { SOCIAL_OPEN_GRAPH, SOCIAL_TWITTER } from "@/lib/social-card";
 import "./globals.css";
 
-const montserrat = Montserrat({
+/* The three typefaces are files in the repository (fonts/, each with its
+ * licence), so a build fetches nothing: loading them from Google Fonts at
+ * build time failed the build whenever Google Fonts answered with a font
+ * URL it could not parse. Latin subset; Inter and Montserrat are variable
+ * fonts, so one file covers every weight the site uses. */
+const montserrat = localFont({
   variable: "--font-montserrat",
-  subsets: ["latin"],
-  weight: ["500", "600", "700", "800"],
+  src: "./fonts/montserrat-latin.woff2",
+  weight: "500 800",
 });
 
-const inter = Inter({
+const inter = localFont({
   variable: "--font-inter",
-  subsets: ["latin"],
-  weight: ["400", "500", "600"],
+  src: "./fonts/inter-latin.woff2",
+  weight: "400 600",
 });
 
-const ptMono = PT_Mono({
+const ptMono = localFont({
   variable: "--font-pt-mono",
-  subsets: ["latin"],
+  src: "./fonts/pt-mono-latin.woff2",
   weight: "400",
 });
 
