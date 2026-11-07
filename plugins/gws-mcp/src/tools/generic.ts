@@ -82,6 +82,16 @@ function unwrapRepeatedParams(
   return out;
 }
 
+/** Changing Gmail's vacation responder needs gmail.settings.basic, a scope
+ * the gateway does not request (SCRUM-457), so Google would refuse it with an
+ * insufficient-scope 403 that reads as a grant the user could still give.
+ * Refused here, before any request, in words that say why. Reading it
+ * (getVacation) works under gmail.modify and is not refused. */
+const VACATION_UPDATE = "gmail users.settings updateVacation";
+
+export const VACATION_UNSUPPORTED =
+  "Changing the Gmail vacation responder is not supported: it needs a Google scope DataToRAG does not request.";
+
 export async function handleGeneric(
   client: GwsClient,
   _toolName: string,
@@ -90,6 +100,7 @@ export async function handleGeneric(
   const service = args.service as string;
   const resource = args.resource as string;
   const method = args.method as string;
+  if (`${service} ${resource} ${method}` === VACATION_UPDATE) throw new Error(VACATION_UNSUPPORTED);
   const result = await client.api(
     service,
     resource,

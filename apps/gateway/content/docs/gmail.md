@@ -197,6 +197,10 @@ A send is never retried. `gmail_send`, `gmail_reply`, `gmail_forward`, `gmail_se
 
 Attaching Drive files and saving attachments to Drive also use the Drive access granted when you connect Google Workspace, and a Sheet sent as `csv` or `tsv` is read through Sheets.
 
+## Not supported
+
+- Turning the vacation responder (out-of-office) on or off, or changing its message. That needs a Google scope DataToRAG does not request.
+
 ## Example prompts
 
 - "Search my inbox for emails from @acme.com in the last week and summarize the key asks"
