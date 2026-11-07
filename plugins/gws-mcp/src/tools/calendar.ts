@@ -172,6 +172,22 @@ export const calendarTools: ToolDef[] = [
           description:
             "The nextPageToken from an earlier call with the same calendar, time range and query, to read the page of events after it.",
         },
+        updated_min: {
+          type: "string",
+          description:
+            "Only events changed at or after this time (RFC 3339, e.g. \"2024-06-01T00:00:00Z\"), for reading what changed since an earlier call. The time range still applies. Google refuses a time too far in the past (410 updatedMinTooLongAgo), and then a full read is the way back. Optional.",
+        },
+        show_deleted: {
+          type: "boolean",
+          description:
+            "When true, cancelled and deleted events are included, each with status \"cancelled\". Defaults to false.",
+        },
+        order_by: {
+          type: "string",
+          enum: ["startTime", "updated"],
+          description:
+            "\"startTime\" (default) orders events by when they start; \"updated\" orders them by when they were last changed.",
+        },
         full: {
           type: "boolean",
           description:
@@ -494,6 +510,16 @@ export async function handleCalendar(
         orderBy: "startTime",
       };
       if (args.query) params.q = args.query;
+      // SCRUM-474: the change-feed parameters, each sent only when given.
+      // singleEvents stays true, which orderBy startTime requires.
+      if (args.order_by !== undefined) {
+        if (args.order_by !== "startTime" && args.order_by !== "updated") {
+          throw new Error(`calendar_list_events: order_by must be "startTime" or "updated".`);
+        }
+        params.orderBy = args.order_by;
+      }
+      if (args.updated_min) params.updatedMin = args.updated_min;
+      if (typeof args.show_deleted === "boolean") params.showDeleted = args.show_deleted;
       // The compact view has always handed back a nextPageToken; this is the
       // argument that takes it (SCRUM-419).
       if (args.page_token) params.pageToken = args.page_token;
