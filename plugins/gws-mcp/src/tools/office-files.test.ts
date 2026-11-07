@@ -165,6 +165,53 @@ describe("drive_copy_file with convert (SCRUM-455)", () => {
   });
 });
 
+describe("drive_copy_file target type and OCR language (SCRUM-473)", () => {
+  const copied = () => json({ id: "c", name: "x", mimeType: GOOGLE_DOC });
+
+  it("a target type is the copy's mimeType as given, with no lookup of the source", async () => {
+    const sent = google({ api: () => json({}), drive: copied });
+    const res = await call("drive_copy_file", { file_id: "pdfFile", name: "x", target_mime_type: GOOGLE_DOC });
+    expect(res.isError).toBeFalsy();
+    expect(sent).toHaveLength(1);
+    expect(sent[0].method).toBe("POST");
+    expect(sent[0].body).toEqual({ name: "x", mimeType: GOOGLE_DOC });
+    expect(sent[0].url.searchParams.has("ocrLanguage")).toBe(false);
+  });
+
+  it("with convert as well, the target type decides and nothing is looked up", async () => {
+    const sent = google({ api: () => json({}), drive: copied });
+    await call("drive_copy_file", { file_id: "xlsxFile", name: "x", convert: true, target_mime_type: GOOGLE_DOC });
+    expect(sent).toHaveLength(1);
+    expect(sent[0].body).toEqual({ name: "x", mimeType: GOOGLE_DOC });
+  });
+
+  it("the OCR language goes out as files.copy's ocrLanguage query parameter, not in the body", async () => {
+    const sent = google({ api: () => json({}), drive: copied });
+    await call("drive_copy_file", { file_id: "scan", name: "x", target_mime_type: GOOGLE_DOC, ocr_language: "ja" });
+    expect(sent[0].url.searchParams.get("ocrLanguage")).toBe("ja");
+    expect(sent[0].body).toEqual({ name: "x", mimeType: GOOGLE_DOC });
+  });
+
+  it("the OCR language rides the convert path too", async () => {
+    const sent = google({
+      api: () => json({}),
+      drive: (s) => (s.method === "POST" ? copied() : json({ mimeType: DOCX })),
+    });
+    await call("drive_copy_file", { file_id: "docxFile", name: "x", convert: true, ocr_language: "de" });
+    const copy = sent.find((s) => s.method === "POST")!;
+    expect(copy.url.searchParams.get("ocrLanguage")).toBe("de");
+    expect(copy.body).toEqual({ name: "x", mimeType: GOOGLE_DOC });
+  });
+
+  it("a plain copy sends neither", async () => {
+    const sent = google({ api: () => json({}), drive: copied });
+    await call("drive_copy_file", { file_id: "any", name: "x", parent_id: "folder" });
+    expect(sent).toHaveLength(1);
+    expect(sent[0].body).toEqual({ name: "x", parents: ["folder"] });
+    expect(sent[0].url.searchParams.has("ocrLanguage")).toBe(false);
+  });
+});
+
 describe("googleTypeFor", () => {
   it.each([
     [XLSX, GOOGLE_SHEET],
