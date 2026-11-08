@@ -134,8 +134,11 @@ export function createOpenDiscovery(deps: OpenDiscoveryDeps): OpenDiscovery {
     }, 5 * 60_000).unref?.();
   }
 
-  function buildServer(instructions: string): Server {
-    const server = new Server(deps.serverInfo, { capabilities: deps.capabilities, instructions });
+  function buildServer(instructions: string | undefined): Server {
+    const server = new Server(deps.serverInfo, {
+      capabilities: deps.capabilities,
+      ...(instructions ? { instructions } : {}),
+    });
     server.setRequestHandler(ListToolsRequestSchema, async () => ({ tools: await opaque("tools/list", deps.listTools) }));
     server.setRequestHandler(ListPromptsRequestSchema, async () => ({
       prompts: (await opaque("prompts/list", deps.listPrompts)) as never,
@@ -187,7 +190,13 @@ export function createOpenDiscovery(deps: OpenDiscoveryDeps): OpenDiscovery {
       // Stateless: no session id generator, so the transport issues none and
       // keeps nothing; a fresh pair per request, closed with the response.
       const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined, enableJsonResponse: true });
-      const server = buildServer(await deps.instructions());
+      // Instructions are a courtesy: a failed read serves the handshake
+      // without them rather than an error page.
+      const instructions = await deps.instructions().catch((err: unknown) => {
+        console.error("[open-discovery] instructions failed:", err instanceof Error ? err.message : err);
+        return undefined;
+      });
+      const server = buildServer(instructions);
       res.on("close", () => {
         void transport.close();
         void server.close();

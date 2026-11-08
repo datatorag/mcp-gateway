@@ -60,6 +60,7 @@ const PUBLIC_BUILTINS = BUILT_IN_TOOLS.filter((t) => !t.audience && (!t.surfaces
 
 let now = 1_800_000_000_000;
 let listFails = false;
+let instructionsFail = false;
 const tracked: McpDiscovery[] = [];
 const authed = vi.fn();
 
@@ -78,7 +79,10 @@ function buildApp() {
       return listedTools(ROWS, PUBLIC_BUILTINS);
     },
     listPrompts: async () => [],
-    instructions: async () => "DataToRAG gives you tools.",
+    instructions: async () => {
+      if (instructionsFail) throw new Error("registry down");
+      return "DataToRAG gives you tools.";
+    },
     serverInfo: MCP_SERVER_INFO,
     capabilities: MCP_SERVER_CAPABILITIES,
     track: (d) => tracked.push(d),
@@ -118,6 +122,7 @@ afterAll(() => new Promise<void>((r) => server.close(() => r())));
 beforeEach(() => {
   tracked.length = 0;
   listFails = false;
+  instructionsFail = false;
   authed.mockClear();
   // A fresh minute and hour for every test, so the limit test owns its counts.
   now += 2 * 60 * 60_000;
@@ -182,6 +187,22 @@ describe("the open methods answer without a bearer", () => {
     spy.mockRestore();
     expect(body.error.message).toContain("tools/list is unavailable right now");
     expect(JSON.stringify(body)).not.toContain("secret_column");
+  });
+
+  it("a failed instructions read still answers initialize, without instructions", async () => {
+    instructionsFail = true;
+    const spy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const res = await post(INITIALIZE);
+    spy.mockRestore();
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.result.serverInfo).toEqual(MCP_SERVER_INFO);
+    expect(body.result.instructions).toBeUndefined();
+  });
+
+  it("an Authorization header that is not a bearer counts as none: discovery answers, a call is a 401", async () => {
+    expect((await post(rpc("tools/list"), { authorization: "Basic Zm9v" })).status).toBe(200);
+    await expectChallenge(await post(rpc("tools/call", 1, { name: "echo" }), { authorization: "Basic Zm9v" }));
   });
 
   it("ping and prompts/list answer 200, and notifications/initialized is accepted", async () => {
