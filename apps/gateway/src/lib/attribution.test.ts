@@ -71,6 +71,15 @@ describe("parseAttribution", () => {
     ).toBeNull();
   });
 
+  it("our own host on a port is still our own host (SCRUM-88)", () => {
+    expect(
+      parseAttribution({ a_ref_domain: "localhost:8285" }, { ownHost: "localhost" }).referringDomain
+    ).toBeNull();
+    expect(
+      parseAttribution({ a_ref_domain: "someblog.dev:8080" }, { ownHost: "localhost" }).referringDomain
+    ).toBe("someblog.dev:8080");
+  });
+
   it("keeps a cross-origin referrer intact when our own host is known", () => {
     const a = parseAttribution(
       { a_ref_domain: "someblog.dev" },

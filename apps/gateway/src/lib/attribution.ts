@@ -89,7 +89,9 @@ export interface ParseAttributionOptions {
 /** Same site when the hosts are equal or one is a subdomain of the other
  *  (`www.datatorag.com` vs `datatorag.com`, either way around). */
 function isOwnDomain(domain: string, ownHost: string): boolean {
-  const a = domain.toLowerCase().replace(/\.$/, "");
+  // A referring domain carries its port when it has one, as the analytics
+  // SDK reads `host`; a port says nothing about whose site it is.
+  const a = domain.toLowerCase().replace(/:\d+$/, "").replace(/\.$/, "");
   const b = ownHost.toLowerCase().replace(/:\d+$/, "").replace(/\.$/, "");
   if (!a || !b) return false;
   return a === b || a.endsWith(`.${b}`) || b.endsWith(`.${a}`);
