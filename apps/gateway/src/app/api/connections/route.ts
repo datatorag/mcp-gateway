@@ -25,16 +25,16 @@ export const DELETE = withRoute(async (userId, request) => {
   const service = request.nextUrl.searchParams.get("service");
 
   if (accountId) {
-    await disconnectAccount(db, userId, accountId);
-    return NextResponse.json({ ok: true });
+    const { note } = await disconnectAccount(db, userId, accountId);
+    return NextResponse.json({ ok: true, ...(note ? { note } : {}) });
   }
 
   if (service) {
     // Same helper the agent's disconnect tool calls. The rules (revoke
     // upstream first, never block the delete, clear both tables) live there so
     // the two paths cannot drift.
-    await disconnectService(db, userId, service);
-    return NextResponse.json({ ok: true });
+    const { note } = await disconnectService(db, userId, service);
+    return NextResponse.json({ ok: true, ...(note ? { note } : {}) });
   }
 
   return NextResponse.json(

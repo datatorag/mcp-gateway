@@ -69,7 +69,9 @@ describe.skipIf(!isDockerAvailable())("SCRUM-442: provider tokens are read seale
 
   async function connect(service: string, tokens: { access_token: string; refresh_token?: string }, expiresAt: Date | null = null) {
     const userId = await insertTestUser(db);
-    await upsertServiceAccount(db, userId, service, `${service}@example.com`, tokens, null, expiresAt);
+    // One account per user: two users on one address would be a shared
+    // account, which a disconnect deliberately leaves unrevoked (SCRUM-180).
+    await upsertServiceAccount(db, userId, service, `${service}-${userId}@example.com`, tokens, null, expiresAt);
     const [row] = await db
       .select({ id: serviceConnections.id })
       .from(serviceConnections)
@@ -96,7 +98,7 @@ describe.skipIf(!isDockerAvailable())("SCRUM-442: provider tokens are read seale
     it("serves it when an account is named", async () => {
       const { userId, rowId } = await connect("atlassian", { access_token: "at-1" });
       await scramblePlain(rowId);
-      expect(await resolveServiceToken(db, userId, "atlassian", "atlassian@example.com")).toMatchObject({
+      expect(await resolveServiceToken(db, userId, "atlassian", `atlassian-${userId}@example.com`)).toMatchObject({
         token: "at-1",
       });
     });

@@ -3,7 +3,9 @@ import type { NextRequest } from "next/server";
 
 /** Disconnect must tell Google before deleting our rows — best effort: a
  * revoke failure still disconnects locally, and the whole-service path
- * revokes every row's token, not just the first. */
+ * revokes every row's token, not just the first. Unless another user holds
+ * the same Google account (SCRUM-180): their tokens are the same grant, so
+ * only our rows go and the answer says so. */
 
 const getSessionUserId = vi.fn();
 vi.mock("@/lib/session", () => ({
@@ -74,18 +76,45 @@ beforeEach(() => {
 });
 
 describe("DELETE ?accountId= (single account)", () => {
-  function primeAccount() {
-    // disconnectAccount's account lookup, then its token lookup.
-    selectResults.push([
-      {
-        id: "acct-1",
-        serviceConnectionId: "conn-1",
-        connectorType: "google-workspace",
-        isDefault: false,
-      },
-    ]);
+  const ACCOUNT = {
+    id: "acct-1",
+    serviceConnectionId: "conn-1",
+    connectorType: "google-workspace",
+    isDefault: false,
+    accountEmail: "shared@example.com",
+    externalAccountId: null,
+  };
+
+  function primeAccount(otherHolders: unknown[] = []) {
+    // disconnectAccount's account lookup, its other-holder check, then its
+    // token lookup.
+    selectResults.push([ACCOUNT]);
+    selectResults.push(otherHolders);
     selectResults.push([sealed("conn-1", "access-1", "refresh-1")]);
   }
+
+  it("another user holds the same account: deletes ours, leaves the grant, and says so", async () => {
+    primeAccount([{ id: "acct-of-user-2" }]);
+
+    const res = await DELETE(request("accountId=acct-1"));
+
+    expect(res.status).toBe(200);
+    expect(revokeGoogleToken).not.toHaveBeenCalled();
+    expect(deleteCalls.length).toBeGreaterThan(0);
+    expect(await res.json()).toEqual({
+      ok: true,
+      note: "Disconnected here. Another DataToRAG user still holds this account, so its Google Workspace access was not revoked.",
+    });
+  });
+
+  it("the last holder: revokes, and the answer carries no note", async () => {
+    primeAccount();
+
+    const res = await DELETE(request("accountId=acct-1"));
+
+    expect(revokeGoogleToken).toHaveBeenCalledOnce();
+    expect(await res.json()).toEqual({ ok: true });
+  });
 
   it("revokes the refresh token, then deletes", async () => {
     primeAccount();
@@ -108,14 +137,8 @@ describe("DELETE ?accountId= (single account)", () => {
   });
 
   it("falls back to the access token when no refresh token exists", async () => {
-    selectResults.push([
-      {
-        id: "acct-1",
-        serviceConnectionId: "conn-1",
-        connectorType: "google-workspace",
-        isDefault: false,
-      },
-    ]);
+    selectResults.push([ACCOUNT]);
+    selectResults.push([]);
     selectResults.push([sealed("conn-1", "access-1", null)]);
 
     await DELETE(request("accountId=acct-1"));
@@ -140,6 +163,22 @@ describe("DELETE ?accountId= (single account)", () => {
 });
 
 describe("DELETE ?service= (whole service)", () => {
+  it("skips the revoke only for the account another user holds", async () => {
+    selectResults.push([
+      { ...sealed("conn-1", "a-1", "r-1"), accountEmail: "shared@example.com", externalAccountId: null },
+      { ...sealed("conn-2", "a-2", "r-2"), accountEmail: "mine@example.com", externalAccountId: null },
+    ]);
+    // The other-holder checks, one per row, in row order.
+    selectResults.push([{ id: "acct-of-user-2" }]);
+    selectResults.push([]);
+
+    const res = await DELETE(request("service=google-workspace"));
+
+    expect(revokeGoogleToken).toHaveBeenCalledExactlyOnceWith("r-2");
+    expect(deleteCalls).toHaveLength(2);
+    expect((await res.json()).note).toMatch(/^Disconnected here\. Another DataToRAG user still holds this account/);
+  });
+
   it("revokes every row's token before deleting", async () => {
     selectResults.push([
       sealed("conn-1", "a-1", "r-1"),

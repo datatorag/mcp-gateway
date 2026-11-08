@@ -338,7 +338,11 @@ export async function resolveServiceToken(
   db: Database,
   userId: string,
   service: string,
-  accountEmail?: string
+  accountEmail?: string,
+  /** Refresh even when the stored token has not expired: the provider has
+   * just refused it (SCRUM-180), and only a refresh can tell a stale token
+   * from a revoked grant. A refused refresh is recorded like any other. */
+  opts?: { forceRefresh?: boolean }
 ): Promise<ResolvedServiceToken | AmbiguousAccount | RefreshFailed | null> {
   type ConnRow = {
     id: string;
@@ -462,7 +466,7 @@ export async function resolveServiceToken(
   }
 
   const isExpired =
-    conn.tokenExpiresAt && conn.tokenExpiresAt.getTime() < Date.now();
+    opts?.forceRefresh || (conn.tokenExpiresAt && conn.tokenExpiresAt.getTime() < Date.now());
 
   if (!isExpired)
     return {
