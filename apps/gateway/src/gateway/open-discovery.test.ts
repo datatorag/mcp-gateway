@@ -59,6 +59,7 @@ const ROWS = [
 const PUBLIC_BUILTINS = BUILT_IN_TOOLS.filter((t) => !t.audience && (!t.surfaces || t.surfaces.includes("mcp")));
 
 let now = 1_800_000_000_000;
+let listFails = false;
 const tracked: McpDiscovery[] = [];
 const authed = vi.fn();
 
@@ -72,7 +73,10 @@ function buildApp() {
     baseUrl: BASE,
     salt: SALT,
     serverSha: "sha-test",
-    listTools: async () => listedTools(ROWS, PUBLIC_BUILTINS),
+    listTools: async () => {
+      if (listFails) throw new Error('column tools.secret_column does not exist');
+      return listedTools(ROWS, PUBLIC_BUILTINS);
+    },
     listPrompts: async () => [],
     instructions: async () => "DataToRAG gives you tools.",
     serverInfo: MCP_SERVER_INFO,
@@ -113,6 +117,7 @@ beforeAll(async () => {
 afterAll(() => new Promise<void>((r) => server.close(() => r())));
 beforeEach(() => {
   tracked.length = 0;
+  listFails = false;
   authed.mockClear();
   // A fresh minute and hour for every test, so the limit test owns its counts.
   now += 2 * 60 * 60_000;
@@ -168,6 +173,15 @@ describe("the open methods answer without a bearer", () => {
     expect(gmail.annotations).toEqual({ readOnlyHint: true });
     // No admin-only built-in reaches the open list.
     for (const t of BUILT_IN_TOOLS.filter((b) => b.audience)) expect(names).not.toContain(t.definition.name);
+  });
+
+  it("a failed read answers in fixed words, never the database's", async () => {
+    listFails = true;
+    const spy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const body = await (await post(rpc("tools/list"))).json();
+    spy.mockRestore();
+    expect(body.error.message).toContain("tools/list is unavailable right now");
+    expect(JSON.stringify(body)).not.toContain("secret_column");
   });
 
   it("ping and prompts/list answer 200, and notifications/initialized is accepted", async () => {

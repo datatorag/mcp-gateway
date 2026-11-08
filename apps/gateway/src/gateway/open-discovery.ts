@@ -25,7 +25,7 @@
 import type { Request, Response } from "express";
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
-import { ListPromptsRequestSchema, ListToolsRequestSchema } from "@modelcontextprotocol/sdk/types.js";
+import { ErrorCode, ListPromptsRequestSchema, ListToolsRequestSchema, McpError } from "@modelcontextprotocol/sdk/types.js";
 import { createRateLimiter, type RateLimiter } from "./usage/rate-limit";
 import { requestClientIp } from "./client-ip";
 import { discoveryKeys } from "./auth-failure-context";
@@ -109,6 +109,17 @@ export type OpenDiscovery = {
   handle(req: Request, res: Response, method: string): Promise<void>;
 };
 
+/** Anyone can call the open methods, so a failure answers in fixed words and
+ * the cause goes to the log only: a database error names tables and columns. */
+async function opaque<T>(method: string, read: () => Promise<T>): Promise<T> {
+  try {
+    return await read();
+  } catch (err) {
+    console.error(`[open-discovery] ${method} failed:`, err instanceof Error ? err.message : err);
+    throw new McpError(ErrorCode.InternalError, `${method} is unavailable right now`);
+  }
+}
+
 export function createOpenDiscovery(deps: OpenDiscoveryDeps): OpenDiscovery {
   const minute: RateLimiter = createRateLimiter({ limit: DISCOVERY_LIMITS.perMinute, windowMs: 60_000, clock: deps.clock });
   const hour: RateLimiter = createRateLimiter({ limit: DISCOVERY_LIMITS.perHour, windowMs: 60 * 60_000, clock: deps.clock });
@@ -125,9 +136,9 @@ export function createOpenDiscovery(deps: OpenDiscoveryDeps): OpenDiscovery {
 
   function buildServer(instructions: string): Server {
     const server = new Server(deps.serverInfo, { capabilities: deps.capabilities, instructions });
-    server.setRequestHandler(ListToolsRequestSchema, async () => ({ tools: await deps.listTools() }));
+    server.setRequestHandler(ListToolsRequestSchema, async () => ({ tools: await opaque("tools/list", deps.listTools) }));
     server.setRequestHandler(ListPromptsRequestSchema, async () => ({
-      prompts: (await deps.listPrompts()) as never,
+      prompts: (await opaque("prompts/list", deps.listPrompts)) as never,
     }));
     return server;
   }
