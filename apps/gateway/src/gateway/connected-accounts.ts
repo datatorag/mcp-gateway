@@ -7,6 +7,7 @@ import { revokeUpstream } from "./service-token";
 import { sealedColumns } from "./token-crypto";
 import { grantedServiceCount, scopeDelta } from "./scope-grant";
 import { refreshClearedFields } from "./refresh-failure";
+import { getConnectableService } from "@/app/dashboard/connections/service-registry";
 
 /**
  * List all connected accounts for a user, joined with service connection metadata.
@@ -53,6 +54,42 @@ export function maskEmail(email: string): string {
   return `${email[0]}•••${email.slice(at)}`;
 }
 
+/** The rows that are one provider account: the unique key's connector,
+ * email, and external id with IS NOT DISTINCT FROM. */
+function sameProviderAccount(connectorType: string, accountEmail: string, externalAccountId: string | null) {
+  return and(
+    eq(connectedAccounts.connectorType, connectorType),
+    eq(connectedAccounts.accountEmail, accountEmail),
+    sql`${connectedAccounts.externalAccountId} IS NOT DISTINCT FROM ${externalAccountId}`
+  );
+}
+
+/** What a disconnect says when it left the provider's grant in place
+ * because another user holds the account (SCRUM-180). */
+export function keptForOthersNote(service: string): string {
+  const name = getConnectableService(service)?.name ?? service;
+  return `Disconnected here. Another DataToRAG user still holds this account, so its ${name} access was not revoked.`;
+}
+
+/** Whether a DataToRAG user other than `userId` holds this provider account
+ * (SCRUM-180). A disconnect then leaves the provider's grant alone: both
+ * users' tokens can be one grant, and revoking it would break the other
+ * user's calls while every row of theirs still looked connected. */
+export async function heldByAnotherUser(
+  db: Database,
+  userId: string,
+  connectorType: string,
+  accountEmail: string,
+  externalAccountId: string | null
+): Promise<boolean> {
+  const [other] = await db
+    .select({ id: connectedAccounts.id })
+    .from(connectedAccounts)
+    .where(and(sameProviderAccount(connectorType, accountEmail, externalAccountId), ne(connectedAccounts.userId, userId)))
+    .limit(1);
+  return other !== undefined;
+}
+
 /**
  * Whether the account being connected is already held by ANOTHER DataToRAG
  * user, and not by this one (SCRUM-363).
@@ -73,11 +110,7 @@ export async function connectedElsewhere(
   accountEmail: string,
   externalAccountId: string | null
 ): Promise<{ otherSignIn: string } | null> {
-  const sameAccount = and(
-    eq(connectedAccounts.connectorType, connectorType),
-    eq(connectedAccounts.accountEmail, accountEmail),
-    sql`${connectedAccounts.externalAccountId} IS NOT DISTINCT FROM ${externalAccountId}`
-  );
+  const sameAccount = sameProviderAccount(connectorType, accountEmail, externalAccountId);
   const [mine] = await db
     .select({ id: connectedAccounts.id })
     .from(connectedAccounts)
@@ -403,13 +436,15 @@ export async function disconnectAccount(
   db: Database,
   userId: string,
   accountId: string
-): Promise<void> {
+): Promise<{ note?: string }> {
   const [account] = await db
     .select({
       id: connectedAccounts.id,
       serviceConnectionId: connectedAccounts.serviceConnectionId,
       connectorType: connectedAccounts.connectorType,
       isDefault: connectedAccounts.isDefault,
+      accountEmail: connectedAccounts.accountEmail,
+      externalAccountId: connectedAccounts.externalAccountId,
     })
     .from(connectedAccounts)
     .where(
@@ -420,7 +455,7 @@ export async function disconnectAccount(
     )
     .limit(1);
 
-  if (!account) return;
+  if (!account) return {};
 
   // A download link reads with this user's connection when it is used; one
   // made before a disconnect does not outlive it (SCRUM-420).
@@ -431,7 +466,15 @@ export async function disconnectAccount(
   // working. Best effort — revocation failure never blocks the disconnect,
   // because a user who clicked disconnect must never stay connected just
   // because Google was slow. Revoking the refresh token (when present) kills
-  // the whole grant including derived access tokens.
+  // the whole grant including derived access tokens. Not when another user
+  // holds the same account (SCRUM-180): only our rows go.
+  const keptForOthers = await heldByAnotherUser(
+    db,
+    userId,
+    account.connectorType,
+    account.accountEmail,
+    account.externalAccountId
+  );
   // Sealed, and handed on unopened: only revokeUpstream opens them.
   const [conn] = await db
     .select({
@@ -441,7 +484,7 @@ export async function disconnectAccount(
     .from(serviceConnections)
     .where(eq(serviceConnections.id, account.serviceConnectionId))
     .limit(1);
-  if (conn) {
+  if (conn && !keptForOthers) {
     await revokeUpstream(account.connectorType, conn, { userId, rowId: account.serviceConnectionId });
   }
 
@@ -461,6 +504,7 @@ export async function disconnectAccount(
   if (account.isDefault) {
     await promoteNextDefault(db, userId, account.connectorType);
   }
+  return keptForOthers ? { note: keptForOthersNote(account.connectorType) } : {};
 }
 
 /**
@@ -479,23 +523,35 @@ export async function disconnectService(
   db: Database,
   userId: string,
   service: string
-): Promise<{ disconnected: number }> {
-  // Sealed, and handed on unopened: only revokeUpstream opens them.
+): Promise<{ disconnected: number; note?: string }> {
+  // Sealed, and handed on unopened: only revokeUpstream opens them. The
+  // account's identity rides along for the other-holder check; a legacy row
+  // with no account has none, and is revoked as before.
   const rows = await db
     .select({
       id: serviceConnections.id,
       accessTokenSealed: serviceConnections.accessTokenSealed,
       refreshTokenSealed: serviceConnections.refreshTokenSealed,
+      accountEmail: connectedAccounts.accountEmail,
+      externalAccountId: connectedAccounts.externalAccountId,
     })
     .from(serviceConnections)
+    .leftJoin(connectedAccounts, eq(connectedAccounts.serviceConnectionId, serviceConnections.id))
     .where(
       and(eq(serviceConnections.userId, userId), eq(serviceConnections.service, service))
     );
   dropLinksForUser(userId);
-  // Tell the provider before forgetting locally. Never blocks the delete: a
-  // provider that is down must not leave the user unable to disconnect.
-  await Promise.all(
-    rows.map((row) => revokeUpstream(service, row, { userId, rowId: row.id }))
+  // Tell the provider before forgetting locally, unless another user holds
+  // the same account (SCRUM-180). Never blocks the delete: a provider that is
+  // down must not leave the user unable to disconnect.
+  const kept = await Promise.all(
+    rows.map(async (row) => {
+      const shared =
+        typeof row.accountEmail === "string" &&
+        (await heldByAnotherUser(db, userId, service, row.accountEmail, row.externalAccountId));
+      if (!shared) await revokeUpstream(service, row, { userId, rowId: row.id });
+      return shared;
+    })
   );
 
   const removed = await db
@@ -512,5 +568,5 @@ export async function disconnectService(
     .where(
       and(eq(serviceConnections.userId, userId), eq(serviceConnections.service, service))
     );
-  return { disconnected: removed.length };
+  return { disconnected: removed.length, ...(kept.some(Boolean) ? { note: keptForOthersNote(service) } : {}) };
 }

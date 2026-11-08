@@ -184,18 +184,58 @@ describe("the agent's surface", () => {
 });
 
 describe("a provider that refuses a token it issued", () => {
-  it("keeps the plugin's words and adds the link, unmetered", async () => {
-    resolveServiceToken.mockResolvedValue({ token: "tok", accountEmail: "a@example.com", scopes: null });
+  // SCRUM-180: a 401 is settled by one forced refresh of the account the call
+  // ran as, never by the plugin's words alone.
+  const refused401 = {
+    content: [{ type: "text", text: "Notion no longer accepts this connection. Reconnect Notion." }],
+    isError: true,
+    _meta: { "datatorag.com/error": { kind: "http", status: 401 } },
+  };
+
+  it("a refresh the provider refuses for good: the account needs reconnecting, with the link, unmetered", async () => {
+    resolveServiceToken
+      .mockResolvedValueOnce({ token: "tok", accountEmail: "a@example.com", scopes: null })
+      .mockResolvedValueOnce({ refreshFailed: true, service: "notion", accountEmail: "a@example.com", reconnectNeeded: true });
     selectLimit.mockResolvedValue([{ id: "srv-2", slug: "notion-mcp", containerPort: 40001, githubRepoUrl: null }]);
-    callPluginToolOnce.mockResolvedValue({
-      content: [{ type: "text", text: "Notion no longer accepts this connection. Reconnect Notion." }],
-      isError: true,
-      _meta: { "datatorag.com/error": { kind: "http", status: 401 } },
-    });
+    callPluginToolOnce.mockResolvedValue(refused401);
     const client = await connectedClient();
     const result = await client.callTool({ name: "notion-mcp__notion_search", arguments: { query: "q" } });
-    expect(textOf(result)).toBe(`Notion no longer accepts this connection. Reconnect Notion. Connect it here: ${LINK}`);
+    expect(resolveServiceToken).toHaveBeenLastCalledWith(expect.anything(), expect.anything(), "notion", "a@example.com", {
+      forceRefresh: true,
+    });
+    expect(textOf(result)).toMatch(/^Your Notion account a@example\.com needs reconnecting: Notion no longer accepts the access it granted\./);
+    expect(textOf(result).endsWith(`Connect it here: ${LINK}`)).toBe(true);
     expect(result.structuredContent).toMatchObject({ reason: "reconnect", provider: "notion", connect_url: LINK });
+    const [, props] = trackToolCall.mock.calls[0];
+    expect(classifyOutcome(props.outcome).meter).toBe(false);
+  });
+
+  it("a refresh that settles nothing: the stored credential is named, may have been revoked, with the link", async () => {
+    resolveServiceToken
+      .mockResolvedValueOnce({ token: "tok", accountEmail: "a@example.com", scopes: null })
+      .mockResolvedValueOnce(null);
+    selectLimit.mockResolvedValue([{ id: "srv-1", slug: "gws-mcp", containerPort: 40000, githubRepoUrl: null }]);
+    callPluginToolOnce.mockResolvedValue(refused401);
+    const client = await connectedClient();
+    const result = await client.callTool({ name: "gws-mcp__gmail_list", arguments: {} });
+    expect(textOf(result)).toBe(
+      `The stored Google Workspace credential for a@example.com stopped working; it may have been revoked. Reconnect it. Connect it here: ${LINK}`
+    );
+    expect(textOf(result)).not.toContain("No connected account found");
+  });
+
+  it("a refresh that issues a new token: nothing to reconnect, try again, unmetered", async () => {
+    resolveServiceToken
+      .mockResolvedValueOnce({ token: "tok", accountEmail: "a@example.com", scopes: null })
+      .mockResolvedValueOnce({ token: "tok-2", accountEmail: "a@example.com", scopes: null });
+    selectLimit.mockResolvedValue([{ id: "srv-2", slug: "notion-mcp", containerPort: 40001, githubRepoUrl: null }]);
+    callPluginToolOnce.mockResolvedValue(refused401);
+    const client = await connectedClient();
+    const result = await client.callTool({ name: "notion-mcp__notion_search", arguments: { query: "q" } });
+    expect(textOf(result)).toBe(
+      "Notion refused the stored access token for a@example.com, and a new one was issued just now. Try the call again."
+    );
+    expect(issueConnectLink).not.toHaveBeenCalled();
     const [, props] = trackToolCall.mock.calls[0];
     expect(classifyOutcome(props.outcome).meter).toBe(false);
   });

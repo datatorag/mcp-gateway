@@ -122,6 +122,23 @@ export function refreshFailedMessage(
   return `${service} did not respond to a token refresh just now. Try the call again in a moment.`;
 }
 
+/** A stored credential the provider refused at call time, when a refresh
+ * did not settle whether the grant is gone (SCRUM-180): the account is named,
+ * because it is connected, and the likely cause is said as likely. */
+export function refusedCredentialMessage(service: string, accountEmail: string | null): string {
+  const name = getConnectableService(service)?.name ?? service;
+  const account = accountEmail ? ` for ${accountEmail}` : "";
+  return `The stored ${name} credential${account} stopped working; it may have been revoked. Reconnect it.`;
+}
+
+/** The provider refused the stored access token, and a refresh issued a new
+ * one: the account is fine, and the call is worth one more try. */
+export function reissuedTokenMessage(service: string, accountEmail: string | null): string {
+  const name = getConnectableService(service)?.name ?? service;
+  const account = accountEmail ? ` for ${accountEmail}` : "";
+  return `${name} refused the stored access token${account}, and a new one was issued just now. Try the call again.`;
+}
+
 /** The fields a user's skill is saved from (SCRUM-226); one definition for
  * skills_create and skills_update. */
 const SKILL_FIELDS = {
@@ -1546,17 +1563,27 @@ export function createMcpServer(
       // its side). The plugin's words stand, followed by a connect link, in
       // the same shape as the gateway's own refusals; never metered.
       const failure = isError ? pluginFailureOf(result) : null;
-      const reconnect = !!requiredService && failure?.kind === "http" && failure.status === 401;
-      if (reconnect) {
-        const link = await offerConnectLink(requiredService, extra);
-        if (link) {
-          const text = ((result as CallToolResult).content ?? [])
-            .map((c) => (c.type === "text" ? c.text : ""))
-            .join(" ")
-            .trim();
+      // Never metered, whichever way the refresh below goes.
+      const tokenRefused = !!requiredService && failure?.kind === "http" && failure.status === 401;
+      if (tokenRefused && requiredService) {
+        // SCRUM-180: one refresh settles what the 401 meant. A grant the
+        // provider no longer honours is refused at refresh and recorded on
+        // the row, so the account reads needs_reconnect everywhere; a token
+        // that was only stale comes back new, and nothing needs reconnecting.
+        const check = await resolveServiceToken(db, userId, requiredService, accountEmail, { forceRefresh: true }).catch(
+          () => null
+        );
+        if (check && "token" in check && check.token) {
+          result = { content: [{ type: "text" as const, text: reissuedTokenMessage(requiredService, accountEmail ?? null) }], isError: true };
+        } else {
+          const sentence =
+            check && "refreshFailed" in check && check.reconnectNeeded
+              ? refreshFailedMessage(check, grantFixUrl)
+              : refusedCredentialMessage(requiredService, accountEmail ?? null);
+          const link = await offerConnectLink(requiredService, extra);
           result = {
             ...(result as Record<string, unknown>),
-            ...notConnectedResult({ service: requiredService, reason: "reconnect", sentence: text, link }),
+            ...notConnectedResult({ service: requiredService, reason: "reconnect", sentence, link }),
           };
         }
       }
@@ -1583,7 +1610,7 @@ export function createMcpServer(
           toolName: name,
           failure,
           grantComplete,
-          notConnected: reconnect,
+          notConnected: tokenRefused,
         },
       });
 

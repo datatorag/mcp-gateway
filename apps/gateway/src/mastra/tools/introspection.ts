@@ -300,7 +300,8 @@ export function buildIntrospectionTools({
        * something the agent may do because it inferred the user wanted it. */
       requireApproval: true,
       description:
-        "Disconnect the signed-in user's account for one service, revoking our access. " +
+        "Disconnect the signed-in user's account for one service, revoking our access unless another " +
+        "DataToRAG user holds the same account, which the answer's note then says. " +
         "This cannot be undone from here; reconnecting means going through consent again. " +
         "Only ever affects the signed-in user.",
       inputSchema: z.object({
@@ -324,10 +325,11 @@ export function buildIntrospectionTools({
       // name somebody else's row; a service name cannot, because the rows are
       // selected by the session user id closed over here.
       execute: async ({ service }: { service: string }) => {
-        const { disconnected } = await disconnectService(db, userId, service);
+        const { disconnected, note } = await disconnectService(db, userId, service);
         return {
           service,
           disconnected,
+          ...(note ? { note } : {}),
           // The dashboard reads the same rows this just changed, so there is
           // one state and no second copy to go stale.
           links: DASHBOARD_LINKS,
