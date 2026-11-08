@@ -13,6 +13,7 @@ import { ThreadList } from "./thread-list";
 import { ChatErrorBoundary } from "../chat-error-boundary";
 import type { PlaygroundMessage } from "../playground-presentation";
 import { getConnectableService } from "../connections/service-registry";
+import { SourcePrompt } from "./source-prompt";
 import {
   connectContinuationMessage,
   connectErrorNotice,
@@ -39,6 +40,7 @@ export type AgentLandedFrom = "signup" | "login";
 export function AgentClient({
   isDefaultView,
   landedFrom,
+  askSource = false,
   resumeThreadId = null,
   connectedService = null,
   connectError = null,
@@ -54,6 +56,9 @@ export function AgentClient({
   seedSkill?: { slug: string; title: string; layer: "published" | "yours"; services: string[]; message: string } | null;
   isDefaultView: boolean;
   landedFrom: AgentLandedFrom;
+  /** SCRUM-480: the server claimed "How did you find DataToRAG?" for this
+   * landing; the prompt opens over the page, once. */
+  askSource?: boolean;
   /** The connection state as the server loaded it at render time
    * (SCRUM-206), so the empty state's first paint is the right one and
    * nothing is fetched to find out. Null only when a caller has no server
@@ -400,6 +405,7 @@ export function AgentClient({
           </ChatErrorBoundary>
         </div>
       </div>
+      {askSource && <SourcePrompt />}
     </div>
   );
 }

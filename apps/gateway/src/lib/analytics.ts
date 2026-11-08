@@ -15,6 +15,9 @@ export const EVENTS = {
   USER_SIGNED_UP: "user_signed_up",
   USER_LOGGED_IN: "user_logged_in",
   ACCOUNT_CONNECTED: "account_connected",
+  /** SCRUM-480: the answer to "How did you find DataToRAG?" on the signup
+   * landing, or its skip, beside the measured `acquisition_*` fields. */
+  ACQUISITION_SELF_REPORTED: "acquisition_self_reported",
   /** SCRUM-149: a connect whose consent granted zero services, refused before
    * anything was written. Deliberately not an `account_connected` property:
    * that event firing means a connection exists, and a refusal is the
