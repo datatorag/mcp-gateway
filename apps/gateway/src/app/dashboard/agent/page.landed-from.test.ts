@@ -31,6 +31,13 @@ vi.mock("@/gateway/connections-view", () => ({
   loadConnectionsView: (...args: unknown[]) => loadConnectionsView(...args),
 }));
 vi.mock("@/lib/db", () => ({ db: { tag: "db" } }));
+// SCRUM-480: whether to ask "How did you find DataToRAG?" is the user's own
+// state, claimed by this call; the claim itself is pinned against Postgres in
+// gateway/self-report.test.ts.
+const claimSelfReportPrompt = vi.fn(async (..._args: unknown[]) => false);
+vi.mock("@/gateway/self-report", () => ({
+  claimSelfReportPrompt: (...args: unknown[]) => claimSelfReportPrompt(...args),
+}));
 
 import AgentPage from "./page";
 
@@ -50,6 +57,7 @@ async function render(searchParams: {
       resumeThreadId: string | null;
       connectedService: string | null;
       connectError: string | null;
+      askSource: boolean;
     };
   };
   return element.props;
@@ -72,6 +80,8 @@ const NO_CONNECT_RETURN = {
   // A plain landing seeds no skill either (SCRUM-223); the skill seeding
   // contract is pinned in page.seed-prompt.test.ts.
   seedSkill: null,
+  // Asked only on a signup landing the server claimed (SCRUM-480).
+  askSource: false,
 };
 
 describe("agent page landing props", () => {
@@ -99,6 +109,24 @@ describe("agent page landing props", () => {
       landedFrom: "login",
       ...NO_CONNECT_RETURN,
     });
+  });
+
+  it("asks how they found us on the signup landing the server claims, and only there (SCRUM-480)", async () => {
+    claimSelfReportPrompt.mockClear();
+    claimSelfReportPrompt.mockResolvedValueOnce(true);
+    expect((await render({ welcome: "1", signup: "1" })).askSource).toBe(true);
+    expect(claimSelfReportPrompt).toHaveBeenCalledExactlyOnceWith({ tag: "db" }, "user-1");
+
+    // Claimed already (a reload, a second tab): not asked again.
+    claimSelfReportPrompt.mockResolvedValueOnce(false);
+    expect((await render({ welcome: "1", signup: "1" })).askSource).toBe(false);
+
+    // A login, or half the pair, never asks or claims.
+    claimSelfReportPrompt.mockClear();
+    expect((await render({ welcome: "1" })).askSource).toBe(false);
+    expect((await render({ signup: "1" })).askSource).toBe(false);
+    expect((await render({})).askSource).toBe(false);
+    expect(claimSelfReportPrompt).not.toHaveBeenCalled();
   });
 
   it("fires no landing event when the route was navigated to rather than landed on", async () => {

@@ -5,6 +5,7 @@ import { loadConnectionsView } from "@/gateway/connections-view";
 import { shapeText } from "@/gateway/agent/suggestion-generator";
 import { getSkillBySlug, runAccountsFrom, servicesFor, skillDeepLink, skillRunMessage } from "@/lib/skills";
 import { listConnectedAccounts } from "@/gateway/connected-accounts";
+import { claimSelfReportPrompt } from "@/gateway/self-report";
 import { AgentClient } from "./agent-client";
 
 export const dynamic = "force-dynamic";
@@ -71,6 +72,10 @@ export default async function AgentPage({
   // shape cannot drift from what a later refetch returns.
   const { welcome, signup, thread, connected, connect_error, prompt, skill, landing } = params;
   const initialConnections = await loadConnectionsView(db, userId);
+  // SCRUM-480: "How did you find DataToRAG?", asked on the signup landing
+  // and nowhere else. The claim is the user's own state, not the URL: the
+  // params only say which landing this is, the row says whether it was asked.
+  const askSource = signup === "1" && welcome === "1" && (await claimSelfReportPrompt(db, userId));
 
   // SEED BY IDENTIFIER, NEVER BY CONTENT (SCRUM-118). The dashboard's prompt
   // cards link here with a SHAPE ID from the suggestion catalogue (SCRUM-110),
@@ -107,6 +112,7 @@ export default async function AgentPage({
     <AgentClient
       isDefaultView={welcome === "1"}
       landedFrom={signup === "1" ? "signup" : "login"}
+      askSource={askSource}
       // The connect round trip's return leg (SCRUM-78): which conversation to
       // reopen, and whether the connect finished. The ids are validated
       // client-side against the service registry / the user's own threads, so
