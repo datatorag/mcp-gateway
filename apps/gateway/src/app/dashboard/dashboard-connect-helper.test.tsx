@@ -34,7 +34,7 @@ vi.mock("next/navigation", () => ({
 vi.mock("posthog-js", () => ({ default: { capture: () => {} } }));
 
 import { resetCurrentUserForTests } from "@/lib/use-current-user";
-import { DashboardClient } from "./dashboard-client";
+import { ConnectionsClient } from "./connections/connections-client";
 
 let container: HTMLDivElement;
 let root: Root;
@@ -53,7 +53,7 @@ const GOOGLE_ACCOUNT: ConnectedAccount = {
 
 async function render() {
   await act(async () => {
-    root.render(<DashboardClient />);
+    root.render(<ConnectionsClient />);
   });
   for (let i = 0; i < 6; i++) {
     await act(async () => {

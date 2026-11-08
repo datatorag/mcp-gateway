@@ -49,6 +49,12 @@ export const EVENTS = {
    * click that confirmed it. */
   DEFAULT_ACCOUNT_CHANGED: "default_account_changed",
   COPY_MCP_CONFIG: "copy_mcp_config",
+  /** SCRUM-482: a client card's action on the dashboard home. `client` (a
+   * `ClientId` from lib/mcp-clients) and `action`: `deep_link` for a client's
+   * own install link, `copy` for a copied config. A copy also fires
+   * COPY_MCP_CONFIG with `source: home_<client>`, so the config-copy series
+   * stays whole. */
+  CLIENT_CARD_INSTALL_CLICKED: "client_card_install_clicked",
   SKILL_COPIED: "skill_copied",
   /** SCRUM-223: the campaign funnel, one event per hop, every one carrying
    * `skill` (the slug). The public page's CTA, the dashboard list's Run, and

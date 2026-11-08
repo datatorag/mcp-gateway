@@ -1,26 +1,22 @@
 import { redirect } from "next/navigation";
-import { connectionsForwardPath } from "@/gateway/post-connect-destination";
+import { getSessionUserId } from "@/lib/session";
+import { ConnectionsClient } from "./connections-client";
 
-/** THE ONE DASHBOARD ROUTE WITHOUT A SESSION CHECK, and deliberately so.
+export const dynamic = "force-dynamic";
+
+/**
+ * The connection card list (SCRUM-482). This route used to be a bare redirect
+ * to `/dashboard`, forwarding its query string, because the cards lived on the
+ * home; the home is now the connect-your-client page and the cards live here.
+ * The connect flow's fallback leg (`/dashboard/connections?error=…`, and a
+ * partial grant's `?connected=…&partial=…`) therefore lands on the cards
+ * directly.
  *
- * Every other route under `/dashboard` resolves the session itself, because
- * `proxy.ts` gates the prefix on the session cookie being PRESENT rather than
- * valid. This one renders nothing at all: it exists only to send an old URL to
- * the dashboard, and `/dashboard` does check. Adding a session lookup here
- * would buy an identical outcome, one hop later, at the cost of a cookie read
- * and a database round trip on a pure redirect.
- *
- * Named rather than left to be rediscovered. An unexplained gap in a set that
- * is otherwise uniform reads as an oversight, and the next person to audit
- * this either "fixes" it or has to work out why it is here.
+ * It renders, so it resolves the session itself: `proxy.ts` gates
+ * `/dashboard/*` on the cookie being present, not valid.
  */
-export default async function ConnectionsPage({
-  searchParams,
-}: {
-  searchParams: Promise<Record<string, string | string[] | undefined>>;
-}) {
-  // SCRUM-149: forward the query string. This redirect used to drop it, which
-  // silently swallowed every connect outcome landing on the fallback leg — a
-  // refused connect rendered as nothing at all.
-  redirect(connectionsForwardPath(await searchParams));
+export default async function ConnectionsPage() {
+  const userId = await getSessionUserId();
+  if (!userId) redirect("/auth/login");
+  return <ConnectionsClient />;
 }

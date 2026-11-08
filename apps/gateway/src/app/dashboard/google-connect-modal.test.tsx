@@ -32,7 +32,7 @@ vi.mock("next/navigation", () => ({
 vi.mock("posthog-js", () => ({ default: { capture: (name: string) => state.captured.push(name) } }));
 
 import { resetCurrentUserForTests } from "@/lib/use-current-user";
-import { DashboardClient } from "./dashboard-client";
+import { ConnectionsClient } from "./connections/connections-client";
 import { GoogleConnectModalHost, googleConnectModalTarget } from "./google-connect-modal";
 import {
   CONSENT_STEPS,
@@ -107,7 +107,7 @@ describe("the modal on the dashboard", () => {
     await act(async () => {
       root.render(
         <>
-          <DashboardClient />
+          <ConnectionsClient />
           <GoogleConnectModalHost />
         </>
       );

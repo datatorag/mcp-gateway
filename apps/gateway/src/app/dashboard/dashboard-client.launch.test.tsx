@@ -18,7 +18,7 @@ vi.mock("next/navigation", () => ({
   useSearchParams: () => new URLSearchParams(),
 }));
 
-const { DashboardClient } = await import("./dashboard-client");
+const { ConnectionsClient } = await import("./connections/connections-client");
 
 let container: HTMLDivElement;
 let root: Root;
@@ -45,7 +45,7 @@ async function mountWith(view: Record<string, unknown>) {
         : new Response("{}", { status: 200 })
     )
   );
-  act(() => root.render(<DashboardClient />));
+  act(() => root.render(<ConnectionsClient />));
   for (let i = 0; i < 4; i++) {
     await act(async () => {
       await Promise.resolve();
