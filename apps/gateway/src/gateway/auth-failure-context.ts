@@ -64,6 +64,29 @@ export function peerHash(ip: string, salt: string): string | null {
   return createHash("sha256").update(`${salt}:${ip}`).digest("hex").slice(0, 16);
 }
 
+/** A salted hash of IP plus user agent (SCRUM-481): the distinct id of an
+ * unauthenticated discovery, and the property a registration or sign-in
+ * carries to join back to one. Null without a salt, like `peerHash`. The
+ * user agent is the raw header, capped, so every caller hashes the same
+ * string for the same request. */
+export function discoveryId(ip: string, userAgent: string | undefined, salt: string): string | null {
+  if (salt.trim() === "") return null;
+  return createHash("sha256")
+    .update(`${salt}:discovery:${ip}|${(userAgent ?? "").slice(0, 512)}`)
+    .digest("hex")
+    .slice(0, 32);
+}
+
+/** Both join keys for a request: `discovery_id` and `peer_hash`. */
+export function discoveryKeys(
+  req: Request,
+  salt: string
+): { discovery_id: string | null; peer_hash: string | null } {
+  const ip = requestClientIp(req);
+  const ua = req.headers["user-agent"];
+  return { discovery_id: discoveryId(ip, typeof ua === "string" ? ua : undefined, salt), peer_hash: peerHash(ip, salt) };
+}
+
 function detailOf(state: McpAuthState): AuthFailureDetail {
   if (state.header === "missing") return state.authorization === "absent" ? "no_header" : "malformed";
   if (state.emptyToken) return "malformed";

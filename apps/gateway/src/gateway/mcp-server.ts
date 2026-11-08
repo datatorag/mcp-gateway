@@ -42,6 +42,7 @@ import {
   listUserToolRows,
   buildPluginServerUrl,
   callPluginToolOnce,
+  type UserToolRow,
 } from "./user-tools";
 import {
   accountsGrantingScope,
@@ -887,6 +888,93 @@ export async function findVisibleBuiltin(
   return (await isAdmin(db, userId)) ? entry : undefined;
 }
 
+/** One tool as tools/list serves it. */
+export type ListedTool = {
+  name: string;
+  description: string;
+  inputSchema: Record<string, unknown>;
+  annotations?: { readOnlyHint: boolean; destructiveHint?: boolean };
+};
+
+/**
+ * Registry rows and built-ins shaped for tools/list: the `account` param
+ * injected on service-backed tools, the hints from the reviewed row. The one
+ * shaping for a signed-in session and for the open list (SCRUM-481), so the
+ * two cannot serve a tool differently.
+ */
+export function listedTools(
+  rows: Pick<UserToolRow, "namespacedName" | "description" | "schema" | "requiredService" | "readOnlyHint" | "destructiveHint">[],
+  builtins: readonly Pick<(typeof BUILT_IN_TOOLS)[number], "definition" | "approval">[]
+): ListedTool[] {
+  const toolList: ListedTool[] = [];
+
+  for (const t of rows) {
+    // readOnlyHint is a hint to the CLIENT, from the same reviewed registry
+    // row as the description (SCRUM-326). A row that recorded nothing serves
+    // nothing, never a guessed false. The agent's own write gate does not
+    // read it; see classifyWrite.
+    //
+    // destructiveHint (SCRUM-468) rides beside it only for a tool that is
+    // not read-only and only when the row recorded one: MCP defaults it to
+    // true for any write, so serving false is what tells a client a write
+    // can be undone.
+    const destructive =
+      t.readOnlyHint === false && typeof t.destructiveHint === "boolean" ? { destructiveHint: t.destructiveHint } : {};
+    const annotations =
+      typeof t.readOnlyHint === "boolean" ? { annotations: { readOnlyHint: t.readOnlyHint, ...destructive } } : {};
+    if (t.requiredService) {
+      const properties = {
+        ...(t.schema.properties as Record<string, unknown>),
+        account: ACCOUNT_PARAM_SCHEMA,
+      };
+      toolList.push({
+        name: t.namespacedName,
+        description: t.description,
+        inputSchema: { ...t.schema, properties },
+        ...annotations,
+      });
+    } else {
+      toolList.push({
+        name: t.namespacedName,
+        description: t.description,
+        inputSchema: t.schema,
+        ...annotations,
+      });
+    }
+  }
+
+  // A built-in's hint is its declared approval, the same field the agent's
+  // confirm card reads.
+  for (const t of builtins) {
+    toolList.push({ ...t.definition, annotations: { readOnlyHint: t.approval === "read" } });
+  }
+
+  return toolList;
+}
+
+/** Skills shaped for prompts/list: one per skill, an optional `account`
+ * argument. Shared with the open list (SCRUM-481). */
+export function listedPrompts(skills: readonly { slug: string; title: string; situation: string; produces: string }[]) {
+  return skills.map((skill) => ({
+    name: skill.slug,
+    title: skill.title,
+    description: `${skill.situation} ${skill.produces}`,
+    arguments: [
+      {
+        name: "account",
+        description:
+          "Optional. The connected account to run against; the default account is used otherwise, and the prompt names the one it chose.",
+        required: false,
+      },
+    ],
+  }));
+}
+
+/** Who the server says it is, and what it serves: the same for a signed-in
+ * session and the open discovery server (SCRUM-481). */
+export const MCP_SERVER_INFO = { name: "datatorag-mcp", version: "0.1.0" };
+export const MCP_SERVER_CAPABILITIES = { tools: { listChanged: true }, prompts: {} };
+
 /**
  * Creates a new MCP Server instance for a client session.
  * Dynamically serves tools from the registry and routes calls to backend
@@ -950,7 +1038,7 @@ export function createMcpServer(
     (t) => !(opts?.unattended && t.attended) && (!t.surfaces || t.surfaces.includes(surface))
   );
   const server = new Server(
-    { name: "datatorag-mcp", version: "0.1.0" },
+    MCP_SERVER_INFO,
     // Prompts (SCRUM-224): the skill catalogue as the native "apply a
     // reusable instruction to this session" primitive, for clients that
     // render it. The same catalogue is served as tools for clients that do
@@ -958,7 +1046,7 @@ export function createMcpServer(
     // `listChanged` (SCRUM-466): a connect mid-conversation changes which
     // tools are listed, and the session is told (`notifyToolsChangedForUser`).
     {
-      capabilities: { tools: { listChanged: true }, prompts: {} },
+      capabilities: MCP_SERVER_CAPABILITIES,
       ...(surface === "mcp" && opts?.instructions ? { instructions: opts.instructions } : {}),
     }
   );
@@ -993,19 +1081,7 @@ export function createMcpServer(
   };
 
   server.setRequestHandler(ListPromptsRequestSchema, async () => ({
-    prompts: (await getAllSkills(userId)).map((skill) => ({
-      name: skill.slug,
-      title: skill.title,
-      description: `${skill.situation} ${skill.produces}`,
-      arguments: [
-        {
-          name: "account",
-          description:
-            "Optional. The connected account to run against; the default account is used otherwise, and the prompt names the one it chose.",
-          required: false,
-        },
-      ],
-    })),
+    prompts: listedPrompts(await getAllSkills(userId)),
   }));
 
   server.setRequestHandler(GetPromptRequestSchema, async (request) => {
@@ -1040,53 +1116,7 @@ export function createMcpServer(
       visibleBuiltins(db, userId, builtinEntries),
     ]);
 
-    const toolList: {
-      name: string;
-      description: string;
-      inputSchema: Record<string, unknown>;
-      annotations?: { readOnlyHint: boolean; destructiveHint?: boolean };
-    }[] = [];
-
-    for (const t of rows) {
-      // readOnlyHint is a hint to the CLIENT, from the same reviewed registry
-      // row as the description (SCRUM-326). A row that recorded nothing serves
-      // nothing, never a guessed false. The agent's own write gate does not
-      // read it; see classifyWrite.
-      //
-      // destructiveHint (SCRUM-468) rides beside it only for a tool that is
-      // not read-only and only when the row recorded one: MCP defaults it to
-      // true for any write, so serving false is what tells a client a write
-      // can be undone.
-      const destructive =
-        t.readOnlyHint === false && typeof t.destructiveHint === "boolean" ? { destructiveHint: t.destructiveHint } : {};
-      const annotations =
-        typeof t.readOnlyHint === "boolean" ? { annotations: { readOnlyHint: t.readOnlyHint, ...destructive } } : {};
-      if (t.requiredService) {
-        const properties = {
-          ...(t.schema.properties as Record<string, unknown>),
-          account: ACCOUNT_PARAM_SCHEMA,
-        };
-        toolList.push({
-          name: t.namespacedName,
-          description: t.description,
-          inputSchema: { ...t.schema, properties },
-          ...annotations,
-        });
-      } else {
-        toolList.push({
-          name: t.namespacedName,
-          description: t.description,
-          inputSchema: t.schema,
-          ...annotations,
-        });
-      }
-    }
-
-    // A built-in's hint is its declared approval, the same field the agent's
-    // confirm card reads.
-    for (const t of builtins) {
-      toolList.push({ ...t.definition, annotations: { readOnlyHint: t.approval === "read" } });
-    }
+    const toolList = listedTools(rows, builtins);
 
     // A user who lists tools and then stops is a very different activation
     // signal from one whose client never connected. Counts and the asker's

@@ -7,7 +7,18 @@ import cookieParser from "cookie-parser";
 import { randomUUID } from "node:crypto";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import { markInterruptedRuns } from "./src/gateway/tests/store";
-import { createMcpServer } from "./src/gateway/mcp-server";
+import {
+  BUILT_IN_TOOLS,
+  MCP_SERVER_CAPABILITIES,
+  MCP_SERVER_INFO,
+  createMcpServer,
+  listedPrompts,
+  listedTools,
+} from "./src/gateway/mcp-server";
+import { cachedFor, createOpenDiscovery, openDiscoveryRequest, publicInstructionsFor } from "./src/gateway/open-discovery";
+import { listPublicToolRows } from "./src/gateway/user-tools";
+import { getAllSkills } from "./src/lib/skills";
+import { PUBLIC_SERVICE_IDS } from "./src/app/dashboard/connections/service-registry";
 import { ConnectionPool } from "./src/gateway/pool";
 import { createDb } from "@datatorag-mcp/db";
 import { getEnv } from "@datatorag-mcp/config";
@@ -31,8 +42,8 @@ import { createAuthRouter } from "./src/gateway/auth";
 import { createConnectLinkRouter } from "./src/gateway/connect-link-route";
 import { serverInstructions } from "./src/gateway/server-instructions";
 import { connectLinkDone } from "./src/gateway/connect-elicitation";
-import { mcpChallenge, mcpUnauthorizedBody } from "./src/gateway/mcp-unauthorized";
-import { offeredServiceIdsFor } from "./src/gateway/service-launch";
+import { sendMcpUnauthorized } from "./src/gateway/mcp-unauthorized";
+import { launchedServiceIds, offeredServiceIdsFor } from "./src/gateway/service-launch";
 import { getPluginManager } from "./src/lib/plugin-manager";
 import { mcpBearerGate, resolveBearer, type McpAuthState } from "./src/gateway/bearer-auth";
 import { authFailureContext } from "./src/gateway/auth-failure-context";
@@ -42,6 +53,7 @@ import {
   trackMcpRequestReceived,
   trackMcpSessionInitialized,
   trackMcpAuthFailed,
+  trackMcpDiscovery,
 } from "./src/gateway/mcp-analytics";
 import { recordSessionStart } from "./src/gateway/session-starts";
 import cron from "node-cron";
@@ -235,12 +247,13 @@ async function main() {
   // OAuth2 authorization server routes (MCP clients only)
   app.use(createMetadataRouter(baseUrl));
   app.use(createProtectedResourceRouter(baseUrl));
-  app.use(createRegisterRouter(db));
+  app.use(createRegisterRouter(db, { salt: env.LEADS_IP_SALT }));
   app.use(
     createAuthorizeRouter(db, {
       googleClientId: env.GOOGLE_CLIENT_ID,
       googleClientSecret: env.GOOGLE_CLIENT_SECRET,
       baseUrl,
+      salt: env.LEADS_IP_SALT,
     })
   );
   // SCRUM-373: the Approve and Deny answers to the consent page.
@@ -288,11 +301,26 @@ async function main() {
     error: string,
     challengeParams: string[] = []
   ) {
-    res
-      .status(401)
-      .set("WWW-Authenticate", mcpChallenge(resourceMetadataUrl, challengeParams))
-      .json(mcpUnauthorizedBody(error, resourceMetadataUrl, baseUrl));
+    sendMcpUnauthorized(res, { resourceMetadataUrl, baseUrl }, error, challengeParams);
   }
+
+  // SCRUM-481: discovery before sign-in. The open list is what a new user
+  // gets once each public service is connected, and nothing user-scoped;
+  // read at most once a minute, since anyone can ask for it.
+  const publicBuiltins = BUILT_IN_TOOLS.filter((t) => !t.audience && (!t.surfaces || t.surfaces.includes("mcp")));
+  const openDiscovery = createOpenDiscovery({
+    baseUrl,
+    salt: env.LEADS_IP_SALT,
+    serverSha: env.GATEWAY_SHA,
+    listTools: cachedFor(60_000, async () => listedTools(await listPublicToolRows(db), publicBuiltins)),
+    listPrompts: async () => listedPrompts(await getAllSkills(null)),
+    instructions: cachedFor(60_000, () =>
+      publicInstructionsFor(() => launchedServiceIds(db), PUBLIC_SERVICE_IDS, serverInstructions)
+    ),
+    serverInfo: MCP_SERVER_INFO,
+    capabilities: MCP_SERVER_CAPABILITIES,
+    track: (d) => void trackMcpDiscovery(db, d),
+  });
 
   // The bearer is checked before the body is parsed, so only an
   // authenticated caller gets the larger limit a file in a tool call needs
@@ -308,9 +336,14 @@ async function main() {
 
     // Every request that reaches the endpoint gets captured, authenticated
     // or not — the copy_mcp_config → tool_call gap was invisible before.
-    const receiveRequest = (userId: string | null, action: ReturnType<typeof classifyMcpRequest>) =>
+    const receiveRequest = (
+      userId: string | null,
+      action: ReturnType<typeof classifyMcpRequest>,
+      flags: { authenticated: boolean; openDiscovery?: boolean } = { authenticated: false }
+    ) =>
       void trackMcpRequestReceived(db, {
         userId,
+        ...flags,
         action,
         method: req.method,
         clientName: clientInfo.name,
@@ -330,6 +363,14 @@ async function main() {
     };
 
     if (authState.header === "missing") {
+      // SCRUM-481: no bearer and one discovery message: answered, stateless.
+      // Everything else without a bearer keeps the 401 below.
+      const openMethod = openDiscoveryRequest(req);
+      if (openMethod) {
+        receiveRequest(null, unauthAction(), { authenticated: false, openDiscovery: true });
+        await openDiscovery.handle(req, res, openMethod);
+        return;
+      }
       receiveRequest(null, unauthAction());
       void trackMcpAuthFailed(db, { reason: "missing_credential", ...refusal("missing_credential", null) });
       send401(res, "unauthorized");
@@ -355,7 +396,7 @@ async function main() {
       sessionId,
       known: session !== undefined && session.userId === auth.userId,
     });
-    receiveRequest(auth.userId, action);
+    receiveRequest(auth.userId, action, { authenticated: true });
 
     // Existing session — route GET/DELETE/POST to the stored transport
     if (action === "route" && session) {

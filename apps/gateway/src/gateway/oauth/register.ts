@@ -4,12 +4,13 @@ import type { Database } from "@datatorag-mcp/db";
 import { oauthClients } from "@datatorag-mcp/db";
 import { checkRedirectUris } from "./redirect-uri-rules";
 import { cleanRegisteredClientName } from "../untrusted-text";
+import { trackClientRegistered } from "../discovery-join";
 
 /**
  * RFC 7591 — Dynamic Client Registration
  * MCP clients register themselves before starting the OAuth flow.
  */
-export function createRegisterRouter(db: Database): Router {
+export function createRegisterRouter(db: Database, opts: { salt?: string } = {}): Router {
   const router = Router();
 
   router.post("/oauth/register", async (req, res) => {
@@ -50,6 +51,10 @@ export function createRegisterRouter(db: Database): Router {
       responseTypes: response_types,
       tokenEndpointAuthMethod,
     });
+
+    // SCRUM-481: the client that discovered is the one registering, so this
+    // carries the discovery's own id. See discovery-join.ts.
+    trackClientRegistered(req, opts.salt ?? "", { clientId, clientName });
 
     res.status(201).json({
       client_id: clientId,

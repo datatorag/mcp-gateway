@@ -9,6 +9,7 @@ import { oneShotCookie } from "@/lib/cookies";
 import { findOrCreateGoogleUser, onNewUser } from "../signup";
 import { cleanClientName, cleanRegisteredClientName } from "../untrusted-text";
 import { hasConsent, issueAuthorizationCode, startConsent } from "./consent";
+import { trackOauthAuthorized } from "../discovery-join";
 
 // A redirect_uri is valid only if it's one the client registered. Shared by
 // /authorize (up front) and /callback (re-checked, since `state` is user-supplied).
@@ -33,6 +34,9 @@ export function createAuthorizeRouter(
     googleClientId: string;
     googleClientSecret: string;
     baseUrl: string;
+    /** The leads salt, for the join keys on the authorization event
+     * (SCRUM-481). Without it the keys are null. */
+    salt?: string;
   }
 ): Router {
   const router = Router();
@@ -236,6 +240,15 @@ export function createAuthorizeRouter(
         clientName: cleanClientName(client?.clientName),
       });
     }
+
+    // SCRUM-481: the authorization reached a user, with the keys that join
+    // it back to a discovery. See discovery-join.ts.
+    trackOauthAuthorized(req, config.salt ?? "", {
+      userId: user.id,
+      clientId: params.client_id,
+      clientName: client?.clientName ?? null,
+      newUser: isNewUser,
+    });
 
     // SCRUM-373: a client this user has approved before gets its code now;
     // any other gets the consent page first, and the code only on Approve.

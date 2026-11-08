@@ -5,7 +5,7 @@ import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 import { PLUGIN_SERVICE_MAP } from "./service-token";
 import { listConnectedServiceIds } from "./connected-services";
-import { gwsRunHiddenFrom } from "./gws-run-access";
+import { gwsRunHiddenFrom, publiclyListedTool } from "./gws-run-access";
 import { envValue } from "@datatorag-mcp/config";
 
 /**
@@ -99,6 +99,36 @@ export async function listUserToolRows(
   }
 
   return result;
+}
+
+/**
+ * The public registry snapshot (SCRUM-481): every enabled tool on an active
+ * server, as a new user would get once each public service is connected, with
+ * nothing read about any user. The public pages' filter applies, so gws_run
+ * and the tools of an admin-audience plugin are never in it.
+ */
+export async function listPublicToolRows(db: Database): Promise<UserToolRow[]> {
+  const rows = await db
+    .select({
+      namespacedName: tools.namespacedName,
+      description: tools.description,
+      inputSchemaJson: tools.inputSchemaJson,
+      readOnlyHint: tools.readOnlyHint,
+      destructiveHint: tools.destructiveHint,
+      serverSlug: mcpServers.slug,
+    })
+    .from(tools)
+    .innerJoin(mcpServers, eq(tools.mcpServerId, mcpServers.id))
+    .where(and(eq(mcpServers.status, "active"), eq(tools.enabled, true), publiclyListedTool()))
+    .orderBy(tools.namespacedName);
+  return rows.map((t) => ({
+    namespacedName: t.namespacedName,
+    description: t.description ?? "",
+    schema: (t.inputSchemaJson as Record<string, unknown>) ?? { type: "object" as const, properties: {} },
+    requiredService: PLUGIN_SERVICE_MAP[t.serverSlug],
+    readOnlyHint: t.readOnlyHint,
+    destructiveHint: t.destructiveHint,
+  }));
 }
 
 /** The registry row fields that say where a plugin server is reachable. Stated

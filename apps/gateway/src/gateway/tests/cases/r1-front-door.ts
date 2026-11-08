@@ -8,24 +8,28 @@ import type { TestCase } from "../types";
  * it leaves a gap exactly the size of the bearer check and the session
  * layer.
  *
- * This closes the anonymous half from here: an unauthenticated initialize
- * must be refused with the documented challenge, and the metadata that
- * challenge points at must exist. The POSITIVE half, a real credential being
- * accepted, is the daily trigger itself: the box calls tests_run through
- * this door, so a broken door means no run at all, which is the loudest
- * failure this suite has.
+ * This closes the anonymous half from here (SCRUM-481): discovery is open,
+ * so an unauthenticated initialize and tools/list answer, with no session
+ * id and a non-empty list; a tool call is refused with a real HTTP 401
+ * carrying the documented challenge, never a 200 error result; and the
+ * metadata that challenge points at exists. The POSITIVE half, a real
+ * credential being accepted, is the daily trigger itself: the box calls
+ * tests_run through this door, so a broken door means no run at all, which
+ * is the loudest failure this suite has.
  *
  * It records what it did NOT prove, rather than implying a whole-door check.
  */
+const HEADERS = { "content-type": "application/json", accept: "application/json, text/event-stream" };
+
 export const r1FrontDoor: TestCase = {
   id: "R1",
   title: "the /mcp front door answers over real HTTP",
   covers: [],
   accounts: [],
   run: async (ctx) => {
-    const res = await ctx.http("/mcp", {
+    const init = await ctx.http("/mcp", {
       method: "POST",
-      headers: { "content-type": "application/json", accept: "application/json, text/event-stream" },
+      headers: HEADERS,
       body: JSON.stringify({
         jsonrpc: "2.0",
         id: 1,
@@ -37,14 +41,38 @@ export const r1FrontDoor: TestCase = {
         },
       }),
     });
+    ctx.evidence(`unauthenticated initialize answered ${init.status}`);
+    if (init.status !== 200) {
+      throw new Error(`the front door answered ${init.status} to an anonymous initialize, not 200 (discovery is open)`);
+    }
+    if (init.headers.get("mcp-session-id") !== null) {
+      throw new Error("an anonymous initialize was given a session id; discovery must keep no state");
+    }
 
-    ctx.evidence(`unauthenticated POST /mcp answered ${res.status}`);
+    const list = await ctx.http("/mcp", {
+      method: "POST",
+      headers: HEADERS,
+      body: JSON.stringify({ jsonrpc: "2.0", id: 2, method: "tools/list", params: {} }),
+    });
+    const listed = list.status === 200 ? ((await list.json()) as { result?: { tools?: unknown[] } }) : null;
+    const count = listed?.result?.tools?.length ?? 0;
+    ctx.evidence(`unauthenticated tools/list answered ${list.status} with ${count} tools`);
+    if (list.status !== 200 || count === 0) {
+      throw new Error(`an anonymous tools/list answered ${list.status} with ${count} tools, not the public list`);
+    }
+
+    const res = await ctx.http("/mcp", {
+      method: "POST",
+      headers: HEADERS,
+      body: JSON.stringify({ jsonrpc: "2.0", id: 3, method: "tools/call", params: { name: "echo", arguments: { message: "smoke" } } }),
+    });
+    ctx.evidence(`unauthenticated tools/call answered ${res.status}`);
     if (res.status !== 401) {
-      throw new Error(`the front door answered ${res.status} to an anonymous initialize, not 401`);
+      throw new Error(`the front door answered ${res.status} to an anonymous tool call, not 401`);
     }
     const challenge = res.headers.get("www-authenticate") ?? "";
-    if (!challenge.includes("resource_metadata")) {
-      throw new Error("the front door's 401 carries no resource_metadata, so a client cannot find the door");
+    if (!/^Bearer /.test(challenge) || !challenge.includes("resource_metadata")) {
+      throw new Error("the front door's 401 carries no Bearer resource_metadata challenge, so a client cannot find the door");
     }
 
     const metadata = await ctx.http("/.well-known/oauth-protected-resource");
