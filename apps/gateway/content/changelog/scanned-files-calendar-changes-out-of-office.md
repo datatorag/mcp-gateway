@@ -14,6 +14,7 @@ API to do.
 - **`calendar_list_events` reads a change feed.** `updated_min` returns the events changed since a
   time, `show_deleted` includes the ones removed, and `order_by` sorts by start time or by last
   update. Google refuses an `updated_min` too far back, and the tool says so.
-- **Out-of-office is not something we change.** Setting the Gmail vacation responder needs a
-  Google permission DataToRAG does not ask for. A request to change it now gets that answer
-  directly instead of a bare error from Google; reading the current responder still works.
+- **Out-of-office is not something we change.** Setting the Gmail vacation responder needs a Google
+  permission DataToRAG does not ask for, so no tool changes it. A raw API request to change it now
+  says so directly instead of asking you to reconnect and grant it; reading the current responder
+  still works.
