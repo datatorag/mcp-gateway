@@ -96,6 +96,14 @@ export const users = pgTable("users", {
   acquisitionGclid: text("acquisition_gclid"),
   acquisitionReferringDomain: text("acquisition_referring_domain"),
   acquisitionEntryUrl: text("acquisition_entry_url"),
+  // SCRUM-480: what the user said when asked "How did you find DataToRAG?" on
+  // their signup landing, the self-reported answer beside the measured one.
+  // Null until answered, and after a skip. The state says where the prompt
+  // is: null (never asked), "shown", "answered" or "skipped"; it moves from
+  // null to "shown" once and from "shown" to a final state once, which is
+  // what keeps the prompt and its event to one each per user.
+  acquisitionSelfReported: text("acquisition_self_reported"),
+  acquisitionSelfReportState: text("acquisition_self_report_state"),
   // Lifetime count of playground chat messages sent (dashboard playground).
   // Capped by PLAYGROUND_MESSAGE_CAP; deliberately NOT part of billing/credits.
   playgroundMessagesUsed: integer("playground_messages_used").notNull().default(0),

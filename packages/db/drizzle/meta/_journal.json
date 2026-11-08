@@ -225,6 +225,13 @@
       "when": 1793897645710,
       "tag": "0031_many_mongu",
       "breakpoints": true
+    },
+    {
+      "idx": 32,
+      "version": "7",
+      "when": 1794180412318,
+      "tag": "0032_acquisition_self_report",
+      "breakpoints": true
     }
   ]
 }
