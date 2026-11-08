@@ -55,6 +55,7 @@ import { healthBody } from "./src/gateway/health";
 import { posthogState } from "./src/lib/posthog-server";
 import { runNoActivationFollowup } from "./src/gateway/lifecycle";
 import { securityHeaders } from "./src/gateway/security-headers";
+import { captureEntry } from "./src/gateway/attribution";
 import { createFileDownloadRouter, quietDecodeErrors } from "./src/gateway/file-download-route";
 import { assertHeldUploadCeiling } from "./src/gateway/file-download";
 
@@ -175,6 +176,10 @@ async function main() {
   app.use(securityHeaders);
 
   app.use(cookieParser());
+
+  // SCRUM-88: where a visitor came from is recorded at their first landing,
+  // so a sign-in that skips the click decorator still carries it.
+  app.use(captureEntry(baseUrl.startsWith("https")));
 
   // Per-IP rate limit on all /oauth traffic — fail fast before body parsing.
   app.use(

@@ -1,7 +1,9 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Request, Response } from "express";
 import type { Database } from "@datatorag-mcp/db";
 import {
+  analyticsCookieSignals,
+  captureEntry,
   persistAcquisition,
   stashAttribution,
   takeAttribution,
@@ -15,11 +17,24 @@ function fakeRes() {
   } as unknown as Response & { cookie: ReturnType<typeof vi.fn>; clearCookie: ReturnType<typeof vi.fn> };
 }
 
-function fakeReq(parts: { query?: unknown; cookies?: unknown; hostname?: string }) {
+function fakeReq(parts: {
+  query?: unknown;
+  cookies?: unknown;
+  hostname?: string;
+  headers?: Record<string, string>;
+  url?: string;
+  method?: string;
+}) {
+  const headers = Object.fromEntries(Object.entries(parts.headers ?? {}).map(([k, v]) => [k.toLowerCase(), v]));
+  const url = parts.url ?? "/auth/google";
   return {
     query: parts.query ?? {},
     cookies: parts.cookies ?? {},
-    hostname: parts.hostname,
+    hostname: parts.hostname ?? "datatorag.com",
+    method: parts.method ?? "GET",
+    originalUrl: url,
+    path: url.split("?")[0],
+    get: (name: string) => headers[name.toLowerCase()],
   } as unknown as Request;
 }
 
@@ -194,5 +209,144 @@ describe("persistAcquisition", () => {
       expect.any(Error)
     );
     warn.mockRestore();
+  });
+});
+
+/* SCRUM-88: the click decorator stays the precise path, and stops being the
+ * only one. A navigation that skipped it (a middle click, a new tab, a link
+ * copied into the same browser, the SDK blocked) still reaches the callback
+ * with where the visitor came from. */
+
+const NOW = Date.UTC(2026, 10, 8, 18, 0, 0);
+const PAID_ENTRY = "https://datatorag.com/docs?gclid=Cj0KPAID&utm_source=google&utm_medium=cpc&utm_campaign=brand";
+
+/** The SDK's cookie as `localStorage+cookie` persistence writes it. */
+function analyticsCookie(over: Record<string, unknown> = {}) {
+  return JSON.stringify({
+    distinct_id: "0198-person",
+    $sesid: [NOW - 60_000, "0198-session", NOW - 600_000],
+    $initial_person_info: { r: "https://www.google.com/", u: PAID_ENTRY },
+    ...over,
+  });
+}
+
+function stashed(req: Request) {
+  const res = fakeRes();
+  stashAttribution(req, res, true);
+  const value = res.cookie.mock.calls[0]?.[1] as string | undefined;
+  return value ? takeAttribution(fakeReq({ cookies: { dtr_attr: value } }), fakeRes()) : null;
+}
+
+describe("the server-side fallback (SCRUM-88)", () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+    vi.setSystemTime(NOW);
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("an undecorated navigation into the flow takes the SDK's cookie: entry, campaign, click id, session and person", () => {
+    const taken = stashed(
+      fakeReq({
+        cookies: { ph_phc_example_posthog: analyticsCookie() },
+        headers: { referer: "https://datatorag.com/auth/login" },
+      })
+    );
+    expect(taken).toEqual({
+      sessionId: "0198-session",
+      distinctId: "0198-person",
+      utmSource: "google",
+      utmMedium: "cpc",
+      utmCampaign: "brand",
+      gclid: "Cj0KPAID",
+      gadSource: null,
+      referringDomain: "www.google.com",
+      entryUrl: PAID_ENTRY,
+    });
+  });
+
+  it("the decorator still wins: its snapshot is kept whole over the cookie's", () => {
+    const taken = stashed(
+      fakeReq({
+        query: SIGNUP_QUERY,
+        cookies: { ph_phc_example_posthog: analyticsCookie() },
+      })
+    );
+    expect(taken).toEqual(parseAttribution(SIGNUP_QUERY));
+  });
+
+  it("a session past its idle timeout or begun on another UTC day is left out", () => {
+    const idle = analyticsCookieSignals(
+      { ph_k_posthog: analyticsCookie({ $sesid: [NOW - 31 * 60_000, "old", NOW - 40 * 60_000] }) },
+      NOW
+    );
+    expect(idle.a_sid).toBeUndefined();
+    const yesterday = analyticsCookieSignals(
+      { ph_k_posthog: analyticsCookie({ $sesid: [NOW - 60_000, "old", NOW - 19 * 3_600_000] }) },
+      NOW
+    );
+    expect(yesterday.a_sid).toBeUndefined();
+    expect(yesterday.a_did).toBe("0198-person");
+  });
+
+  it("with the SDK blocked, the entry this server recorded at the first landing is used", () => {
+    const res = fakeRes();
+    captureEntry(true)(
+      fakeReq({
+        url: "/pricing?utm_source=newsletter&utm_medium=email",
+        headers: { accept: "text/html", referer: "https://news.example.com/issue/12" },
+      }),
+      res,
+      () => {}
+    );
+    expect(res.cookie).toHaveBeenCalledWith("dtr_entry", expect.any(String), expect.objectContaining({ httpOnly: true, sameSite: "lax" }));
+    const entry = res.cookie.mock.calls[0][1] as string;
+
+    const taken = stashed(fakeReq({ cookies: { dtr_entry: entry }, headers: { referer: "https://datatorag.com/auth/login" } }));
+    expect(taken).toMatchObject({
+      utmSource: "newsletter",
+      utmMedium: "email",
+      referringDomain: "news.example.com",
+      entryUrl: "https://datatorag.com/pricing?utm_source=newsletter&utm_medium=email",
+      sessionId: null,
+    });
+  });
+
+  it("the first landing is kept: a later page load does not overwrite it", () => {
+    const res = fakeRes();
+    captureEntry(true)(
+      fakeReq({ url: "/?gclid=later", cookies: { dtr_entry: "{}" }, headers: { accept: "text/html" } }),
+      res,
+      () => {}
+    );
+    expect(res.cookie).not.toHaveBeenCalled();
+  });
+
+  it("records nothing for an internal navigation, a direct visit, a provider's redirect back, an asset or a link that carries a credential", () => {
+    const cases: Array<{ url: string; headers: Record<string, string> }> = [
+      { url: "/docs", headers: { accept: "text/html", referer: "https://datatorag.com/" } },
+      { url: "/docs", headers: { accept: "text/html" } },
+      { url: "/auth/google/callback?code=x", headers: { accept: "text/html", referer: "https://accounts.google.com/" } },
+      { url: "/_next/static/chunk.js?utm_source=x", headers: { accept: "*/*", referer: "https://www.google.com/" } },
+      { url: "/logo.png", headers: { accept: "image/png", referer: "https://www.google.com/" } },
+      // A credential in the path never becomes an entry URL.
+      { url: "/connect/tok_secret", headers: { accept: "text/html", referer: "https://claude.ai/" } },
+      { url: "/files/d/nonce.tag", headers: { accept: "text/html", referer: "https://claude.ai/" } },
+      { url: "/Connect/tok_secret", headers: { accept: "text/html", referer: "https://claude.ai/" } },
+      // The landing after sign-in keeps Google's referrer; it is not an acquisition.
+      { url: "/dashboard/agent?signup=1&welcome=1", headers: { accept: "text/html", referer: "https://accounts.google.com/" } },
+    ];
+    for (const c of cases) {
+      const res = fakeRes();
+      captureEntry(true)(fakeReq(c), res, () => {});
+      expect(res.cookie, c.url).not.toHaveBeenCalled();
+    }
+  });
+
+  it("a navigation with no decoration, no SDK cookie, no recorded entry and only a same-site referrer stashes nothing", () => {
+    const res = fakeRes();
+    stashAttribution(fakeReq({ headers: { referer: "https://datatorag.com/auth/login" } }), res, true);
+    expect(res.cookie).not.toHaveBeenCalled();
   });
 });
