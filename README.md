@@ -12,6 +12,7 @@
   <a href="https://github.com/datatorag/mcp-gateway/commits/main"><img src="https://img.shields.io/github/last-commit/datatorag/mcp-gateway/main" alt="Last commit on main"></a>
   <a href="#connectors"><img src="https://img.shields.io/badge/tools-143-4f46e5" alt="143 tools as of October 2026"></a>
   <a href="https://datatorag.com/docs/getting-started"><img src="https://img.shields.io/badge/works%20with-Claude%20%7C%20Cursor%20%7C%20ChatGPT-555" alt="Works with Claude, Cursor and ChatGPT"></a>
+  <a href="https://mcptry.com/servers/com.datatorag/mcp-gateway"><img src="https://mcptry.com/badge/com.datatorag/mcp-gateway" alt="mcptry"></a>
 </p>
 
 DataToRAG is an open-source [Model Context Protocol](https://modelcontextprotocol.io) gateway. You point your AI client at one URL. Each person connects their own Google, Atlassian and Notion accounts, and the gateway hands the client the tools for those accounts, calling the services with the person's own OAuth grant. It runs hosted at [datatorag.com](https://datatorag.com), or on your own infrastructure under the MIT license.
