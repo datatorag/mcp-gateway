@@ -108,19 +108,29 @@ async function captureMcpEvent(
   db: Database,
   userId: string | null,
   event: string,
-  properties: Record<string, unknown>
+  properties: Record<string, unknown>,
+  opts: {
+    /** Overrides "a user id was known", which is not the same claim: a
+     * refused token can still name its owner (SCRUM-481). */
+    authenticated?: boolean;
+    /** For an anonymous caller: the id to capture under instead of
+     * MCP_ANONYMOUS_ID, with no person profile made for it. */
+    anonymousId?: string;
+  } = {}
 ): Promise<void> {
   try {
     const c = getPosthog();
     if (!c) return;
     const email = userId ? await resolveUserEmail(db, userId) : null;
+    const personless = userId === null && opts.anonymousId !== undefined;
     c.capture({
-      distinctId: userId ?? MCP_ANONYMOUS_ID,
+      distinctId: userId ?? opts.anonymousId ?? MCP_ANONYMOUS_ID,
       event,
       properties: {
         ...properties,
-        authenticated: userId !== null,
+        authenticated: opts.authenticated ?? userId !== null,
         ...identityProps(email),
+        ...(personless ? { $process_person_profile: false } : {}),
       },
     });
   } catch (err) {
@@ -132,18 +142,77 @@ export async function trackMcpRequestReceived(
   db: Database,
   opts: {
     userId: string | null;
+    /** The bearer was accepted. Stated by the caller, never inferred from
+     * `userId`: an expired token still names its owner, and an open
+     * discovery request (SCRUM-481) has no bearer at all. */
+    authenticated: boolean;
     action: McpSessionAction;
     method: string;
     clientName?: string;
     clientVersion?: string;
+    /** Answered without a bearer as discovery (SCRUM-481); its own event is
+     * `mcp_discovery`. */
+    openDiscovery?: boolean;
   }
 ): Promise<void> {
-  return captureMcpEvent(db, opts.userId, EVENTS.MCP_REQUEST_RECEIVED, {
-    action: opts.action,
-    http_method: opts.method,
-    client_name: opts.clientName ?? null,
-    client_version: opts.clientVersion ?? null,
-  });
+  return captureMcpEvent(
+    db,
+    opts.userId,
+    EVENTS.MCP_REQUEST_RECEIVED,
+    {
+      action: opts.action,
+      http_method: opts.method,
+      client_name: opts.clientName ?? null,
+      client_version: opts.clientVersion ?? null,
+      open_discovery: opts.openDiscovery ?? false,
+    },
+    { authenticated: opts.authenticated }
+  );
+}
+
+/** What one unauthenticated discovery request was (SCRUM-481). */
+export type McpDiscovery = {
+  /** The JSON-RPC method, one of the open ones. */
+  method: string;
+  /** From the initialize params; "" when the request carried none. */
+  clientName: string;
+  clientVersion: string;
+  userAgent: string;
+  /** From the initialize params, else the MCP-Protocol-Version header. */
+  protocolVersion: string;
+  /** `served`, or why it was not: over the per-IP limit, or a browser
+   * Origin that is not allowed. */
+  outcome: "served" | "rate_limited" | "origin_refused";
+  serverSha: string;
+  /** Salted hash of IP plus user agent: the distinct id. Null without a
+   * salt, and then the event goes under MCP_ANONYMOUS_ID. */
+  discoveryId: string | null;
+  /** Salted hash of the IP alone, for joining to a browser's sign-in. */
+  peerHash: string | null;
+};
+
+/** One event per unauthenticated discovery request (SCRUM-481). Under the
+ * hashed id with no person profile, flagged authenticated=false; never an IP,
+ * never a body beyond the client's own name and version. */
+export async function trackMcpDiscovery(db: Database, d: McpDiscovery): Promise<void> {
+  return captureMcpEvent(
+    db,
+    null,
+    EVENTS.MCP_DISCOVERY,
+    {
+      method: d.method,
+      client_name: d.clientName,
+      client_version: d.clientVersion,
+      user_agent: d.userAgent,
+      protocol_version: d.protocolVersion,
+      rate_limited: d.outcome === "rate_limited",
+      outcome: d.outcome,
+      server_sha: d.serverSha,
+      discovery_id: d.discoveryId,
+      peer_hash: d.peerHash,
+    },
+    { authenticated: false, anonymousId: d.discoveryId ?? undefined }
+  );
 }
 
 export async function trackMcpSessionInitialized(

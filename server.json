@@ -7,8 +7,24 @@
     "url": "https://github.com/datatorag/mcp-gateway",
     "source": "github"
   },
-  "version": "1.0.0",
+  "version": "1.0.1",
   "websiteUrl": "https://datatorag.com",
+  "icons": [
+    {
+      "src": "https://datatorag.com/datatorag-logo-256.png",
+      "mimeType": "image/png",
+      "sizes": [
+        "256x256"
+      ]
+    },
+    {
+      "src": "https://datatorag.com/datatorag-logo.png",
+      "mimeType": "image/png",
+      "sizes": [
+        "1024x1024"
+      ]
+    }
+  ],
   "remotes": [
     {
       "type": "streamable-http",

@@ -93,6 +93,18 @@ export const EVENTS = {
   MCP_SESSION_INITIALIZED: "mcp_session_initialized",
   MCP_AUTH_FAILED: "mcp_auth_failed",
   MCP_TOOLS_LISTED: "mcp_tools_listed",
+  /** SCRUM-481: one unauthenticated discovery request on /mcp (initialize,
+   * tools/list, ...), under a salted hash of IP plus user agent with no
+   * person profile. `authenticated` is false. */
+  MCP_DISCOVERY: "mcp_discovery",
+  /** SCRUM-481: an MCP client registered itself (/oauth/register), with the
+   * same discovery id and peer hash as `mcp_discovery`, so a discovery joins
+   * to the client id it then signed in with. */
+  MCP_CLIENT_REGISTERED: "mcp_client_registered",
+  /** SCRUM-481: an MCP client's authorization request reached a user
+   * (`/oauth/callback`), under the user id, with `client_id`, `new_user`
+   * and the browser's discovery id and peer hash. */
+  MCP_OAUTH_AUTHORIZED: "mcp_oauth_authorized",
   DOCS_VIEWED: "docs_viewed",
   DOCS_CTA_CLICKED: "docs_cta_clicked",
   /** SCRUM-408: a click that starts Google sign-in, from any call to action

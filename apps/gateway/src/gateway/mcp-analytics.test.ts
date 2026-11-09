@@ -17,6 +17,7 @@ import {
   trackMcpSessionInitialized,
   trackMcpAuthFailed,
   trackMcpToolsListed,
+  trackMcpDiscovery,
   MCP_ANONYMOUS_ID,
 } from "./mcp-analytics";
 import type { Database } from "@datatorag-mcp/db";
@@ -128,6 +129,7 @@ describe("capture identity", () => {
   it("captures unauthenticated requests under the stable anonymous id", async () => {
     await trackMcpRequestReceived(db, {
       userId: null,
+      authenticated: false,
       action: "initialize",
       method: "POST",
     });
@@ -265,5 +267,77 @@ describe("auth kind on the session event", () => {
   it("records oauth, explicitly", async () => {
     await trackMcpSessionInitialized(db, "user-123", { clientName: "Claude" });
     expect(capture.mock.calls[0][0].properties).toMatchObject({ auth_kind: "oauth" });
+  });
+});
+
+describe("authenticated on mcp_request_received (SCRUM-481)", () => {
+  it("is what the caller says, not whether a user id was known: an expired token names its owner and is not authenticated", async () => {
+    await trackMcpRequestReceived(db, { userId: "user-123", authenticated: false, action: "initialize", method: "POST" });
+    const props = capture.mock.calls[0][0].properties;
+    expect(capture.mock.calls[0][0].distinctId).toBe("user-123");
+    expect(props.authenticated).toBe(false);
+    expect(props.open_discovery).toBe(false);
+  });
+
+  it("marks open discovery as unauthenticated discovery", async () => {
+    await trackMcpRequestReceived(db, {
+      userId: null,
+      authenticated: false,
+      openDiscovery: true,
+      action: "initialize",
+      method: "POST",
+    });
+    expect(capture.mock.calls[0][0].properties).toMatchObject({ authenticated: false, open_discovery: true });
+  });
+
+  it("is true for an accepted bearer", async () => {
+    await trackMcpRequestReceived(db, { userId: "user-123", authenticated: true, action: "route", method: "POST" });
+    expect(capture.mock.calls[0][0].properties).toMatchObject({ authenticated: true, open_discovery: false });
+  });
+});
+
+describe("trackMcpDiscovery (SCRUM-481)", () => {
+  const base = {
+    method: "tools/list",
+    clientName: "",
+    clientVersion: "",
+    userAgent: "probe/1.0",
+    protocolVersion: "2025-06-18",
+    outcome: "served" as const,
+    serverSha: "abc123",
+    discoveryId: "d".repeat(32),
+    peerHash: "p".repeat(16),
+  };
+
+  it("captures under the discovery id with no person profile, authenticated=false, and every property", async () => {
+    await trackMcpDiscovery(db, base);
+    const call = capture.mock.calls[0][0];
+    expect(call.event).toBe("mcp_discovery");
+    expect(call.distinctId).toBe("d".repeat(32));
+    expect(call.properties).toMatchObject({
+      method: "tools/list",
+      client_name: "",
+      client_version: "",
+      user_agent: "probe/1.0",
+      protocol_version: "2025-06-18",
+      rate_limited: false,
+      outcome: "served",
+      server_sha: "abc123",
+      discovery_id: "d".repeat(32),
+      peer_hash: "p".repeat(16),
+      authenticated: false,
+      $process_person_profile: false,
+    });
+    expect(call.properties.user_email).toBeUndefined();
+  });
+
+  it("says rate_limited for a limited request", async () => {
+    await trackMcpDiscovery(db, { ...base, outcome: "rate_limited" });
+    expect(capture.mock.calls[0][0].properties).toMatchObject({ rate_limited: true, outcome: "rate_limited" });
+  });
+
+  it("falls back to the anonymous id without a salt, never an address", async () => {
+    await trackMcpDiscovery(db, { ...base, discoveryId: null, peerHash: null });
+    expect(capture.mock.calls[0][0].distinctId).toBe(MCP_ANONYMOUS_ID);
   });
 });

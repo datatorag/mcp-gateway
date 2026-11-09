@@ -6,6 +6,7 @@
  * (SCRUM-466) is for a person reading the raw response: where to sign in and
  * where the setup guide is.
  */
+import type { Response } from "express";
 import { signInHref } from "../lib/sign-in";
 
 /** The WWW-Authenticate value. `challengeParams` comes first, as RFC 6750
@@ -25,4 +26,18 @@ export function mcpUnauthorizedBody(
     // Sign-in itself, not the login page, as every call to action (SCRUM-408).
     message: `Sign in at ${baseUrl}${signInHref()}. Setup guide: ${baseUrl}/docs/getting-started.`,
   };
+}
+
+/** Sends the /mcp 401: the challenge and the body. The one sender, used by
+ * the endpoint and pinned by the open-discovery tests (SCRUM-481). */
+export function sendMcpUnauthorized(
+  res: Response,
+  urls: { resourceMetadataUrl: string; baseUrl: string },
+  error: string,
+  challengeParams: string[] = []
+): void {
+  res
+    .status(401)
+    .set("WWW-Authenticate", mcpChallenge(urls.resourceMetadataUrl, challengeParams))
+    .json(mcpUnauthorizedBody(error, urls.resourceMetadataUrl, urls.baseUrl));
 }

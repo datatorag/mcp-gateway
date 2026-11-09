@@ -46,12 +46,14 @@ export const f7NonOauthBearerRefused: TestCase = {
       throw new Error("the challenge does not say invalid_token, so a client cannot tell a bad token from a missing one");
     }
 
+    // The control is a tool call: an anonymous initialize is open discovery
+    // (SCRUM-481) and answers 200, a tool call without a bearer does not.
     const anonymous = await ctx.http("/mcp", {
       method: "POST",
       headers: { "content-type": "application/json", accept: "application/json, text/event-stream" },
-      body: initialize,
+      body: JSON.stringify({ jsonrpc: "2.0", id: 2, method: "tools/call", params: { name: "echo", arguments: { message: "smoke" } } }),
     });
-    ctx.evidence(`control, no Authorization header: ${anonymous.status}`);
+    ctx.evidence(`control, a tool call with no Authorization header: ${anonymous.status}`);
     if (anonymous.status !== 401) {
       throw new Error(`the unauthenticated control answered ${anonymous.status}, so the 401 above is not about the bearer`);
     }
