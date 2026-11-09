@@ -2,7 +2,7 @@
  * SCRUM-454: Slack's refresh, with token rotation on.
  *
  * Built against Slack's documented rotation rules: an access token lasts
- * `expires_in` seconds (12 hours), a refresh is `oauth.v2.access` with
+ * `expires_in` seconds (12 hours), a refresh is `oauth.v2.user.access` with
  * `grant_type=refresh_token`, it returns a NEW pair, and each refresh token
  * works once: presenting it again is `ok: false`, `invalid_refresh_token`.
  * Errors arrive as HTTP 200 with `ok: false`. So two calls refreshing at once
@@ -30,7 +30,7 @@ import { refreshSlackToken } from "./connectors/slack/tokens";
 import { sealedColumns } from "./token-crypto";
 import { scopeDelta } from "./scope-grant";
 
-const TOKEN_URL = "https://slack.com/api/oauth.v2.access";
+const TOKEN_URL = "https://slack.com/api/oauth.v2.user.access";
 const REVOKE_URL = "https://slack.com/api/auth.revoke";
 
 /** Slack's token endpoint under rotation. Generation n holds user-token-n
