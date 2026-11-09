@@ -30,7 +30,8 @@ section 1(b)) chose a plugin over this layer. That choice is reversed here.
 3. Proxy a call by opening a client to the upstream URL with the user's token as
    `Authorization: Bearer`, through the same CallTool dispatch a plugin call takes, so metering,
    argument validation, the scope pre-check and the 401 handling are unchanged.
-4. Stage 1 is Slack, one admin user, reads only. Writes wait for a gateway-side target check.
+4. Stage 1 is Slack, one admin user, reads only. Writes come in stage 3, classified and enabled,
+   with no gateway-side target check (ruled, section 5).
 5. Retire `slack-mcp` unshipped. It was never connected, and its connect and refresh code carries
    over.
 
@@ -235,12 +236,12 @@ initialized, listed. The connections page can show "Slack is not answering" from
 `expected_user_email`, resolved and compared before sending. Slack's hosted `slack_send_message`
 has no such argument, and we cannot change its schema at the vendor.
 
-- **Keepable, at a cost.** The gateway can add a required `expected_channel_name` argument to the
-  served schema, resolve the target with one Slack Web API call using the same user token
-  (`conversations.info`), compare, strip the argument, and only then forward. That is a per-tool
-  pre-check hook in the dispatch, plus a Web API dependency in the gateway for one vendor.
-- **For stage 1 it is given up, because stage 1 ships no writes.** Writes do not ship without either
-  the pre-check hook or Manuel saying in words that the guard is given up.
+- **It is given up.** The gateway could have added a required `expected_channel_name` argument to
+  the served schema, resolved the target with the same user token and compared before forwarding.
+  Manuel ruled against building it on 2026-11-09: "let's not overengineer it if it's not needed".
+- **What remains** for a passed-through write is the client's own confirmation before a write,
+  which our classification drives: every hosted write is served with `readOnlyHint: false`, and an
+  unknown name is a write. A post to the wrong channel is not stopped by the gateway.
 - **Also lost:** response trimming. `slack-mcp` shaped its answers; the hosted server's answers
   pass through as they are, capped at 900 KB by the adapter.
 
@@ -429,9 +430,9 @@ Each stage proves one new thing.
    withdrawal of a removed tool, the post to the ops channel, `/health`, the probe case,
    `registry-diff --from-snapshot`. Proves a vendor change is seen within six hours without a
    registry write.
-3. **Writes.** The target pre-check hook, or Manuel's words that the guard is given up; send-guard
-   rules for each hosted write; write cases. Proves writes are as safe as the plugin's were, or says
-   they are not.
+3. **Writes.** Each hosted write classified as a write, send-guard rules for the runner, write
+   cases, and the writes enabled by a registry pair. No target check (section 5). Proves the writes
+   reach users with the client's confirmation as the only guard, as ruled.
 4. **A second upstream,** when Manuel rules on PostHog or Brevo. Proves the layer is general, and
    for Brevo, the paste connect.
 
@@ -462,11 +463,11 @@ Each stage proves one new thing.
 - PostHog's EU URL and its annotations.
 - Brevo's tool count, annotations and rate limits.
 
-## Decisions for Manuel
+## Decided (Manuel, 2026-11-09)
 
-1. Token rotation on (recommended) or off, knowing on cannot be undone.
-2. The full 30 user scopes at registration (recommended), or only the reads now and a reconnect for
-   every user later.
-3. Retire `slack-mcp` (recommended), keep it as a fallback, or keep two tools.
-4. For writes: build the target pre-check, or accept in words that the guard is given up.
-5. PostHog and Brevo: move either onto the layer, or leave them as built.
+1. Token rotation on.
+2. All 30 user scopes at registration.
+3. `slack-mcp` is retired.
+4. No gateway-side target check on writes. The guard is given up for passed-through tools; the
+   client's confirmation before a write is what remains.
+5. PostHog and Brevo stay as built. Not ruled on.

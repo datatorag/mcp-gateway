@@ -181,16 +181,18 @@ Done when: the connect from a local gateway reaches Slack's consent screen for t
 **Stage 2 is done when:** a tool renamed in the fake upstream is withdrawn at the next check, the
 alerts channel gets one line, and a registry pair from the snapshot passes the file check.
 
-## Stage 3: writes (after Manuel's decision 4)
+## Stage 3: writes
 
-- **Either** the target pre-check hook:
-  - a required `expected_channel_name` (or `expected_user_email`) on each hosted write's served
-    schema;
-  - resolved with `conversations.info` or `users.lookupByEmail` on the same token;
-  - compared, stripped, then forwarded.
-- **Or** the PR records Manuel's words that the guard is given up.
-- **Then:** the send-guard rules per hosted write, write cases, and the writes enabled by a
-  registry pair.
+Ruled 2026-11-09: no gateway-side target check. The guard `slack-mcp` had (a post refused unless
+the model named its channel or person) is given up for passed-through tools. What remains is the
+client's confirmation before a write.
+
+- Each hosted write gets a reviewed `write` entry in the classification record, so it is served
+  with `readOnlyHint: false`.
+- A send-guard rule per hosted write in `tests/send-guard.ts`, so the runner reaches only the
+  fixture channel and the test user's own DM.
+- One write case per enabled write.
+- The writes enabled by a registry pair from the latest snapshot.
 
 ## Stage 4: a second upstream
 
