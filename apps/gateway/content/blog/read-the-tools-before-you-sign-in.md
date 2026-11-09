@@ -45,9 +45,11 @@ tool call, batches, and the event stream. An unauthenticated handshake creates n
 nothing is metered.
 
 The open methods are rate-limited per address. The list they return is the same snapshot the
-site's tool pages are built from, so there is no second catalogue to drift.
+site's tool pages are built from, plus the gateway's built-in tools, so there is no second
+catalogue to drift.
 
-This is the shape the MCP spec allows and the one Anthropic's own connector guidance describes:
+This is the shape the MCP spec allows and the one [Anthropic's connector guidance on lazy
+authentication](https://claude.com/docs/connectors/building/lazy-authentication) describes:
 discovery open, the gate on the call. We should have shipped it earlier.
 
 ## What we watch
@@ -72,7 +74,7 @@ with the exact setup for that client. The server URL with a copy button. The exa
 tagged with the services they use. One chip per provider showing what is connected. The
 connection cards moved to their own page.
 
-![The new dashboard home: client cards for Claude, ChatGPT, Codex and Cursor, the MCP server URL, and the account chips](/blog/read-the-tools-before-you-sign-in-2.png)
+![The new dashboard home for a fresh account: the headline, three example prompts, and client cards for Claude, ChatGPT, Codex and Cursor](/blog/read-the-tools-before-you-sign-in-2.png)
 
 If you tried DataToRAG before and stopped at the sign-in, the tool list is one request away now,
 no account needed.
