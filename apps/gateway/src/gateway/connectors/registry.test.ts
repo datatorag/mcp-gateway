@@ -9,7 +9,7 @@ import { existsSync, readdirSync } from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { envSchema } from "@datatorag-mcp/config";
-import { CONNECTOR_REGISTRY, connectorById, isConnectorId } from "./registry";
+import { CONNECTOR_REGISTRY, connectorById, isConnectorId, upstreamFor, type ConnectorRecord } from "./registry";
 import { PLUGIN_SERVICE_MAP, SERVICE_PLUGIN_MAP } from "../service-token";
 import { PROVIDERS } from "@/lib/analytics";
 import { CONNECT_START, isDuplicateProvider } from "../connect-duplicate";
@@ -28,10 +28,27 @@ function pluginDirs(): string[] {
 }
 
 describe("the connector registry and plugins/", () => {
-  it("has exactly one entry for every plugin directory, and a plugin directory for every entry", () => {
+  it("has exactly one entry for every plugin directory, and a plugin directory for every entry a plugin serves", () => {
     const slugs = CONNECTOR_REGISTRY.map((c) => c.pluginSlug);
     expect(new Set(slugs).size).toBe(slugs.length);
-    expect([...slugs].sort()).toEqual(pluginDirs());
+    for (const dir of pluginDirs()) expect(slugs, dir).toContain(dir);
+    // An entry whose tools come from the vendor's own server needs no plugin
+    // directory (official-mcp-proxy); every other entry does.
+    const served = CONNECTOR_REGISTRY.filter((c) => !(c as ConnectorRecord).upstream).map((c) => c.pluginSlug);
+    for (const slug of served) expect(pluginDirs(), slug).toContain(slug);
+  });
+
+  it("declares an upstream only as an https URL, and finds it by slug alone", () => {
+    for (const c of CONNECTOR_REGISTRY as readonly ConnectorRecord[]) {
+      if (!c.upstream) {
+        expect(upstreamFor(c.pluginSlug), c.id).toBeUndefined();
+        continue;
+      }
+      expect(new URL(c.upstream.url).protocol, c.id).toBe("https:");
+      expect(upstreamFor(c.pluginSlug), c.id).toBe(c.upstream);
+    }
+    expect(upstreamFor("slack-mcp")?.url).toBe("https://mcp.slack.com/mcp");
+    for (const v of ["slack", "__proto__", "constructor", ""]) expect(upstreamFor(v)).toBeUndefined();
   });
 
   it("names each connector once", () => {

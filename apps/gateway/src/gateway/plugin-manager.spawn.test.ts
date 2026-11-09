@@ -383,3 +383,17 @@ describe("the account a plugin child runs as", () => {
     expect(JSON.parse(readFileSync(join(dir, "user.json"), "utf-8")).uid).toBe(process.getuid?.());
   });
 });
+
+describe("a connector whose tools come from the vendor's own server (official-mcp-proxy)", () => {
+  it("is never started, even with a plugin directory of that name, and is not reported down", async () => {
+    // Writes a file when it starts, so a start is visible.
+    const dir = writePlugin("slack-mcp", `require("node:fs").writeFileSync("started", "1"); setInterval(() => {}, 1000);`);
+    manager = makeManager([{ id: "s1", slug: "slack-mcp", containerPort: 40127 }], []);
+
+    await manager.startAll();
+    await new Promise((r) => setTimeout(r, 300));
+
+    expect(existsSync(join(dir, "started"))).toBe(false);
+    expect(manager.pluginStatus()).toEqual({});
+  });
+});

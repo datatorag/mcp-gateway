@@ -5,6 +5,7 @@ import { eq } from "drizzle-orm";
 import type { Database } from "@datatorag-mcp/db";
 import { mcpServers, mcpServerEnvVars } from "@datatorag-mcp/db";
 import { PLUGINS_DIR, PLUGINS_FROM_IMAGE } from "./plugins-dir";
+import { upstreamFor } from "./connectors/registry";
 
 export { pluginsDirFrom, PLUGINS_DIR, PLUGINS_FROM_IMAGE } from "./plugins-dir";
 
@@ -183,6 +184,10 @@ export class PluginManager {
 
     await Promise.all(
       activeServers.map(async (server) => {
+        // The vendor's own server serves these tools (official-mcp-proxy):
+        // nothing to start, and not down. Its health is the scheduled
+        // upstream check's, not a child process's.
+        if (upstreamFor(server.slug)) return;
         const pluginDir = join(PLUGINS_DIR, server.slug);
         if (!existsSync(pluginDir)) {
           console.warn(

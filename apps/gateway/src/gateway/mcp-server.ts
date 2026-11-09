@@ -41,7 +41,6 @@ import {
 import {
   listUserToolRows,
   buildPluginServerUrl,
-  callPluginToolOnce,
   type UserToolRow,
 } from "./user-tools";
 import {
@@ -75,6 +74,7 @@ import { issueConnectLink, type ConnectLinkPath } from "./connect-links";
 import { isDuplicateProvider } from "./connect-duplicate";
 import { CONNECT_TOOL, CONNECT_TOOL_DESCRIPTION, connectToolResult } from "./connect-tool";
 import { promptConnect, supportsUrlElicitation, type CallExtra } from "./connect-elicitation";
+import { UPSTREAM_TOOL_NOT_OFFERED, callServiceToolOnce, upstreamToolOffered } from "./upstream-call";
 
 const ACCOUNT_PARAM_SCHEMA = {
   type: "string",
@@ -1312,6 +1312,13 @@ export function createMcpServer(
 
     const serverUrl = buildPluginServerUrl(mcpServer);
 
+    // official-mcp-proxy: a vendor-served tool needs an enabled registry row,
+    // so a tool the vendor added since the last review is not reachable by
+    // name. Refused before a token is resolved; nothing is metered.
+    if (!(await upstreamToolOffered(db, mcpServer.slug, name))) {
+      return { content: [{ type: "text" as const, text: UPSTREAM_TOOL_NOT_OFFERED }], isError: true };
+    }
+
     // SCRUM-392: a call missing a required argument, or carrying one the
     // tool does not take, is refused HERE, by name, before a token is
     // resolved or a plugin reached. The schema is the registry's own, the
@@ -1540,7 +1547,8 @@ export function createMcpServer(
           connectionsUrl,
         });
       } else if (userToken) {
-        result = await callPluginToolOnce({
+        result = await callServiceToolOnce({
+          serverSlug: mcpServer.slug,
           serverUrl,
           userToken,
           toolName,
