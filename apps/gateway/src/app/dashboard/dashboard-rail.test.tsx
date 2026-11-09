@@ -46,8 +46,9 @@ if (!("scrollTo" in Element.prototype)) {
 const { default: DashboardLayout } = await import("./layout");
 
 const EXPECTED_ITEMS = [
-  // "Connections", not "Dashboard" (SCRUM-118): the label says what the page
-  // is; the /dashboard PATH deliberately did not move.
+  // SCRUM-482: the home is "Home", and the connection cards have their own
+  // item and route.
+  "Home",
   "Connections",
   "Agent",
   "Usage",
@@ -99,6 +100,13 @@ describe("dashboard rail", () => {
   it("the Billing item exists and points at /dashboard/billing, in rail AND mobile menu data", () => {
     const link = rail().querySelector('a[aria-label="Billing"]');
     expect(link?.getAttribute("href")).toBe("/dashboard/billing");
+  });
+
+  it("Home is /dashboard and Connections is its own item at /dashboard/connections (SCRUM-482)", () => {
+    expect(rail().querySelector('a[aria-label="Home"]')?.getAttribute("href")).toBe("/dashboard");
+    expect(rail().querySelector('a[aria-label="Connections"]')?.getAttribute("href")).toBe(
+      "/dashboard/connections"
+    );
   });
 
   it("expanding shows every title as visible text and flips aria-expanded", () => {

@@ -1,68 +1,118 @@
 "use client";
 
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import posthog from "posthog-js";
-import { Play, Copy, Check } from "lucide-react";
-import { EVENTS } from "@/lib/analytics";
-import { CasaBadge } from "@/components/casa-badge";
-import { ConnectOutcomeNotice } from "./connect-outcome-notice";
-import { SERVICES } from "./connections/services";
-import { offeredServices } from "./connections/service-registry";
-import { ServiceIcon } from "@/components/service-icon";
+import { Play, Copy, Check, ArrowRight } from "lucide-react";
 import { useRouter } from "next/navigation";
+import { EVENTS } from "@/lib/analytics";
+import { ServiceIcon } from "@/components/service-icon";
+import { ClientIcon } from "@/components/client-icon";
+import { Button } from "@/components/ui/button";
+import { useCopyToClipboard } from "@/lib/use-copy-to-clipboard";
+import {
+  CLIENT_GROUPS,
+  DEFAULT_MCP_URL,
+  MCP_CLIENTS,
+  clientConfig,
+  clientDeepLink,
+  clientDetailHref,
+  type ClientId,
+  type McpClient,
+} from "@/lib/mcp-clients";
+import type { Suggestion } from "@/gateway/agent/suggestion-generator";
 import {
   PROMPT_CARDS_STANDFIRST,
   PROMPT_CARD_RUN_LABEL,
-  SERVICE_CARD_TOOLS_LABEL,
 } from "./agent-composer-copy";
-import { useCopyToClipboard } from "@/lib/use-copy-to-clipboard";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import {
-  Card,
-  CardHeader,
-  CardTitle,
-  CardDescription,
-  CardAction,
-  CardContent,
-  CardFooter,
-} from "@/components/ui/card";
-import { Skeleton } from "@/components/ui/skeleton";
-import { formatConnectedDate } from "@/lib/utils";
-import type { ConnectedAccount } from "./connections/types";
-import { GrantPanel } from "./connections/grant-panel";
-import {
-  BetterDefaultSuggestion,
-  SetDefaultControl,
-} from "./connections/default-control";
-import {
-  GRANT_STATE_LABEL,
-  GRANT_STATE_VARIANT,
-  grantState,
-  type GrantState,
-} from "./connections/grant-state";
-import { PREVIEW_SUGGESTIONS } from "./agent-prompts";
-import type { Suggestion } from "@/gateway/agent/suggestion-generator";
+import { PREVIEW_SUGGESTIONS, suggestionServiceIcons } from "./agent-prompts";
 import { useSignupConversion } from "./use-signup-conversion";
 import { useConnections } from "./use-connections";
-import { ConnectHelper, NotionConnectHelper } from "./connect-helper";
-import { accountDisplay, accountName } from "./connections/account-display";
+import { SERVICES } from "./connections/services";
+import { offeredServices } from "./connections/service-registry";
+import type { ConnectedAccount, LegacyConnection } from "./connections/types";
+import {
+  HOME_CLIENTS_HEADING,
+  HOME_CLIENTS_STANDFIRST,
+  HOME_CONNECT_FIRST_NOTE,
+  HOME_CTA,
+  HOME_HEADLINE,
+  HOME_MCP_HEADING,
+  HOME_PROMPTS_HEADING,
+  HOME_STANDFIRST,
+  HOME_STATUS_HEADING,
+  PROMPT_CARD_LOCKED_TITLE,
+  STATUS_LABEL,
+  type ServiceStatus,
+} from "./home-copy";
 
-
+/**
+ * The dashboard home (SCRUM-482): a connect-your-client page. Top to bottom:
+ * the headline with one call to action, example prompts, the client install
+ * cards, the MCP server URL, and a strip saying which accounts are connected.
+ * The connection cards themselves live on `/dashboard/connections`.
+ *
+ * Order rule: a user with nothing connected sees the client cards AND the
+ * connect step, with a note that one account is needed before the first
+ * call. Neither hides or gates the other.
+ */
 export function DashboardClient() {
-  const {
-    accounts,
-    legacyConnections,
-    setAccounts,
-    setLegacyConnections,
-    loaded,
-    refetch,
-    hasConnectedAccount,
-    launchedServices,
-  } = useConnections();
-  const loading = !loaded;
-  const [disconnecting, setDisconnecting] = useState<string | null>(null);
+  const connections = useConnections();
+  const { hasConnectedAccount } = connections;
+  const mcpUrl = useMcpUrl();
+
+  useSignupConversion();
+
+  return (
+    <div className="space-y-10" data-home="">
+      <Hero />
+      <PromptCards hasConnectedAccount={hasConnectedAccount} />
+      <ClientCards mcpUrl={mcpUrl} hasConnectedAccount={hasConnectedAccount} />
+      <McpCard mcpUrl={mcpUrl} />
+      <StatusStrip connections={connections} />
+    </div>
+  );
+}
+
+/** The server URL for this origin. Seeded with production's, corrected after
+ * mount, the same as `SetupInstructions`. */
+function useMcpUrl(): string {
+  const [mcpUrl, setMcpUrl] = useState(DEFAULT_MCP_URL);
+  useEffect(() => {
+    setMcpUrl(`${window.location.origin}/mcp`);
+  }, []);
+  return mcpUrl;
+}
+
+const CLIENTS_ANCHOR = "connect-your-agent";
+
+function Hero() {
+  function scrollToClients(e: React.MouseEvent) {
+    const target = document.getElementById(CLIENTS_ANCHOR);
+    if (!target) return;
+    e.preventDefault();
+    target.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+  return (
+    <section data-section="hero">
+      <h1 className="max-w-2xl font-display text-2xl font-bold text-foreground sm:text-3xl">
+        {HOME_HEADLINE}
+      </h1>
+      <p className="mt-2 max-w-2xl text-sm text-muted-foreground">
+        {HOME_STANDFIRST}
+      </p>
+      <Button
+        className="mt-5"
+        render={<a href={`#${CLIENTS_ANCHOR}`} onClick={scrollToClients} />}
+      >
+        {HOME_CTA}
+        <ArrowRight data-icon="inline-end" />
+      </Button>
+    </section>
+  );
+}
+
+function PromptCards({ hasConnectedAccount }: { hasConnectedAccount: boolean }) {
   const { copied, copy } = useCopyToClipboard<number>();
   const router = useRouter();
 
@@ -93,11 +143,10 @@ export function DashboardClient() {
     });
   }, [hasConnectedAccount, generated]);
 
-  /** Run means run (SCRUM-118): the button's own label has always said "Run
-   * in the Agent", and it navigates there carrying the SHAPE ID, never the
-   * text. The agent page resolves the id server-side from the same catalogue
-   * these cards come from, so there is no free-text parameter for a crafted
-   * link to abuse, and an id that does not resolve seeds nothing. */
+  /** Run means run (SCRUM-118): navigates to the agent carrying the SHAPE ID,
+   * never the text. The agent page resolves the id server-side from the same
+   * catalogue these cards come from, so there is no free-text parameter for
+   * a crafted link to abuse, and an id that does not resolve seeds nothing. */
   function runPrompt(card: Suggestion, position: number) {
     if (!hasConnectedAccount) return;
     posthog.capture(EVENTS.AGENT_SUGGESTION_CLICKED, {
@@ -108,448 +157,301 @@ export function DashboardClient() {
     router.push(`/dashboard/agent?prompt=${encodeURIComponent(card.id)}`);
   }
 
-
-  useSignupConversion();
-
-  async function disconnectAccount(e: React.MouseEvent, account: ConnectedAccount) {
-    e.preventDefault();
-    e.stopPropagation();
-    setDisconnecting(account.id);
-    await fetch(`/api/connections?accountId=${account.id}`, {
-      method: "DELETE",
-    });
-    setAccounts((prev) => prev.filter((a) => a.id !== account.id));
-    setDisconnecting(null);
-    posthog.capture(EVENTS.CONNECTOR_REMOVED, {
-      connector: account.connectorType,
-    });
-  }
-
-  async function disconnectLegacy(e: React.MouseEvent, service: string) {
-    e.preventDefault();
-    e.stopPropagation();
-    setDisconnecting(service);
-    await fetch(`/api/connections?service=${service}`, { method: "DELETE" });
-    setLegacyConnections((prev) => prev.filter((c) => c.service !== service));
-    setDisconnecting(null);
-    posthog.capture(EVENTS.CONNECTOR_REMOVED, { connector: service });
-  }
-
   return (
-    <div>
-      <div>
-        <h1 className="font-display text-2xl font-bold text-foreground">
-          Connections
-        </h1>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Connect your accounts and start using AI with your data. New here?
-          Read the{" "}
-          <Link
-            href="/docs/getting-started"
-            className="font-medium text-primary hover:underline"
+    <section data-section="prompts">
+      <h2 className="font-display text-base font-bold text-foreground">
+        {HOME_PROMPTS_HEADING}
+      </h2>
+      <p className="mt-0.5 text-xs text-muted-foreground">
+        {PROMPT_CARDS_STANDFIRST}
+      </p>
+      <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        {cards.map((card, i) => (
+          <div
+            key={card.id}
+            data-prompt-card=""
+            className="group relative flex flex-col gap-3 rounded-xl border border-border bg-card p-4 transition-colors hover:border-primary/30"
           >
-            Getting Started guide
-          </Link>
-          .
-        </p>
-      </div>
-
-      {/* Shown before the consent-screen step the Connect buttons lead to. */}
-      <CasaBadge className="mt-4" />
-
-      {/* SCRUM-149: a refused zero-grant connect landing here says so, with
-          the retry path, instead of vanishing into the cards. */}
-      <ConnectOutcomeNotice />
-
-      {/* SCRUM-106 ABSORBED THE SCRUM-136 BANNER THAT USED TO SIT HERE.
-          It derived a per-SERVICE missing list off the DEFAULT account only
-          and rendered one amber line above the cards. `GrantPanel` renders the
-          same data per ACCOUNT, inside the card that account already lives in,
-          which is strictly more informative and closes a gap the banner had: a
-          user whose second Google account was short got no signal at all.
-          Keeping both would have said the same thing twice on one screen.
-
-          The card badge now carries the state (see `grantState`), and that is
-          the part that mattered most: a green "Connected" on an account that
-          granted nothing is the claim this ticket exists to retract. */}
-
-      {/* Service cards */}
-      <div className="mt-6 grid gap-4 sm:grid-cols-2">
-        {loading ? (
-          Array.from({ length: 2 }).map((_, i) => (
-            <Card key={i}>
-              <CardHeader>
-                <div className="flex items-start gap-3.5">
-                  <Skeleton className="h-10 w-10 rounded-lg" />
-                  <div className="space-y-2 pt-1">
-                    <Skeleton className="h-3.5 w-32" />
-                    <Skeleton className="h-3 w-44" />
-                  </div>
-                </div>
-              </CardHeader>
-              <CardContent className="space-y-2">
-                <Skeleton className="h-3 w-full" />
-                <Skeleton className="h-3 w-4/5" />
-              </CardContent>
-            </Card>
-          ))
-        ) : (
-          // SCRUM-366: a service whose plugin has not launched gets no card.
-          offeredServices(SERVICES, launchedServices).map((service) => {
-            const serviceAccounts = accounts.filter(
-              (a) => a.connectorType === service.id
-            );
-            const legacyConn = legacyConnections.find(
-              (c) => c.service === service.id
-            );
-            const hasAccounts = serviceAccounts.length > 0;
-            const isConnected = hasAccounts || !!legacyConn;
-
-            /** SCRUM-106: the card's badge answers "what can this actually
-             * do", not "does a row exist". Worst state across the accounts
-             * wins, because a card claiming Connected while one of its
-             * accounts grants nothing is the same overclaim at a smaller
-             * scale. Legacy rows carry their own status and join in. */
-            const cardState = ((): GrantState => {
-              const states = [
-                ...serviceAccounts.map((a) =>
-                  grantState(a.scopeStatus, true)
-                ),
-                ...(legacyConn ? [grantState(legacyConn.scopeStatus, true)] : []),
-              ];
-              if (states.length === 0) return "disconnected";
-              return (
-                (["none", "partial"] as const).find((s) =>
-                  states.includes(s)
-                ) ?? "complete"
-              );
-            })();
-
-            return (
-              <Card key={service.id}>
-                <CardHeader>
-                  <div className="flex items-start gap-3.5">
-                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-secondary">
-                      {service.icon}
-                    </div>
-                    <div className="min-w-0">
-                      <CardTitle className="text-sm font-semibold">
-                        {service.name}
-                      </CardTitle>
-                      <CardDescription className="text-xs">
-                        {service.description}
-                      </CardDescription>
-                    </div>
-                  </div>
-                  <CardAction>
-                    <Badge
-                      variant={GRANT_STATE_VARIANT[cardState]}
-                      className={
-                        cardState === "disconnected"
-                          ? "text-muted-foreground"
-                          : undefined
-                      }
-                    >
-                      <span
-                        className={
-                          cardState === "disconnected"
-                            ? "size-1.5 rounded-full bg-muted-foreground/40"
-                            : "size-1.5 rounded-full bg-current"
-                        }
-                      />
-                      {GRANT_STATE_LABEL[cardState]}
-                    </Badge>
-                  </CardAction>
-                </CardHeader>
-
-                {/* Capabilities */}
-                <CardContent className="flex-1">
-                  <ul className="space-y-1.5">
-                    {service.capabilities.map((cap) => (
-                      <li
-                        key={cap.text}
-                        className="flex items-start gap-2 text-xs text-muted-foreground"
-                      >
-                        <span className="flex shrink-0 items-center gap-1 pt-px">
-                          {cap.services.map((s) => (
-                            <ServiceIcon key={s} service={s} size={14} />
-                          ))}
-                        </span>
-                        {cap.text}
-                      </li>
-                    ))}
-                  </ul>
-                </CardContent>
-
-                {/* Connected accounts (compact) */}
-                {hasAccounts && (
-                  <CardContent className="space-y-3 border-t pt-4">
-                    {serviceAccounts.map((account) => {
-                      // SCRUM-436: a Notion row leads with its workspace
-                      // name, the email beneath; every other row is the
-                      // email alone, as before.
-                      const name = accountDisplay(account);
-                      return (
-                      <div key={account.id} className="space-y-2" data-account-row="">
-                      <div
-                        className="flex flex-wrap items-center justify-between gap-2"
-                      >
-                        <div className="flex min-w-0 items-center gap-2">
-                          <div className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-primary/10 text-[10px] font-medium text-primary">
-                            {[...name.primary][0].toUpperCase()}
-                          </div>
-                          {name.secondary ? (
-                            <span className="flex min-w-0 flex-col">
-                              <span
-                                className="truncate text-xs text-foreground"
-                                data-account-primary=""
-                              >
-                                {name.primary}
-                              </span>
-                              <span
-                                className="truncate text-[11px] text-muted-foreground"
-                                data-account-secondary=""
-                              >
-                                {name.secondary}
-                              </span>
-                            </span>
-                          ) : (
-                            <span
-                              className="truncate text-xs text-foreground"
-                              data-account-primary=""
-                            >
-                              {name.primary}
-                            </span>
-                          )}
-                          {account.isDefault && (
-                            <Badge
-                              variant="secondary"
-                              className="bg-primary/10 text-primary"
-                            >
-                              Default
-                            </Badge>
-                          )}
-                        </div>
-                        <div className="flex flex-wrap items-center justify-end gap-1.5">
-                          {/* SCRUM-147: the state shown here has to be
-                              actionable where it is shown, not one page away. */}
-                          {!account.isDefault && serviceAccounts.length > 1 && (
-                            <SetDefaultControl
-                              accountId={account.id}
-                              accountName={accountName(account)}
-                              service={service.id}
-                              source="connections_page"
-                              onChanged={refetch}
-                            />
-                          )}
-                          <Button
-                            variant="ghost"
-                            size="xs"
-                            onClick={(e) => disconnectAccount(e, account)}
-                            disabled={disconnecting === account.id}
-                            className="text-muted-foreground"
-                          >
-                            {disconnecting === account.id ? "..." : "Disconnect"}
-                          </Button>
-                        </div>
-                      </div>
-                      {/* SCRUM-106. Renders nothing for a complete grant (the
-                          badge above already carries that), so a healthy
-                          account keeps exactly the compact row it had. */}
-                      <GrantPanel
-                        scopeStatus={account.scopeStatus}
-                        rawScopes={account.scopes}
-                        connectUrl={service.connectUrl}
-                        service={service.id}
-                        source="connections_page"
-                        nextPath="/dashboard"
-                      />
-                      {/* SCRUM-147: switching beats re-consenting when a full
-                          sibling exists; renders nothing otherwise. */}
-                      {account.isDefault && (
-                        <BetterDefaultSuggestion
-                          accounts={serviceAccounts}
-                          service={service.id}
-                          source="connections_page"
-                          onChanged={refetch}
-                        />
-                      )}
-                      </div>
-                      );
-                    })}
-                  </CardContent>
-                )}
-
-                {/* Legacy connection */}
-                {!hasAccounts && legacyConn && (
-                  <CardContent className="space-y-2 border-t pt-4">
-                    <div className="flex items-center justify-between">
-                    <p className="text-[11px] text-muted-foreground">
-                      Connected {formatConnectedDate(legacyConn.connectedAt)}
-                    </p>
-                    <Button
-                      variant="ghost"
-                      size="xs"
-                      onClick={(e) => disconnectLegacy(e, service.id)}
-                      disabled={disconnecting === service.id}
-                      className="shrink-0 text-muted-foreground hover:text-foreground"
-                    >
-                      {disconnecting === service.id ? "..." : "Disconnect"}
-                    </Button>
-                    </div>
-                    {/* Legacy rows carry a grant too, and a legacy Google row
-                        can be just as short as a migrated one. */}
-                    <GrantPanel
-                      scopeStatus={legacyConn.scopeStatus}
-                      rawScopes={legacyConn.scopes}
-                      connectUrl={service.connectUrl}
-                      service={service.id}
-                      source="connections_page"
-                      nextPath="/dashboard"
-                    />
-                  </CardContent>
-                )}
-
-                {/* Actions footer. The Google card's connect note sits in it,
-                    under the buttons (SCRUM-434): it explains the button above
-                    it, so it shares the footer's band and corners rather than
-                    hanging below the card as a strip of its own. */}
-                <CardFooter className="flex-col items-stretch gap-2">
-                  <div className="flex gap-2">
-                  {isConnected ? (
-                    <>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="flex-1"
-                        render={
-                          <Link href={`/dashboard/connections/${service.id}`} />
-                        }
-                      >
-                        {SERVICE_CARD_TOOLS_LABEL}
-                      </Button>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        render={
-                          <a
-                            href={service.connectUrl}
-                            onClick={() =>
-                              posthog.capture(EVENTS.CONNECTOR_ADDED, {
-                                connector: service.id,
-                                mode: "add_account",
-                              })
-                            }
-                          />
-                        }
-                      >
-                        Add account
-                      </Button>
-                    </>
-                  ) : (
-                    <Button
-                      size="sm"
-                      className="w-full"
-                      render={
-                        <a
-                          href={service.connectUrl}
-                          onClick={() =>
-                            posthog.capture(EVENTS.CONNECTOR_ADDED, {
-                              connector: service.id,
-                              mode: "first_connect",
-                            })
-                          }
-                        />
-                      }
-                    >
-                      Connect
-                    </Button>
-                  )}
-                  </div>
-                  {/* SCRUM-410: under the Google card's connect button, on
-                      every device, until the user hides it. */}
-                  {service.id === "google-workspace" && <ConnectHelper />}
-                  {/* SCRUM-436: which workspace, and how to reach another
-                      Notion login, said where the button that does it is. */}
-                  {service.id === "notion" && <NotionConnectHelper />}
-                </CardFooter>
-              </Card>
-            );
-          })
-        )}
-      </div>
-
-      {/* The activation moment: an account is connected and the honest next
-          question is "what do I actually do now?". Answer it here rather
-          than leaving an empty playground to answer it. */}
-      {hasConnectedAccount && (
-        <Link
-          className="group mt-10 flex items-start justify-between gap-4 rounded-xl border border-primary/30 bg-primary/[0.03] p-5 transition-colors hover:bg-primary/[0.06]"
-          href="/skills"
-        >
-          <div>
-            <h2 className="font-display text-base font-bold text-foreground">
-              Connected. Now teach Claude what to do with it
-            </h2>
-            <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
-              Working skills you can copy straight into your client: triage
-              your inbox, see your week across every calendar, keep a
-              knowledge base in Sheets.
-            </p>
-          </div>
-          <span className="mt-1 shrink-0 text-sm font-medium text-primary">
-            Browse skills &rarr;
-          </span>
-        </Link>
-      )}
-
-      {/* What can I do? */}
-      <div className="mt-10">
-        <h2 className="font-display text-base font-bold text-foreground">
-          What can I do?
-        </h2>
-        <p className="mt-0.5 text-xs text-muted-foreground">
-          {PROMPT_CARDS_STANDFIRST}
-        </p>
-        <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-          {cards.map((card, i) => (
-            <div
-              key={card.id}
-              className="group flex items-start gap-2 rounded-lg border border-border px-3 py-2.5 text-left transition-colors hover:border-primary/30 hover:bg-secondary/50"
-            >
-              <button
-                onClick={() => runPrompt(card, i)}
-                disabled={!hasConnectedAccount}
-                title={
-                  hasConnectedAccount
-                    ? PROMPT_CARD_RUN_LABEL
-                    : "Connect an account to run this"
-                }
-                className="flex flex-1 items-start gap-1.5 text-left text-xs leading-relaxed text-foreground disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                <Play className="mt-0.5 size-3 shrink-0 fill-primary text-primary" />
-                {card.text}
-              </button>
+            <div className="flex items-center justify-between gap-2">
+              <span className="flex items-center gap-1.5" data-prompt-icons="">
+                {suggestionServiceIcons(card.id).map((s) => (
+                  <ServiceIcon key={s} service={s} size={18} />
+                ))}
+              </span>
               <Button
                 variant="ghost"
                 size="icon-xs"
                 onClick={() => copy(card.text, i)}
                 aria-label="Copy prompt"
                 title="Copy"
-                className="text-muted-foreground opacity-0 group-hover:opacity-100"
+                className="text-muted-foreground sm:opacity-0 sm:group-hover:opacity-100 sm:focus-visible:opacity-100"
               >
                 {copied === i ? (
-                  <Check className="size-3.5 text-emerald-500" />
+                  <Check className="size-3.5 text-success" />
                 ) : (
                   <Copy className="size-3.5" />
                 )}
               </Button>
             </div>
-          ))}
-        </div>
+            <button
+              data-prompt-run=""
+              onClick={() => runPrompt(card, i)}
+              disabled={!hasConnectedAccount}
+              title={
+                hasConnectedAccount
+                  ? PROMPT_CARD_RUN_LABEL
+                  : PROMPT_CARD_LOCKED_TITLE
+              }
+              className="flex flex-1 items-start gap-1.5 text-left text-sm leading-relaxed text-foreground disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              <Play className="mt-1 size-3 shrink-0 fill-primary text-primary" />
+              {card.text}
+            </button>
+          </div>
+        ))}
       </div>
+    </section>
+  );
+}
 
+function ClientCards({
+  mcpUrl,
+  hasConnectedAccount,
+}: {
+  mcpUrl: string;
+  hasConnectedAccount: boolean;
+}) {
+  const { copied, copy } = useCopyToClipboard<ClientId>();
 
-    </div>
+  async function copyConfig(client: McpClient) {
+    // A refused clipboard write is not a copy (use-copy-to-clipboard).
+    if (!(await copy(clientConfig(client.id, mcpUrl), client.id))) return;
+    posthog.capture(EVENTS.CLIENT_CARD_INSTALL_CLICKED, {
+      client: client.id,
+      action: "copy",
+    });
+    posthog.capture(EVENTS.COPY_MCP_CONFIG, {
+      source: `home_${client.id}`,
+      surface: "home",
+    });
+  }
+
+  return (
+    <section
+      id={CLIENTS_ANCHOR}
+      data-section="clients"
+      className="scroll-mt-4"
+    >
+      <h2 className="font-display text-base font-bold text-foreground">
+        {HOME_CLIENTS_HEADING}
+      </h2>
+      <p className="mt-0.5 text-xs text-muted-foreground">
+        {HOME_CLIENTS_STANDFIRST}
+      </p>
+      {!hasConnectedAccount && (
+        <p
+          data-connect-first=""
+          className="mt-3 rounded-xl border border-warning/40 bg-warning/10 px-4 py-3 text-sm text-foreground"
+        >
+          {HOME_CONNECT_FIRST_NOTE}{" "}
+          <Link
+            href="/dashboard/connections"
+            className="font-medium text-primary hover:underline"
+          >
+            Connect an account
+          </Link>
+        </p>
+      )}
+      <div className="mt-4 space-y-5">
+        {CLIENT_GROUPS.map((group) => (
+          <div key={group.id} data-client-group={group.id}>
+            <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+              {group.label}
+            </h3>
+            <div className="mt-2 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              {MCP_CLIENTS.filter((c) => c.group === group.id).map((client) => {
+                const deepLink = clientDeepLink(client.id, mcpUrl);
+                const copyLabel =
+                  copied === client.id
+                    ? "Copied"
+                    : client.payload === "url"
+                      ? "Copy URL"
+                      : client.payload === "command"
+                        ? "Copy command"
+                        : "Copy JSON";
+                return (
+                  <div
+                    key={client.id}
+                    data-client-card={client.id}
+                    className="flex flex-col gap-3 rounded-xl border border-border bg-card p-4"
+                  >
+                    <div className="flex items-center gap-2.5">
+                      <ClientIcon icon={client.icon} size={18} />
+                      <span className="text-sm font-semibold text-foreground">
+                        {client.label}
+                      </span>
+                    </div>
+                    <p className="flex-1 text-xs leading-relaxed text-muted-foreground">
+                      {client.step}
+                    </p>
+                    <div className="flex flex-wrap items-center gap-2">
+                      {deepLink && (
+                        <Button
+                          size="sm"
+                          render={
+                            <a
+                              href={deepLink}
+                              onClick={() =>
+                                posthog.capture(
+                                  EVENTS.CLIENT_CARD_INSTALL_CLICKED,
+                                  { client: client.id, action: "deep_link" }
+                                )
+                              }
+                            />
+                          }
+                        >
+                          Install
+                        </Button>
+                      )}
+                      <Button
+                        size="sm"
+                        variant={deepLink ? "outline" : "default"}
+                        onClick={() => void copyConfig(client)}
+                      >
+                        {copied === client.id ? <Check /> : <Copy />}
+                        {copyLabel}
+                      </Button>
+                      <Link
+                        href={clientDetailHref(client.id)}
+                        className="ml-auto text-xs font-medium text-primary hover:underline"
+                      >
+                        Full steps
+                      </Link>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function McpCard({ mcpUrl }: { mcpUrl: string }) {
+  const { copied, copy } = useCopyToClipboard<boolean>();
+  async function copyUrl() {
+    if (!(await copy(mcpUrl, true))) return;
+    posthog.capture(EVENTS.COPY_MCP_CONFIG, {
+      source: "home_url",
+      surface: "home",
+    });
+  }
+  // One mark per client family, in the order the cards list them.
+  const icons = [...new Set(MCP_CLIENTS.map((c) => c.icon))];
+  return (
+    <section
+      data-section="mcp"
+      className="rounded-xl border border-border bg-card p-4 sm:p-5"
+    >
+      <h2 className="font-display text-base font-bold text-foreground">
+        {HOME_MCP_HEADING}
+      </h2>
+      <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-center">
+        <code
+          data-mcp-url=""
+          className="min-w-0 flex-1 truncate rounded-lg border border-border bg-muted px-3 py-2 font-mono text-xs text-foreground"
+        >
+          {mcpUrl}
+        </code>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => void copyUrl()}
+          aria-label="Copy MCP server URL"
+        >
+          {copied ? <Check /> : <Copy />}
+          {copied ? "Copied" : "Copy"}
+        </Button>
+      </div>
+      <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+        <span>Works in</span>
+        {icons.map((icon) => (
+          <ClientIcon key={icon} icon={icon} size={14} />
+        ))}
+        <span>and any MCP client that supports OAuth.</span>
+      </div>
+    </section>
+  );
+}
+
+/** One provider's state from the connections view. `needs_reconnect` when the
+ * last refresh said so for any of its accounts (SCRUM-190). */
+export function serviceStatus(
+  serviceId: string,
+  accounts: ConnectedAccount[],
+  legacy: LegacyConnection[]
+): ServiceStatus {
+  const rows = [
+    ...accounts.filter((a) => a.connectorType === serviceId),
+    ...legacy.filter((c) => c.service === serviceId),
+  ];
+  if (rows.length === 0) return "not_connected";
+  if (rows.some((r) => r.refresh?.needsReconnect)) return "needs_reconnect";
+  return "connected";
+}
+
+const STATUS_DOT: Record<ServiceStatus, string> = {
+  connected: "bg-success",
+  not_connected: "bg-muted-foreground/40",
+  needs_reconnect: "bg-warning",
+};
+
+function StatusStrip({
+  connections,
+}: {
+  connections: ReturnType<typeof useConnections>;
+}) {
+  const { accounts, legacyConnections, loaded, launchedServices } = connections;
+  return (
+    <section data-section="status">
+      <div className="flex items-baseline justify-between gap-3">
+        <h2 className="font-display text-base font-bold text-foreground">
+          {HOME_STATUS_HEADING}
+        </h2>
+        <Link
+          href="/dashboard/connections"
+          className="text-xs font-medium text-primary hover:underline"
+        >
+          Manage connections
+        </Link>
+      </div>
+      <div className="mt-3 flex flex-wrap gap-2" aria-busy={!loaded}>
+        {offeredServices(SERVICES, launchedServices).map((service) => {
+          const status = serviceStatus(service.id, accounts, legacyConnections);
+          return (
+            <Link
+              key={service.id}
+              href="/dashboard/connections"
+              data-status-chip={service.id}
+              data-status={loaded ? status : "loading"}
+              className="inline-flex items-center gap-2 rounded-full border border-border bg-card py-1.5 pl-1.5 pr-3 text-xs transition-colors hover:bg-secondary"
+            >
+              <span className="flex size-6 items-center justify-center rounded-full bg-secondary [&_svg]:size-4 [&_img]:size-4">
+                {service.icon}
+              </span>
+              <span className="font-medium text-foreground">{service.name}</span>
+              {loaded && (
+                <span className="flex items-center gap-1.5 text-muted-foreground">
+                  <span className={`size-1.5 rounded-full ${STATUS_DOT[status]}`} />
+                  {STATUS_LABEL[status]}
+                </span>
+              )}
+            </Link>
+          );
+        })}
+      </div>
+    </section>
   );
 }

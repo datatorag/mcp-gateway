@@ -4,28 +4,23 @@ import { useEffect, useState } from "react";
 import posthog from "posthog-js";
 import { EVENTS } from "@/lib/analytics";
 import { useCopyToClipboard } from "@/lib/use-copy-to-clipboard";
+import {
+  DEFAULT_MCP_URL,
+  MCP_CLIENTS,
+  clientConfig,
+  isClientId,
+  type ClientId,
+} from "@/lib/mcp-clients";
 
 // Shared client-connection instructions — the single source of truth for "how
 // do I hook my agent up to DataToRAG", rendered by BOTH the dashboard setup
 // wizard and /docs/getting-started so the two can never drift (SCRUM-24).
+// The client list and every config string come from `lib/mcp-clients.ts`, which
+// the dashboard home's client cards read too (SCRUM-482); a URL hash naming a
+// client (`/dashboard/mcp-config#cursor`) opens that client here.
 // `sourcePrefix` keeps the two surfaces distinguishable in analytics:
 // the dashboard keeps its historical `wizard_${client}` copy_mcp_config
 // source values; docs emits `docs_${client}`.
-
-type ClientId =
-  | "claude-web"
-  | "claude-desktop"
-  | "claude-code"
-  | "cursor"
-  | "chatgpt";
-
-const CLIENTS: { id: ClientId; label: string }[] = [
-  { id: "claude-web", label: "Claude web" },
-  { id: "claude-desktop", label: "Claude Desktop" },
-  { id: "claude-code", label: "Claude Code" },
-  { id: "cursor", label: "Cursor" },
-  { id: "chatgpt", label: "ChatGPT" },
-];
 
 function CodeBlock({
   children,
@@ -78,7 +73,7 @@ function ClientInstructions({
   }
 
   if (client === "claude-code") {
-    const command = `claude mcp add --transport http datatorag ${mcpUrl}`;
+    const command = clientConfig("claude-code", mcpUrl);
     return (
       <div className="text-xs text-muted-foreground">
         <p>Run this command in your terminal:</p>
@@ -88,18 +83,24 @@ function ClientInstructions({
   }
 
   if (client === "cursor") {
-    const json = `{
-  "mcpServers": {
-    "datatorag": {
-      "url": "${mcpUrl}"
-    }
-  }
-}`;
+    const json = clientConfig("cursor", mcpUrl);
     return (
       <div className="text-xs text-muted-foreground">
         <p>Add this to your MCP config:</p>
         <CodeBlock onCopied={onCopied}>{json}</CodeBlock>
         <p className="mt-2">Or via UI: Settings → MCP → Add</p>
+      </div>
+    );
+  }
+
+  if (client === "codex") {
+    return (
+      <div className="text-xs text-muted-foreground">
+        <p>
+          Run these in your terminal. The first adds the server, the second
+          signs you in:
+        </p>
+        <CodeBlock onCopied={onCopied}>{clientConfig("codex", mcpUrl)}</CodeBlock>
       </div>
     );
   }
@@ -140,10 +141,13 @@ export function SetupInstructions({
   const [selectedClient, setSelectedClient] = useState<ClientId>("claude-web");
   // Seed with the production URL so statically generated pages (docs) ship the
   // endpoint in their HTML; the effect corrects it on non-prod origins.
-  const [mcpUrl, setMcpUrl] = useState("https://datatorag.com/mcp");
+  const [mcpUrl, setMcpUrl] = useState(DEFAULT_MCP_URL);
 
   useEffect(() => {
     setMcpUrl(`${window.location.origin}/mcp`);
+    // A home client card links here with its client as the hash.
+    const hash = window.location.hash.slice(1);
+    if (isClientId(hash)) setSelectedClient(hash);
   }, []);
 
   function selectClient(client: ClientId) {
@@ -165,7 +169,7 @@ export function SetupInstructions({
     <div>
       {/* Client selector */}
       <div className="flex flex-wrap gap-2">
-        {CLIENTS.map((c) => (
+        {MCP_CLIENTS.map((c) => (
           <button
             key={c.id}
             onClick={() => selectClient(c.id)}
@@ -181,9 +185,12 @@ export function SetupInstructions({
       </div>
 
       {/* Per-client instructions */}
-      <div className="mt-4 rounded-xl border border-border p-4">
+      <div
+        id={selectedClient}
+        className="mt-4 scroll-mt-4 rounded-xl border border-border p-4"
+      >
         <h3 className="font-display text-sm font-semibold text-foreground">
-          {CLIENTS.find((c) => c.id === selectedClient)?.label}
+          {MCP_CLIENTS.find((c) => c.id === selectedClient)?.label}
         </h3>
         <div className="mt-2">
           <ClientInstructions

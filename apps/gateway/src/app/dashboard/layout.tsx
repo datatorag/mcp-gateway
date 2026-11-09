@@ -10,6 +10,7 @@ import {
   BookOpen,
   CreditCard,
   Cable,
+  House,
   MessageSquare,
   PanelLeftClose,
   PanelLeftOpen,
@@ -25,14 +26,11 @@ import { GoogleConnectModalHost } from "./google-connect-modal";
 import { cn } from "@/lib/utils";
 
 const navItems: Array<{ href: string; label: string; icon: LucideIcon }> = [
-  // "Connections", because that is what the page IS (SCRUM-118): the
-  // connector cards are the real connections surface, and the legacy
-  // /dashboard/connections URL redirects HERE. The PATH stays /dashboard on
-  // purpose - the label renames, the route does not, because the route move
-  // would invert that redirect and shift a session-check boundary. The icon
-  // renames with the label: the rail is icon-only when compact, and a grid
-  // glyph labelled Connections would say the old name to anyone hovering.
-  { href: "/dashboard", label: "Connections", icon: Cable },
+  // SCRUM-482: the home is the connect-your-client page, and the connection
+  // cards moved to their own route and item. (SCRUM-118 had labelled the home
+  // "Connections" because the cards were the page; they no longer are.)
+  { href: "/dashboard", label: "Home", icon: House },
+  { href: "/dashboard/connections", label: "Connections", icon: Cable },
   { href: "/dashboard/agent", label: "Agent", icon: MessageSquare },
   // Skills (SCRUM-223): the catalogue the public pages publish, with a Run
   // that lands in the Agent with the skill loaded. Next to Agent because

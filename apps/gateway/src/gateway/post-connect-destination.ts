@@ -22,25 +22,6 @@ export const CONNECT_ERROR_CONNECTED_ELSEWHERE = "connected_elsewhere";
 export const CONNECT_ERROR_NOT_CONFIGURED = "service_not_configured";
 
 /**
- * Where the retired `/dashboard/connections` index forwards to (SCRUM-149).
- *
- * The redirect used to drop the query string, which silently swallowed every
- * connect outcome that landed on the fallback leg — a failed connect rendered
- * as nothing at all. Single-valued params only: an outcome param is written
- * once by the callback, so a repeated key is noise, not data.
- */
-export function connectionsForwardPath(
-  params: Record<string, string | string[] | undefined>
-): string {
-  const qs = new URLSearchParams();
-  for (const [key, value] of Object.entries(params)) {
-    if (typeof value === "string") qs.set(key, value);
-  }
-  const s = qs.toString();
-  return s ? `/dashboard?${s}` : "/dashboard";
-}
-
-/**
  * Where a service-connect OAuth round trip lands, for every combination of
  * requested path and outcome.
  *
