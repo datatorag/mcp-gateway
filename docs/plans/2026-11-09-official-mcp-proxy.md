@@ -116,7 +116,11 @@ Done when: the connect from a local gateway reaches Slack's consent screen for t
 - **Depends on** task 2.4 for `--from-snapshot`. Until then the pair is generated from the task 1.1
   list with the same code path, written as a one-off input file.
 
-### Task 1.7: retire `slack-mcp`
+### Task 1.7: retire `slack-mcp` (held by HQ)
+
+Held until HQ says otherwise: the plugin may serve customers' workspaces before Slack accepts a
+distributed app. The layer coexists with it: the vendor's tools are under their own slug
+(`slack-hosted`), so nothing here touches the plugin's directory, rows or SL cases. When released:
 
 - **Files:**
   - remove `plugins/slack-mcp`, its `Dockerfile` lines and account, and its row in

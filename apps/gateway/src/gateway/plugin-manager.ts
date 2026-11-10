@@ -3,9 +3,9 @@ import { existsSync, readFileSync, mkdirSync } from "node:fs";
 import { join } from "node:path";
 import { eq } from "drizzle-orm";
 import type { Database } from "@datatorag-mcp/db";
-import { mcpServers, mcpServerEnvVars } from "@datatorag-mcp/db";
+import { mcpServerEnvVars } from "@datatorag-mcp/db";
 import { PLUGINS_DIR, PLUGINS_FROM_IMAGE } from "./plugins-dir";
-import { upstreamFor } from "./connectors/registry";
+import { listActiveServers } from "./active-servers";
 
 export { pluginsDirFrom, PLUGINS_DIR, PLUGINS_FROM_IMAGE } from "./plugins-dir";
 
@@ -173,21 +173,12 @@ export class PluginManager {
   }
 
   async startAll(): Promise<void> {
-    const activeServers = await this.db
-      .select({
-        id: mcpServers.id,
-        slug: mcpServers.slug,
-        containerPort: mcpServers.containerPort,
-      })
-      .from(mcpServers)
-      .where(eq(mcpServers.status, "active"));
+    // A vendor-served slug (official-mcp-proxy) has nothing to start and is
+    // not down: its health is the vendor's, not a child process's.
+    const activeServers = (await listActiveServers(this.db)).filter((s) => s.servedBy === "plugin");
 
     await Promise.all(
       activeServers.map(async (server) => {
-        // The vendor's own server serves these tools (official-mcp-proxy):
-        // nothing to start, and not down. Its health is the scheduled
-        // upstream check's, not a child process's.
-        if (upstreamFor(server.slug)) return;
         const pluginDir = join(PLUGINS_DIR, server.slug);
         if (!existsSync(pluginDir)) {
           console.warn(

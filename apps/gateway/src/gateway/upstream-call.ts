@@ -1,29 +1,30 @@
-import { Client } from "@modelcontextprotocol/sdk/client/index.js";
-import { StreamableHTTPClientTransport, StreamableHTTPError } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
+import { StreamableHTTPError } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 import { ErrorCode, McpError, type CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import { and, eq } from "drizzle-orm";
 import type { Database } from "@datatorag-mcp/db";
 import { tools } from "@datatorag-mcp/db";
-import { CONNECTOR_REGISTRY, upstreamFor, type UpstreamServer } from "./connectors/registry";
-import { callPluginToolOnce } from "./user-tools";
+import { vendorServed, type ConnectorRecord, type UpstreamServer } from "./connectors/registry";
+import { buildPluginServerUrl, callMcpToolOnce, callPluginToolOnce, type PluginServerRow } from "./user-tools";
 import { PLUGIN_ERROR_META_KEY, type PluginFailure } from "./usage/classify";
 
 /**
- * One tool call to a vendor's own MCP server (official-mcp-proxy).
+ * Tools served by a vendor's own MCP server (official-mcp-proxy), and the one
+ * place a server's endpoint is decided.
  *
- * The plugin call (`callPluginToolOnce`) differs in three ways, and only
- * these: the URL is the vendor's, the user's token rides as
- * `Authorization: Bearer` and nothing else is sent (no `X-User-Token`, no
- * plugin context header), and the failure marker the gateway meters on is
- * stamped HERE, because a vendor stamps nothing. Without it a vendor that is
- * down or rate-limiting would read as the user's own error and be charged.
+ * A vendor call differs from a plugin call in three ways, and only these: the
+ * URL is the vendor's, the user's token rides as `Authorization: Bearer` and
+ * nothing else is sent (no `X-User-Token`, no plugin context header), and the
+ * failure marker the gateway meters on is stamped HERE, because a vendor
+ * stamps nothing. Without it a vendor that is down or rate-limiting would read
+ * as the user's own error and be charged.
  *
  * Only what is seen at the transport is stamped. A tool result the vendor
  * marks `isError` (a bad channel, a missing scope) passes through as the
  * vendor's words and is the request's own, as a provider 4xx is today.
  */
 
-/** A vendor that has not answered in this long is a transient failure. */
+/** A vendor that has not answered in this long, connect and call together,
+ * is a transient failure. */
 export const UPSTREAM_DEADLINE_MS = 30_000;
 
 /** The cap our plugins apply to an answer, applied here for a vendor's. */
@@ -31,11 +32,18 @@ export const UPSTREAM_MAX_RESPONSE_CHARS = 900_000;
 
 const TRUNCATED = "\n\n... [truncated: response exceeded 900KB]";
 
-/** The URL a call goes to: the declared one, with the declared params. */
-export function upstreamUrl(upstream: UpstreamServer): URL {
-  const url = new URL(upstream.url);
-  for (const [k, v] of Object.entries(upstream.params ?? {})) url.searchParams.set(k, v);
-  return url;
+/** Where a server's tools are served: a plugin we run, at its address, or
+ * the vendor's own MCP server, with the connector that declares it. Every
+ * caller that turns a registry server into an endpoint asks this. */
+export type ServiceEndpoint =
+  | { kind: "plugin"; url: string }
+  | { kind: "vendor"; url: string; connector: ConnectorRecord & { upstream: UpstreamServer } };
+
+export function serviceEndpoint(server: PluginServerRow): ServiceEndpoint {
+  const connector = vendorServed(server.slug);
+  return connector
+    ? { kind: "vendor", url: connector.upstream.url, connector }
+    : { kind: "plugin", url: buildPluginServerUrl(server) };
 }
 
 function failed(text: string, failure: PluginFailure): CallToolResult {
@@ -48,7 +56,10 @@ function failed(text: string, failure: PluginFailure): CallToolResult {
 
 /** A transport outcome as the client is told it, with the marker. Fixed
  * words only: a vendor's HTTP body is never passed on. */
-export function upstreamFailure(err: unknown, serviceName: string): CallToolResult {
+function upstreamFailure(err: unknown, serviceName: string, timedOut: boolean): CallToolResult {
+  if (timedOut || (err instanceof McpError && err.code === ErrorCode.RequestTimeout)) {
+    return failed(`${serviceName}'s MCP server did not answer in time. Try again in a moment.`, { kind: "transient" });
+  }
   if (err instanceof StreamableHTTPError) {
     const status = err.code;
     if (status === 401) {
@@ -68,9 +79,6 @@ export function upstreamFailure(err: unknown, serviceName: string): CallToolResu
     return failed(`${serviceName}'s MCP server did not answer. Try again in a moment.`, { kind: "unreachable" });
   }
   if (err instanceof McpError) {
-    if (err.code === ErrorCode.RequestTimeout) {
-      return failed(`${serviceName}'s MCP server did not answer in time. Try again in a moment.`, { kind: "transient" });
-    }
     if ((err.code === ErrorCode.InvalidParams || err.code === ErrorCode.MethodNotFound) && /not found|unknown tool/i.test(err.message)) {
       return failed(`This ${serviceName} tool is no longer offered.`, { kind: "unknown_tool" });
     }
@@ -84,14 +92,14 @@ export function upstreamFailure(err: unknown, serviceName: string): CallToolResu
  * the SDK return as a result rather than a JSON-RPC error. Matched on the
  * exact tool name, so a vendor's ordinary "not found" about a channel or a
  * file is never read as a missing tool. */
-export function namesMissingTool(result: CallToolResult, toolName: string): boolean {
+function namesMissingTool(result: CallToolResult, toolName: string): boolean {
   if (!result.isError) return false;
   const text = (result.content ?? []).map((c) => (c.type === "text" ? c.text : "")).join(" ");
   return text.includes(`Tool ${toolName} not found`);
 }
 
 /** An answer cut to the cap, the text parts only, with the marker. */
-export function capUpstreamResult(result: CallToolResult): CallToolResult {
+function capUpstreamResult(result: CallToolResult): CallToolResult {
   if (JSON.stringify(result).length <= UPSTREAM_MAX_RESPONSE_CHARS) return result;
   let budget = UPSTREAM_MAX_RESPONSE_CHARS;
   const content = [];
@@ -106,7 +114,7 @@ export function capUpstreamResult(result: CallToolResult): CallToolResult {
 }
 
 export async function callUpstreamTool(opts: {
-  upstream: UpstreamServer;
+  url: string;
   /** The service's name on every surface, for the words of a failure. */
   serviceName: string;
   token: string;
@@ -115,46 +123,44 @@ export async function callUpstreamTool(opts: {
   clientName: string;
   deadlineMs?: number;
 }): Promise<CallToolResult> {
-  const deadline = opts.deadlineMs ?? UPSTREAM_DEADLINE_MS;
-  const transport = new StreamableHTTPClientTransport(upstreamUrl(opts.upstream), {
-    requestInit: { headers: { Authorization: `Bearer ${opts.token}` } },
-  });
-  const client = new Client({ name: opts.clientName, version: "0.1.0" }, { capabilities: {} });
+  // One deadline for the connect and the call together.
+  const signal = AbortSignal.timeout(opts.deadlineMs ?? UPSTREAM_DEADLINE_MS);
   try {
-    await client.connect(transport, { timeout: deadline });
-    const result = (await client.callTool({ name: opts.toolName, arguments: opts.args }, undefined, {
-      timeout: deadline,
+    const result = (await callMcpToolOnce({
+      url: opts.url,
+      headers: { Authorization: `Bearer ${opts.token}` },
+      toolName: opts.toolName,
+      args: opts.args,
+      clientName: opts.clientName,
+      signal,
     })) as CallToolResult;
     if (namesMissingTool(result, opts.toolName)) {
       return failed(`This ${opts.serviceName} tool is no longer offered.`, { kind: "unknown_tool" });
     }
     return capUpstreamResult(result);
   } catch (err) {
-    return upstreamFailure(err, opts.serviceName);
-  } finally {
-    await client.close().catch(() => undefined);
+    return upstreamFailure(err, opts.serviceName, signal.aborted);
   }
 }
 
-/** A tool call for a user with their token, to whichever serves the tool:
- * the vendor's own MCP server when the connector declares one
- * (official-mcp-proxy), else our plugin. The one place that choice is made,
- * so no caller can send a plugin's headers to a vendor or a vendor's bearer
- * to a plugin. `serverUrl` is the plugin's and is not used for a vendor. */
+/** A tool call for a user with their token, to whichever serves the tool. The
+ * one place the call is made from an endpoint, so no caller can send a
+ * plugin's headers to a vendor or a vendor's bearer to a plugin. */
 export async function callServiceToolOnce(opts: {
-  serverSlug: string;
-  serverUrl: string;
+  endpoint: ServiceEndpoint;
   userToken: string;
   toolName: string;
   args: Record<string, unknown>;
   clientName: string;
   contextHeaders?: Record<string, string>;
-}): Promise<Awaited<ReturnType<Client["callTool"]>>> {
-  const upstream = upstreamFor(opts.serverSlug);
-  if (!upstream) return callPluginToolOnce(opts);
+}): Promise<CallToolResult> {
+  const { endpoint } = opts;
+  if (endpoint.kind === "plugin") {
+    return (await callPluginToolOnce({ ...opts, serverUrl: endpoint.url })) as CallToolResult;
+  }
   return callUpstreamTool({
-    upstream,
-    serviceName: CONNECTOR_REGISTRY.find((c) => c.pluginSlug === opts.serverSlug)?.displayName ?? opts.serverSlug,
+    url: endpoint.url,
+    serviceName: endpoint.connector.displayName,
     token: opts.userToken,
     toolName: opts.toolName,
     args: opts.args,
@@ -162,12 +168,13 @@ export async function callServiceToolOnce(opts: {
   });
 }
 
-/** Whether a vendor-served tool may be called (official-mcp-proxy): only one
- * with an enabled registry row, so nothing the vendor added since the last
- * review is reachable by name. Always true for a plugin's tool, whose rule
- * stays as it is. The one gate both call paths ask. */
-export async function upstreamToolOffered(db: Database, serverSlug: string, namespacedName: string): Promise<boolean> {
-  if (!upstreamFor(serverSlug)) return true;
+/** Whether a vendor-served tool may be called: only one with an enabled
+ * registry row, so nothing the vendor added since the last review is
+ * reachable by name. Always true for a plugin's tool. For a caller that does
+ * not already hold the tool's row (the playground's direct call); the MCP
+ * dispatch decides it from the row it reads anyway. */
+export async function upstreamToolOffered(db: Database, endpoint: ServiceEndpoint, namespacedName: string): Promise<boolean> {
+  if (endpoint.kind === "plugin") return true;
   const [row] = await db
     .select({ id: tools.id })
     .from(tools)

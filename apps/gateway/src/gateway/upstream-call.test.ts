@@ -5,67 +5,48 @@
  * does, and every transport outcome carries the failure marker the gateway
  * meters on, in fixed words.
  */
-import { createServer, type Server, type IncomingHttpHeaders } from "node:http";
-import express from "express";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
-import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import { z } from "zod";
-import { callUpstreamTool, upstreamUrl, UPSTREAM_MAX_RESPONSE_CHARS } from "./upstream-call";
+import { callUpstreamTool, UPSTREAM_MAX_RESPONSE_CHARS } from "./upstream-call";
 import { classifyOutcome, pluginFailureOf } from "./usage/classify";
+import { startFakeVendor, type FakeVendor } from "../test-utils/fake-vendor";
 
-let server: Server;
-let base: string;
-const seen: IncomingHttpHeaders[] = [];
-const seenUrls: string[] = [];
-
-function vendor() {
-  const mcp = new McpServer({ name: "fake-vendor", version: "1.0.0" });
-  mcp.tool("vendor_read", { q: z.string().optional() }, async () => ({ content: [{ type: "text", text: "read ok" }] }));
-  mcp.tool("vendor_slow", {}, async () => {
-    await new Promise((r) => setTimeout(r, 2_000));
-    return { content: [{ type: "text", text: "late" }] };
-  });
-  mcp.tool("vendor_big", {}, async () => ({ content: [{ type: "text", text: "x".repeat(UPSTREAM_MAX_RESPONSE_CHARS + 50_000) }] }));
-  mcp.tool("vendor_refuses", {}, async () => ({ content: [{ type: "text", text: "channel_not_found" }], isError: true }));
-  return mcp;
-}
+let vendor: FakeVendor;
 
 beforeAll(async () => {
-  const app = express();
-  app.use(express.json());
-  app.post("/mcp", async (req, res) => {
-    seen.push(req.headers);
-    seenUrls.push(req.originalUrl);
-    const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined, enableJsonResponse: true });
-    const mcp = vendor();
-    res.on("close", () => void transport.close());
-    await mcp.connect(transport);
-    await transport.handleRequest(req, res, req.body);
-  });
-  app.post("/mcp-401", (_req, res) => void res.status(401).json({ error: "invalid_auth" }));
-  app.post("/mcp-429", (_req, res) => void res.status(429).set("Retry-After", "30").send("slow down"));
-  app.post("/mcp-503", (_req, res) => void res.status(503).send("<html>down</html>"));
-  app.post("/mcp-html", (_req, res) => void res.status(200).type("html").send("<html>a proxy page</html>"));
-  server = createServer(app);
-  await new Promise<void>((r) => server.listen(0, "127.0.0.1", r));
-  const addr = server.address();
-  if (typeof addr === "string" || addr === null) throw new Error("no port");
-  base = `http://127.0.0.1:${addr.port}`;
+  vendor = await startFakeVendor(
+    (mcp) => {
+      mcp.tool("vendor_read", { q: z.string().optional() }, async () => ({ content: [{ type: "text", text: "read ok" }] }));
+      mcp.tool("vendor_slow", {}, async () => {
+        await new Promise((r) => setTimeout(r, 2_000));
+        return { content: [{ type: "text", text: "late" }] };
+      });
+      mcp.tool("vendor_big", {}, async () => ({
+        content: [{ type: "text", text: "x".repeat(UPSTREAM_MAX_RESPONSE_CHARS + 50_000) }],
+      }));
+      mcp.tool("vendor_refuses", {}, async () => ({ content: [{ type: "text", text: "channel_not_found" }], isError: true }));
+    },
+    (app) => {
+      app.post("/mcp-401", (_req, res) => void res.status(401).json({ error: "invalid_auth" }));
+      app.post("/mcp-429", (_req, res) => void res.status(429).set("Retry-After", "30").send("slow down"));
+      app.post("/mcp-503", (_req, res) => void res.status(503).send("<html>down</html>"));
+      app.post("/mcp-html", (_req, res) => void res.status(200).type("html").send("<html>a proxy page</html>"));
+    }
+  );
 });
 
 afterAll(async () => {
-  await new Promise<void>((r) => server.close(() => r()));
+  await vendor.close();
 });
 
 beforeEach(() => {
-  seen.length = 0;
-  seenUrls.length = 0;
+  vendor.seen.length = 0;
+  vendor.seenUrls.length = 0;
 });
 
-const call = (path: string, toolName: string, deadlineMs?: number, params?: Record<string, string>) =>
+const call = (path: string, toolName: string, deadlineMs?: number) =>
   callUpstreamTool({
-    upstream: { url: `${base}${path}`, auth: "oauth-confidential", ...(params ? { params } : {}) },
+    url: `${vendor.base}${path}`,
     serviceName: "Slack",
     token: "fixture-user-token",
     toolName,
@@ -83,20 +64,18 @@ describe("a call to a vendor's MCP server", () => {
     const result = await call("/mcp", "vendor_read");
     expect(result.isError).toBeFalsy();
     expect(result.content).toEqual([{ type: "text", text: "read ok" }]);
-    expect(seen.length).toBeGreaterThan(0);
-    for (const h of seen) {
+    expect(vendor.seen.length).toBeGreaterThan(0);
+    for (const h of vendor.seen) {
       expect(h.authorization).toBe("Bearer fixture-user-token");
       expect(h["x-user-token"]).toBeUndefined();
       expect(Object.keys(h).filter((k) => k.startsWith("x-posthog"))).toEqual([]);
     }
   });
 
-  it("sends the declared params on the declared URL, and only there", async () => {
-    await call("/mcp", "vendor_read", undefined, { readonly: "true" });
-    for (const u of seenUrls) expect(u).toBe("/mcp?readonly=true");
-    expect(upstreamUrl({ url: "https://mcp.example.com/mcp?a=1", auth: "bearer-pasted", params: { b: "2" } }).toString()).toBe(
-      "https://mcp.example.com/mcp?a=1&b=2"
-    );
+  it("goes to the declared URL and nowhere else", async () => {
+    await call("/mcp", "vendor_read");
+    expect(vendor.seenUrls.length).toBeGreaterThan(0);
+    for (const u of vendor.seenUrls) expect(u).toBe("/mcp");
   });
 
   it("a vendor's own tool error passes through in its words, and is the request's own", async () => {
@@ -138,7 +117,7 @@ describe("what a transport failure becomes", () => {
 
   it("nothing listening: unreachable, not metered", async () => {
     const result = await callUpstreamTool({
-      upstream: { url: "http://127.0.0.1:1/mcp", auth: "oauth-confidential" },
+      url: "http://127.0.0.1:1/mcp",
       serviceName: "Slack",
       token: "t",
       toolName: "vendor_read",
@@ -149,7 +128,7 @@ describe("what a transport failure becomes", () => {
     expect(meter(result)).toBe(false);
   });
 
-  it("too slow: the deadline holds, transient, not metered", async () => {
+  it("too slow: one deadline holds for the connect and the call together, transient, not metered", async () => {
     const started = Date.now();
     const result = await call("/mcp", "vendor_slow", 500);
     expect(Date.now() - started).toBeLessThan(1_800);

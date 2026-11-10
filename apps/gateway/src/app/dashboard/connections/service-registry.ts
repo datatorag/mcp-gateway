@@ -10,7 +10,7 @@
  * time a connector is added. So the data half lives here and `services.tsx`
  * decorates it with the icons and capability copy only the dashboard needs.
  */
-import { CONNECTOR_REGISTRY, type ConnectorId } from "@/gateway/connectors/registry";
+import { CONNECTOR_REGISTRY, connectorSlugs, type ConnectorId, type ConnectorRecord } from "@/gateway/connectors/registry";
 
 export interface ConnectableService {
   id: ConnectorId;
@@ -55,14 +55,15 @@ export const ALWAYS_OFFERED_SERVICE_IDS: readonly string[] =
  * same for every user, so naming one would announce it to all of them. */
 export const PUBLIC_SERVICE_IDS: readonly string[] = CONNECTABLE_SERVICES.filter((s) => !s.audience).map((s) => s.id);
 
-/** The plugins whose service only some users are offered: the
- * `launchPluginSlug` of every entry with an `audience` (Brevo, SCRUM-468;
- * Slack, SCRUM-454). The one list the public surfaces leave out (the status
- * page's tools, the public tool counts, `/tools/<slug>` and the sitemap), so
- * another admin-only service needs no edit there. */
-export const ADMIN_AUDIENCE_PLUGIN_SLUGS: readonly string[] = CONNECTABLE_SERVICES.filter(
-  (s) => s.audience && s.launchPluginSlug
-).map((s) => s.launchPluginSlug!);
+/** The registry slugs whose service only some users are offered: every slug
+ * of a connector with an `audience` (Brevo, SCRUM-468; Slack, SCRUM-454),
+ * its plugin's and, when it declares one, its vendor's (official-mcp-proxy).
+ * The one list the public surfaces leave out (the status page's tools, the
+ * public tool counts, `/tools/<slug>` and the sitemap), so another
+ * admin-only service needs no edit there. */
+export const ADMIN_AUDIENCE_PLUGIN_SLUGS: readonly string[] = (CONNECTOR_REGISTRY as readonly ConnectorRecord[])
+  .filter((c) => c.audience)
+  .flatMap((c) => connectorSlugs(c));
 
 /** The entries of `services` a surface may offer, given the launched ids
  * (`launchedServiceIds` on the server, `launchedServices` in the connections

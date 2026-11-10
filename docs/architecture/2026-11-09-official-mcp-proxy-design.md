@@ -32,7 +32,7 @@ section 1(b)) chose a plugin over this layer. That choice is reversed here.
    argument validation, the scope pre-check and the 401 handling are unchanged.
 4. Stage 1 is Slack, one admin user, reads only. Writes come in stage 3, classified and enabled,
    with no gateway-side target check (ruled, section 5).
-5. Retire `slack-mcp` unshipped. It was never connected, and its connect and refresh code carries
+5. Retire `slack-mcp` unshipped (held: see section 10). It was never connected, and its connect and refresh code carries
    over.
 
 ## 1(b) revisited: the reasons the proxy was rejected
@@ -59,34 +59,44 @@ connector fact already derives from:
 
 ```ts
 upstream?: {
-  url: string;              // "https://mcp.slack.com/mcp"
-  auth: "oauth-confidential" | "oauth-discovery" | "bearer-pasted";
-  // Query parameters the vendor reads to trim its list (PostHog's features=,
-  // readonly=). Empty for Slack.
-  params?: Record<string, string>;
+  url: string;   // "https://mcp.slack.com/mcp"
+  slug: string;  // "slack-hosted": the registry slug its tools are listed under
 };
 ```
 
+Fields are added when their first reader lands: how a user's token is obtained (registered app,
+discovery, pasted) and the query parameters a vendor reads to trim its list (PostHog's `features=`,
+`readonly=`) have no reader in stage 1.
+
+**The vendor's tools have a slug of their own (`slack-hosted`), never the plugin's.** Our plugin and
+the vendor's server can then serve one connection side by side, which matters while the plugin may
+serve workspaces the vendor does not (a distributed app before Marketplace approval). Both slugs map
+to the connector's service, so one connection, one token and one usage attribution cover both, and
+the admin audience covers both. The service-to-plugin reverse map still names the plugin.
+
 What stays as it is:
 
-- **`pluginSlug`** stays the tool prefix and the `mcp_servers` slug. Slack keeps `slack-mcp`, so
-  the vendor's `slack_send_message` is served as `slack-mcp__slack_send_message`, and
-  `PLUGIN_SERVICE_MAP`, the scope rules and the runner roles need no rename.
+- **`pluginSlug`** stays the plugin's: its directory, process and tool prefix.
 - **`audience`** is the record's existing field. Slack keeps `admin`.
-- **The `mcp_servers` row** holds the slug and status, and is the foreign key for `tools`. It is
-  inserted by the registry pair, as a new plugin's row is today (`--new-plugin`).
+- **The `mcp_servers` row** for the vendor's slug holds its status and is the foreign key for
+  `tools`. It is inserted by the registry pair, as a new plugin's row is today (`--new-plugin`).
 
 What changes:
 
-- **The plugin manager skips a row whose connector declares an upstream.** Today it marks a missing
-  plugin directory as `down`. `/health` then reports the upstream from the scheduled check
-  (section 3) instead of from a child process.
-- **`buildPluginServerUrl`** returns the upstream URL, with its params, for such a row.
-- **`registry.test.ts`**, which checks the connector list against `plugins/` on disk, accepts a
-  record with an upstream and no directory.
+- **One answer to "how is this server served".** `listActiveServers` (`active-servers.ts`) returns
+  each active server with `servedBy: plugin | vendor`, and the plugin manager, the runner's plugin
+  surface (A4) and its sha record all read it. The plugin manager starts nothing for a vendor slug
+  and does not report it down.
+- **One answer to "where does a call go".** `serviceEndpoint(server)` (`upstream-call.ts`) gives the
+  plugin's address or the vendor's URL with its connector; the dispatch's call, its log line, the
+  file crossing and the tokenless pool branch all take it, and only a plugin endpoint reaches the
+  pool.
+- **A4** reads a plugin's own list over the pool, which a vendor's server refuses without a user
+  token. For a vendor slug it holds the registry against what the identity is served, and leaves
+  the vendor's list to the scheduled check (section 3).
 
-Why code and not a table: the URL and the auth shape decide where a user's token is sent. That is a
-reviewed code change, not a row anyone with registry write access can edit.
+Why code and not a table: the URL decides where a user's token is sent. That is a reviewed code
+change, not a row anyone with registry write access can edit.
 
 ## 2. Auth per user
 
@@ -467,7 +477,9 @@ Each stage proves one new thing.
 
 1. Token rotation on.
 2. All 30 user scopes at registration.
-3. `slack-mcp` is retired.
+3. `slack-mcp` is retired. **Held by HQ, 2026-11-09:** the plugin may have to serve customers'
+   workspaces until Slack accepts a distributed app, so the layer coexists with it (section 1) until
+   HQ says otherwise.
 4. No gateway-side target check on writes. The guard is given up for passed-through tools; the
    client's confirmation before a write is what remains.
 5. PostHog and Brevo stay as built. Not ruled on.

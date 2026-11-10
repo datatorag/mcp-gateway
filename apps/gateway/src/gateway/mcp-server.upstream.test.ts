@@ -6,13 +6,9 @@
  * dispatch, the choice of plugin or vendor, the adapter and the metering
  * rule are the product's.
  */
-import { createServer, type Server, type IncomingHttpHeaders } from "node:http";
-import express from "express";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
-import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import { z } from "zod";
 import { mcpServers, tools, type Database } from "@datatorag-mcp/db";
 
@@ -37,53 +33,40 @@ vi.mock("./connect-links", async (orig) => ({
   ...(await orig<typeof import("./connect-links")>()),
   issueConnectLink: vi.fn(async () => null),
 }));
-// Slack's upstream, pointed at the fake. Everything else about the registry
-// is the real one.
+// Slack's vendor, pointed at the fake. Everything else about the registry
+// is the real one, including the vendor's own slug.
 const fake = vi.hoisted(() => ({ url: "" }));
 vi.mock("./connectors/registry", async (orig) => {
   const real = await orig<typeof import("./connectors/registry")>();
   return {
     ...real,
-    upstreamFor: (slug: string) =>
-      slug === "slack-mcp" ? { url: fake.url, auth: "oauth-confidential" as const } : real.upstreamFor(slug),
+    vendorServed: (slug: string) => {
+      const c = real.vendorServed(slug);
+      return c ? { ...c, upstream: { ...c.upstream, url: fake.url } } : undefined;
+    },
   };
 });
 
 import { createMcpServer } from "./mcp-server";
 import { classifyOutcome } from "./usage/classify";
+import { startFakeVendor, type FakeVendor } from "../test-utils/fake-vendor";
 import type { ConnectionPool } from "./pool";
 
-let server: Server;
-let base: string;
-const seen: IncomingHttpHeaders[] = [];
+let vendor: FakeVendor;
 
 beforeAll(async () => {
-  const app = express();
-  app.use(express.json());
-  app.post("/mcp", async (req, res) => {
-    seen.push(req.headers);
-    const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined, enableJsonResponse: true });
-    const mcp = new McpServer({ name: "fake-slack", version: "1.0.0" });
+  vendor = await startFakeVendor((mcp) => {
     mcp.tool("slack_search_public", { query: z.string() }, async ({ query }) => ({
       content: [{ type: "text", text: `results for ${query}` }],
     }));
-    res.on("close", () => void transport.close());
-    await mcp.connect(transport);
-    await transport.handleRequest(req, res, req.body);
   });
-  app.post("/mcp-429", (_req, res) => void res.status(429).send("slow down"));
-  server = createServer(app);
-  await new Promise<void>((r) => server.listen(0, "127.0.0.1", r));
-  const addr = server.address();
-  if (typeof addr === "string" || addr === null) throw new Error("no port");
-  base = `http://127.0.0.1:${addr.port}`;
 });
 
 afterAll(async () => {
-  await new Promise<void>((r) => server.close(() => r()));
+  await vendor.close();
 });
 
-const SERVER_ROW = { id: "srv-slack", slug: "slack-mcp", containerPort: 40009, githubRepoUrl: null };
+const SERVER_ROW = { id: "srv-slack-hosted", slug: "slack-hosted", containerPort: 40009, githubRepoUrl: null };
 const TOOL_ROW = {
   id: "tool-1",
   schema: { type: "object", properties: { query: { type: "string" } }, required: ["query"] },
@@ -113,20 +96,20 @@ async function client() {
 
 beforeEach(() => {
   vi.clearAllMocks();
-  seen.length = 0;
+  vendor.seen.length = 0;
   toolRows = [TOOL_ROW];
-  fake.url = `${base}/mcp`;
+  fake.url = `${vendor.base}/mcp`;
   resolveServiceToken.mockResolvedValue({ token: "slack-user-token", accountEmail: "me@example.com", scopes: null });
 });
 
 describe("a call to a vendor-served tool (official-mcp-proxy)", () => {
   it("reaches the vendor with the user's token as a bearer, and writes one usage row for the user's service, account and tool", async () => {
-    const result = await (await client()).callTool({ name: "slack-mcp__slack_search_public", arguments: { query: "roadmap" } });
+    const result = await (await client()).callTool({ name: "slack-hosted__slack_search_public", arguments: { query: "roadmap" } });
 
     expect(result.isError).toBeFalsy();
     expect(result.content).toEqual([{ type: "text", text: "results for roadmap" }]);
-    expect(seen.length).toBeGreaterThan(0);
-    for (const h of seen) {
+    expect(vendor.seen.length).toBeGreaterThan(0);
+    for (const h of vendor.seen) {
       expect(h.authorization).toBe("Bearer slack-user-token");
       expect(h["x-user-token"]).toBeUndefined();
     }
@@ -136,7 +119,7 @@ describe("a call to a vendor-served tool (official-mcp-proxy)", () => {
     const [, props] = trackToolCall.mock.calls[0];
     expect(props).toMatchObject({
       userId: "user-1",
-      toolName: "slack-mcp__slack_search_public",
+      toolName: "slack-hosted__slack_search_public",
       connectorType: "slack",
       accountEmail: "me@example.com",
     });
@@ -145,23 +128,13 @@ describe("a call to a vendor-served tool (official-mcp-proxy)", () => {
 
   it("a tool the vendor offers but we have not registered is refused before any request, and nothing is metered", async () => {
     toolRows = [];
-    const result = await (await client()).callTool({ name: "slack-mcp__slack_search_public", arguments: { query: "x" } });
+    const result = await (await client()).callTool({ name: "slack-hosted__slack_search_public", arguments: { query: "x" } });
 
     expect(result.isError).toBe(true);
     expect(result.content).toEqual([{ type: "text", text: "This tool is not offered." }]);
-    expect(seen).toEqual([]);
+    expect(vendor.seen).toEqual([]);
     expect(resolveServiceToken).not.toHaveBeenCalled();
     expect(trackToolCall).not.toHaveBeenCalled();
   });
 
-  it("the vendor rate-limiting is tracked once and not metered", async () => {
-    fake.url = `${base}/mcp-429`;
-    const result = await (await client()).callTool({ name: "slack-mcp__slack_search_public", arguments: { query: "x" } });
-
-    expect(result.isError).toBe(true);
-    expect(trackToolCall).toHaveBeenCalledOnce();
-    const [, props] = trackToolCall.mock.calls[0];
-    expect(props.connectorType).toBe("slack");
-    expect(classifyOutcome(props.outcome).meter).toBe(false);
-  });
 });
