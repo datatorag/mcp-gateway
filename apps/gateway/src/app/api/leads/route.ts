@@ -40,8 +40,12 @@ function getClientIp(req: NextRequest): string {
   return req.headers.get("x-real-ip") ?? "0.0.0.0";
 }
 
-function hashIp(ip: string): string {
+/** A salted hash of the IP, or null without a salt (SCRUM-76): an unsalted
+ * hash of an IPv4 address reverses by brute force, so it is never stored.
+ * The rule `peerHash` follows. */
+function hashIp(ip: string): string | null {
   const { LEADS_IP_SALT } = getEnv();
+  if (LEADS_IP_SALT.trim() === "") return null;
   return createHash("sha256").update(`${LEADS_IP_SALT}:${ip}`).digest("hex");
 }
 
@@ -49,8 +53,10 @@ export async function POST(req: NextRequest) {
   const ip = getClientIp(req);
   const ipHash = hashIp(ip);
 
-  const minute = leadsMinuteLimiter.check(ipHash);
-  const hour = leadsHourLimiter.check(ipHash);
+  // The limiter lives in memory only, so without a hash it keys on the IP.
+  const limiterKey = ipHash ?? ip;
+  const minute = leadsMinuteLimiter.check(limiterKey);
+  const hour = leadsHourLimiter.check(limiterKey);
   if (!minute.ok || !hour.ok) {
     const retryAfterMs = Math.max(minute.retryAfterMs, hour.retryAfterMs);
     return NextResponse.json(

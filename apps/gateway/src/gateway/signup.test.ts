@@ -32,6 +32,7 @@ vi.mock("./lifecycle", () => ({
 vi.mock("./signup-alert", () => ({
   notifySignup: vi.fn(async () => undefined),
 }));
+vi.mock("./discovery-join", () => ({ trackOauthAuthorized: vi.fn() }));
 
 import { createAuthRouter } from "./auth";
 import { createAuthorizeRouter } from "./oauth/authorize";
@@ -40,6 +41,7 @@ import { trackLogin, trackSignup } from "./track";
 import { persistAcquisition } from "./attribution";
 import { sendWelcomeEmail } from "./lifecycle";
 import { notifySignup } from "./signup-alert";
+import { trackOauthAuthorized } from "./discovery-join";
 
 const NEW_USER = { id: "user-new", email: "new@example.com", name: "New", plan: "free", createdAt: new Date() };
 const OLD_USER = { id: "user-old", email: "new@example.com", name: "Old", plan: "free", createdAt: new Date() };
@@ -100,7 +102,7 @@ beforeAll(async () => {
       notionClientSecret: "notion-secret",
     })
   );
-  app.use(createAuthorizeRouter(dbMock, google));
+  app.use(createAuthorizeRouter(dbMock, { ...google, salt: "a-salt" }));
   server = createServer(app);
   await new Promise<void>((r) => server.listen(0, "127.0.0.1", r));
   const addr = server.address();
@@ -232,6 +234,28 @@ describe("a new user from an MCP client", () => {
     const res = await mcpCallback();
     expect(res.status).toBe(302);
     expect(sideEffectCounts()).toEqual(NEVER);
+  });
+
+  // SCRUM-76: the sign-in a real MCP client takes ends here, so this is
+  // where the event that joins it back to a discovery has to fire, for a new
+  // user and a returning one alike, with the configured salt.
+  it.each([
+    ["new", [[]], [NEW_USER], true],
+    ["returning", [[OLD_USER]], [], false],
+  ] as const)("a %s user's sign-in emits the authorization event once", async (_label, lookups, rows, newUser) => {
+    userLookups = lookups.map((l) => [...l]);
+    inserted = [...rows];
+    expect((await mcpCallback()).status).toBe(302);
+    expect(trackOauthAuthorized).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(trackOauthAuthorized).mock.calls[0][1]).toBe("a-salt");
+    expect(vi.mocked(trackOauthAuthorized).mock.calls[0][2]).toMatchObject({ newUser });
+  });
+
+  it("the dashboard's sign-in is not an MCP authorization", async () => {
+    userLookups = [[]];
+    inserted = [NEW_USER];
+    await dashboardCallback();
+    expect(trackOauthAuthorized).not.toHaveBeenCalled();
   });
 });
 

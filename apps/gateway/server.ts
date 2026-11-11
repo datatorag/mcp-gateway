@@ -63,7 +63,7 @@ import { runDailyDigest } from "./src/gateway/digest";
 import { runDueSchedules } from "./src/gateway/skills/scheduler";
 import { seedPublishedSkills, skillReader } from "./src/gateway/skills/catalogue-store";
 import { setSkillReader } from "./src/lib/skills";
-import { healthBody } from "./src/gateway/health";
+import { healthBody, ipSaltState } from "./src/gateway/health";
 import { posthogState } from "./src/lib/posthog-server";
 import { runNoActivationFollowup } from "./src/gateway/lifecycle";
 import { securityHeaders } from "./src/gateway/security-headers";
@@ -86,6 +86,9 @@ async function main() {
   // same answer for anything that reads state rather than logs.
   const analytics = posthogState();
   console.log(`[posthog] analytics ${analytics.analytics}: ${analytics.analytics_reason}`);
+  // SCRUM-76: the salt every salted key needs, by name and never by value.
+  // Without it those keys are null, which nothing else reports.
+  console.log(`[config] LEADS_IP_SALT ${ipSaltState(env.LEADS_IP_SALT)}`);
   const db = createDb(env.DATABASE_URL);
   const pool = new ConnectionPool();
   const baseUrl = env.GATEWAY_BASE_URL;
@@ -278,7 +281,7 @@ async function main() {
   // SCRUM-228: carries the analytics state with its reason, so a box that
   // went quiet is a readable "off", never an absence somebody has to notice.
   app.get("/health", (_req, res) => {
-    res.json(healthBody(pluginManager.pluginStatus()));
+    res.json(healthBody(pluginManager.pluginStatus(), env.LEADS_IP_SALT));
   });
 
   /**
