@@ -32,7 +32,7 @@ export const GET = withRoute(async (userId) => {
 
 ### Add an API route (public, unauthenticated)
 
-For public-facing endpoints (lead capture, webhooks) follow `apps/gateway/src/app/api/leads/route.ts` instead: its own dedicated limiters (`leadsMinuteLimiter`/`leadsHourLimiter` in `apps/gateway/src/gateway/leads/limiter.ts`, same `createRateLimiter` primitive as `dashboardApiLimiter`), a zod `bodySchema` with a honeypot field, and IP hashing (`createHash("sha256")` salted with `LEADS_IP_SALT` from `getEnv()`) instead of storing raw IPs. Client IP comes from `CF-Connecting-IP` first (prod is behind Cloudflare with the origin firewalled to CF ranges); the leftmost `X-Forwarded-For` entry is client-spoofable and only a dev fallback — any new public endpoint must use the same order.
+For public-facing endpoints (lead capture, webhooks) follow `apps/gateway/src/app/api/leads/route.ts` instead: its own dedicated limiters (`leadsMinuteLimiter`/`leadsHourLimiter` in `apps/gateway/src/gateway/leads/limiter.ts`, same `createRateLimiter` primitive as `dashboardApiLimiter`), a zod `bodySchema` with a honeypot field, and IP hashing (`createHash("sha256")` salted with `LEADS_IP_SALT` from `getEnv()`, and no hash at all when the salt is blank) instead of storing raw IPs. Client IP comes from `CF-Connecting-IP` first (prod is behind Cloudflare with the origin firewalled to CF ranges); the leftmost `X-Forwarded-For` entry is client-spoofable and only a dev fallback, so any new public endpoint must use the same order.
 
 ### Add a gateway capability (mcp-server.ts)
 

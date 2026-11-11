@@ -39,6 +39,9 @@ services:
       TEST_RUNNER_ENVIRONMENT: "prod"
       TEST_RUNNER_FIXTURES: ${TEST_RUNNER_FIXTURES:-}
       GATEWAY_BASE_URL: ${GATEWAY_BASE_URL:-http://localhost}
+      # The origin links in emails point at (SCRUM-76). The gateway serves
+      # the dashboard itself, so its own base URL is the right fallback.
+      PUBLIC_APP_URL: ${PUBLIC_APP_URL:-${GATEWAY_BASE_URL:-http://localhost}}
       GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
       GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
       GOOGLE_GWS_CLIENT_ID: ${GOOGLE_GWS_CLIENT_ID:-}
@@ -68,6 +71,10 @@ services:
       PLAYGROUND_MODEL: ${PLAYGROUND_MODEL:-claude-sonnet-5-5}
       PLAYGROUND_MESSAGE_CAP: ${PLAYGROUND_MESSAGE_CAP:-20}
       SLACK_CHANNEL_FEEDBACK: ${SLACK_CHANNEL_FEEDBACK:-}
+      # SCRUM-76: the salt for every hashed IP (a lead's, the auth-failure
+      # peer, the discovery join keys). Empty means no hash is made at all,
+      # and /health says ip_salt "missing".
+      LEADS_IP_SALT: ${LEADS_IP_SALT:-}
       # Provider token keys (SCRUM-442). No fallback on purpose: a gateway
       # without them must refuse to start, and the config schema says why.
       CONNECTION_TOKEN_KEYS: ${CONNECTION_TOKEN_KEYS:-}
