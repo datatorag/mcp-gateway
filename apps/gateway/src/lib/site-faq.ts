@@ -123,7 +123,7 @@ export const SITE_FAQ_PAGES: SiteFaqPage[] = [
           },
           {
             q: "How do I disconnect?",
-            a: "From your [dashboard](/dashboard), disconnect the account. From Google's side, you can also revoke DataToRAG's access at myaccount.google.com under third party access. Either one ends our ability to touch that account.",
+            a: "From your [Connections page](/dashboard/connections), disconnect the account. From Google's side, you can also revoke DataToRAG's access at myaccount.google.com under third party access. Either one ends our ability to touch that account.",
           },
         ],
       },

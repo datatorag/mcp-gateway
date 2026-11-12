@@ -387,9 +387,14 @@ export default function DashboardLayout({
                 aria-label={item.label}
                 title={railExpanded ? undefined : item.label}
                 className={cn(
-                  "flex h-10 items-center rounded-lg text-sm transition-colors hover:bg-secondary hover:text-foreground",
+                  "flex h-10 items-center rounded-lg text-sm transition-colors",
                   railExpanded ? "justify-start gap-3 px-3" : "justify-center",
-                  active ? "bg-secondary text-foreground" : "text-muted-foreground"
+                  // Hover is fainter than the current item (SCRUM-487), so
+                  // the pointer over another item never reads as a second
+                  // selection. The text still darkens to foreground on hover.
+                  active
+                    ? "bg-secondary text-foreground"
+                    : "text-muted-foreground hover:bg-secondary/50 hover:text-foreground"
                 )}
               >
                 <Icon className="size-4 shrink-0" aria-hidden="true" />

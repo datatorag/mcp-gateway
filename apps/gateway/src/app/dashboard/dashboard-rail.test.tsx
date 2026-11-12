@@ -211,3 +211,27 @@ describe("the rail after the MCP config page moved onto Home (SCRUM-487)", () =>
     expect(current).toEqual(label ? [label] : []);
   });
 });
+
+describe("hover is fainter than the current item (SCRUM-487)", () => {
+  // The current item's background is the full secondary tone; hover on any
+  // other item is half of it, so the pointer never reads as a second
+  // selection. Read from the classes because jsdom computes no styles.
+  const classes = (label: string) =>
+    (rail().querySelector(`nav a[aria-label="${label}"]`)?.getAttribute("class") ?? "").split(/\s+/);
+
+  it("the current item has the full background and no hover tone of its own", () => {
+    const current = classes("Usage");
+    expect(current).toContain("bg-secondary");
+    expect(current.filter((c) => c.startsWith("hover:bg-"))).toEqual([]);
+  });
+
+  it("every other item hovers at the fainter tone, never the current item's", () => {
+    for (const label of ["Home", "Connections", "Agent", "Billing", "Docs"]) {
+      const other = classes(label);
+      expect(other, label).toContain("hover:bg-secondary/50");
+      expect(other, label).not.toContain("hover:bg-secondary");
+      expect(other, label).not.toContain("bg-secondary");
+    }
+  });
+});
+
