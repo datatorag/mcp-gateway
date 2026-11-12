@@ -35,6 +35,8 @@ const DASHBOARD_DIR = join(import.meta.dirname, ".");
 const EXEMPT: Record<string, string> = {
   "api-keys/page.tsx":
     "API keys were removed (SCRUM-451). Body is a bare redirect to /dashboard, which checks. No render path, no data access.",
+  "mcp-config/page.tsx":
+    "Retired into Home (SCRUM-487). Body is a bare redirect to /dashboard, which checks. No render path, no data access.",
 };
 
 /** Source with comments removed.

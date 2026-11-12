@@ -95,14 +95,14 @@ export function ConnectionDetailClient({
     setAccounts((prev) => prev.filter((a) => a.id !== accountId));
     setDisconnecting(null);
     if (accounts.length <= 1) {
-      router.push("/dashboard");
+      router.push("/dashboard/connections");
     }
   }
 
   async function disconnectLegacy() {
     setDisconnecting("legacy");
     await fetch(`/api/connections?service=${service}`, { method: "DELETE" });
-    router.push("/dashboard");
+    router.push("/dashboard/connections");
   }
 
   function selectTool(tool: Tool) {

@@ -28,6 +28,8 @@ import {
 import { PREVIEW_SUGGESTIONS, suggestionServiceIcons } from "./agent-prompts";
 import { useSignupConversion } from "./use-signup-conversion";
 import { useConnections } from "./use-connections";
+import { ConnectionStatus } from "./connection-status";
+import { SetupInstructions } from "@/components/setup-instructions";
 import { SERVICES } from "./connections/services";
 import { offeredServices } from "./connections/service-registry";
 import type { ConnectedAccount, LegacyConnection } from "./connections/types";
@@ -41,6 +43,8 @@ import {
   HOME_PROMPTS_HEADING,
   HOME_STANDFIRST,
   HOME_STATUS_HEADING,
+  HOME_STEPS_HEADING,
+  HOME_STEPS_STANDFIRST,
   PROMPT_CARD_LOCKED_TITLE,
   STATUS_LABEL,
   type ServiceStatus,
@@ -49,8 +53,13 @@ import {
 /**
  * The dashboard home (SCRUM-482): a connect-your-client page. Top to bottom:
  * the headline with one call to action, example prompts, the client install
- * cards, the MCP server URL, and a strip saying which accounts are connected.
- * The connection cards themselves live on `/dashboard/connections`.
+ * cards, each client's full steps with the live connection status, the MCP
+ * server URL, and a strip saying which accounts are connected. The
+ * connection cards themselves live on `/dashboard/connections`.
+ *
+ * The full steps and the status were the MCP config page until SCRUM-487,
+ * which retired that page into this one: `/dashboard/mcp-config` redirects
+ * here, and a `#<client id>` hash still opens that client's steps.
  *
  * Order rule: a user with nothing connected sees the client cards AND the
  * connect step, with a note that one account is needed before the first
@@ -68,6 +77,7 @@ export function DashboardClient() {
       <Hero />
       <PromptCards hasConnectedAccount={hasConnectedAccount} />
       <ClientCards mcpUrl={mcpUrl} hasConnectedAccount={hasConnectedAccount} />
+      <SetupSteps />
       <McpCard mcpUrl={mcpUrl} />
       <StatusStrip connections={connections} />
     </div>
@@ -85,6 +95,7 @@ function useMcpUrl(): string {
 }
 
 const CLIENTS_ANCHOR = "connect-your-agent";
+const STEPS_ANCHOR = "setup-steps";
 
 function Hero() {
   function scrollToClients(e: React.MouseEvent) {
@@ -321,12 +332,14 @@ function ClientCards({
                         {copied === client.id ? <Check /> : <Copy />}
                         {copyLabel}
                       </Button>
-                      <Link
+                      {/* A plain anchor: the steps are on this page, and a
+                          hash change is what opens the client there. */}
+                      <a
                         href={clientDetailHref(client.id)}
                         className="ml-auto text-xs font-medium text-primary hover:underline"
                       >
                         Full steps
-                      </Link>
+                      </a>
                     </div>
                   </div>
                 );
@@ -335,6 +348,28 @@ function ClientCards({
           </div>
         ))}
       </div>
+    </section>
+  );
+}
+
+/** Each client's full steps, and below them whether pasting worked. The
+ * copy events keep the `wizard_<client>` source and `settings` surface they
+ * carried on the MCP config page, so the activation series stays one series. */
+function SetupSteps() {
+  return (
+    <section
+      id={STEPS_ANCHOR}
+      data-section="steps"
+      className="scroll-mt-4"
+    >
+      <h2 className="font-display text-base font-bold text-foreground">
+        {HOME_STEPS_HEADING}
+      </h2>
+      <p className="mb-3 mt-0.5 text-xs text-muted-foreground">
+        {HOME_STEPS_STANDFIRST}
+      </p>
+      <SetupInstructions sourcePrefix="wizard" />
+      <ConnectionStatus />
     </section>
   );
 }

@@ -3,8 +3,8 @@
  * takes (SCRUM-482).
  *
  * ONE LIST for every surface that hands out a config: the dashboard home's
- * client cards, the `/dashboard/mcp-config` detail view and the getting-started
- * docs (both through `SetupInstructions`). The config strings are built here
+ * client cards, the home's step-by-step section and the getting-started docs
+ * (both through `SetupInstructions`). The config strings are built here
  * and nowhere else, so a card's Copy and the detail view's code block can
  * never disagree about what to paste.
  *
@@ -130,10 +130,10 @@ export function clientDeepLink(id: ClientId, mcpUrl: string): string | null {
   return null;
 }
 
-/** The detail view's anchor for one client: `SetupInstructions` opens the
- * client named by the hash. */
+/** One client's full steps, on the home: `SetupInstructions` opens the
+ * client named by the hash (SCRUM-487 retired the separate page). */
 export function clientDetailHref(id: ClientId): string {
-  return `/dashboard/mcp-config#${id}`;
+  return `/dashboard#${id}`;
 }
 
 export function isClientId(value: string): value is ClientId {

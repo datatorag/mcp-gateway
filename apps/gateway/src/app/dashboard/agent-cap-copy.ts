@@ -57,5 +57,6 @@ export const AGENT_CAP_SECONDARY_HREF = "/upgrade";
  *
  * A route works from either surface and needs no cooperation from whatever
  * page happens to be hosting the panel, which is what made the id-coupled
- * version fragile in the first place. */
-export const AGENT_CAP_PRIMARY_HREF = "/dashboard/mcp-config";
+ * version fragile in the first place. The route is Home since SCRUM-487
+ * retired the MCP config page into it. */
+export const AGENT_CAP_PRIMARY_HREF = "/dashboard";

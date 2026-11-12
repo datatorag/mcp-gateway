@@ -98,12 +98,13 @@ afterEach(() => {
 });
 
 describe("dashboard home sections (SCRUM-482)", () => {
-  it("renders the headline, prompts, client cards, MCP card and status strip, in that order", async () => {
+  it("renders the headline, prompts, client cards, full steps, MCP card and status strip, in that order", async () => {
     await render();
     expect(qa("[data-section]").map((s) => s.getAttribute("data-section"))).toEqual([
       "hero",
       "prompts",
       "clients",
+      "steps",
       "mcp",
       "status",
     ]);
@@ -175,11 +176,11 @@ describe("client cards", () => {
     ).toEqual(["claude-web", "claude-desktop", "claude-code"]);
   });
 
-  it("links each card to its long form on the MCP config page", async () => {
+  it("links each card to its full steps on this page (SCRUM-487)", async () => {
     await render();
     for (const c of MCP_CLIENTS) {
-      const link = q(`[data-client-card="${c.id}"] a[href^="/dashboard/mcp-config"]`);
-      expect(link?.getAttribute("href")).toBe(`/dashboard/mcp-config#${c.id}`);
+      const link = q(`[data-client-card="${c.id}"] a[href^="/dashboard#"]`);
+      expect(link?.getAttribute("href")).toBe(`/dashboard#${c.id}`);
     }
   });
 
@@ -285,3 +286,47 @@ describe("status strip", () => {
     expect(serviceStatus("atlassian", [account()], [])).toBe("not_connected");
   });
 });
+
+/* SCRUM-487: the MCP config page's two parts, the per-client steps and the
+ * live connection status, live on Home, and its copy event fires from here
+ * with the properties it carried there. */
+describe("step-by-step setup", () => {
+  it("offers every client's full steps and the connection status", async () => {
+    await render();
+    const steps = q('[data-section="steps"]')!;
+    expect(steps.id).toBe("setup-steps");
+    const tabs = Array.from(steps.querySelectorAll("button")).map((b) => b.textContent);
+    for (const c of MCP_CLIENTS) expect(tabs).toContain(c.label);
+    expect(steps.textContent).toContain("Connection status");
+  });
+
+  it("copy_mcp_config keeps the wizard source and settings surface the MCP config page sent", async () => {
+    await render();
+    const steps = q('[data-section="steps"]')!;
+    const tab = Array.from(steps.querySelectorAll("button")).find((b) => b.textContent === "Claude Code")!;
+    await act(async () => {
+      tab.click();
+    });
+    const copy = Array.from(steps.querySelectorAll("button")).find((b) => b.textContent === "Copy")!;
+    await act(async () => {
+      copy.click();
+    });
+    expect(clipboard.writeText).toHaveBeenCalledWith(clientConfig("claude-code", `${window.location.origin}/mcp`));
+    expect(state.capture).toHaveBeenCalledWith(EVENTS.COPY_MCP_CONFIG, {
+      source: "wizard_claude-code",
+      surface: "settings",
+    });
+  });
+
+  it("a card's Full steps link opens that client's steps on the same page", async () => {
+    await render();
+    window.location.hash = "#cursor";
+    await act(async () => {
+      window.dispatchEvent(new HashChangeEvent("hashchange"));
+    });
+    const panel = q('[data-section="steps"] #cursor');
+    expect(panel?.textContent).toContain("Cursor");
+    window.location.hash = "";
+  });
+});
+

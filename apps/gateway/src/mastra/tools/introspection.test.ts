@@ -114,7 +114,9 @@ describe("account introspection", () => {
     expect(before.mayOfferProactively).toBe(false);
     // Still reachable ON REQUEST, always. Withholding it from someone who
     // asked would be a different kind of broken.
-    expect(before.configUrl).toBe("/dashboard/mcp-config");
+    expect(before.configUrl).toBe("/dashboard");
+    // The connection cards are not on Home since SCRUM-482.
+    expect(before.links.connections).toBe("/dashboard/connections");
   });
 
   it("authorises the proactive offer once the user has run something", async () => {
