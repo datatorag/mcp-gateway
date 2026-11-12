@@ -1,15 +1,6 @@
 import Link from "next/link";
 import { requireAdminPage } from "@/gateway/admin-page";
-
-/** The admin tools, one line each (SCRUM-487). Every page here awaits the
- * guard itself; see below. */
-export const ADMIN_TOOLS = [
-  {
-    href: "/dashboard/admin/tests",
-    label: "Test runner",
-    description: "Run the smoke cases against this deployment and read past runs.",
-  },
-] as const;
+import { ADMIN_TOOLS } from "./admin-tools";
 
 /**
  * The admin index: a list of the admin tools (SCRUM-487). It began as a
