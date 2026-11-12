@@ -14,7 +14,6 @@ import {
   MessageSquare,
   PanelLeftClose,
   PanelLeftOpen,
-  Plug,
   ShieldCheck,
   Sparkles,
   type LucideIcon,
@@ -38,7 +37,6 @@ const navItems: Array<{ href: string; label: string; icon: LucideIcon }> = [
   { href: "/dashboard/skills", label: "Skills", icon: Sparkles },
   { href: "/dashboard/usage", label: "Usage", icon: BarChart3 },
   { href: "/dashboard/billing", label: "Billing", icon: CreditCard },
-  { href: "/dashboard/mcp-config", label: "MCP config", icon: Plug },
   { href: "/docs", label: "Docs", icon: BookOpen },
 ];
 

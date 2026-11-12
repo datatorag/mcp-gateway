@@ -12,10 +12,11 @@ export const dynamic = "force-dynamic";
  * signed-in furniture to a stranger is not a property this route should have.
  *
  * THE ENUMERATED STATE, because a count from memory got this wrong twice.
- * There are eight routes under `/dashboard`: this one, `agent`, `skills`,
- * `mcp-config`, `usage`, `usage/[tool]`, `connections/[service]` and
- * `connections`. All eight resolve the session before rendering anything
+ * These seven routes under `/dashboard` render a page: this one, `agent`,
+ * `skills`, `usage`, `usage/[tool]`, `connections/[service]` and
+ * `connections`. All seven resolve the session before rendering anything
  * (`connections` stopped being a bare redirect here in SCRUM-482).
+ * `mcp-config` became a bare redirect here in SCRUM-487 and renders nothing.
  *
  * The list is spelled out rather than counted because "all N routes are
  * covered" is a claim about a set, and asserting one without listing it is how

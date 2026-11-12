@@ -19,6 +19,11 @@ export const HOME_CLIENTS_STANDFIRST =
 export const HOME_CONNECT_FIRST_NOTE =
   "Connect at least one account before your agent's first call, or it has nothing to work with.";
 
+/** The full per-client steps and the live status (SCRUM-487). */
+export const HOME_STEPS_HEADING = "Step by step";
+export const HOME_STEPS_STANDFIRST =
+  "Pick your client for its full steps. The status below changes once it connects.";
+
 export const HOME_MCP_HEADING = "Your MCP server";
 
 export const HOME_STATUS_HEADING = "Your accounts";

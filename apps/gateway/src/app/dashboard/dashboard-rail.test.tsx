@@ -12,7 +12,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 
-vi.mock("next/navigation", () => ({ usePathname: () => "/dashboard/usage" }));
+const nav = vi.hoisted(() => ({ pathname: "/dashboard/usage" }));
+vi.mock("next/navigation", () => ({ usePathname: () => nav.pathname }));
 vi.mock("next/link", () => ({
   default: ({ href, children, ...props }: Record<string, unknown>) => (
     <a href={href as string} {...props}>
@@ -53,15 +54,13 @@ const EXPECTED_ITEMS = [
   "Agent",
   "Usage",
   "Billing",
-  "MCP config",
   "Docs",
 ];
 
 let container: HTMLDivElement;
 let root: Root;
 
-beforeEach(() => {
-  localStorage.clear();
+function mount() {
   container = document.createElement("div");
   document.body.appendChild(container);
   root = createRoot(container);
@@ -72,6 +71,12 @@ beforeEach(() => {
       </DashboardLayout>
     );
   });
+}
+
+beforeEach(() => {
+  localStorage.clear();
+  nav.pathname = "/dashboard/usage";
+  mount();
 });
 
 afterEach(() => {
@@ -176,5 +181,33 @@ describe("dashboard rail", () => {
         Node.DOCUMENT_POSITION_FOLLOWING,
       "user control must come after the toggle"
     ).toBeTruthy();
+  });
+});
+
+describe("the rail after the MCP config page moved onto Home (SCRUM-487)", () => {
+  it("has no MCP config item", () => {
+    expect(rail().querySelector('a[href="/dashboard/mcp-config"]')).toBeNull();
+    expect(rail().querySelector('a[aria-label="MCP config"]')).toBeNull();
+  });
+
+  // Hover paints an item with the same background as the current one, so a
+  // screenshot with the pointer over another item shows two highlighted. The
+  // current item is the one with aria-current, and it is only ever one.
+  it.each([
+    ["/dashboard", "Home"],
+    ["/dashboard/connections", "Connections"],
+    ["/dashboard/connections/notion", "Connections"],
+    ["/dashboard/skills", "Skills"],
+    ["/dashboard/usage/some_tool", "Usage"],
+    ["/dashboard/mcp-config", null],
+  ] as const)("on %s the current item is %s, and only that one", (pathname, label) => {
+    act(() => root.unmount());
+    container.remove();
+    nav.pathname = pathname;
+    mount();
+    const current = Array.from(rail().querySelectorAll('nav a[aria-current="page"]')).map((a) =>
+      a.getAttribute("aria-label")
+    );
+    expect(current).toEqual(label ? [label] : []);
   });
 });

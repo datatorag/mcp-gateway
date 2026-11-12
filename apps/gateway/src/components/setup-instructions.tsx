@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import posthog from "posthog-js";
 import { EVENTS } from "@/lib/analytics";
 import { useCopyToClipboard } from "@/lib/use-copy-to-clipboard";
@@ -17,7 +17,9 @@ import {
 // wizard and /docs/getting-started so the two can never drift (SCRUM-24).
 // The client list and every config string come from `lib/mcp-clients.ts`, which
 // the dashboard home's client cards read too (SCRUM-482); a URL hash naming a
-// client (`/dashboard/mcp-config#cursor`) opens that client here.
+// client (`/dashboard#cursor`) opens that client here and scrolls to it, on
+// load and on a later hash change, since the home's cards link to it on the
+// same page (SCRUM-487).
 // `sourcePrefix` keeps the two surfaces distinguishable in analytics:
 // the dashboard keeps its historical `wizard_${client}` copy_mcp_config
 // source values; docs emits `docs_${client}`.
@@ -143,12 +145,30 @@ export function SetupInstructions({
   // endpoint in their HTML; the effect corrects it on non-prod origins.
   const [mcpUrl, setMcpUrl] = useState(DEFAULT_MCP_URL);
 
+  const panelRef = useRef<HTMLDivElement>(null);
+  // Set when a hash picked the client, so the panel is scrolled to once it
+  // carries that client's id.
+  const [scrollToPanel, setScrollToPanel] = useState(false);
+
   useEffect(() => {
     setMcpUrl(`${window.location.origin}/mcp`);
     // A home client card links here with its client as the hash.
-    const hash = window.location.hash.slice(1);
-    if (isClientId(hash)) setSelectedClient(hash);
+    function openHashedClient() {
+      const hash = window.location.hash.slice(1);
+      if (!isClientId(hash)) return;
+      setSelectedClient(hash);
+      setScrollToPanel(true);
+    }
+    openHashedClient();
+    window.addEventListener("hashchange", openHashedClient);
+    return () => window.removeEventListener("hashchange", openHashedClient);
   }, []);
+
+  useEffect(() => {
+    if (!scrollToPanel) return;
+    setScrollToPanel(false);
+    panelRef.current?.scrollIntoView?.({ behavior: "smooth", block: "start" });
+  }, [scrollToPanel, selectedClient]);
 
   function selectClient(client: ClientId) {
     setSelectedClient(client);
@@ -186,6 +206,7 @@ export function SetupInstructions({
 
       {/* Per-client instructions */}
       <div
+        ref={panelRef}
         id={selectedClient}
         className="mt-4 scroll-mt-4 rounded-xl border border-border p-4"
       >

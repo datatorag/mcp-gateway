@@ -60,9 +60,11 @@ export type IntrospectionDeps = {
  * "the dashboard". A link to a specific view is the difference between an
  * answer and an errand. */
 export const DASHBOARD_LINKS = {
-  connections: "/dashboard",
+  // The connection cards moved off Home in SCRUM-482, and the MCP config
+  // page moved onto it in SCRUM-487.
+  connections: "/dashboard/connections",
   usage: "/dashboard/usage",
-  mcpConfig: "/dashboard/mcp-config",
+  mcpConfig: "/dashboard",
   agent: "/dashboard/agent",
 } as const;
 

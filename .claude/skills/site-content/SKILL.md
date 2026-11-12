@@ -118,10 +118,13 @@ Two docs-specific mechanisms added by SCRUM-24:
   on its own line; `docs/[slug]/page.tsx` splits `doc.html` on that comment (marked
   passes HTML comments through) and renders the shared `SetupInstructions` client
   component (`src/components/setup-instructions.tsx`) at that spot. That component is
-  the single source of truth for agent-hookup instructions — the dashboard's
-  `/dashboard/mcp-config` page renders it too, with the live connection-status
-  poller (`src/app/dashboard/mcp-config/connection-status.tsx`) beneath it (the
-  old `SetupWizard` that bundled the two is gone; SCRUM-118/122). Its
+  the single source of truth for agent-hookup instructions. The dashboard home
+  renders it too, in its step-by-step section, with the live connection-status
+  poller (`src/app/dashboard/connection-status.tsx`) beneath it (SCRUM-487
+  retired the separate `/dashboard/mcp-config` page into Home, and the address
+  now redirects there; the old `SetupWizard` that bundled the two is gone,
+  SCRUM-118/122). A `#<client id>` hash opens that client, on load and on a
+  hash change. Its
   `sourcePrefix` prop keeps analytics separable: `copy_mcp_config` fires with source
   `wizard_${client}` (dashboard, historical values preserved) vs `docs_${client}`.
 - **Docs CTA**: `apps/gateway/src/app/docs/cta.tsx` renders a sign-in/get-started CTA in the docs layout
