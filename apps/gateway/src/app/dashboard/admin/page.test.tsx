@@ -11,7 +11,8 @@ vi.mock("@/gateway/admin-page", () => ({
   },
 }));
 
-const { default: AdminIndexPage, ADMIN_TOOLS } = await import("./page");
+const { default: AdminIndexPage } = await import("./page");
+const { ADMIN_TOOLS } = await import("./admin-tools");
 
 describe("the admin index", () => {
   it("links the test runner, and no longer says nothing is wired up", async () => {
