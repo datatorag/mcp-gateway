@@ -9,7 +9,7 @@ import { existsSync, readdirSync } from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { envSchema } from "@datatorag-mcp/config";
-import { CONNECTOR_REGISTRY, connectorById, isConnectorId } from "./registry";
+import { CONNECTOR_REGISTRY, connectorById, connectorSlugs, isConnectorId, vendorServed, type ConnectorRecord } from "./registry";
 import { PLUGIN_SERVICE_MAP, SERVICE_PLUGIN_MAP } from "../service-token";
 import { PROVIDERS } from "@/lib/analytics";
 import { CONNECT_START, isDuplicateProvider } from "../connect-duplicate";
@@ -32,6 +32,26 @@ describe("the connector registry and plugins/", () => {
     const slugs = CONNECTOR_REGISTRY.map((c) => c.pluginSlug);
     expect(new Set(slugs).size).toBe(slugs.length);
     expect([...slugs].sort()).toEqual(pluginDirs());
+  });
+
+  it("gives a vendor's tools a slug of their own, shared with nothing", () => {
+    const all = (CONNECTOR_REGISTRY as readonly ConnectorRecord[]).flatMap((c) => connectorSlugs(c));
+    expect(new Set(all).size).toBe(all.length);
+    for (const c of CONNECTOR_REGISTRY as readonly ConnectorRecord[]) {
+      if (c.upstream) expect(PLUGIN_SERVICE_MAP[c.upstream.slug], c.id).toBe(c.id);
+    }
+    // The reverse map still names the plugin.
+    expect(SERVICE_PLUGIN_MAP.slack).toBe("slack-mcp");
+  });
+
+  it("declares an upstream only as an https URL, and finds its connector by the vendor's slug", () => {
+    for (const c of CONNECTOR_REGISTRY as readonly ConnectorRecord[]) {
+      expect(vendorServed(c.pluginSlug), c.id).toBeUndefined();
+      if (!c.upstream) continue;
+      expect(new URL(c.upstream.url).protocol, c.id).toBe("https:");
+      expect(vendorServed(c.upstream.slug)?.id, c.id).toBe(c.id);
+    }
+    expect(vendorServed("slack-hosted")?.upstream.url).toBe("https://mcp.slack.com/mcp");
   });
 
   it("names each connector once", () => {
@@ -71,9 +91,19 @@ describe("what the registry derives, against the literals it replaced", () => {
       "notion-mcp": "notion",
       "brevo-mcp": "brevo",
       "slack-mcp": "slack",
+      // Slack's vendor-served tools, beside the plugin (official-mcp-proxy).
+      "slack-hosted": "slack",
       "posthog-mcp": "posthog",
     });
-    expect(SERVICE_PLUGIN_MAP).toEqual(Object.fromEntries(Object.entries(PLUGIN_SERVICE_MAP).map(([k, v]) => [v, k])));
+    // One plugin per service; a vendor's slug is never the reverse's answer.
+    expect(SERVICE_PLUGIN_MAP).toEqual({
+      "google-workspace": "gws-mcp",
+      atlassian: "atlassian-mcp",
+      notion: "notion-mcp",
+      brevo: "brevo-mcp",
+      slack: "slack-mcp",
+      posthog: "posthog-mcp",
+    });
   });
 
   it("PROVIDERS", () => {

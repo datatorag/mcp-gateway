@@ -60,6 +60,23 @@ export interface ConnectorRecord {
   /** The runner account roles its tools may be called as; the first is the
    * one a contract probe runs as. */
   readonly runnerRoles: readonly AccountRole[];
+  /** Set when the vendor's own hosted MCP server serves the tools instead of
+   * a plugin we run (official-mcp-proxy). The gateway then starts no plugin
+   * process for `pluginSlug`, which stays the tool prefix and the
+   * `mcp_servers` slug, and a call goes to `url` with the user's token as a
+   * bearer and nothing else. Declared here, in reviewed code, because it
+   * decides where a user's token is sent. */
+  readonly upstream?: UpstreamServer;
+}
+
+export interface UpstreamServer {
+  /** The vendor's MCP endpoint, streamable HTTP. */
+  readonly url: string;
+  /** The registry slug its tools are listed under: their `mcp_servers` row
+   * and the `<slug>__` prefix of their names. Its own, never `pluginSlug`, so
+   * the vendor's tools and our plugin's can be served side by side for one
+   * connection (the plugin may serve workspaces the vendor does not). */
+  readonly slug: string;
 }
 
 export const CONNECTOR_REGISTRY = [
@@ -149,6 +166,9 @@ export const CONNECTOR_REGISTRY = [
     revokes: true,
     contextHeaders: false,
     runnerRoles: ["slack"],
+    // Slack's hosted MCP server, reached with the user token of an internal
+    // app (official-mcp-proxy).
+    upstream: { url: "https://mcp.slack.com/mcp", slug: "slack-hosted" },
   },
   {
     id: "posthog",
@@ -197,4 +217,18 @@ export function isConnectorId(v: unknown): v is ConnectorId {
 /** One field of every connector, keyed by id. */
 export function byConnector<K extends keyof ConnectorRecord>(field: K): Record<ConnectorId, ConnectorRecord[K]> {
   return Object.fromEntries(CONNECTOR_REGISTRY.map((c) => [c.id, (c as ConnectorRecord)[field]])) as Record<ConnectorId, ConnectorRecord[K]>;
+}
+
+/** The connector whose tools the vendor's own server serves under the
+ * registry slug `slug` (official-mcp-proxy), or undefined when the slug is a
+ * plugin's. */
+export function vendorServed(slug: string): (ConnectorRecord & { upstream: UpstreamServer }) | undefined {
+  const c = (CONNECTOR_REGISTRY as readonly ConnectorRecord[]).find((r) => r.upstream?.slug === slug);
+  return c as (ConnectorRecord & { upstream: UpstreamServer }) | undefined;
+}
+
+/** Every registry slug a connector's tools are listed under: its plugin's,
+ * and its vendor's when it declares one. */
+export function connectorSlugs(c: ConnectorRecord): string[] {
+  return c.upstream ? [c.pluginSlug, c.upstream.slug] : [c.pluginSlug];
 }

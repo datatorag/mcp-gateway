@@ -3,7 +3,7 @@ import type { Database } from "@datatorag-mcp/db";
 import { mcpServers } from "@datatorag-mcp/db";
 import { NAMESPACE_SEPARATOR } from "../plugin-manager";
 import { PLUGIN_SERVICE_MAP, getServiceToken } from "../service-token";
-import { buildPluginServerUrl, callPluginToolOnce } from "../user-tools";
+import { UPSTREAM_TOOL_NOT_OFFERED, callServiceToolOnce, serviceEndpoint, upstreamToolOffered } from "../upstream-call";
 import { GWS_RUN_REFUSAL, gwsRunHiddenFrom } from "../gws-run-access";
 
 /**
@@ -325,6 +325,10 @@ export async function executeUserTool(
   if (!mcpServer) {
     throw new ToolCallError(`Unknown server: ${serverSlug}`, 400);
   }
+  const endpoint = serviceEndpoint({ slug: serverSlug, ...mcpServer });
+  if (!(await upstreamToolOffered(db, endpoint, namespacedName))) {
+    throw new ToolCallError(UPSTREAM_TOOL_NOT_OFFERED, 404);
+  }
 
   const requiredService = PLUGIN_SERVICE_MAP[serverSlug];
   if (!requiredService) {
@@ -341,8 +345,8 @@ export async function executeUserTool(
     );
   }
 
-  const result = await callPluginToolOnce({
-    serverUrl: buildPluginServerUrl({ slug: serverSlug, ...mcpServer }),
+  const result = await callServiceToolOnce({
+    endpoint,
     userToken,
     toolName,
     args: cleanArgs,

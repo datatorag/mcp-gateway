@@ -383,3 +383,32 @@ describe("the account a plugin child runs as", () => {
     expect(JSON.parse(readFileSync(join(dir, "user.json"), "utf-8")).uid).toBe(process.getuid?.());
   });
 });
+
+describe("a connector whose tools come from the vendor's own server (official-mcp-proxy)", () => {
+  it("starts no process for the vendor's slug, even with a directory of that name, and does not report it down", async () => {
+    // Writes a file when it starts, so a start is visible.
+    const dir = writePlugin("slack-hosted", `require("node:fs").writeFileSync("started", "1"); setInterval(() => {}, 1000);`);
+    manager = makeManager([{ id: "s1", slug: "slack-hosted", containerPort: 40127 }], []);
+
+    await manager.startAll();
+    await new Promise((r) => setTimeout(r, 300));
+
+    expect(existsSync(join(dir, "started"))).toBe(false);
+    expect(manager.pluginStatus()).toEqual({});
+  });
+
+  it("still starts the connector's own plugin beside it", async () => {
+    const dir = writePlugin("slack-mcp", `require("node:fs").writeFileSync("started", "1"); setInterval(() => {}, 1000);`);
+    manager = makeManager(
+      [
+        { id: "s1", slug: "slack-hosted", containerPort: 40127 },
+        { id: "s2", slug: "slack-mcp", containerPort: 40128 },
+      ],
+      []
+    );
+
+    await manager.startAll();
+    await until(() => existsSync(join(dir, "started")));
+    expect(Object.keys(manager.pluginStatus())).toEqual(["slack-mcp"]);
+  });
+});

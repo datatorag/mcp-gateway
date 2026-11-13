@@ -93,7 +93,7 @@ and a duplicate is a read plus a create. Its writes have rules in the
 runner's send guard (see Conventions). It was born in this repository
 (SCRUM-366), so it has no imported history.
 
-**`slack-mcp` specifics** (SCRUM-454). Calls Slack's Web API through
+**`slack-mcp` specifics** (SCRUM-454). Coexists with Slack's hosted MCP server (official-mcp-proxy), whose tools the `slack` connector serves under their own slug, `slack-hosted`; both use the one Slack connection. Its retirement is held. It calls Slack's Web API through
 `src/slack-client.ts` with the user's own token (user scopes, no bot
 token): GET for reads, POST JSON for writes. Slack refuses with HTTP 200
 and `ok: false`; the client throws `SlackApiError` with Slack's `error`

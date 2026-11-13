@@ -31,10 +31,11 @@ import {
 import type { AccountRole, FixtureKey, TestCase, ToolResult } from "./types";
 import { finishRun, recordResult, startRun } from "./store";
 import { missingCheckouts, pluginShasFor } from "./plugin-sha";
-import { mcpServers, serviceConnections } from "@datatorag-mcp/db";
+import { serviceConnections } from "@datatorag-mcp/db";
 import { PLUGIN_SERVICE_MAP } from "../service-token";
 import { CONNECTOR_REGISTRY } from "../connectors/registry";
 import { eq } from "drizzle-orm";
+import { listActiveServers } from "../active-servers";
 
 /**
  * A run, start to finish (SCRUM-303).
@@ -1267,10 +1268,8 @@ export function sharedAccountsFor(
  */
 export async function activePluginSlugs(db: Database): Promise<string[]> {
   try {
-    const rows = await db
-      .select({ slug: mcpServers.slug })
-      .from(mcpServers)
-      .where(eq(mcpServers.status, "active"));
+    // A vendor-served slug (official-mcp-proxy) has no checkout to record.
+    const rows = (await listActiveServers(db)).filter((r) => r.servedBy === "plugin");
     return rows.map((r) => r.slug).sort();
   } catch {
     return [];

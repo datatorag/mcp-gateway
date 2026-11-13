@@ -13,7 +13,7 @@ import { SLACK_REVOKE_URL, SLACK_TOKEN_TIMEOUT_MS, SLACK_TOKEN_URL } from "./oau
  *
  * With token rotation on, an access token lasts `expires_in` seconds and each
  * refresh token works once, so the lock is what keeps two concurrent calls
- * from spending it twice. The refresh is `oauth.v2.access` with
+ * from spending it twice. The refresh is `oauth.v2.user.access` with
  * `grant_type=refresh_token`, form-encoded with the client credentials, and
  * answers HTTP 200 with `ok`; `classifySlackRefusal` decides which `ok: false`
  * codes mean the grant is dead. The expiry is stored from `expires_in`.

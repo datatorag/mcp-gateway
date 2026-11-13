@@ -49,3 +49,32 @@ describe("A4 with a connection-gated plugin", () => {
     await expect(result).rejects.toThrow(/serves but the registry lacks: notion-mcp__notion_get_page/);
   });
 });
+
+/* official-mcp-proxy: a vendor-served slug's own list needs a user's token,
+ * so A4 does not read it (the scheduled upstream check compares it). The
+ * registry is still held against what the identity is served. */
+describe("A4 with a vendor-served slug", () => {
+  const vendor: PluginSurface = {
+    slug: "slack-hosted",
+    live: null,
+    servedBy: "vendor",
+    registry: ["slack-hosted__slack_search_public"],
+    gate: { service: "slack", connected: true },
+  };
+
+  it("passes when every registered tool is served, without reading the vendor's own list", async () => {
+    const { result, evidence } = run(vendor, ["slack-hosted__slack_search_public"]);
+    await expect(result).resolves.toBeUndefined();
+    expect(evidence.join("\n")).toContain("slack-hosted: served by the vendor, registry 1, served 1");
+  });
+
+  it("still fails when a registered tool is not served to a connected identity", async () => {
+    const { result } = run(vendor, []);
+    await expect(result).rejects.toThrow(/slack-hosted registered but not advertised to this identity/);
+  });
+
+  it("still fails when an identity with no connection is served its tools", async () => {
+    const { result } = run({ ...vendor, gate: { service: "slack", connected: false } }, ["slack-hosted__slack_search_public"]);
+    await expect(result).rejects.toThrow(/advertised to an identity with no slack connection/);
+  });
+});

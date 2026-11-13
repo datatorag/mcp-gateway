@@ -154,9 +154,39 @@ export function buildPluginServerUrl(server: PluginServerRow): string {
   return `http://dtrmcp-server-${server.slug}:${server.containerPort}/mcp`;
 }
 
+/** One MCP tool call on a fresh client: connect, call, close. The client is
+ * closed whatever happens, and a failure to close never replaces the call's
+ * own result or error. `signal` bounds the connect and the call together.
+ * The plugin call and the vendor call (`upstream-call.ts`) are both this,
+ * with their own URL and headers. */
+export async function callMcpToolOnce(opts: {
+  url: URL | string;
+  headers: Record<string, string>;
+  toolName: string;
+  args: Record<string, unknown>;
+  clientName: string;
+  signal?: AbortSignal;
+}): Promise<Awaited<ReturnType<Client["callTool"]>>> {
+  const transport = new StreamableHTTPClientTransport(new URL(opts.url), {
+    requestInit: { headers: opts.headers },
+  });
+  const client = new Client({ name: opts.clientName, version: "0.1.0" }, { capabilities: {} });
+  const params = { name: opts.toolName, arguments: opts.args };
+  try {
+    if (!opts.signal) {
+      await client.connect(transport);
+      return await client.callTool(params);
+    }
+    await client.connect(transport, { signal: opts.signal });
+    return await client.callTool(params, undefined, { signal: opts.signal });
+  } finally {
+    await client.close().catch(() => undefined);
+  }
+}
+
 /** One-shot per-user-token plugin call: fresh StreamableHTTP client with the
- * X-User-Token header, connect → callTool → close-in-finally. (Tokenless
- * calls use the shared ConnectionPool instead — see pool.ts.) */
+ * X-User-Token header. (Tokenless calls use the shared ConnectionPool
+ * instead, see pool.ts.) */
 export async function callPluginToolOnce(opts: {
   serverUrl: string;
   userToken: string;
@@ -167,20 +197,11 @@ export async function callPluginToolOnce(opts: {
    * `pluginContextHeaders`). The token is set last, so none replaces it. */
   contextHeaders?: Record<string, string>;
 }): Promise<Awaited<ReturnType<Client["callTool"]>>> {
-  const transport = new StreamableHTTPClientTransport(new URL(opts.serverUrl), {
-    requestInit: { headers: { ...opts.contextHeaders, "X-User-Token": opts.userToken } },
+  return callMcpToolOnce({
+    url: opts.serverUrl,
+    headers: { ...opts.contextHeaders, "X-User-Token": opts.userToken },
+    toolName: opts.toolName,
+    args: opts.args,
+    clientName: opts.clientName,
   });
-  const client = new Client(
-    { name: opts.clientName, version: "0.1.0" },
-    { capabilities: {} }
-  );
-  try {
-    await client.connect(transport);
-    return await client.callTool({
-      name: opts.toolName,
-      arguments: opts.args,
-    });
-  } finally {
-    await client.close();
-  }
 }
