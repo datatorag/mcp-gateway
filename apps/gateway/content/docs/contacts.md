@@ -23,7 +23,7 @@ faqs:
       permission that DataToRAG does not request, so that one tool is refused.
 ---
 
-The Contacts connector gives your AI assistant access to your Google Contacts.
+The Contacts connector gives your AI agent access to your Google Contacts.
 
 ## Available operations
 

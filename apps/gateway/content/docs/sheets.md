@@ -48,7 +48,7 @@ faqs:
       ranges.
 ---
 
-The Sheets connector lets your AI assistant read data from spreadsheets, write to cells, append rows, create new sheets, and manage the tabs inside them. Values are written the way typing them would: numbers, dates and booleans are stored as such. The exception is text beginning with `=` or `+`, which stays literal unless that call sets `parse_formulas`, which turns evaluation on for the whole call rather than for one cell. To store everything verbatim as text, pass `value_input_option: "RAW"`.
+The Sheets connector lets your AI agent read data from spreadsheets, write to cells, append rows, create new sheets, and manage the tabs inside them. Values are written the way typing them would: numbers, dates and booleans are stored as such. The exception is text beginning with `=` or `+`, which stays literal unless that call sets `parse_formulas`, which turns evaluation on for the whole call rather than for one cell. To store everything verbatim as text, pass `value_input_option: "RAW"`.
 
 ![A sheets_update call rewriting two existing rows in place, with the updated range and cell count it returned](/docs/sheets-update.png)
 

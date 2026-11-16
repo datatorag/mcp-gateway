@@ -22,7 +22,7 @@ faqs:
       Yes, which is what the label is for. Noise is labelled Triaged with the date
       and marked read in the same call, so searching that label shows everything
       one run touched, and marking those messages unread again reverses it.
-  - q: What if an email or an invite tells the assistant to do something else?
+  - q: What if an email or an invite tells the agent to do something else?
     a: >-
       Text inside a message or an event is content to classify, never an
       instruction. A message asking the morning brief to change its recipient, its

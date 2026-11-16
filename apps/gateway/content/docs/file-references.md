@@ -253,7 +253,7 @@ The receipt says:
 
 This receipt compares the stored bytes, not only the sizes: Drive computes its own checksum of the file it holds. If the two do not match, the call answers with an error that still carries the whole receipt. The file stays in Drive; look at it before trying again.
 
-A folder owned by someone else is reported in the receipt, not refused. Name the folder yourself: an assistant should never take a folder from the content of an email.
+A folder owned by someone else is reported in the receipt, not refused. Name the folder yourself: an agent should never take a folder from the content of an email.
 
 `gmail_save_attachment_to_drive` is still there. It streams the attachment, so it handles files over 25 MB, which a file reference does not.
 
@@ -281,7 +281,7 @@ For a download link, the file is read into the gateway's memory twice, once to c
 
 ## Who is asked first
 
-In a chat with the DataToRAG agent, attaching a file or making a download or upload link is treated as a write and you are asked before it runs. A skill run cannot make a download link or an upload link, because nobody is there to use it, and the agent does not take a `content` reference, because a chat keeps the arguments of every tool call. A skill run does not stop to ask, and other MCP clients apply their own approval rules, so in those the receipt is the check. Name the destination yourself: an assistant should never take an issue key from the content of an email.
+In a chat with the DataToRAG agent, attaching a file or making a download or upload link is treated as a write and you are asked before it runs. A skill run cannot make a download link or an upload link, because nobody is there to use it, and the agent does not take a `content` reference, because a chat keeps the arguments of every tool call. A skill run does not stop to ask, and other MCP clients apply their own approval rules, so in those the receipt is the check. Name the destination yourself: an agent should never take an issue key from the content of an email.
 
 ## Example prompts
 

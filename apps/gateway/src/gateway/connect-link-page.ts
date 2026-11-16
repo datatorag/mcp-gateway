@@ -19,7 +19,7 @@ export const CONNECT_LINK_COPY = {
   lead: (masked: string) => `It will be added to the DataToRAG account signed in as ${masked}.`,
   cta: (provider: string) => `Continue to ${provider}`,
   expiredTitle: "This link has expired",
-  expiredBody: "Ask your assistant to connect again.",
+  expiredBody: "Ask your agent to connect again.",
   otherAccountTitle: "This link was made for a different DataToRAG account",
   otherAccountBody: "It is not the one signed in here. Sign out, then open the link again.",
   signOut: "Sign out",
@@ -28,12 +28,12 @@ export const CONNECT_LINK_COPY = {
     "DataToRAG needs to confirm it is you. Sign in, and the connect picks up where it left off.",
   confirmCta: "Sign in to continue",
   doneTitle: (service: string) => `${service} is connected`,
-  doneBody: "Go back to your assistant, it can use it now.",
+  doneBody: "Go back to your agent, it can use it now.",
   partialTitle: (service: string) => `${service} is connected, with some access missing`,
   partialBody: (missing: string) =>
-    `Not allowed on the consent screen: ${missing}. Ask your assistant to connect again and tick every box.`,
+    `Not allowed on the consent screen: ${missing}. Ask your agent to connect again and tick every box.`,
   failedTitle: "That did not connect",
-  failedBody: "Ask your assistant to connect again.",
+  failedBody: "Ask your agent to connect again.",
 } as const;
 
 /** The provider's own name on the button. */

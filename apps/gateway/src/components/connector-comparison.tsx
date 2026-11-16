@@ -195,7 +195,7 @@ export const GROUPS: Group[] = [
     ],
     note: [
       "On a single account, the built-in connector still creates richer events: recurring events, room booking, attachments, and custom reminders, where ours creates plain events. Both of us answer invitations, suggest meeting times and list the other calendars on the account.",
-      "What we add is span: both your calendars reachable in one request, without either account having to share anything with the other. Free/busy runs one lookup per account and the assistant combines them.",
+      "What we add is span: both your calendars reachable in one request, without either account having to share anything with the other. Free/busy runs one lookup per account and the agent combines them.",
       "One honest caveat: the built-in connector sees every calendar the connected account can see. If you already share your personal calendar with your work account, that covers the cross-account case for you. Our advantage is for calendars you'd rather not share.",
     ],
   },

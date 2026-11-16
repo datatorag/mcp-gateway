@@ -37,7 +37,7 @@ something that can be added later.
 
 Here every tool takes an optional `account`. Omit it and you get your default.
 Name one and you get that mailbox. Ask a question that spans accounts and the
-assistant runs the search once per account and assembles the answer.
+agent runs the search once per account and assembles the answer.
 
 ```markdown
 ---
@@ -84,7 +84,7 @@ not slower there, it is impossible.
    feature. Sending from one because you found something in another is not —
    confirm the sending account explicitly first.
 3. **Search each account separately.** There is no cross-account query; the
-   assistant does the fan-out. Expect one call per account.
+   agent does the fan-out. Expect one call per account.
 4. **Be careful with defaults on writes.** A write with no `account` goes to
    the default mailbox, which may not be the one you were just reading.
 ```

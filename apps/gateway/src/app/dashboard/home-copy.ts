@@ -4,7 +4,7 @@
  */
 
 export const HOME_HEADLINE =
-  "Use your Google Workspace, Atlassian and Notion from the assistant you already use";
+  "Use your Google Workspace, Atlassian and Notion from the AI agent you already use";
 export const HOME_STANDFIRST =
   "Add DataToRAG to Claude, ChatGPT, Codex or Cursor, connect an account, then ask.";
 export const HOME_CTA = "Connect my agent";

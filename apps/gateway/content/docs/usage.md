@@ -1,6 +1,6 @@
 ---
 title: "Usage & Metrics"
-description: "See how your AI assistant is using DataToRAG: calls, latency, errors, and per-tool breakdowns."
+description: "See how your AI agent is using DataToRAG: calls, latency, errors, and per-tool breakdowns."
 order: 5
 section: "general"
 faqs:
@@ -56,7 +56,7 @@ faqs:
       tool.
 ---
 
-Every tool call your AI assistant makes through DataToRAG is logged to your personal usage dashboard at [datatorag.com/dashboard/usage](https://datatorag.com/dashboard/usage). You can see what ran, how fast it was, and where errors are happening.
+Every tool call your AI agent makes through DataToRAG is logged to your personal usage dashboard at [datatorag.com/dashboard/usage](https://datatorag.com/dashboard/usage). You can see what ran, how fast it was, and where errors are happening.
 
 ![Usage dashboard showing summary cards, call volume, by-connector breakdown, and the per-tool table](/blog/usage-dashboard.png)
 

@@ -149,7 +149,7 @@ export const SITE_FAQ_PAGES: SiteFaqPage[] = [
         title: "Questions people ask first",
         faqs: [
           {
-            q: "Can my AI assistant actually edit my files, or only read them?",
+            q: "Can my AI agent actually edit my files, or only read them?",
             // NOT the email example, deliberately. Claude's native Gmail
             // connector gained send, reply and forward in August 2026, which
             // our own three-way comparison enumerated on 24 August 2026.
@@ -168,7 +168,7 @@ export const SITE_FAQ_PAGES: SiteFaqPage[] = [
           },
           {
             q: "What does DataToRAG connect to?",
-            a: "Google Workspace and Atlassian. Gmail, Drive, Docs, Sheets, Slides, Calendar, Contacts and Tasks, plus Jira and Confluence, all behind one endpoint: connect once and every tool is available to your assistant rather than one integration at a time. The [docs](/docs) list every action per service.",
+            a: "Google Workspace and Atlassian. Gmail, Drive, Docs, Sheets, Slides, Calendar, Contacts and Tasks, plus Jira and Confluence, all behind one endpoint: connect once and every tool is available to your agent rather than one integration at a time. The [docs](/docs) list every action per service.",
           },
           {
             q: "What stops it doing something I did not want?",

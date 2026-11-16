@@ -87,7 +87,7 @@ faqs:
       reads it through Sheets.
 ---
 
-The Gmail connector gives your AI assistant full access to your inbox: searching, reading, composing, labeling, and organizing messages.
+The Gmail connector gives your AI agent full access to your inbox: searching, reading, composing, labeling, and organizing messages.
 
 ![A gmail_send call with its to, subject and body arguments, and the message id, thread id and SENT label it returned](/docs/gmail-send.png)
 
@@ -188,7 +188,7 @@ Gmail's mobile apps fold a signature they recognise behind the three-dot button.
 
 ## When Google is busy
 
-Google refuses a request when one account has too many in flight at once, which happens when an assistant runs several searches or reads together. A read that Google refuses this way is tried again inside the same call, up to three requests in all with a short wait between them, so it normally returns its results and you see nothing. If Google keeps refusing, the call fails with Google's message and a note that the failure is transient; running it again a little later is the fix.
+Google refuses a request when one account has too many in flight at once, which happens when an agent runs several searches or reads together. A read that Google refuses this way is tried again inside the same call, up to three requests in all with a short wait between them, so it normally returns its results and you see nothing. If Google keeps refusing, the call fails with Google's message and a note that the failure is transient; running it again a little later is the fix.
 
 A send is never retried. `gmail_send`, `gmail_reply`, `gmail_forward`, `gmail_send_draft` and every other tool that changes something make one attempt and report what Google answered, so nothing can go out twice.
 

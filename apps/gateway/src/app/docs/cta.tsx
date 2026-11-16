@@ -67,7 +67,7 @@ export function DocsCta({
           Try this on your own account
         </p>
         <p className="mt-2 text-sm text-muted-foreground">
-          Connect {connectorTitle ?? "a service"} once and your assistant can run
+          Connect {connectorTitle ?? "a service"} once and your agent can run
           every tool on this page against your real data. Free to start, no card.
         </p>
         <a

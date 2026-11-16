@@ -33,7 +33,7 @@ faqs:
       a page with its replies, its body content and version info.
 ---
 
-The Confluence tools let your AI assistant search space content, read and author pages, read and add comments, and look up an attachment's details.
+The Confluence tools let your AI agent search space content, read and author pages, read and add comments, and look up an attachment's details.
 
 ## Available operations
 

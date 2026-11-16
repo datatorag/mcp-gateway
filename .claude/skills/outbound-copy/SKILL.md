@@ -39,6 +39,19 @@ CASA is a Google-specific assessment. Copy must never let it read as SOC 2,
 ISO 27001, or a general audit. Approved 2026-06-29, recert ~June 2027 — the
 date is in the string because it expires.
 
+## Say "agent", not "assistant"
+
+An AI product a person uses (Claude, ChatGPT, Cursor, Codex, Gemini) is their
+**agent**, never their "assistant" (SCRUM-492). "AI assistant" becomes "AI
+agent". Every other sense is left alone: a human assistant, a product named
+Assistant, a quote, and the chat API's `role: "assistant"` in code. Published
+blog posts and changelog entries keep their wording; new ones use "agent".
+
+Our own dashboard feature is also called the agent. Where a line could mean
+either, name theirs as "your agent", "the AI agent you already use" or the
+client by name, and ours as "the DataToRAG agent" or "the agent in your
+dashboard".
+
 ## Register: customer email is not Slack
 
 `manuel-voice` has two registers and the wrong one is a real trap. Customer

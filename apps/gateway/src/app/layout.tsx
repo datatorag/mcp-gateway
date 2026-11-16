@@ -36,7 +36,7 @@ export const metadata: Metadata = {
   twitter: SOCIAL_TWITTER,
   title: "DataToRAG | Connect Your Data to AI",
   description:
-    "Link your data sources and let your AI assistant access everything. No engineering required.",
+    "Link your data sources and let your AI agent access everything. No engineering required.",
 };
 
 export default function RootLayout({
