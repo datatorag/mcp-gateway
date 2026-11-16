@@ -181,6 +181,7 @@ export const SCENARIOS: Scenario[] = [
       /* Answering it. */
       "D12", // a reply lands in the original's thread
       "D13", // a forward carries both the note and the original's token
+      "GM10", // the original and its reply read as one thread, oldest to newest
       /* And taking something out of it. */
       "D15", // an attachment saved to Drive matches in size and md5
       "GM7", // an attachment too large to return is described with its size

@@ -98,6 +98,7 @@ The Gmail connector gives your AI assistant full access to your inbox: searching
 | `gmail_search` | Search emails using Gmail query syntax (e.g., `from:boss subject:Q2 has:attachment`). Results include flattened from/to/subject/date plus snippet and labels |
 | `gmail_list` | List recent messages from your inbox with flattened from/to/subject/date fields |
 | `gmail_read` | Read a full email by message ID. `text_only` returns a compact view (flattened headers, decoded text body, attachment metadata with each attachment's part id); `max_body_chars` truncates long bodies |
+| `gmail_read_thread` | Read a whole conversation by its thread ID (the `threadId` in a search, list or read result): every message from oldest to newest in one call, drafts and messages in Trash included and marked. `depth: "full"` (the default) gives each message's headers, text body and attachments with their part ids; `depth: "headers"` gives headers and snippet only, for a quick look at a long thread. Bodies are held to 200,000 characters together; past that, the oldest messages' bodies are left out and listed under `left_out` by message ID, to read with `gmail_read` |
 | `gmail_send` | Send a new email, with Drive files in `attachments`. Your Gmail signature is added; `signature: false` sends without it |
 | `gmail_reply` | Reply to an existing thread, addressed the way Gmail's Reply button does it; `reply_all: true` includes everyone on the original. Takes Drive files in `attachments`. Your Gmail signature goes under your note, above the quoted message |
 | `gmail_forward` | Forward a message to another recipient, signed the same way as a reply. Carries the original's attachments unless `include_original_attachments: false`; `attachments` adds Drive files |
@@ -204,6 +205,7 @@ Attaching Drive files and saving attachments to Drive also use the Drive access 
 ## Example prompts
 
 - "Search my inbox for emails from @acme.com in the last week and summarize the key asks"
+- "Read the whole thread with Acme about the renewal and tell me what we still owe them"
 - "Draft a reply to the latest email from Sarah declining the meeting politely"
 - "Find all unread emails with attachments and save the attachments to my Reports folder in Drive"
 - "Forward the Q2 report email to the marketing team with a note"

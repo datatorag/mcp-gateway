@@ -150,6 +150,7 @@ describe("isWriteTool", () => {
       "gws-mcp__gmail_search",
       "gws-mcp__gmail_list",
       "gws-mcp__gmail_read",
+      "gws-mcp__gmail_read_thread",
       "gws-mcp__docs_get",
       "gws-mcp__drive_search",
       "gws-mcp__calendar_freebusy",

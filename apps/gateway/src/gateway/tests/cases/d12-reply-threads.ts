@@ -122,5 +122,7 @@ export const d12ReplyThreads: TestCase = {
     if (!/^re:/i.test((replyRead.subject ?? "").trim())) {
       throw new Error(`the reply's subject is not the Re: form (${JSON.stringify(replyRead.subject ?? null)})`);
     }
+    // GM10 reads this conversation whole, in the sender's mailbox.
+    ctx.share({ threadId: originalThread, sentId: from.sentId, replyId: reply, token });
   },
 };
