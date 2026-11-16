@@ -11,7 +11,7 @@ skills:
   - gmail-attachments-to-drive
   - document-to-deck
 faqs:
-  - q: Why do assistants struggle with the spreadsheet we run on?
+  - q: Why do agents struggle with the spreadsheet we run on?
     a: >-
       Because a spreadsheet is a human interface. Merged headers arrive as
       repeated text with no indication of which columns they spanned, a colour

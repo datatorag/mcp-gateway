@@ -1,6 +1,6 @@
 ---
 title: "Getting Started"
-description: "Connect your tools to AI assistants through a single MCP endpoint."
+description: "Connect your tools to AI agents through a single MCP endpoint."
 order: 0
 section: "general"
 faqs:
@@ -17,7 +17,7 @@ faqs:
       No. Setup is two separate connections and both are required: connect your
       accounts in the DataToRAG dashboard, then point your AI client at the
       DataToRAG MCP endpoint. Connecting an account in the dashboard does not
-      connect your assistant, and this is the step most people miss.
+      connect your agent, and this is the step most people miss.
   - q: What URL do I point my AI client at?
     a: >-
       The DataToRAG MCP endpoint is https://datatorag.com/mcp. Add it in your
@@ -48,7 +48,7 @@ faqs:
       Anything that would change your data, such as sending an email or updating
       an issue, pauses for your explicit approval before it runs. The playground
       is for trying things out; connect your own client for day to day use.
-  - q: Where can I see what my assistant actually did?
+  - q: Where can I see what my agent actually did?
     a: >-
       Every tool call appears in your personal usage dashboard, with call volume,
       latency, error rates and a per-tool breakdown, and the first successful
@@ -56,7 +56,7 @@ faqs:
       tracked and how retention works.
 ---
 
-DataToRAG gives your AI assistant access to Google Workspace (Gmail, Drive, Calendar, Docs, Sheets, Slides, Contacts, Tasks), Atlassian (Jira, Confluence) and Notion through a single MCP server. Want to see it in action first? Try the [playground](https://datatorag.com/dashboard), a built-in chat in your dashboard that runs real tools against your connected accounts, no client setup needed.
+DataToRAG gives your AI agent access to Google Workspace (Gmail, Drive, Calendar, Docs, Sheets, Slides, Contacts, Tasks), Atlassian (Jira, Confluence) and Notion through a single MCP server. Want to see it in action first? Try the [playground](https://datatorag.com/dashboard), a built-in chat in your dashboard that runs real tools against your connected accounts, no client setup needed.
 
 ![DataToRAG dashboard with Google Workspace and Atlassian connected, example prompts, and the built-in playground](/docs/dashboard-connections.png)
 
@@ -66,20 +66,20 @@ Prefer video? This two-minute walkthrough covers the sign-in flow, account conne
 
 <iframe src="https://www.youtube.com/embed/2UQvZJcuRy0" title="DataToRAG setup walkthrough" style="width:100%;aspect-ratio:16/9;border:0;border-radius:12px;" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
 
-Setup is two connections, and both are required before your assistant can do anything:
+Setup is two connections, and both are required before your agent can do anything:
 
 1. **Connect your accounts.** Sign in at [datatorag.com/dashboard](https://datatorag.com/dashboard) and connect your Google account (and Atlassian, if you use Jira or Confluence).
-2. **Connect your AI client.** This is the step most people miss: connecting an account in the dashboard does not connect your assistant. Your AI client (Claude, Cursor, ChatGPT) has to be pointed at the DataToRAG MCP endpoint separately. Pick your client below for exact steps:
+2. **Connect your AI client.** This is the step most people miss: connecting an account in the dashboard does not connect your agent. Your AI client (Claude, Cursor, ChatGPT) has to be pointed at the DataToRAG MCP endpoint separately. Pick your client below for exact steps:
 
 <!--setup-instructions-->
 
 Once your client completes its sign-in, ask it something like "search my email for invoices from last month". The first successful tool call shows up in your [dashboard](https://datatorag.com/dashboard) within seconds.
 
-## Connect accounts from your assistant
+## Connect accounts from your agent
 
-Once your client is connected, you can also connect accounts without leaving the conversation. Ask your assistant to connect Google Workspace, Atlassian or Notion. It calls the `connect` tool, which says what is already connected and gives you a link for anything that is not. Open the link in your browser, approve the provider's consent screen, then go back to the conversation. The link works once and expires after ten minutes.
+Once your client is connected, you can also connect accounts without leaving the conversation. Ask your agent to connect Google Workspace, Atlassian or Notion. It calls the `connect` tool, which says what is already connected and gives you a link for anything that is not. Open the link in your browser, approve the provider's consent screen, then go back to the conversation. The link works once and expires after ten minutes.
 
-When a tool needs an account you have not connected, its answer carries the same kind of link. A client that supports it also shows the link as a prompt of its own. Once you have connected, ask your assistant to try again.
+When a tool needs an account you have not connected, its answer carries the same kind of link. A client that supports it also shows the link as a prompt of its own. Once you have connected, ask your agent to try again.
 
 If the account you connect has a different email from the one you signed in to DataToRAG with, and your browser is not already signed in to DataToRAG, you are asked to sign in first. That stops a link meant for someone else from adding your account to theirs.
 
@@ -121,11 +121,11 @@ You don't need to connect an AI client to see what DataToRAG can do. The [dashbo
 
 Anything that would change your data (sending an email, updating an issue) pauses for your explicit approval before it runs, so you can explore safely.
 
-The playground is for trying things out. For day-to-day use, connect your own AI client with the steps above so your assistant carries your tools everywhere you work.
+The playground is for trying things out. For day-to-day use, connect your own AI client with the steps above so your agent carries your tools everywhere you work.
 
 ## How it works
 
-DataToRAG runs as a remote MCP server. When your AI assistant calls a tool like `gmail_search`, the request flows through our gateway to your connected Google account. Your data never touches our storage. Every operation is a pass-through to the Google API on your behalf.
+DataToRAG runs as a remote MCP server. When your AI agent calls a tool like `gmail_search`, the request flows through our gateway to your connected Google account. Your data never touches our storage. Every operation is a pass-through to the Google API on your behalf.
 
 ## One account per sign-in email
 
@@ -167,7 +167,7 @@ DataToRAG currently supports these services:
 
 Each connector is documented on its own page with available operations, required scopes, and example prompts.
 
-## Seeing what your assistant is doing
+## Seeing what your agent is doing
 
 Every tool call shows up in your personal usage dashboard at [datatorag.com/dashboard/usage](https://datatorag.com/dashboard/usage): call volume, latency, error rates, and a per-tool breakdown. See the [Usage docs](/docs/usage) for what gets tracked and how retention works.
 

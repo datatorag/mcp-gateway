@@ -29,7 +29,7 @@ faqs:
       No. Google Drive refuses to copy a folder and answers with a 403 that reads
       like a permissions problem. It is not one, and retrying with wider access
       will not change it. Files copy fine, optionally into another folder.
-  - q: Should I copy a template or ask the assistant to rebuild it?
+  - q: Should I copy a template or ask the agent to rebuild it?
     a: >-
       Copy it. Rebuilding a document from scratch gives you something that looks
       close and drifts a little each time, while a Drive copy carries the
@@ -42,7 +42,7 @@ faqs:
       and folders.
 ---
 
-The Drive connector lets your AI assistant search across your Google Drive, read file contents, and organize files into folders.
+The Drive connector lets your AI agent search across your Google Drive, read file contents, and organize files into folders.
 
 Reading happens server-side: the text comes back in the response, so nothing is
 downloaded to a local filesystem and a large file does not have to pass through
@@ -85,7 +85,7 @@ scanned or rendered pages.
 
 Every tool on this page takes an optional `account` argument: the email address
 of the connected Google account to act on. Omit it and the default account is
-used. Connect a personal and a work account and your assistant can read from
+used. Connect a personal and a work account and your agent can read from
 one and write to the other in the same turn, without you switching profiles.
 
 ## Example prompts

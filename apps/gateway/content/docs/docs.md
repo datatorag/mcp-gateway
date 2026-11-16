@@ -28,7 +28,7 @@ faqs:
       the Google Drive scope specifically for deleting them.
 ---
 
-The Docs connector gives your AI assistant the ability to read and write Google Docs: creating documents, inserting content, and applying batch formatting updates.
+The Docs connector gives your AI agent the ability to read and write Google Docs: creating documents, inserting content, and applying batch formatting updates.
 
 ## Available operations
 

@@ -28,7 +28,7 @@ export default function TermsPage() {
 
           <h2 className="text-xl font-semibold">2. Description of Service</h2>
           <p>
-            DataToRAG is an MCP gateway that lets AI assistants access your connected data sources
+            DataToRAG is an MCP gateway that lets AI agents access your connected data sources
             through standardized tool calls. We provide the infrastructure; you control which
             services are connected and what data is accessed.
           </p>

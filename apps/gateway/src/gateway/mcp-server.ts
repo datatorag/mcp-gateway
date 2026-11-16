@@ -453,7 +453,7 @@ export const BUILT_IN_TOOLS: {
     definition: {
       name: "skills_search",
       description:
-        "Search the published skill catalogue: routines that tell an assistant what to do with the user's connected accounts and in what order. Returns each matching skill's slug, title, the situation it is for, what it produces, the tools it uses, the services it needs, and whether this user has them connected. Call skills_get with a slug to load one into this session.",
+        "Search the published skill catalogue: routines that tell an agent what to do with the user's connected accounts and in what order. Returns each matching skill's slug, title, the situation it is for, what it produces, the tools it uses, the services it needs, and whether this user has them connected. Call skills_get with a slug to load one into this session.",
       inputSchema: {
         type: "object" as const,
         properties: {

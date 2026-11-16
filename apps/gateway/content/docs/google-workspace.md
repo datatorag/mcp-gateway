@@ -13,13 +13,13 @@ faqs:
   - q: Do I need a separate connection for each Google service?
     a: >-
       No. DataToRAG requests all the scopes it needs in a single OAuth flow, so
-      connecting Google Workspace once gives your AI assistant Gmail, Calendar,
+      connecting Google Workspace once gives your AI agent Gmail, Calendar,
       Drive, Docs, Sheets, Slides, Contacts and Tasks together rather than eight
       separate hookups.
   - q: Can I connect more than one Google account?
     a: >-
       Yes. DataToRAG supports multiple Google accounts on one connection,
-      including personal, work and shared inboxes, and your AI assistant can
+      including personal, work and shared inboxes, and your AI agent can
       either target a specific account or search across all of them.
   - q: Can DataToRAG send email, or only read it?
     a: >-
@@ -41,7 +41,7 @@ faqs:
       ships.
 ---
 
-Google Workspace is DataToRAG's flagship connector. One OAuth flow gives your AI assistant access to all eight core services, with multi-account support and tools tuned for token efficiency.
+Google Workspace is DataToRAG's flagship connector. One OAuth flow gives your AI agent access to all eight core services, with multi-account support and tools tuned for token efficiency.
 
 ![Two gmail_search calls in one turn, one against a work account and one against a personal account, each naming the account it targeted](/docs/gmail-two-accounts.png)
 
@@ -62,7 +62,7 @@ Google Workspace is DataToRAG's flagship connector. One OAuth flow gives your AI
 
 Sign in at [datatorag.com/dashboard](https://datatorag.com/dashboard) and click Connect on the Google Workspace card. The OAuth flow requests all required scopes in one step.
 
-You can connect multiple Google accounts, including personal, work and shared inboxes, and your AI assistant can target a specific one or search across all of them.
+You can connect multiple Google accounts, including personal, work and shared inboxes, and your AI agent can target a specific one or search across all of them.
 
 ## Tools
 

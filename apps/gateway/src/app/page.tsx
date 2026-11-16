@@ -33,7 +33,7 @@ export const dynamic = "force-dynamic";
 /* LEADS WITH THE SEARCH TERM ON PURPOSE, changed 2026-08-24. The previous
    title, "Let Claude edit your Google Sheets - DataToRAG", is a better
    sentence and it cost us the category: asked to list hosted Google Workspace
-   MCP servers, an assistant returned Google's official servers and four
+   MCP servers, an agent returned Google's official servers and four
    self-hosted GitHub projects and did not reach us until we were named. Not an
    ad-placement problem and not a ranking problem — nothing on the front door
    matched the phrase at all. "MCP", "hosted" and "Google Workspace MCP" appear
@@ -675,7 +675,7 @@ export default async function HomePage() {
               <p className="mt-4 text-sm leading-relaxed text-muted-foreground">
                 Not every data source has a pre-built connector. Our engineering
                 team works directly with your infrastructure to build custom MCP
-                servers that give your AI assistants access to proprietary
+                servers that give your AI agents access to proprietary
                 systems: databases, internal APIs, ERP platforms, data
                 warehouses, and more.
               </p>

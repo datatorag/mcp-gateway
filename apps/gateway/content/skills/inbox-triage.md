@@ -157,7 +157,7 @@ this usable. The cost of leaving one newsletter unread is nothing; the cost of
 marking one real email read is a missed customer.
 
 **Label first, then mark read.** Before the label there was no way to ask what the
-assistant had touched, and a wrong call was indistinguishable from mail that never
+agent had touched, and a wrong call was indistinguishable from mail that never
 arrived. With it, every run is auditable and any run is undoable. The ordering
 matters for the crash case: a labelled unread message is a shrug, an unlabelled read
 one is a search with no query.

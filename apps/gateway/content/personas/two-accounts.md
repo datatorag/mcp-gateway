@@ -11,7 +11,7 @@ skills:
 faqs:
   - q: Can one prompt search my work and personal Gmail together?
     a: >-
-      Yes. Ask once and the assistant searches each connected account and labels
+      Yes. Ask once and the agent searches each connected account and labels
       every result with the account it came from, or name a single account when
       you mean only that one. Results from two mailboxes are never merged into one
       undifferentiated list, because which inbox a thing is in is part of the
@@ -28,7 +28,7 @@ faqs:
       No. Connect as many Google accounts as you actually use and they stay
       connected together. Switching sides is naming a different account in the
       prompt, not reconnecting.
-  - q: Does this give an assistant access to someone else's mailbox?
+  - q: Does this give an agent access to someone else's mailbox?
     a: >-
       No, and it is worth being exact about this one. These are separately
       connected accounts, each authorised by you personally. There is no delegated

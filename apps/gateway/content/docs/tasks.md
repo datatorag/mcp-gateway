@@ -23,11 +23,11 @@ faqs:
     a: >-
       Yes. Every tool on this page takes an optional account argument naming the
       connected Google account to act on, and omitting it uses the default
-      account, so your assistant can read from one account and write to the other
+      account, so your agent can read from one account and write to the other
       in the same turn.
 ---
 
-The Tasks connector lets your AI assistant manage your Google Tasks: listing task lists, creating items, marking them complete, and organizing your to-dos.
+The Tasks connector lets your AI agent manage your Google Tasks: listing task lists, creating items, marking them complete, and organizing your to-dos.
 
 ## Available operations
 
@@ -49,7 +49,7 @@ The Tasks connector lets your AI assistant manage your Google Tasks: listing tas
 
 Every tool on this page takes an optional `account` argument: the email address
 of the connected Google account to act on. Omit it and the default account is
-used. Connect a personal and a work account and your assistant can read from
+used. Connect a personal and a work account and your agent can read from
 one and write to the other in the same turn, without you switching profiles.
 
 ## Example prompts

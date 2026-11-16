@@ -21,7 +21,7 @@ faqs:
       details; it does not upload or download attachment files.
 ---
 
-The Atlassian connector gives your AI assistant access to Jira and Confluence: searching issues with JQL, creating and updating tickets, reading and editing pages, working with comments, and looking up attachment details.
+The Atlassian connector gives your AI agent access to Jira and Confluence: searching issues with JQL, creating and updating tickets, reading and editing pages, working with comments, and looking up attachment details.
 
 ## Services
 

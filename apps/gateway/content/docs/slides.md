@@ -24,11 +24,11 @@ faqs:
     a: >-
       Yes. Every tool on this page takes an optional account argument naming the
       connected Google account to act on, and omitting it uses the default
-      account. With a personal and a work account connected, your assistant can
+      account. With a personal and a work account connected, your agent can
       read from one and write to the other in the same turn.
 ---
 
-The Slides connector lets your AI assistant read presentation content, create new decks, and apply batch updates to slides.
+The Slides connector lets your AI agent read presentation content, create new decks, and apply batch updates to slides.
 
 ![A slides_batch_update call inserting text into an existing slide's body placeholder, with the revision id it returned](/docs/slides-batch-update.png)
 
@@ -50,7 +50,7 @@ The Slides connector lets your AI assistant read presentation content, create ne
 
 Every tool on this page takes an optional `account` argument: the email address
 of the connected Google account to act on. Omit it and the default account is
-used. Connect a personal and a work account and your assistant can read from
+used. Connect a personal and a work account and your agent can read from
 one and write to the other in the same turn, without you switching profiles.
 
 ## Example prompts
