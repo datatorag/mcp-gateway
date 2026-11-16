@@ -270,7 +270,7 @@ export const gmailTools: ToolDef[] = [
   {
     name: "gmail_read",
     description:
-      "Read a specific email message by its ID. By default returns the full message including headers, body, and metadata. Use text_only for a compact view (flattened headers, decoded text body, attachment metadata) that avoids large MIME/base64 payloads. Each attachment is listed with its part ID; gmail_get_attachment takes the message ID and that part ID and returns the attachment's text, or describes a file that is not text.",
+      "Read a specific email message by its ID. By default returns the full message including headers, body, and metadata. Use text_only for a compact view (flattened headers, decoded text body, attachment metadata) that avoids large MIME/base64 payloads. Each attachment is listed with its part ID; gmail_get_attachment takes the message ID and that part ID and returns the attachment's text, or describes a file that is not text. The message's threadId opens the whole conversation in gmail_read_thread.",
     inputSchema: {
       type: "object",
       properties: {
@@ -294,9 +294,36 @@ export const gmailTools: ToolDef[] = [
     annotations: READ("Read email"),
   },
   {
+    name: "gmail_read_thread",
+    description:
+      "Reads a whole Gmail conversation by its thread ID, the threadId that gmail_search, gmail_list and gmail_read return. Answers every message of the thread in one call, in the order they were sent, oldest to newest, drafts and messages in Trash included and marked as such. With depth full, the default, each message carries its from, to, cc, subject and date, the decoded text body, and its attachments with the part IDs gmail_get_attachment takes. With depth headers, each message carries the same headers and Gmail's snippet but no body, which keeps a long conversation small. The bodies of one answer are held to 200,000 characters together: when a thread is longer, the bodies of its oldest messages are left out, and left_out lists those message IDs, each readable in full by gmail_read.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        thread_id: {
+          type: "string",
+          description: "The Gmail thread ID, as threadId in a gmail_search, gmail_list or gmail_read answer",
+        },
+        depth: {
+          type: "string",
+          enum: ["full", "headers"],
+          description:
+            "full (the default): headers, decoded text body and attachments for each message. headers: headers and Gmail's snippet only, no body or attachments.",
+        },
+        max_body_chars: {
+          type: "number",
+          description:
+            "Cuts each message's body to this many characters, with a truncation marker, before the 200,000 character total is applied. Applies to depth full.",
+        },
+      },
+      required: ["thread_id"],
+    },
+    annotations: READ("Read email thread"),
+  },
+  {
     name: "gmail_search",
     description:
-      "Search Gmail messages using Gmail search syntax. Returns matching messages with flattened from/to/subject/date fields plus snippet and labels. Supports queries like \"from:client@acme.com\", \"subject:proposal\", \"after:2024/01/01\", \"has:attachment\", \"label:important\". A message's attachments are listed by gmail_read and read by gmail_get_attachment.",
+      "Search Gmail messages using Gmail search syntax. Returns matching messages with flattened from/to/subject/date fields plus snippet and labels. Supports queries like \"from:client@acme.com\", \"subject:proposal\", \"after:2024/01/01\", \"has:attachment\", \"label:important\". A message's attachments are listed by gmail_read and read by gmail_get_attachment. Each result's threadId opens its whole conversation in gmail_read_thread.",
     inputSchema: {
       type: "object",
       properties: {
@@ -317,7 +344,7 @@ export const gmailTools: ToolDef[] = [
   {
     name: "gmail_list",
     description:
-      "List recent emails from the inbox. Optionally filter by label. Returns message IDs with flattened from/to/subject/date fields plus snippet and labels.",
+      "List recent emails from the inbox. Optionally filter by label. Returns message IDs with flattened from/to/subject/date fields plus snippet and labels. Each result's threadId opens its whole conversation in gmail_read_thread.",
     inputSchema: {
       type: "object",
       properties: {
@@ -625,6 +652,8 @@ interface GmailPart {
 interface GmailMessage {
   id?: string;
   threadId?: string;
+  /** Milliseconds since the epoch, as a string: when Gmail received it. */
+  internalDate?: string;
   labelIds?: string[];
   snippet?: string;
   payload?: GmailPart & { headers?: { name: string; value: string }[] };
@@ -964,6 +993,87 @@ function draftResponse(data: unknown, signature: SignatureState, report?: Report
       report
     )
   );
+}
+
+/** How many characters of body one gmail_read_thread answer carries, all
+ * messages together (SCRUM-491). Far below the 900 KB response cut, so a
+ * long thread is shortened by a rule the answer states rather than cut
+ * mid-message by the size limit. */
+export const THREAD_BODY_BUDGET_CHARS = 200_000;
+
+/** A whole thread, oldest to newest. With `full`, each message is the shape
+ * gmail_read's text view returns; with `headers`, the same headers and the
+ * snippet. Bodies are kept newest first until the budget is spent, so what
+ * a long thread leaves out is its oldest bodies, and the answer names them. */
+async function readThread(client: GwsClient, args: Record<string, unknown>) {
+  const depth = args.depth === "headers" ? "headers" : "full";
+  const result = await client.api("gmail", "users.threads", "get", {
+    params: { userId: "me", id: args.thread_id, format: depth === "full" ? "full" : "metadata" },
+  });
+  const thread = result.data as { id?: string; messages?: GmailMessage[] };
+  // Gmail answers in order already; sorting by the received time makes the
+  // order this tool promises independent of that. A stable sort keeps
+  // Gmail's order for two messages received in the same millisecond.
+  const messages = [...(thread.messages ?? [])].sort(
+    (a, b) => Number(a.internalDate ?? 0) - Number(b.internalDate ?? 0)
+  );
+
+  const rows = messages.map((msg) => {
+    const labels = msg.labelIds ?? [];
+    return {
+      ...flattenMessage(msg),
+      cc: getHeader(msg, "Cc"),
+      is_draft: labels.includes("DRAFT"),
+      in_trash: labels.includes("TRASH"),
+    };
+  });
+  if (depth === "headers") {
+    return jsonResponse({ thread_id: thread.id ?? args.thread_id, depth, message_count: rows.length, messages: rows });
+  }
+
+  const maxBodyChars = args.max_body_chars as number | undefined;
+  const bodies = messages.map((msg) => {
+    const body = extractTextBody(msg.payload);
+    return maxBodyChars !== undefined ? truncate(body, maxBodyChars) : body;
+  });
+  const kept: (string | null)[] = bodies.map(() => null);
+  let remaining = THREAD_BODY_BUDGET_CHARS;
+  for (let i = bodies.length - 1; i >= 0; i--) {
+    if (bodies[i].length <= remaining) {
+      kept[i] = bodies[i];
+      remaining -= bodies[i].length;
+    } else if (i === bodies.length - 1) {
+      // The newest message alone is over the budget: its start is kept,
+      // marked, rather than answering with no body at all.
+      kept[i] = truncate(bodies[i], remaining);
+      remaining = 0;
+    } else {
+      // Older than a body that did not fit: left out, so the bodies that
+      // are answered stay one unbroken run up to the newest.
+      remaining = 0;
+    }
+  }
+  const leftOut = messages.flatMap((msg, i) => (kept[i] === null ? [msg.id] : []));
+  return jsonResponse({
+    thread_id: thread.id ?? args.thread_id,
+    depth,
+    message_count: rows.length,
+    messages: rows.map((row, i) => ({
+      ...row,
+      body: kept[i],
+      ...(kept[i] === null ? { body_left_out: true } : {}),
+      attachments: listAttachments(messages[i].payload),
+    })),
+    ...(leftOut.length > 0
+      ? {
+          left_out: {
+            reason: `The bodies of this thread are over ${THREAD_BODY_BUDGET_CHARS} characters together, so the oldest are left out.`,
+            message_ids: leftOut,
+            read_with: "gmail_read, with each message_id and text_only",
+          },
+        }
+      : {}),
+  });
 }
 
 async function fetchMessageList(
@@ -1486,6 +1596,9 @@ export async function handleGmail(
         attachments: listAttachments(msg.payload),
       });
     }
+
+    case "gmail_read_thread":
+      return readThread(client, args);
 
     case "gmail_search":
       return fetchMessageList(client, {

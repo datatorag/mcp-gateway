@@ -29,6 +29,7 @@ const DESCRIBED = [
   "calendar_suggest_time",
   "gmail_trash_thread",
   "gmail_untrash_thread",
+  "gmail_read_thread",
   "gmail_mark_spam",
   "gmail_unmark_spam",
   "drive_share_file",

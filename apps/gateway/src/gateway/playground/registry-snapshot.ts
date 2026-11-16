@@ -134,6 +134,7 @@ export const REGISTRY_CLASSIFICATION: ReadonlyArray<readonly [string, "read" | "
   ["gws-mcp__gmail_mark_read", "write"],
   ["gws-mcp__gmail_mark_spam", "write"],
   ["gws-mcp__gmail_read", "read"],
+  ["gws-mcp__gmail_read_thread", "read"],
   ["gws-mcp__gmail_reply", "write"],
   ["gws-mcp__gmail_save_attachment_to_drive", "write"],
   ["gws-mcp__gmail_search", "read"],

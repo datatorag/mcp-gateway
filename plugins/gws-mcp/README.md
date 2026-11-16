@@ -8,7 +8,7 @@ This server powers the Google Workspace connector of [DataToRAG](https://datator
 
 | Service | Tools | Operations |
 |---------|-------|------------|
-| **Gmail** | 26 | send, reply, forward, read, search, list, create draft, update draft, send draft, delete draft, mark read, list filters, create label, list labels, update label, delete label, label message or thread, save attachment to Drive, trash, untrash, trash thread, untrash thread, mark spam, unmark spam, list drafts, get attachment |
+| **Gmail** | 27 | send, reply, forward, read, read thread, search, list, create draft, update draft, send draft, delete draft, mark read, list filters, create label, list labels, update label, delete label, label message or thread, save attachment to Drive, trash, untrash, trash thread, untrash thread, mark spam, unmark spam, list drafts, get attachment |
 | **Calendar** | 9 | list events, get event, create, update, delete, freebusy, respond to an invitation, list calendars, suggest a time |
 | **Contacts** | 7 | search, get, list, create, update, delete, directory search |
 | **Drive** | 12 | search, read file, create folder, rename, copy, upload a referenced file, get file, move, trash, share, list permissions, list recent files |
@@ -17,7 +17,7 @@ This server powers the Google Workspace connector of [DataToRAG](https://datator
 | **Slides** | 4 | get, create, batch update, delete |
 | **Tasks** | 7 | list task lists, create task list, list tasks, create, update, complete, delete |
 
-**86 tools total.** All tools support shared (team) Drives.
+**87 tools total.** All tools support shared (team) Drives.
 
 The plugin also serves a raw API fallback for internal use; the gateway does not list it to users, and the counts above leave it out.
 
