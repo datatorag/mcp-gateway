@@ -6,6 +6,7 @@ updated: "2026-11-17"
 updatedNote: "November 17, 2026: the cost section said DataToRAG has no per-call meter, and its chart said the same. Hosted DataToRAG counts tool calls against your plan, so the chart is replaced with the numbers. The comparison table now includes Notion, connected since October 2026, and says the self-hosted route is open source without a packaged guide. August 27, 2026: narrowed an overbroad privacy claim. The pass-through statement said we do not store your data, unqualified. The gateway keeps nothing, but the hosted agent on our own site stores its conversation threads. The privacy policy is now linked from the paragraph."
 author: "Manuel Yang"
 category: "Comparison"
+coverImage: "/blog/zapier-mcp-alternative.png"
 tags: ["zapier", "mcp", "comparison", "google-workspace", "alternative"]
 ---
 

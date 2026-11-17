@@ -6,6 +6,7 @@ updated: "2026-11-17"
 updatedNote: "November 17, 2026: the comparison table now includes Notion, connected since October 2026. August 24, 2026: narrowed an overbroad privacy claim. The pass-through statement used to end 'there's no copy at all'; the gateway keeps nothing, but the hosted agent on our own site stores its conversation threads. The privacy policy is now linked from the paragraph. EARLIER: Corrected the credentials row, which was the most misleading line on the page. It said credentials are passed through and never stored. They are stored: the hosted service keeps each connection tokens in our database, which is what makes background refresh work at all. Passing through without storing is true of your Workspace CONTENT rather than your credentials, so that claim now has its own row and says what it actually covers."
 author: "Manuel Yang"
 category: "Comparison"
+coverImage: "/blog/composio-alternative.png"
 tags: ["composio", "mcp", "comparison", "ai-agents", "alternative"]
 ---
 

@@ -2,8 +2,10 @@
 title: "The Model Didn't Hallucinate. Our Tool Description Was Missing."
 excerpt: "We read the failed calls on a real account and found something uncomfortable: most of them were not the model getting it wrong. They were our tool descriptions failing to say what the tool could do, and in one case failing to offer something it should have offered."
 date: "2026-08-31"
+updated: "2026-11-17"
 author: "Manuel Yang"
 category: "Engineering"
+coverImage: "/blog/model-invented-a-parameter.png"
 tags: ["mcp", "tools", "claude", "google-workspace", "developer-experience"]
 ---
 

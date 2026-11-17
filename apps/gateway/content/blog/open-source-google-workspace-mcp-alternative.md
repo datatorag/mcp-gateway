@@ -6,6 +6,7 @@ updated: "2026-11-17"
 updatedNote: "November 17, 2026: the post said to run our code yourself with Docker Compose and Postgres. There is no packaged self-host guide; the source is open, and the post now names what you would supply: a Postgres database, your own Google OAuth clients and an encryption key for the stored tokens. Notion added to what comes built in. August 26, 2026: narrowed an overbroad privacy claim. The pass-through statement implied nothing is stored anywhere; the gateway keeps nothing, but the hosted agent on our own site stores its conversation threads. The privacy policy is now linked from the paragraph."
 author: "Manuel Yang"
 category: "Comparison"
+coverImage: "/blog/open-source-google-workspace-mcp-alternative.png"
 tags: ["self-hosting", "google-workspace", "mcp", "open-source", "oauth", "alternative"]
 ---
 

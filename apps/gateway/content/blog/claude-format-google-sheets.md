@@ -2,8 +2,10 @@
 title: "The Spreadsheet Was Correct. Nobody Could Read It."
 excerpt: "Writing values into Google Sheets gives you no formatting at all, and the failure is invisible to whoever caused it. Four new tools fix that: a one-call readable pass, targeted styling, a raw escape hatch, and row lookup that doesn't read the whole sheet."
 date: "2026-08-26"
+updated: "2026-11-17"
 author: "Manuel Yang"
 category: "Product"
+coverImage: "/blog/claude-format-google-sheets.png"
 tags: ["sheets", "claude", "mcp", "formatting", "google-workspace"]
 ---
 

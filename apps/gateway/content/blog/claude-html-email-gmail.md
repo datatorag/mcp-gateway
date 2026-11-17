@@ -6,6 +6,7 @@ updated: "2026-11-17"
 updatedNote: "November 17, 2026: the section on replies and forwards described them as HTML only. They now send an HTML part with a plain-text part derived from it, the same as a fresh send."
 author: "Manuel Yang"
 category: "Product"
+coverImage: "/blog/claude-html-email-gmail.png"
 tags: ["gmail", "claude", "mcp", "email", "google-workspace"]
 ---
 

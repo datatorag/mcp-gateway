@@ -3,9 +3,10 @@ title: "Looking for an Open-Source Composio Alternative? Check Which Part Is Act
 excerpt: "Composio's SDKs are open source. The runtime that holds your tokens and executes your calls is not, and self-hosting it is an enterprise-plan conversation. If 'open source' means 'I can run the whole thing myself', the license on the SDK isn't the license that matters."
 date: "2026-07-23"
 updated: "2026-11-17"
-updatedNote: "November 17, 2026: the self-hosting steps said `docker compose up` with your own Postgres. That command does not work as written and there is no packaged self-host guide, so the post now says the source is open and lists what you would supply instead of printing a command. The scope paragraph now counts Notion, connected since October 2026. August 24, 2026: narrowed an overbroad privacy claim. The pass-through statement used to end 'there's no copy at all'; the gateway keeps nothing, but the hosted agent on our own site stores its conversation threads. The privacy policy is now linked from the paragraph."
+updatedNote: "November 17, 2026: the self-hosting steps said `docker compose up` with your own Postgres. That command does not work as written and there is no packaged self-host guide, so the post now says the source is open and lists what you would supply instead of printing a command. The scope paragraph now counts Notion, connected since October 2026. The comparison table said our client SDKs are open source; we ship no client SDK, because any MCP client connects to the gateway, so the row now says that. August 24, 2026: narrowed an overbroad privacy claim. The pass-through statement used to end 'there's no copy at all'; the gateway keeps nothing, but the hosted agent on our own site stores its conversation threads. The privacy policy is now linked from the paragraph."
 author: "Manuel Yang"
 category: "Comparison"
+coverImage: "/blog/open-source-composio-alternative.png"
 tags: ["composio", "open-source", "self-hosted", "mcp", "alternative"]
 ---
 
@@ -33,7 +34,7 @@ So the layering works out like this:
 
 | | Composio | DataToRAG |
 |---|---|---|
-| Client SDKs | Open source | Open source (MIT) |
+| Client SDKs | Open source | None needed: any MCP client connects |
 | The runtime executing calls | Closed | MIT, same repo |
 | Self-hosting | Enterprise plans | Source open (MIT); you supply the database, OAuth clients and keys |
 | Where tokens live (self-serve) | Composio's cloud | Pass-through hosted, or your own Postgres self-hosted |
