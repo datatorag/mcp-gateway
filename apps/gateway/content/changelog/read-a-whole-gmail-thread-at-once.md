@@ -10,4 +10,4 @@ message's text and attachments, drafts and anything in Trash included and marked
 long conversation it can look at just the senders, dates and a preview of each message, then read
 the ones it needs.
 
-The [Gmail docs](/docs/gmail) cover the new `gmail_read_thread` tool.
+The [Gmail docs](/docs/gmail) cover the new `gmail_read_thread` tool. [How we knew to build it](/blog/read-a-whole-gmail-thread) is on the blog.
