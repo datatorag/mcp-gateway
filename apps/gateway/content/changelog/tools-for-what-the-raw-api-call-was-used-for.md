@@ -42,3 +42,5 @@ before they run, like every other write.
 
 What the raw call was being used for, and why these nine: [We Read What People Used the Raw API
 Call For, and Built Nine Tools Instead](/blog/we-read-what-the-raw-api-call-was-for).
+
+_Note: `gmail_get_attachment` is a name we removed on March 31, when it returned a file's bytes as base64. It is back with a different job: it describes an attachment, and returns text only for a text file, never base64._
