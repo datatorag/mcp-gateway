@@ -53,9 +53,9 @@ Some misses are a mix-up, and Google's answer for a mix-up is the same 404.
 
 Give the thread tool a message id and it now says so: that is a message id, here is the thread it belongs to. Give a Sheets tool the id of a Google Doc and the answer says it is a Doc, and which tools open it. In both cases we only say it when Google itself confirms what the id is.
 
-Two mix-ups we cannot catch. A thread's id is the same as its first message's id, so reading a thread id as a message quietly returns the first message, and nothing tells that apart from someone who wanted the first message. And a folder id given to a Docs tool gets a generic "invalid argument" from Google that other mistakes, such as a bad range, also produce. Both keep Google's words.
+Two mix-ups we cannot catch. A thread's id is the same as its first message's id, so reading a thread id as a message quietly returns the first message, and nothing tells that apart from someone who wanted the first message. And a folder id given to a Docs tool gets a generic "invalid argument" from Google that other mistakes, such as a bad range, also produce. That one keeps Google's words.
 
-Tasks is the odd one. It answers a missing list with a 400, "Invalid task list ID", where every other service answers 404. We treat exactly that message as a miss and leave every other 400 from Tasks alone, because the same code also covers a badly formed due date.
+Tasks is the odd one. It answers a missing list with a 400, "Invalid task list ID", where every other service answers 404. We treat exactly that message as a miss and leave every other 400 from Tasks alone, because the same code covers other mistakes too.
 
 ## What it does not do
 
@@ -67,6 +67,6 @@ The first version shipped with a test that read a made-up message id on producti
 
 The made-up id was not in Gmail's id format, so Google answered "Invalid id value" before it ever looked for a message, and our new handler never ran. We had checked the wording against a different id and a saved copy of Google's response, never the test's own id against a real mailbox. Both were corrected in the next release, twenty-four minutes later: the test reads an id Gmail does look up, and "Invalid id value" has its own answer now, saying the id is not in Gmail's format and where a real one comes from.
 
-Every test case added after that had its own id run against a real account before it was merged. There are eight of them, one per service, and they all pass on production.
+Every test case added after that had its own id run against a real account before it was merged. With the corrected one there are eight, one per service, and they all pass on production.
 
 The two [changelog](/changelog) entries have the short version, and the [Gmail docs](/docs/gmail) list the tools. If your agent gets an error from us that leaves it with nothing to do next, tell me what it said.
