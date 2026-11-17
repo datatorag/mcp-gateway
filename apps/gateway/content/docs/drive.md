@@ -7,9 +7,10 @@ connector: "google-workspace"
 faqs:
   - q: Can DataToRAG read a PDF from Drive?
     a: >-
-      No. The Drive read tool answers with an Unsupported file type error for
-      PDFs. It reads text out of documents rather than out of scanned or rendered
-      pages, which makes PDFs the common surprise.
+      Not directly. The Drive read tool answers a PDF with an Unsupported file
+      type error. To read one, copy it with the Drive copy tool and a target type
+      of Google Doc: Drive recognizes the text, and the copy reads like any other
+      Doc. The original PDF is left as it was.
   - q: Which file types can the Drive reader handle?
     a: >-
       Three kinds. Google Docs, Sheets and Slides come back as extracted text,
@@ -38,8 +39,8 @@ faqs:
   - q: Does renaming a file in Drive change anything else about it?
     a: >-
       No. The Drive rename tool changes the name only, and the file's content,
-      location and sharing are untouched. It works on Google Docs, Sheets, Slides
-      and folders.
+      location and sharing are untouched. It works on any file or folder the
+      account can edit.
 ---
 
 The Drive connector lets your AI agent search across your Google Drive, read file contents, and organize files into folders.
@@ -55,9 +56,9 @@ the conversation to be read.
 | `drive_search` | Search files using Drive query syntax, e.g. `name contains 'report'` or `mimeType='application/vnd.google-apps.spreadsheet'`. Returns names, IDs, types and modification dates. `page_size` defaults to 20 |
 | `drive_read_file` | Read a file's text content by file ID. Handles Google Docs, Sheets and Slides, Office `.docx`/`.xlsx`/`.pptx` (converted automatically), and `.txt`/`.csv`. Returns the extracted text directly, with no local download |
 | `drive_create_folder` | Create a new folder, optionally inside a parent folder |
-| `drive_rename_file` | Rename a file or folder by ID. Changes the name only: content, location and sharing are untouched. Works on Docs, Sheets, Slides and folders |
-| `drive_upload_file` | Put an email, one of its attachments, or a file from another connected account's Drive (as stored, or a Google file exported, such as a Doc as a PDF) into Drive, named by a [file reference](/docs/file-references). The receipt includes the SHA-256 Drive reports for what it stored and whether it matches what was sent, and the owners and sharing of the folder it went into |
-| `drive_copy_file` | Copy a file and name the copy in the same call, optionally into another folder with `parent_id`. The copy carries the original's tabs, formatting and formulas. With `convert: true`, an Excel, Word or PowerPoint file is copied as a Google Sheet, Doc or Slides file. With `target_mime_type`, the copy is converted to the Google type named, so a PDF or an image becomes a Google Doc with its text recognised, in the language `ocr_language` names when given. **Folders cannot be copied** |
+| `drive_rename_file` | Rename a file or folder by ID. Changes the name only: content, location and sharing are untouched. Works on any file or folder the account can edit |
+| `drive_upload_file` | Put a file into Drive, named by a [file reference](/docs/file-references): an email, one of its attachments, a file from another connected account's Drive (as stored, or a Google file exported, such as a Doc as a PDF), a file your agent already holds (up to 1 MB), or a file you send from your computer through an upload link (up to 25 MB). The receipt includes the SHA-256 Drive reports for what it stored and whether it matches what was sent, and the owners and sharing of the folder it went into |
+| `drive_copy_file` | Copy a file and name the copy in the same call, optionally into another folder with `parent_id`. The copy carries the original's tabs, formatting and formulas. With `convert: true`, an Excel, Word or PowerPoint file is copied as a Google Sheet, Doc or Slides file. With `target_mime_type`, the copy is converted to the Google type named, so a PDF or an image becomes a Google Doc with its text recognized, in the language `ocr_language` names when given. **Folders cannot be copied** |
 | `drive_get_file` | Describe a file or folder by ID without reading its content: name, type, size, the folders it is in, owners, created and modified times, link, and whether it is in Trash |
 | `drive_move_file` | Move a file or folder into another folder. It is removed from the folder it was in, so it ends up in one place; name, content and ID are unchanged |
 | `drive_trash_file` | Move a file or folder to Trash, where its owner can restore it for 30 days. Trashing a folder trashes what is inside it |
@@ -75,7 +76,9 @@ the conversation to be read.
 | Anything else, **PDFs included** | An `Unsupported file type` error |
 
 PDFs are the common surprise: the tool reads text out of documents, not out of
-scanned or rendered pages.
+scanned or rendered pages. To read a PDF or an image, copy it with
+`drive_copy_file` and `target_mime_type: "application/vnd.google-apps.document"`.
+Drive recognizes the text, and the copy is a Google Doc the tools can read.
 
 ## Required scopes
 
@@ -97,7 +100,7 @@ one and write to the other in the same turn, without you switching profiles.
 
 ## Copying beats rebuilding
 
-`drive_copy_file` exists mainly for templates. Asking Claude to rebuild a document from
+`drive_copy_file` exists mainly for templates. Asking your agent to rebuild a document from
 scratch gives you something that looks close and drifts a little each time. Copying gives you
 the original's tabs, formatting and formulas exactly, because it is the same file. Copy first,
 then fill in the copy.

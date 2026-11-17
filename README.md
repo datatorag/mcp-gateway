@@ -10,7 +10,7 @@
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue" alt="License: MIT"></a>
   <a href="https://github.com/datatorag/mcp-gateway/actions/workflows/ci.yml"><img src="https://github.com/datatorag/mcp-gateway/actions/workflows/ci.yml/badge.svg?branch=main" alt="CI status on main"></a>
   <a href="https://github.com/datatorag/mcp-gateway/commits/main"><img src="https://img.shields.io/github/last-commit/datatorag/mcp-gateway/main" alt="Last commit on main"></a>
-  <a href="#connectors"><img src="https://img.shields.io/badge/tools-143-4f46e5" alt="143 tools as of October 2026"></a>
+  <a href="#connectors"><img src="https://img.shields.io/badge/tools-140%2B-4f46e5" alt="140+ tools as of November 2026"></a>
   <a href="https://datatorag.com/docs/getting-started"><img src="https://img.shields.io/badge/works%20with-Claude%20%7C%20Cursor%20%7C%20ChatGPT-555" alt="Works with Claude, Cursor and ChatGPT"></a>
   <a href="https://mcptry.com/servers/com.datatorag/mcp-gateway"><img src="https://mcptry.com/badge/com.datatorag/mcp-gateway" alt="mcptry"></a>
 </p>
@@ -71,11 +71,11 @@ The server is listed in the [official MCP registry](https://registry.modelcontex
 
 ## Connectors
 
-Tool counts are from the code as of October 2026: 133 tools in the three connectors, and 10 built into the gateway.
+Tool counts are from the code as of November 2026: 134 tools in the three connectors, plus the tools built into the gateway.
 
 | Connector | Tools | Services | Docs |
 |---|---|---|---|
-| Google Workspace (`plugins/gws-mcp`) | 87 | Gmail, Calendar, Drive, Docs, Sheets, Slides, Contacts, Tasks | [docs](https://datatorag.com/docs/google-workspace) |
+| Google Workspace (`plugins/gws-mcp`) | 88 | Gmail, Calendar, Drive, Docs, Sheets, Slides, Contacts, Tasks | [docs](https://datatorag.com/docs/google-workspace) |
 | Atlassian (`plugins/atlassian-mcp`) | 28 | Jira, Confluence | [docs](https://datatorag.com/docs/atlassian) |
 | Notion (`plugins/notion-mcp`) | 18 | Pages, databases, comments | [docs](https://datatorag.com/docs/notion) |
 | Gateway built-ins | 10 | Connected accounts, skills, file upload and download links, a connectivity check | [docs](https://datatorag.com/docs/file-references) |

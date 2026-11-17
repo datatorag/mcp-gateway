@@ -2,8 +2,8 @@
 title: "Looking for an Open-Source Composio Alternative? Check Which Part Is Actually Open."
 excerpt: "Composio's SDKs are open source. The runtime that holds your tokens and executes your calls is not, and self-hosting it is an enterprise-plan conversation. If 'open source' means 'I can run the whole thing myself', the license on the SDK isn't the license that matters."
 date: "2026-07-23"
-updated: "2026-08-24"
-updatedNote: "August 24, 2026: narrowed an overbroad privacy claim. The pass-through statement used to end 'there's no copy at all'; the gateway keeps nothing, but the hosted agent on our own site stores its conversation threads. The privacy policy is now linked from the paragraph."
+updated: "2026-11-17"
+updatedNote: "November 17, 2026: the self-hosting steps said `docker compose up` with your own Postgres. That command does not work as written and there is no packaged self-host guide, so the post now says the source is open and lists what you would supply instead of printing a command. The scope paragraph now counts Notion, connected since October 2026. August 24, 2026: narrowed an overbroad privacy claim. The pass-through statement used to end 'there's no copy at all'; the gateway keeps nothing, but the hosted agent on our own site stores its conversation threads. The privacy policy is now linked from the paragraph."
 author: "Manuel Yang"
 category: "Comparison"
 tags: ["composio", "open-source", "self-hosted", "mcp", "alternative"]
@@ -23,7 +23,7 @@ None of this is a scandal. It's a normal commercial architecture, and Composio b
 
 ## What actually self-hosting looks like
 
-DataToRAG's core is MIT-licensed, and self-hosting is a supported path, not an enterprise upsell. The whole thing runs on Docker Compose with your own Postgres. You clone the repo, bring your own Google OAuth client, point Claude at your own endpoint, and the tokens sit in a database you control on a box you control.
+DataToRAG's core is MIT-licensed, so running it yourself is a matter of the code, not an enterprise plan. It is not one command, though, and there is no packaged self-host guide yet. You would supply a Postgres database, your own Google OAuth clients (and Google's verification for the restricted Gmail and Drive scopes), and an encryption key for the stored tokens, then point Claude at your own endpoint. The tokens then sit in a database you control on a box you control.
 
 And in either mode, hosted or self-hosted, the gateway is pass-through. When Claude calls `gmail_search`, the request goes to Google on your behalf and the result comes straight back. We don't retain your messages, files, or calendar, and there's no copy of your inbox in anyone's database to leak later.
 
@@ -35,7 +35,7 @@ So the layering works out like this:
 |---|---|---|
 | Client SDKs | Open source | Open source (MIT) |
 | The runtime executing calls | Closed | MIT, same repo |
-| Self-hosting | Enterprise plans | `docker compose up`, any plan or no plan |
+| Self-hosting | Enterprise plans | Source open (MIT); you supply the database, OAuth clients and keys |
 | Where tokens live (self-serve) | Composio's cloud | Pass-through hosted, or your own Postgres self-hosted |
 | Your data at rest with the vendor | Tokens, yes | Nothing stored either way |
 | Attestations | SOC 2 Type II, ISO 27001 | CASA Tier 2 passed, Google-verified (June 2026) |
@@ -44,7 +44,7 @@ That last row cuts both ways and I want to keep it honest. If your procurement c
 
 ## The scope tradeoff, stated plainly
 
-Composio's catalog is over 1,000 toolkits. Ours is 8 Google services plus Jira and Confluence. If your agent needs Salesforce, Slack, Notion, and a dozen niche APIs, an open-source Workspace gateway doesn't answer that, and I'd rather say so in the third section than have you find out after a migration.
+Composio's catalog is over 1,000 toolkits. Ours is 8 Google services, Jira and Confluence, and Notion. If your agent needs Salesforce, Slack and a dozen niche APIs, an open-source Workspace gateway doesn't answer that, and I'd rather say so in the third section than have you find out after a migration.
 
 What you get for the narrower scope is depth. Hand-built Google tools, including the ones platforms tend to skip: `docs_batch_update` for restructuring a document in place, `slides_create` and `slides_batch_update` for building decks, full `contacts_*` and `tasks_*` sets, `gmail_send` and `gmail_reply` so workflows finish instead of stopping at a draft. Composio, for all its breadth, had no standalone Slides toolkit and no standalone Contacts toolkit at the time of writing. Multi-account is built in too: a work Google account, a personal one, and a shared inbox behind one endpoint, addressable in a single prompt.
 
@@ -66,7 +66,7 @@ And it's not open source instead of verified, it's both: the same code passed Go
 
 Two paths, same code:
 
-Self-host: clone the MIT repo, `docker compose up` with your own Postgres, bring your own Google OAuth client, and point Claude at your own endpoint. Tokens live in a database you control, and nothing ever transits us.
+Self-host: the source is MIT at [github.com/datatorag/mcp-gateway](https://github.com/datatorag/mcp-gateway). There is no packaged guide yet; you would bring your own Postgres database, Google OAuth clients and token encryption key, and point Claude at your own endpoint. Tokens live in a database you control, and nothing ever transits us.
 
 Hosted: sign in at [datatorag.com/dashboard](https://datatorag.com/dashboard) and you're running in about two minutes. Same pass-through architecture, nothing stored either way. Try it hosted first if you want to see what you're deploying before you deploy it.
 

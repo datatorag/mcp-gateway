@@ -34,7 +34,7 @@ The Docs connector gives your AI agent the ability to read and write Google Docs
 
 | Tool | Description |
 |------|-------------|
-| `docs_get` | Read the full content of a Google Doc, including inline image metadata |
+| `docs_get` | Read a Google Doc. `mode: "text"` (the default) returns plain text with inline images marked; `"index"` adds the character positions `docs_batch_update` takes; `"full"` returns the raw API response. `start_index` and `end_index` read part of a long document, and the answer says where the next part starts |
 | `docs_create` | Create a new, empty Google Doc with a title. Add content with `docs_write` or `docs_batch_update` |
 | `docs_write` | Insert text at the beginning of a document. It does not replace what is there; to replace or to insert elsewhere, use `docs_batch_update` |
 | `docs_batch_update` | Apply multiple updates in a single request (insert text, add formatting, replace content) |
@@ -44,6 +44,13 @@ The Docs connector gives your AI agent the ability to read and write Google Docs
 
 - `https://www.googleapis.com/auth/documents`
 - `https://www.googleapis.com/auth/drive` (for delete, which is a Drive operation)
+
+## Multiple accounts
+
+Every tool on this page takes an optional `account` argument: the email address
+of the connected Google account to act on. Omit it and the default account is
+used. Connect a personal and a work account and your agent can read from
+one and write to the other in the same turn, without you switching profiles.
 
 ## Example prompts
 

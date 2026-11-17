@@ -2,7 +2,7 @@
 title: "Triage your Gmail inbox with Claude"
 order: 2
 situation: "My inbox is full of things I don't need to read, and the two that matter are buried."
-produces: "A clean inbox and one self-addressed digest of what actually needs you, labelled so every action can be audited or undone."
+produces: "A clean inbox and one self-addressed digest of what actually needs you, labeled so every action can be audited or undone."
 tools: [gmail_search, gmail_read, gmail_create_label, gmail_label_message, gmail_mark_read, gmail_send]
 accounts: multiple
 faqs:
@@ -15,7 +15,7 @@ faqs:
       is the point.
   - q: How do I undo a triage run?
     a: >-
-      Search the label. Every message the routine touches is labelled Triaged with
+      Search the label. Every message the routine touches is labeled Triaged with
       the run's date, so that label shows everything it has ever handled and
       marking one run's messages unread again puts them back.
   - q: What if it marks something important as read?
@@ -96,7 +96,7 @@ triages the wrong inbox.
    `add_labels` only), then mark read (`gmail_mark_read` with the same `message_ids`).
    The order is deliberate. Marking read is the only irreversible act in this
    routine, so the reversible step goes first: if the run dies between the two, a
-   labelled unread message is recoverable, an unlabelled read one is not.
+   labeled unread message is recoverable, an unlabeled read one is not.
    **Never delete, archive, or remove the INBOX label.** When in doubt, leave it
    unread and put it in the digest.
 
@@ -120,7 +120,7 @@ triages the wrong inbox.
      `https://mail.google.com/mail/u/?authuser=<account>#all/<messageId>` using
      the message `id` from the search result. A digest where half the visual
      weight is bare permalinks does not get read.
-   - Close with a one-line labelled-and-marked-read count per account.
+   - Close with a one-line labeled-and-marked-read count per account.
 
 6. Send the digest to yourself: one `gmail_send` call with the formatted version
    in `html_body` and a plain-text version in `body` as the fallback. **The
@@ -159,7 +159,7 @@ marking one real email read is a missed customer.
 **Label first, then mark read.** Before the label there was no way to ask what the
 agent had touched, and a wrong call was indistinguishable from mail that never
 arrived. With it, every run is auditable and any run is undoable. The ordering
-matters for the crash case: a labelled unread message is a shrug, an unlabelled read
+matters for the crash case: a labeled unread message is a shrug, an unlabeled read
 one is a search with no query.
 
 **Deliver the digest where you already look.** The digest used to go to a transcript,

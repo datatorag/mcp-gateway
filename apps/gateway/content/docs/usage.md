@@ -15,14 +15,12 @@ faqs:
   - q: I pay for Pro, so why are my calls counting on the free plan?
     a: >-
       You most likely have two DataToRAG accounts. DataToRAG makes one account
-      per sign-in email, and each AI app asks you to sign in to DataToRAG once,
+      per sign-in email, and each client asks you to sign in to DataToRAG once,
       when you add the connector. Pick a different Google login in one app and
       that app is on a second account, usually a free one, and its calls count
       there. Nothing errors until the free limit. To fix it, remove the
       DataToRAG connector in that app, add it back, and sign in with the email
-      that holds your plan. Do not disconnect the Google account under the
-      other login to tidy up, because that can break it under the login you
-      keep. The section "Calls counting on the wrong account" on this page has the steps for each app.
+      that holds your plan. The section "Calls counting on the wrong account" on this page has the steps for each app.
   - q: What does DataToRAG record about each tool call?
     a: >-
       The tool name, connector, outcome, latency and response size, plus the
@@ -49,11 +47,11 @@ faqs:
       provider.
   - q: What does the usage dashboard show?
     a: >-
-      Four things. Summary cards for total calls this month, success rate, median
-      latency and slow-end latency; call volume over time; a by-connector
-      breakdown across Google Workspace, Atlassian and anything else connected;
-      and a per-tool table you can click into for the last 50 calls of a single
-      tool.
+      Six things. Summary cards for total calls this month, success rate and
+      slow-end latency; call volume over time; your most-called tools; a by-connector
+      breakdown across Google Workspace, Atlassian, Notion and anything else
+      connected; a per-tool table you can click into for the last 50 calls of a
+      single tool; and recent activity.
 ---
 
 Every tool call your AI agent makes through DataToRAG is logged to your personal usage dashboard at [datatorag.com/dashboard/usage](https://datatorag.com/dashboard/usage). You can see what ran, how fast it was, and where errors are happening.
@@ -62,12 +60,14 @@ Every tool call your AI agent makes through DataToRAG is logged to your personal
 
 ## What you see
 
-The dashboard shows four things:
+The dashboard shows six things:
 
-- **Summary cards**: total calls this month, success rate, median latency, and slow-end latency (the p95, the speed you get on a bad day)
-- **Call volume over time**: hourly buckets for 24h and 7d ranges, daily for 30d and 90d
-- **By connector**: stacked breakdown of calls across Google Workspace, Atlassian, and anything else you've connected
-- **Per-tool table**: every tool you've called, with call count, error count, and median latency. Click a row to drill down
+- **Summary cards**: total calls this month, success rate, and slow-end latency (the p95, the speed you get on a bad day)
+- **Call volume over time**: hourly buckets for the 24h range, daily for 7d, 30d and 90d
+- **Most-called tools**: the tools you call most, in a chart
+- **By connector**: stacked breakdown of calls across Google Workspace, Atlassian, Notion and anything else you've connected
+- **Per-tool table**: every tool you've called, with calls, success rate, median and slow-end latency, and average response size. Click a row to drill down
+- **Recent activity**: the latest calls as they come in
 
 The drill-down page shows the last 50 calls for a single tool: when it ran, the status, latency, and any error message.
 
@@ -81,7 +81,7 @@ If a call fails, we store the error message the upstream service returned, as re
 
 Not every call is counted the same way:
 
-- **Successful calls**: counted. Your AI asked Gmail to search, Gmail returned results, you got what you wanted.
+- **Successful calls**: counted. Your agent asked Gmail to search, Gmail returned results, you got what you wanted.
 - **User errors**: counted. You asked for a message that doesn't exist, a query with bad JQL, a file you don't have access to. The request reached the API and came back with a legitimate "no."
 - **Server errors**: *not* counted. If our gateway is down, a plugin crashes, an upstream API has a 5xx outage or refuses for rate, or a request never reaches the service, that's not your problem and we don't meter it. The same goes for a Google refusal for access we never asked you for, when you granted everything we did ask for.
 
@@ -94,7 +94,7 @@ A read that Google refuses for too many requests at once is tried again inside t
 These live on the Billing page, [datatorag.com/dashboard/billing](https://datatorag.com/dashboard/billing), which is Billing in the dashboard's left rail.
 
 - **Plan.** The three plans are shown side by side and yours is marked "Current plan". On Free, the Pro card has Upgrade to Pro. On Pro, your card has "Manage or cancel" and the Free card has "Downgrade"; both open the Stripe billing portal, where the change is made. If you cancel, Pro stays active until the end of the period you have paid for.
-- **This period.** Two meters: "Tool calls" and "Agent and skill runs", each against your plan's allowance, with the date the allowance resets. A free account that reaches its tool-call allowance is paused until that date; on Pro, tool calls are not paused past the allowance. Agent and skill runs stop at the plan's number on both plans.
+- **This period.** Two meters: "Tool calls" and "Agent and skill runs", each against your plan's allowance, with the date the allowance resets. [Pricing](/pricing) lists each plan's allowance. A free account that reaches its tool-call allowance is paused until that date; on Pro, tool calls are not paused past the allowance. Agent and skill runs stop at the plan's number on both plans.
 - **Payment method.** The card on file with its last four digits and expiry. Update opens the billing portal.
 - **Invoices.** Recent invoices with date, amount, status and a PDF link. "All invoices" opens the full list in the billing portal.
 
@@ -106,11 +106,11 @@ The meters on Billing count against your allowance. The Usage page counts every 
 
 The symptom: you pay for Pro, and an app tells you the free-plan limit is reached, or your usage dashboard looks emptier than it should. The usual cause is two DataToRAG accounts.
 
-DataToRAG makes one account per sign-in email. Each AI app asks you to sign in to DataToRAG once, when you add the connector. If you picked a different Google login in one app than the one that holds your plan, that app is on a second account, usually a free one, and every call it makes counts there.
+DataToRAG makes one account per sign-in email. Each client asks you to sign in to DataToRAG once, when you add the connector. If you picked a different Google login in one app than the one that holds your plan, that app is on a second account, usually a free one, and every call it makes counts there.
 
-**How to tell.** There is no setting inside the AI app that shows which DataToRAG login it uses, so check from the dashboard:
+**How to tell.** There is no setting inside the client that shows which DataToRAG login it uses, so check from the dashboard:
 
-1. Sign in at [datatorag.com/dashboard](https://datatorag.com/dashboard). Open the account menu at the bottom of the left rail; the email you are signed in with is shown inside it. The rail itself shows your name, which can be the same on both accounts. Billing shows that account's plan.
+1. Sign in at [datatorag.com/dashboard](https://datatorag.com/dashboard). Open the account menu at the bottom of the left rail; the email you are signed in with is shown inside it. The rail shows your avatar, and your name when it is expanded; both can be the same on two accounts. Billing shows that account's plan.
 2. Make one tool call from the app you are checking, for example "search my email for invoices".
 3. Open Usage. If the call is there, the app is on this account. If it is not, sign out, sign in with your other Google login, and look again. The account where the call appears is the one that app uses.
 
@@ -131,7 +131,7 @@ claude mcp add --transport http datatorag https://datatorag.com/mcp
 
 Then run `/mcp` inside Claude Code and sign in when it sends you to the browser. Use the name you gave the server if it is not `datatorag`. Removing the server also deletes its saved sign-in, so Claude Code asks you to sign in again.
 
-**Do not tidy up by disconnecting.** It is tempting to open the account you are leaving and disconnect your Google account there. Don't: when the same Google account is connected under both logins, disconnecting it under one can break it under the other, and you would have to reconnect it. Re-adding the connector is the whole fix. The unused account can simply be left alone.
+**Re-adding the connector is the whole fix.** The unused account can simply be left alone. If you do disconnect your Google account under the login you are leaving, that only removes it for that login: the same account connected under your other login keeps working.
 
 Calls already made under the other account stay in that account's usage history. They are not moved.
 

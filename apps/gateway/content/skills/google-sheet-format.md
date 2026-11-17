@@ -55,9 +55,9 @@ This is most of the improvement. Width and wrap are what stop the truncation.
 
 ## 3. Styling on top
 
-`sheets_format_range` for fonts, colours, bold, alignment and number formats on specific
+`sheets_format_range` for fonts, colors, bold, alignment and number formats on specific
 ranges: a title row, section bands in a tint with bold text, a header in white on your primary
-colour.
+color.
 
 Do not set fixed row heights on rows that wrap. A fixed height overrides the automatic fit and
 clips the text again.
@@ -89,9 +89,9 @@ one row off is the usual failure, and only the render shows it.
 
 ## Rails
 
-Only writes the sheet you were asked to write. Colour never carries meaning on its own: a
+Only writes the sheet you were asked to write. Color never carries meaning on its own: a
 highlighted cell also says in words why it is highlighted, because a read of the sheet returns
-values and no colour.
+values and no color.
 ```
 
 ## Notes from running this
@@ -128,6 +128,6 @@ checks that can fail.
 
 ## Change it
 
-Set your own widths, fonts and colours in steps 2 and 3. If the table is wide and the row label
+Set your own widths, fonts and colors in steps 2 and 3. If the table is wide and the row label
 must stay visible while scrolling sideways, freeze the first column instead and give up the
 merged bands.

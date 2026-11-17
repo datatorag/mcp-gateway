@@ -19,12 +19,12 @@ faqs:
       text with no indication of which columns they spanned, spacer columns come
       back as empty strings that shift every column index after them, and a
       formula reads back as its result.
-  - q: Can a colour or a strikethrough carry meaning?
+  - q: Can a color or a strikethrough carry meaning?
     a: >-
       Not to anything reading the sheet through the API. Formatting is not in the
       response, so a struck-through row means nothing to an agent, and unlike a
       missing column there is no gap to notice. Every convention a team keeps in
-      bold, colour or strikethrough has to become a column first.
+      bold, color or strikethrough has to become a column first.
   - q: Which trap costs the most time?
     a: >-
       HYPERLINK formulas, because the sheet looks correct. Every link is clickable
@@ -63,14 +63,14 @@ Keep things whose HISTORY is the point somewhere else: decision logs, specs, any
 append-only. A spreadsheet makes history editable and unsearchable, which destroys the two
 properties that made those documents worth keeping.
 
-## Schema rules — these are what make it readable
+## Schema rules: these are what make it readable
 
 1. **One header row, row 1. No merged cells anywhere.** Merged headers arrive at an agent as
    repeated text with no indication of which columns they spanned, so structure becomes
    guesswork.
 2. **No spacer columns.** Empty columns used for visual separation come back as empty strings
    and shift every column index after them.
-3. **Every table has an `id` column.** Never match rows on a display name — `AcmeCorp` and
+3. **Every table has an `id` column.** Never match rows on a display name: `AcmeCorp` and
    `Acme Corp` are different strings and the same company, and a failed match reads as "this
    record does not exist."
 4. **One concern per tab, named explicitly.** `sheets_read` takes one tab at a time and echoes
@@ -81,7 +81,7 @@ properties that made those documents worth keeping.
 7. **URLs in their own plain-text column.** A `=HYPERLINK(url, label)` cell reads back as
    just the label. The address is not in the response at all, so a link that is perfectly
    usable to a person is unreachable to an agent.
-8. **Status is a column, never formatting.** Strikethrough, colour and bold do not appear in
+8. **Status is a column, never formatting.** Strikethrough, color and bold do not appear in
    the response, and nothing in this connector reads them. A row struck through to mean
    "done" is live data as far as an agent is concerned.
 
@@ -149,7 +149,7 @@ will not be there the next time this sheet is opened.
 
 - `range` tells you which tab actually resolved.
 - `rowCount` and `columnCount` tell you the real extent of what came back. Ask for more than
-  exists and you get back what exists — that is how you detect truncation instead of assuming
+  exists and you get back what exists; that is how you detect truncation instead of assuming
   you got everything.
 
 Assert the extent before you trust the values. If you expected 40 rows and got 12, stop.
@@ -195,7 +195,7 @@ missing, because from where it stands nothing is.
 **Formatting is where the real state usually turns out to live.** Ask anyone what a
 struck-through row in their sheet means and they will answer immediately. Nothing in the
 response carries it, so that answer is not available to an agent, and unlike a missing column
-there is no gap to notice. Every convention a team keeps in bold, colour or strikethrough has
+there is no gap to notice. Every convention a team keeps in bold, color or strikethrough has
 to become a column before any of this works.
 
 **One tab owns a fact is the rule that gets broken first**, because breaking it is always

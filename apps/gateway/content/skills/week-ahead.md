@@ -45,14 +45,14 @@ description: One agenda across every connected calendar, with conflicts and pend
 ## Gather
 
 For each connected account, `calendar_list_events` over the next 7 days. Pass `account`
-explicitly every time — the connector defaults to one calendar otherwise, and a
+explicitly every time: the connector defaults to one calendar otherwise, and a
 single-calendar answer to a multi-calendar question is worse than no answer, because it
 looks complete.
 
 ## Report
 
 1. **Conflicts first.** Overlapping events across DIFFERENT accounts are the whole point of
-   running this — those are the ones nothing else catches. Two events on the same calendar
+   running this: those are the ones nothing else catches. Two events on the same calendar
    you probably already know about; a personal appointment sitting on top of a work meeting
    you do not.
 
@@ -68,7 +68,7 @@ looks complete.
 
 ## Rails
 
-Read-only. No creating, no updating, no deleting, no RSVPs — surface what needs answering and
+Read-only. No creating, no updating, no deleting, no RSVPs: surface what needs answering and
 let the human answer it. If an account errors, say which one and continue with the rest.
 ```
 

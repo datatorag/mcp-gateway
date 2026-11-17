@@ -23,15 +23,15 @@ faqs:
       either target a specific account or search across all of them.
   - q: Can DataToRAG send email, or only read it?
     a: >-
-      It sends. DataToRAG's Gmail tools cover search, read, send, reply, forward
-      and draft, with files from Google Drive attached, alongside saving
-      attachments and managing labels. The
+      It sends. DataToRAG's Gmail tools cover search, reading messages and whole
+      threads, send, reply, forward and draft, with files attached, alongside
+      trashing, reporting spam, saving attachments and managing labels. The
       [Gmail page](/docs/gmail) lists each operation with the scopes it needs.
   - q: Can DataToRAG edit Google Docs and Sheets, or only read them?
     a: >-
       It edits both. DataToRAG's Docs tools read, create, write and batch update
-      documents, and its Sheets tools read, create, update, append and delete
-      spreadsheets as well as managing tabs. The [Docs](/docs/docs) and
+      documents, and its Sheets tools read, query, find rows, create, update,
+      append, format and delete spreadsheets as well as managing tabs. The [Docs](/docs/docs) and
       [Sheets](/docs/sheets) pages list every operation.
   - q: How many tools does the Google Workspace connector have?
     a: >-
@@ -49,18 +49,18 @@ Google Workspace is DataToRAG's flagship connector. One OAuth flow gives your AI
 
 | Service | Summary |
 |---------|---------|
-| [Gmail](/docs/gmail) | Search, read, send, reply, forward, draft with Drive files attached, save attachments, and manage labels |
-| [Calendar](/docs/calendar) | List, create, update, delete events, and check availability |
-| [Drive](/docs/drive) | Search files, read content, create folders, rename and copy files |
+| [Gmail](/docs/gmail) | Search, read messages and threads, send, reply, forward and draft with files attached, trash, report spam, and manage labels |
+| [Calendar](/docs/calendar) | List, create, update, and delete events. Check free/busy, suggest meeting times, answer invitations and list calendars |
+| [Drive](/docs/drive) | Search, read, upload, copy, move, rename, trash and share files, and create folders |
 | [Docs](/docs/docs) | Read, create, write, and batch update documents |
-| [Sheets](/docs/sheets) | Read, create, update, append, and delete spreadsheets, and manage tabs |
+| [Sheets](/docs/sheets) | Read, query, create, update, append and delete Google Sheets, find rows by value, and format a range into a readable table |
 | [Slides](/docs/slides) | Read, create, batch update, and delete presentations |
 | [Contacts](/docs/contacts) | Search, list, create, update, and delete contacts |
 | [Tasks](/docs/tasks) | Manage task lists, create, update, complete, delete tasks |
 
 ## Connecting
 
-Sign in at [datatorag.com/dashboard](https://datatorag.com/dashboard) and click Connect on the Google Workspace card. The OAuth flow requests all required scopes in one step.
+Sign in, open [Connections](https://datatorag.com/dashboard/connections) and click Connect on the Google Workspace card. The OAuth flow requests all required scopes in one step.
 
 You can connect multiple Google accounts, including personal, work and shared inboxes, and your AI agent can target a specific one or search across all of them.
 
@@ -70,3 +70,11 @@ Each service's page lists its operations, required scopes, and example prompts.
 The live count is on the [pricing page](/pricing), which reads it from the
 registry rather than restating it here, because a number written into a docs
 page is wrong the next time a tool ships.
+
+A read that Google refuses for too many requests at once is tried again inside the same call, up to three requests in all; a write is never retried. The [Gmail page](/docs/gmail) has the details.
+
+## When an id is not found
+
+A missing id is answered in words, not with Google's bare 404. The answer says what was not found and its id, which connected account was searched, why that usually happens (deleted, not shared with this account, or in another connected account) and which tool finds a current id, such as `gmail_search` or `drive_search`. It also says that the `account` argument reads from another connected account and that `list_connected_accounts` names them. Google's own code and reason follow, for debugging.
+
+Two mix-ups get their own answer, when Google itself confirms what the id is: a message id given to a thread tool names the thread it belongs to, and the id of one kind of Google file given to another's tools (a Doc id to a Sheets tool) says what it is and which tools open it. An id Gmail cannot read as an id at all says so and where a real one comes from.

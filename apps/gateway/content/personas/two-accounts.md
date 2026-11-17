@@ -31,7 +31,7 @@ faqs:
   - q: Does this give an agent access to someone else's mailbox?
     a: >-
       No, and it is worth being exact about this one. These are separately
-      connected accounts, each authorised by you personally. There is no delegated
+      connected accounts, each authorized by you personally. There is no delegated
       or shared mailbox access here, and nothing in these skills can read a
       mailbox you have not connected yourself.
 ---

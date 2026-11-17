@@ -35,10 +35,10 @@ The Calendar connector lets your AI agent manage your Google Calendar: viewing y
 
 | Tool | Description |
 |------|-------------|
-| `calendar_list_events` | List events in a date range, or search them with `query` (free-text, matches title, description, location and attendees, within the date range). Compact by default (plain-text descriptions cut at 500 characters unless you raise `max_description_chars`, attendee count + your response status, full roster on meetings of 10 or fewer, join links, recurring flag, attachments; `full: true` for the raw payload). A listing with more events than `max_results` carries a `nextPageToken`; pass it back as `page_token` to read the next page. For what changed since a time, `updated_min` keeps only events changed after it (Google refuses a time too far back), `show_deleted: true` includes cancelled events with `status: "cancelled"`, and `order_by: "updated"` orders by last change instead of start time |
+| `calendar_list_events` | List events in a date range, or search them with `query` (free-text, matches title, description, location and attendees, within the date range). Compact by default (plain-text descriptions cut at 500 characters unless you raise `max_description_chars`, attendee count + your response status, full roster on meetings of 10 or fewer, join links, recurring flag, attachments; `full: true` for the raw payload). A listing with more events than `max_results` carries a `nextPageToken`; pass it back as `page_token` to read the next page. For what changed since a time, `updated_min` keeps only events changed after it (Google refuses a time too far back), `show_deleted: true` includes canceled events with `status: "cancelled"`, and `order_by: "updated"` orders by last change instead of start time |
 | `calendar_get_event` | Get full details of a specific event, with the description converted to plain text (`full: true` keeps the original HTML) |
-| `calendar_create_event` | Create a new event with attendees, location, and description |
-| `calendar_update_event` | Update an existing event |
+| `calendar_create_event` | Create a new event with attendees, location and description. `add_meet: true` adds a Google Meet link; `calendar_id` picks a calendar other than your primary one; guests are emailed unless `send_updates` says otherwise |
+| `calendar_update_event` | Update an existing event. Only the fields you pass change; `attendees` replaces the whole guest list |
 | `calendar_delete_event` | Delete an event |
 | `calendar_freebusy` | Check free/busy status for one or more people in a time range |
 | `calendar_suggest_time` | Suggest free slots of a given length for you and the attendees you name, within a window of up to 31 days, inside working hours in one time zone (the primary calendar's unless you give one). Slots start on the quarter hour and weekends are left out unless `include_weekends` is true. The answer says whose calendars were checked and whose could not be |
@@ -48,6 +48,13 @@ The Calendar connector lets your AI agent manage your Google Calendar: viewing y
 ## Required scopes
 
 - `https://www.googleapis.com/auth/calendar`
+
+## Multiple accounts
+
+Every tool on this page takes an optional `account` argument: the email address
+of the connected Google account to act on. Omit it and the default account is
+used. Connect a personal and a work account and your agent can read from
+one and write to the other in the same turn, without you switching profiles.
 
 ## Example prompts
 

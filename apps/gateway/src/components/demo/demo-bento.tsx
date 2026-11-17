@@ -27,6 +27,7 @@
  * limit to name (Gmail) names none.
  */
 
+import { SLIDES_VERIFIED_ON, VERIFIED_ON } from "@/lib/connector-verification";
 import Link from "next/link";
 import { CircleCheckIcon, CircleMinusIcon } from "lucide-react";
 import { DemoWindow } from "./demo-section";
@@ -275,6 +276,19 @@ export function DemoBento({
           );
         })}
       </div>
+
+      {/* The rows that name Claude's built-in connectors are claims about
+          someone else's product, so they carry the date the comparison table
+          was checked on, read from the same constants, and point at that
+          table, on both surfaces this grid renders on. */}
+      <p className="mt-4 text-center text-xs text-muted-foreground">
+        Comparisons with Claude's built-in connectors as checked on{" "}
+        {VERIFIED_ON}, and Slides on {SLIDES_VERIFIED_ON}.{" "}
+        <a href="/#comparison" className="underline underline-offset-4 hover:text-foreground">
+          See the full table
+        </a>
+        .
+      </p>
 
       {/* The closing call to action, rendered here rather than by each caller
           so both surfaces get the same words and the same shape. It was

@@ -1,13 +1,15 @@
 ---
-title: "Your assistant can now run your Gmail drafts end to end"
+title: "Your agent can now run your Gmail drafts end to end"
 excerpt: "Two new tools complete the draft lifecycle, and Gmail reads got a compact mode that cuts a typical email to 2% of its former size."
 date: "2026-07-18"
+updated: "2026-11-17"
+updatedNote: "November 17, 2026: dropped 'threaded into the right conversation' from the first paragraph. gmail_create_draft takes no thread id, so a draft it writes is a standalone draft, not a reply inside the conversation."
 author: "Manuel Yang"
 category: "Product"
 tags: ["gmail", "mcp", "google-workspace", "product"]
 ---
 
-Back in April I wrote about [the Gmail draft workflow](/blog/ai-powered-email-workflows-gmail-draft-tool): your assistant writes a draft, it lands in your real Gmail drafts folder, threaded into the right conversation, and you revise it from there. That post ended with "hit send from Gmail. Done."
+Back in April I wrote about [the Gmail draft workflow](/blog/ai-powered-email-workflows-gmail-draft-tool): your agent writes a draft, it lands in your real Gmail drafts folder with the recipients and subject filled in, and you revise it from there. That post ended with "hit send from Gmail. Done."
 
 The hitting-send part was still you. As of today, it doesn't have to be.
 
@@ -27,7 +29,7 @@ The other half of this release is about tokens.
 
 `gmail_read` used to have exactly one mode: the full Gmail API response, raw MIME tree and all. Multipart boundaries, base64 chunks, forty-odd headers nobody asked about. Marketing emails are the worst case. One paragraph of actual text wrapped in a small novel of tracking-pixel HTML.
 
-The new `text_only` option returns what an assistant needs: flattened from/to/cc/subject/date, the decoded plain-text body (with a fallback to tag-stripped HTML when there's no text part), and attachment names and sizes instead of the raw MIME. On a typical marketing email, that's about 2% of the full response size. Not 2% smaller. 2% of the size.
+The new `text_only` option returns what an agent needs: flattened from/to/cc/subject/date, the decoded plain-text body (with a fallback to tag-stripped HTML when there's no text part), and attachment names and sizes instead of the raw MIME. On a typical marketing email, that's about 2% of the full response size. Not 2% smaller. 2% of the size.
 
 There's also `max_body_chars`, which truncates long bodies and marks where the cut happened. Setting it implies `text_only`, since capping a raw MIME payload mid-base64 wouldn't help anyone.
 
@@ -39,7 +41,7 @@ Search got the same treatment. `gmail_search` and `gmail_list` results are now f
 
 Flattening the search results surfaced something embarrassing. We were passing `metadataHeaders` to the Gmail API as one comma-joined string instead of an array of header names. The API read it as a single header called "From,To,Subject", which matches nothing. So search and list results have been missing From and Subject this entire time.
 
-Nobody reported it, and I think I know why: assistants quietly worked around it by calling `gmail_read` on each result to get the sender, which happened to also be the expensive pattern the flattened format now replaces. The bug hid inside the inefficiency.
+Nobody reported it, and I think I know why: agents quietly worked around it by calling `gmail_read` on each result to get the sender, which happened to also be the expensive pattern the flattened format now replaces. The bug hid inside the inefficiency.
 
 That one's on me. It shipped broken, and it stayed broken because the failure was silent. It's fixed now, and the flat result shape makes this class of miss visible immediately: if `from` came back empty on every row, you'd notice.
 

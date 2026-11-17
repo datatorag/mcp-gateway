@@ -1,6 +1,6 @@
 ---
 title: "Gmail"
-description: "Search, read, send, reply, forward, and draft emails with Drive files attached, and manage labels."
+description: "Search, read messages and whole threads, send, reply, forward and draft with files attached, trash, report spam, and manage labels."
 order: 1
 section: "connectors"
 connector: "google-workspace"
@@ -10,16 +10,16 @@ faqs:
       It sends. The Gmail tools cover sending a new message, replying to an
       existing thread and forwarding a message, alongside creating, updating,
       sending and deleting drafts. Sending, replying, forwarding, creating a
-      draft and updating one can attach files from Google Drive. Searching and reading use Gmail's own query syntax.
+      draft and updating one can attach files. Searching and reading use Gmail's own query syntax.
   - q: Can it attach files to an email?
     a: >-
-      Yes, from Google Drive. Sending, replying, forwarding, creating a draft and
-      updating one take a list of Drive file ids, up to 10 files and 25 MB per message. A
-      PDF, an image or any other file is attached as it is. A Google Doc, Sheet
-      or Slides deck goes in as a link in the body, the way Gmail sends one,
-      unless you ask for it as a file such as a PDF, a Word document or a
-      spreadsheet. Files have to be in Drive first; nothing is attached from
-      outside it.
+      Yes. Sending, replying, forwarding, creating a draft and updating one take
+      up to 10 files and 25 MB per message: Drive files by id, or a file
+      reference to another email, one of its attachments, a file your agent
+      holds or a file you upload. A PDF, an image or any other file is attached
+      as it is. A Google Doc, Sheet or Slides deck passed by id goes in as a
+      link in the body, the way Gmail sends one, unless you ask for it as a file
+      such as a PDF, a Word document or a spreadsheet.
   - q: Can an image show inside the email instead of at the bottom?
     a: >-
       Yes. Reference the Drive image in the HTML body as cid followed by its
@@ -69,7 +69,7 @@ faqs:
     a: >-
       Usually because of where it lives rather than whether it was added. A signed
       message goes out with a plain-text and an HTML version and the signature is
-      in the HTML version only, and Gmail's mobile apps fold a signature they recognise
+      in the HTML version only, and Gmail's mobile apps fold a signature they recognize
       behind the three-dot button, where it is still part of the message. Every
       send response also carries a signature field saying which happened: applied,
       none_set when the account has no signature in Gmail, suppressed when you
@@ -81,13 +81,13 @@ faqs:
     a: >-
       One Gmail scope, gmail.modify. That scope covers everything the Gmail
       tools do in your mailbox: searching, reading, sending, replying,
-      forwarding, drafting and managing labels. Attaching a Drive file or saving
+      forwarding, drafting, trashing, reporting spam and managing labels. Attaching a Drive file or saving
       an attachment to Drive also uses the Drive access you grant when you
       connect Google Workspace, and sending one tab of a Sheet as csv or tsv
       reads it through Sheets.
 ---
 
-The Gmail connector gives your AI agent full access to your inbox: searching, reading, composing, labeling, and organizing messages.
+The Gmail connector gives your AI agent full access to your inbox: searching, reading messages and whole threads, composing with files attached, labeling, trashing, reporting spam, and organizing messages.
 
 ![A gmail_send call with its to, subject and body arguments, and the message id, thread id and SENT label it returned](/docs/gmail-send.png)
 
@@ -105,12 +105,12 @@ The Gmail connector gives your AI agent full access to your inbox: searching, re
 | `gmail_create_draft` | Create a draft without sending, with Drive files in `attachments`. Your Gmail signature is added to the draft; `signature: false` leaves it out |
 | `gmail_update_draft` | Update an existing draft. This replaces the whole draft: files it held are dropped unless passed again in `attachments` |
 | `gmail_send_draft` | Send an existing draft. A draft that already carries the signature is sent unchanged; one without gets it, including a draft that holds files |
-| `gmail_delete_draft` | Delete a draft |
+| `gmail_delete_draft` | Delete a draft for good. It is removed at once, not moved to Trash |
 | `gmail_list_drafts` | List the drafts in the mailbox: each draft's ID, the ID of the message it holds and its thread, optionally narrowed with a Gmail search `query`. The draft ID feeds `gmail_update_draft`, `gmail_send_draft` and `gmail_delete_draft` |
 | `gmail_mark_read` | Mark messages as read, for a single message or a batch of up to 1,000 IDs. With no labels given it removes UNREAD; with `add_labels` or `remove_labels` given it applies exactly those and nothing else. For label changes beyond read state, use `gmail_label_message` |
 | `gmail_label_message` | Label many messages in one call: `message_ids` (up to 1,000) with `add_labels` and `remove_labels`, one `batchModify` request, a per-message outcome in the result; `message_id` for a single message; `thread_id` for every message of one conversation. Removing INBOX archives a message; removing UNREAD marks it read |
 | `gmail_create_label` | Create a label. Nested labels use `/` in the name (e.g., `Alerts/Invoices`). Returns the created label, including its ID. If a label with that name already exists, it returns that label with `existed: true` instead of an error |
-| `gmail_list_filters` | List the mailbox's Gmail filters with their criteria and actions. Read-only; useful for seeing why a message was archived or labelled before anyone read it |
+| `gmail_list_filters` | List the mailbox's Gmail filters with their criteria and actions. Read-only; useful for seeing why a message was archived or labeled before anyone read it. Filters cannot be created or deleted here; see "Not supported" |
 | `gmail_list_labels` | List every label, system and user-created, with its ID, name, and type. Label IDs feed `gmail_label_message`, `gmail_update_label`, and `gmail_delete_label` |
 | `gmail_update_label` | Rename a label or change its visibility. Takes the label ID, not the name. Renaming keeps the label on already-labeled messages |
 | `gmail_delete_label` | Delete a label by ID. The label is removed from every message carrying it; the messages themselves are not deleted. System labels (INBOX, UNREAD, SENT) cannot be deleted |
@@ -125,7 +125,7 @@ The Gmail connector gives your AI agent full access to your inbox: searching, re
 
 ## Attachments
 
-`gmail_send`, `gmail_reply`, `gmail_forward`, `gmail_create_draft` and `gmail_update_draft` take an `attachments` list of Drive files: at most 10 entries per call and 25 MB per message in total. Each entry is a Drive file id, or `{"file_id": "<id>", "as": "<format>"}` to send a Google Doc, Sheet or Slides deck as a file.
+`gmail_send`, `gmail_reply`, `gmail_forward`, `gmail_create_draft` and `gmail_update_draft` take an `attachments` list: at most 10 entries per call and 25 MB per message in total. Each entry is a Drive file id, `{"file_id": "<id>", "as": "<format>"}` to send a Google Doc, Sheet or Slides deck as a file, or a [file reference](/docs/file-references) to an email, an email attachment, a file your agent holds or a file you uploaded.
 
 - A PDF, an image, a zip or any other Drive file is attached as it is.
 - A Google Doc, Sheet or Slides deck passed by id alone goes in as a link in the body, in both the plain and HTML versions, the way Gmail sends one. Nothing changes who can open it; sharing is up to you.
@@ -146,9 +146,9 @@ The Gmail connector gives your AI agent full access to your inbox: searching, re
 
 **Refusals come first.** A folder, a format a file cannot take, an unknown tab, a missing or unshared id, two attachments with the same filename, or files whose sizes add up to more than 25 MB is refused before anything is downloaded or sent, and the refusal names the file. A Google Doc, Sheet or Slides deck exported with `as` has no size until Google renders it, so it is counted as it downloads; one that takes the total past 25 MB stops the message before it is sent, and nothing goes out.
 
-**The response says what happened.** Each entry is reported in an `attachments` field as `attached`, `inline`, `linked` or `exported`, with its size or link. A call with no attachments has no such field, except a forward that carried the original's files, which reports those.
+**The response says what happened.** Each entry is reported in an `attachments` field as `attached`, `inline`, `linked` or `exported`, with its size and SHA-256, or its link for a file sent as a link. A call with no attachments has no such field, except a forward that carried the original's files, which reports those.
 
-Files come from Drive only. To send something that is not in Drive yet, put it there first and pass its id.
+Files can come from Drive or from a file reference: another email, one of its attachments, a file your agent already holds, or a file you send through an upload link. See [Moving files between services](/docs/file-references).
 
 ## Who a reply goes to
 
@@ -184,7 +184,7 @@ Every send response carries a `signature` field:
 | `unavailable` | The signature could not be read; the message was sent unsigned |
 | `skipped_unsupported_draft` | The draft's format is one we send untouched rather than rewrite |
 
-Gmail's mobile apps fold a signature they recognise behind the three-dot button. The signature is still in the message.
+Gmail's mobile apps fold a signature they recognize behind the three-dot button. The signature is still in the message.
 
 ## When Google is busy
 
@@ -201,6 +201,14 @@ Attaching Drive files and saving attachments to Drive also use the Drive access 
 ## Not supported
 
 - Turning the vacation responder (out-of-office) on or off, or changing its message. That needs a Google scope DataToRAG does not request.
+- Creating or deleting Gmail filters. Filters can be listed with `gmail_list_filters`; changing them needs a Google scope DataToRAG does not request, so do that in Gmail's settings.
+
+## Multiple accounts
+
+Every tool on this page takes an optional `account` argument: the email address
+of the connected Google account to act on. Omit it and the default account is
+used. Connect a personal and a work account and your agent can read from
+one and write to the other in the same turn, without you switching profiles.
 
 ## Example prompts
 

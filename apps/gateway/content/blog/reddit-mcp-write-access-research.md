@@ -2,8 +2,8 @@
 title: "The Same Three Complaints Keep Showing Up in MCP Threads on Reddit"
 excerpt: "Before we built anything for write access, we read the threads. People complain about three things: connectors that won't change existing files, OAuth that eats DIY servers, and write access that sounds reckless. Here's each one, sourced, with what we did about it."
 date: "2026-07-30"
-updated: "2026-10-09"
-updatedNote: "October 9: Problem 1 said the Gmail connector's draft never sends, never replies in-thread and cannot be deleted. All three are out of date. The connector has sent, replied and forwarded since August 2026, and it deletes drafts. That sentence is rewritten; the Slides and Drive half of the paragraph still holds. Earlier, August 7: Anthropic's Gmail connector has since gained labelling, marking read, and archiving, so Problem 1 is rewritten around what the connector's tool list actually shows. The scope-based reasoning is gone from the post, and the method note now says why."
+updated: "2026-11-17"
+updatedNote: "November 17, 2026: two corrections. Spreadsheets did not have a connector of their own when this was written; since October 2026 Claude has Sheets and Docs connectors that edit in place (enumerated 15 October 2026), so that paragraph now says so. And the approval-gate paragraph said every write waits for approval; that is true of a turn in our hosted agent, but a skill you start yourself runs its writes without stopping, and from your own client the approval prompt is that client's. October 9: Problem 1 said the Gmail connector's draft never sends, never replies in-thread and cannot be deleted. All three are out of date. The connector has sent, replied and forwarded since August 2026, and it deletes drafts. That sentence is rewritten; the Slides and Drive half of the paragraph still holds. Earlier, August 7: Anthropic's Gmail connector has since gained labelling, marking read, and archiving, so Problem 1 is rewritten around what the connector's tool list actually shows. The scope-based reasoning is gone from the post, and the method note now says why."
 author: "Manuel Yang"
 category: "Research"
 coverImage: "/blog/reddit-mcp-write-access-cover.png"
@@ -28,9 +28,9 @@ The second half of that quote is out of date, and it's worth saying so plainly: 
 
 Gmail and Drive are a different story, and the precise line matters: both connectors can create new things. The Gmail connector drafts emails into your Drafts folder, and the Drive connector can create new files, including a real Slides presentation at a real URL. Where Drive stops is one verb past that. Gmail no longer stops there: when this post was written the connector that wrote a draft had no send tool, no reply tool and no way to delete the draft, and it has since gained all three, so that half of the complaint is closed. The Slides deck still arrives with one blank slide and no way to put anything on it. Drive still won't change what is inside the file you already have.
 
-Gmail labels now, and that's worth flagging because this post said otherwise in July. Anthropic added the labelling tools since, which also means marking read and archiving. [The Gmail comparison](/blog/claude-gmail-connector-vs-datatorag-send-reply) carries the current table and the date we last enumerated the surface.
+Gmail labels now, and that's worth flagging because this post said otherwise in July. Anthropic added the labeling tools since, which also means marking read and archiving. [The Gmail comparison](/blog/claude-gmail-connector-vs-datatorag-send-reply) carries the current table and the date we last enumerated the surface.
 
-Spreadsheets have no connector of their own; they come through Drive. In ["When will we get a google sheets MCP?"](https://www.reddit.com/r/ClaudeAI/comments/1sha5th/when_will_we_get_a_google_sheets_mcp/), a commenter pasted the answer Claude itself had given them:
+When this post was written, spreadsheets had no connector of their own and came through Drive. Since October 2026 Claude has Sheets and Docs connectors that edit in place; what they still lack is a filtered query and two accounts in one request. In ["When will we get a google sheets MCP?"](https://www.reddit.com/r/ClaudeAI/comments/1sha5th/when_will_we_get_a_google_sheets_mcp/), a commenter pasted the answer Claude itself had given them:
 
 > "The Drive connector you have only does file-level stuff (read, copy, metadata), so anything cell-level falls back to Apps Script or the Sheets API, which is why it spirals."
 
@@ -70,7 +70,7 @@ Our answer has three parts, and none of them is "trust the model."
 
 First, there is no shell. The gateway exposes named tools against specific APIs. Nothing executes code: no `run_command`, no eval, no arbitrary code path for a prompt injection to reach.
 
-Second, every write goes through an approval gate. Before `gmail_send` or `sheets_update` or any other mutating tool executes, you see what's about to happen and you click approve or deny. Reads flow; writes wait.
+Second, in our hosted agent every write goes through an approval gate. Before `gmail_send` or `sheets_update` or any other mutating tool executes, you see what's about to happen and you click approve or deny. Reads flow; writes wait. A skill you start yourself runs its writes without stopping, since starting it is the approval, and from your own client the approval prompt is that client's.
 
 Third, and this is the part I'm most proud of as of late July 2026: the gate fails closed. A tool the classifier doesn't positively recognize as a read is treated as a write and prompts for approval. A new tool with a verb nobody anticipated can't slip past silently. The unknown defaults to "ask."
 

@@ -1,6 +1,7 @@
 import type { ContentFaq } from "./content-collection";
 import { planLimits } from "@/gateway/billing/plans";
 import { SLIDES_VERIFIED_ON, VERIFIED_ON } from "./connector-verification";
+import { PUBLIC_CLIENTS_TEXT, PUBLIC_CONNECTORS_TEXT, PUBLIC_SERVICES_TEXT } from "./public-integrations";
 
 /** Numbers and dates are IMPORTED, never retyped.
  *
@@ -79,11 +80,11 @@ export const SITE_FAQ_PAGES: SiteFaqPage[] = [
         faqs: [
           {
             q: "What is DataToRAG?",
-            a: "One hosted MCP server that connects Claude and other AI clients to your Google Workspace and Atlassian tools, with the write actions the native connectors stopped short of when we last checked their tool lists on October 9, 2026. You connect your accounts once, paste one URL into your client, and your AI can read and change things in Gmail, Drive, Docs, Sheets, Slides, Calendar, Contacts, Tasks, Jira and Confluence, with your approval on every write. [Getting started](/docs/getting-started) has the two minute version.",
+            a: `One hosted MCP server that connects Claude and other AI clients to your ${PUBLIC_CONNECTORS_TEXT} tools, with the write actions the native connectors stopped short of when we last checked their tool lists on ${VERIFIED_ON}. You connect your accounts once, paste one URL into your client, and your agent can read and change things in ${PUBLIC_SERVICES_TEXT}, with your approval on every write. [Getting started](/docs/getting-started) has the two minute version.`,
           },
           {
             q: "How do I set it up?",
-            a: "Three steps, and the order matters. First sign up and connect at least one Google account. Then copy your MCP config from the dashboard. Then paste it into your client. If you copy the config before connecting an account, the config has nothing to authenticate against and your client will connect to an empty account, so connect first. The [setup guide](/docs/getting-started) walks you through it.",
+            a: "Two steps, in either order. Add the DataToRAG URL to your client and sign in when it asks. Connect the accounts you want it to use, on the Connections page in the dashboard or by asking your agent to connect one, which answers with a link. Your agent needs at least one connected account before its first call does anything. The [setup guide](/docs/getting-started) walks you through it.",
           },
           {
             q: "Which AI clients work with it?",
@@ -100,7 +101,7 @@ export const SITE_FAQ_PAGES: SiteFaqPage[] = [
         faqs: [
           {
             q: "What can it actually do?",
-            a: "Read and search across your connected services, and change things: [send and reply to email](/docs/gmail), [edit cells in an existing spreadsheet](/docs/sheets), [restructure a doc in place](/docs/docs), [build slides onto a deck](/docs/slides), [create and update calendar events](/docs/calendar), manage [contacts](/docs/contacts) and [tasks](/docs/tasks), [file and update Jira issues](/docs/jira), and [edit Confluence pages](/docs/confluence). Every change goes through an approval step, so you see what is about to happen before it does. The hub pages list every action: [Google Workspace](/docs/google-workspace) and [Atlassian](/docs/atlassian).",
+            a: "Read and search across your connected services, and change things: [send and reply to email](/docs/gmail), [edit cells in an existing spreadsheet](/docs/sheets), [restructure a doc in place](/docs/docs), [build slides onto a deck](/docs/slides), [create and update calendar events](/docs/calendar), manage [contacts](/docs/contacts) and [tasks](/docs/tasks), [file and update Jira issues](/docs/jira), [edit Confluence pages](/docs/confluence), and [write Notion pages and database rows](/docs/notion). Every change goes through an approval step, so you see what is about to happen before it does. The hub pages list every action: [Google Workspace](/docs/google-workspace), [Atlassian](/docs/atlassian) and [Notion](/docs/notion).",
           },
           {
             q: "Claude already connects to Gmail, Calendar and Drive. Why would I need this?",
@@ -110,7 +111,7 @@ export const SITE_FAQ_PAGES: SiteFaqPage[] = [
             // blog post had been rewritten to say so. The Gmail post IS linked,
             // and it is the strongest link in the set: it is the one that
             // carries the correction, title and all.
-            a: "For reading, you often don't, and mail is nearly settled: the native Gmail connector sends, replies and forwards, which it gained in August 2026 and we re-checked on October 9, 2026. What is left in mail is small and worth naming rather than inflating: it cannot file an attachment into Drive. Docs and Sheets have their own connectors since October 2026, in beta, and they edit a file you already have (enumerated 15 October 2026). Slides, as of the October 9 check, gets as far as an empty deck: nothing native could put a slide or a word into it. It also works one Google account at a time, where connecting a work and a personal account here is one endpoint and one prompt. Native Calendar is genuinely strong, with full create, update and delete, and if calendars on one account are your whole job the native connector is the answer. We publish claim by claim comparisons and re-test them when the connectors change, including when the change goes against us: [we said Claude could not send email, and it can](/blog/claude-gmail-connector-vs-datatorag-send-reply), plus [Drive and Docs](/blog/claude-google-drive-vs-datatorag-editing), [Calendar](/blog/claude-google-calendar-vs-datatorag-multi-account), and [the full map of your options](/blog/claude-google-workspace-mcp-alternatives).",
+            a: `For reading, you often don't, and mail is nearly settled: the native Gmail connector sends, replies and forwards, which it gained in August 2026 and we re-checked on ${VERIFIED_ON}. What is left in mail is small and worth naming rather than inflating: it cannot file an attachment into Drive. Docs and Sheets have their own connectors since October 2026, in beta, and they edit a file you already have (enumerated ${VERIFIED_ON}). Slides, as of the ${SLIDES_VERIFIED_ON} check, gets as far as an empty deck: nothing native could put a slide or a word into it. It also works one Google account at a time, where connecting a work and a personal account here is one endpoint and one prompt. Native Calendar is genuinely strong, with full create, update and delete, and if calendars on one account are your whole job the native connector is the answer. We publish claim by claim comparisons and re-test them when the connectors change, including when the change goes against us: [we said Claude could not send email, and it can](/blog/claude-gmail-connector-vs-datatorag-send-reply), plus [Drive and Docs](/blog/claude-google-drive-vs-datatorag-editing), [Calendar](/blog/claude-google-calendar-vs-datatorag-multi-account), and [the full map of your options](/blog/claude-google-workspace-mcp-alternatives).`,
           },
           {
             q: "Can it work across multiple accounts?",
@@ -180,11 +181,11 @@ export const SITE_FAQ_PAGES: SiteFaqPage[] = [
           },
           {
             q: "Which AI clients can connect to it?",
-            a: "Any client that speaks MCP. Claude Desktop, Cursor, Windsurf and your own application all connect the same way, with one URL covering every service you have connected and OAuth sign-in handling the rest. The gateway is hosted, so the same connection works from another machine without setting anything up again.",
+            a: `Any client that speaks MCP. ${PUBLIC_CLIENTS_TEXT} have step-by-step setup in the dashboard, and any other MCP client, your own application included, connects the same way, with one URL covering every service you have connected and OAuth sign-in handling the rest. The gateway is hosted, so the same connection works from another machine without setting anything up again.`,
           },
           {
             q: "What does DataToRAG connect to?",
-            a: "Google Workspace and Atlassian. Gmail, Drive, Docs, Sheets, Slides, Calendar, Contacts and Tasks, plus Jira and Confluence, all behind one endpoint: connect once and every tool is available to your agent rather than one integration at a time. The [docs](/docs) list every action per service.",
+            a: `${PUBLIC_CONNECTORS_TEXT}. ${PUBLIC_SERVICES_TEXT}, all behind one endpoint: connect once and every tool is available to your agent rather than one integration at a time. The [docs](/docs) list every action per service.`,
           },
           {
             q: "Can you add a service that is not listed?",
@@ -192,7 +193,7 @@ export const SITE_FAQ_PAGES: SiteFaqPage[] = [
           },
           {
             q: "What stops it doing something I did not want?",
-            a: "An approval step in front of every write. Reads flow, and anything that changes your data is shown to you and waits. The gate fails closed, so a tool DataToRAG does not positively recognise as a read is treated as a write and asks first, and there is no shell or arbitrary code execution anywhere in the gateway for a prompt injection to reach.",
+            a: "An approval step in front of every write. Reads flow, and anything that changes your data is shown to you and waits. The gate fails closed, so a tool DataToRAG does not positively recognize as a read is treated as a write and asks first, and there is no shell or arbitrary code execution anywhere in the gateway for a prompt injection to reach.",
           },
           {
             q: "Is it safe to connect a hosted gateway to my Google account?",
@@ -222,7 +223,7 @@ export const SITE_FAQ_PAGES: SiteFaqPage[] = [
           },
           {
             q: "I pay for Pro, so why are my calls counting on the free plan?",
-            a: "You most likely have two DataToRAG accounts. DataToRAG makes one account per sign-in email, and each AI app asks you to sign in to DataToRAG once, when you add the connector. Pick a different Google login in one app and that app is on a second account, usually a free one, and its calls count there. Nothing errors until the free limit. To fix it, remove the DataToRAG connector in that app, add it back, and sign in with the email that holds your plan. Do not disconnect the Google account under the other login to tidy up, because that can break it under the login you keep. The [Usage docs](/docs/usage) have the steps for each app.",
+            a: "You most likely have two DataToRAG accounts. DataToRAG makes one account per sign-in email, and each AI app asks you to sign in to DataToRAG once, when you add the connector. Pick a different Google login in one app and that app is on a second account, usually a free one, and its calls count there. Nothing errors until the free limit. To fix it, remove the DataToRAG connector in that app, add it back, and sign in with the email that holds your plan. Disconnecting the Google account under the other login removes it only for that login, so the one you keep is not affected. The [Usage docs](/docs/usage) have the steps for each app.",
           },
           {
             q: "Is any connector or feature behind the paid tier?",
@@ -252,15 +253,15 @@ export const SITE_FAQ_PAGES: SiteFaqPage[] = [
           },
           {
             q: "Which Google products does the one endpoint cover?",
-            a: "Gmail, Drive, Sheets, Docs, Slides, Calendar, Contacts and Tasks, with Jira and Confluence on the same endpoint. The gap worth naming is Google Chat: DataToRAG has no Chat tools, and Google has an official Chat MCP if that is the job.",
+            a: "Gmail, Drive, Sheets, Docs, Slides, Calendar, Contacts and Tasks, with Jira, Confluence and Notion on the same endpoint. The gap worth naming is Google Chat: DataToRAG has no Chat tools, and Google has an official Chat MCP if that is the job.",
           },
           {
             q: "Can it change a file, or only create new ones?",
-            a: "Change them. On 24 August 2026 changing a cell, writing into an existing doc and putting content onto slides were where the built-in connectors stopped. Since October 2026 Claude's own Docs and Sheets connectors, in beta, do the first two (enumerated 15 October 2026); slides, as of the 9 October 2026 check, still arrived empty. What stays ours is the work across services and accounts: an email's attachment onto a Jira issue or into Drive, two Google accounts in one request, and a query over a sheet.",
+            a: `Change them. On 24 August 2026 changing a cell, writing into an existing doc and putting content onto slides were where the built-in connectors stopped. Since October 2026 Claude's own Docs and Sheets connectors, in beta, do the first two (enumerated ${VERIFIED_ON}); slides, as of the ${SLIDES_VERIFIED_ON} check, still arrived empty. What stays ours is the work across services and accounts: an email's attachment onto a Jira issue or into Drive, two Google accounts in one request, and a query over a sheet.`,
           },
           {
             q: "When are Claude's native connectors the better answer?",
-            a: "When calendars or file management are the whole job. The native connectors cover both better than DataToRAG does and they are free, and their Google surface is Gmail, Calendar and Drive, and since October 2026 Docs and Sheets connectors in beta (enumerated 15 October 2026), with no Contacts or Tasks connector and one Google account at a time.",
+            a: `When calendars or file management are the whole job. The native connectors cover both better than DataToRAG does and they are free, and their Google surface is Gmail, Calendar and Drive, and since October 2026 Docs and Sheets connectors in beta (enumerated ${VERIFIED_ON}), with no Contacts or Tasks connector and one Google account at a time.`,
           },
           {
             q: "What if having a third party in the path is not acceptable?",

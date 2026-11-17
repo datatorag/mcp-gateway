@@ -14,7 +14,7 @@ faqs:
   - q: Why do agents struggle with the spreadsheet we run on?
     a: >-
       Because a spreadsheet is a human interface. Merged headers arrive as
-      repeated text with no indication of which columns they spanned, a colour
+      repeated text with no indication of which columns they spanned, a color
       means nothing, and a formula reads back as its result, so an agent reading
       one is doing document archaeology. Most attempts at this fail there rather
       than on the model.
@@ -45,7 +45,7 @@ the place the answer actually lives, which is fine right up until you want
 something else to read it.
 
 A spreadsheet is a human interface. An agent reading one is doing document
-archaeology: merged headers arrive as repeated text, a colour means nothing,
+archaeology: merged headers arrive as repeated text, a color means nothing,
 and a formula reads back as its result. Most "let the AI read our
 spreadsheet" attempts fail on that and not on the model.
 

@@ -76,7 +76,7 @@ const ROUTES = [
     name: "This gateway",
     setup: "One URL, one Google sign-in",
     covers:
-      "Gmail, Drive, Sheets, Docs, Slides, Calendar, Contacts, Tasks, plus Jira and Confluence on the same endpoint.",
+      "Gmail, Drive, Sheets, Docs, Slides, Calendar, Contacts, Tasks, plus Jira, Confluence and Notion on the same endpoint.",
     gap: "We are a third party in the path. No Google Chat tools. Self-host if that trade is wrong for you.",
   },
 ];

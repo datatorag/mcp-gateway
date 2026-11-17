@@ -2,14 +2,14 @@
 title: "Zapier MCP Connects 9,000 Apps. We Went Deep on Google Workspace Instead."
 excerpt: "Zapier MCP is the widest way to hand Claude tools. Its Google Workspace actions stay shallow, though. Here's the tradeoff, and where a focused gateway wins."
 date: "2026-06-29"
-updated: "2026-08-27"
-updatedNote: "August 27, 2026: narrowed an overbroad privacy claim. The pass-through statement said we do not store your data, unqualified. The gateway keeps nothing, but the hosted agent on our own site stores its conversation threads. The privacy policy is now linked from the paragraph."
+updated: "2026-11-17"
+updatedNote: "November 17, 2026: the cost section said DataToRAG has no per-call meter, and its chart said the same. Hosted DataToRAG counts tool calls against your plan, so the chart is replaced with the numbers. The comparison table now includes Notion, connected since October 2026, and says the self-hosted route is open source without a packaged guide. August 27, 2026: narrowed an overbroad privacy claim. The pass-through statement said we do not store your data, unqualified. The gateway keeps nothing, but the hosted agent on our own site stores its conversation threads. The privacy policy is now linked from the paragraph."
 author: "Manuel Yang"
 category: "Comparison"
 tags: ["zapier", "mcp", "comparison", "google-workspace", "alternative"]
 ---
 
-The pitch for Zapier MCP is hard to argue with. One connection, and your AI assistant can touch nine thousand apps. Gmail, Slack, Notion, Salesforce, some CRM you forgot you signed up for in 2019. It's the widest set of tools you can hand Claude in about five minutes, and it works across Claude, ChatGPT, Cursor, and the rest.
+The pitch for Zapier MCP is hard to argue with. One connection, and your agent can touch nine thousand apps. Gmail, Slack, Notion, Salesforce, some CRM you forgot you signed up for in 2019. It's the widest set of tools you can hand Claude in about five minutes, and it works across Claude, ChatGPT, Cursor, and the rest.
 
 So I tried to do real work with it, on Google Workspace, which is where my actual day happens. I asked Claude to take a messy meeting-notes doc, restructure it into proper sections with headings, and then build a short slide deck from the summary. That's where it hit a ceiling, pretty fast. Claude could append a paragraph to the bottom of the doc. It could run a find-and-replace. It couldn't restructure the document the way you'd actually edit one, and the deck wasn't happening at all.
 
@@ -29,7 +29,7 @@ There are coverage gaps too. Gmail, Docs, Sheets, Drive, and Calendar have genui
 
 | Capability | Zapier MCP | DataToRAG |
 |---|---|---|
-| Total apps reachable | 9,000+ | Google Workspace + Atlassian |
+| Total apps reachable | 9,000+ | Google Workspace, Atlassian and Notion |
 | Gmail: send / reply / forward | Yes | Yes |
 | Docs: structural editing (batch update) | No (append, find-and-replace only) | Yes |
 | Sheets: read / update / append | Yes (row-level) | Yes (cell and range) |
@@ -39,7 +39,7 @@ There are coverage gaps too. Gmail, Docs, Sheets, Drive, and Calendar have genui
 | Multi-account in one prompt | Not documented | Yes |
 | Atlassian (Jira + Confluence) | Via separate Zaps | Same endpoint |
 | Token-optimized responses | No | Yes |
-| Self-host / open source | No (cloud-only, closed) | Yes (MIT) |
+| Self-host / open source | No (cloud-only, closed) | Source open (MIT); no packaged self-host guide |
 
 ## What DataToRAG's Google tools add
 
@@ -89,7 +89,7 @@ There's a quieter difference worth naming. Every successful Zapier MCP call spen
 
 DataToRAG passes requests straight through to Google on your behalf, and the gateway keeps nothing on the way. One caveat, because the unqualified version of this line was too broad: if you use the **hosted agent** on our own site, that conversation is stored so the thread persists, and whatever the agent quoted into it is stored with it. Connect your own client straight to the gateway and that does not apply. The [privacy policy](/privacy) states what is kept and for how long. The economics are different because the architecture is different.
 
-![A 10-call task two ways: Zapier MCP draws down a shared plan task budget on every call, while DataToRAG passes each call straight through to Google with no per-call meter](/blog/zapier-task-cost-vs-passthrough.png)
+Hosted DataToRAG does count tool calls against your plan. As of November 2026 that is 250 calls a month on Free and 10,000 on Pro at $20 a month, counted per call and not shared with any other automations. The [pricing page](/pricing) has the current numbers.
 
 ## If you live in two Google accounts
 

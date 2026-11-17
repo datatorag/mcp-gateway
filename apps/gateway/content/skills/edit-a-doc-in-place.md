@@ -55,7 +55,7 @@ description: Make targeted edits inside an existing Google Doc
 - `full` is the raw API response, for debugging.
 
 The body starts at index 1, not 0. Each run's text includes its trailing
-newline, and one run's `endIndex` is the next run's `startIndex` — the
+newline, and one run's `endIndex` is the next run's `startIndex`: the
 positions are a continuous ribbon, not per-paragraph offsets.
 
 ## Make the edit
@@ -87,7 +87,7 @@ So:
 ## When not to use positions at all
 
 If you are replacing every occurrence of a fixed string, `replaceAllText`
-does it without positions and cannot drift. Use it for renames — a term, a
+does it without positions and cannot drift. Use it for renames: a term, a
 product name, a date. Use positional edits when the change depends on where
 it is.
 
@@ -111,6 +111,6 @@ the reliable shape for "change this sentence."
 
 **The drift is the thing that bites.** After replacing a 28-character
 sentence with a 59-character one, every position later in the document had
-moved by 31. Nothing errors — a second edit using the first read's positions
+moved by 31. Nothing errors: a second edit using the first read's positions
 would land in the wrong place and report success. Re-reading between edits is
 not caution, it is the only way the second edit is correct.

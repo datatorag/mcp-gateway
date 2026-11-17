@@ -112,7 +112,7 @@ export const GROUPS: Group[] = [
       { capability: "Format cells and tables", short: "format", builtIn: true, ours: true },
       { capability: "Two Google accounts in one request", builtIn: false, ours: true, emphasis: true },
     ],
-    note: "Google Sheets has its own connector since October 2026, in beta on claude.ai, on the Sheets API: values in and out, formulas, clearing, inserting rows and columns, and the full batch update for tabs, formatting and charts. It reads one range per call and has no query language. Enumerated 15 October 2026.",
+    note: `Google Sheets has its own connector since October 2026, in beta on claude.ai, on the Sheets API: values in and out, formulas, clearing, inserting rows and columns, and the full batch update for tabs, formatting and charts. It reads one range per call and has no query language. Enumerated ${VERIFIED_ON}.`,
   },
   {
     service: "Google Docs",
@@ -126,7 +126,7 @@ export const GROUPS: Group[] = [
       // trash. Ours deletes. Either way the doc is gone from where it was.
       { capability: "Delete or trash a doc", builtIn: true, ours: true },
     ],
-    note: "Google Docs has its own connector since October 2026, in beta on claude.ai: one read and one batch update that inserts, deletes, replaces, styles, and can write as tracked suggestions. Enumerated 15 October 2026.",
+    note: `Google Docs has its own connector since October 2026, in beta on claude.ai: one read and one batch update that inserts, deletes, replaces, styles, and can write as tracked suggestions. Enumerated ${VERIFIED_ON}.`,
   },
   {
     service: "Google Slides",
@@ -135,7 +135,7 @@ export const GROUPS: Group[] = [
       { capability: "Put content in it", builtIn: false, ours: true, emphasis: true },
       { capability: "Read an existing deck", short: "read a deck", builtIn: true, ours: true },
     ],
-    note: `The built-in connector does make a real Google Slides deck. It just arrives with one blank slide, an empty title and an empty subtitle, because a Google-native deck with content is refused. You get the container and you fill it in yourself. The connector will convert a .pptx you upload, if you have the file. Anthropic announced a Slides editing connector in beta on 6 October 2026, alongside the Docs and Sheets ones. We had not enumerated it by 15 October 2026, so these rows are as we verified them on ${SLIDES_VERIFIED_ON}. We will re-test and correct this when we have.`,
+    note: `The built-in connector does make a real Google Slides deck. It just arrives with one blank slide, an empty title and an empty subtitle, because a Google-native deck with content is refused. You get the container and you fill it in yourself. The connector will convert a .pptx you upload, if you have the file. Anthropic announced a Slides editing connector in beta on 6 October 2026, alongside the Docs and Sheets ones. We had not enumerated it by ${VERIFIED_ON}, so these rows are as we verified them on ${SLIDES_VERIFIED_ON}. We will re-test and correct this when we have.`,
   },
   {
     service: "Gmail",
@@ -170,7 +170,7 @@ export const GROUPS: Group[] = [
       // to disk.
       { capability: "Save an email or an attachment to your computer", builtIn: false, ours: true },
     ],
-    note: "The built-in connector sends, replies and forwards. It gained those verbs in August 2026, and this table claimed otherwise until 18 September 2026: if you read the older version of this row anywhere, including here, it was wrong. It also deletes a draft, which this table denied until 9 October 2026. Both connectors now label a whole thread in one call, move a message or a whole thread to the trash and back, and mark a message as spam and take it back out. And it gained full label management earlier in 2026, so it can label, star, mark read and archive. Its tool list, enumerated 15 October 2026, has no download to disk. What is left on our side is saving an email or an attachment straight to Drive or to your computer.",
+    note: `The built-in connector sends, replies and forwards. It gained those verbs in August 2026, and this table claimed otherwise until 18 September 2026: if you read the older version of this row anywhere, including here, it was wrong. It also deletes a draft, which this table denied until 9 October 2026. Both connectors now label a whole thread in one call, move a message or a whole thread to the trash and back, and mark a message as spam and take it back out. And it gained full label management earlier in 2026, so it can label, star, mark read and archive. Its tool list, enumerated ${VERIFIED_ON}, has no download to disk. What is left on our side is saving an email or an attachment straight to Drive or to your computer.`,
   },
   {
     service: "Google Calendar",
@@ -194,7 +194,7 @@ export const GROUPS: Group[] = [
       { capability: "Free/busy lookup", builtIn: false, ours: true },
     ],
     note: [
-      "On a single account, the built-in connector still creates richer events: recurring events, room booking, attachments, and custom reminders, where ours creates plain events. Both of us answer invitations, suggest meeting times and list the other calendars on the account.",
+      `On a single account, the built-in connector still creates richer events: recurring events, room booking, attachments, and custom reminders, where ours creates plain events. Both of us answer invitations, suggest meeting times and list the other calendars on the account. Enumerated ${VERIFIED_ON}.`,
       "What we add is span: both your calendars reachable in one request, without either account having to share anything with the other. Free/busy runs one lookup per account and the agent combines them.",
       "One honest caveat: the built-in connector sees every calendar the connected account can see. If you already share your personal calendar with your work account, that covers the cross-account case for you. Our advantage is for calendars you'd rather not share.",
     ],
@@ -262,7 +262,7 @@ export const GROUPS: Group[] = [
         emphasis: true,
       },
     ],
-    note: "The built-in connectors handle one Google account. If you live in a work inbox and a personal one, you disconnect and reconnect to switch. Every DataToRAG tool takes an account, so checking both inboxes is one request.",
+    note: `The built-in connectors handle one Google account, as enumerated ${VERIFIED_ON}. If you live in a work inbox and a personal one, you disconnect and reconnect to switch. Every DataToRAG tool takes an account, so checking both inboxes is one request.`,
   },
 ];
 

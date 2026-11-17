@@ -139,7 +139,12 @@ describe("the surfaces that repeat the table agree with it", () => {
     expect(description, "HOME_DESCRIPTION not found").toBeDefined();
     expect(row("Rename a file").builtIn).toBe(true);
     expect(description).not.toMatch(/can't|cannot|can not|read-only|unable/i);
-    expect(description).toMatch(/DataToRAG edits them in place/);
+    // Since the built-in Docs and Sheets connectors edit in place too, the
+    // sentence says what is ours (every account, any client, approval on each
+    // write) and names no built-in connector at all.
+    expect(description).not.toMatch(/Claude's/);
+    expect(description).toMatch(/every account you connect/);
+    expect(description).toMatch(/Every write asks you first/);
     // Search results cut around here.
     expect(description!.length).toBeLessThanOrEqual(160);
   });

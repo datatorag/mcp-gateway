@@ -77,7 +77,7 @@ the bold ends mid-word, and nothing reports it.
 **If a range was wrong, clear it and reapply.** Setting only the correct range leaves any
 overshoot still styled.
 
-## 4. Fonts and colours, if you set them
+## 4. Fonts and colors, if you set them
 
 Set the document-wide font FIRST, then re-apply every bold range AFTER it, setting both
 properties together:
@@ -86,7 +86,7 @@ properties together:
 `fields: "bold,weightedFontFamily"`.
 
 `weightedFontFamily` carries a weight, so applying a body font at weight 400 across the whole
-document removes every bold run already in it. Colours are `rgbColor` values from 0 to 1, not
+document removes every bold run already in it. Colors are `rgbColor` values from 0 to 1, not
 hex: divide each channel by 255.
 
 ## 5. Check it
@@ -139,4 +139,4 @@ what you meant. Reading it back is the only check that can fail.
 ## Change it
 
 Change the heading levels and the list style to your house style, and set your own fonts and
-colours in step 4. Keep the order: all the text, one read, one styling batch.
+colors in step 4. Keep the order: all the text, one read, one styling batch.

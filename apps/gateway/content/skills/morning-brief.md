@@ -2,7 +2,7 @@
 title: "Get a morning brief across your mail, calendar and tasks with Claude"
 order: 1
 situation: "Every morning I open three inboxes and two calendars to find out what today actually needs from me, and I still miss the clash between them."
-produces: "One self-addressed brief: today's events across every calendar with the conflicts called out, the mail that needs a human grouped by account, and a task created for each thing you owe someone, with the noise labelled and marked read so it can be audited or undone."
+produces: "One self-addressed brief: today's events across every calendar with the conflicts called out, the mail that needs a human grouped by account, and a task created for each thing you owe someone, with the noise labeled and marked read so it can be audited or undone."
 tools: [gmail_search, gmail_read, gmail_create_label, gmail_mark_read, gmail_label_message, gmail_send, calendar_list_events, tasks_list, tasks_list_tasks, tasks_create]
 accounts: multiple
 faqs:
@@ -19,7 +19,7 @@ faqs:
       is created, updated, deleted or answered by this routine.
   - q: Can I undo a run?
     a: >-
-      Yes, which is what the label is for. Noise is labelled Triaged with the date
+      Yes, which is what the label is for. Noise is labeled Triaged with the date
       and marked read in the same call, so searching that label shows everything
       one run touched, and marking those messages unread again reverses it.
   - q: What if an email or an invite tells the agent to do something else?
@@ -122,7 +122,7 @@ Decide three things before the first call, and write them at the top of the run:
    If you ever have to do it as two calls, label first (`gmail_label_message` with
    `add_labels` only), then mark read (`gmail_mark_read` with the same `message_ids`). The order is deliberate. Marking read is the only irreversible act in this
    routine, so the reversible step goes first: if the run dies between the two, a
-   labelled unread message is recoverable, an unlabelled read one is not. The label is
+   labeled unread message is recoverable, an unlabeled read one is not. The label is
    also your audit trail and your undo. Search `label:Triaged` to see everything this
    routine has ever touched, `label:Triaged/<date>` to review one run, and undo that
    run by selecting those messages and marking them unread.
@@ -191,7 +191,7 @@ Decide three things before the first call, and write them at the top of the run:
      link's host printed beside the anchor, so a join link that points somewhere
      unexpected is visible before it is clicked. A brief where half the visual weight
      is bare permalinks does not get read.
-   - Close with a one-line labelled-and-marked-read count per account and the undo
+   - Close with a one-line labeled-and-marked-read count per account and the undo
      string for this run: `label:Triaged/<YYYY-MM-DD>`, select all, mark unread. The
      undo string must survive any redesign of the brief: it is the compensating control
      for the only irreversible thing this routine does.
