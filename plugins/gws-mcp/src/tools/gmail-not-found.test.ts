@@ -133,4 +133,48 @@ describe("a Gmail id Gmail cannot find (SCRUM-493)", () => {
     expect(text).toMatch(/^Error: /);
     expect(text).not.toContain("Gmail has no");
   });
+
+  // Gmail refuses a string that is not in its id format with a 400 before
+  // looking anything up (recorded live: "Invalid id value", invalidArgument).
+  const INVALID_ID = () =>
+    json(
+      {
+        error: {
+          code: 400,
+          message: "Invalid id value",
+          errors: [{ message: "Invalid id value", domain: "global", reason: "invalidArgument" }],
+          status: "INVALID_ARGUMENT",
+        },
+      },
+      400
+    );
+
+  it.each([
+    ["gmail_read", { message_id: "fffffffffffffff0" }, "message", "gmail_search, gmail_list or gmail_read"],
+    ["gmail_read_thread", { thread_id: "zzzz" }, "thread", "threadId"],
+    ["gmail_delete_draft", { draft_id: "not-a-draft" }, "draft", "gmail_list_drafts"],
+  ] as const)("%s with an id Gmail cannot read says so, and where a real one comes from", async (tool, args, kind, source) => {
+    const sent = gmail(() => INVALID_ID());
+    const id = Object.values(args)[0];
+    const res = await call(tool, args);
+    const text = res.content[0].text;
+    expect(res.isError).toBe(true);
+    expect(text).toMatch(new RegExp(`^Gmail does not read ${id} as a ${kind} id, so nothing was looked up\\. `));
+    expect(text).toContain(source);
+    expect(text).toMatch(/\(Google: 400 invalidArgument, .*Invalid id value.*\)$/);
+    // Nothing was searched, so no mailbox is named and none is looked up.
+    expect(sent.some((s) => s.path.endsWith("/profile"))).toBe(false);
+    expect(res._meta?.[ERROR_META_KEY]).toEqual({ kind: "http", status: 400, reason: "invalidArgument" });
+  });
+
+  it("any other Gmail 400 keeps Google's own words", async () => {
+    gmail(() =>
+      json(
+        { error: { code: 400, message: "Invalid label name", errors: [{ message: "Invalid label name", domain: "global", reason: "invalidArgument" }] } },
+        400
+      )
+    );
+    const text = (await call("gmail_read", { message_id: "m-1" })).content[0].text;
+    expect(text).toMatch(/^Error: /);
+  });
 });
