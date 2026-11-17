@@ -14,7 +14,7 @@ import { PlanCards } from "@/components/plan-cards";
 import { FaqSection } from "@/components/faq-section";
 import { JsonLd } from "@/components/json-ld";
 import { faqPageNode } from "@/lib/site-schema";
-import { siteFaqGroups, siteFaqs } from "@/lib/site-faq";
+import { CUSTOM_INTEGRATION, siteFaqGroups, siteFaqs } from "@/lib/site-faq";
 import { SOCIAL_OPEN_GRAPH, SOCIAL_TWITTER } from "@/lib/social-card";
 import { SignInConsent } from "@/components/sign-in-consent";
 
@@ -119,6 +119,18 @@ export default async function PricingPage({
                 </span>
               ))}
             </div>
+            {/* Custom integrations: in this card because it applies to every
+                tier and implies none. Same copy and form as the landing block. */}
+            <p className="mt-6 text-sm leading-relaxed text-muted-foreground">
+              {CUSTOM_INTEGRATION.heading} {CUSTOM_INTEGRATION.short}{" "}
+              <Link
+                href={CUSTOM_INTEGRATION.href}
+                data-ph-capture-attribute-cta="custom_integration_request"
+                className="font-medium text-primary underline-offset-4 hover:underline"
+              >
+                {CUSTOM_INTEGRATION.action}
+              </Link>
+            </p>
           </div>
 
           {/* The questions that decide a plan, before the ask that follows.

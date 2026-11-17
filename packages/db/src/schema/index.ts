@@ -21,7 +21,7 @@ export { subscriptions, SUBSCRIPTION_STATUS, type SubscriptionStatus } from "./s
 export { alertSends } from "./alert-sends";
 export { stripeEvents } from "./stripe-events";
 export { PLAN_VALUES, type Plan, ROLE_VALUES, type Role } from "./users";
-export { leads, TEAM_SIZE_VALUES, type TeamSize } from "./leads";
+export { leads, LEAD_SOURCE_VALUES, TEAM_SIZE_VALUES, type LeadSource, type TeamSize } from "./leads";
 export {
   skillSchedules,
   SCHEDULE_CADENCES,
