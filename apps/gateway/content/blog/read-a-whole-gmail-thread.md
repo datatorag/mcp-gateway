@@ -33,7 +33,7 @@ Drafts and messages in Trash are part of the answer, each marked. I would rather
 
 ## Long threads
 
-A thread with a hundred replies will not fit in one answer, and cutting it off wherever the size limit lands would drop the newest messages, which are usually the ones being asked about.
+A thread with a hundred replies may not fit in one answer, and cutting it off wherever the size limit lands would drop the newest messages, which are usually the ones being asked about.
 
 So the bodies in one answer are held to 200,000 characters together, and the newest are kept first. When a thread runs past that, the oldest messages keep their headers and lose their bodies, and the answer says so: a `left_out` list with those message ids, each readable in full with `gmail_read`. `max_body_chars` cuts each body before the total is applied, for an agent that wants a little of everything.
 
