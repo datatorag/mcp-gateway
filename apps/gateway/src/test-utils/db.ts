@@ -8,6 +8,7 @@ import postgres from "postgres";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
 import { execSync } from "node:child_process";
+import { readFileSync } from "node:fs";
 import { users, type Database } from "@datatorag-mcp/db";
 
 let container: StartedPostgreSqlContainer | null = null;
@@ -45,6 +46,13 @@ export async function getTestDb(): Promise<Database> {
     __dirname,
     "../../../../packages/db/drizzle"
   );
+  // The leads table was created by a hand-written file outside the journal
+  // (0004_leads.sql; 0004_smiling_hercules.sql says so), so replaying the
+  // journal alone never creates it, and a later migration that alters leads
+  // (0033) fails on a fresh database. Production has the table. The test
+  // database gets it the same way, before the journal: it has no foreign
+  // keys, so it does not depend on anything the journal creates.
+  await client.unsafe(readFileSync(path.join(migrationsFolder, "0004_leads.sql"), "utf8"));
   await migrate(db, { migrationsFolder });
 
   return db;

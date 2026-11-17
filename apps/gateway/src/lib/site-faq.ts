@@ -20,6 +20,9 @@ const count = (n: number) => n.toLocaleString("en-US");
  * the pricing cards and enforcement both read, never retyped. */
 const FREE_CALLS = count(FREE.monthlyIncluded);
 const FREE_RUNS = count(FREE.agentRuns);
+const PRO = planLimits("pro");
+const PRO_CALLS = count(PRO.monthlyIncluded);
+const PRO_RUNS = count(PRO.agentRuns);
 
 /** Authored FAQs for the pages that are TSX rather than markdown.
  *
@@ -145,7 +148,7 @@ export const SITE_FAQ_PAGES: SiteFaqPage[] = [
         faqs: [
           {
             q: "What does it cost?",
-            a: "It is free to get started today. Paid plans are coming and the [pricing page](/pricing) carries the current state. We would rather the page be honest than exciting.",
+            a: `Nothing to start, and no card: the free tier includes ${FREE_CALLS} tool calls and ${FREE_RUNS} agent runs a month. Pro raises that to ${PRO_CALLS} tool calls and ${PRO_RUNS} agent runs a month, and Enterprise is a quote for committed volume. Every tier gets every connector, and the [pricing page](/pricing) has the current prices.`,
           },
           {
             q: "Where do I get help?",
