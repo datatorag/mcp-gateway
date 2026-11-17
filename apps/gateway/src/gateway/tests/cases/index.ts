@@ -80,6 +80,7 @@ import { gm7GmailGetAttachment } from "./gm7-gmail-get-attachment";
 import { gm8GmailSpam } from "./gm8-gmail-spam";
 import { gm9GmailThread } from "./gm9-gmail-thread";
 import { gm10GmailReadThread } from "./gm10-gmail-read-thread";
+import { gm11GmailNotFound } from "./gm11-gmail-not-found";
 import { dr1DriveFolder } from "./dr1-drive-folder";
 import { dr2DriveRead } from "./dr2-drive-read";
 import { dr3DriveGetFile } from "./dr3-drive-get-file";
@@ -283,6 +284,7 @@ export const CASES: TestCase[] = [
   gm8GmailSpam,
   gm9GmailThread,
   gm10GmailReadThread,
+  gm11GmailNotFound,
   dr1DriveFolder,
   dr2DriveRead,
   dr3DriveGetFile,

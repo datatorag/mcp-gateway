@@ -1,5 +1,5 @@
 import { buildRequest, requestUrl, type BuiltRequest, supportsMediaDownload } from "./request.js";
-import { GwsApiError, GwsUnreachableError, TransientGwsError, isTransient } from "./errors.js";
+import { GwsApiError, GwsUnreachableError, TransientGwsError, isTransient, type ApiRequestRef } from "./errors.js";
 import { MAX_ATTEMPTS, isRateLimited, retryClock, retryWaitMs } from "./rate-limit-retry.js";
 
 /** One default per call; media moves more bytes and gets longer (SCRUM-289). */
@@ -104,7 +104,7 @@ const TRANSIENT_STATUS = new Set([502, 503, 504]);
 function throwApiError(
   status: number,
   bodyText: string,
-  request?: { service: string; pathParams: Record<string, string> }
+  request?: ApiRequestRef
 ): never {
   if (status === 401) {
     // Google refused the token the gateway sent. Nothing on this server can
@@ -276,7 +276,7 @@ async function sendOk(
         continue;
       }
     }
-    throwApiError(res.status, text, { service: request.service, pathParams: request.pathParams });
+    throwApiError(res.status, text, { service: request.service, resource: request.resource, pathParams: request.pathParams });
   }
 }
 

@@ -23,6 +23,10 @@ export class TransientGwsError extends Error {
 /** Google answered the request with an HTTP error. The status and Google's
  * own reason travel with it, so the gateway can tell a refusal of the request
  * from a failure on our side without reading the words (SCRUM-154). */
+/** The request an API error answered: its API, resource path and path
+ * parameters (SCRUM-455, SCRUM-493). */
+export type ApiRequestRef = { service: string; resource: string; pathParams: Record<string, string> };
+
 export class GwsApiError extends Error {
   constructor(
     message: string,
@@ -30,7 +34,7 @@ export class GwsApiError extends Error {
     readonly reason?: string,
     /** The request it answered: its API and path parameters (SCRUM-455).
      * Absent for an error thrown outside the method table's requests. */
-    readonly request?: { service: string; pathParams: Record<string, string> }
+    readonly request?: ApiRequestRef
   ) {
     super(message);
     this.name = "GwsApiError";

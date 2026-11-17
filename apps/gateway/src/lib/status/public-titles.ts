@@ -115,6 +115,7 @@ export const PUBLIC_TITLES: Readonly<Record<string, string>> = {
   "GM8": "Mark an email as spam, and undo it",
   "GM9": "Label or trash a whole conversation at once",
   "GM10": "Read a whole conversation at once",
+  "GM11": "Reading an email that cannot be found is refused, naming the email and the account",
   "GW1": "List your connected accounts",
   // SCRUM-468. Not shown in public while Brevo is offered to admins only.
   "BR1": "Your Brevo account and its campaigns answer",

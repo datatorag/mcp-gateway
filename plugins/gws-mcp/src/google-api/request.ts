@@ -12,6 +12,9 @@ export interface BuiltRequest {
   /** The API the request is for, and the path parameters as given, so an
    * error can name what it was about (SCRUM-455). */
   service: string;
+  /** The resource path, e.g. users.messages, so an error can say what kind
+   * of thing was not found (SCRUM-493). */
+  resource: string;
   pathParams: Record<string, string>;
   queryParams: Array<[string, string]>;
   body: unknown;
@@ -154,6 +157,7 @@ export function buildRequest(
     method: entry.httpMethod,
     url: built,
     service,
+    resource,
     pathParams,
     queryParams,
     body: options?.jsonBody ?? null,
