@@ -3,7 +3,8 @@ import { GwsApiError } from "../google-api/errors.js";
 
 /**
  * SCRUM-493. When Gmail answers 404 for a message, thread, draft or
- * attachment id, the answer says what was not found, in which mailbox, why
+ * attachment id, or refuses one as not an id at all (a 400, "Invalid id
+ * value"), the answer says what was not found, in which mailbox, why
  * that usually happens and what to do next, instead of Google's bare
  * "Requested entity was not found". One path for every Gmail tool: it is
  * keyed on the request that failed (its resource and path parameters), never
@@ -33,6 +34,21 @@ const REASONS: Record<Kind, string> = {
     "Gmail issues a new attachment id each time a message is read, so an id from an earlier read can stop working. gmail_read lists the message's attachments with their current ids and part ids.",
 };
 
+/** Where a real id of each kind comes from, for an id Gmail cannot read. */
+const SOURCES: Record<Kind, string> = {
+  message: "A message's id comes from gmail_search, gmail_list or gmail_read.",
+  thread: "A thread's id is the threadId in a gmail_search, gmail_list or gmail_read answer.",
+  draft: "A draft's id comes from gmail_list_drafts.",
+  attachment: "An attachment's current id and part id come from gmail_read.",
+};
+
+/** Gmail refuses an id that is not in its own format with a 400 whose reason
+ * is "invalidArgument" and whose message is exactly "Invalid id value". The
+ * reason alone also covers other bad arguments, so the message decides. */
+function isMalformedId(err: GwsApiError): boolean {
+  return err.status === 400 && err.reason === "invalidArgument" && err.message.includes('"Invalid id value"');
+}
+
 /** The address of the mailbox the token opens, or null when Gmail does not
  * say. One call, made only after a 404, with the access the call already had. */
 async function mailboxOf(client: GwsClient): Promise<string | null> {
@@ -61,12 +77,18 @@ async function threadOfMessage(client: GwsClient, id: string): Promise<string | 
 
 /** The words for a Gmail 404, or null for any other error. */
 export async function gmailNotFound(client: GwsClient, err: unknown): Promise<string | null> {
-  if (!(err instanceof GwsApiError) || err.status !== 404 || err.request?.service !== "gmail") return null;
+  if (!(err instanceof GwsApiError) || err.request?.service !== "gmail") return null;
+  if (err.status !== 404 && !isMalformedId(err)) return null;
   const kind = KIND_BY_RESOURCE[err.request.resource];
   const id = err.request.pathParams.id;
   if (!kind || !id) return null;
 
   const google = `(Google: ${err.status}${err.reason ? ` ${err.reason}` : ""}, ${err.message})`;
+  if (err.status === 400) {
+    // Not a miss: Gmail cannot read the string as an id at all, so no
+    // mailbox was searched and none is named.
+    return `Gmail does not read ${id} as a ${kind} id, so nothing was looked up. ${SOURCES[kind]} ${google}`;
+  }
   if (kind === "thread") {
     const threadId = await threadOfMessage(client, id);
     if (threadId && threadId !== id) {
