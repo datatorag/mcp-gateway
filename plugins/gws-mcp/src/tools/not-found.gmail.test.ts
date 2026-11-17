@@ -127,11 +127,13 @@ describe("a Gmail id Gmail cannot find (SCRUM-493)", () => {
     expect(text).toMatch(/^Gmail has no message with the id m-gone in this Gmail account\. /);
   });
 
-  it("a 404 from another Google API keeps Google's own words", async () => {
-    vi.spyOn(globalThis, "fetch").mockImplementation(async () => NOT_FOUND());
-    const text = (await call("drive_get_file", { file_id: "f-gone" })).content[0].text;
+  it("a Gmail error that is not a miss keeps Google's own words", async () => {
+    vi.spyOn(globalThis, "fetch").mockImplementation(async () =>
+      json({ error: { code: 403, message: "Insufficient Permission", errors: [{ reason: "insufficientPermissions" }] } }, 403)
+    );
+    const text = (await call("gmail_read", { message_id: "m-1" })).content[0].text;
     expect(text).toMatch(/^Error: /);
-    expect(text).not.toContain("Gmail has no");
+    expect(text).not.toContain("has no");
   });
 
   // Gmail refuses a string that is not in its id format with a 400 before

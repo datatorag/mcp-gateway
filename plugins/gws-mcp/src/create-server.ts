@@ -8,7 +8,7 @@ import { allTools, toolHandlers } from "./tools/index.js";
 import { validateArgs } from "./tools/validate.js";
 import { errorMetaField, errorMetaFor } from "./error-meta.js";
 import { officeFileRefusal } from "./tools/office-files.js";
-import { gmailNotFound } from "./tools/gmail-not-found.js";
+import { notFoundAnswer } from "./tools/not-found.js";
 import { withAliased } from "./tools/response.js";
 
 export const gwsClient = new GwsClient();
@@ -52,9 +52,9 @@ export function createMcpServer(client?: GwsClient): Server {
       // SCRUM-455: a Sheets, Docs or Slides request on an Office file gets
       // words that name the conversion instead of Google's bare 400.
       const office = await officeFileRefusal(client, name, err);
-      // SCRUM-493: a Gmail id Gmail cannot find gets words an agent can act
-      // on, with Google's code and reason after them.
-      const notFound = office ?? (await gmailNotFound(client, err));
+      // SCRUM-493, SCRUM-495: an id Google cannot find gets words an agent
+      // can act on, with Google's code and reason after them.
+      const notFound = office ?? (await notFoundAnswer(client, err));
       return {
         content: [{ type: "text" as const, text: notFound ?? `Error: ${errorMessage(err)}` }],
         isError: true,

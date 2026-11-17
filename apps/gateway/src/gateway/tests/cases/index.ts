@@ -81,6 +81,13 @@ import { gm8GmailSpam } from "./gm8-gmail-spam";
 import { gm9GmailThread } from "./gm9-gmail-thread";
 import { gm10GmailReadThread } from "./gm10-gmail-read-thread";
 import { gm11GmailNotFound } from "./gm11-gmail-not-found";
+import { nf1DriveNotFound } from "./nf1-drive-not-found";
+import { nf2DocsNotFound } from "./nf2-docs-not-found";
+import { nf3SheetsNotFound } from "./nf3-sheets-not-found";
+import { nf4SlidesNotFound } from "./nf4-slides-not-found";
+import { nf5CalendarNotFound } from "./nf5-calendar-not-found";
+import { nf6ContactsNotFound } from "./nf6-contacts-not-found";
+import { nf7TasksNotFound } from "./nf7-tasks-not-found";
 import { dr1DriveFolder } from "./dr1-drive-folder";
 import { dr2DriveRead } from "./dr2-drive-read";
 import { dr3DriveGetFile } from "./dr3-drive-get-file";
@@ -285,6 +292,13 @@ export const CASES: TestCase[] = [
   gm9GmailThread,
   gm10GmailReadThread,
   gm11GmailNotFound,
+  nf1DriveNotFound,
+  nf2DocsNotFound,
+  nf3SheetsNotFound,
+  nf4SlidesNotFound,
+  nf5CalendarNotFound,
+  nf6ContactsNotFound,
+  nf7TasksNotFound,
   dr1DriveFolder,
   dr2DriveRead,
   dr3DriveGetFile,
