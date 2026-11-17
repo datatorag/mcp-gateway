@@ -43,7 +43,7 @@ The Confluence tools let your AI agent search space content, read and author pag
 | `confluence_list_pages` | List pages in a space with id, title, version, and link |
 | `confluence_get_page` | Get a page by ID with its version info. The body comes back as clean text by default; pass `format: "storage"` for the XHTML, which is what `confluence_edit_page` needs |
 | `confluence_create_page` | Create a new page. Content must be in XHTML storage format |
-| `confluence_edit_page` | Update an existing page. Version auto-increments if not provided |
+| `confluence_edit_page` | Replace a page's title and body. The body must be XHTML storage format, as `confluence_get_page` returns with `format: "storage"`. Version auto-increments if not provided |
 | `confluence_delete_page` | Delete a page by ID |
 | `confluence_get_comments` | Get all comments on a page, footer and inline, with their replies in thread order. Each carries its type and the comment it replies to; an inline comment also carries the text it is anchored to and whether it is resolved |
 | `confluence_add_comment` | Add a plain-text comment to a page: a footer comment, an inline comment anchored to text on the page with `inline_text`, or a reply to a footer or inline comment with `parent_comment_id` |
@@ -58,6 +58,14 @@ the v2 API, which rejects a classic grant with `scope does not match`.
 - `write:page:confluence`, `delete:page:confluence`
 - `read:comment:confluence`, `write:comment:confluence`
 - `read:attachment:confluence`, `search:confluence`
+
+## Multiple accounts
+
+Every tool on this page takes an optional `account` argument: the email address
+of the connected Atlassian account to act on. Omit it and the default account
+is used. Connect more than one Atlassian account and a single request can reach
+whichever one the work belongs to. An account that can reach several sites acts
+on the first site Atlassian lists for it.
 
 ## Example prompts
 

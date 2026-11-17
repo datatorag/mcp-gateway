@@ -22,6 +22,7 @@ import { FaqSection } from "@/components/faq-section";
 import { JsonLd } from "@/components/json-ld";
 import { faqPageNode } from "@/lib/site-schema";
 import { CUSTOM_INTEGRATION, siteFaqGroups, siteFaqs } from "@/lib/site-faq";
+import { PUBLIC_CLIENTS_TEXT, PUBLIC_CONNECTORS_TEXT } from "@/lib/public-integrations";
 import { SOCIAL_OPEN_GRAPH, SOCIAL_TWITTER } from "@/lib/social-card";
 import { signInHref } from "@/lib/sign-in";
 
@@ -59,7 +60,7 @@ const HOME_TITLE =
    inside the budget, and check what falls off the end rather than what reads
    well in the file. */
 const HOME_DESCRIPTION =
-  "Claude's Drive connector reads your files. DataToRAG edits them in place, appends rows, sends email and updates tickets. Every write asks you first.";
+  "Your agent works across Gmail, Docs, Sheets, Jira and Notion, on every account you connect, from any MCP client. Every write asks you first.";
 
 /* Canonical is self-referencing and absolute, on the non-www origin: Search
    Console was reporting the four origin variants (http/https x www/non-www)
@@ -209,12 +210,11 @@ export default async function HomePage() {
               className="animate-fade-in-up mx-auto mt-6 max-w-2xl text-base leading-relaxed text-white/60 sm:text-lg lg:col-start-1 lg:row-start-3 lg:mx-0"
               style={{ animationDelay: "0.12s" }}
             >
-              {/* Fallback is rounded, not an exact number: it only renders
-                  when the count query failed, and stating a precise figure we
-                  did not just read is how a wrong one ships. Matches the
-                  pricing page and the lead page. */}
-              {totalTools > 0 ? totalTools : "70+"} tools across Google
-              Workspace, Atlassian and Notion behind one URL, in Claude, Claude
+              {/* No number at all when the count query failed: a fallback
+                  figure is one nobody re-reads, and it went stale. Matches
+                  the pricing page and the integrations section below. */}
+              {totalTools > 0 ? `${totalTools} tools` : "Tools"} across{" "}
+              {PUBLIC_CONNECTORS_TEXT} behind one URL, in Claude, Claude
               Code, Cursor or your own app.
             </p>
 
@@ -392,7 +392,7 @@ export default async function HomePage() {
                 },
                 {
                   title: "Pre-Built Connectors",
-                  desc: "One connection for Google Workspace, Jira and Confluence. We handle the auth and schema mapping.",
+                  desc: `One connection for ${PUBLIC_CONNECTORS_TEXT}. We handle the auth and schema mapping.`,
                   icon: (
                     <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
                       <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83" />
@@ -455,7 +455,7 @@ export default async function HomePage() {
                 ? `${totalTools} tools, ready to use through the Model Context Protocol. `
                 : "Ready-to-use integrations through the Model Context Protocol. "}
               Every integration works from one endpoint. Connect once, use
-              them all. More added every week.
+              them all.
             </p>
           </div>
 
@@ -766,8 +766,8 @@ export default async function HomePage() {
                 One line to connect.
               </h2>
               <p className="mt-4 text-sm leading-relaxed text-muted-foreground">
-                Add the DataToRAG gateway to any MCP-compatible client: Claude
-                Desktop, Cursor, Windsurf, or your own application. OAuth
+                Add the DataToRAG gateway to any MCP-compatible client:{" "}
+                {PUBLIC_CLIENTS_TEXT}, or your own application. OAuth
                 sign-in handles the rest.
               </p>
             </div>

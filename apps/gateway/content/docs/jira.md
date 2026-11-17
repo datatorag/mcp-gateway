@@ -41,7 +41,7 @@ faqs:
       granular scopes instead.
 ---
 
-The Jira tools let your AI agent search, create, update, and move issues through their workflow, plus add, edit and delete comments, log and list time spent, link issues to each other, look up an attachment's details, and add a file from another connected service as an attachment.
+The Jira tools let your AI agent search, create, update, and move issues through their workflow, plus add, edit and delete comments, log and list time spent, link issues to each other, look up an attachment's details, and add a file as an attachment: from another connected service, a file your agent already holds, or a file you send from your computer through an upload link.
 
 ## Available operations
 
@@ -49,7 +49,7 @@ The Jira tools let your AI agent search, create, update, and move issues through
 |------|-------------|
 | `jira_search` | Search issues using JQL (Jira Query Language). Supports pagination via `next_page_token` |
 | `jira_get_issue` | Get full details for an issue by key (e.g. `PROJ-123`): summary, status, priority, assignee, reporter, description, labels, dates, comments count, attachments |
-| `jira_create_issue` | Create a new issue in a specified project. Returns the issue key and URL |
+| `jira_create_issue` | Create a new issue in a project, as a Task unless `issue_type` says otherwise, with assignee, priority, labels and other fields via `additional_fields`. Returns the issue key and URL |
 | `jira_update_issue` | Update an issue's summary, description, or arbitrary fields via `additional_fields` |
 | `jira_get_transitions` | Get available workflow transitions for an issue. Use returned IDs with `jira_transition_issue` |
 | `jira_transition_issue` | Move an issue to a new workflow status |
@@ -62,7 +62,7 @@ The Jira tools let your AI agent search, create, update, and move issues through
 | `jira_link_issues` | Link two issues by a link type's name or phrase, e.g. `PROJ-1` blocks `PROJ-2`. Returns the new link as Jira reports it |
 | `jira_list_issue_links` | List an issue's links, each read from that issue's side (blocks, is blocked by), and the link types the site has |
 | `jira_get_attachment` | Get attachment metadata by ID: filename, size, MIME type, content URL |
-| `jira_add_attachment` | Attach a file to an issue from a file reference: a Gmail message as its original `.eml`, one of its attachments by part id under the sender's file name, a Google Drive file as stored, or a Google Docs, Sheets or Slides file exported, such as a Doc as a PDF. The file never passes through the conversation; the answer is a receipt with the name, size and SHA-256 of what was sent. See [Moving files between services](/docs/file-references) |
+| `jira_add_attachment` | Attach a file to an issue from a file reference: a Gmail message as its original `.eml`, one of its attachments by part id under the sender's file name, a Google Drive file as stored, or a Google Docs, Sheets or Slides file exported, such as a Doc as a PDF, a file your agent already holds (up to 1 MB), or a file you send from your computer through an upload link (up to 25 MB). `filename` renames it on the issue. A file from Gmail or Drive never passes through the conversation; the answer is a receipt with the name, size and SHA-256 of what was sent. See [Moving files between services](/docs/file-references) |
 | `jira_list_fields` | List all available fields (system + custom) to discover field IDs for creates/updates |
 | `jira_search_users` | Search users by name, username, or email. Returns display names and account IDs |
 | `jira_delete_issue` | Permanently delete an issue. See the warning below before using it |

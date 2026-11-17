@@ -37,8 +37,8 @@ The thinking happened when the document was written. Making slides out of it
 is not more thinking, it is an hour of copying sentences into text boxes.
 
 The trick worth knowing is that a slide can be created and filled in the same
-request. The obvious implementation — create the slides, read the deck back
-to find out what the placeholders are called, then write into them — is a
+request. The obvious implementation (create the slides, read the deck back
+to find out what the placeholders are called, then write into them) is a
 round trip you do not need.
 
 ```markdown
@@ -86,7 +86,7 @@ first slide.
 Because you named the placeholders, you can write into them in the same
 batch. No create-then-read-then-write.
 
-Body text takes newlines, so one `insertText` per slide body is enough — you
+Body text takes newlines, so one `insertText` per slide body is enough; you
 do not need a request per line.
 
 ## Rules
@@ -112,7 +112,7 @@ it says before handing it over.
 **One pass works, and it is the whole efficiency of this.**
 `placeholderIdMappings` lets you name a new slide's placeholders as you create
 it, so `createSlide` and both `insertText` calls go in a single batch. Built a
-five-slide deck this way in two calls total — the naive create, read, write
+five-slide deck this way in two calls total: the naive create, read, write
 loop would have been one round trip per slide.
 
 **The first slide's placeholders are named differently.** `slides_create`

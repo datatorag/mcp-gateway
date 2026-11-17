@@ -4,13 +4,13 @@ description: "Attach a file from one connected service to another without downlo
 order: 6
 section: "general"
 faqs:
-  - q: Can Claude attach an email to a Jira issue without me downloading it?
+  - q: Can my agent attach an email to a Jira issue without me downloading it?
     a: >-
       Yes. The Jira attachment tool takes a file reference that names a Gmail
       message, and DataToRAG carries the email's original file from Gmail to
       the issue in one call. Nothing is downloaded to your computer and the
       file's content never enters the conversation.
-  - q: Can Claude attach an email's attachment to a Jira issue?
+  - q: Can my agent attach an email's attachment to a Jira issue?
     a: >-
       Yes. A file reference can name one attachment of a Gmail message, by the
       message and the attachment's part id, and it lands on the issue under
@@ -22,16 +22,16 @@ faqs:
       and is never written to our disks. It goes from the service it lives in
       to the service you named, and is not copied to Drive or anywhere else on
       the way.
-  - q: Can Claude save an email or an attachment to my computer?
+  - q: Can my agent save an email or an attachment to my computer?
     a: >-
       Yes. The download link tool takes a file reference and answers with a
       link that works once, for ten minutes. The link opens a page with one
       button that saves the file. The receipt gives the size and the SHA-256,
       so you can check the saved copy. The file's content never enters the
       conversation.
-  - q: Can Claude put a file I already have into Drive or onto a Jira issue?
+  - q: Can my agent put a file I already have into Drive or onto a Jira issue?
     a: >-
-      Yes, for a file of up to 1 MB that Claude already holds in the
+      Yes, for a file of up to 1 MB that your agent already holds in the
       conversation, such as an image or a PDF you shared with it. It sends
       the file as a content reference, and DataToRAG hands it to Drive or
       Jira in the same call and answers with the SHA-256 and size of what it
@@ -46,7 +46,7 @@ Some jobs need a file to go from one connected service to another: an email file
 
 ## File references
 
-A tool that takes a file takes a **file reference**. Most references are a small object that says where the file lives in one of your connected services: a name for the file, not the file. A `content` reference is the exception: it carries a file Claude already holds, in the call itself.
+A tool that takes a file takes a **file reference**. Most references are a small object that says where the file lives in one of your connected services: a name for the file, not the file. A `content` reference is the exception: it carries a file your agent already holds, in the call itself.
 
 | Reference | Fields | The file |
 |-----------|--------|----------|
@@ -54,7 +54,7 @@ A tool that takes a file takes a **file reference**. Most references are a small
 | `gmail_attachment` | `message_id`, `part_id`, optional `account` | One attachment of an email, under the sender's file name and type |
 | `drive_file` | `file_id`, optional `account` | A Google Drive file as stored, under its Drive name |
 | `drive_export` | `file_id`, `format`, optional `account` | A Google Docs, Sheets or Slides file exported to a format, named with its extension |
-| `content` | `name`, `base64`, optional `mime_type` | A file Claude already holds, carried in the call as base64, at most 1 MB |
+| `content` | `name`, `base64`, optional `mime_type` | A file your agent already holds, carried in the call as base64, at most 1 MB |
 | `upload` | `upload_id` | A file you sent from your computer through an upload link, at most 25 MB |
 
 A Google Docs, Sheets or Slides file has no stored file to send as it is, so as a `drive_file` it is refused with the `drive_export` reference to use instead. The formats are:
@@ -100,7 +100,7 @@ Each call moves one file. To attach three PDFs from one email, make three calls,
 
 ## Sending a file you have
 
-When the file is already in the conversation, for example an image or a PDF you shared with Claude, a `content` reference carries it to `drive_upload_file` or `jira_add_attachment` directly:
+When the file is already in the conversation, for example an image or a PDF you shared with your agent, a `content` reference carries it to `drive_upload_file` or `jira_add_attachment` directly:
 
 ```json
 {
@@ -110,7 +110,7 @@ When the file is already in the conversation, for example an image or a PDF you 
 ```
 
 - `base64` is the file in standard base64, as one unbroken string. Base64 broken across lines, or in the URL-safe alphabet, is refused rather than decoded into a damaged file.
-- The file can be at most 1 MB. For a larger file, or one Claude does not hold, use an upload link.
+- The file can be at most 1 MB. For a larger file, or one your agent does not hold, use an upload link.
 - `mime_type` is optional. Without it, the type comes from the name's extension.
 - A `content` reference takes no `account`, because the file comes with the call.
 
@@ -143,7 +143,7 @@ Pass that reference as the file of `drive_upload_file` or `jira_add_attachment`,
 - The uploaded file is kept for ten minutes after it arrives, for one call. After that it is gone, and you upload it again.
 - If the call stops before anything is sent on (the service is busy, or another reference in the same email is wrong), the uploaded file is kept and the reference still works. Once the call reaches Drive, Jira or Gmail, the file is used, even if that service then says no (a folder id that is not a folder, an issue you cannot see): upload it again.
 - You can have three upload links or uploaded files waiting at a time.
-- An upload link, like a download link, is for you: a call that carries one is refused, and the link is cancelled.
+- An upload link, like a download link, is for you: a call that carries one is refused, and the link is canceled.
 
 ## Attaching files to an email
 
@@ -229,7 +229,7 @@ In each case, ask for a new link in your conversation.
 
 ### A link stays with you
 
-A download link is for you. A call to any DataToRAG tool that carries one of your unused links, for example an email with the link in its body, is refused, and the link is cancelled. This covers a link carried as it is. It does not cover what another tool in your client does with a link, so treat a link like the file it leads to.
+A download link is for you. A call to any DataToRAG tool that carries one of your unused links, for example an email with the link in its body, is refused, and the link is canceled. This covers a link carried as it is. It does not cover what another tool in your client does with a link, so treat a link like the file it leads to.
 
 ## Saving a file to Drive
 

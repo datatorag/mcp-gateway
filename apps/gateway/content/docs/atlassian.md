@@ -6,7 +6,7 @@ section: "general"
 faqs:
   - q: Does one connection cover both Jira and Confluence?
     a: >-
-      Yes. One OAuth flow on the Atlassian card in the DataToRAG dashboard grants
+      Yes. One OAuth flow on the Atlassian card on the dashboard's Connections page grants
       access to both Jira and Confluence in the Atlassian site you choose.
   - q: Why do Jira and Confluence ask for different kinds of scope?
     a: >-
@@ -15,24 +15,27 @@ faqs:
       the connector calls does not accept classic scopes.
   - q: What can DataToRAG do in Jira and Confluence?
     a: >-
-      In Jira it searches with JQL, creates, updates and transitions issues, and
-      manages comments. In Confluence it searches with CQL, reads and edits
-      pages, and reads and adds comments. In both it looks up an attachment's
-      details; it does not upload or download attachment files.
+      In Jira it searches with JQL, creates, updates, transitions and deletes
+      issues, manages comments, logs work, links issues, and adds a file to an
+      issue as an attachment, from Gmail, Drive or an upload link. In Confluence
+      it searches with CQL, reads, creates, edits and deletes pages, and reads and
+      adds comments. In both it looks up an attachment's details. It does not
+      download attachment files, and it does not add attachments to Confluence
+      pages.
 ---
 
-The Atlassian connector gives your AI agent access to Jira and Confluence: searching issues with JQL, creating and updating tickets, reading and editing pages, working with comments, and looking up attachment details.
+The Atlassian connector gives your AI agent access to Jira and Confluence: searching issues with JQL, creating, updating and deleting tickets, logging work, linking issues and attaching files to them, reading, creating and editing pages, working with comments, and looking up attachment details.
 
 ## Services
 
 | Service | Summary |
 |---------|---------|
-| [Jira](/docs/jira) | Search with JQL, create, update, transition issues, manage comments, look up attachments |
-| [Confluence](/docs/confluence) | Search with CQL, read and edit pages, read and add comments, look up attachments |
+| [Jira](/docs/jira) | Search with JQL, create, update, transition and delete issues, manage comments, log work, link issues, and add attachments |
+| [Confluence](/docs/confluence) | Search with CQL, read, create, edit and delete pages, read and add comments, look up attachments |
 
 ## Connecting
 
-Sign in at [datatorag.com/dashboard](https://datatorag.com/dashboard) and click Connect on the Atlassian card. One OAuth flow grants access to both Jira and Confluence in your chosen Atlassian site.
+Sign in, open [Connections](https://datatorag.com/dashboard/connections) and click Connect on the Atlassian card. One OAuth flow grants access to both Jira and Confluence in your chosen Atlassian site.
 
 ## Required scopes
 

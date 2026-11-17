@@ -71,7 +71,12 @@ describe("pricing page copy", () => {
     expect(prices).toContain('"$20"');
     expect(prices).toContain('"$200"');
     expect(ctas).not.toMatch(/"\$20"|"\$200"/);
-    expect(page).toContain("$20 a month or $200 a year");
+    // The page and the yearly line on the card read the amounts from that
+    // module rather than retyping them, so a price change is one edit.
+    expect(page).toContain("PRICE_LABEL.monthly.amount");
+    expect(page).toContain("PRICE_LABEL.yearly.amount");
+    expect(page).not.toMatch(/\$20 a month|\$200 a year/);
+    expect(ctas).not.toMatch(/\$200 a year/);
   });
 
   it("keeps the claims that must not be weakened", () => {

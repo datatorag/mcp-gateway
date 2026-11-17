@@ -2,8 +2,8 @@
 title: "Every Way to Connect Claude to Your Google Workspace, Compared (2026)"
 excerpt: "Native connectors, Zapier MCP, Composio, Pipedream, a self-hosted open-source server, or DataToRAG. What each one really does with your Google data, and how to pick the right one."
 date: "2026-06-29"
-updated: "2026-10-19"
-updatedNote: "October 19, 2026: the Calendar paragraph said the native count includes a suggest_time helper we don't ship. We ship one now, along with RSVP and a calendar list, so that sentence is corrected. Earlier, October 15, later the same day: Claude's Google Docs and Sheets connectors, in beta since October 2026 and enumerated on 15 October 2026, edit files in place, so the paragraph that said nothing native edits a sheet or a doc you already have is rewritten, as is the line that said Sheets has no cell-level editing, and the Slides line carries its October 9 date, and the pointer to the Drive post carries its new title. October 15: a dated note beside the line that nothing native edits an existing sheet, doc or deck. Anthropic announced Docs, Sheets and Slides editing connectors in beta on 6 October 2026. As of 15 October 2026 they were not available on our account, so what this post says about them is what we could verify ourselves. We will re-test and correct this the day they reach us. October 9: two corrections, both in the native connectors' favour. Anthropic's Gmail connector does delete a draft, so the sentence calling that the one Gmail verb still missing is gone from the FAQ, the native-connector section and the summary table. And Claude has an Atlassian connector of its own, which the summary table's Atlassian column had as No. One sentence also said Sheets, Slides and Docs aren't in the native surface at all; the native Drive connector reads all three and creates a new doc or sheet, and what it cannot do is edit one. August 24: a bigger correction than the last one. Anthropic's Gmail connector now SENDS, replies with reply-all, and forwards, so the native-connector section, the cross-link, and the summary table are all rewritten. The only Gmail verb still missing natively is deleting a draft. We also tightened our own data-retention sentence: Workspace content is a pass-through, but a blanket 'we don't store your data' was too broad, and the privacy policy is now linked instead. August 7: the connector gained labelling, marking read, and archiving."
+updated: "2026-11-17"
+updatedNote: "November 17, 2026: the summary table's native row still said Sheets has no cell editing; since October 2026 Claude's Docs and Sheets connectors edit in place (beta, enumerated 15 October 2026), so the row now says so, and the FAQ answer on what the native connectors cannot do is redated and rewritten to match. The closing example was a prompt the native connectors can now finish on one account, so it is replaced with one that crosses accounts and services. Self-hosting is no longer called a supported path: the code is MIT and you can run it, but there is no packaged self-host guide, and the post now says what you would supply. October 19, 2026: the Calendar paragraph said the native count includes a suggest_time helper we don't ship. We ship one now, along with RSVP and a calendar list, so that sentence is corrected. Earlier, October 15, later the same day: Claude's Google Docs and Sheets connectors, in beta since October 2026 and enumerated on 15 October 2026, edit files in place, so the paragraph that said nothing native edits a sheet or a doc you already have is rewritten, as is the line that said Sheets has no cell-level editing, and the Slides line carries its October 9 date, and the pointer to the Drive post carries its new title. October 15: a dated note beside the line that nothing native edits an existing sheet, doc or deck. Anthropic announced Docs, Sheets and Slides editing connectors in beta on 6 October 2026. As of 15 October 2026 they were not available on our account, so what this post says about them is what we could verify ourselves. We will re-test and correct this the day they reach us. October 9: two corrections, both in the native connectors' favour. Anthropic's Gmail connector does delete a draft, so the sentence calling that the one Gmail verb still missing is gone from the FAQ, the native-connector section and the summary table. And Claude has an Atlassian connector of its own, which the summary table's Atlassian column had as No. One sentence also said Sheets, Slides and Docs aren't in the native surface at all; the native Drive connector reads all three and creates a new doc or sheet, and what it cannot do is edit one. August 24: a bigger correction than the last one. Anthropic's Gmail connector now SENDS, replies with reply-all, and forwards, so the native-connector section, the cross-link, and the summary table are all rewritten. The only Gmail verb still missing natively is deleting a draft. We also tightened our own data-retention sentence: Workspace content is a pass-through, but a blanket 'we don't store your data' was too broad, and the privacy policy is now linked instead. August 7: the connector gained labelling, marking read, and archiving."
 author: "Manuel Yang"
 category: "Comparison"
 tags: ["google-workspace", "claude", "mcp", "comparison", "alternatives"]
@@ -12,18 +12,18 @@ faqs:
     a: >-
       Yes. As of our October 9, 2026 check of the native connectors' tool lists,
       Claude's Gmail connector sends a new message, sends an existing draft,
-      replies with reply-all, and forwards, alongside labelling, starring,
+      replies with reply-all, and forwards, alongside labeling, starring,
       marking read, archiving, trashing and deleting a draft. That surface
       moves, so the date is part of the answer.
   - q: What can Claude's native Google connectors not do?
     a: >-
-      As of our August 24, 2026 check, Claude's native Gmail, Calendar and Drive
-      connectors cover mail, calendar and files, and stop there. There is no
-      cell-level Sheets editing, and nothing that writes content onto a Slides
-      deck: Drive will create a real presentation at a real URL, but it arrives
-      with one slide, a blank title and a blank subtitle. Contacts and Tasks are
-      not in the native surface at all. You also connect one Google account at a
-      time.
+      As of our 15 October 2026 check, Claude's native Gmail, Calendar and Drive
+      connectors cover mail, calendar and files, and its Docs and Sheets
+      connectors (in beta) edit a doc or a sheet in place. A Slides deck made
+      through Drive arrives with one slide, a blank title and a blank subtitle
+      (checked 9 October 2026). There is no filtered query of a sheet, Contacts
+      and Tasks are not in the native surface at all, and you connect one
+      Google account at a time.
   - q: Can I use more than one Google account with Claude at the same time?
     a: >-
       Not through Claude's native connectors, which hold one Google account at a
@@ -121,12 +121,12 @@ Your Workspace content is a pass-through. We don't retain the documents, message
 
 | Option | Google write depth | Multi-account in one prompt | Atlassian | Hosting / open source | Setup effort |
 |---|---|---|---|---|---|
-| Claude native | Calendar full CRUD plus `suggest_time`; Gmail now sends, replies and forwards; Drive files, plus a Slides deck that arrives empty; no Sheets cell editing, Contacts, or Tasks | No, one account | Yes, through Claude's separate Atlassian connector | Anthropic-hosted, closed | None |
+| Claude native | Calendar full CRUD plus `suggest_time`; Gmail sends, replies and forwards; Docs and Sheets edit in place (beta, enumerated 15 October 2026); a Slides deck that arrives empty (9 October 2026); no sheet query, Contacts, or Tasks | No, one account | Yes, through Claude's separate Atlassian connector | Anthropic-hosted, closed | None |
 | Zapier MCP | Coarse writes for Gmail/Docs/Sheets/Drive/Calendar; no Slides/Contacts/Tasks on MCP | Not documented | Separate Zapier apps | Cloud-only, closed | Low |
 | Composio | Deep Gmail; Docs/Sheets/Tasks; no standalone Slides/Contacts | Per user, in your app | Via toolkit | Cloud core; self-host enterprise-only | Developer (SDK) |
 | Pipedream | Gmail/Sheets/Drive/Calendar writes; thinner, custom-API fallback | Per user, in your app | Via app | Cloud-only platform | Developer (SDK) |
 | Self-hosted OSS | Deep read and write, ~70 tools | Yes, you operate it | No | You host it; open source | High: Cloud project, OAuth, verification, uptime |
-| DataToRAG | Deep writes incl. `docs_batch_update`, `slides_batch_update`, send, Contacts, Tasks | Yes, built in | Jira + Confluence | Hosted or self-host; MIT | Low hosted, moderate self-host |
+| DataToRAG | Deep writes incl. `docs_batch_update`, `slides_batch_update`, send, Contacts, Tasks | Yes, built in | Jira + Confluence | Hosted; source open (MIT) | Low hosted; running it yourself means your own database, OAuth clients and keys |
 
 ## So which one should you use?
 
@@ -140,8 +140,8 @@ If you're a developer building a product that connects your customers' accounts,
 
 If you want every byte to stay on infrastructure you control and you have the ops hours to spend, self-host an open-source server. You'll work for it, but it's yours.
 
-And if you want Claude to actually do things across your Google Workspace, send the email, edit the doc, update the sheet, manage tasks and contacts, plus your Jira and Confluence, across more than one account, without standing up a Google Cloud project and babysitting OAuth verification, that's the gap we built DataToRAG to fill. If you'd still rather run it yourself, the code is MIT and self-hosting is a supported path, not an afterthought.
+And if you want Claude to actually do things across your Google Workspace, send the email, edit the doc, update the sheet, manage tasks and contacts, plus your Jira and Confluence, across more than one account, without standing up a Google Cloud project and babysitting OAuth verification, that's the gap we built DataToRAG to fill. If you'd still rather run it yourself, the code is MIT-licensed. There is no packaged self-host guide yet: you would supply your own Postgres database, your own Google OAuth clients (and Google's verification for the restricted scopes), and an encryption key for the stored tokens.
 
 ## Try it
 
-Connect your Google account at [datatorag.com/dashboard](https://datatorag.com/dashboard) and try a prompt the native connector can't finish, like "reply to the last three emails from this customer and log each one in our tracker sheet." If you'd rather keep the infrastructure on your side, the gateway is open source at [github.com/datatorag/mcp-gateway](https://github.com/datatorag/mcp-gateway). Either way the goal is the same: Claude that works in your real data, not next to it.
+Connect your Google account at [datatorag.com/dashboard](https://datatorag.com/dashboard) and try a prompt that crosses a line the native connectors stop at, like "check my work and personal inboxes for anything from this customer, reply from the right one, and put the PDF they sent on the Jira issue." If you'd rather keep the infrastructure on your side, the gateway is open source at [github.com/datatorag/mcp-gateway](https://github.com/datatorag/mcp-gateway). Either way the goal is the same: Claude that works in your real data, not next to it.

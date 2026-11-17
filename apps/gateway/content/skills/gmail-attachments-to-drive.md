@@ -62,7 +62,7 @@ precisely because they come from the same place with the same subject.
 
 ## Read only if you need to decide
 
-`gmail_read` with `text_only: true` when you need the body to route the file —
+`gmail_read` with `text_only: true` when you need the body to route the file:
 a period, an invoice number, which region it covers.
 
 DO NOT read a message without `text_only` when it has attachments. The raw
@@ -80,7 +80,7 @@ attachmentId, which is everything you need to file it.
 the folder id.
 
 The file moves Gmail to Drive server-side. Nothing about its contents reaches
-this conversation, which is the point — you are filing it, not reading it.
+this conversation, which is the point: you are filing it, not reading it.
 
 ## Rules that keep this from going wrong
 
@@ -93,7 +93,7 @@ this conversation, which is the point — you are filing it, not reading it.
 3. **Never search the whole mailbox.** `has:attachment` alone matches years of
    mail. Always bound it with a sender and a date.
 4. **File, then confirm, then mark.** If you also mark the mail read, do it
-   after the file lands, not before — otherwise a failure leaves you with a
+   after the file lands, not before, otherwise a failure leaves you with a
    read message and no file, which is invisible.
 ```
 
@@ -107,7 +107,7 @@ cost is the same whether the file is 5KB or 50MB.
 
 **Responses are truncated before they can overflow.** The connector caps tool
 responses around 900KB because MCP starts failing near 1MB. That is a
-backstop, not a plan — a truncated response is a response you cannot trust,
+backstop, not a plan: a truncated response is a response you cannot trust,
 so the fix is to not ask for the payload in the first place.
 
 **`text_only` is not just smaller, it is differently shaped.** It flattens the

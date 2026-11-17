@@ -1,6 +1,6 @@
 ---
 title: "Slides"
-description: "Read, create, and update Google Slides presentations."
+description: "Read, create, batch update, and delete Google Slides presentations."
 order: 6
 section: "connectors"
 connector: "google-workspace"
@@ -39,7 +39,7 @@ The Slides connector lets your AI agent read presentation content, create new de
 | `slides_get` | Read a presentation's content: slide `objectId`s, placeholder types (TITLE/BODY/SUBTITLE) and text, stripped of layout and styling data so a large deck still fits in context. Feed the returned `objectId`s to `slides_batch_update` |
 | `slides_create` | Create a presentation. Returns the `presentationId` and a `placeholder_map` per slide, mapping TITLE/BODY/SUBTITLE to their `objectId`s, so the first `insertText` needs no lookup |
 | `slides_batch_update` | Insert or replace text, add slides, delete objects and other edits, in the Google Slides API `batchUpdate` format. One call, applied in order |
-| `slides_delete` | Delete a presentation |
+| `slides_delete` | Delete a presentation. The delete is permanent, not a move to the trash; use `drive_trash_file` for one you may want back |
 
 ## Required scopes
 

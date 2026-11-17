@@ -4,6 +4,7 @@ import { ContactForm, type Utm } from "@/components/contact-form";
 import { DemoBento } from "@/components/demo/demo-bento";
 import { DEMO_STANDFIRST } from "@/components/demo/demo-copy";
 import { signInHref } from "@/lib/sign-in";
+import { PUBLIC_CONNECTORS_TEXT } from "@/lib/public-integrations";
 
 // Rendered by both /contact (canonical) and /demo (kept for ad destinations
 // and historical analytics continuity) — one source of truth for the form.
@@ -31,7 +32,9 @@ export function ContactPage({ utm }: { utm: Utm }) {
 
             <div className="mt-6 flex flex-wrap gap-2">
               {[
-                "70+ tools · Google Workspace + Atlassian",
+                // No tool count: this page does not read it, and a typed
+                // number went stale. The connector list is the shared one.
+                PUBLIC_CONNECTORS_TEXT,
                 "Multi-account",
                 "Google-verified · CASA Tier 2",
               ].map((badge) => (

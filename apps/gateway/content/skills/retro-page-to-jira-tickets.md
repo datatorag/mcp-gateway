@@ -86,11 +86,11 @@ Two things about the body:
 `jira_create_issue` per item. Not one issue with a checklist: an item nobody
 owns individually is an item nobody does.
 
-- **summary** — the outcome, not the discussion. "Publish the deploy log so
+- **summary**: the outcome, not the discussion. "Publish the deploy log so
   the live build is checkable" beats "deploy visibility".
-- **description** — the item as agreed, one line of context from the page
+- **description**: the item as agreed, one line of context from the page
   saying why it came up, and the page title and version you read it from.
-- **issue_type** — `Task` unless it is plainly a `Bug`.
+- **issue_type**: `Task` unless it is plainly a `Bug`.
 
 Write the description as ONE block of prose. It is converted to Atlassian's
 document format and blank lines do not survive as paragraph breaks, so do not
@@ -109,7 +109,7 @@ can open. To give a human a link, build it from your Jira site URL and the key.
 ## Rules
 
 1. **Ask before filing.** Show the list you are about to create and what each
-   will say. Filing is cheap; unfiling is not — there is no delete in this
+   will say. Filing is cheap; unfiling is not: there is no delete in this
    connector, so a wrong ticket is cleaned up by hand.
 2. **One issue per agreed action.** Never per sentence.
 3. **Owner from the page, not guessed.** If the notes name an owner, put it in
@@ -123,7 +123,7 @@ can open. To give a human a link, build it from your Jira site URL and the key.
 
 **Reading a Confluence page needs granular OAuth scopes, and the failure looks
 like something else.** Confluence's v2 API rejects Atlassian's classic scopes
-with `401 Unauthorized; scope does not match` — a 401, not a 403, so it reads
+with `401 Unauthorized; scope does not match`, a 401, not a 403, so it reads
 like a broken connection rather than a permissions gap. Search kept working
 throughout, because search is the one call still on the older API. Reads
 failing while search succeeds is the shape that identifies this.
@@ -134,13 +134,13 @@ the old scopes until someone reconnects by hand. Nothing prompts for it.
 
 **The page body arrives flattened, and the whitespace is structure.** A page
 built with Confluence's layout macros came back with long runs of blank lines
-where its columns and sections had been. Nothing is missing — the visual
+where its columns and sections had been. Nothing is missing: the visual
 scaffolding just has no text equivalent. Code that stops at the first large
 gap stops early.
 
 **Search cannot tell you where anything lives.** Results carry an id and a
 title, and `link` comes back null. Searching for spaces returns a title with
-an empty id, and every space-scoped tool requires a space key — so if you do
+an empty id, and every space-scoped tool requires a space key, so if you do
 not already know the key, listing a space's pages is not reachable from here.
 Work from page ids.
 

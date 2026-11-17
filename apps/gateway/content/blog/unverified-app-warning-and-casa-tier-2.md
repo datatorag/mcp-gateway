@@ -1,7 +1,9 @@
 ---
 title: "The 'unverified app' warning, explained: where we are with Google's CASA review"
-excerpt: "DataToRAG is going through Google's CASA Tier 2 security assessment. Until it's done, you'll see Google's 'unverified app' warning when connecting your Workspace. Here's what's happening and why you can click through it."
+excerpt: "From May to June 2026 DataToRAG showed Google's 'unverified app' warning while its CASA Tier 2 review ran. It passed on June 29, 2026; this is the record of what the warning was."
 date: "2026-05-10"
+updated: "2026-11-17"
+updatedNote: "November 17, 2026: the excerpt still said the warning appears; it has been gone since June 29, 2026, and now says so. The list of how tokens are handled said we only request the scopes that match the tools you enabled. We request one fixed set of scopes for the eight Google services, and Google's consent screen lets you untick any of them, so that line is corrected."
 author: "Manuel Yang"
 category: "Security"
 coverImage: "/blog/casa-tier-2-cover.png"
@@ -49,7 +51,7 @@ That's the whole thing. The OAuth grant itself works exactly the same way it wou
 This is the question the warning screen is really asking.
 
 - OAuth tokens are stored encrypted at rest, scoped per user and per service
-- We only request the scopes that match the tools you've enabled in DataToRAG. If you don't enable Gmail send, we don't ask for Gmail send.
+- We request one fixed set of scopes for the eight Google services, and Google's consent screen lets you untick any of them; a tool that needs a scope you left unticked says so
 - No personally identifiable information goes into our application logs
 - We don't sell, share, or train models on your data
 

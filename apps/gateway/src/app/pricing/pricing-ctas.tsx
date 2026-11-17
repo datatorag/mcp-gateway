@@ -74,7 +74,7 @@ export function ProCheckout({ className, promo = null }: { className: string; pr
           <p className="mt-1 text-xs text-muted-foreground">
             {interval === "yearly"
               ? "Two months free vs monthly"
-              : "Or $200 a year, two months free"}
+              : `Or ${PRICE_LABEL.yearly.amount} a year, two months free`}
           </p>
           {promo && (
             <p className="mt-1 text-xs font-medium text-primary">

@@ -61,7 +61,7 @@ The Sheets connector lets your AI agent read data from spreadsheets, write to ce
 | `sheets_create` | Create a new spreadsheet |
 | `sheets_update` | Update specific cells in a sheet |
 | `sheets_append` | Append rows to the end of a sheet |
-| `sheets_delete` | Delete a spreadsheet |
+| `sheets_delete` | Delete a spreadsheet. The delete is permanent, not a move to the trash; use `drive_trash_file` for one you may want back |
 | `sheets_add_tab` | Add a new tab to an existing spreadsheet, with an optional header row |
 | `sheets_rename_tab` | Rename a tab by its current title; data is untouched, but saved ranges that name the old title stop resolving |
 | `sheets_clear` | Clear values in a range while keeping the tab and its formatting; a bare tab name clears the whole tab |
@@ -70,7 +70,7 @@ The Sheets connector lets your AI agent read data from spreadsheets, write to ce
 | `sheets_find_rows` | Find the rows whose value in one column matches, and get back their row numbers plus a ready-made A1 range for each, so a lookup can be followed straight by an update. Searches many values in one call |
 | `sheets_query` | Run a query in the QUERY() language over a range and get back only the matching rows: select, where, group by, order by, limit and the aggregates, in one call. Columns by sheet letter. A tab that does not exist is refused with the list of tabs. Read-only |
 | `sheets_format_table` | Apply the whole readable-table pass to a range in one atomic call: header styling, frozen header row, column widths, wrapping, optional banding, and an optional trim of the empty grid outside the range |
-| `sheets_format_range` | Set fonts, colours, wrapping, alignment, padding, number formats and merges on the A1 ranges you give. Takes a list of instructions and applies all of them in one atomic call |
+| `sheets_format_range` | Set fonts, colors, wrapping, alignment, padding, number formats and merges on the A1 ranges you give. Takes a list of instructions and applies all of them in one atomic call |
 | `sheets_batch_update` | The full Sheets `batchUpdate` pass-through, beneath the job-shaped tools above. Use it for what they do not cover: custom borders, inserting or deleting columns, duplicating tabs, protected ranges |
 
 ## Which tab a range means
@@ -104,6 +104,13 @@ you the result is what you meant.
 
 - `https://www.googleapis.com/auth/spreadsheets`
 - `https://www.googleapis.com/auth/drive` (for delete, which is a Drive operation)
+
+## Multiple accounts
+
+Every tool on this page takes an optional `account` argument: the email address
+of the connected Google account to act on. Omit it and the default account is
+used. Connect a personal and a work account and your agent can read from
+one and write to the other in the same turn, without you switching profiles.
 
 ## Example prompts
 

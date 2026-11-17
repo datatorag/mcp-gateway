@@ -15,6 +15,8 @@ import { FaqSection } from "@/components/faq-section";
 import { JsonLd } from "@/components/json-ld";
 import { faqPageNode } from "@/lib/site-schema";
 import { CUSTOM_INTEGRATION, siteFaqGroups, siteFaqs } from "@/lib/site-faq";
+import { PUBLIC_CONNECTORS_TEXT } from "@/lib/public-integrations";
+import { PRICE_LABEL } from "./price-label";
 import { SOCIAL_OPEN_GRAPH, SOCIAL_TWITTER } from "@/lib/social-card";
 import { SignInConsent } from "@/components/sign-in-consent";
 
@@ -30,8 +32,8 @@ export const dynamic = "force-dynamic";
 
 // Call allowances render from the same constants enforcement reads
 // (billing/plans.ts), so the page cannot say one number while the gateway
-// enforces another. The dollar amounts live in pricing-ctas.tsx next to the
-// checkout that charges them.
+// enforces another. The dollar amounts come from PRICE_LABEL, next to the
+// checkout that charges them, here and on the cards.
 const FREE_CALLS = FREE_MONTHLY_CAP.toLocaleString("en-US");
 const PRO_CALLS = PRO_MONTHLY_INCLUDED.toLocaleString("en-US");
 const FREE_RUNS = planLimits("free").agentRuns.toLocaleString("en-US");
@@ -40,7 +42,7 @@ const PRO_RUNS = planLimits("pro").agentRuns.toLocaleString("en-US");
 // Both allowances, like the cards and the answers below them. Naming only the
 // calls was complete until agent runs became the second dimension (SCRUM-290),
 // and the run cap is the one expected to bind first.
-const description = `Free tier with ${FREE_CALLS} tool calls and ${FREE_RUNS} agent runs a month, no card required. Pro is $20 a month or $200 a year with ${PRO_CALLS} calls and ${PRO_RUNS} runs included. Every tier gets all connectors, multi-account, and the approval gate on writes.`;
+const description = `Free tier with ${FREE_CALLS} tool calls and ${FREE_RUNS} agent runs a month, no card required. Pro is ${PRICE_LABEL.monthly.amount} a month or ${PRICE_LABEL.yearly.amount} a year with ${PRO_CALLS} calls and ${PRO_RUNS} runs included. Every tier gets all connectors, multi-account, and the approval gate on writes.`;
 
 export const metadata: Metadata = {
   title: "Pricing | DataToRAG",
@@ -104,7 +106,7 @@ export default async function PricingPage({
             </h2>
             <div className="mt-5 flex flex-wrap justify-center gap-2">
               {[
-                `${totalTools > 0 ? totalTools : "70+"} tools across Google Workspace + Jira/Confluence`,
+                `${totalTools > 0 ? `${totalTools} tools` : "Tools"} across ${PUBLIC_CONNECTORS_TEXT}`,
                 "All connectors, no per-connector upsell",
                 "Multi-account",
                 "Approval gate on writes",

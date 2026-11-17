@@ -19,7 +19,7 @@ faqs:
     a: >-
       One Google scope, the contacts scope. That single grant covers searching,
       listing, reading, creating, updating and deleting your own contacts.
-      Searching your organisation's directory needs a separate Google
+      Searching your organization's directory needs a separate Google
       permission that DataToRAG does not request, so that one tool is refused.
 ---
 
@@ -31,7 +31,7 @@ The Contacts connector gives your AI agent access to your Google Contacts.
 |------|-------------|
 | `contacts_search` | Search contacts by name, email, or phone number |
 | `contacts_list` | List contacts by last name, 20 by default; raise `max_results` for more. There is no next-page argument |
-| `contacts_directory_search` | Search your organisation's directory. It needs Google's directory permission, which DataToRAG does not request today, so on the hosted service this call is refused |
+| `contacts_directory_search` | Search your organization's directory. It needs Google's directory permission, which DataToRAG does not request today, so on the hosted service this call is refused |
 | `contacts_get` | Get details of a specific contact |
 | `contacts_create` | Create a new contact |
 | `contacts_update` | Update an existing contact |
@@ -40,6 +40,13 @@ The Contacts connector gives your AI agent access to your Google Contacts.
 ## Required scopes
 
 - `https://www.googleapis.com/auth/contacts`
+
+## Multiple accounts
+
+Every tool on this page takes an optional `account` argument: the email address
+of the connected Google account to act on. Omit it and the default account is
+used. Connect a personal and a work account and your agent can read from
+one and write to the other in the same turn, without you switching profiles.
 
 ## Example prompts
 
