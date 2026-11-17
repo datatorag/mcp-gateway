@@ -117,6 +117,7 @@ export const SCENARIOS: Scenario[] = [
        * with a reason instead of failing each one separately against a
        * spreadsheet that does not exist. */
       "SH1", // create the spreadsheet this lifecycle works in
+      "NF3", // a spreadsheet id sheets cannot find is refused naming the id and the account
       "D7", //  add a tab, and it answers with a real sheet id
       "D1", //  append a row, read it back, clear it
       "E3", //  values beginning = and + are stored as text
@@ -206,6 +207,7 @@ export const SCENARIOS: Scenario[] = [
       "E10", // nested replaceAllText works; the flat shape is refused
       /* Read guards, on the standing fixture doc. */
       "C5", //  the fixture doc's first line is its control heading
+      "NF2", // a document id docs cannot find is refused naming the id and the account
       "E9", //  a partial read returns the slice and says the doc is longer
     ],
   },
@@ -224,6 +226,7 @@ export const SCENARIOS: Scenario[] = [
       "FD3", // a Drive file named by drive_file downloads as the bytes Drive stored
       "FD4", // a Doc named by drive_export downloads as a PDF
       "FD5", // a folder, a Doc as a stored file, and a format a Doc cannot take are refused
+      "NF1", // a file id drive cannot find is refused naming the id and the account
       "FD6", // a file sent as a content reference lands in Drive as the bytes that were sent
       "FD8", // a download link is refused for a file sent as a content reference
       "FD9", // a content reference over 1 MB is refused, and nothing reaches Drive
@@ -249,6 +252,7 @@ export const SCENARIOS: Scenario[] = [
       "CA3", // freebusy is busy where an event was made and free beside it
       "CA4", // the calendar list is compact; a suggested slot leaves once an event takes it
       "CA5", // an answer to an invitation is what the organizer then sees
+      "NF5", // an event id calendar cannot find is refused naming the id and the account
     ],
   },
   {
@@ -283,6 +287,7 @@ export const SCENARIOS: Scenario[] = [
     title: "see the lists, then make a task, rename it, finish it, remove it",
     steps: [
       "C10", // the first page of tasklists answers with a list shape
+      "NF7", // a task list id tasks cannot find is refused naming the id and the account
       "TK1", // a task is created, renamed, completed and deleted
     ],
   },
@@ -294,6 +299,7 @@ export const SCENARIOS: Scenario[] = [
       "CO1", // a contact is created, renamed, deleted, and a later get refused
       "CO2", // a contact search answers addressably
       "CO3", // the org directory read answers addressably
+      "NF6", // a contact contacts cannot find is refused naming it and the account
     ],
   },
   {
@@ -308,6 +314,7 @@ export const SCENARIOS: Scenario[] = [
        * run anywhere. */
       "D6", // a deck is created, its title placeholder filled, read back, deleted
       "C6", // the fixture deck has exactly one slide with its control title
+      "NF4", // a presentation id slides cannot find is refused naming the id and the account
     ],
   },
   {

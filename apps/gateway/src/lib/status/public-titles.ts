@@ -117,6 +117,13 @@ export const PUBLIC_TITLES: Readonly<Record<string, string>> = {
   "GM10": "Read a whole conversation at once",
   "GM11": "Reading an email that cannot be found is refused, naming the email and the account",
   "GW1": "List your connected accounts",
+  "NF1": "Reading a Drive file that cannot be found is refused, naming the file and the account",
+  "NF2": "Reading a Google Doc that cannot be found is refused, naming the document and the account",
+  "NF3": "Reading a spreadsheet that cannot be found is refused, naming the spreadsheet and the account",
+  "NF4": "Reading a presentation that cannot be found is refused, naming the presentation and the account",
+  "NF5": "Reading a calendar event that cannot be found is refused, naming the event and the account",
+  "NF6": "Reading a contact that cannot be found is refused, naming the contact and the account",
+  "NF7": "Reading a task list that cannot be found is refused, naming the list and the account",
   // SCRUM-468. Not shown in public while Brevo is offered to admins only.
   "BR1": "Your Brevo account and its campaigns answer",
   "BR2": "Read a Brevo list, its members and a contact",

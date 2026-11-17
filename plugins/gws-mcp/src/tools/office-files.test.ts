@@ -116,8 +116,11 @@ describe("an Office file given to a Google tool (SCRUM-455)", () => {
     expect(res.content[0].text).toMatch(/^This file is an Excel file, not a Google Sheet, so gws_run cannot open it\./);
   });
 
-  it("an error that is not a 400 asks Drive nothing", async () => {
-    const sent = google({ api: () => json({ error: { code: 404, message: "not found", status: "NOT_FOUND" } }, 404) });
+  // A 404 is a miss and gets its own words, which may ask Drive what the id
+  // is (SCRUM-495, not-found.ts). Any other error that is not this 400 asks
+  // Drive nothing.
+  it("an error that is neither this 400 nor a miss asks Drive nothing", async () => {
+    const sent = google({ api: () => json({ error: { code: 403, message: "The caller does not have permission", status: "PERMISSION_DENIED" } }, 403) });
     const res = await call("sheets_get_metadata", { spreadsheet_id: "gone" });
     expect(res.content[0].text).toMatch(/^Error: /);
     expect(sent.some((s) => s.url.pathname.startsWith("/drive/"))).toBe(false);
