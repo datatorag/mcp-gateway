@@ -2,6 +2,8 @@
 title: "Your Agent Can Attach Files to Email Now. The Interesting Part Is Where the Bytes Never Go."
 excerpt: "Gmail send, reply, forward and drafts take attachments from Drive: real files attached, Google Docs linked the way Gmail does it or exported as PDF and Word, images inline. The design question underneath is one the MCP spec itself hasn't settled yet, and we picked a side."
 date: "2026-09-28"
+updated: "2026-11-17"
+updatedNote: "November 17, 2026: when this was written a file had to be in Drive first. Since late October 2026 a file Claude already holds (up to 1 MB) or a file on your computer (up to 25 MB, through a single-use upload link) can be attached too."
 author: "Manuel Yang"
 category: "Product"
 coverImage: "/blog/gmail-draft-attachments.png"
@@ -33,6 +35,8 @@ The obvious design has the model hand us the file as base64 in the tool call. It
 A Drive id is already the opaque handle the MCP spec is converging on. So the model says "attach this id", our server pulls the bytes from Drive with your token and streams them into the message, and nothing large ever passes through the model. The full reasoning, including what the spec's own proposals did with this question, is in [How a File Should Move Through an MCP Server](/blog/how-files-should-move-through-an-mcp-server).
 
 ## What it means for you today
+
+*Since late October 2026 a file does not have to be in Drive first: a file Claude already holds (up to 1 MB) or a file on your computer (up to 25 MB, through a single-use upload link) can be attached too. See [a file on your computer into Drive, Jira or an email](/blog/a-file-on-your-computer-into-drive-jira-or-an-email).*
 
 If the file is in Drive, or already on an email you're forwarding, it works now. If it's a screenshot you pasted into the chat, it doesn't, and the honest answer is "put it in Drive and tell me the name". That's a limit of every MCP client, not ours, and the docs say so rather than pretending.
 

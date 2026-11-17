@@ -6,7 +6,8 @@ author: "Manuel Yang"
 category: "Product"
 coverImage: "/blog/raw-call-to-named-tool.png"
 tags: ["gws-mcp", "sheets", "gmail", "drive", "mcp"]
-updated: "2026-10-17"
+updated: "2026-11-17"
+updatedNote: "November 17, 2026: the claim that nothing was left for the raw call was wrong. Reading a whole Gmail thread still went through it; gmail_read_thread now covers that."
 ---
 
 Every connector has a gap somewhere, and ours has had the same answer to every gap since the first week: a tool called `gws_run` that sends one raw request to a Google API and gives back whatever Google says. Service, resource, method, parameters. If we had not built a tool for something, the model could still get there.
@@ -44,4 +45,4 @@ That takes the connector to 70+ named tools for Google Workspace, plus the raw o
 
 With the gaps filled, there is nothing left that an outside user needs the raw call for, and every time the model picks it over a named tool it is a worse call for them and a blind spot for us. So from today `gws_run` is hidden from every account except our own and a few we have talked to. It still exists, and a client that calls it anyway gets a one-line answer naming the tools to use instead. If you use it today for something these nine do not cover, tell me what. That is the next tool. The full list of what changed is in the [changelog](/changelog).
 
-Everything here went out the same way: the registry rows first, approved from my phone, then the build that serves them, then the test suite against production, with seven new cases for the seven new behaviours. All seven green on the first run against production.
+Everything here went out the same way: the registry rows first, approved from my phone, then the build that serves them, then the test suite against production, with seven new cases for the seven new behaviors. All seven green on the first run against production.

@@ -2,8 +2,8 @@
 title: "Composio Is for the Developer Shipping an Agent. DataToRAG Is for You."
 excerpt: "Composio is a strong platform for developers wiring tools into agent products. If you just want Claude working in your own Google account, you'd have to write code to get there. DataToRAG is the part you sign into."
 date: "2026-06-29"
-updated: "2026-08-24"
-updatedNote: "August 24, 2026: narrowed an overbroad privacy claim. The pass-through statement used to end 'there's no copy at all'; the gateway keeps nothing, but the hosted agent on our own site stores its conversation threads. The privacy policy is now linked from the paragraph. EARLIER: Corrected the credentials row, which was the most misleading line on the page. It said credentials are passed through and never stored. They are stored: the hosted service keeps each connection tokens in our database, which is what makes background refresh work at all. Passing through without storing is true of your Workspace CONTENT rather than your credentials, so that claim now has its own row and says what it actually covers."
+updated: "2026-11-17"
+updatedNote: "November 17, 2026: the comparison table now includes Notion, connected since October 2026. August 24, 2026: narrowed an overbroad privacy claim. The pass-through statement used to end 'there's no copy at all'; the gateway keeps nothing, but the hosted agent on our own site stores its conversation threads. The privacy policy is now linked from the paragraph. EARLIER: Corrected the credentials row, which was the most misleading line on the page. It said credentials are passed through and never stored. They are stored: the hosted service keeps each connection tokens in our database, which is what makes background refresh work at all. Passing through without storing is true of your Workspace CONTENT rather than your credentials, so that claim now has its own row and says what it actually covers."
 author: "Manuel Yang"
 category: "Comparison"
 tags: ["composio", "mcp", "comparison", "ai-agents", "alternative"]
@@ -27,7 +27,7 @@ Composio gives you the pieces to assemble. You create a server config that bundl
 
 DataToRAG is the assembled thing. You go to the dashboard, you click connect, you sign in with Google, and Claude can now read and write your Workspace. There's no app to build because the app is the product. That's the entire design difference, and I'm pretty sure it decides which tool fits you before you compare a single feature.
 
-If you're a founder building an AI assistant for your customers, Composio's shape is right and DataToRAG's probably isn't. If you're an ops lead, a founder using Claude to actually do work, or an IC who wants two Gmail accounts and a Jira board in one prompt, it's the reverse.
+If you're a founder building an agent for your customers, Composio's shape is right and DataToRAG's probably isn't. If you're an ops lead, a founder using Claude to actually do work, or an IC who wants two Gmail accounts and a Jira board in one prompt, it's the reverse.
 
 ## Feature comparison
 
@@ -37,11 +37,11 @@ If you're a founder building an AI assistant for your customers, Composio's shap
 | Gmail send, reply, label, search | Yes, and deep | Yes |
 | Standalone Slides tools | No standalone Slides toolkit at the time of writing | Yes (`slides_*`) |
 | Standalone Contacts tools | No standalone Contacts toolkit at the time of writing | Yes (`contacts_*`) |
-| Google and Atlassian behind one endpoint | Separate toolkits you wire up yourself | Yes, one endpoint, one sign-in |
+| Google, Atlassian and Notion behind one endpoint | Separate toolkits you wire up yourself | Yes, one endpoint, one sign-in |
 | Self-host on an open-source core | Enterprise plans only, closed core | Yes, MIT, Docker Compose |
 | Where credentials live on self-serve plans | Composio's cloud | Our database on hosted plans; self-host and they stay in your own Postgres |
 | Where your Workspace content lives | Varies by toolkit | Passed through; the gateway stores nothing ([privacy](/privacy)) |
-| Total integration count | 1,000+ toolkits | 8 Google services + Jira and Confluence, built deep |
+| Total integration count | 1,000+ toolkits | 8 Google services, Jira, Confluence and Notion, built deep |
 | Formal attestations | SOC 2 Type II, ISO 27001 | CASA Tier 2 passed, Google-verified (June 2026) |
 
 A note on that last row, because I want to be straight about it: Composio is ahead of us on general-purpose security attestations. They're SOC 2 Type II and ISO 27001 certified, and we're not there yet. What we did finish is CASA Tier 2, the Google-specific verification for restricted Gmail and Drive scopes. We passed it, and Google verified the app in June 2026; [the full story of that review is here](/blog/casa-tier-2-verified). Different credential, different scope. If your bar is SOC 2 and ISO 27001, they've shipped and we haven't. If it's verified Google access, we're both there.

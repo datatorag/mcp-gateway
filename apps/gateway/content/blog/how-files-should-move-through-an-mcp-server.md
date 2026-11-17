@@ -2,9 +2,11 @@
 title: "How a File Should Move Through an MCP Server (and Why Ours Never Sees the Bytes)"
 excerpt: "We designed Gmail attachments three ways and built one. What we learned about base64 and tokens, what Claude actually hands a tool when you drop a PDF into the chat, and where the MCP spec is heading, is worth more than the feature."
 date: "2026-09-28"
+updated: "2026-11-17"
+updatedNote: "November 17, 2026: this post says a file has to be in Drive and that bytes in the call are a dead end. Since late October 2026 we take both: a file Claude already holds in the call, capped at 1 MB for the token reasons given here, and a file on your computer through a single-use upload link up to 25 MB. The reasoning stands; the limits section does not. See /blog/a-file-on-your-computer-into-drive-jira-or-an-email."
 author: "Manuel Yang"
 category: "Engineering"
-coverImage: "/blog/gmail-draft-attachments.png"
+coverImage: "/blog/attachments-three-designs.png"
 tags: ["mcp", "attachments", "files", "drive", "engineering"]
 ---
 
@@ -26,7 +28,7 @@ The reasons are below. None of them is "it was easier". Design 1 would have been
 
 Two facts, one from arithmetic and one from how the clients work.
 
-**The arithmetic.** Base64 is high-entropy text, so it does not compress into tokens the way English does. On Claude's tokenizer it lands at roughly one token per two raw bytes, sometimes worse. A 200 KB screenshot is about 100,000 output tokens. Most clients stop a model's turn well before that, and output tokens are the expensive kind. A 2 MB photo is a million tokens, which is not a cost, it is a refusal. The customer whose ask started this sends "docs and zip files for the most part". A zip is exactly the file base64 handles worst.
+**The arithmetic.** Base64 is high-entropy text, so it does not compress into tokens the way English does. On Claude's tokenizer it lands at roughly one token per two raw bytes, sometimes worse. A 200 KB screenshot is about 100,000 output tokens. Most clients stop a model's turn well before that, and output tokens are the expensive kind. A 2 MB photo is a million tokens, which is not a cost, it is a refusal. The customer whose ask started this mostly sends documents and zip files. A zip is exactly the file base64 handles worst.
 
 The result is a path that works in the demo and fails in the first real week, which is worse than no path. A user who hits it once does not try attachments again.
 

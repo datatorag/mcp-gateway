@@ -1,16 +1,16 @@
 ---
 title: "Building a Usage Dashboard Without Logging User Data"
-excerpt: "How we show users exactly what their AI assistant is doing (calls, latency, errors) without storing a single argument or response body."
+excerpt: "How we show users exactly what their agent is doing (calls, latency, errors) without storing a single argument or response body."
 date: "2026-04-20"
-updated: "2026-09-03"
-updatedNote: "Corrected the error-message claim. The post said stored error messages are redacted, which was true when it was written and is no longer. The redaction protected against sending user content to a third-party analytics provider, and that still happens; it was never a reason to censor the copy stored for the user in a row only they can see, quoting an error they had already received in full. The stored copy is now raw."
+updated: "2026-11-17"
+updatedNote: "November 17, 2026: the row now lists every field it holds (the account, client, argument size and cost units, and for the raw gws_run call its service, resource, method and parameter names, never values); a redacted copy of each event goes to our analytics provider; and hosted agent calls count, since plans are billed on this meter. Corrected the error-message claim. The post said stored error messages are redacted, which was true when it was written and is no longer. The redaction protected against sending user content to a third-party analytics provider, and that still happens; it was never a reason to censor the copy stored for the user in a row only they can see, quoting an error they had already received in full. The stored copy is now raw."
 author: "Manuel Yang"
 category: "Engineering"
 coverImage: "/blog/usage-dashboard.png"
 tags: ["mcp", "observability", "privacy", "architecture"]
 ---
 
-Users kept asking the same thing. "Is it actually doing anything?" They'd wire their AI assistant up to DataToRAG, kick off a workflow, and have no way to see what happened. Did Gmail even get called? Did a search fail silently? Was the slow response our fault or Anthropic's?
+Users kept asking the same thing. "Is it actually doing anything?" They'd wire their agent up to DataToRAG, kick off a workflow, and have no way to see what happened. Did Gmail even get called? Did a search fail silently? Was the slow response our fault or Anthropic's?
 
 We needed a usage dashboard. But DataToRAG is a multi-tenant MCP gateway. Every user's data flows through the same pipes on its way to Google or Atlassian, so the last thing anyone wants is a "helpful" dashboard that logs their Gmail search terms or the contents of a Jira comment they just drafted.
 
@@ -18,7 +18,7 @@ The first design constraint was easy to name: track behavior, not content.
 
 ## What we log, and what we refuse to
 
-For every tool call we record six things:
+For every tool call we record these things:
 
 - Tool name (`gmail_search`, `jira_create_issue`)
 - Connector (`google-workspace`, `atlassian`)
@@ -26,12 +26,14 @@ For every tool call we record six things:
 - Latency in milliseconds
 - Response size in bytes
 - The error message when something failed, stored as received and capped in length
+- The connected account the call used, the client that made it, the size of its arguments and the units it counted for
+- For the raw `gws_run` call only: the API service, resource and method, and the names of the parameters it passed, never their values
 
 That's the whole row. No arguments. No response body. No `q=` search query, no message ID, no ticket title, no document contents.
 
 If a call errored with something like `"Message 18f3a2c1b not found for user alice@company.com"`, we store that string as received and capped in length, in a row only that user can see. It quotes their own data, and they already received the same error in full when the call failed, so censoring the stored copy only made failures harder to diagnose. The redaction happens on the way out instead: before that message is sent to our analytics provider it runs through a regex redactor that replaces emails, Google Drive IDs, and long quoted strings with a `[redacted]` marker. The error message is useful because it tells users why something failed. It's not worth sending PII to a third party to get there.
 
-The schema lives in a single `usage_events` table in the same Postgres instance as the rest of the app. No separate analytics warehouse, no third-party event pipeline, no cross-region replication. It's just a table.
+The schema lives in a single `usage_events` table in the same Postgres instance as the rest of the app. The usage rows live in one Postgres table, with no separate warehouse and no cross-region replication. A redacted copy of each tool-call event also goes to our analytics provider.
 
 ## Counting what matters
 
@@ -43,7 +45,7 @@ Not every tool call should count equally. We settled on three outcome buckets:
 
 **Server error.** Our gateway choked, a plugin threw, or the upstream API had a 5xx outage. *Not counted.* If we're broken, that's on us. Charging the user (or even showing it in their metrics) is the wrong signal.
 
-Playground calls from the in-dashboard tool tester don't count either. Those are for debugging, not production usage.
+When this was written, calls from the in-dashboard tool tester did not count either. Since August 2026 calls made by the hosted agent count like any other call, and plans are billed on this meter.
 
 The classifier that makes this decision is one function with a handful of branches. Every code path that dispatches a tool call routes through it, so the meter rules can't drift between the MCP endpoint and the playground.
 
@@ -109,10 +111,10 @@ Two choices worth naming.
 
 ## What it's worth
 
-A usage dashboard in a multi-tenant service isn't a feature. It's a trust signal. The promise is that you can see what your AI assistant is doing without us seeing what you're doing.
+A usage dashboard in a multi-tenant service isn't a feature. It's a trust signal. The promise is that you can see what your agent is doing without us seeing what you're doing.
 
-We got there by being disciplined about the row schema: tool name, outcome, latency, size, the error message. Nothing else.
+We got there by being disciplined about the row schema: what was called, by which account and client, the outcome, latency and sizes, and the error message. No argument values and no response body.
 
-If we ever need to add billing on top of this (metered pricing based on call counts), the meter semantics are already correct. Success and user errors count. Server errors don't. Playground calls don't. The plumbing is the same.
+Billing now runs on this meter, and the semantics held: success and user errors count, server errors don't.
 
 But that's a post for another day.

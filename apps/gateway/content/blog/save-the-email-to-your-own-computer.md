@@ -6,7 +6,7 @@ author: "Manuel Yang"
 category: "Product"
 coverImage: "/blog/download-page.png"
 tags: ["gmail", "attachments", "file-references", "mcp"]
-updated: "2026-10-17"
+updated: "2026-11-17"
 ---
 
 Earlier this month I wrote about [filing an email on a Jira issue](/blog/email-to-jira-file-references) without the file going through the conversation. The customer who asked for that came back a few days later with the natural follow-up. He files those emails locally too, so could the same file land in his Downloads folder, and could he check that what he saved is byte for byte what Gmail has.
@@ -54,7 +54,7 @@ Both of those are true at once because the file is read from Gmail twice. Once w
 
 A tool that turns any of your mail into a URL deserves a straight answer on what happens if that URL leaks. It is worth one download, inside ten minutes, and only if the other person uses it before you do. If they did, your click tells you, in words.
 
-There is one more guard that is specific to how these links get made. A link is for you, not for Claude. If any tool call on our service carries one of your live links in its arguments, the call is refused and the link is cancelled. That stops the obvious case where a message in your inbox tries to talk the model into exporting itself somewhere. It does not stop everything. The [docs page](/docs/file-references) says what it does not catch.
+There is one more guard that is specific to how these links get made. A link is for you, not for Claude. If any tool call on our service carries one of your live links in its arguments, the call is refused and the link is canceled. That stops the obvious case where a message in your inbox tries to talk the model into exporting itself somewhere. It does not stop everything. The [docs page](/docs/file-references) says what it does not catch.
 
 ## And Drive, the day after
 

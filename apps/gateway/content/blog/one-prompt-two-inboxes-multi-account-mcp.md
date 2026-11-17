@@ -2,8 +2,8 @@
 title: "One Prompt, Two Inboxes: Multi-Account Support for MCP"
 excerpt: "Most MCP servers assume one user means one account. We built multi-account support so you can query your work and personal Google accounts in the same conversation."
 date: "2026-04-05"
-updated: "2026-08-12"
-updatedNote: "Three corrections. The services list omitted Slides, Contacts and Tasks. The 'about 30%' saving from lazy tool loading was a figure that moves every time a tool ships, so it is gone rather than restated. And the bar chart with tool counts printed on it is replaced by a table: the counts had gone stale, and a number inside an image cannot be caught by the tests that check the rest of our copy."
+updated: "2026-11-17"
+updatedNote: "November 17, 2026: Notion added to the services list and the table, and the account argument for Notion can be the workspace name. Three corrections. The services list omitted Slides, Contacts and Tasks. The 'about 30%' saving from lazy tool loading was a figure that moves every time a tool ships, so it is gone rather than restated. And the bar chart with tool counts printed on it is replaced by a table: the counts had gone stale, and a number inside an image cannot be caught by the tests that check the rest of our copy."
 author: "Manuel Yang"
 category: "Product"
 coverImage: "/blog/multi-account-mcp.png"
@@ -26,7 +26,7 @@ So we built the plumbing.
 
 DataToRAG now supports connecting multiple Google accounts per service. The connect flow uses Google's `select_account` prompt, so when you add a second account, Google asks which one you want to link. No confusion, no accidentally re-authorizing the same account.
 
-Every tool (search emails, list drafts, read documents) accepts an optional `account` parameter. It's just an email address. If you pass `account: "manuel@work.com"`, the tool hits that account's API. If you omit it, the default account is used.
+Every tool (search emails, list drafts, read documents) accepts an optional `account` parameter. For Google and Atlassian it's an email address; for Notion it can also be the workspace name. If you pass `account: "manuel@work.com"`, the tool hits that account's API. If you omit it, the default account is used.
 
 Single-account users never notice the feature exists. There's no extra configuration, no "select your account" step on every call. You connect one account, you use the tools exactly like before.
 
@@ -36,7 +36,7 @@ For multi-account users, the LLM figures it out from context. If you say "check 
 
 Adding multi-account support raised a question we'd been thinking about anyway: tool sprawl.
 
-DataToRAG connects to Google services (Gmail, Calendar, Drive, Docs, Sheets, Slides, Contacts, Tasks) and Atlassian services (Jira, Confluence). That's a lot of tools. If you've only connected Gmail, why should your LLM's context window include tool definitions for Jira, Confluence, Sheets, and everything else?
+DataToRAG connects to Google services (Gmail, Calendar, Drive, Docs, Sheets, Slides, Contacts, Tasks) Atlassian services (Jira, Confluence) and Notion. That's a lot of tools. If you've only connected Gmail, why should your LLM's context window include tool definitions for Jira, Confluence, Sheets, and everything else?
 
 We added lazy tool loading. Tools for services you haven't connected are hidden from the MCP `ListTools` response entirely. They don't exist as far as the LLM is concerned. Connect Google Workspace only and every Atlassian tool disappears from the list. Connect Atlassian only and the whole Google surface goes. We deliberately do not put a percentage on it here, because the saving moves every time a tool ships or a connector is added, and a number printed in a blog post does not.
 
@@ -46,7 +46,8 @@ When you connect a new service, its tools appear automatically. Disconnect it, t
 |---|---|
 | Google Workspace only | Gmail, Calendar, Drive, Docs, Sheets, Slides, Contacts and Tasks tools |
 | Atlassian only | Jira and Confluence tools |
-| Both | All of the above |
+| Notion only | Notion tools |
+| More than one | The tools of each one connected |
 | Nothing yet | Only the tools that help you connect something |
 
 This used to be a bar chart with the tool counts printed on it. The counts went

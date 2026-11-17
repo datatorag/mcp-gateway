@@ -2,8 +2,8 @@
 title: "AI-Powered Email Workflows with the Gmail Draft Tool"
 excerpt: "Most AI email tools generate and send in one shot. We built a draft workflow instead, because anything that matters deserves a second look before it leaves your outbox."
 date: "2026-04-04"
-updated: "2026-08-12"
-updatedNote: "Dropped a threading claim that a live test disproved. gmail_create_draft takes recipients, subject and body and has no thread parameter; a draft written as a reply lands as its own draft rather than inside the original conversation. The recipients-and-subject half was always true and stays."
+updated: "2026-11-17"
+updatedNote: "November 17, 2026: dropped sharing a draft link with your manager. A Gmail draft link opens only in the mailbox that owns the draft, so nobody else can open it. Dropped a threading claim that a live test disproved. gmail_create_draft takes recipients, subject and body and has no thread parameter; a draft written as a reply lands as its own draft rather than inside the original conversation. The recipients-and-subject half was always true and stays."
 author: "Manuel Yang"
 category: "Product"
 coverImage: "/blog/gmail-draft-workflow.png"
@@ -46,7 +46,7 @@ The obvious use case is one-off emails that need a human eye. But the draft work
 
 **Batch drafting.** "Go through my last 10 unanswered emails and draft replies for each one." Claude creates 10 drafts. You spend 15 minutes reviewing them instead of 45 minutes writing them. Some need edits, some are good as-is. You send them in a batch.
 
-**Multi-stakeholder review.** Draft an email, share the draft link with your manager, get feedback, ask Claude to incorporate it. The draft is the collaboration surface.
+**Review before sending.** Draft an email, read it in Gmail, paste in your manager's feedback and ask Claude to incorporate it. The draft stays in your mailbox until you send it.
 
 **Follow-up sequences.** "Draft a follow-up to the partnership email I sent last Tuesday. Reference the pricing doc I shared." Claude finds the thread, reads the context, and drafts something that sounds like a continuation of the conversation. Because it is one.
 
