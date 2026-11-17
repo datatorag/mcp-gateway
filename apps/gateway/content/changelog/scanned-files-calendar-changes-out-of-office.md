@@ -18,3 +18,5 @@ API to do.
   permission DataToRAG does not ask for, so no tool changes it. A raw API request to change it now
   says so directly instead of asking you to reconnect and grant it; reading the current responder
   still works.
+
+_Note: the raw API call this entry mentions is available only to the few accounts that still have it, as the [October 17 entry](/changelog#named-tools-first) explains. For everyone else, no DataToRAG tool reads or changes the vacation responder._

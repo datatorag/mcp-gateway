@@ -15,3 +15,5 @@ marker. Default behavior is unchanged.
 `{id, threadId, from, to, subject, date, snippet, labelIds}`. This also
 fixes a bug where search and list results were missing From/Subject
 headers entirely.
+
+_Note: the April 16 entry about triage names `gmail_read` with `text_only`. `text_only` arrived here, on July 18; both entries were written that day._

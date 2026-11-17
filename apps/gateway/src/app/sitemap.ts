@@ -33,6 +33,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     // /demo still serves (ad destinations, analytics history) but canonicalizes
     // to /contact, so only the canonical URL is listed here.
     { url: `${BASE}/contact`, changeFrequency: "monthly", priority: 0.5 },
+    { url: `${BASE}/request-integration`, changeFrequency: "monthly", priority: 0.5 },
     { url: `${BASE}/privacy`, changeFrequency: "yearly", priority: 0.2 },
     { url: `${BASE}/terms`, changeFrequency: "yearly", priority: 0.2 },
   ];
