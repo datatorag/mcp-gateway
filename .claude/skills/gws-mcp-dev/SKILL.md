@@ -243,6 +243,17 @@ gateway deploy carries it. What goes with it:
   attaches to `GwsApiError` (its `service` and path parameters), so gws_run
   is covered too; it never matches Google's words, and an ordinary 400
   costs no Drive call.
+- **A Gmail id Gmail cannot find is answered in words** (SCRUM-493). A 404
+  on a Gmail `users.messages`, `users.threads`, `users.drafts` or
+  `users.messages.attachments` request is worded in the same CallTool catch
+  by `gmailNotFound` (`src/tools/gmail-not-found.ts`), keyed on the request's
+  `resource` and `id` path parameter, which `GwsApiError` now carries beside
+  `service`. So every Gmail tool, gws_run included, gets one answer: the id
+  and its kind, the mailbox (one `users.getProfile`, only after a 404), why
+  that usually happens, what to do next, then Google's code and reason. A
+  thread 404 first asks whether the id is a message's, and if so names its
+  thread. The `_meta` error field is unchanged. Other services keep Google's
+  words for now.
 - **An alias is declared on the schema** (SCRUM-456). A name callers keep
   reaching for is a property carrying `"x-alias-of": "<canonical>"`
   (`query` on `sheets_find_rows`, `content` on `docs_write`, `body` on
