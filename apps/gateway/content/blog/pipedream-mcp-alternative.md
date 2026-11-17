@@ -2,6 +2,8 @@
 title: "Pipedream Wants You to Build the Integration. DataToRAG Is the Integration."
 excerpt: "Pipedream Connect is excellent infrastructure for embedding tool access into your own product. But if you just want Claude to use your Google Workspace, you'd be building a product to do it. DataToRAG is the one you sign into."
 date: "2026-06-29"
+updated: "2026-11-17"
+updatedNote: "November 17, 2026: the billing row now states the plans: Free up to 250 tool calls a month, Pro $20 a month for 10,000. The self-host row said Docker and PostgreSQL; there is no packaged self-host guide, so it now says the source is open (MIT)."
 author: "Manuel Yang"
 category: "Comparison"
 tags: ["pipedream", "mcp", "comparison", "ai-agents", "alternative"]
@@ -28,11 +30,11 @@ DataToRAG removes the scaffolding because it removes the abstraction. There's no
 | Capability | Pipedream Connect / MCP | DataToRAG |
 |---|---|---|
 | An end user can sign in and use it without writing code | No, a developer builds the integration first | Yes |
-| Self-host the entire platform | No, cloud only | Yes, MIT (Docker + PostgreSQL) |
+| Self-host the entire platform | No, cloud only | Source open (MIT); no packaged self-host guide |
 | Deep Google Workspace actions out of the box | Broad but shallow per app, with a custom-API fallback | Yes, all eight services |
 | Google and Atlassian behind one endpoint | You wire up each app yourself | Yes, one endpoint |
 | Work and personal Google in a single prompt | Possible, but you build and host it | Yes, from the dashboard |
-| How you're billed | Compute-metered credits | Usage based, pass-through |
+| How you're billed | Compute-metered credits | Tool calls: Free up to 250 a month; Pro $20 a month for 10,000 |
 | Credentials and execution can stay off a vendor's servers | No, they transit Pipedream | Yes, when you self-host |
 
 ## What DataToRAG ships that you'd otherwise assemble
@@ -53,7 +55,7 @@ So the rule of thumb is simple. Pick Pipedream when you're the one building the 
 
 ## A word on cost shape
 
-Pipedream meters compute. You spend credits as actions run, and an agent that polls, retries, and chains tool calls runs a lot of actions. That isn't a knock. Metered compute is a fair model, and for steady workloads it's predictable enough. But a chatty Claude session can burn through more than you'd guess, and the cost of "let me just check that one more time" adds up in a way a usage-simple, pass-through model doesn't. Model it against your real usage before you commit, in either direction. The point isn't that one is always cheaper. It's that the two bill on different axes, and a conversational agent leans hard on the axis Pipedream charges for.
+Pipedream meters compute. You spend credits as actions run, and an agent that polls, retries, and chains tool calls runs a lot of actions. That isn't a knock. Metered compute is a fair model, and for steady workloads it's predictable enough. But a chatty Claude session can burn through more than you'd guess, and the cost of "let me just check that one more time" adds up in a way a plan that counts tool calls doesn't. Model it against your real usage before you commit, in either direction. The point isn't that one is always cheaper. It's that the two bill on different axes, and a conversational agent leans hard on the axis Pipedream charges for.
 
 ## Where the difference actually bites
 

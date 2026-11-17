@@ -2,6 +2,8 @@
 title: "Claude Can Send Formatted Email Now. Here's What That Took."
 excerpt: "Until August 26, our Gmail tools sent every message as plain text, so asking Claude for a formatted email got you literal HTML tags in your inbox. Here's the fix, the one asymmetry to know about, and where the workflow builders stand."
 date: "2026-08-26"
+updated: "2026-11-17"
+updatedNote: "November 17, 2026: the section on replies and forwards described them as HTML only. They now send an HTML part with a plain-text part derived from it, the same as a fresh send."
 author: "Manuel Yang"
 category: "Product"
 tags: ["gmail", "claude", "mcp", "email", "google-workspace"]
@@ -36,17 +38,12 @@ because mail clients render the last part they support. Get that backwards and H
 show the fallback. It's the kind of thing you only learn by sending yourself a lot of test
 email.
 
-## The asymmetry you should know about
+## Replies and forwards
 
-`gmail_reply` and `gmail_forward` also accept `html_body`, but they behave differently: those
-paths send single-part `text/html` with no plain-text fallback.
-
-Why? Replies and forwards hand quoting and threading to a composer that has one body slot.
-Building a faithful plain-text alternative of a quoted HTML thread is a project in itself, and
-a bad fallback is worse than none. So the same parameter name means "multipart with fallback"
-on a fresh send and "HTML only" on a reply. We wrote it into the tool descriptions, and I'm
-writing it here, because a parameter that behaves two ways is exactly what you hit at the
-wrong moment.
+When this shipped, `gmail_reply` and `gmail_forward` also accepted `html_body` but sent
+single-part `text/html` with no plain-text fallback, because replies and forwards handed quoting
+to a composer with one body slot. They now send both parts, the same as `gmail_send`: an HTML
+part and a plain-text part derived from it, with the original quoted beneath in Gmail's style.
 
 While we were in there, `gmail_forward` gained a plain `body` it never had. Before this you
 could forward a message and not say anything above it, which made forwarding oddly mute.

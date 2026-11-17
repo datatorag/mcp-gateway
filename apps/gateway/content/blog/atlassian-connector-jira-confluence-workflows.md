@@ -2,8 +2,8 @@
 title: "One Prompt, Jira and Confluence Both Move"
 excerpt: "The Atlassian connector isn't two separate integrations. It's the cross-product workflow that always lived in a Google Doc."
 date: "2026-04-20"
-updated: "2026-08-12"
-updatedNote: "Corrected two overstatements of our own surface. Attachments are read-only on both Jira and Confluence, so claiming we manage them promised a write we do not ship, and Confluence comments are add and read only, unlike Jira where they can also be edited and deleted. The status-update walkthrough also had jira_get_issue fetching epic links; a live call shows its response carries no epic or parent field, so the grouping step is now a per-epic search."
+updated: "2026-11-17"
+updatedNote: "November 17, 2026: Jira attachments are no longer read-only. jira_add_attachment puts a file on an issue from an email, Drive or an upload; Confluence attachments are still read-only. Issue links, worklogs and the delete tools were added to the list. Corrected two overstatements of our own surface. Attachments are read-only on both Jira and Confluence, so claiming we manage them promised a write we do not ship, and Confluence comments are add and read only, unlike Jira where they can also be edited and deleted. The status-update walkthrough also had jira_get_issue fetching epic links; a live call shows its response carries no epic or parent field, so the grouping step is now a per-epic search."
 author: "Manuel Yang"
 category: "Product"
 coverImage: "/blog/atlassian-fanout.png"
@@ -20,12 +20,12 @@ The Atlassian connector is about not being that anymore.
 
 Two services, one OAuth flow:
 
-- **Jira**: search with JQL, read/create/update issues, transition workflow states, add/edit/delete comments, fetch attachments, look up users
-- **Confluence**: search with CQL, list/read/create/edit pages, add and read comments, fetch attachments
+- **Jira**: search with JQL, read/create/update/delete issues, transition workflow states, add/edit/delete comments, read an attachment's details and add a file to an issue from an email, Drive or an upload, link issues, log and list work, look up users
+- **Confluence**: search with CQL, list/read/create/edit/delete pages, add and read comments, read an attachment's details
 
 Both are scoped to whichever Atlassian site you connect. You can connect more than one. See the [Jira](/docs/jira) and [Confluence](/docs/confluence) docs for the full tool surface.
 
-The interesting part isn't the individual tools. It's what happens when an AI assistant has both at the same time.
+The interesting part isn't the individual tools. It's what happens when an agent has both at the same time.
 
 ## The standup prep workflow
 
@@ -35,14 +35,14 @@ Here's the prompt I actually use:
 
 > "Summarize my Jira tickets that moved this week, then check if the sprint retro page on Confluence has any action items assigned to me."
 
-Under the hood, the assistant runs:
+Under the hood, the agent runs:
 
 1. `jira_search` with `assignee = currentUser() AND updated >= -7d ORDER BY updated DESC` and pulls the recent issues
 2. `confluence_search` with a CQL query for the retro page in the current sprint's space
 3. `confluence_get_page` on the match, scanning the page for mentions of my name in action-item tables
 4. Writes a paragraph summary
 
-I don't write JQL. I don't write CQL. I describe the outcome. The assistant figures out which query languages to use, runs them in parallel where it can, and hands back the one thing I wanted: three bullets for standup.
+I don't write JQL. I don't write CQL. I describe the outcome. The agent figures out which query languages to use, runs them in parallel where it can, and hands back the one thing I wanted: three bullets for standup.
 
 ## The ticket-from-context workflow
 
@@ -52,7 +52,7 @@ The old flow: read the email, mentally extract steps to reproduce, open Jira, cl
 
 The new flow is one prompt: "Create a Jira bug in the PLATFORM project from this email with steps to reproduce and assign it to Sarah."
 
-The assistant calls `jira_search_users` to resolve "Sarah" to an account ID, calls `jira_create_issue` with a structured description built from the email body, and returns the issue key and URL. If Sarah has a common first name and there are three Sarahs, the assistant asks which one. That's the only human decision in the loop.
+The agent calls `jira_search_users` to resolve "Sarah" to an account ID, calls `jira_create_issue` with a structured description built from the email body, and returns the issue key and URL. If Sarah has a common first name and there are three Sarahs, the agent asks which one. That's the only human decision in the loop.
 
 ## The retro-to-tickets workflow
 
@@ -60,7 +60,7 @@ End of sprint. Your team ran a retro on a Confluence page with an "Action Items"
 
 > "Read the Q2 W4 retro page and create Jira tickets for every action item in the Improvements section. Assign each one to the owner listed in the row."
 
-`confluence_search`, `confluence_get_page`, a loop of `jira_search_users` + `jira_create_issue`, and the assistant replies with a list of created issue keys. A meeting artifact becomes work items in roughly the time it takes to read this paragraph.
+`confluence_search`, `confluence_get_page`, a loop of `jira_search_users` + `jira_create_issue`, and the agent replies with a list of created issue keys. A meeting artifact becomes work items in roughly the time it takes to read this paragraph.
 
 ## The status-doc workflow
 
@@ -83,13 +83,13 @@ status WAS "In Progress" DURING (startOfWeek(-1w), endOfWeek(-1w))
   AND assignee != currentUser()
 ```
 
-Your AI assistant knows this. It's been writing JQL since it was a thing. The same goes for CQL on Confluence, which is even more obscure. The assistant will write queries that most humans would have to look up. That's a real productivity lift for anyone who touches Jira occasionally but doesn't live in it.
+Your agent knows this. It's been writing JQL since it was a thing. The same goes for CQL on Confluence, which is even more obscure. The agent will write queries that most humans would have to look up. That's a real productivity lift for anyone who touches Jira occasionally but doesn't live in it.
 
 ## Context, not content
 
 A quick aside on the technical side. Confluence pages are stored as XHTML in a format Atlassian calls storage format. A two-page meeting-notes page with a table and some status badges easily runs 40KB of markup. Most of that is structural: macros, layout wrappers, text style runs, panel containers.
 
-An AI assistant doesn't need any of it. It needs the words.
+An agent doesn't need any of it. It needs the words.
 
 We wrote about this problem and how we solve it in [a previous post](/blog/atlassian-mcp-adf-context-optimization). The short version: the connector converts storage format to clean text before it ever touches your context window. 40KB of XHTML becomes 2KB of markdown. That's what makes the "read 10 retro pages and summarize" kind of workflow actually work.
 

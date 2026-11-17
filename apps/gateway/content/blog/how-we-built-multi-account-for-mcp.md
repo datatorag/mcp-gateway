@@ -2,6 +2,8 @@
 title: "How We Built Multi-Account for MCP"
 excerpt: "The database changes, token routing, and tool schema tricks behind supporting multiple Google accounts in a single MCP server."
 date: "2026-04-05"
+updated: "2026-11-17"
+updatedNote: "November 17, 2026: dropped the 30% figure for lazy tool loading, which moves every time a tool ships, and dated the dashboard screenshot to April 2026; the dashboard home has changed since."
 author: "Manuel Yang"
 category: "Engineering"
 coverImage: "/blog/multi-account-architecture.png"
@@ -10,7 +12,7 @@ tags: ["multi-account", "mcp", "oauth", "architecture", "google-workspace"]
 
 People kept asking for it. "I have a work Google account and a personal one. Can I search both?" The answer was no, because our entire auth model assumed one account per service per user. Fixing that touched every layer of the stack: database schema, token resolution, tool schemas, and the OAuth callback flow. Here's how we did it.
 
-![The dashboard today: five Google accounts connected under one user, with an Atlassian account alongside](/blog/dashboard-home.png)
+![The dashboard in April 2026: five Google accounts connected under one user, with an Atlassian account alongside](/blog/dashboard-home.png)
 
 ## The old model and why it broke
 
@@ -63,7 +65,7 @@ The LLM calls this when it needs to know which accounts exist. If a user says "c
 
 This one was a side effect we didn't plan for. We started checking `SELECT DISTINCT connector_type FROM connected_accounts WHERE user_id = ?` at `ListTools` time. If you've only connected Google, we only return Google tools. Jira tools, Confluence tools: hidden.
 
-The result is roughly 30% fewer tool definitions for single-connector users. That's less noise in the LLM's context window and faster tool selection.
+Single-connector users see only that connector's tools. That's less noise in the LLM's context window and faster tool selection.
 
 ## The OAuth callback
 

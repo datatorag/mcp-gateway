@@ -1,7 +1,9 @@
 ---
 title: "Skills Are Live: The Routines I Kept Rebuilding by Hand, Now One Click"
-excerpt: "Eleven published routines for Gmail, Calendar, Drive, Docs, Sheets and Jira. Copy one into Claude or press Run in the dashboard. Here is what the morning brief does, what it cost us to make it finish, and why it never asks you a question."
+excerpt: "Published routines for Gmail, Calendar, Drive, Docs, Sheets and Jira. Copy one into Claude or press Run in the dashboard. Here is what the morning brief does, what it cost us to make it finish, and why it never asks you a question."
 date: "2026-09-11"
+updated: "2026-11-17"
+updatedNote: "November 17, 2026: the post said there are eleven skills; that was the count at launch, and more have been published since."
 author: "Manuel Yang"
 category: "Product"
 coverImage: "/blog/skills-dashboard.png"
@@ -12,7 +14,7 @@ from me, and I'd still miss the clash between a work meeting and a personal one.
 routine down once, as a file, and had the agent run it. Then I did the same for inbox triage, for
 filing the weekly attachment into Drive, for turning a retro page into Jira tickets.
 
-Those files are now published. We're calling them skills, there are eleven of them at
+Those files are now published. We're calling them skills, there were eleven of them at launch at
 [datatorag.com/skills](/skills), and this post is about what one of them actually does when it
 runs, because "AI does your morning" is a claim and a 3-minute run with 23 tool calls is a fact.
 
@@ -48,7 +50,7 @@ tasks because nothing needed me this time, and sends me one email.
 Twenty-three tool calls, six model steps, three minutes and nine seconds. The email that lands
 is the brief: today's events across every calendar with the clashes called out (it caught a
 double-booking on one calendar and said so), the three invites I hadn't answered, and a
-per-account line of what it labelled so I can undo the whole run with one search.
+per-account line of what it labeled so I can undo the whole run with one search.
 
 It never asked me a question. That's deliberate. The run message hands the model the list of
 connected accounts and says which one is the recipient, so "which accounts should I cover?" is

@@ -2,8 +2,8 @@
 title: "You Can Self-Host a Google Workspace MCP for Free. The OAuth Verification Is the Catch."
 excerpt: "The open-source Google Workspace MCP servers are genuinely good. The cost isn't the code. It's the Google Cloud project, the consent screen, and the verification that comes after."
 date: "2026-06-29"
-updated: "2026-08-26"
-updatedNote: "August 26, 2026: narrowed an overbroad privacy claim. The pass-through statement implied nothing is stored anywhere; the gateway keeps nothing, but the hosted agent on our own site stores its conversation threads. The privacy policy is now linked from the paragraph."
+updated: "2026-11-17"
+updatedNote: "November 17, 2026: the post said to run our code yourself with Docker Compose and Postgres. There is no packaged self-host guide; the source is open, and the post now names what you would supply: a Postgres database, your own Google OAuth clients and an encryption key for the stored tokens. Notion added to what comes built in. August 26, 2026: narrowed an overbroad privacy claim. The pass-through statement implied nothing is stored anywhere; the gateway keeps nothing, but the hosted agent on our own site stores its conversation threads. The privacy policy is now linked from the paragraph."
 author: "Manuel Yang"
 category: "Comparison"
 tags: ["self-hosting", "google-workspace", "mcp", "open-source", "oauth", "alternative"]
@@ -77,7 +77,7 @@ If you want total control, your data physically never leaving your infrastructur
 
 If you don't want to run the OAuth and verification gauntlet, if your work spans Google and Atlassian both, if you want several accounts working under one endpoint without configuring impersonation yourself, or if you just want the thing to stay up and stay maintained, that's what a gateway is for. We did the Cloud project, the consent screen, the verification track, and the token handling once, so a hosted user doesn't repeat any of it.
 
-And if you like the idea of a gateway but still want your data on your own servers, [our code is on GitHub](https://github.com/datatorag/mcp-gateway) under MIT. Run it yourself with Docker Compose and Postgres. You'll still bring your own Google OAuth client, so the verification question is still yours, but you skip writing the integration from scratch and you get Atlassian and multi-account built in.
+And if you like the idea of a gateway but still want your data on your own servers, [our code is on GitHub](https://github.com/datatorag/mcp-gateway) under MIT. There is no packaged self-host guide yet: you would bring your own Postgres database, your own Google OAuth clients (and Google's verification for the restricted scopes, so that question is still yours), and an encryption key for the stored tokens. What you skip is writing the integrations from scratch, and you get Atlassian, Notion and multi-account built in.
 
 ## Try it
 

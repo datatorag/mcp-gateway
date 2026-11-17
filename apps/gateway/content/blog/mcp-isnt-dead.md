@@ -2,13 +2,15 @@
 title: "MCP Isn't Dead. You're Just Building for Yourself."
 excerpt: "The 'just use CLIs' crowd has a point. But it only holds if every user of your tool is a developer with a terminal open."
 date: "2026-04-02"
+updated: "2026-11-17"
+updatedNote: "November 17, 2026: the post said Google Workspace has no CLI. Google publishes one, gws; it needs a Cloud project and local credentials."
 author: "Manuel Yang"
 category: "Opinion"
 coverImage: "/blog/mcp-vs-cli.png"
 tags: ["mcp", "oauth", "architecture"]
 ---
 
-There's a take going around that MCP is dead. That CLIs and skills make it redundant. That the protocol overhead isn't worth it when you can just pipe shell commands into your AI assistant.
+There's a take going around that MCP is dead. That CLIs and skills make it redundant. That the protocol overhead isn't worth it when you can just pipe shell commands into your agent.
 
 For developers building tools for themselves, this is a reasonable position. I don't think it's wrong. I think it's incomplete.
 
@@ -48,7 +50,7 @@ This also means updates are instant. When we add a new tool to the Google Worksp
 
 ## Some services don't have CLIs
 
-Google Workspace doesn't have a CLI. Not really. There's `gcloud` for GCP infrastructure, but there's no `gmail send --to alice@acme.com` command. Notion's API is REST-only. Figma has no CLI. Salesforce has SFDX, but it's for developers managing metadata, not for an account exec pulling pipeline numbers.
+Google Workspace has a CLI, `gws`, but it is a developer tool that needs a Cloud project and local credentials, which is the point of this post. `gcloud` is for GCP infrastructure. Notion's API is REST-only. Figma has no CLI. Salesforce has SFDX, but it's for developers managing metadata, not for an account exec pulling pipeline numbers.
 
 For these services, the choice isn't "MCP vs CLI." It's "MCP vs nothing."
 

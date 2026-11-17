@@ -2,6 +2,8 @@
 title: "Reading a Spreadsheet Is Not Reading Data"
 excerpt: "An agent can read a rendering of your spreadsheet or it can read the cells. They look identical right up until they disagree, and you won't be watching when they do."
 date: "2026-07-31"
+updated: "2026-11-17"
+updatedNote: "November 17, 2026: Claude has had its own Sheets connector since October 2026, and it reads a range. The distinction in this post is between the two kinds of reader, not between two vendors."
 author: "Manuel Yang"
 category: "Engineering"
 coverImage: "/blog/spreadsheet-rendering.png"
@@ -110,7 +112,7 @@ If the output is a number on a dashboard, a wrong mapping does not break the das
 moves a value from one row to another and both keep rendering. There is no red state to
 notice. The first symptom is somebody downstream making a decision on it.
 
-There is a related trap worth naming because it is a *modelling* error rather than a reading
+There is a related trap worth naming because it is a *modeling* error rather than a reading
 one: cardinality. If one row in your sheet corresponds to many records in your system (one
 vendor with a dozen integrations, say) and you map it to a single record, you will attribute
 a twelfth of the value and silently drop the rest. The join succeeds. The number is wrong.
@@ -124,7 +126,7 @@ Cardinality deserves the same suspicion as strings.
   file reader is the right tool, and its reach across formats is genuinely useful.
 - Anything a number or a decision flows out of: read cells, and assert the extent before you
   compute on it.
-- Verify identity by a normalised key, never by a string's surface form. Case, whitespace and
+- Verify identity by a normalized key, never by a string's surface form. Case, whitespace and
   punctuation are presentation, not identity.
 - When a rendering forces you to infer structure, mark the inference as an inference and go
   verify it before anyone acts on the result.
