@@ -33,7 +33,7 @@ That's the whole row. No arguments. No response body. No `q=` search query, no m
 
 If a call errored with something like `"Message 18f3a2c1b not found for user alice@company.com"`, we store that string as received and capped in length, in a row only that user can see. It quotes their own data, and they already received the same error in full when the call failed, so censoring the stored copy only made failures harder to diagnose. The redaction happens on the way out instead: before that message is sent to our analytics provider it runs through a regex redactor that replaces emails, Google Drive IDs, and long quoted strings with a `[redacted]` marker. The error message is useful because it tells users why something failed. It's not worth sending PII to a third party to get there.
 
-The schema lives in a single `usage_events` table in the same Postgres instance as the rest of the app. The usage rows live in one Postgres table, with no separate warehouse and no cross-region replication. A redacted copy of each tool-call event also goes to our analytics provider.
+The schema lives in a single `usage_events` table in the same Postgres instance as the rest of the app, with no separate warehouse and no cross-region replication. A redacted copy of each tool-call event also goes to our analytics provider.
 
 ## Counting what matters
 

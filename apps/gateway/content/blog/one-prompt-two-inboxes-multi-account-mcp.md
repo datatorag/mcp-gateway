@@ -36,7 +36,7 @@ For multi-account users, the LLM figures it out from context. If you say "check 
 
 Adding multi-account support raised a question we'd been thinking about anyway: tool sprawl.
 
-DataToRAG connects to Google services (Gmail, Calendar, Drive, Docs, Sheets, Slides, Contacts, Tasks) Atlassian services (Jira, Confluence) and Notion. That's a lot of tools. If you've only connected Gmail, why should your LLM's context window include tool definitions for Jira, Confluence, Sheets, and everything else?
+DataToRAG connects to Google services (Gmail, Calendar, Drive, Docs, Sheets, Slides, Contacts, Tasks), Atlassian services (Jira, Confluence) and Notion. That's a lot of tools. If you've only connected Gmail, why should your LLM's context window include tool definitions for Jira, Confluence, Sheets, and everything else?
 
 We added lazy tool loading. Tools for services you haven't connected are hidden from the MCP `ListTools` response entirely. They don't exist as far as the LLM is concerned. Connect Google Workspace only and every Atlassian tool disappears from the list. Connect Atlassian only and the whole Google surface goes. We deliberately do not put a percentage on it here, because the saving moves every time a tool ships or a connector is added, and a number printed in a blog post does not.
 
