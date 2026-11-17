@@ -6,6 +6,7 @@ updated: "2026-09-03"
 updatedNote: "Corrected the claim that this runs every morning. It did not: the scheduled job missed three of the ten days after this published, and every check we had passed while it happened. The routine and the four decisions below are unchanged and still what we run. The scheduling was the broken part, and it now has its own post."
 author: "Manuel Yang"
 category: "Product"
+coverImage: "/blog/stop-reading-your-inbox.png"
 tags: ["gmail", "claude", "skills", "productivity", "email"]
 ---
 

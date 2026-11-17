@@ -6,6 +6,7 @@ updated: "2026-11-17"
 updatedNote: "November 17, 2026: dropped 'threaded into the right conversation' from the first paragraph. gmail_create_draft takes no thread id, so a draft it writes is a standalone draft, not a reply inside the conversation."
 author: "Manuel Yang"
 category: "Product"
+coverImage: "/blog/gmail-drafts-and-leaner-reads.png"
 tags: ["gmail", "mcp", "google-workspace", "product"]
 ---
 

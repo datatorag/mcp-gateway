@@ -6,6 +6,7 @@ updated: "2026-08-26"
 updatedNote: "August 26, 2026: narrowed an overbroad privacy claim. The pass-through statement implied nothing is stored anywhere; the gateway keeps nothing, but the hosted agent on our own site stores its conversation threads. The privacy policy is now linked from the paragraph."
 author: "Manuel Yang"
 category: "Comparison"
+coverImage: "/blog/composio-vs-zapier-mcp.png"
 tags: ["composio", "zapier", "mcp", "comparison", "ai-agents"]
 faqs:
   - q: What is the difference between Composio and Zapier MCP?

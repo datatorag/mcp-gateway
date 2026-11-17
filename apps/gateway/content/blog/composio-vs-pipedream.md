@@ -6,6 +6,7 @@ updated: "2026-08-26"
 updatedNote: "August 26, 2026: narrowed an overbroad privacy claim. The pass-through statement implied nothing is stored anywhere; the gateway keeps nothing, but the hosted agent on our own site stores its conversation threads. The privacy policy is now linked from the paragraph. EARLIER: Corrected as pricing firmed up. The tool count is gone rather than restated, since every figure we publish eventually rots. The claim that there is no per-call meter no longer holds: tiers carry a monthly allowance of tool calls, so the honest contrast with prepaid credits is that there is nothing to buy up front, not that nothing is counted. And the pricing page now carries published numbers, so this post points there instead of describing tiers that have since been renamed."
 author: "Manuel Yang"
 category: "Comparison"
+coverImage: "/blog/composio-vs-pipedream.png"
 tags: ["composio", "pipedream", "mcp", "comparison", "ai-agents"]
 faqs:
   - q: How do Composio and Pipedream Connect differ technically?

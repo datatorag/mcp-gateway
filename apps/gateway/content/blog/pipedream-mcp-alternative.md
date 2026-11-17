@@ -6,6 +6,7 @@ updated: "2026-11-17"
 updatedNote: "November 17, 2026: the billing row now states the plans: Free up to 250 tool calls a month, Pro $20 a month for 10,000. The self-host row said Docker and PostgreSQL; there is no packaged self-host guide, so it now says the source is open (MIT)."
 author: "Manuel Yang"
 category: "Comparison"
+coverImage: "/blog/pipedream-mcp-alternative.png"
 tags: ["pipedream", "mcp", "comparison", "ai-agents", "alternative"]
 ---
 

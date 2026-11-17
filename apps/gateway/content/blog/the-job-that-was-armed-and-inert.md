@@ -2,8 +2,10 @@
 title: "We Published Our Inbox Triage Routine. Then It Quietly Stopped Running."
 excerpt: "The scheduled job missed three of the next ten days and every check passed. Firing and noticing are different jobs, and a check you write cannot verify a run that never happened."
 date: "2026-09-03"
+updated: "2026-11-17"
 author: "Manuel Yang"
 category: "Engineering"
+coverImage: "/blog/the-job-that-was-armed-and-inert.png"
 tags: ["automation", "reliability", "gmail", "mcp", "scheduling"]
 ---
 
