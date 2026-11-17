@@ -12,3 +12,5 @@ another connected account), and which tool finds it again, instead of Google's b
 
 When the id belongs to a different kind of Google file, such as a Doc id given to a Sheets tool,
 the answer says what it is and which tools open it.
+
+More on how these answers work is [on the blog](/blog/not-found-and-what-to-do-next).
