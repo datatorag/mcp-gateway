@@ -20,6 +20,9 @@ const count = (n: number) => n.toLocaleString("en-US");
  * the pricing cards and enforcement both read, never retyped. */
 const FREE_CALLS = count(FREE.monthlyIncluded);
 const FREE_RUNS = count(FREE.agentRuns);
+const PRO = planLimits("pro");
+const PRO_CALLS = count(PRO.monthlyIncluded);
+const PRO_RUNS = count(PRO.agentRuns);
 
 /** Authored FAQs for the pages that are TSX rather than markdown.
  *
@@ -53,6 +56,19 @@ export interface SiteFaqPage {
   route: string;
   groups: SiteFaqGroup[];
 }
+
+/** Custom integrations on request: the landing block, the pricing line and
+ * the home FAQ entry share this copy and the form's address, so they cannot
+ * drift. No price, no timeline, no promise a request is built: "on request"
+ * is the whole claim. */
+export const CUSTOM_INTEGRATION = {
+  heading: "Need a service that is not listed?",
+  body: "We build integrations for your own services on request. Tell us the service and what you want your agent to do with it.",
+  /** The pricing page's one line: the body's first sentence. */
+  short: "We build integrations for your own services on request.",
+  action: "Request an integration",
+  href: "/request-integration",
+} as const;
 
 export const SITE_FAQ_PAGES: SiteFaqPage[] = [
   {
@@ -132,7 +148,7 @@ export const SITE_FAQ_PAGES: SiteFaqPage[] = [
         faqs: [
           {
             q: "What does it cost?",
-            a: "It is free to get started today. Paid plans are coming and the [pricing page](/pricing) carries the current state. We would rather the page be honest than exciting.",
+            a: `Nothing to start, and no card: the free tier includes ${FREE_CALLS} tool calls and ${FREE_RUNS} agent runs a month. Pro raises that to ${PRO_CALLS} tool calls and ${PRO_RUNS} agent runs a month, and Enterprise is a quote for committed volume. Every tier gets every connector, and the [pricing page](/pricing) has the current prices.`,
           },
           {
             q: "Where do I get help?",
@@ -169,6 +185,10 @@ export const SITE_FAQ_PAGES: SiteFaqPage[] = [
           {
             q: "What does DataToRAG connect to?",
             a: "Google Workspace and Atlassian. Gmail, Drive, Docs, Sheets, Slides, Calendar, Contacts and Tasks, plus Jira and Confluence, all behind one endpoint: connect once and every tool is available to your agent rather than one integration at a time. The [docs](/docs) list every action per service.",
+          },
+          {
+            q: "Can you add a service that is not listed?",
+            a: `Yes, on request: we build integrations for your own services. Tell us the service and what you want your agent to do with it on the [request form](${CUSTOM_INTEGRATION.href}).`,
           },
           {
             q: "What stops it doing something I did not want?",

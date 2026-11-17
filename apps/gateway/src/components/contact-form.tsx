@@ -15,6 +15,10 @@ export interface Utm {
 
 interface Props {
   utm: Utm;
+  /** `contact` is the /contact and /demo form. `custom_integration` asks for
+   * a service we do not list yet: it adds the service, drops team size, and
+   * writes its rows with that source (SCRUM custom integrations). */
+  kind?: "contact" | "custom_integration";
 }
 
 type Status = "idle" | "submitting" | "success" | "error";
@@ -22,12 +26,14 @@ type Status = "idle" | "submitting" | "success" | "error";
 const inputClass =
   "w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground/60 focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary";
 
-export function ContactForm({ utm }: Props) {
+export function ContactForm({ utm, kind = "contact" }: Props) {
+  const custom = kind === "custom_integration";
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [company, setCompany] = useState("");
   const [teamSize, setTeamSize] = useState<TeamSize | "">("");
   const [useCase, setUseCase] = useState("");
+  const [service, setService] = useState("");
   const [website, setWebsite] = useState(""); // honeypot
   const [status, setStatus] = useState<Status>("idle");
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
@@ -51,6 +57,7 @@ export function ContactForm({ utm }: Props) {
           website,
           utm,
           referrer: typeof document !== "undefined" ? document.referrer : undefined,
+          ...(custom ? { source: "custom_integration", service } : {}),
         }),
       });
 
@@ -58,6 +65,8 @@ export function ContactForm({ utm }: Props) {
         // Funnel analytics: ties to the same anonymous person as the /demo
         // $pageview so view→lead is measurable. No PII — UTMs + team size only.
         posthog.capture("lead_submitted", {
+          // Which form: the two write the same table and the same event.
+          form: kind,
           utm_source: utm.source,
           utm_medium: utm.medium,
           utm_campaign: utm.campaign,
@@ -83,6 +92,17 @@ export function ContactForm({ utm }: Props) {
       setErrorMsg("Network error. Please try again.");
       setStatus("error");
     }
+  }
+
+  if (status === "success" && custom) {
+    return (
+      <div className="rounded-2xl border border-border bg-secondary/30 p-8">
+        <h2 className="font-display text-xl font-semibold text-foreground">Thanks. We have your request.</h2>
+        <p className="mt-3 text-sm leading-relaxed text-muted-foreground">
+          We will reply by email about the service you named and what it would take.
+        </p>
+      </div>
+    );
   }
 
   if (status === "success") {
@@ -151,6 +171,25 @@ export function ContactForm({ utm }: Props) {
         />
       </div>
 
+      {custom && (
+        <div>
+          <label htmlFor="service" className="text-sm font-medium text-foreground">
+            Service
+          </label>
+          <input
+            id="service"
+            type="text"
+            required
+            maxLength={200}
+            value={service}
+            onChange={(e) => setService(e.target.value)}
+            className={`mt-1.5 ${inputClass}`}
+            placeholder="e.g., our internal ticketing system, HubSpot, Linear"
+          />
+        </div>
+      )}
+
+      {!custom && (
       <div>
         <label htmlFor="teamSize" className="text-sm font-medium text-foreground">
           Team size <span className="text-muted-foreground">(optional)</span>
@@ -169,10 +208,12 @@ export function ContactForm({ utm }: Props) {
           ))}
         </select>
       </div>
+      )}
 
       <div>
         <label htmlFor="useCase" className="text-sm font-medium text-foreground">
-          What are you trying to achieve? <span className="text-muted-foreground">(optional)</span>
+          {custom ? "What do you want your agent to do with it?" : "What are you trying to achieve?"}{" "}
+          <span className="text-muted-foreground">(optional)</span>
         </label>
         <textarea
           id="useCase"
@@ -181,7 +222,11 @@ export function ContactForm({ utm }: Props) {
           value={useCase}
           onChange={(e) => setUseCase(e.target.value)}
           className={`mt-1.5 ${inputClass}`}
-          placeholder="e.g., Our SDRs are drowning in inbox triage and we want AI to draft replies against our CRM..."
+          placeholder={
+            custom
+              ? "e.g., Read open tickets, and file a new one from an email thread..."
+              : "e.g., Our SDRs are drowning in inbox triage and we want AI to draft replies against our CRM..."
+          }
         />
       </div>
 
@@ -209,7 +254,7 @@ export function ContactForm({ utm }: Props) {
         disabled={status === "submitting"}
         className="w-full rounded-[var(--radius)] bg-primary px-6 py-3 text-sm font-medium text-primary-foreground transition-all hover:bg-primary/90 disabled:opacity-60"
       >
-        {status === "submitting" ? "Sending…" : "Get in touch"}
+        {status === "submitting" ? "Sending…" : custom ? "Request an integration" : "Get in touch"}
       </button>
 
       <p className="text-xs text-muted-foreground">

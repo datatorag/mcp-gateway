@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createHash } from "node:crypto";
 import { z } from "zod";
 import { db } from "@/lib/db";
-import { leads, TEAM_SIZE_VALUES } from "@datatorag-mcp/db";
+import { leads, LEAD_SOURCE_VALUES, TEAM_SIZE_VALUES } from "@datatorag-mcp/db";
 import { getEnv } from "@datatorag-mcp/config";
 import { leadsMinuteLimiter, leadsHourLimiter } from "@/gateway/leads/limiter";
 import { sendLeadConfirmation } from "@/gateway/leads/confirmation";
@@ -10,7 +10,8 @@ import { sendSlack } from "@/lib/slack";
 
 export const dynamic = "force-dynamic";
 
-const bodySchema = z.object({
+const bodySchema = z
+  .object({
   name: z.string().trim().min(1).max(100),
   email: z.string().trim().email().max(254),
   company: z.string().trim().min(1).max(100),
@@ -27,7 +28,16 @@ const bodySchema = z.object({
     })
     .optional(),
   referrer: z.string().max(2000).optional(),
-});
+  /** Which form sent it; the contact form sends none and is `demo`. */
+  source: z.enum(LEAD_SOURCE_VALUES).optional(),
+  /** The service a custom integration request names. */
+  service: z.string().trim().max(200).optional(),
+  })
+  // A custom integration request without the service it asks for says
+  // nothing we can act on.
+  .refine((b) => b.source !== "custom_integration" || (b.service ?? "").length > 0, {
+    path: ["service"],
+  });
 
 function getClientIp(req: NextRequest): string {
   // Prod sits behind Cloudflare (origin :80 is firewalled to CF ranges), so
@@ -102,6 +112,8 @@ export async function POST(req: NextRequest) {
       utmTerm: data.utm?.term,
       utmContent: data.utm?.content,
       referrer: data.referrer,
+      source: data.source ?? "demo",
+      service: data.service || null,
       ipHash,
       userAgent: req.headers.get("user-agent") ?? null,
     });
@@ -110,7 +122,9 @@ export async function POST(req: NextRequest) {
       .join(" / ");
     void sendSlack("leads", {
       text:
-        `🟢 New lead: ${contactLine}` +
+        (data.source === "custom_integration"
+          ? `🟢 Custom integration request: ${contactLine}\nService: ${data.service}`
+          : `🟢 New lead: ${contactLine}`) +
         (data.teamSize ? ` · team ${data.teamSize}` : "") +
         (utmBits ? `\nUTM: ${utmBits}` : "") +
         (data.referrer ? `\nReferrer: ${data.referrer}` : "") +

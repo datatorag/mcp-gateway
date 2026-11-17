@@ -21,7 +21,7 @@ import Script from "next/script";
 import { FaqSection } from "@/components/faq-section";
 import { JsonLd } from "@/components/json-ld";
 import { faqPageNode } from "@/lib/site-schema";
-import { siteFaqGroups, siteFaqs } from "@/lib/site-faq";
+import { CUSTOM_INTEGRATION, siteFaqGroups, siteFaqs } from "@/lib/site-faq";
 import { SOCIAL_OPEN_GRAPH, SOCIAL_TWITTER } from "@/lib/social-card";
 import { signInHref } from "@/lib/sign-in";
 
@@ -520,6 +520,31 @@ export default async function HomePage() {
                 conversations and smarter agents.
               </p>
             </div>
+          </div>
+
+          {/* Custom integrations on request. The page has no CTA event of
+              its own, so the click is PostHog's autocapture, named by the
+              attribute; the form fires lead_submitted with form set. */}
+          <div
+            id="custom-integrations"
+            className="animate-fade-in-up mt-5 flex flex-col gap-4 rounded-2xl border border-border bg-background p-6 sm:flex-row sm:items-center sm:justify-between"
+            style={{ animationDelay: "0.2s" }}
+          >
+            <div>
+              <h3 className="font-display text-base font-semibold text-foreground">
+                {CUSTOM_INTEGRATION.heading}
+              </h3>
+              <p className="mt-2 max-w-xl text-sm leading-relaxed text-muted-foreground">
+                {CUSTOM_INTEGRATION.body}
+              </p>
+            </div>
+            <Link
+              href={CUSTOM_INTEGRATION.href}
+              data-ph-capture-attribute-cta="custom_integration_request"
+              className="inline-block shrink-0 self-start rounded-[var(--radius)] bg-primary px-6 py-3 text-sm font-medium text-primary-foreground transition-all hover:bg-primary/90 sm:self-auto"
+            >
+              {CUSTOM_INTEGRATION.action}
+            </Link>
           </div>
 
         </section>
