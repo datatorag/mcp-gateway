@@ -30,7 +30,7 @@ const bodySchema = z
     .optional(),
   referrer: z.string().max(2000).optional(),
   /** Which form sent it; the contact form sends none and is `demo`. */
-  source: z.enum(LEAD_SOURCE_VALUES).optional(),
+  source: z.enum(LEAD_SOURCE_VALUES).default("demo"),
   /** The service a custom integration request names. */
   service: z.string().trim().max(200).optional(),
   })
@@ -117,7 +117,7 @@ export async function POST(req: NextRequest) {
       utmTerm: data.utm?.term,
       utmContent: data.utm?.content,
       referrer: data.referrer,
-      source: data.source ?? "demo",
+      source: data.source,
       service,
       ipHash,
       userAgent: req.headers.get("user-agent") ?? null,

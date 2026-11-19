@@ -215,7 +215,7 @@ export default async function HomePage() {
                   the pricing page and the integrations section below. */}
               {totalTools > 0 ? `${totalTools} tools` : "Tools"} across{" "}
               {PUBLIC_CONNECTORS_TEXT} behind one URL, in Claude, Claude
-              Code, Cursor or your own app.
+              Code, Cursor, or your own app.
             </p>
 
             <div
@@ -766,9 +766,10 @@ export default async function HomePage() {
                 One line to connect.
               </h2>
               <p className="mt-4 text-sm leading-relaxed text-muted-foreground">
-                Add the DataToRAG gateway to any MCP-compatible client:{" "}
-                {PUBLIC_CLIENTS_TEXT}, or your own application. OAuth
-                sign-in handles the rest.
+                Add the DataToRAG gateway to any MCP-compatible client, your
+                own application included. {PUBLIC_CLIENTS_TEXT} have
+                step-by-step setup in the dashboard, and OAuth sign-in
+                handles the rest.
               </p>
             </div>
             <div

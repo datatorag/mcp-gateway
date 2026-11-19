@@ -78,7 +78,7 @@ describe("connectToolResult", () => {
     ]);
     const issue = vi.fn(link);
     const result = await connectToolResult(db, "u", undefined, issue);
-    expect(result.content[0].text).toBe("Google Workspace, Atlassian and Notion are all connected. Nothing to do.");
+    expect(result.content[0].text).toBe("Google Workspace, Atlassian, and Notion are all connected. Nothing to do.");
     expect(issue).not.toHaveBeenCalled();
   });
 

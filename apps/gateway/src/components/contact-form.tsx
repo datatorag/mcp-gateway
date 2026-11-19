@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import posthog from "posthog-js";
-import { TEAM_SIZE_VALUES, type TeamSize } from "@datatorag-mcp/db/schema";
+import { TEAM_SIZE_VALUES, type LeadSource, type TeamSize } from "@datatorag-mcp/db/schema";
 import { reportLeadConversion } from "@/components/google-ads";
 
 export interface Utm {
@@ -26,6 +26,45 @@ type Status = "idle" | "submitting" | "success" | "error";
 const inputClass =
   "w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground/60 focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary";
 
+type Kind = NonNullable<Props["kind"]>;
+
+/** Everything that differs between the two forms' words, so a third kind is
+ * one more entry here rather than another branch in the markup. */
+const COPY: Record<Kind, {
+  source?: LeadSource;
+  useCaseLabel: string;
+  useCasePlaceholder: string;
+  submit: string;
+  successTitle: React.ReactNode;
+  successBody: React.ReactNode;
+}> = {
+  contact: {
+    useCaseLabel: "What are you trying to achieve?",
+    useCasePlaceholder:
+      "e.g., Our SDRs are drowning in inbox triage and we want AI to draft replies against our CRM...",
+    submit: "Get in touch",
+    successTitle: <>Thanks. We&apos;ll be in touch soon.</>,
+    successBody: (
+      <>
+        One of us will reach out within a business day to learn more about
+        what you&apos;re working on. If you&apos;d rather email,{" "}
+        <a href="mailto:support@datatorag.com" className="underline hover:text-foreground">
+          support@datatorag.com
+        </a>{" "}
+        gets to the team directly.
+      </>
+    ),
+  },
+  custom_integration: {
+    source: "custom_integration",
+    useCaseLabel: "What do you want your agent to do with it?",
+    useCasePlaceholder: "e.g., Read open tickets, and file a new one from an email thread...",
+    submit: "Request an integration",
+    successTitle: "Thanks. We have your request.",
+    successBody: "We will reply by email about the service you named and what it would take.",
+  },
+};
+
 /** A value with something other than spaces in it: `required` alone lets a
  * field of only spaces through, and the server then refuses it with a
  * message that points at no field. */
@@ -33,6 +72,7 @@ const NOT_BLANK = ".*\\S.*";
 
 export function ContactForm({ utm, kind = "contact" }: Props) {
   const custom = kind === "custom_integration";
+  const copy = COPY[kind];
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [company, setCompany] = useState("");
@@ -62,7 +102,7 @@ export function ContactForm({ utm, kind = "contact" }: Props) {
           website,
           utm,
           referrer: typeof document !== "undefined" ? document.referrer : undefined,
-          ...(custom ? { source: "custom_integration", service } : {}),
+          ...(copy.source ? { source: copy.source, service } : {}),
         }),
       });
 
@@ -99,29 +139,11 @@ export function ContactForm({ utm, kind = "contact" }: Props) {
     }
   }
 
-  if (status === "success" && custom) {
-    return (
-      <div className="rounded-2xl border border-border bg-secondary/30 p-8">
-        <h2 className="font-display text-xl font-semibold text-foreground">Thanks. We have your request.</h2>
-        <p className="mt-3 text-sm leading-relaxed text-muted-foreground">
-          We will reply by email about the service you named and what it would take.
-        </p>
-      </div>
-    );
-  }
-
   if (status === "success") {
     return (
       <div className="rounded-2xl border border-border bg-secondary/30 p-8">
-        <h2 className="font-display text-xl font-semibold text-foreground">Thanks. We&apos;ll be in touch soon.</h2>
-        <p className="mt-3 text-sm leading-relaxed text-muted-foreground">
-          One of us will reach out within a business day to learn more about
-          what you&apos;re working on. If you&apos;d rather email,{" "}
-          <a href="mailto:support@datatorag.com" className="underline hover:text-foreground">
-            support@datatorag.com
-          </a>{" "}
-          gets to the team directly.
-        </p>
+        <h2 className="font-display text-xl font-semibold text-foreground">{copy.successTitle}</h2>
+        <p className="mt-3 text-sm leading-relaxed text-muted-foreground">{copy.successBody}</p>
       </div>
     );
   }
@@ -223,7 +245,7 @@ export function ContactForm({ utm, kind = "contact" }: Props) {
 
       <div>
         <label htmlFor="useCase" className="text-sm font-medium text-foreground">
-          {custom ? "What do you want your agent to do with it?" : "What are you trying to achieve?"}{" "}
+          {copy.useCaseLabel}{" "}
           <span className="text-muted-foreground">(optional)</span>
         </label>
         <textarea
@@ -233,11 +255,7 @@ export function ContactForm({ utm, kind = "contact" }: Props) {
           value={useCase}
           onChange={(e) => setUseCase(e.target.value)}
           className={`mt-1.5 ${inputClass}`}
-          placeholder={
-            custom
-              ? "e.g., Read open tickets, and file a new one from an email thread..."
-              : "e.g., Our SDRs are drowning in inbox triage and we want AI to draft replies against our CRM..."
-          }
+          placeholder={copy.useCasePlaceholder}
         />
       </div>
 
@@ -265,7 +283,7 @@ export function ContactForm({ utm, kind = "contact" }: Props) {
         disabled={status === "submitting"}
         className="w-full rounded-[var(--radius)] bg-primary px-6 py-3 text-sm font-medium text-primary-foreground transition-all hover:bg-primary/90 disabled:opacity-60"
       >
-        {status === "submitting" ? "Sending…" : custom ? "Request an integration" : "Get in touch"}
+        {status === "submitting" ? "Sending…" : copy.submit}
       </button>
 
       <p className="text-xs text-muted-foreground">
