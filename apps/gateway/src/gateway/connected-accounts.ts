@@ -1,9 +1,10 @@
 import { dropLinksForUser } from "./file-download";
-import { eq, and, ne, sql, desc } from "drizzle-orm";
+import { eq, and, ne, sql, desc, gte } from "drizzle-orm";
 import type { Database } from "@datatorag-mcp/db";
-import { connectedAccounts, serviceConnections, users } from "@datatorag-mcp/db";
+import { connectedAccounts, serviceConnections, usageEvents, users } from "@datatorag-mcp/db";
 import { randomUUID } from "node:crypto";
 import { revokeUpstream } from "./service-token";
+import { trackAccountDisconnected, type DisconnectTrigger } from "./track";
 import { sealedColumns } from "./token-crypto";
 import { grantedServiceCount, scopeDelta } from "./scope-grant";
 import { refreshClearedFields } from "./refresh-failure";
@@ -435,7 +436,8 @@ export async function setDefaultAccount(
 export async function disconnectAccount(
   db: Database,
   userId: string,
-  accountId: string
+  accountId: string,
+  trigger: DisconnectTrigger = "dashboard_button"
 ): Promise<{ note?: string }> {
   const [account] = await db
     .select({
@@ -445,6 +447,7 @@ export async function disconnectAccount(
       isDefault: connectedAccounts.isDefault,
       accountEmail: connectedAccounts.accountEmail,
       externalAccountId: connectedAccounts.externalAccountId,
+      createdAt: connectedAccounts.createdAt,
     })
     .from(connectedAccounts)
     .where(
@@ -480,6 +483,7 @@ export async function disconnectAccount(
     .select({
       accessTokenSealed: serviceConnections.accessTokenSealed,
       refreshTokenSealed: serviceConnections.refreshTokenSealed,
+      scopes: serviceConnections.scopes,
     })
     .from(serviceConnections)
     .where(eq(serviceConnections.id, account.serviceConnectionId))
@@ -504,6 +508,13 @@ export async function disconnectAccount(
   if (account.isDefault) {
     await promoteNextDefault(db, userId, account.connectorType);
   }
+  await reportDisconnected(db, userId, trigger, {
+    provider: account.connectorType,
+    accountEmail: account.accountEmail,
+    scopes: conn?.scopes ?? null,
+    connectedAt: account.createdAt,
+    revokeSkippedShared: keptForOthers,
+  });
   return keptForOthers ? { note: keptForOthersNote(account.connectorType) } : {};
 }
 
@@ -522,7 +533,8 @@ export async function disconnectAccount(
 export async function disconnectService(
   db: Database,
   userId: string,
-  service: string
+  service: string,
+  trigger: DisconnectTrigger = "service_wide"
 ): Promise<{ disconnected: number; note?: string }> {
   // Sealed, and handed on unopened: only revokeUpstream opens them. The
   // account's identity rides along for the other-holder check; a legacy row
@@ -532,8 +544,11 @@ export async function disconnectService(
       id: serviceConnections.id,
       accessTokenSealed: serviceConnections.accessTokenSealed,
       refreshTokenSealed: serviceConnections.refreshTokenSealed,
+      scopes: serviceConnections.scopes,
+      connectedAt: serviceConnections.connectedAt,
       accountEmail: connectedAccounts.accountEmail,
       externalAccountId: connectedAccounts.externalAccountId,
+      accountCreatedAt: connectedAccounts.createdAt,
     })
     .from(serviceConnections)
     .leftJoin(connectedAccounts, eq(connectedAccounts.serviceConnectionId, serviceConnections.id))
@@ -568,5 +583,68 @@ export async function disconnectService(
     .where(
       and(eq(serviceConnections.userId, userId), eq(serviceConnections.service, service))
     );
+  for (const [i, row] of rows.entries()) {
+    await reportDisconnected(db, userId, trigger, {
+      provider: service,
+      accountEmail: row.accountEmail,
+      scopes: row.scopes,
+      connectedAt: row.accountCreatedAt ?? row.connectedAt,
+      revokeSkippedShared: kept[i],
+    });
+  }
   return { disconnected: removed.length, ...(kept.some(Boolean) ? { note: keptForOthersNote(service) } : {}) };
+}
+
+/**
+ * SCRUM-500: the `account_disconnected` event for one removed connection,
+ * sent after its rows are gone. Whether a tool call ever used the connection
+ * is read from `usage_events`: a row for this user, this connector, and this
+ * account since the account was connected. Raw events are kept 90 days, so
+ * an older connection whose calls all fell out of that window reads as
+ * unused. Never throws, and a failure here never undoes or blocks the
+ * disconnect.
+ */
+async function reportDisconnected(
+  db: Database,
+  userId: string,
+  trigger: DisconnectTrigger,
+  conn: {
+    provider: string;
+    accountEmail: string | null;
+    scopes: string | null;
+    connectedAt: Date | null;
+    revokeSkippedShared: boolean;
+  }
+): Promise<void> {
+  try {
+    const toolCallsMade = await connectionWasUsed(db, userId, conn.provider, conn.accountEmail, conn.connectedAt);
+    await trackAccountDisconnected(db, userId, trigger, { ...conn, toolCallsMade });
+  } catch (err) {
+    // The message only: a failed query's error can carry its values, an
+    // account address among them.
+    console.warn(`[disconnect] account_disconnected not sent for user=${userId}: ${err instanceof Error ? err.message : "unknown error"}`);
+  }
+}
+
+async function connectionWasUsed(
+  db: Database,
+  userId: string,
+  connector: string,
+  accountEmail: string | null,
+  since: Date | null
+): Promise<boolean> {
+  if (accountEmail === null) return false;
+  const [hit] = await db
+    .select({ id: usageEvents.id })
+    .from(usageEvents)
+    .where(
+      and(
+        eq(usageEvents.userId, userId),
+        eq(usageEvents.connector, connector),
+        eq(usageEvents.accountEmail, accountEmail),
+        ...(since ? [gte(usageEvents.createdAt, since)] : [])
+      )
+    )
+    .limit(1);
+  return hit !== undefined;
 }

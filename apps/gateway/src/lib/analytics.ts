@@ -15,6 +15,14 @@ export const EVENTS = {
   USER_SIGNED_UP: "user_signed_up",
   USER_LOGGED_IN: "user_logged_in",
   ACCOUNT_CONNECTED: "account_connected",
+  /** SCRUM-500: a connection was removed, sent once per connection after its
+   * rows are gone. `provider`, `account_email`, `trigger`
+   * (`dashboard_button`, `agent_tool`, or `service_wide`), `grant_complete`
+   * and `missing_scopes` as `account_connected` reads them,
+   * `connected_for_seconds`, `tool_calls_made`, and
+   * `revoke_skipped_shared`, with the same identity fields as
+   * `account_connected`. */
+  ACCOUNT_DISCONNECTED: "account_disconnected",
   /** SCRUM-480: the answer to "How did you find DataToRAG?" on the signup
    * landing, or its skip, beside the measured `acquisition_*` fields. */
   ACQUISITION_SELF_REPORTED: "acquisition_self_reported",
