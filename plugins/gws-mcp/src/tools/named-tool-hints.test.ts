@@ -1,10 +1,11 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { Client } from "@modelcontextprotocol/sdk/client/index.js";
+import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
+import { createMcpServer } from "../create-server.js";
+import { GwsClient } from "../gws-client.js";
 import { METHOD_TABLE } from "../google-api/method-table.js";
-import { fakeClient } from "./fake-client.test-helper.js";
-import { handleGeneric } from "./generic.js";
 import { allTools } from "./index.js";
 import { NAMED_TOOL_FOR, namedToolLine } from "./named-tool-hints.js";
-import { withAliased } from "./response.js";
 
 /* SCRUM-499. A raw gws_run call a named tool covers answers with one leading
  * line naming that tool; the call still runs and its answer follows. */
@@ -26,12 +27,6 @@ describe("the map cannot drift from the registered tools", () => {
     const [service, path] = key.split(" ");
     const takesBody = METHOD_TABLE[service].methods[path].hasBody === true;
     if (entry.body) expect(takesBody).toBe(true);
-  });
-
-  it("handles the three pairs the ticket names", () => {
-    expect(NAMED_TOOL_FOR["gmail users.threads.get"].tool).toBe("gmail_read_thread");
-    expect(NAMED_TOOL_FOR["gmail users.messages.get"].tool).toBe("gmail_read");
-    expect(NAMED_TOOL_FOR["drive files.copy"].tool).toBe("drive_copy_file");
   });
 });
 
@@ -128,44 +123,67 @@ describe("namedToolLine: only when the named tool returns what the raw call aske
   });
 });
 
-describe("gws_run: the line leads, the answer follows unchanged", () => {
+describe("gws_run through the dispatcher: the line leads, the answer follows unchanged", () => {
+  const TOKEN = "fixture-bearer-not-a-real-token";
+  afterEach(() => vi.restoreAllMocks());
+
+  async function call(args: Record<string, unknown>, body: unknown, status = 200) {
+    vi.spyOn(globalThis, "fetch").mockImplementation(async () => new Response(JSON.stringify(body), { status }));
+    const server = createMcpServer(new GwsClient({ accessToken: TOKEN }));
+    const [a, b] = InMemoryTransport.createLinkedPair();
+    const mcp = new Client({ name: "test", version: "1.0.0" });
+    await Promise.all([server.connect(a), mcp.connect(b)]);
+    return (await mcp.callTool({ name: "gws_run", arguments: args })) as {
+      isError?: boolean;
+      content: Array<{ type: string; text: string }>;
+    };
+  }
+
   it("a covered call answers the line, then the API's own JSON", async () => {
     const thread = { id: "t1", messages: [{ id: "m1" }] };
-    const { client, calls } = fakeClient([{ data: thread }]);
-    const out = await handleGeneric(client, "gws_run", {
-      service: "gmail",
-      resource: "users.threads",
-      method: "get",
-      params: { userId: "me", id: "t1", format: "full" },
-    });
-    expect(calls).toHaveLength(1);
+    const out = await call(
+      { service: "gmail", resource: "users.threads", method: "get", params: { userId: "me", id: "t1", format: "full" } },
+      thread
+    );
     expect(out.content).toHaveLength(2);
     expect(out.content[0].text).toMatch(/^gmail_read_thread reads this thread in one call: /);
     expect(JSON.parse(out.content[1].text)).toEqual(thread);
   });
 
   it("an uncovered call answers exactly as before, with no line", async () => {
-    const { client } = fakeClient([{ data: { threads: [] } }]);
-    const out = await handleGeneric(client, "gws_run", {
-      service: "gmail",
-      resource: "users.threads",
-      method: "list",
-      params: { userId: "me" },
-    });
+    const out = await call({ service: "gmail", resource: "users.threads", method: "list", params: { userId: "me" } }, { threads: [] });
     expect(out.content).toHaveLength(1);
     expect(JSON.parse(out.content[0].text)).toEqual({ threads: [] });
   });
 
-  it("an alias note still merges into the JSON answer after the line", () => {
-    const answer = {
-      content: [
-        { type: "text", text: "slides_batch_update covers this call: x." },
-        { type: "text", text: JSON.stringify({ ok: true }) },
-      ],
-    };
-    const out = withAliased(answer, { body: "json_body" });
+  it("an alias note merges into the API's JSON, after which the line leads", async () => {
+    const out = await call(
+      {
+        service: "sheets",
+        resource: "spreadsheets.values",
+        method: "clear",
+        params: { spreadsheetId: "s", range: "A1:B2" },
+        body: {},
+      },
+      { clearedRange: "A1:B2" }
+    );
     expect(out.content).toHaveLength(2);
-    expect(out.content[0].text).toBe("slides_batch_update covers this call: x.");
-    expect(JSON.parse(out.content[1].text!)).toEqual({ ok: true, aliased: { body: "json_body" } });
+    expect(out.content[0].text).toMatch(/^sheets_clear covers this call: /);
+    expect(JSON.parse(out.content[1].text)).toEqual({ clearedRange: "A1:B2", aliased: { body: "json_body" } });
+  });
+
+  it("a failed call and a dry run carry no line", async () => {
+    const failed = await call(
+      { service: "gmail", resource: "users.messages", method: "trash", params: { userId: "me", id: "m" } },
+      { error: { code: 500, message: "backend" } },
+      500
+    );
+    expect(failed.isError).toBe(true);
+    expect(failed.content.every((c) => !/covers this call/.test(c.text))).toBe(true);
+    const dry = await call(
+      { service: "gmail", resource: "users.messages", method: "trash", params: { userId: "me", id: "m" }, dry_run: true },
+      {}
+    );
+    expect(dry.content).toHaveLength(1);
   });
 });

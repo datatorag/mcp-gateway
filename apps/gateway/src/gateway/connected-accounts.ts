@@ -4,7 +4,8 @@ import type { Database } from "@datatorag-mcp/db";
 import { connectedAccounts, serviceConnections, usageEvents, users } from "@datatorag-mcp/db";
 import { randomUUID } from "node:crypto";
 import { revokeUpstream } from "./service-token";
-import { trackAccountDisconnected, type DisconnectTrigger } from "./track";
+import { trackAccountDisconnected, type DisconnectedConnection, type DisconnectTrigger } from "./track";
+import { getPosthog } from "../lib/posthog-server";
 import { sealedColumns } from "./token-crypto";
 import { grantedServiceCount, scopeDelta } from "./scope-grant";
 import { refreshClearedFields } from "./refresh-failure";
@@ -437,7 +438,7 @@ export async function disconnectAccount(
   db: Database,
   userId: string,
   accountId: string,
-  trigger: DisconnectTrigger = "dashboard_button"
+  trigger: DisconnectTrigger
 ): Promise<{ note?: string }> {
   const [account] = await db
     .select({
@@ -488,6 +489,16 @@ export async function disconnectAccount(
     .from(serviceConnections)
     .where(eq(serviceConnections.id, account.serviceConnectionId))
     .limit(1);
+  // The event's usage read starts now, beside the revoke, so the response
+  // waits on the slower of the two rather than both; it is sent once the rows
+  // are gone.
+  const report = startDisconnectReport(db, userId, trigger, {
+    provider: account.connectorType,
+    accountEmail: account.accountEmail,
+    scopes: conn?.scopes ?? null,
+    connectedAt: account.createdAt,
+    revokeSkippedShared: keptForOthers,
+  });
   if (conn && !keptForOthers) {
     await revokeUpstream(account.connectorType, conn, { userId, rowId: account.serviceConnectionId });
   }
@@ -508,13 +519,7 @@ export async function disconnectAccount(
   if (account.isDefault) {
     await promoteNextDefault(db, userId, account.connectorType);
   }
-  await reportDisconnected(db, userId, trigger, {
-    provider: account.connectorType,
-    accountEmail: account.accountEmail,
-    scopes: conn?.scopes ?? null,
-    connectedAt: account.createdAt,
-    revokeSkippedShared: keptForOthers,
-  });
+  await report();
   return keptForOthers ? { note: keptForOthersNote(account.connectorType) } : {};
 }
 
@@ -534,7 +539,7 @@ export async function disconnectService(
   db: Database,
   userId: string,
   service: string,
-  trigger: DisconnectTrigger = "service_wide"
+  trigger: DisconnectTrigger
 ): Promise<{ disconnected: number; note?: string }> {
   // Sealed, and handed on unopened: only revokeUpstream opens them. The
   // account's identity rides along for the other-holder check; a legacy row
@@ -559,15 +564,23 @@ export async function disconnectService(
   // Tell the provider before forgetting locally, unless another user holds
   // the same account (SCRUM-180). Never blocks the delete: a provider that is
   // down must not leave the user unable to disconnect.
-  const kept = await Promise.all(
+  const outcomes = await Promise.all(
     rows.map(async (row) => {
       const shared =
         typeof row.accountEmail === "string" &&
         (await heldByAnotherUser(db, userId, service, row.accountEmail, row.externalAccountId));
+      const report = startDisconnectReport(db, userId, trigger, {
+        provider: service,
+        accountEmail: row.accountEmail,
+        scopes: row.scopes,
+        connectedAt: row.accountCreatedAt ?? row.connectedAt,
+        revokeSkippedShared: shared,
+      });
       if (!shared) await revokeUpstream(service, row, { userId, rowId: row.id });
-      return shared;
+      return { shared, report };
     })
   );
+  const kept = outcomes.map((o) => o.shared);
 
   const removed = await db
     .delete(connectedAccounts)
@@ -583,15 +596,7 @@ export async function disconnectService(
     .where(
       and(eq(serviceConnections.userId, userId), eq(serviceConnections.service, service))
     );
-  for (const [i, row] of rows.entries()) {
-    await reportDisconnected(db, userId, trigger, {
-      provider: service,
-      accountEmail: row.accountEmail,
-      scopes: row.scopes,
-      connectedAt: row.accountCreatedAt ?? row.connectedAt,
-      revokeSkippedShared: kept[i],
-    });
-  }
+  await Promise.all(outcomes.map((o) => o.report()));
   return { disconnected: removed.length, ...(kept.some(Boolean) ? { note: keptForOthersNote(service) } : {}) };
 }
 
@@ -607,28 +612,37 @@ export async function disconnectService(
  * the provider's reads as unused; and raw events are kept 90 days, so an
  * older connection whose calls all fell out of that window reads as unused.
  * Telling connections apart would need the connection on the usage row.
+ *
+ * The usage read starts when this is called, before the revoke, and the
+ * returned function sends the event once the caller has deleted the rows.
  * Never throws, and a failure here never undoes or blocks the disconnect.
  */
-async function reportDisconnected(
+function startDisconnectReport(
   db: Database,
   userId: string,
   trigger: DisconnectTrigger,
-  conn: {
-    provider: string;
-    accountEmail: string | null;
-    scopes: string | null;
-    connectedAt: Date | null;
-    revokeSkippedShared: boolean;
-  }
-): Promise<void> {
+  conn: Omit<DisconnectedConnection, "toolCallsMade">
+): () => Promise<void> {
+  // With analytics off nothing is sent, so nothing is read either. Reading
+  // the policy reads the config, which cannot stand between a user and their
+  // disconnect either.
+  let analyticsOn = false;
   try {
-    const toolCallsMade = await connectionWasUsed(db, userId, conn.provider, conn.accountEmail, conn.connectedAt);
-    await trackAccountDisconnected(db, userId, trigger, { ...conn, toolCallsMade });
-  } catch (err) {
+    analyticsOn = getPosthog() !== null;
+  } catch {
+    analyticsOn = false;
+  }
+  if (!analyticsOn) return async () => {};
+  const used = connectionWasUsed(db, userId, conn.provider, conn.accountEmail, conn.connectedAt).catch((err: unknown) => {
     // The message only: a failed query's error can carry its values, an
     // account address among them.
     console.warn(`[disconnect] account_disconnected not sent for user=${userId}: ${err instanceof Error ? err.message : "unknown error"}`);
-  }
+    return undefined;
+  });
+  return async () => {
+    const toolCallsMade = await used;
+    if (toolCallsMade !== undefined) await trackAccountDisconnected(db, userId, trigger, { ...conn, toolCallsMade });
+  };
 }
 
 async function connectionWasUsed(

@@ -1,4 +1,5 @@
 import { and, eq, isNull, lte, gte, inArray } from "drizzle-orm";
+import { listOf } from "../lib/list-of";
 import type { Database } from "@datatorag-mcp/db";
 import { users, serviceConnections } from "@datatorag-mcp/db";
 import { sendSlack } from "../lib/slack";
@@ -125,17 +126,6 @@ export function followupBranch(
   };
 }
 
-/**
- * Display names as they read mid-sentence: "Gmail", "Gmail and Drive",
- * "Gmail, Drive and Calendar". The template owns every other word; this is
- * only the list, because Brevo params are flat strings and a template cannot
- * join one itself.
- */
-export function listInProse(names: ReadonlyArray<string>): string {
-  if (names.length <= 1) return names[0] ?? "";
-  return `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}`;
-}
-
 /** Connection rows for the run's candidates, grouped by user. One read for
  * the whole run rather than one per user. */
 async function connectionsByUser(
@@ -229,7 +219,7 @@ export async function runNoActivationFollowup(
       FIRSTNAME: firstNameOf(user.name),
     };
     if (branch.state === "missing-permissions") {
-      params.MISSING_SERVICES = listInProse(branch.missingServices);
+      params.MISSING_SERVICES = listOf(branch.missingServices);
     }
 
     const ok = await sendBrevoTemplate(branch.templateId, user.email, params);

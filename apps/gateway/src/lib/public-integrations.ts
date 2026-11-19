@@ -1,4 +1,5 @@
 import { CONNECTORS } from "./docs-connectors";
+import { listOf } from "./list-of";
 import { MCP_CLIENTS } from "./mcp-clients";
 
 /**
@@ -9,25 +10,19 @@ import { MCP_CLIENTS } from "./mcp-clients";
  * PostHog are admin-only and are not in it.
  */
 
-/** "a, b and c". */
-export function listOf(items: readonly string[]): string {
-  if (items.length <= 1) return items.join("");
-  return `${items.slice(0, -1).join(", ")} and ${items[items.length - 1]}`;
-}
-
 /** The eight Google Workspace services, in the order the docs list them. */
-export const GOOGLE_SERVICES = ["Gmail", "Calendar", "Drive", "Docs", "Sheets", "Slides", "Contacts", "Tasks"] as const;
-export const ATLASSIAN_SERVICES = ["Jira", "Confluence"] as const;
+const GOOGLE_SERVICES = ["Gmail", "Calendar", "Drive", "Docs", "Sheets", "Slides", "Contacts", "Tasks"] as const;
+const ATLASSIAN_SERVICES = ["Jira", "Confluence"] as const;
 
-/** "Google Workspace, Atlassian and Notion": the public connectors by name. */
+/** "Google Workspace, Atlassian, and Notion": the public connectors by name. */
 export const PUBLIC_CONNECTORS_TEXT = listOf(CONNECTORS.map((c) => c.title));
 
-/** Every public service by name: the Google eight, then Jira, Confluence and
- * Notion. */
+/** Every public service by name: the Google eight, then Jira, Confluence,
+ * and Notion. */
 export const PUBLIC_SERVICES_TEXT = `${listOf(GOOGLE_SERVICES)}, plus ${listOf([...ATLASSIAN_SERVICES, "Notion"])}`;
 
 /** The clients the dashboard gives steps for, one name per product family:
- * "Claude, ChatGPT, Codex and Cursor". */
+ * "Claude, ChatGPT, Codex, and Cursor". */
 export const PUBLIC_CLIENTS_TEXT = listOf([
   ...new Set(MCP_CLIENTS.map((c) => (c.group === "claude" ? "Claude" : c.label))),
 ]);

@@ -6,7 +6,8 @@
  * the dashboard agent's surface, which has its own system prompt.
  */
 import { CONNECTABLE_SERVICES, offeredServices } from "../app/dashboard/connections/service-registry";
-import { CONNECT_TOOL, listOf } from "./connect-tool";
+import { CONNECT_TOOL } from "./connect-tool";
+import { listOf } from "../lib/list-of";
 
 /** The three lines, naming only the providers that have launched. */
 export function serverInstructions(launched: Iterable<string>): string {

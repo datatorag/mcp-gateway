@@ -202,7 +202,7 @@ describe.skipIf(!isDockerAvailable())(
             eq(connectedAccounts.accountEmail, "leaving@example.com")
           )
         );
-      await disconnectAccount(db, userId, row.id);
+      await disconnectAccount(db, userId, row.id, "dashboard_button");
 
       // Oldest-first promotion would hand the default to the identity-only
       // account and recreate the exact SCRUM-145 state on the disconnect path.

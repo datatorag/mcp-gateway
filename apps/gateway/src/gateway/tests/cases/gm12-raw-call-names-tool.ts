@@ -1,5 +1,5 @@
 import type { TestCase } from "../types";
-import { NAMED_TOOL_LINE, resultJson } from "../result-json";
+import { namedToolHint, resultJson } from "../result-json";
 
 /**
  * GM12 (Gmail scenario, SCRUM-499): a raw `gws_run` call a named tool handles
@@ -27,10 +27,10 @@ export const gm12RawCallNamesTool: TestCase = {
       { service: "gmail", resource: "users.threads", method: "get", params: { userId: "me", id: from.threadId, format: "metadata" } },
       { as: "sender" }
     );
-    const lead = covered.content[0]?.text ?? "";
+    const lead = namedToolHint(covered) ?? "";
     ctx.evidence(`the raw thread read answered ${covered.content.length} part(s), leading with: ${lead.slice(0, 120)}`);
-    if (covered.isError) throw new Error(`the raw thread read failed: ${lead.slice(0, 200)}`);
-    if (!NAMED_TOOL_LINE.test(lead) || !lead.startsWith("gmail_read_thread reads this thread in one call: ")) {
+    if (covered.isError) throw new Error(`the raw thread read failed: ${(covered.content[0]?.text ?? "").slice(0, 200)}`);
+    if (!lead.startsWith("gmail_read_thread reads this thread in one call: ")) {
       throw new Error("the raw thread read did not lead with the line naming gmail_read_thread");
     }
     const thread = resultJson<{ id?: string; messages?: unknown[] }>("gws_run", covered);
@@ -44,7 +44,7 @@ export const gm12RawCallNamesTool: TestCase = {
       { as: "sender" }
     );
     ctx.evidence(`the raw profile read answered ${uncovered.content.length} part(s)`);
-    if (uncovered.content.some((c) => NAMED_TOOL_LINE.test(c.text ?? ""))) {
+    if (namedToolHint(uncovered) !== undefined) {
       throw new Error("the raw profile read named a tool, but no named tool handles it");
     }
     const profile = resultJson<{ emailAddress?: string }>("gws_run", uncovered);

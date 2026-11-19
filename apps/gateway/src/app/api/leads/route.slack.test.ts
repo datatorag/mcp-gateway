@@ -129,3 +129,48 @@ describe("leads route slack hooks", () => {
     expect(vi.mocked(sendLeadConfirmation).mock.lastCall?.[0]).not.toHaveProperty("service");
   });
 });
+
+/* The leads table holds two forms: the contact form (source "demo", the
+ * column's default) and the custom integration request (source
+ * "custom_integration", with the service it asks for). */
+const postLead = (body: object) => POST(leadRequest(body));
+const stored = () => insertValues.mock.calls[0][0] as Record<string, unknown>;
+
+describe("the source of a lead", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    insertValues.mockResolvedValue(undefined);
+  });
+
+  it("the contact form sends none and is stored as demo, with no service", async () => {
+    expect((await postLead(validLead)).status).toBe(200);
+    expect(stored()).toMatchObject({ source: "demo", service: null });
+  });
+
+  it("a custom integration request is stored with its source, service and note", async () => {
+    const res = await postLead({ ...validLead, source: "custom_integration", service: "Linear", useCase: "file issues" });
+    expect(res.status).toBe(200);
+    expect(stored()).toMatchObject({ source: "custom_integration", service: "Linear", useCase: "file issues" });
+    expect(sendSlack).toHaveBeenCalledWith(
+      "leads",
+      expect.objectContaining({ text: expect.stringMatching(/^🟢 Custom integration request: .*\nService: Linear/) })
+    );
+  });
+
+  it.each([undefined, "", "   "])("a custom integration request with service %j is refused", async (service) => {
+    const res = await postLead({ ...validLead, source: "custom_integration", ...(service === undefined ? {} : { service }) });
+    expect(res.status).toBe(400);
+    expect(insertValues).not.toHaveBeenCalled();
+  });
+
+  it.each([undefined, "demo"])("a service sent with source %j is not stored on a demo row", async (source) => {
+    const res = await postLead({ ...validLead, ...(source ? { source } : {}), service: "anything" });
+    expect(res.status).toBe(200);
+    expect(stored()).toMatchObject({ source: "demo", service: null });
+  });
+
+  it("an unknown source is refused", async () => {
+    expect((await postLead({ ...validLead, source: "newsletter" })).status).toBe(400);
+    expect(insertValues).not.toHaveBeenCalled();
+  });
+});
