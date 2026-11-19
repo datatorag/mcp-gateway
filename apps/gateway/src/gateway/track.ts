@@ -707,6 +707,8 @@ export interface DisconnectedConnection {
    * both events. */
   scopes: string | null;
   connectedAt: Date | null;
+  /** A metered call on this account's address since it was connected; see
+   * `reportDisconnected` for what that cannot tell apart. */
   toolCallsMade: boolean;
   revokeSkippedShared: boolean;
 }

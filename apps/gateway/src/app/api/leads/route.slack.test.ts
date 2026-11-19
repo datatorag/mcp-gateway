@@ -99,4 +99,33 @@ describe("leads route slack hooks", () => {
     const res = await POST(leadRequest(validLead));
     expect(res.status).toBe(200);
   });
+
+  it("escapes every stranger's value and keeps each on one line (no mention, link, or forged field)", async () => {
+    const res = await POST(
+      leadRequest({
+        ...validLead,
+        name: "Ada <!channel>",
+        company: "Acme\nUTM: google / cpc",
+        useCase: "line one\nReferrer: <https://evil.example|open the brief>",
+        source: "custom_integration",
+        service: "x\nUse case: <!here>",
+      })
+    );
+    expect(res.status).toBe(200);
+    const text = (vi.mocked(sendSlack).mock.calls.find((c) => c[0] === "leads")?.[1] as { text: string }).text;
+    expect(text).not.toMatch(/<!channel>|<!here>|<https:/);
+    expect(text).toContain("&lt;!channel&gt;");
+    const lines = text.split("\n");
+    expect(lines.filter((l) => l.startsWith("UTM:"))).toHaveLength(0);
+    expect(lines.filter((l) => l.startsWith("Referrer:"))).toHaveLength(0);
+    expect(lines.filter((l) => l.startsWith("Use case:"))).toHaveLength(1);
+    expect(lines.find((l) => l.startsWith("Service:"))).toBe("Service: x Use case: &lt;!here&gt;");
+  });
+
+  it("sends the custom integration confirmation, with its service, only for a custom request", async () => {
+    await POST(leadRequest({ ...validLead, source: "custom_integration", service: "Linear" }));
+    expect(sendLeadConfirmation).toHaveBeenLastCalledWith(expect.objectContaining({ service: "Linear" }));
+    await POST(leadRequest({ ...validLead, service: "Linear" }));
+    expect(vi.mocked(sendLeadConfirmation).mock.lastCall?.[0]).not.toHaveProperty("service");
+  });
 });

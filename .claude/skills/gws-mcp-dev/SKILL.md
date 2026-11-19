@@ -264,14 +264,20 @@ gateway deploy carries it. What goes with it:
   entry in the table; the `_meta` error field is never changed.
 - **A raw call a named tool covers says so** (SCRUM-499). `NAMED_TOOL_FOR` in
   `src/tools/named-tool-hints.ts` maps a `service resource.method` to the named
-  tool and the query parameters and body fields it can express. When a
-  `gws_run` call fits an entry, the answer leads with one text part,
-  "`<tool>` covers this call: ...", and the API's JSON follows unchanged;
-  anything outside the entry gets no line. A new named tool that does a raw
-  method's whole job gets an entry in the same change; the test fails on an
-  entry whose tool is not registered or whose method is not in the method
-  table. The runner reads a `gws_run` answer through `answerText`
-  (`apps/gateway/src/gateway/tests/result-json.ts`), which drops that line.
+  tool and the query parameters and body fields under which that tool returns
+  what the raw call asked for. When a `gws_run` call fits an entry, the answer
+  leads with one text part, "`<tool>` covers this call: ...", and the API's
+  JSON follows unchanged. Anything outside the entry gets no line: a parameter
+  the tool cannot take, `page_all`, a `fields` mask the tool does not honor
+  (it is not neutral), a body field it lacks. A raw thread read is the one
+  entry that describes instead: "gmail_read_thread reads this thread in one
+  call: ...", naming what it leaves out. The matcher reads rules as own
+  properties and never throws, because the Google call has already run. A new
+  named tool that does a raw method's whole job gets an entry in the same
+  change; the test fails on an entry whose tool is not registered or whose
+  method is not in the method table. The runner reads a `gws_run` answer
+  through `answerText` (`apps/gateway/src/gateway/tests/result-json.ts`),
+  which drops that line.
 - **An alias is declared on the schema** (SCRUM-456). A name callers keep
   reaching for is a property carrying `"x-alias-of": "<canonical>"`
   (`query` on `sheets_find_rows`, `content` on `docs_write`, `body` on

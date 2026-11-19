@@ -2,18 +2,19 @@ import type { TestCase } from "../types";
 import { NAMED_TOOL_LINE, resultJson } from "../result-json";
 
 /**
- * GM12 (Gmail scenario, SCRUM-499): a raw `gws_run` call a named tool covers
+ * GM12 (Gmail scenario, SCRUM-499): a raw `gws_run` call a named tool handles
  * answers with one leading line naming that tool, and the API's own answer
- * follows unchanged. A raw call no named tool covers answers exactly as before.
+ * follows unchanged. A raw call no named tool handles answers exactly as before.
  *
  * It reads D12's conversation in the sender's mailbox through the raw thread
- * read, which `gmail_read_thread` covers, and the mailbox's own profile
- * through `users.getProfile`, which no named tool covers. Both are reads, so
- * nothing is created and there is nothing to clean up.
+ * read, which is answered with what `gmail_read_thread` returns, and the
+ * mailbox's own profile through `users.getProfile`, which no named tool
+ * handles. Both are reads, so nothing is created and there is nothing to
+ * clean up.
  */
 export const gm12RawCallNamesTool: TestCase = {
   id: "GM12",
-  title: "a raw thread read names gmail_read_thread, and a raw call no tool covers does not",
+  title: "a raw thread read names gmail_read_thread, and a raw call no tool handles does not",
   covers: ["gws-mcp__gws_run"],
   accounts: ["sender"],
   needs: ["D12"],
@@ -29,7 +30,7 @@ export const gm12RawCallNamesTool: TestCase = {
     const lead = covered.content[0]?.text ?? "";
     ctx.evidence(`the raw thread read answered ${covered.content.length} part(s), leading with: ${lead.slice(0, 120)}`);
     if (covered.isError) throw new Error(`the raw thread read failed: ${lead.slice(0, 200)}`);
-    if (!NAMED_TOOL_LINE.test(lead) || !lead.startsWith("gmail_read_thread covers this call: ")) {
+    if (!NAMED_TOOL_LINE.test(lead) || !lead.startsWith("gmail_read_thread reads this thread in one call: ")) {
       throw new Error("the raw thread read did not lead with the line naming gmail_read_thread");
     }
     const thread = resultJson<{ id?: string; messages?: unknown[] }>("gws_run", covered);
@@ -44,7 +45,7 @@ export const gm12RawCallNamesTool: TestCase = {
     );
     ctx.evidence(`the raw profile read answered ${uncovered.content.length} part(s)`);
     if (uncovered.content.some((c) => NAMED_TOOL_LINE.test(c.text ?? ""))) {
-      throw new Error("the raw profile read named a tool, but no named tool covers it");
+      throw new Error("the raw profile read named a tool, but no named tool handles it");
     }
     const profile = resultJson<{ emailAddress?: string }>("gws_run", uncovered);
     if (typeof profile.emailAddress !== "string") throw new Error("the raw profile read did not answer the API's own profile");

@@ -14,10 +14,11 @@ export function resultText(result: ToolResult): string {
   return result.content.map((c) => c.text ?? "").join("");
 }
 
-/** The line gws_run leads with when a named tool covers the call (SCRUM-499):
- * the tool's name, then "covers this call:". Its wording lives in the plugin's
+/** The line gws_run leads with when a named tool handles the call
+ * (SCRUM-499): the tool's name, then "covers this call:", or for a thread
+ * read "reads this thread in one call:". Its wording lives in the plugin's
  * `tools/named-tool-hints.ts`; a change there must change this. */
-export const NAMED_TOOL_LINE = /^[a-z][a-z0-9_]* covers this call: /;
+export const NAMED_TOOL_LINE = /^[a-z][a-z0-9_]* (covers this call|reads this thread in one call): /;
 
 /** The answer without that leading line, so a reader that parses the answer
  * sees the API's own JSON, as it did before the line existed. */

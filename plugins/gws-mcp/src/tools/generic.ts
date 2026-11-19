@@ -104,6 +104,7 @@ export async function handleGeneric(
   if (`${service} ${resource} ${method}` === VACATION_UPDATE) throw new Error(VACATION_UNSUPPORTED);
   const params = unwrapRepeatedParams(service, resource, method, args.params as Record<string, unknown> | undefined);
   const dryRun = args.dry_run as boolean | undefined;
+  const pageAll = args.page_all as boolean | undefined;
   const result = await client.api(
     service,
     resource,
@@ -111,14 +112,14 @@ export async function handleGeneric(
     {
       params,
       jsonBody: args.json_body,
-      pageAll: args.page_all as boolean | undefined,
+      pageAll,
       dryRun,
     }
   );
 
-  // SCRUM-499: the named tool that covers this call leads the answer, which
+  // SCRUM-499: the named tool that handles this call leads the answer, which
   // follows unchanged.
   const answer = jsonResponse(result.data);
-  const line = dryRun ? undefined : namedToolLine(service, resource, method, params, args.json_body);
+  const line = dryRun ? undefined : namedToolLine(service, resource, method, params, args.json_body, pageAll);
   return line ? { content: [{ type: "text" as const, text: line }, ...answer.content] } : answer;
 }

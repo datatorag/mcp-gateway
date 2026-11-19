@@ -69,6 +69,13 @@ export const CUSTOM_INTEGRATION = {
   short: "We build integrations for your own services on request.",
   action: "Request an integration",
   href: "/request-integration",
+  /** The form's address from each surface that links to it, so a request
+   * says where it came from (`?from=`, read by `lib/contact-utm.ts`). */
+  from: {
+    home: "/request-integration?from=home",
+    pricing: "/request-integration?from=pricing",
+    faq: "/request-integration?from=faq",
+  },
 } as const;
 
 export const SITE_FAQ_PAGES: SiteFaqPage[] = [
@@ -189,7 +196,7 @@ export const SITE_FAQ_PAGES: SiteFaqPage[] = [
           },
           {
             q: "Can you add a service that is not listed?",
-            a: `Yes, on request: we build integrations for your own services. Tell us the service and what you want your agent to do with it on the [request form](${CUSTOM_INTEGRATION.href}).`,
+            a: `Yes, on request: we build integrations for your own services. Tell us the service and what you want your agent to do with it on the [request form](${CUSTOM_INTEGRATION.from.faq}).`,
           },
           {
             q: "What stops it doing something I did not want?",

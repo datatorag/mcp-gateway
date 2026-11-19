@@ -7,6 +7,7 @@ import { getEnv } from "@datatorag-mcp/config";
 import { leadsMinuteLimiter, leadsHourLimiter } from "@/gateway/leads/limiter";
 import { sendLeadConfirmation } from "@/gateway/leads/confirmation";
 import { sendSlack } from "@/lib/slack";
+import { slackField } from "@/lib/slack-text";
 
 export const dynamic = "force-dynamic";
 
@@ -97,7 +98,11 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: true });
   }
 
-  const contactLine = `${data.name} <${data.email}> — ${data.company}`;
+  // Every value here is a stranger's text: escaped and on one line in Slack,
+  // so none can mention, link, or start a line that passes for another field.
+  const slackContact = `${slackField(data.name)} &lt;${slackField(data.email)}&gt; · ${slackField(data.company)}`;
+  // A service is part of a custom integration request and nothing else.
+  const service = data.source === "custom_integration" ? data.service || null : null;
 
   try {
     await db.insert(leads).values({
@@ -113,22 +118,23 @@ export async function POST(req: NextRequest) {
       utmContent: data.utm?.content,
       referrer: data.referrer,
       source: data.source ?? "demo",
-      service: data.service || null,
+      service,
       ipHash,
       userAgent: req.headers.get("user-agent") ?? null,
     });
     const utmBits = [data.utm?.source, data.utm?.medium, data.utm?.campaign]
-      .filter(Boolean)
+      .filter((v): v is string => Boolean(v))
+      .map(slackField)
       .join(" / ");
     void sendSlack("leads", {
       text:
-        (data.source === "custom_integration"
-          ? `🟢 Custom integration request: ${contactLine}\nService: ${data.service}`
-          : `🟢 New lead: ${contactLine}`) +
+        (service
+          ? `🟢 Custom integration request: ${slackContact}\nService: ${slackField(service)}`
+          : `🟢 New lead: ${slackContact}`) +
         (data.teamSize ? ` · team ${data.teamSize}` : "") +
         (utmBits ? `\nUTM: ${utmBits}` : "") +
-        (data.referrer ? `\nReferrer: ${data.referrer}` : "") +
-        (data.useCase ? `\nUse case: ${data.useCase}` : ""),
+        (data.referrer ? `\nReferrer: ${slackField(data.referrer)}` : "") +
+        (data.useCase ? `\nUse case: ${slackField(data.useCase)}` : ""),
     });
     // Fire-and-forget, exactly like the Slack ping above: the lead row is
     // saved and that is the thing that must not be lost. A confirmation that
@@ -138,6 +144,7 @@ export async function POST(req: NextRequest) {
       name: data.name,
       email: data.email,
       senderEmail: getEnv().LEADS_CONFIRMATION_FROM,
+      ...(service ? { service } : {}),
     });
     return NextResponse.json({ ok: true });
   } catch (err) {
@@ -145,8 +152,8 @@ export async function POST(req: NextRequest) {
     void sendSlack("alerts", {
       text:
         `🔴 Lead insert FAILED — contact is recoverable from this message:\n` +
-        `${contactLine}\n` +
-        `Error: ${(err as Error).message}`,
+        `${slackContact}\n` +
+        `Error: ${slackField((err as Error).message)}`,
     });
     return NextResponse.json({ error: "internal" }, { status: 500 });
   }

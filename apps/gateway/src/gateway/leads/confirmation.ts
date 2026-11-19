@@ -40,7 +40,11 @@ const CASA_LINE =
  * this is a best guess and is only ever used as a greeting — a wrong split
  * reads as informal, never as wrong data. */
 export function firstNameOf(name: string): string {
-  return name.trim().split(/\s+/)[0] ?? "";
+  const first = name.trim().split(/\s+/)[0] ?? "";
+  // A stranger's text in a mail sent to an address nobody verified: a first
+  // word a mail client could turn into a link is left out, and the greeting
+  // reads "Hey," instead.
+  return /[./:@\\]/.test(first) ? "" : first;
 }
 
 function escapeHtml(value: string): string {
@@ -107,6 +111,63 @@ export function confirmationHtml(name: string): string {
   ].join("");
 }
 
+/** A custom integration request (`/request-integration`) gets its own
+ * confirmation: it names the service asked for, promises no timeline, and
+ * carries no link, because "on request" is the whole claim the form makes. */
+export function integrationSubject(name: string): string {
+  const first = firstNameOf(name);
+  return first ? `got your request, ${first}` : "got your request";
+}
+
+/** The service as the email names it, or null to say "a custom integration".
+ * It is a stranger's text in a mail sent in Manuel's name to an address
+ * nobody verified, so it is named only when it reads as a plain name: short,
+ * letters, digits, spaces and a few joiners, and nothing a mail client could
+ * turn into a link. */
+export function serviceForEmail(service: string | undefined): string | null {
+  const s = (service ?? "").trim().replace(/\s+/g, " ");
+  if (s.length === 0 || s.length > 40) return null;
+  return /^[\p{L}\p{N}][\p{L}\p{N} &+'()-]*$/u.test(s) ? s : null;
+}
+
+function integrationAsk(service: string | null): string {
+  return service ? `an integration for ${service}` : "a custom integration";
+}
+
+export function integrationText(name: string, service: string | undefined): string {
+  const first = firstNameOf(name);
+  const named = serviceForEmail(service);
+  return [
+    first ? `Hey ${first},` : "Hey,",
+    "",
+    `This is Manuel from DataToRAG, thanks for asking about ${integrationAsk(named)}. Your request came through and I'll read it properly before I write back.`,
+    "",
+    `If it would help, just reply to this with what you want your agent to do${named ? ` in ${named}` : ""} and which accounts are involved, that's usually what decides whether we can build it.`,
+    "",
+    "Cheers,",
+    "Manuel",
+  ].join("\n");
+}
+
+export function integrationHtml(name: string, service: string | undefined): string {
+  const first = escapeHtml(firstNameOf(name));
+  const named = serviceForEmail(service);
+  const shown = named === null ? null : escapeHtml(named);
+  const p = (inner: string) => `<p style="margin:0 0 16px">${inner}</p>`;
+  return [
+    `<div style="font-family:-apple-system,Segoe UI,Helvetica,Arial,sans-serif;font-size:15px;line-height:1.6;color:#1C1917">`,
+    p(first ? `Hey ${first},` : "Hey,"),
+    p(
+      `This is Manuel from DataToRAG, thanks for asking about ${integrationAsk(shown)}. Your request came through and I&rsquo;ll read it properly before I write back.`
+    ),
+    p(
+      `If it would help, just reply to this with what you want your agent to do${shown ? ` in ${shown}` : ""} and which accounts are involved, that&rsquo;s usually what decides whether we can build it.`
+    ),
+    p("Cheers,<br>Manuel"),
+    "</div>",
+  ].join("");
+}
+
 /**
  * Never throws and never blocks the form response — a lead row that saved is
  * a success even when the confirmation does not send. Returns false on any
@@ -116,7 +177,10 @@ export async function sendLeadConfirmation(input: {
   name: string;
   email: string;
   senderEmail: string;
+  /** Present for a custom integration request, which gets its own email. */
+  service?: string;
 }): Promise<boolean> {
+  const integration = input.service !== undefined;
   try {
     return await sendBrevoEmail({
       to: input.email,
@@ -124,9 +188,9 @@ export async function sendLeadConfirmation(input: {
       // header the provider assembles. It almost certainly strips them; not
       // depending on that is one line.
       toName: input.name.replace(/[\r\n]+/g, " "),
-      subject: confirmationSubject(input.name),
-      textContent: confirmationText(input.name),
-      htmlContent: confirmationHtml(input.name),
+      subject: integration ? integrationSubject(input.name) : confirmationSubject(input.name),
+      textContent: integration ? integrationText(input.name, input.service) : confirmationText(input.name),
+      htmlContent: integration ? integrationHtml(input.name, input.service) : confirmationHtml(input.name),
       senderEmail: input.senderEmail,
       senderName: CONFIRMATION_SENDER_NAME,
       // Replies are the primary ask, so they have to reach a real inbox.

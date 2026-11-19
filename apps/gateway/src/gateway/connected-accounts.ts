@@ -599,10 +599,15 @@ export async function disconnectService(
  * SCRUM-500: the `account_disconnected` event for one removed connection,
  * sent after its rows are gone. Whether a tool call ever used the connection
  * is read from `usage_events`: a row for this user, this connector, and this
- * account since the account was connected. Raw events are kept 90 days, so
- * an older connection whose calls all fell out of that window reads as
- * unused. Never throws, and a failure here never undoes or blocks the
- * disconnect.
+ * account address since the account was connected. Three limits, all
+ * because a usage row records the account's address and nothing narrower:
+ * two connections with the same address (one Notion login in two
+ * workspaces) read as one, so a call on either counts for both; only metered
+ * calls write a row, so a connection whose every call failed on our side or
+ * the provider's reads as unused; and raw events are kept 90 days, so an
+ * older connection whose calls all fell out of that window reads as unused.
+ * Telling connections apart would need the connection on the usage row.
+ * Never throws, and a failure here never undoes or blocks the disconnect.
  */
 async function reportDisconnected(
   db: Database,

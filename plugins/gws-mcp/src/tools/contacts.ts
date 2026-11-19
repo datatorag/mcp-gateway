@@ -205,7 +205,7 @@ function isScopeInsufficient(err: unknown): boolean {
   );
 }
 
-const PERSON_FIELDS =
+export const PERSON_FIELDS =
   "names,emailAddresses,phoneNumbers,organizations,biographies,metadata";
 
 function buildPersonBody(args: Record<string, unknown>) {
