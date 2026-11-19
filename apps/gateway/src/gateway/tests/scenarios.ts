@@ -184,6 +184,7 @@ export const SCENARIOS: Scenario[] = [
       "D13", // a forward carries both the note and the original's token
       "GM10", // the original and its reply read as one thread, oldest to newest
       "GM11", // a message id gmail cannot find is refused naming the id and the mailbox
+      "GM12", // a raw thread read names gmail_read_thread, and a raw call no tool covers does not
       /* And taking something out of it. */
       "D15", // an attachment saved to Drive matches in size and md5
       "GM7", // an attachment too large to return is described with its size

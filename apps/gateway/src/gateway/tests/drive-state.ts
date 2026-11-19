@@ -1,5 +1,5 @@
 import type { ToolResult } from "./types";
-import { resultText } from "./result-json";
+import { answerText, resultText } from "./result-json";
 
 /**
  * Whether Drive still holds a file, asked of DRIVE (SCRUM-303).
@@ -29,7 +29,7 @@ export function driveFileState(res: ToolResult): "gone" | "trashed" | "present" 
   }
   let body: { id?: unknown; trashed?: unknown };
   try {
-    body = JSON.parse(text) as typeof body;
+    body = JSON.parse(answerText(res)) as typeof body;
   } catch {
     throw new Error("Drive answered about the deleted file with something that is not JSON");
   }

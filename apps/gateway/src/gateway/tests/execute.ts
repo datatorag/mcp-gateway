@@ -7,7 +7,7 @@ import { createMcpServer } from "../mcp-server";
 import { FILE_CONSUMING_TOOLS } from "../file-crossing";
 import { DOWNLOAD_TOOL, UPLOAD_TOOL } from "../file-download";
 import { NAMESPACE_SEPARATOR, PLUGINS_DIR, PLUGINS_FROM_IMAGE } from "../plugin-manager";
-import { resultText } from "./result-json";
+import { answerText, resultText } from "./result-json";
 import type { ConnectionPool } from "../pool";
 import { checkContract, type ContractSubject } from "./contract";
 import { toolNameShapes } from "./evidence";
@@ -1189,7 +1189,7 @@ export function makeContextParts(opts: {
 export function threadSubjects(result: ToolResult): string[] | null {
   if (result.isError) return null;
   try {
-    const parsed = JSON.parse(resultText(result)) as { messages?: { payload?: { headers?: { name?: string; value?: string }[] } }[] };
+    const parsed = JSON.parse(answerText(result)) as { messages?: { payload?: { headers?: { name?: string; value?: string }[] } }[] };
     if (!Array.isArray(parsed.messages)) return null;
     return parsed.messages.map(
       (m) => m.payload?.headers?.find((h) => typeof h?.name === "string" && h.name.toLowerCase() === "subject")?.value ?? ""
@@ -1202,7 +1202,7 @@ export function threadSubjects(result: ToolResult): string[] | null {
 function parseHeaders(result: ToolResult) {
   if (result.isError) return null;
   try {
-    const parsed = JSON.parse(resultText(result)) as Record<string, unknown>;
+    const parsed = JSON.parse(answerText(result)) as Record<string, unknown>;
 
     const raw = (parsed.payload ?? (parsed.message as Record<string, unknown> | undefined)?.payload) as
       | { headers?: { name?: string; value?: string }[] }

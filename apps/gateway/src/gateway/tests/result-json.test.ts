@@ -5,7 +5,7 @@
  */
 
 import { describe, expect, it } from "vitest";
-import { firstArray, resultJson, resultText } from "./result-json";
+import { answerText, firstArray, resultJson, resultText } from "./result-json";
 
 const ok = (text: string) => ({ content: [{ type: "text", text }] });
 
@@ -68,5 +68,24 @@ describe("firstArray", () => {
 describe("resultText", () => {
   it("joins parts and tolerates a part with no text", () => {
     expect(resultText({ content: [{ type: "text", text: "a" }, { type: "image" }] })).toBe("a");
+  });
+});
+
+/* SCRUM-499: gws_run leads with a line naming the tool that covers a raw
+ * call. A reader that parses the answer must still see the API's own JSON,
+ * and a first part that only looks similar is not dropped. */
+describe("answerText", () => {
+  const text = (...parts: string[]) => ({ content: parts.map((t) => ({ type: "text", text: t })) });
+
+  it("drops the leading named-tool line, so resultJson parses the API's answer", () => {
+    const result = text("gmail_read_thread covers this call: every message.", '{"id":"t1"}');
+    expect(answerText(result)).toBe('{"id":"t1"}');
+    expect(resultJson("gws_run", result)).toEqual({ id: "t1" });
+  });
+
+  it("keeps an answer with no line, and a lone part, as they are", () => {
+    expect(answerText(text('{"a":1}'))).toBe('{"a":1}');
+    expect(answerText(text("gmail_read_thread covers this call: x."))).toBe("gmail_read_thread covers this call: x.");
+    expect(answerText(text("Note: something else.", '{"a":1}'))).toBe('Note: something else.{"a":1}');
   });
 });

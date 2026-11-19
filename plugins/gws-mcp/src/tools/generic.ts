@@ -3,6 +3,7 @@ import { MUTATE, ToolDef } from "./annotations.js";
 import { jsonResponse } from "./response.js";
 import { unwrapJsonString } from "./validate.js";
 import { repeatedParams } from "../google-api/request.js";
+import { namedToolLine } from "./named-tool-hints.js";
 
 export const genericTools: ToolDef[] = [
   {
@@ -101,17 +102,23 @@ export async function handleGeneric(
   const resource = args.resource as string;
   const method = args.method as string;
   if (`${service} ${resource} ${method}` === VACATION_UPDATE) throw new Error(VACATION_UNSUPPORTED);
+  const params = unwrapRepeatedParams(service, resource, method, args.params as Record<string, unknown> | undefined);
+  const dryRun = args.dry_run as boolean | undefined;
   const result = await client.api(
     service,
     resource,
     method,
     {
-      params: unwrapRepeatedParams(service, resource, method, args.params as Record<string, unknown> | undefined),
+      params,
       jsonBody: args.json_body,
       pageAll: args.page_all as boolean | undefined,
-      dryRun: args.dry_run as boolean | undefined,
+      dryRun,
     }
   );
 
-  return jsonResponse(result.data);
+  // SCRUM-499: the named tool that covers this call leads the answer, which
+  // follows unchanged.
+  const answer = jsonResponse(result.data);
+  const line = dryRun ? undefined : namedToolLine(service, resource, method, params, args.json_body);
+  return line ? { content: [{ type: "text" as const, text: line }, ...answer.content] } : answer;
 }

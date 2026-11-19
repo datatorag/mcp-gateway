@@ -116,6 +116,7 @@ export const PUBLIC_TITLES: Readonly<Record<string, string>> = {
   "GM9": "Label or trash a whole conversation at once",
   "GM10": "Read a whole conversation at once",
   "GM11": "Reading an email that cannot be found is refused, naming the email and the account",
+  "GM12": "A raw Google API call names the tool that covers it",
   "GW1": "List your connected accounts",
   "NF1": "Reading a Drive file that cannot be found is refused, naming the file and the account",
   "NF2": "Reading a Google Doc that cannot be found is refused, naming the document and the account",
