@@ -14,6 +14,7 @@ import { writeUsageEvent } from "./usage/write";
 import { redactErrorMessage } from "./usage/redact";
 import { classifyOutcome, type ClassifyInput } from "./usage/classify";
 import { countToolCall, periodStatus } from "./usage/period";
+import { scopeDelta } from "./scope-grant";
 import {
   resolveUserIdentity,
   resolveUserEmail,
@@ -689,6 +690,61 @@ export async function trackOAuthCompleted(
       entry: context?.entry ?? "connect",
     },
   });
+}
+
+/** What removed a connection (SCRUM-500): a dashboard account's disconnect
+ * button, the agent's disconnect tool, or the dashboard's service-wide
+ * disconnect. */
+export type DisconnectTrigger = "dashboard_button" | "agent_tool" | "service_wide";
+
+/** One removed connection, as the disconnect read it before deleting. */
+export interface DisconnectedConnection {
+  provider: string;
+  /** Null for a legacy connection with no connected_accounts row. */
+  accountEmail: string | null;
+  /** The stored grant, read by `scopeDelta` the way the connect callback
+   * reads the token exchange's, so `grant_complete` means the same thing on
+   * both events. */
+  scopes: string | null;
+  connectedAt: Date | null;
+  toolCallsMade: boolean;
+  revokeSkippedShared: boolean;
+}
+
+/** SCRUM-500: a connection was removed, after its rows are gone. The
+ * counterpart of `account_connected`, with the same identity fields and
+ * nothing more. Never throws: analytics must not stand between a user and
+ * their disconnect. */
+export async function trackAccountDisconnected(
+  db: Database,
+  userId: string,
+  trigger: DisconnectTrigger,
+  conn: DisconnectedConnection
+): Promise<void> {
+  try {
+    const c = getPosthog();
+    if (!c) return;
+    const email = await resolveUserEmail(db, userId);
+    const grant = scopeDelta(conn.provider, conn.scopes);
+    c.capture({
+      distinctId: userId,
+      event: EVENTS.ACCOUNT_DISCONNECTED,
+      properties: {
+        provider: conn.provider,
+        account_email: conn.accountEmail,
+        trigger,
+        grant_complete: grant.complete,
+        missing_scopes: grant.missing.map((m) => m.displayName),
+        connected_for_seconds:
+          conn.connectedAt === null ? null : Math.max(0, Math.round((Date.now() - conn.connectedAt.getTime()) / 1000)),
+        tool_calls_made: conn.toolCallsMade,
+        revoke_skipped_shared: conn.revokeSkippedShared,
+        ...identityProps(email),
+      },
+    });
+  } catch (err) {
+    console.warn(`[track] account_disconnected capture failed for user=${userId}`, err);
+  }
 }
 
 /** The connect found the account already held by another DataToRAG user

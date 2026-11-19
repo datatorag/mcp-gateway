@@ -327,7 +327,7 @@ export function buildIntrospectionTools({
       // name somebody else's row; a service name cannot, because the rows are
       // selected by the session user id closed over here.
       execute: async ({ service }: { service: string }) => {
-        const { disconnected, note } = await disconnectService(db, userId, service);
+        const { disconnected, note } = await disconnectService(db, userId, service, "agent_tool");
         return {
           service,
           disconnected,
