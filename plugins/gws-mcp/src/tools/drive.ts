@@ -89,7 +89,7 @@ export const driveTools: ToolDef[] = [
   {
     name: "drive_copy_file",
     description:
-      "Copies a file in Google Drive and names the copy in the same call. The copy carries the original's tabs, formatting and formulas, so a copied template matches its source. With convert set to true, an Excel, Word or PowerPoint file is copied as a Google Sheet, Doc or Slides file, which the sheets_, docs_ and slides_ tools open; the original is left as it was. With target_mime_type, the copy is converted to the Google type named, which is how a PDF or an image becomes a Google Doc with its text recognised (ocr_language sets the language for that recognition); when convert and target_mime_type are both given, target_mime_type decides the type. Returns the copy's id, name, MIME type, folders and link. Folders are not copyable: Drive refuses them with a 403 \"This file cannot be copied by the user\", a limit of the API rather than of permissions.",
+      "Copies a file in Google Drive and names the copy in the same call. The copy carries the original's tabs, formatting and formulas, so a copied template matches its source. With convert set to true, an Excel, Word or PowerPoint file is copied as a Google Sheet, Doc or Slides file, which the sheets_, docs_ and slides_ tools open; the original is left as it was. With target_mime_type, the copy is converted to the Google type named, which is how a PDF or an image becomes a Google Doc with its text read by OCR, optical character recognition (ocr_language sets the language for that recognition); when convert and target_mime_type are both given, target_mime_type decides the type. Returns the copy's id, name, MIME type, folders and link. Folders are not copyable: Drive refuses them with a 403 \"This file cannot be copied by the user\", a limit of the API rather than of permissions.",
     inputSchema: {
       type: "object",
       properties: {
@@ -116,7 +116,7 @@ export const driveTools: ToolDef[] = [
           type: "string",
           minLength: 1,
           description:
-            "The Google type the copy is converted to, e.g. application/vnd.google-apps.document for a Google Doc (a PDF or image copied this way has its text recognised), application/vnd.google-apps.spreadsheet or application/vnd.google-apps.presentation. Sent to Drive as the copy's mimeType, with no lookup of the source's type; Drive refuses a conversion it does not support. Optional; takes precedence over convert.",
+            "The Google type the copy is converted to, e.g. application/vnd.google-apps.document for a Google Doc (a PDF or image copied this way has its text recognized by OCR), application/vnd.google-apps.spreadsheet or application/vnd.google-apps.presentation. Sent to Drive as the copy's mimeType, with no lookup of the source's type; Drive refuses a conversion it does not support. Optional; takes precedence over convert.",
         },
         ocr_language: {
           type: "string",

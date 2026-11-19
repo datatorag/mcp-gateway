@@ -14,9 +14,22 @@ export function resultText(result: ToolResult): string {
   return result.content.map((c) => c.text ?? "").join("");
 }
 
+/** The line gws_run leads with when a named tool covers the call (SCRUM-499):
+ * the tool's name, then "covers this call:". Its wording lives in the plugin's
+ * `tools/named-tool-hints.ts`; a change there must change this. */
+export const NAMED_TOOL_LINE = /^[a-z][a-z0-9_]* covers this call: /;
+
+/** The answer without that leading line, so a reader that parses the answer
+ * sees the API's own JSON, as it did before the line existed. */
+export function answerText(result: ToolResult): string {
+  const [first, ...rest] = result.content;
+  if (rest.length > 0 && NAMED_TOOL_LINE.test(first?.text ?? "")) return rest.map((c) => c.text ?? "").join("");
+  return resultText(result);
+}
+
 /** Throws with the tool's own words when it errored or did not answer JSON. */
 export function resultJson<T = unknown>(what: string, result: ToolResult): T {
-  const text = resultText(result).trim();
+  const text = answerText(result).trim();
   if (result.isError) throw new Error(`${what} answered with an error: ${clip(text)}`);
   if (text === "") throw new Error(`${what} answered with no content at all`);
   try {

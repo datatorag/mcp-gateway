@@ -81,6 +81,7 @@ import { gm8GmailSpam } from "./gm8-gmail-spam";
 import { gm9GmailThread } from "./gm9-gmail-thread";
 import { gm10GmailReadThread } from "./gm10-gmail-read-thread";
 import { gm11GmailNotFound } from "./gm11-gmail-not-found";
+import { gm12RawCallNamesTool } from "./gm12-raw-call-names-tool";
 import { nf1DriveNotFound } from "./nf1-drive-not-found";
 import { nf2DocsNotFound } from "./nf2-docs-not-found";
 import { nf3SheetsNotFound } from "./nf3-sheets-not-found";
@@ -292,6 +293,7 @@ export const CASES: TestCase[] = [
   gm9GmailThread,
   gm10GmailReadThread,
   gm11GmailNotFound,
+  gm12RawCallNamesTool,
   nf1DriveNotFound,
   nf2DocsNotFound,
   nf3SheetsNotFound,
