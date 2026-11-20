@@ -539,7 +539,7 @@ export default async function HomePage() {
               </p>
             </div>
             <Link
-              href={CUSTOM_INTEGRATION.href}
+              href={CUSTOM_INTEGRATION.from.home}
               data-ph-capture-attribute-cta="custom_integration_request"
               className="inline-block shrink-0 self-start rounded-[var(--radius)] bg-primary px-6 py-3 text-sm font-medium text-primary-foreground transition-all hover:bg-primary/90 sm:self-auto"
             >

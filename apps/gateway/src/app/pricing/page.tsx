@@ -126,7 +126,7 @@ export default async function PricingPage({
             <p className="mt-6 text-sm leading-relaxed text-muted-foreground">
               {CUSTOM_INTEGRATION.heading} {CUSTOM_INTEGRATION.short}{" "}
               <Link
-                href={CUSTOM_INTEGRATION.href}
+                href={CUSTOM_INTEGRATION.from.pricing}
                 data-ph-capture-attribute-cta="custom_integration_request"
                 className="font-medium text-primary underline-offset-4 hover:underline"
               >

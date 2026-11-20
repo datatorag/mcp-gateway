@@ -26,6 +26,11 @@ type Status = "idle" | "submitting" | "success" | "error";
 const inputClass =
   "w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground/60 focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary";
 
+/** A value with something other than spaces in it: `required` alone lets a
+ * field of only spaces through, and the server then refuses it with a
+ * message that points at no field. */
+const NOT_BLANK = ".*\\S.*";
+
 export function ContactForm({ utm, kind = "contact" }: Props) {
   const custom = kind === "custom_integration";
   const [name, setName] = useState("");
@@ -131,6 +136,8 @@ export function ContactForm({ utm, kind = "contact" }: Props) {
           id="name"
           type="text"
           required
+          pattern={NOT_BLANK}
+          title="This field cannot be blank."
           maxLength={100}
           value={name}
           onChange={(e) => setName(e.target.value)}
@@ -163,6 +170,8 @@ export function ContactForm({ utm, kind = "contact" }: Props) {
           id="company"
           type="text"
           required
+          pattern={NOT_BLANK}
+          title="This field cannot be blank."
           maxLength={100}
           value={company}
           onChange={(e) => setCompany(e.target.value)}
@@ -180,6 +189,8 @@ export function ContactForm({ utm, kind = "contact" }: Props) {
             id="service"
             type="text"
             required
+            pattern={NOT_BLANK}
+            title="This field cannot be blank."
             maxLength={200}
             value={service}
             onChange={(e) => setService(e.target.value)}

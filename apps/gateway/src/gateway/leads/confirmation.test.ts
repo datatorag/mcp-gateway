@@ -12,7 +12,11 @@ import {
   confirmationSubject,
   confirmationText,
   firstNameOf,
+  integrationHtml,
+  integrationSubject,
+  integrationText,
   sendLeadConfirmation,
+  serviceForEmail,
 } from "./confirmation";
 
 /** This is the only copy we send to a stranger automatically, in our name,
@@ -141,5 +145,74 @@ describe("sendLeadConfirmation", () => {
       })
     ).resolves.toBe(false);
     warn.mockRestore();
+  });
+});
+
+/** A custom integration request is answered on its own terms: it names the
+ * service, and promises neither a reply time nor a build, so it carries no
+ * timeline and neither of the contact reply's links. */
+describe("custom integration confirmation", () => {
+  const bodies = [integrationText("Ada Lovelace", "Linear"), integrationHtml("Ada Lovelace", "Linear")];
+
+  it.each(bodies)("names the service and promises no timeline, booking, or link", (body) => {
+    expect(body).toContain("an integration for Linear");
+    expect(body).not.toMatch(/business day|within|soon|calendar|connect a Google account|https?:\/\//i);
+    expect(body).not.toContain(CONFIRMATION_BOOKING_URL);
+    expect(body).not.toContain(CONFIRMATION_CTA_URL);
+    expect(body).not.toMatch(/[\u2013\u2014]|&mdash;|&ndash;/);
+  });
+
+  it("asks for what to do in the named service, or without one", () => {
+    const ask = "To get started, reply with what you want your agent to do in Linear and which accounts are involved.";
+    expect(integrationText("Ada", "Linear")).toContain(ask);
+    expect(integrationHtml("Ada", "Linear")).toContain(ask);
+    const plain = "To get started, reply with what you want your agent to do and which accounts are involved.";
+    expect(integrationText("Ada", "visit evil.example")).toContain(plain);
+    expect(integrationHtml("Ada", undefined)).toContain(plain);
+  });
+
+  it("has a lowercase subject of its own", () => {
+    expect(integrationSubject("Ada Lovelace")).toBe("got your request, Ada");
+    expect(integrationSubject("")).toBe("got your request");
+  });
+
+  it.each([
+    ["Linear", "Linear"],
+    ["  Help  Scout ", "Help Scout"],
+    ["Zendesk (EU)", "Zendesk (EU)"],
+    ["evil.example", null],
+    ["https://evil.example", null],
+    ["write to me@evil.example", null],
+    ["x".repeat(41), null],
+    ["", null],
+    [undefined, null],
+  ])("names %j as %j", (given, named) => {
+    expect(serviceForEmail(given)).toBe(named);
+  });
+
+  it("a service it will not name reads as a custom integration, and HTML is escaped", () => {
+    expect(integrationText("Ada", "visit evil.example")).toContain("about a custom integration.");
+    expect(integrationText("Ada", "visit evil.example")).not.toContain("evil");
+    expect(integrationHtml("<b>Ada", "R&D Tools")).toContain("Hey &lt;b&gt;Ada,");
+    expect(integrationHtml("Ada", "R&D Tools")).toContain("an integration for R&amp;D Tools");
+  });
+
+  it("sendLeadConfirmation sends this variant when a service is given", async () => {
+    sendBrevoEmail.mockResolvedValue(true);
+    await sendLeadConfirmation({ name: "Ada", email: "ada@example.com", senderEmail: "s@example.com", service: "Linear" });
+    expect(sendBrevoEmail).toHaveBeenCalledWith(
+      expect.objectContaining({ subject: "got your request, Ada", textContent: expect.stringContaining("an integration for Linear") })
+    );
+  });
+});
+
+describe("firstNameOf", () => {
+  it.each([
+    ["Ada Lovelace", "Ada"],
+    ["evil.example/x Smith", ""],
+    ["https://evil.example", ""],
+    ["me@evil.example", ""],
+  ])("greets %j as %j", (name, first) => {
+    expect(firstNameOf(name)).toBe(first);
   });
 });

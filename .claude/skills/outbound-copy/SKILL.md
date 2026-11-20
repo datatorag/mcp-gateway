@@ -97,7 +97,7 @@ copy figures into this repo.
 
 | Surface | Lives in | Reviewed by |
 |---|---|---|
-| Lead confirmation email | `apps/gateway/src/gateway/leads/confirmation.ts` | code review + tests |
+| Lead confirmation email (contact form, and its custom integration variant) | `apps/gateway/src/gateway/leads/confirmation.ts` | code review + tests |
 | Welcome, no-activation email | Brevo console templates (ids 2, 3) | nobody — see below |
 | Site pages, skills, personas | `apps/gateway/content/**`, `src/app/**` | code review |
 

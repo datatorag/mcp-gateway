@@ -59,6 +59,12 @@ describe("the source of a lead", () => {
     expect(insertValues).not.toHaveBeenCalled();
   });
 
+  it.each([undefined, "demo"])("a service sent with source %j is not stored on a demo row", async (source) => {
+    const res = await post({ ...person, ...(source ? { source } : {}), service: "anything" });
+    expect(res.status).toBe(200);
+    expect(stored()).toMatchObject({ source: "demo", service: null });
+  });
+
   it("an unknown source is refused", async () => {
     expect((await post({ ...person, source: "newsletter" })).status).toBe(400);
     expect(insertValues).not.toHaveBeenCalled();

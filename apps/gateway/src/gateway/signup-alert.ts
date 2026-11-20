@@ -2,6 +2,7 @@ import { desc, eq } from "drizzle-orm";
 import type { Database } from "@datatorag-mcp/db";
 import { leads, users } from "@datatorag-mcp/db";
 import { sendSlack } from "../lib/slack";
+import { slackEscape } from "../lib/slack-text";
 import { isInternalEmail } from "../lib/brevo";
 import type { SignupSource } from "./track";
 
@@ -118,10 +119,6 @@ function entryLine(source: SignupSource): string {
   // Inline code, so a name shaped like a domain is not made a link.
   const name = source.clientName ? ` (\`${slackEscape(source.clientName.replace(/`/g, "'"))}\`)` : "";
   return `Entry: MCP client${name}`;
-}
-
-function slackEscape(text: string): string {
-  return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
 
 /** Entry PATH only: the query string is where all the length is and none of

@@ -88,4 +88,9 @@ describe("answerText", () => {
     expect(answerText(text("gmail_read_thread covers this call: x."))).toBe("gmail_read_thread covers this call: x.");
     expect(answerText(text("Note: something else.", '{"a":1}'))).toBe('Note: something else.{"a":1}');
   });
+
+  it("drops the thread read's line too", () => {
+    const result = text("gmail_read_thread reads this thread in one call: each message.", '{"id":"t1"}');
+    expect(resultJson("gws_run", result)).toEqual({ id: "t1" });
+  });
 });
