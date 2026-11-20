@@ -15,6 +15,11 @@
             "type": "command",
             "command": "python3 \"$CLAUDE_PROJECT_DIR/scripts/hooks/db-client-guard.py\"",
             "statusMessage": "DB client guard: checking for direct database clients"
+          },
+          {
+            "type": "command",
+            "command": "node \"$CLAUDE_PROJECT_DIR/scripts/hooks/review-gate.mjs\"",
+            "statusMessage": "PR review gate"
           }
         ]
       },
@@ -25,6 +30,11 @@
             "type": "command",
             "command": "python3 \"$CLAUDE_PROJECT_DIR/scripts/hooks/protect-dev-targets.py\"",
             "statusMessage": "Dev targets guard: the allowlist is a human's to edit"
+          },
+          {
+            "type": "command",
+            "command": "node \"$CLAUDE_PROJECT_DIR/scripts/hooks/review-gate.mjs\"",
+            "statusMessage": "PR review gate"
           }
         ]
       },
@@ -35,6 +45,18 @@
             "type": "command",
             "command": "python3 \"$CLAUDE_PROJECT_DIR/scripts/hooks/db-guard.py\"",
             "statusMessage": "DB guard: classifying SQL"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Skill|ReportFindings|Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$CLAUDE_PROJECT_DIR/scripts/hooks/review-gate.mjs\"",
+            "statusMessage": "PR review gate"
           }
         ]
       }
