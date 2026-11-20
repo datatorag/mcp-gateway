@@ -83,8 +83,10 @@ Notion version changes nothing until the header moves. Rate refusals
 (429, Notion's 529) are retried only for tools marked read-only, never by
 HTTP method, because search and data-source queries are POSTs. Notion
 answers an unshared page and a missing one with the same 404
-`object_not_found`; the client words both. 18 tools: six reads
-(`src/tools/notion.ts`) and twelve writes (`src/tools/notion-write.ts`),
+`object_not_found`; the client words both. 19 tools: seven reads
+(`src/tools/notion.ts`, and the meeting notes list in
+`src/tools/notion-meetings.ts`, SCRUM-501) and twelve writes
+(`src/tools/notion-write.ts`),
 every write annotated destructive and never retried. Content goes in as
 Notion's markdown; property values go in and out as plain values
 (`src/properties.ts` reads, `src/encode.ts` writes against the data

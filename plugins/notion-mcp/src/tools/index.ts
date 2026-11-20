@@ -2,6 +2,7 @@ import type { NotionClient } from "../notion-client.js";
 import type { ToolDef } from "./annotations.js";
 import { notionTools, handleNotion } from "./notion.js";
 import { notionWriteTools, handleNotionWrite } from "./notion-write.js";
+import { meetingTools, handleMeetingNotes } from "./notion-meetings.js";
 
 export type ToolHandler = (
   client: NotionClient,
@@ -9,7 +10,7 @@ export type ToolHandler = (
   args: Record<string, unknown>
 ) => Promise<{ content: Array<{ type: "text"; text: string }>; isError?: boolean }>;
 
-export const allTools: ToolDef[] = [...notionTools, ...notionWriteTools];
+export const allTools: ToolDef[] = [...notionTools, ...meetingTools, ...notionWriteTools];
 
 function register(
   toolDefs: ReadonlyArray<{ readonly name: string }>,
@@ -20,6 +21,7 @@ function register(
 
 export const toolHandlers = new Map<string, ToolHandler>([
   ...register(notionTools, handleNotion),
+  ...register(meetingTools, handleMeetingNotes),
   ...register(notionWriteTools, handleNotionWrite),
 ]);
 

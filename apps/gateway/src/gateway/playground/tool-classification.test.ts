@@ -102,6 +102,7 @@ describe("registry write/read classification snapshot", () => {
       ["notion-mcp__notion_get_comments", "read"],
       ["notion-mcp__notion_get_database", "read"],
       ["notion-mcp__notion_get_page", "read"],
+      ["notion-mcp__notion_list_meeting_notes", "read"],
       ["notion-mcp__notion_list_users", "read"],
       ["notion-mcp__notion_move_page", "write"],
       ["notion-mcp__notion_query_data_source", "read"],

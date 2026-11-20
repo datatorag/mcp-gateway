@@ -1,0 +1,9 @@
+---
+title: "Read your Notion AI meeting notes, with the summary and action items"
+date: "2026-11-19"
+tags: ["notion"]
+---
+
+`notion_list_meeting_notes` lists the Notion AI meeting notes of meetings you attended, by date, with the newest at the top. Each note comes back with its title, the meeting's time, its attendees, the AI summary and notes as text, and the action items, which Notion AI writes as to-dos in the summary. The transcript stays out unless you ask for it.
+
+A run that reads each new note every morning can ask for the notes since yesterday in one call. A long range is held to a set size: the newest notes keep their text, and the oldest come back with their title and time, so a week of meetings cannot fill the conversation. See the [Notion docs](/docs/notion).

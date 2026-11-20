@@ -13,6 +13,7 @@ const DESCRIBED = [
   "notion_query_data_source",
   "notion_get_comments",
   "notion_list_users",
+  "notion_list_meeting_notes",
   "notion_create_page",
   "notion_update_page",
   "notion_update_page_content",

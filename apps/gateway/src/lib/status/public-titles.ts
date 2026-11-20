@@ -160,6 +160,7 @@ export const PUBLIC_TITLES: Readonly<Record<string, string>> = {
   "NT12": "Create a Notion database and change its properties",
   "NT13": "Set a database row's values and read them back",
   "NT14": "Create a view of a Notion database and query through it",
+  "NT15": "Read Notion meeting notes with their summary and action items",
   "R1": "Reach the service over the internet",
   "R2": "The service's own admin tools are hidden from everyone else",
   "SH1": "Create a spreadsheet",
