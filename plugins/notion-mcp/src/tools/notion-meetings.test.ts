@@ -15,6 +15,7 @@ import {
   TRANSCRIPT_NEW,
   TRANSCRIPT_NEW_CHILDREN,
   SUMMARY_LIKE_REAL,
+  SUMMARY_WITH_TODO_LIST,
   USER,
   USERS_LIST,
   children,
@@ -118,6 +119,14 @@ describe("the answer", () => {
     expect(out.results[0].notes).toBe("");
   });
 
+  it("a to-do list heading is not an action-items heading, and item text has no trailing spaces", async () => {
+    fakeFetch([ok({ ...QUERY_ANSWER, results: [QUERY_ANSWER.results[0]] }), ok(SUMMARY_WITH_TODO_LIST), ok(children())]);
+    const out = await call({});
+    expect(out.results[0].action_items).toEqual([{ text: "Test User: send the agenda", done: false }]);
+    expect(out.results[0].summary).toContain("- [ ] Test User: send the agenda\n");
+    expect(out.results[0].summary).not.toMatch(/ \n/);
+  });
+
   it("reads the transcript when asked", async () => {
     fakeFetch([
       ok({ ...QUERY_ANSWER, results: [QUERY_ANSWER.results[0]] }),
@@ -158,7 +167,7 @@ describe("the answer", () => {
     fakeFetch([ok({ results: [], has_more: false })]);
     const out = await call({ since: "today" });
     expect(out.results).toEqual([]);
-    expect(out.note).toMatch(/attended/);
+    expect(out.note).toMatch(/shared with the DataToRAG connection/);
   });
 
   it("a workspace whose plan lacks AI meeting notes answers with a sentence about the plan", async () => {

@@ -72,7 +72,7 @@ The `account` argument takes the email, or, when one email has several workspace
 
 ### Meeting notes
 
-`notion_list_meeting_notes` reads the Notion AI meeting notes of meetings the connected Notion user attended, with the newest at the top. Give it a start date (`since`, a date such as `2026-11-18`, or `yesterday`, `today`, or `one_week_ago`; the default is yesterday), and optionally an end date (`until`) and text the title contains (`title`).
+`notion_list_meeting_notes` reads the Notion AI meeting notes the DataToRAG connection can read, with the newest at the top. A note on a private page comes back only once that page is shared with the connection (the page's ••• menu, then Connections). Give it a start date (`since`, a date such as `2026-11-18`, or `yesterday`, `today`, or `one_week_ago`; the default is yesterday), and optionally an end date (`until`) and text the title contains (`title`).
 
 Each note comes back with its title, the meeting's start and end, how many attended (`attendee_count`), its status, the AI summary and the notes as text, and `action_items`. Notion has no separate field for action items, so the connector collects every to-do in the summary and notes, with whether it is checked, and every list item under an "Action items" or "Next steps" heading. Notion AI writes action items as to-dos in the summary, one per item, with the person's name first.
 
