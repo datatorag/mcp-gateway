@@ -55,9 +55,9 @@ export const meetingTools: ToolDef[] = [
   {
     name: MEETING_NOTES_TOOL,
     description:
-      "Lists the Notion AI meeting notes of meetings the connected Notion user attended, the newest at the top, created on or after a date and optionally on or before another, and optionally only those whose title contains some text. " +
+      "Lists the Notion AI meeting notes the DataToRAG connection can read, the newest at the top, created on or after a date and optionally on or before another, and optionally only those whose title contains some text. " +
       "Each note carries its id, title, the meeting's start and end time, attendee_count, its status, the AI summary and the notes as text, and action_items: every to-do in the summary and notes with whether it is checked, and every list item under a heading that says action items or next steps. " +
-      "The transcript is left out unless include_transcript is true. " +
+      "A note on a private page comes back only once the page is shared with the connection. The transcript is left out unless include_transcript is true. " +
       "Attendee names are left out unless include_attendees is true: then each note also carries attendees by name and attendees_unnamed, how many could not be named. The workspace's member list is read once, then up to 100 attendees it does not hold are looked up one by one, and those Notion still gives no name for, such as some guests, are counted. " +
       `The text of one answer is held to max_body_chars together (default ${DEFAULT_BODY_CHARS.toLocaleString("en-US")}): when there is more, the oldest notes keep their title and times but not their text, and left_out lists their ids. ` +
       `Notion returns at most ${MAX_LIMIT} notes and no cursor; has_more true means more notes match than were returned, and a narrower date range reads the rest. ` +
@@ -165,7 +165,8 @@ function blockLine(block: Obj, depth: number): Line | null {
   const type = str(block.type);
   if (!type) return null;
   const body = isObj(block[type]) ? (block[type] as Obj) : {};
-  const text = richText(body.rich_text);
+  // Notion's rich text ends some lines with spaces; they are not content.
+  const text = richText(body.rich_text).trimEnd();
   switch (type) {
     case "to_do":
       return { text, done: body.checked === true, depth };
@@ -217,7 +218,10 @@ function linesToText(lines: Line[]): string {
     .join("\n");
 }
 
-const ACTION_HEADING = /action items?|next steps?|to-?dos?|follow[- ]?ups?/i;
+/** Only the headings Notion AI uses for action items. A "to-do list" heading
+ * is not one: a summary can list personal to-dos there and say they are not
+ * action items (observed on a live note, 2026-11-20). */
+const ACTION_HEADING = /\b(action items?|next steps?)\b/i;
 
 /** To-dos anywhere, and list items under an action-items heading. */
 export function actionItems(lines: Line[]): Array<{ text: string; done: boolean | null }> {
@@ -420,7 +424,7 @@ export async function handleMeetingNotes(client: NotionClient, _name: string, ar
         }
       : {}),
     ...(results.length === 0
-      ? { note: "No meeting notes matched. Only notes of meetings the connected Notion user attended are listed." }
+      ? { note: "No meeting notes matched. A note comes back only when the connection can read it: one on a private page needs that page shared with the DataToRAG connection." }
       : {}),
   });
 }

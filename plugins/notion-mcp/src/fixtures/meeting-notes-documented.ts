@@ -89,3 +89,17 @@ export const SUMMARY_LIKE_REAL = children(
 );
 /** The workspace's user list, one page, as `GET /v1/users` answers it. */
 export const USERS_LIST = { object: "list", results: [USER], has_more: false, next_cursor: null };
+
+/** A summary whose "to-do list" heading holds items it says are not action
+ * items, and lines that end in spaces, as a live note showed (2026-11-20).
+ * The text is invented. */
+export const SUMMARY_WITH_TODO_LIST = children(
+  block("heading_2", "Action Items"),
+  block("to_do", "Test User: send the agenda  ", { checked: false }),
+  block("heading_2", "Personal to-do list"),
+  block("numbered_list_item", "Water the plants"),
+  block("numbered_list_item", "Call the bank "),
+  block("bulleted_list_item", "These are personal tasks, so they are not listed as action items"),
+  block("heading_2", "Follow-ups"),
+  block("bulleted_list_item", "Nothing was agreed")
+);

@@ -58,7 +58,8 @@ and stages: `docs/architecture/2026-10-02-scrum-366-notion-connector-design.md` 
   `POST /v1/blocks/meeting_notes/query` answers `meeting_notes` blocks with
   child ids for the summary, notes, and transcript; their text is read from
   each child's children, so the transcript is fetched only when asked. Only
-  notes the connected user attended, at most 50, no cursor. Action items are
+  notes the connection can read (a private page must be shared with it), at
+  most 50, no cursor. Action items are
   the summary's and notes' to-dos, and list items under an action-items
   heading; a real AI summary puts them as to-dos under "Action Items"
 - `src/fixtures/`: test support, excluded from the build. The `.json` files
