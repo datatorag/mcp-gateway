@@ -10,6 +10,7 @@ import { errorMetaField, errorMetaFor } from "./error-meta.js";
 import { officeFileRefusal } from "./tools/office-files.js";
 import { notFoundAnswer } from "./tools/not-found.js";
 import { withAliased } from "./tools/response.js";
+import { withNamedToolLine } from "./tools/named-tool-hints.js";
 
 export const gwsClient = new GwsClient();
 
@@ -47,7 +48,9 @@ export function createMcpServer(client?: GwsClient): Server {
       // error describing Google's state rather than the caller's mistake.
       const tool = allTools.find((t) => t.name === name);
       const aliased = tool ? validateArgs(tool, args as Record<string, unknown>) : {};
-      return withAliased(await handler(client, name, args as Record<string, unknown>), aliased);
+      const called = args as Record<string, unknown>;
+      // SCRUM-499: a raw call a named tool handles leads with that tool's line.
+      return withNamedToolLine(name, called, withAliased(await handler(client, name, called), aliased));
     } catch (err) {
       // SCRUM-455: a Sheets, Docs or Slides request on an Office file gets
       // words that name the conversion instead of Google's bare 400.

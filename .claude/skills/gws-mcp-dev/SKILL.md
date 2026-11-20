@@ -271,13 +271,15 @@ gateway deploy carries it. What goes with it:
   the tool cannot take, `page_all`, a `fields` mask the tool does not honor
   (it is not neutral), a body field it lacks. A raw thread read is the one
   entry that describes instead: "gmail_read_thread reads this thread in one
-  call: ...", naming what it leaves out. The matcher reads rules as own
-  properties and never throws, because the Google call has already run. A new
-  named tool that does a raw method's whole job gets an entry in the same
-  change; the test fails on an entry whose tool is not registered or whose
-  method is not in the method table. The runner reads a `gws_run` answer
-  through `answerText` (`apps/gateway/src/gateway/tests/result-json.ts`),
-  which drops that line.
+  call: ...", naming what it leaves out. The line is added once, in
+  `create-server.ts` after the alias note (`withNamedToolLine`), never inside
+  a handler. The matcher reads rules as own properties and never throws,
+  because the Google call has already run. A new named tool that does a raw
+  method's whole job gets an entry in the same change; the test fails on an
+  entry whose tool is not registered or whose method is not in the method
+  table. In the runner, `resultText`
+  (`apps/gateway/src/gateway/tests/result-json.ts`) returns the payload
+  without that line, and `namedToolHint` returns the line itself.
 - **An alias is declared on the schema** (SCRUM-456). A name callers keep
   reaching for is a property carrying `"x-alias-of": "<canonical>"`
   (`query` on `sheets_find_rows`, `content` on `docs_write`, `body` on

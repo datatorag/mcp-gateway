@@ -25,12 +25,14 @@ type Rule = true | readonly (string | number | boolean)[] | ((value: unknown) =>
 
 interface NamedTool {
   tool: string;
-  /** What the named tool adds over the raw call. */
-  adds: string;
+  /** What the named tool adds over the raw call; CHECKED when not said. */
+  adds?: string;
   params: Record<string, Rule>;
   /** Body fields the named tool can express; absent means no body. */
   body?: Record<string, Rule>;
-  /** Fields that must be present, in the params or the body. */
+  /** Fields that must be present, in the params or the body. A path
+   * parameter is never listed: the request builder refuses a call without
+   * one before this is asked. */
   required?: readonly string[];
   /** The whole line, when it describes rather than covers. */
   line?: string;
@@ -49,7 +51,12 @@ const NEUTRAL: Record<string, Rule> = {
 };
 
 const ME: Rule = ["me"];
+/** A Gmail call on one message, thread, draft, or label of the account. */
+const GMAIL_BY_ID: Record<string, Rule> = { userId: ME, id: true };
 const CHECKED = "named arguments that are checked before any request is sent";
+
+/** One parent is all drive_copy_file takes, as a string or a one-item list. */
+const singleParent: Rule = (v) => typeof v === "string" || (Array.isArray(v) && v.length <= 1);
 
 /** At most this many results, where the named tool reads each one with its own
  * request (gmail_search): a larger raw listing is one cheap call the named
@@ -72,19 +79,16 @@ const isTrue = (v: unknown) => v === true || v === "true";
 export const NAMED_TOOL_FOR: Record<string, NamedTool> = {
   "gmail users.threads.get": {
     tool: "gmail_read_thread",
-    adds: "",
     line:
       "gmail_read_thread reads this thread in one call: each message's from, to, cc, subject, date, decoded text body, and attachments, oldest to newest, with a body budget and a headers-only mode. It does not return other headers or the HTML part.",
-    params: { userId: ME, id: true, format: ["full", "metadata", "minimal"], metadataHeaders: true, fields: true },
-    required: ["id"],
+    params: { ...GMAIL_BY_ID, format: ["full", "metadata", "minimal"], metadataHeaders: true, fields: true },
   },
   "gmail users.messages.get": {
     // gmail_read answers the full message as Google sends it, so a field mask
     // or a header list asks for a part of what it returns.
     tool: "gmail_read",
     adds: "a text-only view with flattened headers, the decoded body, and each attachment's part ID, without the raw MIME parts",
-    params: { userId: ME, id: true, format: ["full", "metadata", "minimal"], metadataHeaders: true, fields: true },
-    required: ["id"],
+    params: { ...GMAIL_BY_ID, format: ["full", "metadata", "minimal"], metadataHeaders: true, fields: true },
   },
   "gmail users.messages.list": {
     tool: "gmail_search",
@@ -92,21 +96,20 @@ export const NAMED_TOOL_FOR: Record<string, NamedTool> = {
     params: { userId: ME, q: true, maxResults: atMost(MAX_FANOUT) },
     required: ["q", "maxResults"],
   },
-  "gmail users.messages.trash": { tool: "gmail_trash", adds: CHECKED, params: { userId: ME, id: true } },
-  "gmail users.messages.untrash": { tool: "gmail_untrash", adds: CHECKED, params: { userId: ME, id: true } },
-  "gmail users.threads.trash": { tool: "gmail_trash_thread", adds: CHECKED, params: { userId: ME, id: true } },
-  "gmail users.threads.untrash": { tool: "gmail_untrash_thread", adds: CHECKED, params: { userId: ME, id: true } },
+  "gmail users.messages.trash": { tool: "gmail_trash", params: GMAIL_BY_ID },
+  "gmail users.messages.untrash": { tool: "gmail_untrash", params: GMAIL_BY_ID },
+  "gmail users.threads.trash": { tool: "gmail_trash_thread", params: GMAIL_BY_ID },
+  "gmail users.threads.untrash": { tool: "gmail_untrash_thread", params: GMAIL_BY_ID },
   "gmail users.drafts.list": {
     tool: "gmail_list_drafts",
-    adds: CHECKED,
     params: { userId: ME, maxResults: true, q: true, pageToken: true },
   },
-  "gmail users.drafts.delete": { tool: "gmail_delete_draft", adds: CHECKED, params: { userId: ME, id: true } },
-  "gmail users.drafts.send": { tool: "gmail_send_draft", adds: CHECKED, params: { userId: ME }, body: { id: true } },
-  "gmail users.labels.list": { tool: "gmail_list_labels", adds: CHECKED, params: { userId: ME } },
-  "gmail users.labels.create": { tool: "gmail_create_label", adds: CHECKED, params: { userId: ME }, body: { name: true } },
-  "gmail users.labels.delete": { tool: "gmail_delete_label", adds: CHECKED, params: { userId: ME, id: true } },
-  "gmail users.settings.filters.list": { tool: "gmail_list_filters", adds: CHECKED, params: { userId: ME } },
+  "gmail users.drafts.delete": { tool: "gmail_delete_draft", params: GMAIL_BY_ID },
+  "gmail users.drafts.send": { tool: "gmail_send_draft", params: { userId: ME }, body: { id: true } },
+  "gmail users.labels.list": { tool: "gmail_list_labels", params: { userId: ME } },
+  "gmail users.labels.create": { tool: "gmail_create_label", params: { userId: ME }, body: { name: true } },
+  "gmail users.labels.delete": { tool: "gmail_delete_label", params: GMAIL_BY_ID },
+  "gmail users.settings.filters.list": { tool: "gmail_list_filters", params: { userId: ME } },
   "calendar events.list": {
     // calendar_list_events always expands recurring events and reads a window
     // it defaults to the coming week, so only a call that does the same is
@@ -129,41 +132,35 @@ export const NAMED_TOOL_FOR: Record<string, NamedTool> = {
   },
   "calendar events.get": {
     tool: "calendar_get_event",
-    adds: CHECKED,
     params: { calendarId: true, eventId: true },
-    required: ["eventId"],
   },
   "calendar events.delete": {
     tool: "calendar_delete_event",
-    adds: CHECKED,
     params: { calendarId: true, eventId: true, sendUpdates: true },
-    required: ["eventId"],
   },
   "drive files.copy": {
     tool: "drive_copy_file",
     adds: "conversion to a Google Doc, Sheet, or Slides file, text recognition for a PDF or image, and the target folder, as named arguments",
     // Callers put the copy's name, type, and folder in the query parameters as
     // often as in the body; the named tool takes them either way.
-    params: { fileId: true, ocrLanguage: true, name: true, mimeType: true, parents: true },
-    body: { name: true, mimeType: true, parents: true },
-    required: ["fileId", "name"],
+    params: { fileId: true, ocrLanguage: true, name: true, mimeType: true, parents: singleParent },
+    body: { name: true, mimeType: true, parents: singleParent },
+    required: ["name"],
   },
   "drive files.list": {
     tool: "drive_search",
-    adds: CHECKED,
     params: { q: true, pageSize: true },
     required: ["q"],
   },
-  "drive permissions.list": { tool: "drive_get_file_permissions", adds: CHECKED, params: { fileId: true } },
+  "drive permissions.list": { tool: "drive_get_file_permissions", params: { fileId: true } },
   "docs documents.get": {
     tool: "docs_get",
     adds: "the document as text, or the part between two character indices, besides the full document",
     params: { documentId: true },
   },
-  "docs documents.create": { tool: "docs_create", adds: CHECKED, params: {}, body: { title: true } },
+  "docs documents.create": { tool: "docs_create", params: {}, body: { title: true } },
   "docs documents.batchUpdate": {
     tool: "docs_batch_update",
-    adds: CHECKED,
     params: { documentId: true },
     body: { requests: true },
   },
@@ -174,19 +171,16 @@ export const NAMED_TOOL_FOR: Record<string, NamedTool> = {
   },
   "sheets spreadsheets.values.clear": {
     tool: "sheets_clear",
-    adds: CHECKED,
     params: { spreadsheetId: true, range: true },
   },
   "sheets spreadsheets.batchUpdate": {
     tool: "sheets_batch_update",
-    adds: CHECKED,
     params: { spreadsheetId: true },
     body: { requests: true },
   },
-  "slides presentations.create": { tool: "slides_create", adds: CHECKED, params: {}, body: { title: true } },
+  "slides presentations.create": { tool: "slides_create", params: {}, body: { title: true } },
   "slides presentations.batchUpdate": {
     tool: "slides_batch_update",
-    adds: CHECKED,
     params: { presentationId: true },
     body: { requests: true },
   },
@@ -194,18 +188,15 @@ export const NAMED_TOOL_FOR: Record<string, NamedTool> = {
   // covered only when it asks for those fields or fewer.
   "people people.searchContacts": {
     tool: "contacts_search",
-    adds: CHECKED,
     params: { query: true, pageSize: true, readMask: within(PERSON_FIELDS) },
   },
   "people people.get": {
     tool: "contacts_get",
-    adds: CHECKED,
     params: { resourceName: true, personFields: within(PERSON_FIELDS) },
   },
-  "people people.deleteContact": { tool: "contacts_delete", adds: CHECKED, params: { resourceName: true } },
+  "people people.deleteContact": { tool: "contacts_delete", params: { resourceName: true } },
   "people people.searchDirectoryPeople": {
     tool: "contacts_directory_search",
-    adds: CHECKED,
     params: {
       query: true,
       pageSize: true,
@@ -213,14 +204,13 @@ export const NAMED_TOOL_FOR: Record<string, NamedTool> = {
       sources: (v) => v === "DIRECTORY_SOURCE_TYPE_DOMAIN_PROFILE" || (Array.isArray(v) && v.length === 1 && v[0] === "DIRECTORY_SOURCE_TYPE_DOMAIN_PROFILE"),
     },
   },
-  "tasks tasklists.list": { tool: "tasks_list", adds: CHECKED, params: {} },
-  "tasks tasklists.insert": { tool: "tasks_create_tasklist", adds: CHECKED, params: {}, body: { title: true } },
+  "tasks tasklists.list": { tool: "tasks_list", params: {} },
+  "tasks tasklists.insert": { tool: "tasks_create_tasklist", params: {}, body: { title: true } },
   "tasks tasks.list": {
     tool: "tasks_list_tasks",
-    adds: CHECKED,
     params: { tasklist: true, showCompleted: true, showHidden: true },
   },
-  "tasks tasks.delete": { tool: "tasks_delete", adds: CHECKED, params: { tasklist: true, task: true } },
+  "tasks tasks.delete": { tool: "tasks_delete", params: { tasklist: true, task: true } },
 };
 
 /** Own properties only: a parameter named `constructor` or `__proto__` is a
@@ -240,12 +230,6 @@ function fits(given: Record<string, unknown>, ...ruleSets: Record<string, unknow
   return Object.entries(given).every(([key, value]) =>
     ruleSets.some((rules) => allowed(ruleFor(rules as Record<string, Rule>, key), value))
   );
-}
-
-/** One parent is all the named tool takes, as a string or a one-item list. */
-function singleParent(parents: unknown): boolean {
-  if (parents === undefined || typeof parents === "string") return true;
-  return Array.isArray(parents) && parents.length <= 1;
 }
 
 const isPlainObject = (v: unknown): v is Record<string, unknown> =>
@@ -273,11 +257,10 @@ function lineFor(
     // An empty body is no body: callers send {} to a method whose body is empty.
     if (Object.keys(b).length > 0 && (!entry.body || !fits(b, entry.body))) return undefined;
   }
-  if (!singleParent(p.parents) || !singleParent(b.parents)) return undefined;
   for (const field of entry.required ?? []) {
     if (!Object.hasOwn(p, field) && !Object.hasOwn(b, field)) return undefined;
   }
-  return entry.line ?? `${entry.tool} covers this call: ${entry.adds}.`;
+  return entry.line ?? `${entry.tool} covers this call: ${entry.adds ?? CHECKED}.`;
 }
 
 /**
@@ -298,4 +281,27 @@ export function namedToolLine(
   } catch {
     return undefined;
   }
+}
+
+/**
+ * The answer to a `gws_run` call with its named-tool line in front, applied
+ * once, at the dispatch point, after the alias note. An error, a dry run, or
+ * any other tool is returned as it is. `args` is the call's arguments after
+ * `validateArgs`, so an aliased body is already under `json_body`.
+ */
+export function withNamedToolLine<T extends { content: Array<{ type: string; text?: string }>; isError?: boolean }>(
+  toolName: string,
+  args: Record<string, unknown>,
+  result: T
+): T {
+  if (toolName !== "gws_run" || result.isError || args.dry_run) return result;
+  const line = namedToolLine(
+    args.service as string,
+    args.resource as string,
+    args.method as string,
+    args.params as Record<string, unknown> | undefined,
+    args.json_body,
+    args.page_all as boolean | undefined
+  );
+  return line ? { ...result, content: [{ type: "text", text: line }, ...result.content] } : result;
 }

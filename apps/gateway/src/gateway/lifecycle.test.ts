@@ -31,7 +31,6 @@ import {
   sendWelcomeEmail,
   runNoActivationFollowup,
   followupBranch,
-  listInProse,
   LIFECYCLE_LAUNCH,
 } from "./lifecycle";
 import { sendSlack } from "../lib/slack";
@@ -115,17 +114,6 @@ describe("sendWelcomeEmail", () => {
     expect(sendTpl).toHaveBeenCalledWith(2, "ada@example.com", {
       FIRSTNAME: "Ada",
     });
-  });
-});
-
-describe("listInProse", () => {
-  it("reads as a list mid-sentence at every length", () => {
-    expect(listInProse([])).toBe("");
-    expect(listInProse(["Gmail"])).toBe("Gmail");
-    expect(listInProse(["Gmail", "Drive"])).toBe("Gmail and Drive");
-    expect(listInProse(["Gmail", "Drive", "Calendar"])).toBe(
-      "Gmail, Drive and Calendar"
-    );
   });
 });
 
@@ -317,7 +305,7 @@ describe("runNoActivationFollowup", () => {
       {
         FIRSTNAME: "Real",
         MISSING_SERVICES:
-          "Gmail, Drive, Calendar, Docs, Sheets, Slides, Contacts and Tasks",
+          "Gmail, Drive, Calendar, Docs, Sheets, Slides, Contacts, and Tasks",
       }
     );
     // Both directions, so a branch that collapses into one template is red

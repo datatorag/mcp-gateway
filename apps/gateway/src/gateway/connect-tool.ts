@@ -9,6 +9,7 @@
  * is how a second account of the same provider is added.
  */
 import type { Database } from "@datatorag-mcp/db";
+import { listOf } from "../lib/list-of";
 import { CONNECTABLE_SERVICES, offeredServices } from "../app/dashboard/connections/service-registry";
 import { listConnectedAccounts } from "./connected-accounts";
 import { offeredServiceIdsFor } from "./service-launch";
@@ -44,12 +45,6 @@ export type ConnectToolProvider = {
   accounts: Array<{ email: string; workspace?: string; is_default: boolean; needs_reconnect?: true }>;
   connect_url: string | null;
 };
-
-/** "A", "A and B", "A, B and C". */
-export function listOf(names: string[]): string {
-  if (names.length <= 1) return names.join("");
-  return `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}`;
-}
 
 export async function connectToolResult(
   db: Database,

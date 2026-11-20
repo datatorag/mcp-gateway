@@ -21,7 +21,7 @@ describe("serverInstructions", () => {
   it("is three lines: the tools, the connection rule, connect first", () => {
     expect(serverInstructions(ALL)).toBe(
       [
-        "DataToRAG gives you tools for the user's Google Workspace, Atlassian and Notion.",
+        "DataToRAG gives you tools for the user's Google Workspace, Atlassian, and Notion.",
         "Each provider's tools need that account connected first; until then they are not listed.",
         "Call `connect` first to see what is connected and to get a link for anything that is not.",
       ].join("\n")

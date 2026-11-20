@@ -62,11 +62,14 @@ export interface SiteFaqPage {
  * the home FAQ entry share this copy and the form's address, so they cannot
  * drift. No price, no timeline, no promise a request is built: "on request"
  * is the whole claim. */
+const INTEGRATION_OFFER = "We build integrations for your own services on request.";
+const INTEGRATION_ASK = "Tell us the service and what you want your agent to do with it";
+
 export const CUSTOM_INTEGRATION = {
   heading: "Need a service that is not listed?",
-  body: "We build integrations for your own services on request. Tell us the service and what you want your agent to do with it.",
+  body: `${INTEGRATION_OFFER} ${INTEGRATION_ASK}.`,
   /** The pricing page's one line: the body's first sentence. */
-  short: "We build integrations for your own services on request.",
+  short: INTEGRATION_OFFER,
   action: "Request an integration",
   href: "/request-integration",
   /** The form's address from each surface that links to it, so a request
@@ -196,7 +199,7 @@ export const SITE_FAQ_PAGES: SiteFaqPage[] = [
           },
           {
             q: "Can you add a service that is not listed?",
-            a: `Yes, on request: we build integrations for your own services. Tell us the service and what you want your agent to do with it on the [request form](${CUSTOM_INTEGRATION.from.faq}).`,
+            a: `Yes, on request: we build integrations for your own services. ${INTEGRATION_ASK} on the [request form](${CUSTOM_INTEGRATION.from.faq}).`,
           },
           {
             q: "What stops it doing something I did not want?",

@@ -315,32 +315,38 @@ export function trackLogin(
 }
 
 /**
- * Agent chat analytics. Never throws: a capture failure must not break the
- * streaming chat response.
+ * One server-side event for a user, with the same identity fields as every
+ * other capture. Never throws: a capture failure must not break the response
+ * it rides on (a streaming chat reply, a disconnect). Properties may be a
+ * function, so that building them is inside the same boundary. Used by the
+ * agent chat lifecycle below and by account_disconnected.
  *
- * These sit alongside `trackToolCall` rather than replacing it. The agent's
+ * The agent chat events sit alongside `trackToolCall` rather than replacing it. The agent's
  * TOOL CALLS go through that, as `tool_call` with `surface: "agent"`, because
  * they are the same measurement as gateway traffic and now meter the same way.
  * What is left here is the surface's own lifecycle, which has no gateway
  * equivalent.
  */
-async function capturePlaygroundEvent(
+async function captureForUser(
   db: Database,
   userId: string,
   event: string,
-  properties: Record<string, unknown> = {}
+  properties: Record<string, unknown> | (() => Record<string, unknown>) = {}
 ): Promise<void> {
   try {
     const c = getPosthog();
     if (!c) return;
+    const props = typeof properties === "function" ? properties() : properties;
     const identity = await resolveUserIdentity(db, userId);
     c.capture({
       distinctId: userId,
       event,
-      properties: { ...properties, ...identityProps(identity?.email ?? null) },
+      properties: { ...props, ...identityProps(identity?.email ?? null) },
     });
   } catch (err) {
-    console.warn(`[track] ${event} failed for user=${userId}`, err);
+    // The message only: an error from a query or the client can carry the
+    // values it was given, an address among them.
+    console.warn(`[track] ${event} failed for user=${userId}: ${err instanceof Error ? err.message : "unknown error"}`);
   }
 }
 
@@ -350,7 +356,7 @@ export async function trackFileDownload(
   db: Database,
   props: { userId: string; bytes: number; complete: boolean }
 ): Promise<void> {
-  return capturePlaygroundEvent(db, props.userId, EVENTS.FILE_DOWNLOADED, {
+  return captureForUser(db, props.userId, EVENTS.FILE_DOWNLOADED, {
     bytes: props.bytes,
     complete: props.complete,
   });
@@ -371,7 +377,7 @@ export async function trackSkillSearched(
     surface: "mcp" | "agent";
   }
 ): Promise<void> {
-  return capturePlaygroundEvent(db, userId, EVENTS.SKILL_SEARCHED, {
+  return captureForUser(db, userId, EVENTS.SKILL_SEARCHED, {
     query_length: props.queryLength,
     results: props.results,
     top_result: props.topResult,
@@ -384,7 +390,7 @@ export async function trackSkillApplied(
   userId: string,
   props: { skill: string; via: "prompt" | "tool"; surface: "mcp" | "agent"; runnable: boolean }
 ): Promise<void> {
-  return capturePlaygroundEvent(db, userId, EVENTS.SKILL_APPLIED, {
+  return captureForUser(db, userId, EVENTS.SKILL_APPLIED, {
     skill: props.skill,
     via: props.via,
     surface: props.surface,
@@ -397,7 +403,7 @@ export async function trackPlaygroundMessage(
   db: Database,
   userId: string
 ): Promise<void> {
-  return capturePlaygroundEvent(db, userId, EVENTS.PLAYGROUND_MESSAGE_SENT);
+  return captureForUser(db, userId, EVENTS.PLAYGROUND_MESSAGE_SENT);
 }
 
 /** One agent turn, emitted where the run id is minted.
@@ -432,7 +438,7 @@ export async function trackAgentRun(
   // the digest both key off that meaning; widening it here would change what
   // those already report without touching their code.
   void claimFirstAgentRun(db, userId);
-  return capturePlaygroundEvent(db, userId, EVENTS.AGENT_RUN, {
+  return captureForUser(db, userId, EVENTS.AGENT_RUN, {
     run_id: props.runId,
     runs_used: props.runsUsed,
     skill: props.skill ?? null,
@@ -467,7 +473,7 @@ export async function trackPlaygroundCapHit(
   db: Database,
   userId: string
 ): Promise<void> {
-  return capturePlaygroundEvent(db, userId, EVENTS.PLAYGROUND_CAP_HIT);
+  return captureForUser(db, userId, EVENTS.PLAYGROUND_CAP_HIT);
 }
 
 /** The in-thread connect ask reached its decision point (SCRUM-112). Fired
@@ -509,7 +515,7 @@ export async function trackConnectCardShown(
       runs <= 1 &&
       firstAt !== null &&
       (periodStart === null || firstAt >= periodStart);
-    return capturePlaygroundEvent(db, userId, EVENTS.CONNECT_CARD_SHOWN, {
+    return captureForUser(db, userId, EVENTS.CONNECT_CARD_SHOWN, {
       service: props.service,
       outcome: props.outcome,
       first_agent_run: firstAgentRun,
@@ -542,7 +548,7 @@ export async function trackPlaygroundRunCeilingHit(
   userId: string,
   hit: RunCeilingHit
 ): Promise<void> {
-  return capturePlaygroundEvent(db, userId, EVENTS.PLAYGROUND_RUN_CEILING_HIT, { ...hit });
+  return captureForUser(db, userId, EVENTS.PLAYGROUND_RUN_CEILING_HIT, { ...hit });
 }
 
 /** How a run ended (SCRUM-255), once per run. `reason` names the ending;
@@ -565,7 +571,7 @@ export async function trackPlaygroundRunEnded(
   userId: string,
   ended: RunEnded
 ): Promise<void> {
-  return capturePlaygroundEvent(db, userId, EVENTS.PLAYGROUND_RUN_ENDED, { ...ended });
+  return captureForUser(db, userId, EVENTS.PLAYGROUND_RUN_ENDED, { ...ended });
 }
 
 /** Write-confirmation gate: "shown" when a turn pauses for approval,
@@ -576,7 +582,7 @@ export async function trackPlaygroundConfirm(
   kind: "shown" | "approved" | "denied",
   writeCount: number
 ): Promise<void> {
-  return capturePlaygroundEvent(db, userId, EVENTS.PLAYGROUND_CONFIRM, {
+  return captureForUser(db, userId, EVENTS.PLAYGROUND_CONFIRM, {
     kind,
     write_count: writeCount,
   });
@@ -723,30 +729,20 @@ export async function trackAccountDisconnected(
   trigger: DisconnectTrigger,
   conn: DisconnectedConnection
 ): Promise<void> {
-  try {
-    const c = getPosthog();
-    if (!c) return;
-    const email = await resolveUserEmail(db, userId);
+  return captureForUser(db, userId, EVENTS.ACCOUNT_DISCONNECTED, () => {
     const grant = scopeDelta(conn.provider, conn.scopes);
-    c.capture({
-      distinctId: userId,
-      event: EVENTS.ACCOUNT_DISCONNECTED,
-      properties: {
-        provider: conn.provider,
-        account_email: conn.accountEmail,
-        trigger,
-        grant_complete: grant.complete,
-        missing_scopes: grant.missing.map((m) => m.displayName),
-        connected_for_seconds:
-          conn.connectedAt === null ? null : Math.max(0, Math.round((Date.now() - conn.connectedAt.getTime()) / 1000)),
-        tool_calls_made: conn.toolCallsMade,
-        revoke_skipped_shared: conn.revokeSkippedShared,
-        ...identityProps(email),
-      },
-    });
-  } catch (err) {
-    console.warn(`[track] account_disconnected capture failed for user=${userId}`, err);
-  }
+    return {
+      provider: conn.provider,
+      account_email: conn.accountEmail,
+      trigger,
+      grant_complete: grant.complete,
+      missing_scopes: grant.missing.map((m) => m.displayName),
+      connected_for_seconds:
+        conn.connectedAt === null ? null : Math.max(0, Math.round((Date.now() - conn.connectedAt.getTime()) / 1000)),
+      tool_calls_made: conn.toolCallsMade,
+      revoke_skipped_shared: conn.revokeSkippedShared,
+    };
+  });
 }
 
 /** The connect found the account already held by another DataToRAG user
@@ -799,5 +795,5 @@ export async function trackSkillEvent(
   event: string,
   props: Record<string, unknown>
 ): Promise<void> {
-  return capturePlaygroundEvent(db, userId, event, props);
+  return captureForUser(db, userId, event, props);
 }

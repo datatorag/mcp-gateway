@@ -172,7 +172,7 @@ describe.skipIf(!isDockerAvailable())("SCRUM-366: Notion workspaces as accounts"
       rows = await notionRows(userId);
       expect(rows.filter((r) => r.isDefault).map((r) => r.workspaceId)).toEqual(["ws-a"]);
 
-      await disconnectAccount(db, userId, rows.find((r) => r.workspaceId === "ws-a")!.id);
+      await disconnectAccount(db, userId, rows.find((r) => r.workspaceId === "ws-a")!.id, "dashboard_button");
       rows = await notionRows(userId);
       expect(rows.map((r) => [r.workspaceId, r.isDefault])).toEqual([["ws-b", true]]);
     });

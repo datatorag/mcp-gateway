@@ -68,7 +68,7 @@ describe.skipIf(!isDockerAvailable())("a Google account two users hold (SCRUM-18
     const a = await holder("a");
     const b = await holder("b");
 
-    const { note } = await disconnectAccount(db, b, await accountIdOf(b));
+    const { note } = await disconnectAccount(db, b, await accountIdOf(b), "dashboard_button");
 
     expect(revokeGoogleToken).not.toHaveBeenCalled();
     expect(note).toBe(
@@ -78,7 +78,7 @@ describe.skipIf(!isDockerAvailable())("a Google account two users hold (SCRUM-18
     expect(await resolveServiceToken(db, a, GOOGLE, SHARED)).toMatchObject({ token: "access-a", accountEmail: SHARED });
 
     // A is now the last holder: their disconnect revokes, with no note.
-    const last = await disconnectAccount(db, a, await accountIdOf(a));
+    const last = await disconnectAccount(db, a, await accountIdOf(a), "dashboard_button");
     expect(revokeGoogleToken).toHaveBeenCalledExactlyOnceWith("refresh-a");
     expect(last.note).toBeUndefined();
   });
@@ -87,14 +87,14 @@ describe.skipIf(!isDockerAvailable())("a Google account two users hold (SCRUM-18
     const a = await holder("c");
     const b = await holder("d");
 
-    const { disconnected, note } = await disconnectService(db, b, GOOGLE);
+    const { disconnected, note } = await disconnectService(db, b, GOOGLE, "service_wide");
 
     expect(disconnected).toBe(1);
     expect(note).toMatch(/^Disconnected here\. Another DataToRAG user still holds this account/);
     expect(revokeGoogleToken).not.toHaveBeenCalled();
     expect(await resolveServiceToken(db, a, GOOGLE, SHARED)).toMatchObject({ token: "access-c" });
 
-    await disconnectService(db, a, GOOGLE);
+    await disconnectService(db, a, GOOGLE, "service_wide");
     expect(revokeGoogleToken).toHaveBeenCalledExactlyOnceWith("refresh-c");
   });
 

@@ -209,7 +209,7 @@ describe.skipIf(!isDockerAvailable())("SCRUM-442: provider tokens are read seale
       const { userId, rowId } = await connect("google-workspace", { access_token: "at-1", refresh_token: "rt-1" });
       await scramblePlain(rowId);
       const { disconnectService } = await import("./connected-accounts");
-      await disconnectService(db, userId, "google-workspace");
+      await disconnectService(db, userId, "google-workspace", "service_wide");
       expect(revokeGoogleToken).toHaveBeenCalledWith("rt-1");
       const left = await db.select().from(connectedAccounts).where(eq(connectedAccounts.userId, userId));
       expect(left).toEqual([]);

@@ -5,7 +5,7 @@
  */
 
 import { describe, expect, it } from "vitest";
-import { answerText, firstArray, resultJson, resultText } from "./result-json";
+import { firstArray, namedToolHint, resultJson, resultText } from "./result-json";
 
 const ok = (text: string) => ({ content: [{ type: "text", text }] });
 
@@ -71,26 +71,33 @@ describe("resultText", () => {
   });
 });
 
-/* SCRUM-499: gws_run leads with a line naming the tool that covers a raw
- * call. A reader that parses the answer must still see the API's own JSON,
- * and a first part that only looks similar is not dropped. */
-describe("answerText", () => {
+/* SCRUM-499: gws_run leads with a line naming the tool that handles a raw
+ * call. Every reader gets the payload from resultText; the line is read only
+ * through namedToolHint, and a first part that only looks similar, or an
+ * error, is left as it is. */
+describe("named-tool line", () => {
   const text = (...parts: string[]) => ({ content: parts.map((t) => ({ type: "text", text: t })) });
 
-  it("drops the leading named-tool line, so resultJson parses the API's answer", () => {
+  it("is left out of resultText, so resultJson parses the API's answer", () => {
     const result = text("gmail_read_thread covers this call: every message.", '{"id":"t1"}');
-    expect(answerText(result)).toBe('{"id":"t1"}');
+    expect(resultText(result)).toBe('{"id":"t1"}');
     expect(resultJson("gws_run", result)).toEqual({ id: "t1" });
+    expect(namedToolHint(result)).toBe("gmail_read_thread covers this call: every message.");
   });
 
-  it("keeps an answer with no line, and a lone part, as they are", () => {
-    expect(answerText(text('{"a":1}'))).toBe('{"a":1}');
-    expect(answerText(text("gmail_read_thread covers this call: x."))).toBe("gmail_read_thread covers this call: x.");
-    expect(answerText(text("Note: something else.", '{"a":1}'))).toBe('Note: something else.{"a":1}');
-  });
-
-  it("drops the thread read's line too", () => {
+  it("covers the thread read's wording too", () => {
     const result = text("gmail_read_thread reads this thread in one call: each message.", '{"id":"t1"}');
     expect(resultJson("gws_run", result)).toEqual({ id: "t1" });
+    expect(namedToolHint(result)).toMatch(/^gmail_read_thread reads this thread/);
+  });
+
+  it("keeps an answer with no line, a lone part, and an error as they are", () => {
+    expect(resultText(text('{"a":1}'))).toBe('{"a":1}');
+    expect(namedToolHint(text('{"a":1}'))).toBeUndefined();
+    expect(resultText(text("gmail_read_thread covers this call: x."))).toBe("gmail_read_thread covers this call: x.");
+    expect(resultText(text("Note: something else.", '{"a":1}'))).toBe('Note: something else.{"a":1}');
+    const error = { ...text("gmail_read covers this call: x.", "boom"), isError: true };
+    expect(resultText(error)).toBe("gmail_read covers this call: x.boom");
+    expect(namedToolHint(error)).toBeUndefined();
   });
 });

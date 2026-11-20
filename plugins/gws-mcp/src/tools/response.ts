@@ -8,23 +8,21 @@ export function textResponse(text: string) {
 
 /**
  * The answer with the aliases a call used named in it (SCRUM-456), so the
- * caller learns the tool's own word. Merged as `aliased` into the answer's
- * first JSON object, which a leading line (SCRUM-499) may come before; any
- * other answer gets a line of its own after it.
+ * caller learns the tool's own word. Merged into a JSON object answer as
+ * `aliased`; any other answer gets a line of its own after it.
  */
 export function withAliased<T extends { content: Array<{ type: string; text?: string }> }>(
   result: T,
   aliased: Record<string, string>
 ): T {
   if (Object.keys(aliased).length === 0) return result;
-  for (const [i, block] of result.content.slice(0, 2).entries()) {
-    if (block.type !== "text" || typeof block.text !== "string") continue;
+  const [first, ...rest] = result.content;
+  if (first?.type === "text" && typeof first.text === "string") {
     try {
-      const parsed: unknown = JSON.parse(block.text);
+      const parsed: unknown = JSON.parse(first.text);
       if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
         const merged = JSON.stringify({ ...(parsed as Record<string, unknown>), aliased }, null, 2);
-        const content = result.content.map((b, j) => (j === i ? { ...b, text: merged } : b));
-        return { ...result, content };
+        return { ...result, content: [{ ...first, text: merged }, ...rest] };
       }
     } catch {
       // Not JSON (text, or a truncated body): the note goes on a line of its own.
