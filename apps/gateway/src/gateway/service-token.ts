@@ -4,7 +4,7 @@ import { serviceConnections, connectedAccounts } from "@datatorag-mcp/db";
 import { CONNECTOR_TOKENS } from "./connectors/token-calls";
 import { posthogHost } from "./connectors/posthog/oauth";
 import { accountMatches, choiceFor, type AmbiguousAccount, type AccountRow } from "./account-choice";
-import { CONNECTOR_REGISTRY, isConnectorId, type ConnectorId, type ContextConnectorId, type RevokingConnectorId } from "./connectors/registry";
+import { CONNECTOR_REGISTRY, connectorSlugs, isConnectorId, type ConnectorId, type ConnectorRecord, type ContextConnectorId, type RevokingConnectorId } from "./connectors/registry";
 import { openToken, sealedColumns, TokenOpenError, type TokenRow } from "./token-crypto";
 import {
   classifyRefreshFailure,
@@ -57,7 +57,7 @@ export const UNEXPECTED: { failure: RefreshFailure } = { failure: { kind: "trans
 /** Mapping from plugin slug to the service connection it needs, from the
  * connector registry. */
 export const PLUGIN_SERVICE_MAP: Record<string, string> = Object.fromEntries(
-  CONNECTOR_REGISTRY.map((c) => [c.pluginSlug, c.id])
+  (CONNECTOR_REGISTRY as readonly ConnectorRecord[]).flatMap((c) => connectorSlugs(c).map((slug) => [slug, c.id]))
 );
 
 /** What a plugin is handed beside its token (SCRUM-471), per service. Most
@@ -80,7 +80,7 @@ export function pluginContextHeaders(service: string, account: { externalAccount
 
 /** Reverse mapping: service name to plugin slug. */
 export const SERVICE_PLUGIN_MAP: Record<string, string> = Object.fromEntries(
-  Object.entries(PLUGIN_SERVICE_MAP).map(([slug, service]) => [service, slug])
+  CONNECTOR_REGISTRY.map((c) => [c.id, c.pluginSlug])
 );
 
 /** How long a provider token call may hold the row lock before giving up. */

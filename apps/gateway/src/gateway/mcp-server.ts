@@ -40,8 +40,6 @@ import {
 } from "./service-token";
 import {
   listUserToolRows,
-  buildPluginServerUrl,
-  callPluginToolOnce,
   type UserToolRow,
 } from "./user-tools";
 import {
@@ -75,6 +73,7 @@ import { issueConnectLink, type ConnectLinkPath } from "./connect-links";
 import { isDuplicateProvider } from "./connect-duplicate";
 import { CONNECT_TOOL, CONNECT_TOOL_DESCRIPTION, connectToolResult } from "./connect-tool";
 import { promptConnect, supportsUrlElicitation, type CallExtra } from "./connect-elicitation";
+import { UPSTREAM_TOOL_NOT_OFFERED, callServiceToolOnce, serviceEndpoint } from "./upstream-call";
 
 const ACCOUNT_PARAM_SCHEMA = {
   type: "string",
@@ -1310,7 +1309,10 @@ export function createMcpServer(
       };
     }
 
-    const serverUrl = buildPluginServerUrl(mcpServer);
+    // Where this server's tools are served: our plugin, or the vendor's own
+    // MCP server (official-mcp-proxy). Every use below asks this one answer.
+    const endpoint = serviceEndpoint(mcpServer);
+    const serverUrl = endpoint.url;
 
     // SCRUM-392: a call missing a required argument, or carrying one the
     // tool does not take, is refused HERE, by name, before a token is
@@ -1325,6 +1327,12 @@ export function createMcpServer(
       .from(tools)
       .where(and(eq(tools.namespacedName, name), eq(tools.enabled, true)))
       .limit(1);
+    // official-mcp-proxy: a vendor-served tool needs an enabled registry row,
+    // so a tool the vendor added since the last review is not reachable by
+    // name. Refused before a token is resolved; nothing is metered.
+    if (!toolRow && endpoint.kind === "vendor") {
+      return { content: [{ type: "text" as const, text: UPSTREAM_TOOL_NOT_OFFERED }], isError: true };
+    }
     if (toolRow && toolRow.schema && typeof toolRow.schema === "object") {
       const validation = validateArguments(toolRow.schema, args, ["account"]);
       if (!validation.ok) {
@@ -1524,6 +1532,9 @@ export function createMcpServer(
     try {
       let result;
       if (filePathsFor(name, (args ?? {}) as Record<string, unknown>)) {
+        // A crossing hands the destination a plugin's token header; a vendor
+        // (official-mcp-proxy) only ever gets the bearer, so it is never one.
+        if (endpoint.kind !== "plugin") throw new Error(`${serverSlug} cannot take a file reference`);
         // SCRUM-384: a tool that takes a file reference. The crossing stands
         // exactly where the plugin call would, so the gates above and the
         // tracking below treat it as the one tool call it is. The source
@@ -1540,14 +1551,18 @@ export function createMcpServer(
           connectionsUrl,
         });
       } else if (userToken) {
-        result = await callPluginToolOnce({
-          serverUrl,
+        result = await callServiceToolOnce({
+          endpoint,
           userToken,
           toolName,
           args: args as Record<string, unknown>,
           clientName: "datatorag-mcp",
           contextHeaders,
         });
+      } else if (endpoint.kind === "vendor") {
+        // A vendor is never called without the user's token. Unreachable:
+        // a vendor's tools always need a connected service, refused above.
+        throw new Error(`no token for ${serverSlug}`);
       } else {
         const pooledClient = await pool.acquire(mcpServer.id, serverUrl);
         try {

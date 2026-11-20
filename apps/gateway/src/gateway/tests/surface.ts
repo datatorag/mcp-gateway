@@ -1,8 +1,9 @@
 import { eq, and } from "drizzle-orm";
 import type { Database } from "@datatorag-mcp/db";
-import { mcpServers, tools, users } from "@datatorag-mcp/db";
+import { tools, users } from "@datatorag-mcp/db";
 import type { ConnectionPool } from "../pool";
 import { buildPluginServerUrl } from "../user-tools";
+import { listActiveServers } from "../active-servers";
 import { PLUGIN_SERVICE_MAP } from "../service-token";
 import { listConnectedServiceIds } from "../connected-services";
 import { classifyWrite } from "../playground/tools";
@@ -32,6 +33,11 @@ export type PluginSurface = {
   live: string[] | null;
   registry: string[];
   error?: string;
+  /** Set when the vendor's own MCP server serves these tools
+   * (official-mcp-proxy). Its list can only be read with a user's token, so
+   * it is not read here: `live` is null, and the vendor's list against the
+   * registry is the scheduled upstream check's comparison. */
+  servedBy?: "vendor";
   /** The service whose connection gates this plugin's tools in the listing
    * (PLUGIN_SERVICE_MAP), and whether the asking identity has connected it.
    * Absent for a plugin no service gates. Read from the same two sources the
@@ -54,15 +60,7 @@ export async function registrySurface(
   userId?: string
 ): Promise<{ plugins: PluginSurface[] }> {
   const connected = userId ? await listConnectedServiceIds(db, userId) : null;
-  const servers = await db
-    .select({
-      slug: mcpServers.slug,
-      id: mcpServers.id,
-      containerPort: mcpServers.containerPort,
-      githubRepoUrl: mcpServers.githubRepoUrl,
-    })
-    .from(mcpServers)
-    .where(eq(mcpServers.status, "active"));
+  const servers = await listActiveServers(db);
 
   const plugins = await Promise.all(
     servers.map(async (server) => {
@@ -72,6 +70,12 @@ export async function registrySurface(
           .from(tools)
           .where(and(eq(tools.mcpServerId, server.id), eq(tools.enabled, true)))
       ).map((r) => r.name);
+
+      const service = PLUGIN_SERVICE_MAP[server.slug];
+      const gate = service && connected ? { service, connected: connected.has(service) } : undefined;
+      if (server.servedBy === "vendor") {
+        return { slug: server.slug, live: null, registry: registry.sort(), servedBy: "vendor" as const, ...(gate ? { gate } : {}) };
+      }
 
       let live: string[] | null = null;
       let error: string | undefined;
@@ -97,8 +101,6 @@ export async function registrySurface(
         error = err instanceof Error ? err.constructor.name : "unknown failure";
       }
 
-      const service = PLUGIN_SERVICE_MAP[server.slug];
-      const gate = service && connected ? { service, connected: connected.has(service) } : undefined;
       return { slug: server.slug, live, registry: registry.sort(), error, ...(gate ? { gate } : {}) };
     })
   );

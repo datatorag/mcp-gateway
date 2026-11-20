@@ -1,46 +1,67 @@
 /**
- * Slack's OAuth v2 (SCRUM-454): its endpoints, the code exchange, and its
- * connect for the shared flow. The refresh and revoke are in `tokens.ts`.
+ * Slack's OAuth for its hosted MCP server: its endpoints, the code exchange,
+ * and its connect for the shared flow. The refresh and revoke are in
+ * `tokens.ts`.
  *
- * Built against Slack's documented behaviour for an internal app that
- * requests user scopes only, with token rotation on:
- * - the authorize URL takes the scopes in `user_scope`, never `scope` (that
- *   is the bot's, and this app asks for none);
- * - `oauth.v2.access` takes form-encoded client credentials and answers
- *   HTTP 200 with `ok`, and on `ok: false` an `error` code;
- * - the person's token, its refresh token and its `expires_in` are under
- *   `authed_user`; there is no top-level access token without bot scopes;
- * - `team` names the workspace and `is_enterprise_install` an org-wide
- *   Enterprise Grid install.
+ * The tools are served by Slack's own MCP server (official-mcp-proxy), which
+ * takes the user token of the `v2_user` flow (Slack's MCP server page and
+ * its OAuth page):
+ * - authorize at `oauth/v2_user/authorize` with the user scopes in `scope`;
+ *   the app asks for no bot scopes;
+ * - exchange at `oauth.v2.user.access` with form-encoded client
+ *   credentials; it answers HTTP 200 with `ok`, and on `ok: false` an
+ *   `error` code;
+ * - the answer is shaped by the OAuth spec: the person's token, refresh
+ *   token and `expires_in` at the top level, `authed_user.id` naming the
+ *   person and `team.id` the workspace. Token rotation is on for the app.
+ *   The older `oauth.v2.access` shape (the token under `authed_user`) is
+ *   still read, so a grant from either is understood.
  *
  * Nothing here logs a token, a code or a response body.
  */
 import { cleanWorkspaceName } from "../../untrusted-text";
 import type { ConnectorOAuth } from "../../connect/connector-oauth";
 
-export const SLACK_AUTHORIZE_URL = "https://slack.com/oauth/v2/authorize";
-export const SLACK_TOKEN_URL = "https://slack.com/api/oauth.v2.access";
+export const SLACK_AUTHORIZE_URL = "https://slack.com/oauth/v2_user/authorize";
+export const SLACK_TOKEN_URL = "https://slack.com/api/oauth.v2.user.access";
 export const SLACK_REVOKE_URL = "https://slack.com/api/auth.revoke";
 export const SLACK_USERS_INFO_URL = "https://slack.com/api/users.info";
 
-/** Every user scope the tools need, requested at once: adding one later
- * makes every connected user reconnect. No bot scopes. */
+/** Every user scope Slack's MCP server supports (its `scopes_supported`),
+ * requested at once: adding one later makes every connected user reconnect.
+ * Which tools are served is decided by our registry, not by the grant. No
+ * bot scopes. */
 export const SLACK_USER_SCOPES = [
-  "channels:read",
-  "groups:read",
-  "im:read",
-  "mpim:read",
+  "canvases:read",
+  "canvases:write",
   "channels:history",
-  "groups:history",
-  "im:history",
-  "mpim:history",
-  "search:read",
+  "channels:read",
+  "channels:write",
   "chat:write",
-  "reactions:write",
+  "emoji:read",
+  "files:read",
+  "files:write",
+  "groups:history",
+  "groups:read",
+  "groups:write",
+  "im:history",
+  "im:read",
   "im:write",
+  "lists:read",
+  "lists:write",
+  "mpim:history",
+  "mpim:read",
+  "mpim:write",
+  "reactions:read",
+  "reactions:write",
+  "search:read.files",
+  "search:read.im",
+  "search:read.mpim",
+  "search:read.private",
+  "search:read.public",
+  "search:read.users",
   "users:read",
   "users:read.email",
-  "files:read",
 ].join(",");
 
 /** How long one Slack OAuth call may take. */
@@ -72,6 +93,11 @@ export class SlackExchangeError extends Error {
 type AccessResponse = {
   ok?: unknown;
   error?: unknown;
+  access_token?: unknown;
+  token_type?: unknown;
+  refresh_token?: unknown;
+  expires_in?: unknown;
+  scope?: unknown;
   team?: { id?: unknown; name?: unknown } | null;
   is_enterprise_install?: unknown;
   authed_user?: {
@@ -117,17 +143,26 @@ export async function exchangeSlackCode(
   }
   const user = data.authed_user ?? {};
   const team = data.team ?? {};
-  if (!nonEmpty(user.access_token) || !nonEmpty(user.id) || !nonEmpty(team.id)) {
+  // The spec's place first (`oauth.v2.user.access`), then `authed_user`
+  // (`oauth.v2.access`). A top-level token marked as a bot's is never the
+  // person's: on `oauth.v2.access` with bot scopes the top level is the bot
+  // token, and storing it as the user's would act as the bot.
+  const top = data.token_type !== "bot" && nonEmpty(data.access_token);
+  const accessToken = top ? data.access_token : user.access_token;
+  const refreshToken = top ? data.refresh_token : user.refresh_token;
+  const expiresIn = top ? data.expires_in : user.expires_in;
+  const scope = top ? data.scope : user.scope;
+  if (!nonEmpty(accessToken) || !nonEmpty(user.id) || !nonEmpty(team.id)) {
     throw new SlackExchangeError("incomplete_grant");
   }
   return {
     teamId: team.id,
     teamName: typeof team.name === "string" ? team.name : "",
     userId: user.id,
-    accessToken: user.access_token,
-    refreshToken: nonEmpty(user.refresh_token) ? user.refresh_token : null,
-    expiresIn: typeof user.expires_in === "number" && user.expires_in > 0 ? user.expires_in : null,
-    scopes: typeof user.scope === "string" ? user.scope.split(",").filter(Boolean) : [],
+    accessToken,
+    refreshToken: nonEmpty(refreshToken) ? refreshToken : null,
+    expiresIn: typeof expiresIn === "number" && expiresIn > 0 ? expiresIn : null,
+    scopes: typeof scope === "string" ? scope.split(/[,\s]+/).filter(Boolean) : [],
     enterprise: data.is_enterprise_install === true,
   };
 }
@@ -173,8 +208,9 @@ export const SLACK_CONNECT: ConnectorOAuth = {
   authorizeUrl(ctx, nonce) {
     const url = new URL(SLACK_AUTHORIZE_URL);
     url.searchParams.set("client_id", ctx.config.slackClientId!);
-    // User scopes only; `scope` is the bot's and is never sent.
-    url.searchParams.set("user_scope", SLACK_USER_SCOPES);
+    // On the `v2_user` endpoint `scope` is the person's; the app asks for no
+    // bot scopes.
+    url.searchParams.set("scope", SLACK_USER_SCOPES);
     url.searchParams.set("redirect_uri", ctx.redirectUri);
     // Opens the consent screen on the company workspace; the identity step's
     // team check is what enforces it.
@@ -222,8 +258,10 @@ export const SLACK_CONNECT: ConnectorOAuth = {
       emailVerified: true,
       externalAccountId: grant.teamId,
       // Set by whoever administers the workspace, and shown to the model and
-      // in the dashboard: cleaned and capped before it is stored.
-      label: cleanWorkspaceName(grant.teamName),
+      // in the dashboard: cleaned and capped before it is stored. The
+      // `v2_user` answer carries no team name; then none is passed, and a
+      // name the user gave the account is kept.
+      ...(grant.teamName ? { label: cleanWorkspaceName(grant.teamName) } : {}),
     };
   },
 };

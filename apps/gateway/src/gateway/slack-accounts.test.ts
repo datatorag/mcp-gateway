@@ -2,9 +2,10 @@
  * SCRUM-454: the Slack connect pair, for the company workspace only.
  *
  * Driven through the REAL router over real HTTP with a fake fetch, built
- * against Slack's documented OAuth v2 behaviour (user scopes only, token
- * rotation on): the exchange answers HTTP 200 with `ok`, the person's token
- * is under `authed_user`, and the email comes from `users.info`. What must
+ * against Slack's documented `v2_user` flow, which is what its hosted MCP
+ * server takes (official-mcp-proxy; user scopes only, token rotation on):
+ * the exchange answers HTTP 200 with `ok` and the person's token at the top
+ * level, as the OAuth spec places it, and the email comes from `users.info`. What must
  * hold: only an admin can start it; it asks for user scopes and no bot
  * scopes; the callback stores nothing for another workspace, an Enterprise
  * Grid install or a grant with no email; and a good grant is stored with the
@@ -102,9 +103,24 @@ afterAll(async () => {
   await new Promise<void>((r) => unconfigured.server.close(() => r()));
 });
 
-/** oauth.v2.access for a user-scope-only app with rotation on, as Slack
- * documents it. Reassigned per test where a field must differ. */
+/** oauth.v2.user.access with rotation on, as Slack's method page shows it:
+ * the token at the top level, the person in `authed_user`, the workspace's
+ * id (and no name) in `team`. Reassigned per test where a field must differ. */
 const GRANT = {
+  ok: true,
+  access_token: "user-token-1",
+  token_type: "user",
+  scope: SLACK_USER_SCOPES,
+  refresh_token: "refresh-token-1",
+  expires_in: 43200,
+  authed_user: { id: "slack-user-1", scope: SLACK_USER_SCOPES },
+  team: { id: TEAM },
+  is_enterprise_install: false,
+};
+
+/** The older oauth.v2.access answer: the token under `authed_user`, the
+ * team with its name. Still understood. */
+const OLD_SHAPE_GRANT = {
   ok: true,
   app_id: "app-1",
   authed_user: {
@@ -135,7 +151,7 @@ beforeEach(() => {
     "fetch",
     outbound.mockImplementation(async (url: string | URL) => {
       const u = String(url);
-      if (u.startsWith("https://slack.com/api/oauth.v2.access")) {
+      if (u.startsWith("https://slack.com/api/oauth.v2.user.access")) {
         return new Response(JSON.stringify(grantBody), { status: 200 });
       }
       if (u.startsWith("https://slack.com/api/users.info")) {
@@ -177,14 +193,14 @@ describe("GET /auth/slack/connect", () => {
     expect(outbound).not.toHaveBeenCalled();
   });
 
-  it("connect redirects with user_scope and no scope param", async () => {
+  it("connect redirects to the v2_user authorize page with the user scopes in scope", async () => {
     const res = await rawGet("/auth/slack/connect", SESSION);
     expect(res.status).toBe(302);
     const location = new URL(res.headers.get("location") ?? "");
-    expect(`${location.origin}${location.pathname}`).toBe("https://slack.com/oauth/v2/authorize");
+    expect(`${location.origin}${location.pathname}`).toBe("https://slack.com/oauth/v2_user/authorize");
     expect(location.searchParams.get("client_id")).toBe("slack-cid");
-    expect(location.searchParams.get("user_scope")).toBe(SLACK_USER_SCOPES);
-    expect(location.searchParams.has("scope")).toBe(false);
+    expect(location.searchParams.get("scope")).toBe(SLACK_USER_SCOPES);
+    expect(location.searchParams.has("user_scope")).toBe(false);
     expect(location.searchParams.get("redirect_uri")).toBe("http://127.0.0.1/auth/slack/connect/callback");
     // Pins the authorize page to the company workspace.
     expect(location.searchParams.get("team")).toBe(TEAM);
@@ -196,10 +212,15 @@ describe("GET /auth/slack/connect", () => {
     expect(setCookie).toContain("HttpOnly");
   });
 
-  it("the requested scopes are exactly the user scopes in the plan", () => {
-    expect(SLACK_USER_SCOPES).toBe(
-      "channels:read,groups:read,im:read,mpim:read,channels:history,groups:history,im:history,mpim:history,search:read,chat:write,reactions:write,im:write,users:read,users:read.email,files:read"
-    );
+  it("the requested scopes are exactly the ones Slack's MCP server supports (its scopes_supported)", () => {
+    expect(SLACK_USER_SCOPES.split(",")).toEqual([
+      "canvases:read", "canvases:write", "channels:history", "channels:read", "channels:write", "chat:write",
+      "emoji:read", "files:read", "files:write", "groups:history", "groups:read", "groups:write",
+      "im:history", "im:read", "im:write", "lists:read", "lists:write", "mpim:history", "mpim:read",
+      "mpim:write", "reactions:read", "reactions:write", "search:read.files", "search:read.im",
+      "search:read.mpim", "search:read.private", "search:read.public", "search:read.users",
+      "users:read", "users:read.email",
+    ]);
   });
 
   it("missing config answers not configured and offers nothing", async () => {
@@ -263,19 +284,19 @@ describe("GET /auth/slack/connect/callback", () => {
   });
 
   it("refuses a grant with no user token, storing nothing", async () => {
-    grantBody = { ...GRANT, authed_user: { id: "slack-user-1", scope: "" } };
+    grantBody = { ...GRANT, access_token: undefined, authed_user: { id: "slack-user-1", scope: "" } };
     const res = await rawGet(CALLBACK, WITH_NONCE);
     expect(res.headers.get("location")).toBe("/dashboard/connections?error=token_exchange_failed");
     expect(upsertServiceAccount).not.toHaveBeenCalled();
   });
 
-  it("callback stores sealed tokens with external_account_id = team id and label = team name", async () => {
+  it("callback stores sealed tokens with external_account_id = team id, and no label when Slack sends no team name", async () => {
     const before = Date.now();
     const res = await rawGet(CALLBACK, WITH_NONCE);
     expect(res.headers.get("location")).toBe("/dashboard/agent?connected=slack&landing=connect");
 
     // The exchange: form-encoded, credentials in the body, never in a header.
-    const exchange = calls("https://slack.com/api/oauth.v2.access");
+    const exchange = calls("https://slack.com/api/oauth.v2.user.access");
     expect(exchange).toHaveLength(1);
     const init = exchange[0][1] as RequestInit;
     expect(init.method).toBe("POST");
@@ -312,9 +333,29 @@ describe("GET /auth/slack/connect/callback", () => {
     expect(expiresAt).toBeInstanceOf(Date);
     expect(expiresAt.getTime()).toBeGreaterThanOrEqual(before + 43200 * 1000);
     expect(expiresAt.getTime()).toBeLessThanOrEqual(Date.now() + 43200 * 1000);
-    expect(args[7]).toEqual({ externalAccountId: TEAM, label: "Example Co" });
+    // No team name in the v2_user answer: no label, so a name the user gave
+    // the account is kept on a reconnect.
+    expect(args[7]).toEqual({ externalAccountId: TEAM });
 
     expect(res.headers.get("set-cookie") ?? "").toContain("slack_connect_nonce=;");
+  });
+
+  it("a top-level bot token is never stored as the person's: the person's token under authed_user is", async () => {
+    grantBody = { ...OLD_SHAPE_GRANT, access_token: "bot-token-x", token_type: "bot", scope: "chat:write" };
+    const res = await rawGet(CALLBACK, WITH_NONCE);
+    expect(res.headers.get("location")).toBe("/dashboard/agent?connected=slack&landing=connect");
+    const args = upsertServiceAccount.mock.calls[0];
+    expect(args[4]).toEqual(expect.objectContaining({ access_token: "user-token-1", refresh_token: "refresh-token-1" }));
+    expect(JSON.stringify(args)).not.toContain("bot-token-x");
+  });
+
+  it("an answer in the older oauth.v2.access shape is still understood, with the team name as the label", async () => {
+    grantBody = OLD_SHAPE_GRANT;
+    const res = await rawGet(CALLBACK, WITH_NONCE);
+    expect(res.headers.get("location")).toBe("/dashboard/agent?connected=slack&landing=connect");
+    const args = upsertServiceAccount.mock.calls[0];
+    expect(args[4]).toEqual(expect.objectContaining({ access_token: "user-token-1", refresh_token: "refresh-token-1" }));
+    expect(args[7]).toEqual({ externalAccountId: TEAM, label: "Example Co" });
   });
 
   it("clears the nonce on a failure path too", async () => {

@@ -30,6 +30,22 @@ export const a4ThreeWay: TestCase = {
 
     const problems: string[] = [];
     for (const plugin of surface.plugins) {
+      // A vendor-served slug (official-mcp-proxy): its own list needs a
+      // user's token and is the scheduled upstream check's to compare. Here
+      // the registry is still held against what this identity is served.
+      if (plugin.servedBy === "vendor") {
+        const registry = [...plugin.registry];
+        const servedHere = [...served].filter((n) => n.startsWith(`${plugin.slug}__`));
+        const gatedOff = plugin.gate !== undefined && !plugin.gate.connected;
+        const registeredButUnserved = gatedOff ? [] : registry.filter((n) => !served.has(n));
+        ctx.evidence(
+          `${plugin.slug}: served by the vendor, registry ${registry.length}, served ${servedHere.length}` +
+            (gatedOff ? ` (no ${plugin.gate!.service} connection on this identity, so none expected)` : "")
+        );
+        if (registeredButUnserved.length) problems.push(`${plugin.slug} registered but not advertised to this identity: ${registeredButUnserved.join(", ")}`);
+        if (gatedOff && servedHere.length) problems.push(`${plugin.slug} advertised to an identity with no ${plugin.gate!.service} connection: ${servedHere.join(", ")}`);
+        continue;
+      }
       if (plugin.live === null) {
         problems.push(`${plugin.slug}: its own list could not be read (${plugin.error ?? "no reason given"})`);
         continue;
