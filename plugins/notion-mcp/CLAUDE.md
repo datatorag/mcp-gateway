@@ -2,8 +2,9 @@
 
 ## Project
 
-Notion MCP plugin for the DataToRAG gateway (SCRUM-366). Exposes six read
-tools (stage 1) and twelve write tools (stage 2) via MCP over HTTP. Design
+Notion MCP plugin for the DataToRAG gateway (SCRUM-366). Exposes seven read
+tools (six from stage 1, and the meeting notes list from SCRUM-501) and
+twelve write tools (stage 2) via MCP over HTTP. Design
 and stages: `docs/architecture/2026-10-02-scrum-366-notion-connector-design.md` and
 `docs/plans/2026-10-02-scrum-366-notion-connector.md`.
 
@@ -47,6 +48,13 @@ and stages: `docs/architecture/2026-10-02-scrum-366-notion-connector-design.md` 
   `src/tools/annotations.ts` the `READ` and `WRITE` presets (every write is
   `WRITE`: destructive, not read-only); `src/tools/response.ts` the shared
   response helpers
+- `src/tools/notion-meetings.ts`: `notion_list_meeting_notes` (SCRUM-501).
+  `POST /v1/blocks/meeting_notes/query` answers `meeting_notes` blocks with
+  child ids for the summary, notes, and transcript; their text is read from
+  each child's children, so the transcript is fetched only when asked. Only
+  notes the connected user attended, at most 50, no cursor. Action items are
+  the summary's and notes' to-dos, and list items under an action-items
+  heading; a real AI summary puts them as to-dos under "Action Items"
 - `src/fixtures/`: test support, excluded from the build. The `.json` files
   are recorded responses (stage 0, 2026-10-21), scrubbed of names, emails,
   avatar and file URLs and the workspace name. The `.ts` files marked "shape

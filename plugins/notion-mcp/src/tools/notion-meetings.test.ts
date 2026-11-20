@@ -1,0 +1,165 @@
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { NotionClient } from "../notion-client.js";
+import { fakeFetch } from "../fixtures/fake-fetch.js";
+import {
+  NOTES_NEW,
+  NOTES_NEW_CHILDREN,
+  NOTES_OLD,
+  NOTES_OLD_CHILDREN,
+  NOTE_OLD,
+  QUERY_ANSWER,
+  SUMMARY_NEW,
+  SUMMARY_NEW_CHILDREN,
+  SUMMARY_OLD,
+  SUMMARY_OLD_CHILDREN,
+  TRANSCRIPT_NEW,
+  TRANSCRIPT_NEW_CHILDREN,
+  SUMMARY_LIKE_REAL,
+  USER,
+  children,
+} from "../fixtures/meeting-notes-documented.js";
+import { MEETING_NOTES_TOOL, NO_MEETING_NOTES, dateValue, handleMeetingNotes, meetingQuery } from "./notion-meetings.js";
+
+/* SCRUM-501: the meeting notes list, through the real client against a
+ * stubbed fetch, on answers shaped from Notion's reference. */
+
+const TOKEN = "fixture-bearer-not-a-real-token";
+const client = () => new NotionClient({ accessToken: TOKEN }).forTool(true);
+const ok = (body: unknown) => ({ status: 200, body });
+
+afterEach(() => vi.unstubAllGlobals());
+
+async function call(args: Record<string, unknown>) {
+  const res = await handleMeetingNotes(client(), MEETING_NOTES_TOOL, args);
+  return JSON.parse(res.content[0].text);
+}
+
+describe("the query Notion is sent", () => {
+  it("defaults to notes since yesterday, the newest at the top, ten of them", () => {
+    expect(meetingQuery({})).toEqual({
+      filter: { property: "created_time", filter: { operator: "date_is_on_or_after", value: { type: "relative", value: "yesterday" } } },
+      sort: [{ property: "created_time", direction: "descending" }],
+      limit: 10,
+    });
+  });
+
+  it("joins a date range and a title with and", () => {
+    const q = meetingQuery({ since: "2026-11-01", until: "2026-11-15", title: " planning ", limit: 99 });
+    expect(q.limit).toBe(50);
+    expect(q.filter).toEqual({
+      operator: "and",
+      filters: [
+        { property: "created_time", filter: { operator: "date_is_on_or_after", value: { type: "exact", value: { type: "date", start_date: "2026-11-01" } } } },
+        { property: "created_time", filter: { operator: "date_is_on_or_before", value: { type: "exact", value: { type: "date", start_date: "2026-11-15" } } } },
+        { property: "title", filter: { operator: "string_contains", value: { type: "exact", value: "planning" } } },
+      ],
+    });
+  });
+
+  it("refuses a date it cannot send, in words", () => {
+    expect(() => dateValue("last tuesday", "since")).toThrow(/since must be a date as YYYY-MM-DD/);
+    expect(() => dateValue("2026-13-45", "until")).toThrow(/until must be/);
+    expect(dateValue("one_week_ago", "since")).toEqual({ type: "relative", value: "one_week_ago" });
+  });
+});
+
+describe("the answer", () => {
+  it("carries the summary, notes, attendees, and action items, and never fetches the transcript unless asked", async () => {
+    const f = fakeFetch([
+      ok(QUERY_ANSWER),
+      ok(USER),
+      ok(SUMMARY_NEW_CHILDREN),
+      ok(NOTES_NEW_CHILDREN),
+      ok(SUMMARY_OLD_CHILDREN),
+      ok(NOTES_OLD_CHILDREN),
+    ]);
+    const out = await call({});
+    expect(f.sent[0]).toMatchObject({ method: "POST", url: new URL("https://api.notion.com/v1/blocks/meeting_notes/query") });
+    expect(f.sent.some((r) => r.url.pathname.includes(TRANSCRIPT_NEW))).toBe(false);
+    expect(f.sent.filter((r) => r.url.pathname === `/v1/users/${USER.id}`)).toHaveLength(1);
+
+    const [first, second] = out.results;
+    expect(first).toMatchObject({
+      title: "Sprint planning",
+      status: "notes_ready",
+      meeting_start: "2026-11-19T10:00:00.000Z",
+      meeting_end: "2026-11-19T10:30:00.000Z",
+      attendees: ["Ada Example"],
+      notes: "- Scope is fixed for this sprint",
+      action_items: [
+        { text: "Ada drafts the release notes", done: null },
+        { text: "Ben books the demo", done: false },
+      ],
+    });
+    expect(first.summary).toContain("The team agreed the release scope.");
+    expect(first.summary).toContain("- [ ] Ben books the demo");
+    expect(first).not.toHaveProperty("transcript");
+    expect(second.title).toBe("Weekly sync");
+    expect(out).toMatchObject({ has_more: false, next_cursor: null });
+    expect(out).not.toHaveProperty("left_out");
+  });
+
+  it("in a summary laid out as a real one, the action items are its to-dos and nothing under the other headings", async () => {
+    fakeFetch([ok({ ...QUERY_ANSWER, results: [QUERY_ANSWER.results[0]] }), ok(USER), ok(SUMMARY_LIKE_REAL), ok(children())]);
+    const out = await call({});
+    expect(out.results[0].action_items).toEqual([
+      { text: "Test User: get the test running", done: false },
+      { text: "Test User: show the output", done: true },
+    ]);
+    expect(out.results[0].summary).toContain("## Open Questions");
+    expect(out.results[0].notes).toBe("");
+  });
+
+  it("reads the transcript when asked", async () => {
+    fakeFetch([
+      ok({ ...QUERY_ANSWER, results: [QUERY_ANSWER.results[0]] }),
+      ok(USER),
+      ok(SUMMARY_NEW_CHILDREN),
+      ok(NOTES_NEW_CHILDREN),
+      ok(TRANSCRIPT_NEW_CHILDREN),
+    ]);
+    const out = await call({ include_transcript: true });
+    expect(out.results[0].transcript).toBe("Ada: shall we start?");
+  });
+
+  it("over the budget, the older note keeps its title and times and is listed in left_out", async () => {
+    const f = fakeFetch([
+      ok(QUERY_ANSWER),
+      ok(USER),
+      ok(SUMMARY_NEW_CHILDREN),
+      ok(NOTES_NEW_CHILDREN),
+      ok(SUMMARY_OLD_CHILDREN),
+      ok(NOTES_OLD_CHILDREN),
+    ]);
+    const out = await call({ max_body_chars: 1000 });
+    expect(out.left_out).toEqual([NOTE_OLD]);
+    expect(out.left_out_reason).toMatch(/did not fit in max_body_chars \(1,000\)/);
+    expect(out.results[1]).toMatchObject({ title: "Weekly sync", summary: null, notes: null, action_items: [] });
+    expect(out.results[0].summary).not.toBeNull();
+    expect(f.pending()).toBe(0);
+  });
+
+  it("a note still being summarized comes back with its status", async () => {
+    const pending = structuredClone(QUERY_ANSWER.results[0]);
+    pending.meeting_notes.status = "summary_in_progress";
+    fakeFetch([ok({ results: [pending], has_more: true }), ok(USER), ok(children()), ok(children())]);
+    const out = await call({});
+    expect(out.results[0]).toMatchObject({ status: "summary_in_progress", summary: "", action_items: [] });
+    expect(out.has_more).toBe(true);
+  });
+
+  it("no notes at all says whose notes are listed", async () => {
+    fakeFetch([ok({ results: [], has_more: false })]);
+    const out = await call({ since: "today" });
+    expect(out.results).toEqual([]);
+    expect(out.note).toMatch(/attended/);
+  });
+
+  it("a workspace without AI meeting notes answers with a sentence", async () => {
+    fakeFetch([{ status: 400, body: { object: "error", status: 400, code: "validation_error", message: "Meeting notes are not available." } }]);
+    await expect(handleMeetingNotes(client(), MEETING_NOTES_TOOL, {})).rejects.toThrow(NO_MEETING_NOTES);
+  });
+});
+
+// The ids are used only through the fixture's answers.
+void [SUMMARY_NEW, NOTES_NEW, SUMMARY_OLD, NOTES_OLD];

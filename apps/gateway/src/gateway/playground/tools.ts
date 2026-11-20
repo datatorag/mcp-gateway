@@ -172,6 +172,7 @@ export const KNOWN_READ_TOOLS: ReadonlySet<string> = new Set<string>([
   "notion-mcp__notion_get_comments",
   "notion-mcp__notion_get_database",
   "notion-mcp__notion_get_page",
+  "notion-mcp__notion_list_meeting_notes",
   "notion-mcp__notion_list_users",
   "notion-mcp__notion_query_data_source",
   "notion-mcp__notion_search",

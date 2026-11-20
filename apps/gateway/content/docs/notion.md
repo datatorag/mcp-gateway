@@ -67,6 +67,17 @@ The `account` argument takes the email, or, when one email has several workspace
 | `notion_query_data_source` | Query a data source with filter and sort in Notion's JSON format, choose which properties come back, and page through results with a cursor. Or run a saved view with `view_id`, which returns page ids |
 | `notion_get_comments` | Get the unresolved comments on a page |
 | `notion_list_users` | List the people in the workspace, or pass `"me"` for the connection itself |
+| `notion_list_meeting_notes` | List your Notion AI meeting notes by date, with each note's summary, notes, and action items. The transcript only when you ask |
+
+### Meeting notes
+
+`notion_list_meeting_notes` reads the Notion AI meeting notes of meetings the connected Notion user attended, with the newest at the top. Give it a start date (`since`, a date such as `2026-11-18`, or `yesterday`, `today`, or `one_week_ago`; the default is yesterday), and optionally an end date (`until`) and text the title contains (`title`).
+
+Each note comes back with its title, the meeting's start and end, its attendees, its status, the AI summary and the notes as text, and `action_items`. Notion has no separate field for action items, so the connector collects every to-do in the summary and notes, with whether it is checked, and every list item under an "Action items" or "Next steps" heading. Notion AI writes action items as to-dos in the summary, one per item, with the person's name first.
+
+The transcript is left out unless you set `include_transcript`. The text of one answer is held to 100,000 characters by default (`max_body_chars`, up to 200,000): when a range holds more, the newest notes keep their text and the oldest come back with their title and times only, listed in `left_out`. Notion returns at most 50 notes in one answer and no cursor; `has_more` says more match, and a narrower date range reads the rest.
+
+A note that is still being transcribed or summarized comes back with its status and no summary yet. A workspace without Notion AI meeting notes answers with a sentence saying so. A daily run that reads each new note asks for `since: "yesterday"`.
 
 ### Writing
 

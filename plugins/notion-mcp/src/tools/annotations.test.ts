@@ -8,6 +8,7 @@ const READS = [
   "notion_query_data_source",
   "notion_get_comments",
   "notion_list_users",
+  "notion_list_meeting_notes",
 ];
 
 const WRITES = [
@@ -26,7 +27,7 @@ const WRITES = [
 ];
 
 describe("the tool list", () => {
-  it("serves the six reads and the twelve writes, each with a handler", () => {
+  it("serves the seven reads and the twelve writes, each with a handler", () => {
     expect(allTools.map((t) => t.name).sort()).toEqual([...READS, ...WRITES].sort());
     for (const t of allTools) expect(toolHandlers.has(t.name), t.name).toBe(true);
   });

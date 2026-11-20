@@ -93,9 +93,10 @@ describe("the Notion connector's coverage", () => {
     const { REGISTRY_CLASSIFICATION } = await import("../playground/registry-snapshot");
     const { scenarioOf } = await import("./scenarios");
     const tools = REGISTRY_CLASSIFICATION.map(([name]) => name).filter((n) => n.startsWith("notion-mcp__"));
-    // Six reads and twelve writes (stage 2). The writes are restoring pairs
-    // on artifacts the run creates and labels; see the notion scenario.
-    expect(tools.length).toBe(18);
+    // Seven reads (the meeting notes list since SCRUM-501) and twelve
+    // writes (stage 2). The writes are restoring pairs on artifacts the run
+    // creates and labels; see the notion scenario.
+    expect(tools.length).toBe(19);
     const covered = new Set(CASES.flatMap((c) => c.covers));
     expect(tools.filter((t) => !covered.has(t))).toEqual([]);
     const notionCases = CASES.filter((c) => c.covers.some((t) => t.startsWith("notion-mcp__")));
