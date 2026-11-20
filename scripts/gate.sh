@@ -201,6 +201,7 @@ run_scripts() {
   node --test scripts/env-reads-check.test.mjs
   node --test scripts/registry-file-check.test.mjs
   node --test scripts/registry-apply.test.mjs
+  node --test scripts/hooks/review-gate.test.mjs
   local t
   for t in scripts/hooks/test_*.py; do
     python3 -m unittest "$t"
