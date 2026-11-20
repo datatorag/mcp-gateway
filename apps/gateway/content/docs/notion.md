@@ -78,7 +78,7 @@ Each note comes back with its title, the meeting's start and end, its attendees,
 
 The transcript is left out unless you set `include_transcript`. The text of one answer is held to 100,000 characters by default (`max_body_chars`, up to 200,000): when a range holds more, the newest notes keep their text and the oldest come back with their title and times only, listed in `left_out`. Notion returns at most 50 notes in one answer and no cursor; `has_more` says more match, and a narrower date range reads the rest.
 
-A note that is still being transcribed or summarized comes back with its status and no summary yet. A workspace without Notion AI meeting notes answers with a sentence saying so. A daily run that reads each new note asks for `since: "yesterday"`.
+A note that is still being transcribed or summarized comes back with its status and no summary yet. Reading meeting notes through Notion's API needs a Notion plan with AI meeting notes enabled, which is not every plan that can record them; on a workspace whose plan lacks it, the tool answers with a sentence saying so. A daily run that reads each new note asks for `since: "yesterday"`.
 
 ### Writing
 
