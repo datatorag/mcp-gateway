@@ -308,6 +308,76 @@ describe("Notion writes in a test run: known-bad attempts", () => {
   });
 });
 
+/* notion_attach_file (SCRUM-501) lives in its own plugin module and takes
+ * the file's bytes from the gateway, so it is driven here through the real
+ * `attachNotionFile` with a recording client, apart from the table above. */
+describe("notion_attach_file in a test run", () => {
+  let attachNotionFile: (client: unknown, args: Record<string, unknown>, file: unknown) => Promise<unknown>;
+  beforeAll(async () => {
+    const mod = await import(
+      /* @vite-ignore */ pathToFileURL(path.join(REPO_ROOT, "plugins/notion-mcp/src/tools/notion-file.ts")).href
+    );
+    attachNotionFile = mod.attachNotionFile;
+  });
+
+  /** The ids the handler's writes name, as for the write tools above. */
+  async function attachedIds(args: Record<string, unknown>): Promise<string[]> {
+    const sent: Sent[] = [];
+    const base = recordingClient(sent);
+    const client = {
+      ...base,
+      get: async (p: string) =>
+        p === "/v1/users/me" ? { bot: { workspace_limits: { max_file_upload_size_in_bytes: 5242880 } } } : base.get(p),
+      post: async (p: string, body?: unknown) => {
+        sent.push({ method: "POST", path: p, body });
+        return { id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", status: "pending" };
+      },
+      postMultipart: async (p: string) => {
+        sent.push({ method: "POST", path: p, body: null });
+        return { status: "uploaded", content_length: 1 };
+      },
+      patch: async (p: string, body?: unknown) => {
+        sent.push({ method: "PATCH", path: p, body });
+        return { results: [{ id: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb", type: "file" }] };
+      },
+    };
+    await attachNotionFile(client, structuredClone(args), { bytes: new Uint8Array([1]), name: "a.txt", type: "text/plain" });
+    return sent
+      .filter((r) => r.method === "PATCH")
+      .flatMap((r) => `${r.path} ${JSON.stringify(r.body ?? null)}`.match(ID_ANYWHERE) ?? [])
+      .map(norm)
+      .filter((id) => !id.startsWith("aaaaaaaa"));
+  }
+
+  it("lets a file the run supplies go on a page the run created", async () => {
+    for (const type of ["content", "upload"]) {
+      const args = { page_id: OWN_PAGE, file: { type } };
+      expect(await check("notion_attach_file", args), type).toEqual({ ok: true });
+      expect(await attachedIds(args)).toEqual([norm(OWN_PAGE)]);
+    }
+  });
+
+  it.each([
+    ["the fixture page, which no tool can take the block back off", FIXTURE_PAGE],
+    ["a page outside the fixtures", STRANGER],
+  ])("refuses %s, which the handler would write to", async (_what, page) => {
+    const args = { page_id: page, file: { type: "content" } };
+    expect((await check("notion_attach_file", args)).ok).toBe(false);
+    expect(await attachedIds(args)).toEqual([norm(page)]);
+  });
+
+  it.each(["gmail_message", "gmail_attachment", "drive_file", "drive_export"])(
+    "refuses a %s reference, which would carry someone's file into Notion",
+    async (type) => {
+      expect((await check("notion_attach_file", { page_id: OWN_PAGE, file: { type } })).ok).toBe(false);
+    }
+  );
+
+  it("refuses a page given as a URL", async () => {
+    expect((await check("notion_attach_file", { page_id: `https://www.notion.so/x-${norm(OWN_PAGE)}`, file: { type: "content" } })).ok).toBe(false);
+  });
+});
+
 describe("what counts as created by this run", () => {
   it("is read from each create's own answer", () => {
     const created = newNotionCreated();

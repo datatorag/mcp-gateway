@@ -736,6 +736,9 @@ export async function checkSend(
  *    because anyone in the workspace can type a title;
  *  - comments: new ones only on the fixture page (or in a discussion the run
  *    started there), edited or deleted only when the run created them.
+ *  - a file (`notion_attach_file`, SCRUM-501): only on a page this run
+ *    created, and only a file the run supplies (a content or upload
+ *    reference), because no tool takes a block back off a page.
  *
  * On the fixtures themselves the write is narrowed further: the fixture page
  * is never trashed, templated, moved, wholly replaced or stripped of child
@@ -1017,6 +1020,18 @@ function checkNotion(name: string, args: Record<string, unknown>, scope: NotionS
       if (!isDb(notionKey(args.database_id))) return refuse("may only add a view to the fixture database or one this run created");
       if (!isDs(notionKey(args.data_source_id))) return refuse("may only show the fixture data source or one this run created");
       if (!labelled(args.name)) return refuse(`must name the view with ${SUBJECT_PREFIX} and this run's stamp`);
+      return { ok: true };
+    }
+
+    case "notion_attach_file": {
+      // A block cannot be taken back off a page by any tool here, so the file
+      // goes only on a page this run created, which its cleanup trashes. The
+      // file is one the run supplies itself, never a reference that would
+      // carry someone's mail or Drive file into Notion.
+      if (!created.pages.has(notionKey(args.page_id) ?? "")) return refuse("may only put a file on a page this run created, named by a bare id");
+      const ref = args.file as Record<string, unknown> | null | undefined;
+      const type = ref && typeof ref === "object" ? ref.type : undefined;
+      if (type !== "content" && type !== "upload") return refuse("may only put a file the run supplies (a content or upload reference)");
       return { ok: true };
     }
 

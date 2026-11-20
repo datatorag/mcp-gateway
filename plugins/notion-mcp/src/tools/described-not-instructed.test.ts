@@ -26,6 +26,7 @@ const DESCRIBED = [
   "notion_update_data_source",
   "notion_create_view",
   "notion_update_view",
+  "notion_attach_file",
 ];
 
 /** Words that address the reader's behaviour instead of the tool's. */

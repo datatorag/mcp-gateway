@@ -185,6 +185,13 @@ export class NotionClient {
     return this.request("DELETE", path);
   }
 
+  /** A multipart POST, for the one Notion endpoint that takes a file's bytes
+   * (`/v1/file_uploads/{id}/send`). The runtime writes the boundary into the
+   * Content-Type, so none is set here. */
+  postMultipart(path: string, form: FormData): Promise<unknown> {
+    return this.request("POST", path, { form });
+  }
+
   /** Send, and hand back the parsed JSON of an answer that succeeded.
    *
    * A refusal for rate from a read-only tool is sent again, up to
@@ -197,7 +204,7 @@ export class NotionClient {
   async request(
     method: "GET" | "POST" | "PATCH" | "DELETE",
     path: string,
-    options: { query?: Record<string, QueryValue>; body?: unknown } = {}
+    options: { query?: Record<string, QueryValue>; body?: unknown; form?: FormData } = {}
   ): Promise<unknown> {
     if (!this.accessToken) throw new Error(NO_TOKEN_MESSAGE);
 
@@ -210,8 +217,10 @@ export class NotionClient {
       "Notion-Version": NOTION_VERSION,
       Accept: "application/json",
     };
-    let body: string | undefined;
-    if (options.body !== undefined) {
+    let body: string | FormData | undefined;
+    if (options.form !== undefined) {
+      body = options.form;
+    } else if (options.body !== undefined) {
       headers["Content-Type"] = "application/json";
       body = JSON.stringify(options.body);
     }

@@ -185,6 +185,7 @@ export const REGISTRY_CLASSIFICATION: ReadonlyArray<readonly [string, "read" | "
   // destructive. `query_data_source` is a POST to Notion and still a read; the
   // gate judges the name, not the HTTP method. Every write carries a verb the
   // floor knows, `duplicate` included.
+  ["notion-mcp__notion_attach_file", "write"],
   ["notion-mcp__notion_create_comment", "write"],
   // Creates a database, with its one data source, under a page.
   ["notion-mcp__notion_create_database", "write"],

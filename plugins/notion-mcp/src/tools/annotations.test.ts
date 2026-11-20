@@ -24,10 +24,11 @@ const WRITES = [
   "notion_update_data_source",
   "notion_create_view",
   "notion_update_view",
+  "notion_attach_file",
 ];
 
 describe("the tool list", () => {
-  it("serves the seven reads and the twelve writes, each with a handler", () => {
+  it("serves the seven reads and the thirteen writes, each with a handler", () => {
     expect(allTools.map((t) => t.name).sort()).toEqual([...READS, ...WRITES].sort());
     for (const t of allTools) expect(toolHandlers.has(t.name), t.name).toBe(true);
   });

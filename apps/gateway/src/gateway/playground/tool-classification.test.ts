@@ -79,9 +79,9 @@ describe("registry write/read classification snapshot", () => {
     expect(names.has("gws-mcp__gmail_list_filters")).toBe(true);
   });
 
-  /** The Notion connector (SCRUM-366) ships eighteen tools: six reads, each
-   * declared `readOnlyHint: true` by the plugin, and twelve writes. The gate
-   * agrees on its own, by name. Pinned as a set so a nineteenth notion tool
+  /** The Notion connector (SCRUM-366) ships nineteen tools: six reads, each
+   * declared `readOnlyHint: true` by the plugin, and thirteen writes. The gate
+   * agrees on its own, by name. Pinned as a set so a twentieth notion tool
    * arrives here as a question rather than as a silent prompt, and so a write
    * cannot be added to the read half of this list by habit.
    *
@@ -89,10 +89,12 @@ describe("registry write/read classification snapshot", () => {
    * a write that is a write only because nothing recognised it is one
    * KNOWN_READ_TOOLS entry away from running unprompted, and the floor is the
    * one thing that entry cannot dig under. `duplicate` joined the verb list
-   * for `notion_duplicate_page`, which creates a page. */
-  it("records the six Notion reads as reads and the twelve writes as writes, each write caught by a verb", () => {
+   * for `notion_duplicate_page`, which creates a page, and `attach` for
+   * `notion_attach_file` (SCRUM-501). */
+  it("records the six Notion reads as reads and the thirteen writes as writes, each write caught by a verb", () => {
     const notion = REGISTRY_CLASSIFICATION.filter(([name]) => name.startsWith("notion-mcp__"));
     expect(notion).toEqual([
+      ["notion-mcp__notion_attach_file", "write"],
       ["notion-mcp__notion_create_comment", "write"],
       ["notion-mcp__notion_create_database", "write"],
       ["notion-mcp__notion_create_page", "write"],

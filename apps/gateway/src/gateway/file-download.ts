@@ -722,7 +722,7 @@ export function createUploadLink(opts: {
     max_bytes: maxBytes,
     note:
       "The link takes one file, once, within ten minutes: open it in a browser to choose or drop the file, or run the command with the path of the file in place of <path-to-file>. " +
-      'It answers a receipt with the file\'s size and SHA-256 and a reference, {"type":"upload","upload_id":"..."}, to pass to drive_upload_file, jira_add_attachment or an email\'s attachments. ' +
+      'It answers a receipt with the file\'s size and SHA-256 and a reference, {"type":"upload","upload_id":"..."}, to pass to drive_upload_file, jira_add_attachment, notion_attach_file, or an email\'s attachments. ' +
       "The file is held for ten minutes after it arrives and goes to one call. It is not placed in this conversation.",
   };
   return { content: [{ type: "text", text: JSON.stringify(receipt, null, 2) }] };
@@ -771,7 +771,7 @@ export function beginReceive(
         received: { name: file.name, type: file.type, bytes: file.bytes.byteLength, sha256 },
         reference: { type: "upload", upload_id: record.uploadId },
         held_until: new Date(record.heldUntil).toISOString(),
-        note: "Pass the reference as the file of drive_upload_file or jira_add_attachment, or as an entry of an email's attachments. It works once, within ten minutes.",
+        note: "Pass the reference as the file of drive_upload_file, jira_add_attachment, or notion_attach_file, or as an entry of an email's attachments. It works once, within ten minutes.",
       };
     },
   };

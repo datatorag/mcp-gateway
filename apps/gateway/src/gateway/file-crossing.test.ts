@@ -161,10 +161,11 @@ async function handoffOf(call: Call): Promise<{
 const idle = { host: 0, users: 0 };
 
 describe("the registry", () => {
-  it("is explicit: two consuming tools, four reference types, the stated limits", () => {
+  it("is explicit: three consuming tools, four reference types, the stated limits", () => {
     expect(FILE_CONSUMING_TOOLS).toEqual({
       "atlassian-mcp__jira_add_attachment": { fileArg: "file" },
       "gws-mcp__drive_upload_file": { fileArg: "file" },
+      "notion-mcp__notion_attach_file": { fileArg: "file" },
     });
     expect(Object.keys(FILE_REFERENCE_TYPES)).toEqual(["gmail_message", "gmail_attachment", "drive_file", "drive_export"]);
     expect(FILE_REFERENCE_TYPES).toMatchObject({

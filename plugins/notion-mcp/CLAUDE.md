@@ -3,8 +3,9 @@
 ## Project
 
 Notion MCP plugin for the DataToRAG gateway (SCRUM-366). Exposes seven read
-tools (six from stage 1, and the meeting notes list from SCRUM-501) and
-twelve write tools (stage 2) via MCP over HTTP. Design
+tools (six from stage 1, and the meeting notes list from SCRUM-501), twelve
+write tools (stage 2), and `notion_attach_file` (SCRUM-501) via MCP over
+HTTP. Design
 and stages: `docs/architecture/2026-10-02-scrum-366-notion-connector-design.md` and
 `docs/plans/2026-10-02-scrum-366-notion-connector.md`.
 
@@ -17,7 +18,10 @@ and stages: `docs/architecture/2026-10-02-scrum-366-notion-connector-design.md` 
 
 ## Architecture
 
-- `src/index.ts`: HTTP entry point, `/health` and `/mcp` only. The gateway's
+- `src/index.ts`: HTTP entry point, `/health`, `/mcp`, and the gateway's
+  private `/internal/consume` (`src/internal/consume.ts`, SCRUM-501), which
+  takes a file's bytes for `notion_attach_file` as the multipart handoff
+  (`src/internal/handoff.ts`, the same module atlassian-mcp and gws-mcp carry). The gateway's
   plugin manager sets `PORT`; `X-User-Token` is read once per session
 - `src/create-server.ts`: builds the MCP server. The dispatch hands each tool
   a client scoped to that tool's `readOnlyHint` (`client.forTool`)
@@ -45,6 +49,8 @@ and stages: `docs/architecture/2026-10-02-scrum-366-notion-connector-design.md` 
   `copyableValue` for the imitated duplicate
 - `src/tools/notion.ts`: the six read schemas and `handleNotion()`;
   `src/tools/notion-write.ts` the twelve writes and `handleNotionWrite()`;
+  `src/tools/notion-file.ts` `notion_attach_file`, whose bytes arrive only
+  through `/internal/consume` (through `/mcp` it is refused in words);
   `src/tools/annotations.ts` the `READ` and `WRITE` presets (every write is
   `WRITE`: destructive, not read-only); `src/tools/response.ts` the shared
   response helpers

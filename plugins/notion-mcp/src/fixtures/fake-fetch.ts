@@ -12,6 +12,8 @@ export interface SentRequest {
   url: URL;
   headers: Record<string, string>;
   body: unknown;
+  /** A multipart body, as sent. */
+  form?: FormData;
 }
 
 /** Replaces global fetch with one that answers `answers` in order, one each,
@@ -29,6 +31,7 @@ export function fakeFetch(answers: Answer[]) {
       url: new URL(String(input)),
       headers,
       body: typeof raw === "string" ? JSON.parse(raw) : undefined,
+      ...(raw instanceof FormData ? { form: raw } : {}),
     });
     const next = queue.shift();
     if (!next) throw new Error(`unexpected request ${init?.method ?? "GET"} ${String(input)}`);
