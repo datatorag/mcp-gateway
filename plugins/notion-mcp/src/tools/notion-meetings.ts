@@ -56,7 +56,7 @@ export const meetingTools: ToolDef[] = [
     name: MEETING_NOTES_TOOL,
     description:
       "Lists the Notion AI meeting notes of meetings the connected Notion user attended, the newest at the top, created on or after a date and optionally on or before another, and optionally only those whose title contains some text. " +
-      "Each note carries its id, title, the meeting's start and end time, its attendees by name, attendees_unnamed (how many attendees Notion gives no name for, such as guests), its status, the AI summary and the notes as text, and action_items: every to-do in the summary and notes with whether it is checked, and every list item under a heading that says action items or next steps. " +
+      "Each note carries its id, title, the meeting's start and end time, its attendees by name, attendees_unnamed (how many attendees could not be named: the workspace's member list is read, then up to 100 attendees it does not hold are looked up one by one, and those Notion still gives no name for, such as some guests, are counted here), its status, the AI summary and the notes as text, and action_items: every to-do in the summary and notes with whether it is checked, and every list item under a heading that says action items or next steps. " +
       "The transcript is left out unless include_transcript is true. " +
       `The text of one answer is held to max_body_chars together (default ${DEFAULT_BODY_CHARS.toLocaleString("en-US")}): when there is more, the oldest notes keep their title and times but not their text, and left_out lists their ids. ` +
       `Notion returns at most ${MAX_LIMIT} notes and no cursor; has_more true means more notes match than were returned, and a narrower date range reads the rest. ` +
@@ -248,12 +248,44 @@ async function workspaceNames(client: NotionClient): Promise<Map<string, string>
     }
     for (const user of list(isObj(res) ? res.results : undefined)) {
       if (isObj(user) && typeof user.id === "string" && typeof user.name === "string" && user.name !== "") {
-        names.set(user.id.replace(/-/g, "").toLowerCase(), user.name);
+        names.set(bare(user.id), user.name);
       }
     }
     cursor = isObj(res) && res.has_more === true ? str(res.next_cursor) ?? undefined : undefined;
     if (!cursor) break;
   }
+  return names;
+}
+
+/** Attendees the list did not hold, looked up one by one, at most this many
+ * per call and this many at a time. A large workspace has more members than
+ * the pages read; past the cap, an attendee is counted as unnamed. */
+export const MAX_USER_LOOKUPS = 100;
+const LOOKUP_CONCURRENCY = 5;
+
+const bare = (id: string) => id.replace(/-/g, "").toLowerCase();
+
+/** Every attendee of every note named once: the user list first, then a
+ * capped, concurrent lookup of each attendee it did not hold. Ids Notion
+ * will not name stay out of the map. */
+export async function attendeeDirectory(client: NotionClient, ids: string[]): Promise<Map<string, string>> {
+  const wanted = [...new Set(ids.map(bare))];
+  if (wanted.length === 0) return new Map();
+  const names = await workspaceNames(client);
+  const missing = wanted.filter((id) => !names.has(id)).slice(0, MAX_USER_LOOKUPS);
+  let next = 0;
+  const worker = async () => {
+    while (next < missing.length) {
+      const id = missing[next++];
+      try {
+        const user = await client.get(`/v1/users/${notionId(id, "user_id")}`);
+        if (isObj(user) && typeof user.name === "string" && user.name !== "") names.set(id, user.name);
+      } catch {
+        // A user the connection cannot read stays unnamed.
+      }
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(LOOKUP_CONCURRENCY, missing.length) }, worker));
   return names;
 }
 
@@ -263,7 +295,7 @@ function namedAttendees(ids: string[], names: Map<string, string>): { attendees:
   const attendees: string[] = [];
   let unnamed = 0;
   for (const id of ids) {
-    const name = names.get(id.replace(/-/g, "").toLowerCase());
+    const name = names.get(bare(id));
     if (name) attendees.push(name);
     else unnamed++;
   }
@@ -303,7 +335,13 @@ export async function handleMeetingNotes(client: NotionClient, _name: string, ar
   }
 
   const blocks = list(isObj(res) ? res.results : undefined).filter(isObj);
-  let users: Map<string, string> | undefined;
+  // Every note's attendees named in one pass, before the notes are read.
+  const attendeeIds = (block: Obj): string[] => {
+    const m = isObj(block.meeting_notes) ? block.meeting_notes : {};
+    const event = isObj(m.calendar_event) ? m.calendar_event : {};
+    return list(event.attendees).filter((x): x is string => typeof x === "string");
+  };
+  const users = await attendeeDirectory(client, blocks.flatMap(attendeeIds));
   const results: NoteOut[] = [];
   const leftOut: string[] = [];
   let used = 0;
@@ -315,7 +353,7 @@ export async function handleMeetingNotes(client: NotionClient, _name: string, ar
     const event = isObj(m.calendar_event) ? m.calendar_event : {};
     const recording = isObj(m.recording) ? m.recording : {};
     const id = str(block.id) ?? "";
-    const ids = list(event.attendees).filter((x): x is string => typeof x === "string");
+    const ids = attendeeIds(block);
     const note: NoteOut = {
       id,
       title: richText(m.title),
@@ -323,7 +361,7 @@ export async function handleMeetingNotes(client: NotionClient, _name: string, ar
       meeting_start: str(event.start_time) ?? str(recording.start_time),
       meeting_end: str(event.end_time) ?? str(recording.end_time),
       created_time: str(block.created_time),
-      ...namedAttendees(ids, ids.length > 0 ? (users ??= await workspaceNames(client)) : new Map()),
+      ...namedAttendees(ids, users),
       summary: null,
       notes: null,
       action_items: [],
