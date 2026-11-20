@@ -19,7 +19,7 @@ import {
   USERS_LIST,
   children,
 } from "../fixtures/meeting-notes-documented.js";
-import { MEETING_NOTES_TOOL, MEETING_QUERY_REFUSED, NO_MEETING_NOTES_PLAN, dateValue, handleMeetingNotes, meetingQuery } from "./notion-meetings.js";
+import { MAX_USER_LOOKUPS, MEETING_NOTES_TOOL, MEETING_QUERY_REFUSED, NO_MEETING_NOTES_PLAN, dateValue, handleMeetingNotes, meetingQuery } from "./notion-meetings.js";
 
 /* SCRUM-501: the meeting notes list, through the real client against a
  * stubbed fetch, on answers shaped from Notion's reference. */
@@ -184,37 +184,109 @@ describe("the answer", () => {
   });
 });
 
+/** A stubbed fetch that answers by path, for requests sent concurrently.
+ * Records every request and the most requests in flight at once. */
+function routedFetch(route: (path: string) => { status: number; body: unknown }) {
+  const sent: string[] = [];
+  let inFlight = 0;
+  let maxInFlight = 0;
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async (input: string | URL | Request) => {
+      const url = new URL(String(input));
+      sent.push(url.pathname);
+      inFlight++;
+      maxInFlight = Math.max(maxInFlight, inFlight);
+      await new Promise((r) => setTimeout(r, 1));
+      inFlight--;
+      const { status, body } = route(url.pathname);
+      return new Response(JSON.stringify(body), { status });
+    })
+  );
+  return { sent, maxInFlight: () => maxInFlight };
+}
+
+const guest = (i: number) => `99999999-0000-4000-8000-${String(i).padStart(12, "0")}`;
+const note = (attendees: string[], id = QUERY_ANSWER.results[0].id) => {
+  const n = structuredClone(QUERY_ANSWER.results[0]);
+  n.id = id;
+  n.meeting_notes.calendar_event.attendees = attendees;
+  return n;
+};
+const empty = { results: [], has_more: false, next_cursor: null };
+
 describe("attendees", () => {
-  it("a meeting with many attendees costs one user-list read, and those Notion does not name are counted, not listed", async () => {
-    const many = structuredClone(QUERY_ANSWER.results[0]);
-    const guests = Array.from({ length: 89 }, (_, i) => `99999999-0000-4000-8000-${String(i).padStart(12, "0")}`);
-    many.meeting_notes.calendar_event.attendees = [USER.id, ...guests];
-    const f = fakeFetch([ok({ results: [many], has_more: false }), ok(USERS_LIST), ok(children()), ok(children())]);
+  it("those the user list does not hold are looked up one by one, concurrently, and named", async () => {
+    const guests = Array.from({ length: 40 }, (_, i) => guest(i));
+    const f = routedFetch((path) => {
+      if (path === "/v1/blocks/meeting_notes/query") return { status: 200, body: { results: [note([USER.id, ...guests])], has_more: false } };
+      if (path === "/v1/users") return { status: 200, body: USERS_LIST };
+      if (path.startsWith("/v1/users/")) return { status: 200, body: { object: "user", id: path.slice(10), type: "person", name: `Member ${path.slice(-2)}` } };
+      return { status: 200, body: empty };
+    });
     const out = await call({});
-    expect(f.sent.filter((r) => r.url.pathname.startsWith("/v1/users"))).toHaveLength(1);
-    expect(out.results[0].attendees).toEqual(["Ada Example"]);
-    expect(out.results[0].attendees_unnamed).toBe(89);
+    expect(out.results[0].attendees).toHaveLength(41);
+    expect(out.results[0].attendees_unnamed).toBe(0);
+    expect(f.sent.filter((p) => p === "/v1/users")).toHaveLength(1);
+    expect(f.sent.filter((p) => p.startsWith("/v1/users/"))).toHaveLength(40);
+    expect(f.maxInFlight()).toBeGreaterThan(1);
+    expect(f.maxInFlight()).toBeLessThanOrEqual(5);
+  });
+
+  it("past the cap of lookups, and where Notion gives no name, an attendee is counted, never listed by id", async () => {
+    const guests = Array.from({ length: MAX_USER_LOOKUPS + 20 }, (_, i) => guest(i));
+    const f = routedFetch((path) => {
+      if (path === "/v1/blocks/meeting_notes/query") return { status: 200, body: { results: [note(guests)], has_more: false } };
+      if (path === "/v1/users") return { status: 200, body: USERS_LIST };
+      // Every tenth lookup is someone Notion will not name.
+      if (path.startsWith("/v1/users/")) {
+        const n = Number(path.slice(-2));
+        return n % 10 === 0 ? { status: 404, body: { object: "error", status: 404, code: "object_not_found", message: "no" } } : { status: 200, body: { object: "user", name: `Member ${n}` } };
+      }
+      return { status: 200, body: empty };
+    });
+    const out = await call({});
+    expect(f.sent.filter((p) => p.startsWith("/v1/users/"))).toHaveLength(MAX_USER_LOOKUPS);
+    const named = out.results[0].attendees.length;
+    expect(named + out.results[0].attendees_unnamed).toBe(MAX_USER_LOOKUPS + 20);
+    expect(out.results[0].attendees_unnamed).toBeGreaterThanOrEqual(20);
     expect(JSON.stringify(out.results[0].attendees)).not.toMatch(/[0-9a-f]{8}-/);
   });
 
-  it("a note with no attendees reads no user list", async () => {
-    const alone = structuredClone(QUERY_ANSWER.results[0]);
-    alone.meeting_notes.calendar_event.attendees = [];
-    const f = fakeFetch([ok({ results: [alone], has_more: false }), ok(children()), ok(children())]);
+  it("an attendee of two notes is looked up once", async () => {
+    const shared = guest(7);
+    const f = routedFetch((path) => {
+      if (path === "/v1/blocks/meeting_notes/query") {
+        return { status: 200, body: { results: [note([shared]), note([shared, USER.id], NOTE_OLD)], has_more: false } };
+      }
+      if (path === "/v1/users") return { status: 200, body: USERS_LIST };
+      if (path.startsWith("/v1/users/")) return { status: 200, body: { object: "user", name: "Guest Seven" } };
+      return { status: 200, body: empty };
+    });
     const out = await call({});
-    expect(f.sent.some((r) => r.url.pathname.startsWith("/v1/users"))).toBe(false);
+    expect(f.sent.filter((p) => p.startsWith("/v1/users/"))).toHaveLength(1);
+    expect(out.results[0].attendees).toEqual(["Guest Seven"]);
+    expect(out.results[1].attendees).toEqual(["Guest Seven", "Ada Example"]);
+  });
+
+  it("a note with no attendees reads no user list", async () => {
+    const f = routedFetch((path) =>
+      path === "/v1/blocks/meeting_notes/query" ? { status: 200, body: { results: [note([])], has_more: false } } : { status: 200, body: empty }
+    );
+    const out = await call({});
+    expect(f.sent.some((p) => p.startsWith("/v1/users"))).toBe(false);
     expect(out.results[0]).toMatchObject({ attendees: [], attendees_unnamed: 0 });
   });
 
-  it("a user list Notion will not give leaves every attendee unnamed, and the note still comes back", async () => {
-    fakeFetch([
-      ok({ ...QUERY_ANSWER, results: [QUERY_ANSWER.results[0]] }),
-      { status: 403, body: { object: "error", status: 403, code: "restricted_resource", message: "no" } },
-      ok(SUMMARY_NEW_CHILDREN),
-      ok(NOTES_NEW_CHILDREN),
-    ]);
+  it("a user list Notion will not give falls back to the lookups, and the note still comes back", async () => {
+    routedFetch((path) => {
+      if (path === "/v1/blocks/meeting_notes/query") return { status: 200, body: { results: [note([USER.id])], has_more: false } };
+      if (path === "/v1/users") return { status: 403, body: { object: "error", status: 403, code: "restricted_resource", message: "no" } };
+      if (path.startsWith("/v1/users/")) return { status: 200, body: USER };
+      return { status: 200, body: empty };
+    });
     const out = await call({});
-    expect(out.results[0]).toMatchObject({ attendees: [], attendees_unnamed: 1, title: "Sprint planning" });
+    expect(out.results[0]).toMatchObject({ attendees: ["Ada Example"], attendees_unnamed: 0, title: "Sprint planning" });
   });
 });
 
