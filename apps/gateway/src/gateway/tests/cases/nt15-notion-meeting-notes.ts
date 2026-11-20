@@ -16,15 +16,23 @@ type Note = {
  * start keeps that note in range however old it gets. */
 const SINCE = "2026-11-19";
 
+/** The plugin's sentence for a workspace whose Notion plan has no API access
+ * to AI meeting notes (`NO_MEETING_NOTES_PLAN` in notion-mcp's
+ * notion-meetings.ts). The runner cannot import the plugin, so it matches
+ * the sentence's fixed words; a change there must change this. */
+const PLAN_REFUSAL = /plan does not include API access to AI meeting notes/;
+
 /**
  * NT15 (Notion scenario, SCRUM-501): `notion_list_meeting_notes` reads the
  * workspace's Notion AI meeting notes with their summary and action items,
  * and leaves the transcript and the attendees' names out unless asked.
  *
- * It reads; nothing is created, so there is nothing to clean up. The test
- * workspace holds at least one AI meeting note recorded by the connected
- * Notion user, whose summary lists action items as to-dos, so a note with
- * action items must come back.
+ * It reads; nothing is created, so there is nothing to clean up. On a
+ * workspace whose plan includes AI meeting notes, the recorded note must come
+ * back with its summary and action items. On one whose plan does not, as the
+ * test workspace's does not today, the right answer is the refusal that names
+ * the plan, and the case passes on exactly that sentence; any other refusal
+ * fails.
  */
 export const nt15NotionMeetingNotes: TestCase = {
   id: "NT15",
@@ -33,7 +41,14 @@ export const nt15NotionMeetingNotes: TestCase = {
   accounts: ["notion"],
   run: async (ctx) => {
     const listed = await ctx.call("notion-mcp__notion_list_meeting_notes", { since: SINCE }, { as: "notion" });
-    if (listed.isError) throw new Error(`the meeting notes query was refused: ${resultText(listed).slice(0, 300)}`);
+    if (listed.isError) {
+      const said = resultText(listed);
+      if (PLAN_REFUSAL.test(said)) {
+        ctx.evidence("the workspace's plan has no API access to AI meeting notes, and the refusal names the plan");
+        return;
+      }
+      throw new Error(`the meeting notes query was refused for a reason other than the plan: ${said.slice(0, 300)}`);
+    }
     const answer = resultJson<{ results?: unknown; has_more?: unknown; next_cursor?: unknown }>("notion_list_meeting_notes", listed);
     if (!Array.isArray(answer.results)) throw new Error("the answer has no results list");
     if (typeof answer.has_more !== "boolean" || answer.next_cursor !== null) {
