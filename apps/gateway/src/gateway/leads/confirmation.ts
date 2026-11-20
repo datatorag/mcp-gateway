@@ -142,7 +142,7 @@ export function integrationText(name: string, service: string | undefined): stri
     "",
     `This is Manuel from DataToRAG, thanks for asking about ${integrationAsk(named)}. Your request came through and I'll read it properly before I write back.`,
     "",
-    `If it would help, just reply to this with what you want your agent to do${named ? ` in ${named}` : ""} and which accounts are involved, that's usually what decides whether we can build it.`,
+    `To get started, reply with what you want your agent to do${named ? ` in ${named}` : ""} and which accounts are involved.`,
     "",
     "Cheers,",
     "Manuel",
@@ -161,7 +161,7 @@ export function integrationHtml(name: string, service: string | undefined): stri
       `This is Manuel from DataToRAG, thanks for asking about ${integrationAsk(shown)}. Your request came through and I&rsquo;ll read it properly before I write back.`
     ),
     p(
-      `If it would help, just reply to this with what you want your agent to do${shown ? ` in ${shown}` : ""} and which accounts are involved, that&rsquo;s usually what decides whether we can build it.`
+      `To get started, reply with what you want your agent to do${shown ? ` in ${shown}` : ""} and which accounts are involved.`
     ),
     p("Cheers,<br>Manuel"),
     "</div>",

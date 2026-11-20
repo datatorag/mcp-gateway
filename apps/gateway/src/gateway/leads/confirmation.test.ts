@@ -162,6 +162,15 @@ describe("custom integration confirmation", () => {
     expect(body).not.toMatch(/[\u2013\u2014]|&mdash;|&ndash;/);
   });
 
+  it("asks for what to do in the named service, or without one", () => {
+    const ask = "To get started, reply with what you want your agent to do in Linear and which accounts are involved.";
+    expect(integrationText("Ada", "Linear")).toContain(ask);
+    expect(integrationHtml("Ada", "Linear")).toContain(ask);
+    const plain = "To get started, reply with what you want your agent to do and which accounts are involved.";
+    expect(integrationText("Ada", "visit evil.example")).toContain(plain);
+    expect(integrationHtml("Ada", undefined)).toContain(plain);
+  });
+
   it("has a lowercase subject of its own", () => {
     expect(integrationSubject("Ada Lovelace")).toBe("got your request, Ada");
     expect(integrationSubject("")).toBe("got your request");
