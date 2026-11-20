@@ -39,8 +39,17 @@ const RELATIVE_DATES = ["today", "yesterday", "one_week_ago"] as const;
 
 const DATE_WORDS = `a date as YYYY-MM-DD, or one of ${RELATIVE_DATES.join(", ")}`;
 
-export const NO_MEETING_NOTES =
-  "Notion refused the meeting notes query. Notion answers this way when the workspace does not have Notion AI meeting notes, or when they are not available to the connected Notion user.";
+/** Notion's 400 when the workspace's plan does not include AI meeting notes:
+ * "This endpoint requires a plan with AI meeting notes enabled." Observed on
+ * the test workspace, 2026-11-20. */
+const PLAN_REFUSAL = /requires a plan with AI meeting notes/i;
+
+export const NO_MEETING_NOTES_PLAN =
+  "The connected Notion workspace's plan does not include API access to AI meeting notes: Notion answers that this query requires a plan with AI meeting notes enabled. Recording a meeting note in Notion is possible on more plans than reading it through the API.";
+
+/** Any other 400: the query itself, which is ours to fix, not the user's. */
+export const MEETING_QUERY_REFUSED =
+  "Notion refused the meeting notes query as sent. This is a fault in the connector's query, not in the workspace.";
 
 export const meetingTools: ToolDef[] = [
   {
@@ -51,7 +60,7 @@ export const meetingTools: ToolDef[] = [
       "The transcript is left out unless include_transcript is true. " +
       `The text of one answer is held to max_body_chars together (default ${DEFAULT_BODY_CHARS.toLocaleString("en-US")}): when there is more, the oldest notes keep their title and times but not their text, and left_out lists their ids. ` +
       `Notion returns at most ${MAX_LIMIT} notes and no cursor; has_more true means more notes match than were returned, and a narrower date range reads the rest. ` +
-      "Notes still being transcribed or summarized come back with their status and no summary. A workspace without Notion AI meeting notes answers with a sentence saying so.",
+      "Notes still being transcribed or summarized come back with their status and no summary. Reading meeting notes through Notion's API needs a Notion plan with AI meeting notes enabled; a workspace whose plan lacks it answers with a sentence saying so.",
     inputSchema: {
       type: "object",
       properties: {
@@ -122,7 +131,10 @@ export function meetingQuery(args: Obj): Obj {
   }
   const limit = Number.isInteger(args.limit) ? Math.min(MAX_LIMIT, Math.max(1, args.limit as number)) : DEFAULT_LIMIT;
   return {
-    filter: filters.length === 1 ? filters[0] : { operator: "and", filters },
+    // Notion takes only a combinator at the top, even around one filter:
+    // a lone property filter is refused as "body.filter.operator should be
+    // defined" (observed 2026-11-20).
+    filter: { operator: "and", filters },
     sort: [{ property: "created_time", direction: "descending" }],
     limit,
   };
@@ -261,7 +273,8 @@ export async function handleMeetingNotes(client: NotionClient, _name: string, ar
     res = await client.post("/v1/blocks/meeting_notes/query", meetingQuery(args));
   } catch (err) {
     if (err instanceof NotionApiError && err.status === 400) {
-      throw new Error(`${NO_MEETING_NOTES} Notion said: ${err.message}`);
+      const sentence = PLAN_REFUSAL.test(err.message) ? NO_MEETING_NOTES_PLAN : MEETING_QUERY_REFUSED;
+      throw new Error(`${sentence} Notion said: ${err.message}`);
     }
     throw err;
   }

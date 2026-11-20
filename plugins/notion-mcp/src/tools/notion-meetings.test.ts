@@ -18,7 +18,7 @@ import {
   USER,
   children,
 } from "../fixtures/meeting-notes-documented.js";
-import { MEETING_NOTES_TOOL, NO_MEETING_NOTES, dateValue, handleMeetingNotes, meetingQuery } from "./notion-meetings.js";
+import { MEETING_NOTES_TOOL, MEETING_QUERY_REFUSED, NO_MEETING_NOTES_PLAN, dateValue, handleMeetingNotes, meetingQuery } from "./notion-meetings.js";
 
 /* SCRUM-501: the meeting notes list, through the real client against a
  * stubbed fetch, on answers shaped from Notion's reference. */
@@ -36,8 +36,12 @@ async function call(args: Record<string, unknown>) {
 
 describe("the query Notion is sent", () => {
   it("defaults to notes since yesterday, the newest at the top, ten of them", () => {
+    // A lone filter still goes inside a combinator: Notion refuses one at the top.
     expect(meetingQuery({})).toEqual({
-      filter: { property: "created_time", filter: { operator: "date_is_on_or_after", value: { type: "relative", value: "yesterday" } } },
+      filter: {
+        operator: "and",
+        filters: [{ property: "created_time", filter: { operator: "date_is_on_or_after", value: { type: "relative", value: "yesterday" } } }],
+      },
       sort: [{ property: "created_time", direction: "descending" }],
       limit: 10,
     });
@@ -155,9 +159,24 @@ describe("the answer", () => {
     expect(out.note).toMatch(/attended/);
   });
 
-  it("a workspace without AI meeting notes answers with a sentence", async () => {
-    fakeFetch([{ status: 400, body: { object: "error", status: 400, code: "validation_error", message: "Meeting notes are not available." } }]);
-    await expect(handleMeetingNotes(client(), MEETING_NOTES_TOOL, {})).rejects.toThrow(NO_MEETING_NOTES);
+  it("a workspace whose plan lacks AI meeting notes answers with a sentence about the plan", async () => {
+    // Notion's words, observed on the test workspace on 2026-11-20.
+    const message =
+      "This endpoint requires a plan with AI meeting notes enabled. Please upgrade your plan to use this feature: https://www.notion.com/pricing";
+    fakeFetch([{ status: 400, body: { object: "error", status: 400, code: "validation_error", message } }]);
+    await expect(handleMeetingNotes(client(), MEETING_NOTES_TOOL, {})).rejects.toThrow(NO_MEETING_NOTES_PLAN);
+  });
+
+  it("a query Notion refuses for its shape says the fault is the query, not the workspace", async () => {
+    const message = "body failed validation: body.filter.operator should be defined, instead was `undefined`.";
+    fakeFetch([{ status: 400, body: { object: "error", status: 400, code: "validation_error", message } }]);
+    const said = await handleMeetingNotes(client(), MEETING_NOTES_TOOL, {}).then(
+      () => "",
+      (e: Error) => e.message
+    );
+    expect(said).toContain(MEETING_QUERY_REFUSED);
+    expect(said).toContain("body.filter.operator should be defined");
+    expect(said).not.toContain(NO_MEETING_NOTES_PLAN);
   });
 });
 
