@@ -45,6 +45,8 @@ re-reading the source:
 - `product-capture` — Remotion project at `tools/capture` for product screenshots/recordings; imports real gateway components so captures can't drift.
 - `parent-updates` — keeping the `datatorag-hq` parent session current. It cannot see this session, so an update not sent did not happen.
 - `outbound-copy` — anything a person outside the company reads: transactional/lifecycle email, in-product strings, form and error copy. Load it (and `manuel-voice`) before drafting a line.
+- `pr-simplify`: the cleanup pass every PR gets before it is pushed (the generic simplify, `pattern-review`, and this repo's cleanup checklist), ending in a findings report the push gate reads.
+- `pr-review`: the defect review every PR gets before it is pushed (a tool is four things that move together, an outside API is unproven until a live call, errors name the real cause), ending in a findings report the push gate reads.
 - Plus: `blog-writing`, `db-query`, `deploy`, `humanizer`, `marketing-video` (brand explainers only), `product-promo-video` (superseded).
 
 Agents in `.claude/agents/`: `engineer` implements, `qa-engineer` verifies,
