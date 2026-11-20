@@ -72,7 +72,6 @@ describe("the answer", () => {
   it("carries the summary, notes, attendees, and action items, and never fetches the transcript unless asked", async () => {
     const f = fakeFetch([
       ok(QUERY_ANSWER),
-      ok(USERS_LIST),
       ok(SUMMARY_NEW_CHILDREN),
       ok(NOTES_NEW_CHILDREN),
       ok(SUMMARY_OLD_CHILDREN),
@@ -82,8 +81,8 @@ describe("the answer", () => {
     expect(f.sent[0]).toMatchObject({ method: "POST", url: new URL("https://api.notion.com/v1/blocks/meeting_notes/query") });
     expect(f.sent.some((r) => r.url.pathname.includes(TRANSCRIPT_NEW))).toBe(false);
     // One read of the workspace's user list names every attendee of every note.
-    expect(f.sent.filter((r) => r.url.pathname.startsWith("/v1/users"))).toHaveLength(1);
-    expect(f.sent.find((r) => r.url.pathname.startsWith("/v1/users"))?.url.pathname).toBe("/v1/users");
+    // Names are not asked for, so no user is read.
+    expect(f.sent.some((r) => r.url.pathname.startsWith("/v1/users"))).toBe(false);
 
     const [first, second] = out.results;
     expect(first).toMatchObject({
@@ -91,8 +90,7 @@ describe("the answer", () => {
       status: "notes_ready",
       meeting_start: "2026-11-19T10:00:00.000Z",
       meeting_end: "2026-11-19T10:30:00.000Z",
-      attendees: ["Ada Example"],
-      attendees_unnamed: 0,
+      attendee_count: 1,
       notes: "- Scope is fixed for this sprint",
       action_items: [
         { text: "Ada drafts the release notes", done: null },
@@ -102,13 +100,15 @@ describe("the answer", () => {
     expect(first.summary).toContain("The team agreed the release scope.");
     expect(first.summary).toContain("- [ ] Ben books the demo");
     expect(first).not.toHaveProperty("transcript");
+    expect(first).not.toHaveProperty("attendees");
+    expect(first).not.toHaveProperty("attendees_unnamed");
     expect(second.title).toBe("Weekly sync");
     expect(out).toMatchObject({ has_more: false, next_cursor: null });
     expect(out).not.toHaveProperty("left_out");
   });
 
   it("in a summary laid out as a real one, the action items are its to-dos and nothing under the other headings", async () => {
-    fakeFetch([ok({ ...QUERY_ANSWER, results: [QUERY_ANSWER.results[0]] }), ok(USERS_LIST), ok(SUMMARY_LIKE_REAL), ok(children())]);
+    fakeFetch([ok({ ...QUERY_ANSWER, results: [QUERY_ANSWER.results[0]] }), ok(SUMMARY_LIKE_REAL), ok(children())]);
     const out = await call({});
     expect(out.results[0].action_items).toEqual([
       { text: "Test User: get the test running", done: false },
@@ -121,7 +121,6 @@ describe("the answer", () => {
   it("reads the transcript when asked", async () => {
     fakeFetch([
       ok({ ...QUERY_ANSWER, results: [QUERY_ANSWER.results[0]] }),
-      ok(USERS_LIST),
       ok(SUMMARY_NEW_CHILDREN),
       ok(NOTES_NEW_CHILDREN),
       ok(TRANSCRIPT_NEW_CHILDREN),
@@ -133,7 +132,6 @@ describe("the answer", () => {
   it("over the budget, the older note keeps its title and times and is listed in left_out", async () => {
     const f = fakeFetch([
       ok(QUERY_ANSWER),
-      ok(USERS_LIST),
       ok(SUMMARY_NEW_CHILDREN),
       ok(NOTES_NEW_CHILDREN),
       ok(SUMMARY_OLD_CHILDREN),
@@ -150,7 +148,7 @@ describe("the answer", () => {
   it("a note still being summarized comes back with its status", async () => {
     const pending = structuredClone(QUERY_ANSWER.results[0]);
     pending.meeting_notes.status = "summary_in_progress";
-    fakeFetch([ok({ results: [pending], has_more: true }), ok(USERS_LIST), ok(children()), ok(children())]);
+    fakeFetch([ok({ results: [pending], has_more: true }), ok(children()), ok(children())]);
     const out = await call({});
     expect(out.results[0]).toMatchObject({ status: "summary_in_progress", summary: "", action_items: [] });
     expect(out.has_more).toBe(true);
@@ -224,7 +222,7 @@ describe("attendees", () => {
       if (path.startsWith("/v1/users/")) return { status: 200, body: { object: "user", id: path.slice(10), type: "person", name: `Member ${path.slice(-2)}` } };
       return { status: 200, body: empty };
     });
-    const out = await call({});
+    const out = await call({ include_attendees: true });
     expect(out.results[0].attendees).toHaveLength(41);
     expect(out.results[0].attendees_unnamed).toBe(0);
     expect(f.sent.filter((p) => p === "/v1/users")).toHaveLength(1);
@@ -245,7 +243,7 @@ describe("attendees", () => {
       }
       return { status: 200, body: empty };
     });
-    const out = await call({});
+    const out = await call({ include_attendees: true });
     expect(f.sent.filter((p) => p.startsWith("/v1/users/"))).toHaveLength(MAX_USER_LOOKUPS);
     const named = out.results[0].attendees.length;
     expect(named + out.results[0].attendees_unnamed).toBe(MAX_USER_LOOKUPS + 20);
@@ -263,19 +261,30 @@ describe("attendees", () => {
       if (path.startsWith("/v1/users/")) return { status: 200, body: { object: "user", name: "Guest Seven" } };
       return { status: 200, body: empty };
     });
-    const out = await call({});
+    const out = await call({ include_attendees: true });
     expect(f.sent.filter((p) => p.startsWith("/v1/users/"))).toHaveLength(1);
     expect(out.results[0].attendees).toEqual(["Guest Seven"]);
     expect(out.results[1].attendees).toEqual(["Guest Seven", "Ada Example"]);
   });
 
-  it("a note with no attendees reads no user list", async () => {
+  it("by default a note carries its attendee count and no user is read, however many attend", async () => {
+    const many = Array.from({ length: 90 }, (_, i) => guest(i));
     const f = routedFetch((path) =>
-      path === "/v1/blocks/meeting_notes/query" ? { status: 200, body: { results: [note([])], has_more: false } } : { status: 200, body: empty }
+      path === "/v1/blocks/meeting_notes/query" ? { status: 200, body: { results: [note(many)], has_more: false } } : { status: 200, body: empty }
     );
     const out = await call({});
     expect(f.sent.some((p) => p.startsWith("/v1/users"))).toBe(false);
-    expect(out.results[0]).toMatchObject({ attendees: [], attendees_unnamed: 0 });
+    expect(out.results[0].attendee_count).toBe(90);
+    expect(out.results[0]).not.toHaveProperty("attendees");
+  });
+
+  it("a note with no attendees reads no user list, even when names are asked for", async () => {
+    const f = routedFetch((path) =>
+      path === "/v1/blocks/meeting_notes/query" ? { status: 200, body: { results: [note([])], has_more: false } } : { status: 200, body: empty }
+    );
+    const out = await call({ include_attendees: true });
+    expect(f.sent.some((p) => p.startsWith("/v1/users"))).toBe(false);
+    expect(out.results[0]).toMatchObject({ attendee_count: 0, attendees: [], attendees_unnamed: 0 });
   });
 
   it("a user list Notion will not give falls back to the lookups, and the note still comes back", async () => {
@@ -285,7 +294,7 @@ describe("attendees", () => {
       if (path.startsWith("/v1/users/")) return { status: 200, body: USER };
       return { status: 200, body: empty };
     });
-    const out = await call({});
+    const out = await call({ include_attendees: true });
     expect(out.results[0]).toMatchObject({ attendees: ["Ada Example"], attendees_unnamed: 0, title: "Sprint planning" });
   });
 });
@@ -295,7 +304,7 @@ describe("a part the note does not have yet", () => {
     const fresh = structuredClone(QUERY_ANSWER.results[0]);
     fresh.meeting_notes.status = "transcription_not_started";
     fresh.meeting_notes.children = { notes_block_id: NOTES_NEW } as typeof fresh.meeting_notes.children;
-    fakeFetch([ok({ results: [fresh], has_more: false }), ok(USERS_LIST), ok(children())]);
+    fakeFetch([ok({ results: [fresh], has_more: false }), ok(children())]);
     const out = await call({});
     expect(out.results[0]).toMatchObject({ status: "transcription_not_started", summary: null, notes: "", action_items: [] });
   });

@@ -56,8 +56,9 @@ export const meetingTools: ToolDef[] = [
     name: MEETING_NOTES_TOOL,
     description:
       "Lists the Notion AI meeting notes of meetings the connected Notion user attended, the newest at the top, created on or after a date and optionally on or before another, and optionally only those whose title contains some text. " +
-      "Each note carries its id, title, the meeting's start and end time, its attendees by name, attendees_unnamed (how many attendees could not be named: the workspace's member list is read, then up to 100 attendees it does not hold are looked up one by one, and those Notion still gives no name for, such as some guests, are counted here), its status, the AI summary and the notes as text, and action_items: every to-do in the summary and notes with whether it is checked, and every list item under a heading that says action items or next steps. " +
+      "Each note carries its id, title, the meeting's start and end time, attendee_count, its status, the AI summary and the notes as text, and action_items: every to-do in the summary and notes with whether it is checked, and every list item under a heading that says action items or next steps. " +
       "The transcript is left out unless include_transcript is true. " +
+      "Attendee names are left out unless include_attendees is true: then each note also carries attendees by name and attendees_unnamed, how many could not be named. The workspace's member list is read once, then up to 100 attendees it does not hold are looked up one by one, and those Notion still gives no name for, such as some guests, are counted. " +
       `The text of one answer is held to max_body_chars together (default ${DEFAULT_BODY_CHARS.toLocaleString("en-US")}): when there is more, the oldest notes keep their title and times but not their text, and left_out lists their ids. ` +
       `Notion returns at most ${MAX_LIMIT} notes and no cursor; has_more true means more notes match than were returned, and a narrower date range reads the rest. ` +
       "A part the note does not have yet, such as the summary of a meeting not yet transcribed, is null; a part that exists with nothing in it is an empty string. Reading meeting notes through Notion's API needs a Notion plan with AI meeting notes enabled; a workspace whose plan lacks it answers with a sentence saying so.",
@@ -79,6 +80,11 @@ export const meetingTools: ToolDef[] = [
         include_transcript: {
           type: "boolean",
           description: "Whether each note carries its transcript as text. Default false.",
+        },
+        include_attendees: {
+          type: "boolean",
+          description:
+            "Whether each note carries its attendees by name. Default false, in which case a note carries attendee_count only and no user is read.",
         },
         limit: {
           type: "integer",
@@ -309,8 +315,10 @@ interface NoteOut {
   meeting_start: string | null;
   meeting_end: string | null;
   created_time: string | null;
-  attendees: string[];
-  attendees_unnamed: number;
+  attendee_count: number;
+  /** Only with include_attendees. */
+  attendees?: string[];
+  attendees_unnamed?: number;
   summary: string | null;
   notes: string | null;
   action_items: Array<{ text: string; done: boolean | null }>;
@@ -322,6 +330,7 @@ export async function handleMeetingNotes(client: NotionClient, _name: string, ar
     ? Math.min(MAX_BODY_CHARS, Math.max(1000, args.max_body_chars as number))
     : DEFAULT_BODY_CHARS;
   const withTranscript = args.include_transcript === true;
+  const withAttendees = args.include_attendees === true;
 
   let res: unknown;
   try {
@@ -341,7 +350,8 @@ export async function handleMeetingNotes(client: NotionClient, _name: string, ar
     const event = isObj(m.calendar_event) ? m.calendar_event : {};
     return list(event.attendees).filter((x): x is string => typeof x === "string");
   };
-  const users = await attendeeDirectory(client, blocks.flatMap(attendeeIds));
+  // No user is read unless names were asked for.
+  const users = withAttendees ? await attendeeDirectory(client, blocks.flatMap(attendeeIds)) : new Map<string, string>();
   const results: NoteOut[] = [];
   const leftOut: string[] = [];
   let used = 0;
@@ -361,7 +371,8 @@ export async function handleMeetingNotes(client: NotionClient, _name: string, ar
       meeting_start: str(event.start_time) ?? str(recording.start_time),
       meeting_end: str(event.end_time) ?? str(recording.end_time),
       created_time: str(block.created_time),
-      ...namedAttendees(ids, users),
+      attendee_count: ids.length,
+      ...(withAttendees ? namedAttendees(ids, users) : {}),
       summary: null,
       notes: null,
       action_items: [],

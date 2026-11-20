@@ -8,6 +8,8 @@ type Note = {
   summary?: unknown;
   action_items?: unknown;
   transcript?: unknown;
+  attendee_count?: unknown;
+  attendees?: unknown;
 };
 
 /** The day the test workspace's first AI meeting note was recorded. A fixed
@@ -17,7 +19,7 @@ const SINCE = "2026-11-19";
 /**
  * NT15 (Notion scenario, SCRUM-501): `notion_list_meeting_notes` reads the
  * workspace's Notion AI meeting notes with their summary and action items,
- * and leaves the transcript out unless asked.
+ * and leaves the transcript and the attendees' names out unless asked.
  *
  * It reads; nothing is created, so there is nothing to clean up. The test
  * workspace holds at least one AI meeting note recorded by the connected
@@ -47,6 +49,9 @@ export const nt15NotionMeetingNotes: TestCase = {
       }
       if ("transcript" in n) throw new Error("a note carries a transcript that was not asked for");
       if (!Array.isArray(n.action_items)) throw new Error("a note has no action_items list");
+      // Names are left out unless asked for; the count is always there.
+      if (typeof n.attendee_count !== "number") throw new Error("a note has no attendee_count");
+      if ("attendees" in n) throw new Error("a note carries attendee names that were not asked for");
     }
     const ready = notes.filter((n) => n.status === "notes_ready");
     if (!ready.some((n) => typeof n.summary === "string" && n.summary.trim() !== "")) {
