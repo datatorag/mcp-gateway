@@ -87,3 +87,5 @@ export const SUMMARY_LIKE_REAL = children(
   block("heading_3", "Purpose of the recording"),
   block("bulleted_list_item", "A short solo test of meeting transcription")
 );
+/** The workspace's user list, one page, as `GET /v1/users` answers it. */
+export const USERS_LIST = { object: "list", results: [USER], has_more: false, next_cursor: null };
