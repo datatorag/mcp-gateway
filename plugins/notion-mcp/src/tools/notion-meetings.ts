@@ -56,11 +56,11 @@ export const meetingTools: ToolDef[] = [
     name: MEETING_NOTES_TOOL,
     description:
       "Lists the Notion AI meeting notes of meetings the connected Notion user attended, the newest at the top, created on or after a date and optionally on or before another, and optionally only those whose title contains some text. " +
-      "Each note carries its id, title, the meeting's start and end time, its attendees (names where Notion gives them), its status, the AI summary and the notes as text, and action_items: every to-do in the summary and notes with whether it is checked, and every list item under a heading that says action items or next steps. " +
+      "Each note carries its id, title, the meeting's start and end time, its attendees by name, attendees_unnamed (how many attendees Notion gives no name for, such as guests), its status, the AI summary and the notes as text, and action_items: every to-do in the summary and notes with whether it is checked, and every list item under a heading that says action items or next steps. " +
       "The transcript is left out unless include_transcript is true. " +
       `The text of one answer is held to max_body_chars together (default ${DEFAULT_BODY_CHARS.toLocaleString("en-US")}): when there is more, the oldest notes keep their title and times but not their text, and left_out lists their ids. ` +
       `Notion returns at most ${MAX_LIMIT} notes and no cursor; has_more true means more notes match than were returned, and a narrower date range reads the rest. ` +
-      "Notes still being transcribed or summarized come back with their status and no summary. Reading meeting notes through Notion's API needs a Notion plan with AI meeting notes enabled; a workspace whose plan lacks it answers with a sentence saying so.",
+      "A part the note does not have yet, such as the summary of a meeting not yet transcribed, is null; a part that exists with nothing in it is an empty string. Reading meeting notes through Notion's API needs a Notion plan with AI meeting notes enabled; a workspace whose plan lacks it answers with a sentence saying so.",
     inputSchema: {
       type: "object",
       properties: {
@@ -228,24 +228,46 @@ export function actionItems(lines: Line[]): Array<{ text: string; done: boolean 
   return out.filter((a) => a.text.trim() !== "");
 }
 
-/** Attendee names, read once per id per call; an id Notion will not name
- * stays an id. */
-async function attendeeNames(client: NotionClient, ids: string[], cache: Map<string, string>): Promise<string[]> {
-  const names: string[] = [];
-  for (const id of ids) {
-    if (!cache.has(id)) {
-      let name = id;
-      try {
-        const user = await client.get(`/v1/users/${notionId(id, "user_id")}`);
-        if (isObj(user) && typeof user.name === "string" && user.name !== "") name = user.name;
-      } catch {
-        // A user the connection cannot read is listed by id.
-      }
-      cache.set(id, name);
+/** Pages of the workspace's user list read to name attendees, 100 users a
+ * page: one call names everyone it holds, so a note with many attendees
+ * costs at most this many requests, not one per attendee. */
+export const MAX_USER_PAGES = 3;
+
+/** The workspace's people by id, read once per call and only when a note has
+ * attendees. Guests and anyone past the pages read are not in it. */
+async function workspaceNames(client: NotionClient): Promise<Map<string, string>> {
+  const names = new Map<string, string>();
+  let cursor: string | undefined;
+  for (let page = 0; page < MAX_USER_PAGES; page++) {
+    let res: unknown;
+    try {
+      res = await client.get("/v1/users", { page_size: 100, start_cursor: cursor });
+    } catch {
+      // Without the list, attendees are counted as unnamed.
+      break;
     }
-    names.push(cache.get(id) as string);
+    for (const user of list(isObj(res) ? res.results : undefined)) {
+      if (isObj(user) && typeof user.id === "string" && typeof user.name === "string" && user.name !== "") {
+        names.set(user.id.replace(/-/g, "").toLowerCase(), user.name);
+      }
+    }
+    cursor = isObj(res) && res.has_more === true ? str(res.next_cursor) ?? undefined : undefined;
+    if (!cursor) break;
   }
   return names;
+}
+
+/** An attendee list as names, and how many attendees Notion gave no name
+ * for. An id is never put among the names, where it would read as one. */
+function namedAttendees(ids: string[], names: Map<string, string>): { attendees: string[]; attendees_unnamed: number } {
+  const attendees: string[] = [];
+  let unnamed = 0;
+  for (const id of ids) {
+    const name = names.get(id.replace(/-/g, "").toLowerCase());
+    if (name) attendees.push(name);
+    else unnamed++;
+  }
+  return { attendees, attendees_unnamed: unnamed };
 }
 
 interface NoteOut {
@@ -256,6 +278,7 @@ interface NoteOut {
   meeting_end: string | null;
   created_time: string | null;
   attendees: string[];
+  attendees_unnamed: number;
   summary: string | null;
   notes: string | null;
   action_items: Array<{ text: string; done: boolean | null }>;
@@ -280,7 +303,7 @@ export async function handleMeetingNotes(client: NotionClient, _name: string, ar
   }
 
   const blocks = list(isObj(res) ? res.results : undefined).filter(isObj);
-  const users = new Map<string, string>();
+  let users: Map<string, string> | undefined;
   const results: NoteOut[] = [];
   const leftOut: string[] = [];
   let used = 0;
@@ -292,6 +315,7 @@ export async function handleMeetingNotes(client: NotionClient, _name: string, ar
     const event = isObj(m.calendar_event) ? m.calendar_event : {};
     const recording = isObj(m.recording) ? m.recording : {};
     const id = str(block.id) ?? "";
+    const ids = list(event.attendees).filter((x): x is string => typeof x === "string");
     const note: NoteOut = {
       id,
       title: richText(m.title),
@@ -299,7 +323,7 @@ export async function handleMeetingNotes(client: NotionClient, _name: string, ar
       meeting_start: str(event.start_time) ?? str(recording.start_time),
       meeting_end: str(event.end_time) ?? str(recording.end_time),
       created_time: str(block.created_time),
-      attendees: await attendeeNames(client, list(event.attendees).filter((a): a is string => typeof a === "string"), users),
+      ...namedAttendees(ids, ids.length > 0 ? (users ??= await workspaceNames(client)) : new Map()),
       summary: null,
       notes: null,
       action_items: [],

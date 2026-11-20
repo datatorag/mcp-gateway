@@ -16,6 +16,7 @@ import {
   TRANSCRIPT_NEW_CHILDREN,
   SUMMARY_LIKE_REAL,
   USER,
+  USERS_LIST,
   children,
 } from "../fixtures/meeting-notes-documented.js";
 import { MEETING_NOTES_TOOL, MEETING_QUERY_REFUSED, NO_MEETING_NOTES_PLAN, dateValue, handleMeetingNotes, meetingQuery } from "./notion-meetings.js";
@@ -71,7 +72,7 @@ describe("the answer", () => {
   it("carries the summary, notes, attendees, and action items, and never fetches the transcript unless asked", async () => {
     const f = fakeFetch([
       ok(QUERY_ANSWER),
-      ok(USER),
+      ok(USERS_LIST),
       ok(SUMMARY_NEW_CHILDREN),
       ok(NOTES_NEW_CHILDREN),
       ok(SUMMARY_OLD_CHILDREN),
@@ -80,7 +81,9 @@ describe("the answer", () => {
     const out = await call({});
     expect(f.sent[0]).toMatchObject({ method: "POST", url: new URL("https://api.notion.com/v1/blocks/meeting_notes/query") });
     expect(f.sent.some((r) => r.url.pathname.includes(TRANSCRIPT_NEW))).toBe(false);
-    expect(f.sent.filter((r) => r.url.pathname === `/v1/users/${USER.id}`)).toHaveLength(1);
+    // One read of the workspace's user list names every attendee of every note.
+    expect(f.sent.filter((r) => r.url.pathname.startsWith("/v1/users"))).toHaveLength(1);
+    expect(f.sent.find((r) => r.url.pathname.startsWith("/v1/users"))?.url.pathname).toBe("/v1/users");
 
     const [first, second] = out.results;
     expect(first).toMatchObject({
@@ -89,6 +92,7 @@ describe("the answer", () => {
       meeting_start: "2026-11-19T10:00:00.000Z",
       meeting_end: "2026-11-19T10:30:00.000Z",
       attendees: ["Ada Example"],
+      attendees_unnamed: 0,
       notes: "- Scope is fixed for this sprint",
       action_items: [
         { text: "Ada drafts the release notes", done: null },
@@ -104,7 +108,7 @@ describe("the answer", () => {
   });
 
   it("in a summary laid out as a real one, the action items are its to-dos and nothing under the other headings", async () => {
-    fakeFetch([ok({ ...QUERY_ANSWER, results: [QUERY_ANSWER.results[0]] }), ok(USER), ok(SUMMARY_LIKE_REAL), ok(children())]);
+    fakeFetch([ok({ ...QUERY_ANSWER, results: [QUERY_ANSWER.results[0]] }), ok(USERS_LIST), ok(SUMMARY_LIKE_REAL), ok(children())]);
     const out = await call({});
     expect(out.results[0].action_items).toEqual([
       { text: "Test User: get the test running", done: false },
@@ -117,7 +121,7 @@ describe("the answer", () => {
   it("reads the transcript when asked", async () => {
     fakeFetch([
       ok({ ...QUERY_ANSWER, results: [QUERY_ANSWER.results[0]] }),
-      ok(USER),
+      ok(USERS_LIST),
       ok(SUMMARY_NEW_CHILDREN),
       ok(NOTES_NEW_CHILDREN),
       ok(TRANSCRIPT_NEW_CHILDREN),
@@ -129,7 +133,7 @@ describe("the answer", () => {
   it("over the budget, the older note keeps its title and times and is listed in left_out", async () => {
     const f = fakeFetch([
       ok(QUERY_ANSWER),
-      ok(USER),
+      ok(USERS_LIST),
       ok(SUMMARY_NEW_CHILDREN),
       ok(NOTES_NEW_CHILDREN),
       ok(SUMMARY_OLD_CHILDREN),
@@ -146,7 +150,7 @@ describe("the answer", () => {
   it("a note still being summarized comes back with its status", async () => {
     const pending = structuredClone(QUERY_ANSWER.results[0]);
     pending.meeting_notes.status = "summary_in_progress";
-    fakeFetch([ok({ results: [pending], has_more: true }), ok(USER), ok(children()), ok(children())]);
+    fakeFetch([ok({ results: [pending], has_more: true }), ok(USERS_LIST), ok(children()), ok(children())]);
     const out = await call({});
     expect(out.results[0]).toMatchObject({ status: "summary_in_progress", summary: "", action_items: [] });
     expect(out.has_more).toBe(true);
@@ -177,6 +181,51 @@ describe("the answer", () => {
     expect(said).toContain(MEETING_QUERY_REFUSED);
     expect(said).toContain("body.filter.operator should be defined");
     expect(said).not.toContain(NO_MEETING_NOTES_PLAN);
+  });
+});
+
+describe("attendees", () => {
+  it("a meeting with many attendees costs one user-list read, and those Notion does not name are counted, not listed", async () => {
+    const many = structuredClone(QUERY_ANSWER.results[0]);
+    const guests = Array.from({ length: 89 }, (_, i) => `99999999-0000-4000-8000-${String(i).padStart(12, "0")}`);
+    many.meeting_notes.calendar_event.attendees = [USER.id, ...guests];
+    const f = fakeFetch([ok({ results: [many], has_more: false }), ok(USERS_LIST), ok(children()), ok(children())]);
+    const out = await call({});
+    expect(f.sent.filter((r) => r.url.pathname.startsWith("/v1/users"))).toHaveLength(1);
+    expect(out.results[0].attendees).toEqual(["Ada Example"]);
+    expect(out.results[0].attendees_unnamed).toBe(89);
+    expect(JSON.stringify(out.results[0].attendees)).not.toMatch(/[0-9a-f]{8}-/);
+  });
+
+  it("a note with no attendees reads no user list", async () => {
+    const alone = structuredClone(QUERY_ANSWER.results[0]);
+    alone.meeting_notes.calendar_event.attendees = [];
+    const f = fakeFetch([ok({ results: [alone], has_more: false }), ok(children()), ok(children())]);
+    const out = await call({});
+    expect(f.sent.some((r) => r.url.pathname.startsWith("/v1/users"))).toBe(false);
+    expect(out.results[0]).toMatchObject({ attendees: [], attendees_unnamed: 0 });
+  });
+
+  it("a user list Notion will not give leaves every attendee unnamed, and the note still comes back", async () => {
+    fakeFetch([
+      ok({ ...QUERY_ANSWER, results: [QUERY_ANSWER.results[0]] }),
+      { status: 403, body: { object: "error", status: 403, code: "restricted_resource", message: "no" } },
+      ok(SUMMARY_NEW_CHILDREN),
+      ok(NOTES_NEW_CHILDREN),
+    ]);
+    const out = await call({});
+    expect(out.results[0]).toMatchObject({ attendees: [], attendees_unnamed: 1, title: "Sprint planning" });
+  });
+});
+
+describe("a part the note does not have yet", () => {
+  it("a meeting not yet transcribed has a null summary and an empty notes string, as documented", async () => {
+    const fresh = structuredClone(QUERY_ANSWER.results[0]);
+    fresh.meeting_notes.status = "transcription_not_started";
+    fresh.meeting_notes.children = { notes_block_id: NOTES_NEW } as typeof fresh.meeting_notes.children;
+    fakeFetch([ok({ results: [fresh], has_more: false }), ok(USERS_LIST), ok(children())]);
+    const out = await call({});
+    expect(out.results[0]).toMatchObject({ status: "transcription_not_started", summary: null, notes: "", action_items: [] });
   });
 });
 
