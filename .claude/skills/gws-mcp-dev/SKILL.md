@@ -83,15 +83,21 @@ Notion version changes nothing until the header moves. Rate refusals
 (429, Notion's 529) are retried only for tools marked read-only, never by
 HTTP method, because search and data-source queries are POSTs. Notion
 answers an unshared page and a missing one with the same 404
-`object_not_found`; the client words both. 19 tools: seven reads
+`object_not_found`; the client words both. 20 tools: seven reads
 (`src/tools/notion.ts`, and the meeting notes list in
-`src/tools/notion-meetings.ts`, SCRUM-501) and twelve writes
-(`src/tools/notion-write.ts`),
+`src/tools/notion-meetings.ts`, SCRUM-501), twelve writes
+(`src/tools/notion-write.ts`), and `notion_attach_file`,
 every write annotated destructive and never retried. Content goes in as
 Notion's markdown; property values go in and out as plain values
 (`src/properties.ts` reads, `src/encode.ts` writes against the data
 source schema). Deleting a page is `notion_update_page` with `in_trash`,
-and a duplicate is a read plus a create. Its writes have rules in the
+and a duplicate is a read plus a create. `notion_attach_file`
+(`src/tools/notion-file.ts`, SCRUM-501) takes a file reference: the gateway
+hands the bytes to the plugin's `/internal/consume` route (`src/internal/`,
+the same handoff as atlassian-mcp and gws-mcp), which uploads them through
+Notion's file upload API in one part (at most 20 MB, and the workspace's own
+limit read from `users/me` first) and appends an image, PDF, or file block.
+Its writes have rules in the
 runner's send guard (see Conventions). It was born in this repository
 (SCRUM-366), so it has no imported history.
 

@@ -31,7 +31,8 @@ faqs:
     a: >-
       It edits them. The DataToRAG Notion connector creates pages and database
       rows, updates properties and content in markdown, moves, duplicates,
-      trashes and restores pages, and writes comments. In the dashboard Agent,
+      trashes and restores pages, writes comments, and puts files on pages.
+      In the dashboard Agent,
       each of these asks for approval before it runs.
 ---
 
@@ -95,12 +96,19 @@ A note that is still being transcribed or summarized comes back with its status 
 | `notion_create_view` | Create a database view |
 | `notion_update_view` | Change a database view |
 | `notion_duplicate_page` | Copy a page's content and the properties that match the destination. Comments, page history and some block types are not copied |
+| `notion_attach_file` | Put a file on a page, at the end: an image as an image, a PDF as a PDF, anything else as a file. The file comes from a Gmail message or attachment, a Drive file, a file the agent already holds, or a file you send through an upload link, and its bytes never pass through the conversation |
 
 In a dashboard Agent conversation, every write asks for approval before it runs, as it does for the other connectors. A skill you start runs its writes without stopping to ask.
 
 ## Limits
 
 Notion allows about 180 requests a minute for each workspace connection. When Notion refuses a read for going over, the connector waits briefly and tries again. A write is never retried; instead the connector returns how long Notion asked it to wait.
+
+## Files on a page
+
+`notion_attach_file` takes the same file references as `drive_upload_file` and `jira_add_attachment`: a Gmail message or one of its attachments, a Drive file or a Google Docs, Sheets, or Slides file exported to a format, a file the agent already holds (up to 1 MB), or a file you send from your computer through an upload link (up to 25 MB). The gateway fetches the file and hands it to Notion, so it never passes through the conversation. The answer is a receipt with the new block, the file's name, size, and type, the SHA-256 of what was sent, and the page.
+
+Notion takes a file of at most 20 MB in one upload, which is what the connector sends, and a free Notion workspace accepts files of at most 5 MB. The connector reads your workspace's own limit from Notion before it sends anything, and a larger file is refused with nothing uploaded. The file is appended at the end of the page; putting it in a database row's files property is not offered yet. A failed upload is not retried, so check the page before trying again.
 
 ## What is not possible
 

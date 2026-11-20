@@ -33,6 +33,8 @@ export const FILE_CONSUMING_TOOLS: Readonly<Record<string, { fileArg: string }>>
    * reference's `account` can name a different connected account from the
    * one whose Drive receives it. */
   "gws-mcp__drive_upload_file": { fileArg: "file" },
+  /** SCRUM-501. Uploaded to Notion and appended to a page as a block. */
+  "notion-mcp__notion_attach_file": { fileArg: "file" },
 };
 
 /** Reference types: the plugin that can answer the bytes, the service whose

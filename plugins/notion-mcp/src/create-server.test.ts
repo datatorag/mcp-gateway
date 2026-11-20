@@ -33,12 +33,12 @@ afterEach(() => {
 });
 
 describe("the MCP server", () => {
-  it("lists the nineteen tools with their annotations", async () => {
+  it("lists the twenty tools with their annotations", async () => {
     const mcp = await connect(new NotionClient({ accessToken: TOKEN }));
     const { tools } = await mcp.listTools();
-    expect(tools).toHaveLength(19);
+    expect(tools).toHaveLength(20);
     for (const t of tools) {
-      const write = /^notion_(create|update|move|duplicate|delete)_/.test(t.name);
+      const write = /^notion_(create|update|move|duplicate|delete|attach)_/.test(t.name);
       expect(t.annotations, t.name).toMatchObject(
         write ? { readOnlyHint: false, destructiveHint: true } : { readOnlyHint: true, destructiveHint: false }
       );

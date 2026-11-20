@@ -160,6 +160,7 @@ import { nt12NotionDatabase } from "./nt12-notion-database";
 import { nt13NotionRowProperties } from "./nt13-notion-row-properties";
 import { nt14NotionView } from "./nt14-notion-view";
 import { nt15NotionMeetingNotes } from "./nt15-notion-meeting-notes";
+import { nt16NotionAttachFile } from "./nt16-notion-attach-file";
 import { sl1SlackUsersLookup } from "./sl1-slack-users-lookup";
 import { sl2SlackChannelsList } from "./sl2-slack-channels-list";
 import { sl3SlackChannelHistory } from "./sl3-slack-channel-history";
@@ -371,6 +372,7 @@ export const CASES: TestCase[] = [
   nt13NotionRowProperties,
   nt14NotionView,
   nt15NotionMeetingNotes,
+  nt16NotionAttachFile,
   sl1SlackUsersLookup,
   sl2SlackChannelsList,
   sl3SlackChannelHistory,

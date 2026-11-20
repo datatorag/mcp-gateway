@@ -56,6 +56,9 @@ const WRITE_VERBS = new Set([
   // SCRUM-454: `slack_message_post` posts a message as the user. Without this
   // it was a write only by the fail-closed default.
   "post",
+  // SCRUM-501: `notion_attach_file` puts a file on a page. The reads that
+  // name an attachment end in `attachment`, a different token.
+  "attach",
 ]);
 
 /** The floor of the write classification: whether a namespaced tool mutates

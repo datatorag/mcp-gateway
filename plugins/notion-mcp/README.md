@@ -24,6 +24,7 @@ This server is the Notion connector of [DataToRAG](https://datatorag.com), a hos
 | `notion_create_database` | A database under a page, with its data source's schema as a simple map | `POST /v1/databases` |
 | `notion_update_data_source` | Title, add, rename, retype or remove properties, trash | `PATCH /v1/data_sources/{id}` |
 | `notion_create_view`, `notion_update_view` | Database views with filter, sorts and configuration in Notion's JSON | `POST /v1/views`, `PATCH /v1/views/{id}` |
+| `notion_attach_file` | A file put at the end of a page as an image, PDF, or file block. The file comes as a file reference; the DataToRAG gateway resolves it and hands the bytes to this server's private `/internal/consume` route, so they never pass through the conversation. One part, up to 20 MB and the workspace's own limit | `GET /v1/users/me`, `POST /v1/file_uploads`, `POST /v1/file_uploads/{id}/send`, `PATCH /v1/blocks/{id}/children` |
 
 `notion_query_data_source` also reads a saved view's rows with `view_id` (`POST /v1/views/{id}/queries`, then `GET /v1/views/{id}/queries/{query_id}`); Notion returns those rows as ids.
 

@@ -375,6 +375,7 @@ export const SCENARIOS: Scenario[] = [
       "NT13", // a row's properties set as plain values and restored
       "NT14", // a view created, queried through, renamed
       "NT15", // meeting notes come back with their summary and action items, the transcript only when asked
+      "NT16", // a file sent as a content reference put on a created page as an image, the page trashed
     ],
   },
   {
