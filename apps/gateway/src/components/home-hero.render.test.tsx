@@ -24,16 +24,26 @@ const heroHtml = renderToStaticMarkup(<HomeHero getStartedHref="/auth/google" />
 const hero = parse(heroHtml);
 
 describe("the home hero", () => {
-  it("leads with the headline, two sentences in one h1 and the second on its own line, and no eyebrow", () => {
+  it("leads with the headline, two sentences in one h1 and each on a line of its own, and no eyebrow", () => {
     const h1s = [...hero.querySelectorAll("h1")];
     expect(h1s).toHaveLength(1);
     expect(h1s[0].textContent).toBe("One connection to your tools.Your AI agent moves the work.");
-    const second = h1s[0].querySelector("span")!;
-    expect(second.textContent).toBe(HERO_HEADLINE[1]);
-    expect(second.classList.contains("block")).toBe(true);
-    // A bare whitespace-nowrap in the h1 clipped an earlier headline on every phone; it may only come back behind a
-    // breakpoint. Checked on the rendered classes, so a class built by cn() is seen too.
-    for (const el of [h1s[0], ...h1s[0].querySelectorAll("*")]) expect(el.classList.contains("whitespace-nowrap")).toBe(false);
+    // Each sentence is its own block, so the second starts its own line at every width.
+    const sentences = [...h1s[0].querySelectorAll(":scope > span")];
+    expect(sentences.map((el) => el.textContent)).toEqual([...HERO_HEADLINE]);
+    for (const el of sentences) {
+      expect(el.classList.contains("block")).toBe(true);
+      // One line each from 356px, where the smallest type still fits; narrower screens may wrap. A bare
+      // whitespace-nowrap, at every width, clipped an earlier headline on every phone and must not come back.
+      expect(el.classList.contains("min-[356px]:whitespace-nowrap")).toBe(true);
+      expect(el.classList.contains("whitespace-nowrap")).toBe(false);
+    }
+    expect(h1s[0].classList.contains("whitespace-nowrap")).toBe(false);
+    // The type follows the screen below the width where 30px no longer fits, and never goes under 22px; where it
+    // does wrap, the lines are balanced, so no word is left alone.
+    const size = [...h1s[0].classList].find((c) => c.startsWith("text-[length:"))!;
+    expect(size).toBe("text-[length:max(22px,min(calc((100vw-48px)/14),clamp(30px,4vw,48px)))]");
+    expect(h1s[0].classList.contains("[text-wrap:balance]")).toBe(true);
     expect(heroHtml).not.toContain("ONE GATEWAY");
   });
 
