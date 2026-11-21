@@ -64,10 +64,15 @@ export function HomeHero({
     <div className={cn("relative mx-auto w-full max-w-[1160px]", dark ? "text-white" : "text-[#1C1917]")}>
       <div className="relative z-10 px-6 text-center xl:pointer-events-none xl:absolute xl:inset-x-0 xl:top-5">
         {above ? <div className="absolute inset-x-0 bottom-full mb-3 flex justify-center xl:pointer-events-auto">{above}</div> : null}
-        <h1 className="mx-auto max-w-[18em] text-[clamp(30px,4vw,48px)] font-semibold leading-[1.08] tracking-[-0.03em]">
-          {HERO_HEADLINE[0]}
-          {/* `block`, not a <br>: the second sentence starts its own line at every width. */}
-          <span className={cn("block", dark ? "text-[#BFD3FF]" : "text-[#2D5BD6]")}>{HERO_HEADLINE[1]}</span>
+        {/* One sentence per line, at every width that can hold one. The type follows the screen where 30px no longer
+            fits: the longer sentence is 13.9em wide in this face and tracking, so a 14th of the column (the screen
+            less the 48px of gutters) keeps it on one line, down to a 22px floor. That is about 24px on a 390px
+            phone, and 30px again from about 470px, so wider screens are as they were. Under 356px the floor would
+            overflow, so there the sentences may wrap, balanced, and nothing runs off the screen. Measured in a
+            browser at 320 to 430; re-measure if the copy, the face, the tracking, or the gutters change. */}
+        <h1 className="mx-auto max-w-[18em] text-[length:max(22px,min(calc((100vw-48px)/14),clamp(30px,4vw,48px)))] font-semibold leading-[1.08] tracking-[-0.03em] [text-wrap:balance]">
+          <span className="block min-[356px]:whitespace-nowrap">{HERO_HEADLINE[0]}</span>
+          <span className={cn("block min-[356px]:whitespace-nowrap", dark ? "text-[#BFD3FF]" : "text-[#2D5BD6]")}>{HERO_HEADLINE[1]}</span>
         </h1>
         <p className={cn("mx-auto mt-3.5 max-w-[640px] text-base leading-normal sm:text-lg", soft)}>
           {HERO_SUBTITLE[0]}
