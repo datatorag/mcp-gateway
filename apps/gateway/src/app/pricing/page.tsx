@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { PromoChip } from "@/components/promo-banner";
 import { PROMO, isPromoCode } from "@/lib/promo";
 import { db } from "@/lib/db";
 import { publicToolCount } from "@/lib/public-tools";
@@ -81,7 +82,14 @@ export default async function PricingPage({
       <main>
         <JsonLd nodes={pricingFaqs.length > 0 ? [faqPageNode(pricingFaqs)] : []} />
         <div className="mx-auto max-w-6xl px-6 pb-16 pt-32 sm:pt-36">
-          <div className="mx-auto max-w-2xl text-center">
+          <div className="relative mx-auto max-w-2xl text-center">
+            {/* The promo chip, above the heading and out of the flow (it is
+                decided on the client), so the heading does not move when the
+                chip appears or the campaign ends. It sits in the page's top
+                padding, under the fixed navbar. */}
+            <div className="absolute inset-x-0 bottom-full mb-3 flex justify-center">
+              <PromoChip tone="light" />
+            </div>
             <p className="text-sm font-semibold uppercase tracking-widest text-primary">
               Pricing
             </p>

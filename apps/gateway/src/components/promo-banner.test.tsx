@@ -34,11 +34,11 @@ afterEach(() => {
 });
 
 /** The chip, as the home page mounts it. */
-const renderChip = (now: Date = BEFORE) => {
+const renderChip = (now: Date = BEFORE, tone?: "dark" | "light") => {
   // The promo reads the URL from the window; put the page there first.
   window.history.replaceState(null, "", pathname + (search ? `?${search}` : ""));
   act(() => {
-    root.render(<PromoChip now={now} />);
+    root.render(<PromoChip now={now} tone={tone} />);
   });
 };
 /** The dashboard's bar. */
@@ -71,6 +71,21 @@ describe("PromoChip", () => {
     expect(a.classList.contains("whitespace-nowrap")).toBe(true);
     // A link and nothing else: no dismiss control on something this small.
     expect(container.querySelectorAll("button")).toHaveLength(0);
+  });
+
+  it("is a pale pill on the dark hero and a bordered one in the page's ink on a light page, with the same words and link", () => {
+    renderChip();
+    expect(link()!.classList.contains("text-white/90")).toBe(true);
+    const words = link()!.textContent;
+    remount();
+    renderChip(BEFORE, "light");
+    const a = link()!;
+    expect(a.textContent).toBe(words);
+    expect(a.classList.contains("text-foreground")).toBe(true);
+    expect(a.classList.contains("border-border")).toBe(true);
+    // Never the solid blue bar, on either ground.
+    expect(a.className).not.toMatch(/(^|\s)bg-primary(\s|$)/);
+    expect(a.classList.contains("whitespace-nowrap")).toBe(true);
   });
 
   it("renders nothing after the end date under the injected clock, with no deploy", () => {
