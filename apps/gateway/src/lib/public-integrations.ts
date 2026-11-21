@@ -14,6 +14,10 @@ import { MCP_CLIENTS } from "./mcp-clients";
 const GOOGLE_SERVICES = ["Gmail", "Calendar", "Drive", "Docs", "Sheets", "Slides", "Contacts", "Tasks"] as const;
 const ATLASSIAN_SERVICES = ["Jira", "Confluence"] as const;
 
+/** Every public service, one name each, in the order the docs list them. */
+export const PUBLIC_SERVICES = [...GOOGLE_SERVICES, ...ATLASSIAN_SERVICES, "Notion"] as const;
+export type PublicService = (typeof PUBLIC_SERVICES)[number];
+
 /** "Google Workspace, Atlassian, and Notion": the public connectors by name. */
 export const PUBLIC_CONNECTORS_TEXT = listOf(CONNECTORS.map((c) => c.title));
 
