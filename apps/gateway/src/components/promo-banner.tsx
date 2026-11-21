@@ -8,9 +8,9 @@ import { PROMO, PROMO_DISMISSED_KEY, isPromoCode, promoActive, promoCopy, promoP
 import { cn } from "@/lib/utils";
 
 /**
- * The promo (SCRUM-231), in the two places it is shown: a small chip above
- * the home page's headline, and a thin bar on the dashboard for a signed-in
- * user who is not paying. Both say the same words as the running ad, read
+ * The promo (SCRUM-231), in the places it is shown: a small chip above the
+ * home page's headline and the pricing page's heading, and a thin bar on the
+ * dashboard for a signed-in user who is not paying. All say the same words as the running ad, read
  * from lib/promo.ts.
  *
  * It used to be a wide bar in the navbar of every public page; on a phone
@@ -69,11 +69,16 @@ function usePromo(now: Date | undefined): { visible: boolean; dismiss: () => voi
 const reportClick = () => posthog.capture(EVENTS.PROMO_BANNER_CLICKED, { code: PROMO.code, page: window.location.pathname });
 
 /**
- * The chip: one line at every width, for a dark ground. From `sm` it says
- * both windows, as the banner did; under `sm` the short form, which fits a
- * 320px screen. One link to pricing with the code.
+ * The chip: one line at every width. From `sm` it says both windows, as the
+ * banner did; under `sm` the short form, which fits a 320px screen. `tone` is
+ * the ground it sits on: the dark hero, or a light page.
+ *
+ * One link, to pricing with the code in the URL: that is where the code is
+ * redeemed, because the pricing page passes it to checkout and says so on
+ * the Pro card. On the pricing page itself the same link applies the code to
+ * the page the reader is on.
  */
-export function PromoChip({ now, className }: { now?: Date; className?: string }) {
+export function PromoChip({ now, tone = "dark" }: { now?: Date; tone?: "dark" | "light" }) {
   const { visible } = usePromo(now);
   if (!visible) return null;
   const copy = promoCopy();
@@ -82,8 +87,10 @@ export function PromoChip({ now, className }: { now?: Date; className?: string }
       href={promoPricingHref()}
       onClick={reportClick}
       className={cn(
-        "inline-flex items-center whitespace-nowrap rounded-full border border-white/20 bg-white/10 px-3 py-1 text-[13px] leading-5 text-white/90 transition-colors hover:bg-white/15",
-        className
+        "inline-flex items-center whitespace-nowrap rounded-full border px-3 py-1 text-[13px] leading-5 transition-colors",
+        tone === "dark"
+          ? "border-white/20 bg-white/10 text-white/90 hover:bg-white/15"
+          : "border-border bg-secondary/60 text-foreground hover:bg-secondary"
       )}
     >
       <span className="sm:hidden">{copy.short}</span>
@@ -123,7 +130,8 @@ export function PromoBanner({ plan, now }: PromoBannerProps) {
       <button
         type="button"
         aria-label="Dismiss"
-        className="ml-1 rounded-full p-0.5 opacity-80 hover:opacity-100"
+        // A 30px target (the 14px icon and its padding) without making the bar taller.
+        className="-my-1.5 -ml-1 rounded-full p-2 opacity-80 hover:opacity-100"
         onClick={dismiss}
       >
         <XIcon aria-hidden="true" className="size-3.5" />

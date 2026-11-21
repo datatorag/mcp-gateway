@@ -32,11 +32,11 @@ knows.
 ## Where it mounts
 
 **Amended 2026-11-21.** The wide bar left the navbar: on a phone it was two
-lines the full width of the screen above the nav. The promo now shows in two
-places from `components/promo-banner.tsx`: `PromoChip`, one line at every
-width, above the home page's headline (not dismissible; it honors an earlier
-dismissal), and `PromoBanner`, the dashboard's bar. Other public pages carry
-no promo; the docs sidebar line (SCRUM-287) is unchanged. What follows is the
+lines the full width of the screen above the nav. The promo now shows from
+`components/promo-banner.tsx`: `PromoChip`, one line at every width, above
+the home page's headline and above the pricing page's heading (not
+dismissible; it honors an earlier dismissal), and `PromoBanner`, the
+dashboard's bar. Other public pages carry no promo; the docs sidebar line (SCRUM-287) is unchanged. What follows is the
 original design.
 
 Three mount points, one component:
