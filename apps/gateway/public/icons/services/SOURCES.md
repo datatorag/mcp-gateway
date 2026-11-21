@@ -1,8 +1,10 @@
 # Service icon sources
 
-Official full-colour product marks, self-hosted (no vendor CDN hotlinking),
-used unmodified per Google's and Atlassian's brand guidelines to indicate
-interoperability — not endorsement. Google and Atlassian product marks are
+Official full-colour product marks, self-hosted (no vendor CDN hotlinking).
+The files are unmodified, and the marks are shown as they are everywhere but
+one place: on the home page's wheel each mark is drawn at an angle with the
+disc it sits on, and flat when its tool is at the front. They are used per
+Google's and Atlassian's brand guidelines to indicate interoperability — not endorsement. Google and Atlassian product marks are
 trademarks of their respective owners.
 
 Fetched 2026-07-26 from Wikimedia Commons (file pages carry the licensing

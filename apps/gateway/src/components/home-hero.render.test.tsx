@@ -37,11 +37,19 @@ describe("the home hero", () => {
     expect(heroHtml).not.toContain("ONE GATEWAY");
   });
 
-  it("builds the subtitle from the public connector list, with the serial comma", () => {
-    expect(HERO_SUBTITLE).toBe(
-      "Connect Google Workspace, Atlassian, and Notion once, and your agent works across all of them, on every account you connect."
+  it("builds the subtitle from the public connector list, with the serial comma, and sets the accounts claim in semibold", () => {
+    const whole = HERO_SUBTITLE.join("");
+    expect(whole).toBe(
+      "Connect Google Workspace, Atlassian, and Notion once. Your agent works across all of them, and across multiple accounts in the same request."
     );
-    expect(hero.body.textContent).toContain(HERO_SUBTITLE);
+    expect(hero.body.textContent).toContain(whole);
+    const strong = [...hero.querySelectorAll("p strong")];
+    expect(strong.map((s) => s.textContent)).toEqual(["multiple accounts in the same request"]);
+    expect(strong[0].classList.contains("font-semibold")).toBe(true);
+    // Full ink against the softer line around it: white on the dark hero, the page's ink on a light one.
+    expect(strong[0].classList.contains("text-white")).toBe(true);
+    const light = parse(renderToStaticMarkup(<HomeHero getStartedHref="/auth/google" tone="light" />));
+    expect(light.querySelector("p strong")!.classList.contains("text-[#1C1917]")).toBe(true);
   });
 
   it("has the two actions, and starts sign-in with a plain anchor", () => {

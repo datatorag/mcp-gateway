@@ -10,7 +10,14 @@ import { cn } from "@/lib/utils";
 
 /** The headline's two sentences, each on a line of its own; the second is set in the lighter blue. */
 export const HERO_HEADLINE = ["One connection to your tools.", "Your AI agent moves the work."] as const;
-export const HERO_SUBTITLE = `Connect ${PUBLIC_CONNECTORS_TEXT} once, and your agent works across all of them, on every account you connect.`;
+/** The subtitle in three parts; the middle one is the claim set in semibold and full ink. It holds for every public
+ * service: each tool takes an `account`, a user can connect more than one account of a service, and one request can
+ * make calls on several of them. */
+export const HERO_SUBTITLE = [
+  `Connect ${PUBLIC_CONNECTORS_TEXT} once. Your agent works across all of them, and across `,
+  "multiple accounts in the same request",
+  ".",
+] as const;
 
 /**
  * The top of the home page: the headline and the ask, then the wheel of
@@ -51,7 +58,11 @@ export function HomeHero({ getStartedHref, tone = "dark" }: { getStartedHref: st
           {/* `block`, not a <br>: the second sentence starts its own line at every width. */}
           <span className={cn("block", dark ? "text-[#BFD3FF]" : "text-[#2D5BD6]")}>{HERO_HEADLINE[1]}</span>
         </h1>
-        <p className={cn("mx-auto mt-3.5 max-w-[640px] text-base leading-normal sm:text-lg", soft)}>{HERO_SUBTITLE}</p>
+        <p className={cn("mx-auto mt-3.5 max-w-[640px] text-base leading-normal sm:text-lg", soft)}>
+          {HERO_SUBTITLE[0]}
+          <strong className={cn("font-semibold", dark ? "text-white" : "text-[#1C1917]")}>{HERO_SUBTITLE[1]}</strong>
+          {HERO_SUBTITLE[2]}
+        </p>
         <div className="mt-5 flex flex-wrap items-center justify-center gap-3 xl:pointer-events-auto">
           {/* A plain anchor: the href starts sign-in, which must never be prefetched (lib/sign-in.ts). */}
           <a
