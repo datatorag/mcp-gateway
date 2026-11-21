@@ -79,37 +79,29 @@ describe("the comparison hero", () => {
     expect(link.textContent).toContain("Google Slides on 9 October 2026");
   });
 
-  it("on the landing page comes right after the headline, before the sentence and the buttons", () => {
-    // The DOM order is the phone order (the grid moves it beside the text
-    // from lg). Measured in the browser too: see the SCRUM-426 report.
+  it("on the landing page follows the wheel hero directly, with the tool count line beside it", () => {
+    // The wheel took the top of the page; the comparison is the next thing
+    // on it, before the demo, on the hero's own dark ground.
     const page = readFileSync(join(__dirname, "../app/page.tsx"), "utf8");
-    const hero = page.slice(page.indexOf("{/* Hero */}"), page.indexOf("</ShaderBackground>"));
     const at = (needle: string) => {
-      const i = hero.indexOf(needle);
+      const i = page.indexOf(needle);
       expect(i, needle).toBeGreaterThan(-1);
       return i;
     };
-    expect(at("<h1")).toBeLessThan(at("<ComparisonHero"));
-    expect(at("<ComparisonHero")).toBeLessThan(at("{PUBLIC_CONNECTORS_TEXT} behind one URL, in Claude, Claude"));
-    expect(at("<ComparisonHero")).toBeLessThan(at("Get Started"));
-    expect(at("Get Started")).toBeLessThan(at("Google-verified since June 2026"));
+    const hero = page.slice(at("{/* Hero"), at("</ShaderBackground>"));
+    expect(hero).toContain("<HomeHero");
+    expect(hero).toContain("<TrustedBy");
+    expect(hero).not.toContain("<ComparisonHero");
+    const band = page.slice(at("</ShaderBackground>"), at('id="playground"'));
+    expect(band).toContain("<ComparisonHero");
+    expect(band).toContain("{PUBLIC_CONNECTORS_TEXT} behind one URL, in Claude, Claude");
+    // Nothing sits between the hero and the comparison's section.
+    expect(band.slice(0, band.indexOf("<section")).replace(/\{\/\*[\s\S]*?\*\/\}/g, "").trim()).toBe("</ShaderBackground>");
     // The agreement line left the hero on Manuel's word; it is shown on the
     // first screen after sign-in instead (agent-empty-state.test.tsx).
-    expect(hero).not.toContain("<SignInConsent");
-    // The headline is the simpler one, with its second sentence on a line
-    // of its own (SCRUM-426).
-    const h1 = hero.slice(at("<h1"), hero.indexOf("</h1>"));
-    expect(h1.replace(/\{\/\*[\s\S]*?\*\/\}/g, "").replace(/<[^>]+>|\{" "\}/g, " ").replace(/\s+/g, " ")).toContain(
-      "One connection to Google Workspace and more."
-    );
-    // "Google Workspace" is held together from 360px, so "Google" is never
-    // alone on a line of the headline.
-    expect(h1).toMatch(/<span className="min-\[360px\]:whitespace-nowrap">Google Workspace<\/span>/);
-    // Its own line from sm up; on a phone it flows on, so the table sits higher.
-    expect(h1).toMatch(/className="text-blue-200 sm:block"/);
-    expect(h1).not.toMatch(/className="[^"]*(?<![:\w-])block[\s"]/);
-    expect(h1).toContain("Claude moves the work");
-    expect(h1).not.toContain("Gmail, Drive, Sheets");
+    expect(page).not.toContain("<SignInConsent");
+    // The page has one h1, and it is the hero's (home-hero.render.test.tsx).
+    expect(page).not.toContain("<h1");
     // No connector we do not ship is named anywhere on the page (SCRUM-426).
     for (const name of ["Salesforce", "Databricks", "Slack", "HubSpot", "PostgreSQL", "Snowflake"]) {
       expect(page, name).not.toContain(name);
@@ -119,7 +111,7 @@ describe("the comparison hero", () => {
     expect(page).not.toContain("Coming soon connectors");
     expect(page).not.toMatch(/>\s*Coming soon\s*</);
     // The pill above the headline is gone, and so is the old long sentence.
-    expect(hero).not.toContain("MCP gateway for Google Workspace and Jira");
-    expect(hero).not.toContain("File the email on the Jira issue");
+    expect(page).not.toContain("MCP gateway for Google Workspace and Jira");
+    expect(page).not.toContain("File the email on the Jira issue");
   });
 });

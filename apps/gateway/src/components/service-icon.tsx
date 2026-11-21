@@ -9,7 +9,9 @@ import { cn } from "@/lib/utils";
  * there for provenance). Per each vendor's brand guidelines the
  * marks are used as-is: no recolouring, no restyling, no theme variants —
  * the full-colour marks are legible on light and dark grounds, which is
- * verified in the ship checks rather than assumed.
+ * verified in the ship checks rather than assumed. (The home page's wheel
+ * does not use this component: it draws the same files on a canvas, at an
+ * angle with the disc each sits on; see ui/tool-wheel.tsx.)
  *
  * Anything that is not a known service renders a neutral glyph in
  * currentColor, never a broken image.

@@ -11,6 +11,9 @@ import { StartupBarOffset } from "@/components/startupbar-offset";
 import { DemoBento } from "@/components/demo/demo-bento";
 import { DEMO_HEADING, DEMO_STANDFIRST } from "@/components/demo/demo-copy";
 import { ComparisonHero } from "@/components/comparison-hero";
+import { REPOSITORY_URL } from "@/components/github-mark";
+import { HomeHero } from "@/components/home-hero";
+import { TrustedBy } from "@/components/trusted-by";
 import { SLIDES_VERIFIED_ON, VERIFIED_ON } from "@/lib/connector-verification";
 import { SkillCard } from "@/components/skill-card";
 import { getAllSkills } from "@/lib/skills";
@@ -40,11 +43,11 @@ export const dynamic = "force-dynamic";
    matched the phrase at all. "MCP", "hosted" and "Google Workspace MCP" appear
    in no title on the site outside one blog post.
 
-   THE H1 IS DELIBERATELY UNCHANGED. A title is read by a search engine and by
-   a model; an h1 is read by a person who already arrived. They do not have to
-   be the same string, and trading a line that converts for a line that gets
-   found would be the wrong half of the trade. 57 characters, inside the ~60
-   search results truncate at. */
+   THE H1 IS A DIFFERENT STRING ON PURPOSE (it is in HomeHero). A title is
+   read by a search engine and by a model; an h1 is read by a person who
+   already arrived. They do not have to be the same string, and trading a line
+   that converts for a line that gets found would be the wrong half of the
+   trade. 57 characters, inside the ~60 search results truncate at. */
 const HOME_TITLE =
   "Hosted Google Workspace MCP with write access - DataToRAG";
 /* Makes no quantity claim at all, which is why it cannot go stale. This string
@@ -123,138 +126,43 @@ export default async function HomePage() {
             second script element. */}
         <JsonLd nodes={homeFaqs.length > 0 ? [faqPageNode(homeFaqs)] : []} />
 
-        {/* Hero */}
+        {/* Hero: the gateway and its circle of tools. The headline, the ask,
+            the wheel, and who uses it, on the animated background under a
+            veil dark enough for text to read. `pt-36` clears the fixed
+            header: the navbar with the promo banner above it, the same 144px
+            the hero before it kept. The copy and the layout are in HomeHero; the names in the
+            row are in lib/trusted-by.ts. */}
         <ShaderBackground>
-          {/* One viewport-height column, centered as a group: extra vertical
-              space goes above the hero and below the teaser — never between
-              them. The hero→teaser gap is the teaser's fixed pt. */}
-          <div className="relative flex min-h-[calc(100vh-4rem)] flex-col justify-center pb-12 pt-24">
-          {/* One grid, so the reading order can differ by width without a
-              second copy of anything (SCRUM-426). The DOM order is the phone
-              order: headline, the comparison table, the sentence, the
-              buttons, the trust lines. A phone shows the table near the top
-              instead of under five lines of copy.
+          <div
+            aria-hidden="true"
+            className="absolute inset-0 bg-[linear-gradient(180deg,rgba(8,16,36,.62),rgba(8,16,36,.38)_55%,rgba(8,16,36,.55))]"
+          />
+          <div className="relative pb-16 pt-36 sm:pb-20">
+            <HomeHero getStartedHref={signInHref()} />
+            <TrustedBy className="mt-10 sm:mt-12" />
+          </div>
+        </ShaderBackground>
 
-              From `lg` the table moves to a 520px right column spanning every
-              row, and the text sits in the middle three of five rows
-              (`1fr auto auto auto 1fr`), so the extra height of the taller
-              table goes above and below the text as a group, never between
-              the headline and its sentence. The column widths are the ones
-              the headline was measured against below: the page padding (48),
-              the gap (64) and 520.
-
-              `pt-12` is the room the pill above the headline used to take:
-              without it, the headline's first line sat under the fixed navbar
-              on a phone and the table touched it on a desktop. */}
-          <div className="mx-auto grid w-full max-w-7xl grid-cols-1 items-center px-6 pt-12 text-center lg:grid-cols-[minmax(0,1fr)_520px] lg:grid-rows-[1fr_auto_auto_auto_1fr] lg:gap-x-16 lg:text-left">
-              {/* "Claude moves the work" is kept on one line only where the
-                  column has room for it, and allowed to wrap everywhere else.
-                  Measured in Chrome (SCRUM-425, SCRUM-426): the phrase is
-                  434px wide at 36px, 579 at 48px and 724 at 60px.
-
-                  - Below `sm` the column is the viewport less 48px, 342 at 390.
-                    Kept whole, the phrase clipped the headline at both edges
-                    on every phone, because <main> is `overflow-x-hidden`.
-                  - From `sm` to `lg` the page is one column (592 at 640, 720
-                    at 768), so the 48px phrase fits.
-                  - From `lg` the column is the viewport less the page padding
-                    (48), the gap (64) and the hero table (520): 392 at 1024,
-                    and never more than 648, because the container stops at
-                    1280. The 60px phrase needs 724, so it wraps at every
-                    desktop width. Kept whole, it pushed the column wide and
-                    the table off the right edge.
-
-                  Re-measure if the headline, the face, the gap or the hero
-                  table's width changes. */}
-              <h1
-                className="animate-fade-in-up font-display text-3xl font-extrabold leading-[1.1] tracking-tight text-white sm:text-5xl lg:col-start-1 lg:row-start-2 lg:max-[1119px]:text-4xl xl:text-6xl"
-                style={{ animationDelay: "0.06s" }}
-              >
-                One connection to{" "}
-                {/* "Google Workspace" stays together from 360px up, so
-                    "Google" is never alone on a line. Measured, the pair is
-                    about 300px at 30px, 347 at 36, 463 at 48 and 579 at 60,
-                    and each size is chosen so it fits its column: 30 on a
-                    phone, 48 from `sm`, 36 from `lg` to 1119 (a 392 to 487px
-                    column), 48 from 1120 and 60 from `xl` (a 648px column).
-                    Below 360 the column is under 300, so it may break there
-                    rather than run off the edge. */}
-                <span className="min-[360px]:whitespace-nowrap">Google Workspace</span>{" "}
-                and more.{" "}
-                {/* From `sm` the second sentence starts its own line; on a
-                    phone it flows on from the first, which keeps the
-                    headline a line shorter and the table higher. */}
-                <span className="text-blue-200 sm:block">
-                  <span className="sm:max-lg:whitespace-nowrap">Claude moves the work</span>{" "}
-                  <span className="sm:max-lg:whitespace-nowrap">between them.</span>
-                </span>
-              </h1>
-
-            {/* The comparison is the hero shot (SCRUM-425): all nine gaps at
-                once (SCRUM-426), `max-w-md` stacked, 520px from `lg` up. The
-                headline's wrapping above is measured against this width. Its
-                rows come from the full table at #comparison and nowhere else;
-                see heroGroups(). */}
-            <div
-              className="animate-fade-in-up mx-auto mt-6 w-full max-w-md lg:col-start-2 lg:row-span-5 lg:row-start-1 lg:mt-0 lg:w-[520px] lg:max-w-[520px]"
-              style={{ animationDelay: "0.1s" }}
-            >
-              <ComparisonHero
-                groups={heroGroups()}
-                verifiedOn={VERIFIED_ON}
-                slidesVerifiedOn={SLIDES_VERIFIED_ON}
-              />
-            </div>
-
-            <p
-              className="animate-fade-in-up mx-auto mt-6 max-w-2xl text-base leading-relaxed text-white/60 sm:text-lg lg:col-start-1 lg:row-start-3 lg:mx-0"
-              style={{ animationDelay: "0.12s" }}
-            >
-              {/* No number at all when the count query failed: a fallback
-                  figure is one nobody re-reads, and it went stale. Matches
-                  the pricing page and the integrations section below. */}
-              {totalTools > 0 ? `${totalTools} tools` : "Tools"} across{" "}
-              {PUBLIC_CONNECTORS_TEXT} behind one URL, in Claude, Claude
-              Code, Cursor, or your own app.
-            </p>
-
-            <div
-              className="animate-fade-in-up mt-6 lg:col-start-1 lg:row-start-4"
-              style={{ animationDelay: "0.18s" }}
-            >
-              <div className="flex flex-wrap items-center justify-center gap-3 lg:justify-start">
-                <a
-                  href={signInHref()}
-                  className="rounded-full bg-white px-7 py-3 text-sm font-medium text-[#1a3a8f] transition-all hover:bg-white/90"
-                >
-                  Get Started
-                </a>
-                <Link
-                  href="/contact"
-                  className="rounded-full border border-white/30 px-7 py-3 text-sm font-medium text-white transition-all hover:border-white/50 hover:bg-white/10"
-                >
-                  Talk to Us
-                </Link>
-              </div>
-
-              {/* THE TRUST SIGNAL BELONGS NEXT TO THE ASK, added 2026-08-24.
-                  It already existed on this page, ~760 lines further down, in
-                  a footer link nobody scrolls to. The obvious objection to a
-                  hosted gateway is "I am giving a third party access to my
-                  Gmail", and the answer to it was filed below the fold while
-                  the question was being asked at the button. Same fact, moved
-                  to where it is load-bearing. Deliberately plain text plus one
-                  link rather than a badge graphic: a self-drawn badge reads as
-                  decoration, the sentence reads as a claim we will be held to. */}
-              <p className="mt-4 text-[11px] text-white/50">
-                Google-verified since June 2026 ·{" "}
-                <Link
-                  href="/blog/casa-tier-2-verified"
-                  className="underline decoration-white/30 underline-offset-2 hover:text-white/80"
-                >
-                  CASA Tier 2 assessed
-                </Link>{" "}
-                · Open source, self-host it if you prefer
+        {/* The comparison follows the hero directly: all the gaps at once
+            (SCRUM-425, SCRUM-426), on the hero's own dark ground so the two
+            read as one opening. It was the hero's right column until the
+            wheel took the top of the page. Its rows come from the full table
+            at #comparison and nowhere else; see heroGroups(). The heading is
+            the table's own caption, said aloud. */}
+        <section className="bg-[#0a1628]">
+          <div className="mx-auto grid w-full max-w-7xl grid-cols-1 items-center gap-y-8 px-6 py-16 text-center sm:py-20 lg:grid-cols-[minmax(0,1fr)_520px] lg:gap-x-16 lg:text-left">
+            <div>
+              <h2 className="font-display text-2xl font-bold leading-tight text-white sm:text-3xl">
+                What DataToRAG does that Claude&rsquo;s built-in connectors do
+                not
+              </h2>
+              <p className="mx-auto mt-4 max-w-2xl text-base leading-relaxed text-white/60 sm:text-lg lg:mx-0">
+                {/* No number at all when the count query failed: a fallback
+                    figure is one nobody re-reads, and it went stale. Matches
+                    the pricing page and the integrations section below. */}
+                {totalTools > 0 ? `${totalTools} tools` : "Tools"} across{" "}
+                {PUBLIC_CONNECTORS_TEXT} behind one URL, in Claude, Claude
+                Code, Cursor, or your own app.
               </p>
               {/* No sign-in agreement line here (SCRUM-426, Manuel). Get
                   Started goes straight to Google, and the agreement is shown
@@ -264,15 +172,20 @@ export default async function HomePage() {
               {/* Badge lockup, not fine print. Compact here, so it does not
                   compete with the table beside it. */}
               <CasaBadge
-                className="mt-4 justify-center lg:justify-start"
+                className="mt-5 justify-center lg:justify-start"
                 compact
                 tone="dark"
               />
             </div>
+            <div className="mx-auto w-full max-w-md lg:w-[520px] lg:max-w-[520px]">
+              <ComparisonHero
+                groups={heroGroups()}
+                verifiedOn={VERIFIED_ON}
+                slidesVerifiedOn={SLIDES_VERIFIED_ON}
+              />
+            </div>
           </div>
-
-          </div>
-        </ShaderBackground>
+        </section>
 
         {/* Scripted demo — its own band: the product working, not more hero.
             The grid, its copy and the sample-data disclosure live in
@@ -878,7 +791,7 @@ export default async function HomePage() {
           <a href="/status" className="underline hover:text-foreground">Status</a>
           {" "}&middot;{" "}
           <a
-            href="https://github.com/datatorag/mcp-gateway"
+            href={REPOSITORY_URL}
             target="_blank"
             rel="noopener noreferrer"
             className="underline hover:text-foreground"
