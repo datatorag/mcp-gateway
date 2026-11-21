@@ -25,13 +25,16 @@ export function promoActive(now: Date): boolean {
   return now.getTime() < Date.parse(`${PROMO.endsOn}T23:59:59.999Z`) + 1;
 }
 
-export function promoCopy(): { discount: string; headline: string; redeemBy: string; cta: string } {
+export function promoCopy(): { discount: string; headline: string; redeemBy: string; short: string; cta: string } {
   const discount = "50% off Pro for a year";
   return {
     /** The discount's window alone, for surfaces that name the code separately. */
     discount,
     headline: `${discount} with code ${PROMO.code}`,
     redeemBy: "Redeem by December 6",
+    /** The offer on one line where the full words do not fit (a phone): what
+     * it is and the code. The windows are on the pricing page it links to. */
+    short: `50% off Pro: code ${PROMO.code}`,
     cta: "See pricing",
   };
 }

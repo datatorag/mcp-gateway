@@ -5,38 +5,41 @@ import posthog from "posthog-js";
 import { XIcon } from "lucide-react";
 import { EVENTS } from "@/lib/analytics";
 import { PROMO, PROMO_DISMISSED_KEY, isPromoCode, promoActive, promoCopy, promoPricingHref } from "@/lib/promo";
+import { cn } from "@/lib/utils";
 
 /**
- * The promo banner (SCRUM-231): the same words as the running ad, on every
- * public page and, for a signed-in user who is not paying, on the dashboard.
+ * The promo (SCRUM-231), in the two places it is shown: a small chip above
+ * the home page's headline, and a thin bar on the dashboard for a signed-in
+ * user who is not paying. Both say the same words as the running ad, read
+ * from lib/promo.ts.
+ *
+ * It used to be a wide bar in the navbar of every public page; on a phone
+ * that was two lines the full width of the screen above the nav. The chip is
+ * one line at every width and is in the page, not the header.
  *
  * Decided on the CLIENT, in an effect, and rendered as nothing on the
  * server: several public pages are prerendered at image build, and a date
  * switch evaluated at build time would freeze the answer into the HTML until
  * the next deploy, which is the "deploy to remove it" the ticket forbids.
- * The cost is one paint without the banner before it appears.
+ * The cost is one paint without it before it appears.
  *
- * Dismissal is a per-browser memory for the campaign's life. A browser with
- * no memory sees the banner, so a first visit from the ad always does, and a
- * visit carrying the code in the URL clears the memory so a click-through
- * from the ad shows it even after an earlier dismissal.
+ * Dismissal is a per-browser memory for the campaign's life. The dashboard
+ * bar has the button; the chip has none (it is small enough to leave), and
+ * honors the memory, so a browser that closed the old banner or the bar does
+ * not get the chip either. A browser with no memory sees it, so a first
+ * visit from the ad always does, and a visit carrying the code in the URL
+ * clears the memory so a click-through from the ad shows it even after an
+ * earlier dismissal.
  *
  * One click event carrying the page it was clicked from; nothing on show.
  */
-type PromoBannerProps = {
-  /** The dashboard variant also needs the plan; it hides for a paying customer. */
-  variant?: "public" | "dashboard";
-  /** The signed-in user's plan for the dashboard variant; null until known. */
-  plan?: string | null;
-  /** The clock, injectable for tests. Defaults to the browser's now at mount. */
-  now?: Date;
-};
 
-/** The URL is read from the window inside the effect, not from Next's
- * navigation hooks: the decision is client-only anyway, it keeps the banner
+/** Whether to show the promo in this browser now, and how to dismiss it.
+ * The URL is read from the window inside the effect, not from Next's
+ * navigation hooks: the decision is client-only anyway, it keeps the promo
  * free of a Suspense requirement on prerendered pages, and it keeps every
  * layout test that mounts it free of a navigation mock. */
-export function PromoBanner({ variant = "public", plan = null, now }: PromoBannerProps) {
+function usePromo(now: Date | undefined): { visible: boolean; dismiss: () => void } {
   const [visible, setVisible] = useState(false);
 
   useEffect(() => {
@@ -52,10 +55,6 @@ export function PromoBanner({ variant = "public", plan = null, now }: PromoBanne
     setVisible(true);
   }, [now]);
 
-  if (!visible) return null;
-  if (variant === "dashboard" && plan !== "free") return null;
-
-  const copy = promoCopy();
   const dismiss = () => {
     try {
       localStorage.setItem(PROMO_DISMISSED_KEY, "1");
@@ -64,27 +63,63 @@ export function PromoBanner({ variant = "public", plan = null, now }: PromoBanne
     }
     setVisible(false);
   };
+  return { visible, dismiss };
+}
+
+const reportClick = () => posthog.capture(EVENTS.PROMO_BANNER_CLICKED, { code: PROMO.code, page: window.location.pathname });
+
+/**
+ * The chip: one line at every width, for a dark ground. From `sm` it says
+ * both windows, as the banner did; under `sm` the short form, which fits a
+ * 320px screen. One link to pricing with the code.
+ */
+export function PromoChip({ now, className }: { now?: Date; className?: string }) {
+  const { visible } = usePromo(now);
+  if (!visible) return null;
+  const copy = promoCopy();
+  return (
+    <a
+      href={promoPricingHref()}
+      onClick={reportClick}
+      className={cn(
+        "inline-flex items-center whitespace-nowrap rounded-full border border-white/20 bg-white/10 px-3 py-1 text-[13px] leading-5 text-white/90 transition-colors hover:bg-white/15",
+        className
+      )}
+    >
+      <span className="sm:hidden">{copy.short}</span>
+      <span className="hidden sm:inline">
+        <span className="font-medium">{copy.headline}</span>
+        <span className="opacity-80"> · {copy.redeemBy}</span>
+      </span>
+    </a>
+  );
+}
+
+type PromoBannerProps = {
+  /** The signed-in user's plan; null until known. It hides for a paying customer. */
+  plan: string | null;
+  /** The clock, injectable for tests. Defaults to the browser's now at mount. */
+  now?: Date;
+};
+
+/** The dashboard's bar, for a signed-in user on the free plan. */
+export function PromoBanner({ plan, now }: PromoBannerProps) {
+  const { visible, dismiss } = usePromo(now);
+  if (!visible || plan !== "free") return null;
+  const copy = promoCopy();
 
   return (
     <div
       role="region"
       aria-label="Promotion"
-      className={
-        variant === "dashboard"
-          ? "flex items-center justify-center gap-3 border-b border-primary/20 bg-primary/10 px-4 py-2 text-sm text-foreground"
-          : "mx-auto mb-2 flex max-w-6xl items-center justify-center gap-3 rounded-full bg-primary px-4 py-1.5 text-sm text-primary-foreground"
-      }
+      className="flex items-center justify-center gap-3 border-b border-primary/20 bg-primary/10 px-4 py-2 text-sm text-foreground"
     >
-      <a
-        href={promoPricingHref()}
-        className="font-medium underline-offset-4 hover:underline"
-        onClick={() =>
-          posthog.capture(EVENTS.PROMO_BANNER_CLICKED, { code: PROMO.code, page: window.location.pathname })
-        }
-      >
-        {copy.headline}
+      <a href={promoPricingHref()} className="font-medium underline-offset-4 hover:underline" onClick={reportClick}>
+        {/* One line at every width: the short form on a phone, as on the chip. */}
+        <span className="sm:hidden">{copy.short}</span>
+        <span className="hidden sm:inline">{copy.headline}</span>
       </a>
-      <span className={variant === "dashboard" ? "text-muted-foreground" : "opacity-80"}>{copy.redeemBy}.</span>
+      <span className="hidden text-muted-foreground sm:inline">{copy.redeemBy}.</span>
       <button
         type="button"
         aria-label="Dismiss"

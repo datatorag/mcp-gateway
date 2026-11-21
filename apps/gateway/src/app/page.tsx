@@ -13,6 +13,7 @@ import { DEMO_HEADING, DEMO_STANDFIRST } from "@/components/demo/demo-copy";
 import { ComparisonHero } from "@/components/comparison-hero";
 import { REPOSITORY_URL } from "@/components/github-mark";
 import { HomeHero } from "@/components/home-hero";
+import { PromoChip } from "@/components/promo-banner";
 import { TrustedBy } from "@/components/trusted-by";
 import { SLIDES_VERIFIED_ON, VERIFIED_ON } from "@/lib/connector-verification";
 import { SkillCard } from "@/components/skill-card";
@@ -128,17 +129,18 @@ export default async function HomePage() {
 
         {/* Hero: the gateway and its circle of tools. The headline, the ask,
             the wheel, and who uses it, on the animated background under a
-            veil dark enough for text to read. `pt-36` clears the fixed
-            header: the navbar with the promo banner above it, the same 144px
-            the hero before it kept. The copy and the layout are in HomeHero; the names in the
+            veil dark enough for text to read. `pt-32` clears the fixed
+            navbar (72px) and leaves room above the headline for the promo
+            chip, which sits out of the flow so the headline does not move
+            when the chip appears or the campaign ends. The copy and the layout are in HomeHero; the names in the
             row are in lib/trusted-by.ts. */}
         <ShaderBackground>
           <div
             aria-hidden="true"
             className="absolute inset-0 bg-[linear-gradient(180deg,rgba(8,16,36,.62),rgba(8,16,36,.38)_55%,rgba(8,16,36,.55))]"
           />
-          <div className="relative pb-16 pt-36 sm:pb-20">
-            <HomeHero getStartedHref={signInHref()} />
+          <div className="relative pb-16 pt-32 sm:pb-20">
+            <HomeHero getStartedHref={signInHref()} above={<PromoChip />} />
             <TrustedBy className="mt-10 sm:mt-12" />
           </div>
         </ShaderBackground>
