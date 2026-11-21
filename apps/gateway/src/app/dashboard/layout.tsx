@@ -206,7 +206,7 @@ export default function DashboardLayout({
     <>
       {/* SCRUM-231: shown to a signed-in user without a subscription, hidden
           from a paying customer; the shell below sizes itself under it. */}
-      <PromoBanner variant="dashboard" plan={user?.plan ?? null} />
+      <PromoBanner plan={user?.plan ?? null} />
     <div
       ref={shell}
       // ONE SHELL FOR EVERY DASHBOARD ROUTE. The shell is always exactly the

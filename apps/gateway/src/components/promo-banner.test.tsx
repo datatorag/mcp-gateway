@@ -10,7 +10,7 @@ vi.mock("posthog-js", () => ({ default: { capture: (...a: unknown[]) => capture(
 let pathname = "/skills/morning-brief";
 let search = "";
 
-const { PromoBanner } = await import("./promo-banner");
+const { PromoBanner, PromoChip } = await import("./promo-banner");
 
 let container: HTMLDivElement;
 let root: Root;
@@ -33,54 +33,65 @@ afterEach(() => {
   container.remove();
 });
 
-const render = (props: Partial<Parameters<typeof PromoBanner>[0]> = {}) => {
-  // The banner reads the URL from the window; put the page there first.
+/** The chip, as the home page mounts it. */
+const renderChip = (now: Date = BEFORE) => {
+  // The promo reads the URL from the window; put the page there first.
   window.history.replaceState(null, "", pathname + (search ? `?${search}` : ""));
   act(() => {
-    root.render(<PromoBanner now={BEFORE} {...props} />);
+    root.render(<PromoChip now={now} />);
   });
 };
-const link = () => container.querySelector('a[href="/pricing?promo=DTR50"]');
+/** The dashboard's bar. */
+const renderBar = (plan: string | null, now: Date = BEFORE) => {
+  window.history.replaceState(null, "", pathname + (search ? `?${search}` : ""));
+  act(() => {
+    root.render(<PromoBanner plan={plan} now={now} />);
+  });
+};
+const remount = () => {
+  act(() => root.unmount());
+  root = createRoot(container);
+};
+const link = () => container.querySelector<HTMLAnchorElement>('a[href="/pricing?promo=DTR50"]');
 const dismiss = () => Array.from(container.querySelectorAll("button")).find((b) => b.getAttribute("aria-label") === "Dismiss");
 
-/* SCRUM-231: one banner, decided on the client. Two mount points since SCRUM-287 took it off docs. */
-describe("PromoBanner", () => {
-  it("shows both windows of the copy and links to pricing with the code, before the end date", () => {
-    render();
-    expect(container.textContent).toContain("50% off Pro for a year with code DTR50");
-    expect(container.textContent).toContain("Redeem by December 6");
-    expect(link()).toBeTruthy();
+/* SCRUM-231: one promo, decided on the client, in two places: a chip above the home page's headline and a bar on the
+ * dashboard. It left the navbar when the wide bar there proved too big on a phone. */
+describe("PromoChip", () => {
+  it("says both windows from sm and the short form under it, on one line, linking to pricing with the code", () => {
+    renderChip();
+    const a = link()!;
+    expect(a).toBeTruthy();
+    const [narrow, wide] = Array.from(a.children) as HTMLElement[];
+    expect(narrow.textContent).toBe("50% off Pro: code DTR50");
+    expect(narrow.className).toBe("sm:hidden");
+    expect(wide.textContent).toBe("50% off Pro for a year with code DTR50 · Redeem by December 6");
+    expect(wide.className).toBe("hidden sm:inline");
+    // Never wraps, at any width.
+    expect(a.classList.contains("whitespace-nowrap")).toBe(true);
+    // A link and nothing else: no dismiss control on something this small.
+    expect(container.querySelectorAll("button")).toHaveLength(0);
   });
 
   it("renders nothing after the end date under the injected clock, with no deploy", () => {
-    render({ now: AFTER });
+    renderChip(AFTER);
     expect(container.textContent).toBe("");
     expect(link()).toBeNull();
   });
 
-  it("dismisses with a memory for the campaign, and a browser with that memory sees nothing on mount", () => {
-    render();
-    act(() => {
-      dismiss()!.click();
-    });
-    expect(link()).toBeNull();
-    expect(localStorage.getItem(PROMO_DISMISSED_KEY)).toBe("1");
-    act(() => root.unmount());
-    root = createRoot(container);
-    render();
-    expect(link()).toBeNull();
-  });
-
-  it("a visit carrying the code in the URL clears the memory, so a click-through from the ad always sees it", () => {
+  it("honors a dismissal made on the bar or the old banner, and a visit carrying the code clears it", () => {
     localStorage.setItem(PROMO_DISMISSED_KEY, "1");
+    renderChip();
+    expect(link()).toBeNull();
+    remount();
     search = "promo=DTR50";
-    render();
+    renderChip();
     expect(link()).toBeTruthy();
     expect(localStorage.getItem(PROMO_DISMISSED_KEY)).toBeNull();
   });
 
   it("reports one click with the code and the page it was clicked from, and nothing on show", () => {
-    render();
+    renderChip();
     expect(capture).not.toHaveBeenCalled();
     act(() => {
       link()!.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }));
@@ -88,18 +99,48 @@ describe("PromoBanner", () => {
     expect(capture).toHaveBeenCalledTimes(1);
     expect(capture).toHaveBeenCalledWith("promo_banner_clicked", { code: "DTR50", page: "/skills/morning-brief" });
   });
+});
 
-  it("in the dashboard variant, hides for a paying customer and shows for a free one", () => {
-    render({ variant: "dashboard", plan: "pro" });
-    expect(link()).toBeNull();
-    act(() => root.unmount());
-    root = createRoot(container);
-    render({ variant: "dashboard", plan: "free" });
+describe("PromoBanner, the dashboard's bar", () => {
+  it("shows the offer for a free plan, hides for a paying customer, and shows nothing until the plan is known", () => {
+    renderBar("free");
+    expect(container.textContent).toContain("50% off Pro for a year with code DTR50");
+    expect(container.textContent).toContain("Redeem by December 6");
+    expect(container.textContent).toContain("50% off Pro: code DTR50");
     expect(link()).toBeTruthy();
+    remount();
+    renderBar("pro");
+    expect(link()).toBeNull();
+    remount();
+    renderBar(null);
+    expect(link()).toBeNull();
   });
 
-  it("in the dashboard variant, shows nothing until the plan is known", () => {
-    render({ variant: "dashboard", plan: null });
+  it("renders nothing after the end date", () => {
+    renderBar("free", AFTER);
+    expect(container.textContent).toBe("");
+  });
+
+  it("dismisses with a memory for the campaign, and a browser with that memory sees neither the bar nor the chip", () => {
+    renderBar("free");
+    act(() => {
+      dismiss()!.click();
+    });
     expect(link()).toBeNull();
+    expect(localStorage.getItem(PROMO_DISMISSED_KEY)).toBe("1");
+    remount();
+    renderBar("free");
+    expect(link()).toBeNull();
+    remount();
+    renderChip();
+    expect(link()).toBeNull();
+  });
+
+  it("reports the same click event as the chip", () => {
+    renderBar("free");
+    act(() => {
+      link()!.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }));
+    });
+    expect(capture).toHaveBeenCalledWith("promo_banner_clicked", { code: "DTR50", page: "/skills/morning-brief" });
   });
 });

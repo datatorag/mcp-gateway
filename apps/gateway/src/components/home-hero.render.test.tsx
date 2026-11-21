@@ -94,6 +94,18 @@ describe("the home hero", () => {
   });
 });
 
+describe("the slot above the headline", () => {
+  it("sets what it is given directly before the h1, out of the flow, and renders nothing when given nothing", () => {
+    const withChip = parse(renderToStaticMarkup(<HomeHero getStartedHref="/auth/google" above={<a href="/pricing">offer</a>} />));
+    const slot = withChip.querySelector("h1")!.previousElementSibling!;
+    expect(slot.textContent).toBe("offer");
+    // Absolute and anchored to the heading's top edge: the headline does not move when the chip comes or goes.
+    expect(slot.classList.contains("absolute")).toBe(true);
+    expect(slot.classList.contains("bottom-full")).toBe(true);
+    expect(hero.querySelector("h1")!.previousElementSibling).toBeNull();
+  });
+});
+
 describe("the wheel's tools", () => {
   it("are the public services and nothing admin-only, each with a logo and a docs page that exist", () => {
     expect(WHEEL_TOOLS.map((t) => t.label)).toEqual([...PUBLIC_SERVICES]);

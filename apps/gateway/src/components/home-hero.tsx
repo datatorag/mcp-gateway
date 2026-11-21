@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { GithubMark, REPOSITORY_URL } from "@/components/github-mark";
 import { ToolWheel } from "@/components/ui/tool-wheel";
 import { WHEEL_TOOLS } from "@/lib/home-wheel";
@@ -41,7 +41,17 @@ export const HERO_SUBTITLE = [
  * animated background. "light" is the same hero for a light page: the blue
  * glow under each disc becomes a small neutral shadow.
  */
-export function HomeHero({ getStartedHref, tone = "dark" }: { getStartedHref: string; tone?: "light" | "dark" }) {
+export function HomeHero({
+  getStartedHref,
+  tone = "dark",
+  above,
+}: {
+  getStartedHref: string;
+  tone?: "light" | "dark";
+  /** Something small to set directly above the headline (the promo chip). It is placed out of the flow, in the
+   * hero's top padding, so the headline does not move when it appears or goes. */
+  above?: ReactNode;
+}) {
   const [active, setActive] = useState(0);
   /** A reader on the tool's name (mouse or keyboard) holds the wheel, so the link does not change under them. */
   const [onCaption, setOnCaption] = useState(false);
@@ -53,6 +63,7 @@ export function HomeHero({ getStartedHref, tone = "dark" }: { getStartedHref: st
   return (
     <div className={cn("relative mx-auto w-full max-w-[1160px]", dark ? "text-white" : "text-[#1C1917]")}>
       <div className="relative z-10 px-6 text-center xl:pointer-events-none xl:absolute xl:inset-x-0 xl:top-5">
+        {above ? <div className="absolute inset-x-0 bottom-full mb-3 flex justify-center xl:pointer-events-auto">{above}</div> : null}
         <h1 className="mx-auto max-w-[18em] text-[clamp(30px,4vw,48px)] font-semibold leading-[1.08] tracking-[-0.03em]">
           {HERO_HEADLINE[0]}
           {/* `block`, not a <br>: the second sentence starts its own line at every width. */}
