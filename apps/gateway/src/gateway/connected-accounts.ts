@@ -184,8 +184,8 @@ export async function upsertServiceAccount(
     await db
       .update(serviceConnections)
       .set({
-        ...plain,
-        // SCRUM-442: sealed beside the plain pair, bound to this row.
+        // Sealed, bound to this row (SCRUM-442). The tokens are stored
+        // sealed only: the plain columns are never written (SCRUM-505).
         ...sealedColumns("service_connections", { userId, rowId: existing.serviceConnectionId }, plain),
         scopes: tokens.scope ?? defaultScopes,
         tokenExpiresAt: expiresAt,
@@ -204,7 +204,6 @@ export async function upsertServiceAccount(
       id: newConn.id,
       userId,
       service: connectorType,
-      ...plain,
       ...sealedColumns("service_connections", { userId, rowId: newConn.id }, plain),
       scopes: tokens.scope ?? defaultScopes,
       tokenExpiresAt: expiresAt,

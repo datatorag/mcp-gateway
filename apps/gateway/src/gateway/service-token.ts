@@ -175,7 +175,6 @@ export async function refreshRotatingToken(
       await tx
         .update(serviceConnections)
         .set({
-          ...rotated,
           ...sealedFor(conn, rotated),
           tokenExpiresAt: provider.expiresAt(data),
           updatedAt: new Date(),

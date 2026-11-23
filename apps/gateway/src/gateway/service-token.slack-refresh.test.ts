@@ -29,6 +29,7 @@ import { PLUGIN_SERVICE_MAP, resolveServiceToken, revokeUpstream } from "./servi
 import { refreshSlackToken } from "./connectors/slack/tokens";
 import { sealedColumns } from "./token-crypto";
 import { scopeDelta } from "./scope-grant";
+import { storedTokens } from "../test-utils/stored-tokens";
 
 const TOKEN_URL = "https://slack.com/api/oauth.v2.access";
 const REVOKE_URL = "https://slack.com/api/auth.revoke";
@@ -178,15 +179,12 @@ describe.skipIf(!isDockerAvailable())("SCRUM-454: refreshSlackToken", () => {
   async function stored(connId: string) {
     const [row] = await db
       .select({
-        access: serviceConnections.accessToken,
-        refresh: serviceConnections.refreshToken,
-        expires: serviceConnections.tokenExpiresAt,
         lastRefreshError: serviceConnections.lastRefreshError,
         permanentFailures: serviceConnections.refreshPermanentFailures,
       })
       .from(serviceConnections)
       .where(eq(serviceConnections.id, connId));
-    return row;
+    return { ...(await storedTokens(db, { id: connId })), ...row };
   }
 
   it("concurrent refreshes take the row lock and refresh once", async () => {

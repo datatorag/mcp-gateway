@@ -16,6 +16,7 @@ import { upsertServiceAccount } from "./connected-accounts";
 import { revokeUpstream } from "./service-token";
 import { refreshPostHogToken } from "./connectors/posthog/tokens";
 import { sealedColumns } from "./token-crypto";
+import { storedTokens } from "../test-utils/stored-tokens";
 
 const TOKEN_URL = "https://us.posthog.com/oauth/token/";
 const REVOKE_URL = "https://us.posthog.com/oauth/revoke/";
@@ -93,13 +94,7 @@ describe.skipIf(!isDockerAvailable())("SCRUM-471: refreshPostHogToken", () => {
     return { userId, connId: row.id };
   }
 
-  async function stored(connId: string) {
-    const [row] = await db
-      .select({ access: serviceConnections.accessToken, refresh: serviceConnections.refreshToken, expires: serviceConnections.tokenExpiresAt })
-      .from(serviceConnections)
-      .where(eq(serviceConnections.id, connId));
-    return row;
-  }
+  const stored = (connId: string) => storedTokens(db, { id: connId });
 
   it("refreshes with the client id and no secret, and stores the new pair and its expiry", async () => {
     const { connId, userId } = await connected();

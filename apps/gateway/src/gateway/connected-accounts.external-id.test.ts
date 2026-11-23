@@ -46,7 +46,7 @@ describe.skipIf(!isDockerAvailable())("connected_accounts key (0022)", () => {
   ) {
     const [conn] = await db
       .insert(serviceConnections)
-      .values({ userId, service: connectorType, accessToken: "test-token" })
+      .values({ userId, service: connectorType })
       .returning({ id: serviceConnections.id });
     await db.insert(connectedAccounts).values({
       userId,

@@ -35,6 +35,7 @@ import {
   upsertServiceAccount,
 } from "./connected-accounts";
 import { ambiguousAccountMessage, resolveServiceToken } from "./service-token";
+import { storedTokens } from "../test-utils/stored-tokens";
 
 const NOTION = "notion";
 const EMAIL = "person@example.com";
@@ -72,7 +73,7 @@ describe.skipIf(!isDockerAvailable())("SCRUM-366: Notion workspaces as accounts"
   }
 
   async function notionRows(userId: string) {
-    return db
+    const rows = await db
       .select({
         id: connectedAccounts.id,
         email: connectedAccounts.accountEmail,
@@ -80,9 +81,6 @@ describe.skipIf(!isDockerAvailable())("SCRUM-366: Notion workspaces as accounts"
         label: connectedAccounts.label,
         isDefault: connectedAccounts.isDefault,
         connId: serviceConnections.id,
-        access: serviceConnections.accessToken,
-        refresh: serviceConnections.refreshToken,
-        expires: serviceConnections.tokenExpiresAt,
       })
       .from(connectedAccounts)
       .innerJoin(
@@ -95,6 +93,8 @@ describe.skipIf(!isDockerAvailable())("SCRUM-366: Notion workspaces as accounts"
           eq(connectedAccounts.connectorType, NOTION)
         )
       );
+    // The tokens as stored: sealed, opened, and no plain copy (SCRUM-505).
+    return Promise.all(rows.map(async (r) => ({ ...r, ...(await storedTokens(db, { id: r.connId })) })));
   }
 
   describe("upsert", () => {
@@ -146,11 +146,12 @@ describe.skipIf(!isDockerAvailable())("SCRUM-366: Notion workspaces as accounts"
       await upsertServiceAccount(db, userId, "google-workspace", EMAIL, { access_token: "g1", scope }, scope, null);
       await upsertServiceAccount(db, userId, "google-workspace", EMAIL, { access_token: "g2", scope }, scope, null);
       const rows = await db
-        .select({ access: serviceConnections.accessToken, ext: connectedAccounts.externalAccountId, label: connectedAccounts.label })
+        .select({ connId: serviceConnections.id, ext: connectedAccounts.externalAccountId, label: connectedAccounts.label })
         .from(connectedAccounts)
         .innerJoin(serviceConnections, eq(connectedAccounts.serviceConnectionId, serviceConnections.id))
         .where(eq(connectedAccounts.userId, userId));
-      expect(rows).toEqual([{ access: "g2", ext: null, label: null }]);
+      expect(rows.map(({ ext, label }) => ({ ext, label }))).toEqual([{ ext: null, label: null }]);
+      expect((await storedTokens(db, { id: rows[0].connId })).access).toBe("g2");
     });
   });
 

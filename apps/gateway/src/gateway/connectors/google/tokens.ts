@@ -53,7 +53,6 @@ export async function refreshGoogleToken(
     await db
       .update(serviceConnections)
       .set({
-        accessToken: data.access_token,
         ...sealedFor(conn, { accessToken: data.access_token }),
         tokenExpiresAt: expiresAt,
         updatedAt: new Date(),

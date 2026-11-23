@@ -32,7 +32,8 @@ describe("who may open a sealed token", () => {
     const files = [...sources(path.join(GATEWAY, "src")), path.join(GATEWAY, "server.ts")];
     const offenders = files
       .map((f) => path.relative(GATEWAY, f))
-      .filter((f) => !/\.test\.tsx?$/.test(f) && !ALLOWED.has(f))
+      // Test utilities are test code: storedTokens opens a row to check it (SCRUM-505).
+      .filter((f) => !/\.test\.tsx?$/.test(f) && !f.startsWith("src/test-utils/") && !ALLOWED.has(f))
       .filter((f) => /\bopenToken\b/.test(readFileSync(path.join(GATEWAY, f), "utf8")));
     expect(offenders).toEqual([]);
   });

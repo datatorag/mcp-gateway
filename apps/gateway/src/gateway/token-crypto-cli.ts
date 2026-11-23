@@ -1,6 +1,7 @@
 /**
- * `node dist/tokens.js backfill | reencrypt | restore` (SCRUM-442), and
- * `hash-access-tokens` (SCRUM-443 release 2).
+ * `node dist/tokens.js reencrypt` (SCRUM-442) and `hash-access-tokens`
+ * (SCRUM-443 release 2). SCRUM-505 removed `backfill` and `restore`, which
+ * read and wrote the plain token columns.
  *
  * Its own entry, so it runs whenever it is started and never on an import:
  * a "was I started directly" check does not survive the bundler, which turns

@@ -50,7 +50,7 @@ describe.skipIf(!isDockerAvailable())("connectedElsewhere", () => {
     connectedAt = new Date()
   ) {
     const sc = randomUUID();
-    await db.insert(serviceConnections).values({ id: sc, userId, service: connectorType, accessToken: "x" });
+    await db.insert(serviceConnections).values({ id: sc, userId, service: connectorType });
     await db.insert(connectedAccounts).values({
       userId,
       connectorType,
