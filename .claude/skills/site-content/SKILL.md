@@ -116,17 +116,16 @@ Two docs-specific mechanisms added by SCRUM-24:
 
 - **Component embed via marker**: a doc's markdown can place `<!--setup-instructions-->`
   on its own line; `docs/[slug]/page.tsx` splits `doc.html` on that comment (marked
-  passes HTML comments through) and renders the shared `SetupInstructions` client
-  component (`src/components/setup-instructions.tsx`) at that spot. That component is
-  the single source of truth for agent-hookup instructions. The dashboard home
-  renders it too, in its step-by-step section, with the live connection-status
-  poller (`src/app/dashboard/connection-status.tsx`) beneath it (SCRUM-487
-  retired the separate `/dashboard/mcp-config` page into Home, and the address
-  now redirects there; the old `SetupWizard` that bundled the two is gone,
-  SCRUM-118/122). A `#<client id>` hash opens that client, on load and on a
-  hash change. Its
-  `sourcePrefix` prop keeps analytics separable: `copy_mcp_config` fires with source
-  `wizard_${client}` (dashboard, historical values preserved) vs `docs_${client}`.
+  passes HTML comments through) and renders the "Add to your agent" block
+  (`src/components/add-to-agent.tsx`, `placement="docs"`) at that spot (SCRUM-503;
+  the marker kept its old name so no page had to change). That block is the single
+  source of truth for agent-hookup steps: the dashboard home, the Agent page, the
+  site home, blog posts, the hosted landing page, and `/add-to-your-agent` mount
+  the same component, each with its own `placement`. The clients and steps are
+  data in `src/lib/mcp-clients.ts`, each with the client doc and date it was
+  checked against. A `#<client id>` hash or `?client=<id>` opens that client.
+  Every copy also fires `copy_mcp_config` with source `<placement>_<client>`
+  (before SCRUM-503 the sources were `wizard_` and `docs_`).
 - **Docs CTA**: `apps/gateway/src/app/docs/cta.tsx` renders a sign-in/get-started CTA in the docs layout
   (mobile header + desktop sidebar, every `/docs/*` page), firing `docs_cta_clicked`
   (PostHog) with the page path. It starts Google sign-in itself (`signInHref()`, a plain anchor; see the sign-in rule under Page conventions); the gtag signup conversion

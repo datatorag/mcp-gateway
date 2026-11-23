@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
+import { AddToAgent } from "@/components/add-to-agent";
 import Link from "next/link";
 import Image from "next/image";
 import { getAllPosts, getPostBySlug, getRelatedPosts } from "@/lib/blog";
@@ -281,6 +282,10 @@ export default async function BlogArticlePage({ params }: Props) {
           {/* Placed after the article body and before the CTA, so it reads as
               part of the article rather than as part of the pitch. */}
           <FaqSection faqs={post.faqs} />
+
+          {/* SCRUM-503: the client step, before the pitch, for a reader who
+              already has an agent. */}
+          <AddToAgent placement="blog" layout="compact" className="mt-12" />
 
           {/* CTA — appears on every post */}
           <div className="mt-12 rounded-2xl border border-border bg-secondary/30 p-8 text-center">

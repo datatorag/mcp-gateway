@@ -1,3 +1,4 @@
+import { Plug } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { McpClient } from "@/lib/mcp-clients";
 
@@ -28,9 +29,16 @@ export function ClientIcon({
       style={{ width: size + pad * 2, height: size + pad * 2 }}
       aria-hidden
     >
-      {/* Plain <img>: tiny local static SVGs, next/image adds nothing. */}
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img src={`/icons/clients/${icon}.svg`} alt="" width={size} height={size} />
+      {icon ? (
+        <>
+          {/* Plain <img>: tiny local static SVGs, next/image adds nothing. */}
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={`/icons/clients/${icon}.svg`} alt="" width={size} height={size} />
+        </>
+      ) : (
+        // The generic "any MCP client" choice has no product mark.
+        <Plug className="text-muted-foreground" style={{ width: size, height: size }} />
+      )}
     </span>
   );
 }

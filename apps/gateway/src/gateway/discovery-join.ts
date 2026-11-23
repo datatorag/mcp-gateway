@@ -1,6 +1,7 @@
 /**
- * The two OAuth-side events that let a sign-up be joined back to the
- * discovery that preceded it (SCRUM-481). Both carry the same salted keys
+ * The OAuth-side events that let a sign-up be joined back to the discovery
+ * that preceded it (SCRUM-481), and the sign-in that started between them
+ * (SCRUM-503). Both carry the same salted keys
  * `mcp_discovery` does, computed from their own request:
  *
  * - `discovery_id`, a hash of IP plus user agent. Registration is made by the
@@ -44,6 +45,38 @@ export function trackClientRegistered(
     });
   } catch (err) {
     console.warn("[discovery-join] registration capture failed", err instanceof Error ? err.message : err);
+  }
+}
+
+/**
+ * SCRUM-503: an MCP client sent its user's browser to sign in
+ * (`/oauth/authorize`, valid request, on its way to Google). There is no user
+ * yet, so it is under the browser's discovery id, with the client. A start
+ * with no `mcp_oauth_authorized` after it is a sign-in that stopped: the
+ * registration and the authorization alone could not show which browser
+ * that was.
+ */
+export function trackAuthorizeStarted(
+  req: Request,
+  salt: string,
+  client: { clientId: string; clientName: string | null }
+): void {
+  try {
+    const ph = getPosthog();
+    if (!ph) return;
+    const keys = discoveryKeys(req, salt);
+    ph.capture({
+      distinctId: keys.discovery_id ?? "mcp_anonymous",
+      event: EVENTS.MCP_OAUTH_STARTED,
+      properties: {
+        client_id: client.clientId,
+        client_name: cleanClientName(client.clientName) ?? "",
+        ...keys,
+        $process_person_profile: false,
+      },
+    });
+  } catch (err) {
+    console.warn("[discovery-join] authorize capture failed", err instanceof Error ? err.message : err);
   }
 }
 

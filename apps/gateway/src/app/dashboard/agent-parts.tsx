@@ -2,7 +2,7 @@
 
 import { createContext, useContext, useEffect, type ReactNode } from "react";
 import posthog from "posthog-js";
-import { SetupInstructions } from "@/components/setup-instructions";
+import { AddToAgent } from "@/components/add-to-agent";
 import { buttonVariants } from "@/components/ui/button";
 import { EVENTS } from "@/lib/analytics";
 import { formatCost, formatTokens } from "@/lib/usage-format";
@@ -299,10 +299,10 @@ export function ConnectPart({
 }
 
 function McpConfigPart() {
-  // `surface="agent"` is what separates a config the agent offered in
-  // conversation from one found on a settings page. They are different user
-  // states and the copy event has to be able to tell them apart.
-  return <SetupInstructions sourcePrefix="wizard" surface="agent" />;
+  // The `agent_chat` placement is what separates a config the agent offered
+  // in conversation from one found on a page. They are different user states
+  // and the events have to be able to tell them apart.
+  return <AddToAgent placement="agent_chat" signedIn heading={false} />;
 }
 
 function AccountStatePart({

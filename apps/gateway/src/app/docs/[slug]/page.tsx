@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 import Link from "next/link";
 import { getAllDocs, getDocBySlug } from "@/lib/docs";
 import { faqPageNode } from "@/lib/site-schema";
-import { SetupInstructions } from "@/components/setup-instructions";
+import { AddToAgent } from "@/components/add-to-agent";
 import { FaqSection } from "@/components/faq-section";
 import { JsonLd } from "@/components/json-ld";
 import { ServiceIcon, serviceFromSlug } from "@/components/service-icon";
@@ -18,9 +18,9 @@ function connectorTitleFor(doc: { connector: string | null; slug: string }): str
 }
 
 // A doc's markdown can place `<!--setup-instructions-->` on its own line to
-// render the shared SetupInstructions component (the same client picker +
-// copy-config the dashboard wizard renders — one source of truth, SCRUM-24)
-// at that exact spot. marked passes HTML comments through untouched, so the
+// render the "Add to your agent" block (the one client picker and step the
+// dashboard and the site render too, SCRUM-24, SCRUM-503) at that exact
+// spot. marked passes HTML comments through untouched, so the
 // marker survives into doc.html for us to split on.
 const SETUP_MARKER = "<!--setup-instructions-->";
 
@@ -84,7 +84,7 @@ export default async function DocPage({ params }: Props) {
       {after !== undefined && (
         <>
           <div className="mt-6">
-            <SetupInstructions sourcePrefix="docs" />
+            <AddToAgent placement="docs" heading={false} />
           </div>
           <div
             className="prose mt-6"

@@ -28,5 +28,5 @@ export const PUBLIC_SERVICES_TEXT = `${listOf(GOOGLE_SERVICES)}, plus ${listOf([
 /** The clients the dashboard gives steps for, one name per product family:
  * "Claude, ChatGPT, Codex, and Cursor". */
 export const PUBLIC_CLIENTS_TEXT = listOf([
-  ...new Set(MCP_CLIENTS.map((c) => (c.group === "claude" ? "Claude" : c.label))),
+  ...new Set(MCP_CLIENTS.flatMap((c) => (c.family ? [c.family] : []))),
 ]);

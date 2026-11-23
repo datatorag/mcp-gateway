@@ -4,7 +4,7 @@ import type { Request } from "express";
 const capture = vi.fn();
 vi.mock("../lib/posthog-server", () => ({ getPosthog: () => ({ capture }) }));
 
-import { trackClientRegistered, trackOauthAuthorized } from "./discovery-join";
+import { trackAuthorizeStarted, trackClientRegistered, trackOauthAuthorized } from "./discovery-join";
 import { discoveryKeys } from "./auth-failure-context";
 
 const SALT = "test-salt";
@@ -47,10 +47,30 @@ describe("joining a sign-up back to a discovery (SCRUM-481)", () => {
     expect(JSON.stringify(call)).not.toContain("203.0.113");
   });
 
+  it("a started sign-in is the browser's, with the client and both keys, and no person (SCRUM-503)", () => {
+    const browser = req("203.0.113.7", "Mozilla/5.0");
+    trackAuthorizeStarted(browser, SALT, { clientId: "client-1", clientName: "Claude" });
+    const call = capture.mock.calls[0][0];
+    expect(call.event).toBe("mcp_oauth_started");
+    const keys = discoveryKeys(browser, SALT);
+    expect(call.distinctId).toBe(keys.discovery_id);
+    expect(call.properties).toEqual({
+      client_id: "client-1",
+      client_name: "Claude",
+      ...keys,
+      $process_person_profile: false,
+    });
+    expect(JSON.stringify(call)).not.toContain("203.0.113");
+  });
+
   it("never throws into an OAuth step", () => {
     capture.mockImplementationOnce(() => {
       throw new Error("posthog down");
     });
     expect(() => trackClientRegistered(req("1.2.3.4", "x"), SALT, { clientId: "c", clientName: null })).not.toThrow();
+    capture.mockImplementationOnce(() => {
+      throw new Error("posthog down");
+    });
+    expect(() => trackAuthorizeStarted(req("1.2.3.4", "x"), SALT, { clientId: "c", clientName: null })).not.toThrow();
   });
 });

@@ -57,12 +57,23 @@ export const EVENTS = {
    * click that confirmed it. */
   DEFAULT_ACCOUNT_CHANGED: "default_account_changed",
   COPY_MCP_CONFIG: "copy_mcp_config",
-  /** SCRUM-482: a client card's action on the dashboard home. `client` (a
-   * `ClientId` from lib/mcp-clients) and `action`: `deep_link` for a client's
-   * own install link, `copy` for a copied config. A copy also fires
-   * COPY_MCP_CONFIG with `source: home_<client>`, so the config-copy series
-   * stays whole. */
-  CLIENT_CARD_INSTALL_CLICKED: "client_card_install_clicked",
+  /** SCRUM-503: the "Add to your agent" block (`components/add-to-agent.tsx`),
+   * one series for every place it is mounted. Each carries `placement` (where
+   * the block is: `agent`, `agent_chat`, `home`, `docs`, `site_home`, `blog`,
+   * `landing`, `page`) and, past the first, `client` (a `ClientId` from
+   * lib/mcp-clients).
+   * - SHOWN: once per page view, when the block is first half on screen;
+   *   with `signed_in`, and `client`, the one it opened on.
+   * - CLIENT_PICKED: a different client chosen.
+   * - ACTION: the step's button pressed; `action` is `link` for a client's
+   *   own add link and `copy` for a copied config. A copy also fires
+   *   COPY_MCP_CONFIG with `source: <placement>_<client>`, so the
+   *   config-copy series stays whole.
+   * They replace SCRUM-482's `client_card_install_clicked`, which the home's
+   * cards sent until the block replaced them. */
+  ADD_TO_AGENT_SHOWN: "add_to_agent_shown",
+  ADD_TO_AGENT_CLIENT_PICKED: "add_to_agent_client_picked",
+  ADD_TO_AGENT_ACTION: "add_to_agent_action",
   SKILL_COPIED: "skill_copied",
   /** SCRUM-223: the campaign funnel, one event per hop, every one carrying
    * `skill` (the slug). The public page's CTA, the dashboard list's Run, and
@@ -119,6 +130,12 @@ export const EVENTS = {
    * (`/oauth/callback`), under the user id, with `client_id`, `new_user`
    * and the browser's discovery id and peer hash. */
   MCP_OAUTH_AUTHORIZED: "mcp_oauth_authorized",
+  /** SCRUM-503: an MCP client sent its user's browser to sign in
+   * (`/oauth/authorize`, a valid request, before Google), with `client_id`,
+   * `client_name` and the browser's discovery id and peer hash, and no user
+   * yet. Followed by `mcp_oauth_authorized` when the sign-in finished; a
+   * start with none after it is a sign-in that stopped. */
+  MCP_OAUTH_STARTED: "mcp_oauth_started",
   DOCS_VIEWED: "docs_viewed",
   DOCS_CTA_CLICKED: "docs_cta_clicked",
   /** SCRUM-408: a click that starts Google sign-in, from any call to action

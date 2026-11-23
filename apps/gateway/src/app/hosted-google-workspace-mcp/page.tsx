@@ -7,6 +7,7 @@ import { faqPageNode } from "@/lib/site-schema";
 import { siteFaqGroups, siteFaqs } from "@/lib/site-faq";
 import { SOCIAL_OPEN_GRAPH, SOCIAL_TWITTER } from "@/lib/social-card";
 import { signInHref } from "@/lib/sign-in";
+import { AddToAgent } from "@/components/add-to-agent";
 
 /** Answers live in lib/site-faq.ts keyed by route, under the same guard as
  * every other FAQ surface. They restate THIS page's claims and carry this
@@ -132,6 +133,10 @@ export default function HostedGoogleWorkspaceMcpPage() {
             </Link>{" "}
             · Open source, self-host it if you prefer
           </p>
+
+          {/* SCRUM-503: the client step, for a visitor who arrives with an
+              agent in hand. */}
+          <AddToAgent placement="landing" className="mt-10" />
 
           <h2 className="mt-16 font-display text-2xl font-bold text-foreground">
             Where the writes actually stop
