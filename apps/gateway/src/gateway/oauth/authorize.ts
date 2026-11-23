@@ -9,7 +9,7 @@ import { oneShotCookie } from "@/lib/cookies";
 import { findOrCreateGoogleUser, onNewUser } from "../signup";
 import { cleanClientName, cleanRegisteredClientName } from "../untrusted-text";
 import { hasConsent, issueAuthorizationCode, startConsent } from "./consent";
-import { trackOauthAuthorized } from "../discovery-join";
+import { trackAuthorizeStarted, trackOauthAuthorized } from "../discovery-join";
 
 // A redirect_uri is valid only if it's one the client registered. Shared by
 // /authorize (up front) and /callback (re-checked, since `state` is user-supplied).
@@ -126,6 +126,12 @@ export function createAuthorizeRouter(
     googleAuthUrl.searchParams.set("scope", "openid email profile");
     googleAuthUrl.searchParams.set("state", oauthState);
     googleAuthUrl.searchParams.set("prompt", "select_account");
+
+    // SCRUM-503: the sign-in started, so one that never finishes is seen.
+    trackAuthorizeStarted(req, config.salt ?? "", {
+      clientId: client_id,
+      clientName: client.clientName ?? null,
+    });
 
     res.redirect(googleAuthUrl.toString());
   });

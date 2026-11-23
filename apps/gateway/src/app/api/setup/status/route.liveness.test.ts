@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import type { NextRequest } from "next/server";
 import { describe, it, expect, vi, beforeAll, afterAll } from "vitest";
-import { oauthAccessTokens } from "@datatorag-mcp/db";
+import { oauthAccessTokens, oauthClients } from "@datatorag-mcp/db";
 import type { Database } from "@datatorag-mcp/db";
 import {
   getTestDb,
@@ -102,6 +102,7 @@ describe.skipIf(!dockerAvailable)(
       expect(body.agentConnected).toBe(false);
       expect(body.agentClientName).toBeNull();
       expect(body.agentConnectedAt).toBeNull();
+      expect(body.agentClientNames).toEqual([]);
     });
 
     it("does not count an expired non-web token as connected", async () => {
@@ -119,6 +120,7 @@ describe.skipIf(!dockerAvailable)(
       expect(body.agentConnected).toBe(false);
       expect(body.agentClientName).toBeNull();
       expect(body.agentConnectedAt).toBeNull();
+      expect(body.agentClientNames).toEqual([]);
     });
 
     it("counts a live (unrevoked, unexpired) non-web token as connected", async () => {
@@ -160,6 +162,35 @@ describe.skipIf(!dockerAvailable)(
       const body = await res.json();
       expect(body.agentConnected).toBe(true);
       expect(body.agentClientName).toBeNull(); // no matching oauth_clients row seeded
+    });
+
+    it("names every client with a live token once, and none whose tokens are all dead (SCRUM-503)", async () => {
+      const userId = await insertTestUser(testDb);
+      sessionUserId.mockResolvedValue(userId);
+      const suffix = randomUUID();
+      const register = (clientId: string, clientName: string) =>
+        testDb.insert(oauthClients).values({
+          clientId,
+          clientName,
+          redirectUris: ["https://client.example.test/cb"],
+          grantTypes: ["authorization_code"],
+          responseTypes: ["code"],
+        });
+      await register(`claude-${suffix}`, "Claude");
+      await register(`cursor-${suffix}`, "Cursor");
+      await register(`codex-${suffix}`, "codex-mcp-client");
+      const live = new Date(Date.now() + HOUR);
+      // Two live tokens from Claude: one name.
+      await insertToken({ userId, clientId: `claude-${suffix}`, expiresAt: live });
+      await insertToken({ userId, clientId: `claude-${suffix}`, expiresAt: live });
+      await insertToken({ userId, clientId: `cursor-${suffix}`, expiresAt: live });
+      // Codex's only token is revoked: not named.
+      await insertToken({ userId, clientId: `codex-${suffix}`, expiresAt: live, revokedAt: new Date() });
+      // The dashboard's own token is never a client.
+      await insertToken({ userId, clientId: "web", expiresAt: live });
+
+      const body = await (await GET({} as NextRequest)).json();
+      expect([...body.agentClientNames].sort()).toEqual(["Claude", "Cursor"]);
     });
   }
 );

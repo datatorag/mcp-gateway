@@ -91,6 +91,7 @@ import {
 } from "./playground-presentation";
 import { cn } from "@/lib/utils";
 import { SignInConsent } from "@/components/sign-in-consent";
+import { AddToAgent } from "@/components/add-to-agent";
 
 /** Thrown by the transport for a 429, and never shown: the cap panel replaces
  * the composer instead, so rendering this sentinel would put an internal
@@ -226,7 +227,10 @@ const UNCONNECTED_LEAD = `${UNCONNECTED_GREETING} ${UNCONNECTED_INSTRUCTION}`;
  * composer, or went looking through other pages for where to start. A
  * number says there is an order, and which one is first. */
 const UNCONNECTED_STEP_CONNECT = "1. Connect an account";
-const UNCONNECTED_PROMPTS_CAPTION = "2. Once you connect, ask for something like:";
+/** SCRUM-503: the client step is its own numbered step, between connecting
+ * and asking, so a phone shows it without scrolling (Manuel, 2026-11-23). */
+const UNCONNECTED_STEP_AGENT = "2. Add DataToRAG to your own agent";
+const UNCONNECTED_PROMPTS_CAPTION = "3. Once you connect, ask for something like:";
 /** Matches the dashboard prompt cards' disabled tooltip, word for word. */
 const LOCKED_PROMPT_TITLE = "Connect an account to run this";
 /** The genuinely-unknown state, which after SCRUM-206 is only ever a
@@ -1046,6 +1050,21 @@ export const Playground = forwardRef<PlaygroundHandle, PlaygroundProps>(
                         source="empty_state"
                         reportImpression={locked}
                       />
+                      {/* SCRUM-503: the client step, on the page every
+                          login lands on, as step 2. It leaves with the empty
+                          state once a conversation starts, and the composer
+                          stays where it is. */}
+                      {isPage && locked && (
+                        <>
+                          <p
+                            className="text-sm font-medium text-foreground"
+                            data-testid="empty-step-agent"
+                          >
+                            {UNCONNECTED_STEP_AGENT}
+                          </p>
+                          <AddToAgent placement="agent" layout="compact" signedIn heading={false} />
+                        </>
+                      )}
                       {locked && (
                         <p
                           className={cn(
@@ -1058,6 +1077,14 @@ export const Playground = forwardRef<PlaygroundHandle, PlaygroundProps>(
                         </p>
                       )}
                     </div>
+                  )}
+                  {/* SCRUM-503: connected, there are no numbered steps; the
+                      client step still comes before the prompts. Not while
+                      checking: the answer decides which of the two places it
+                      goes, and mounting it in one and then the other would
+                      count one page view twice. */}
+                  {isPage && !locked && !checking && (
+                    <AddToAgent placement="agent" layout="compact" signedIn />
                   )}
                   {/* Three suggestions, enforced by the top-up above, two
                       arrangements. The panel keeps its pill row. The page

@@ -145,6 +145,11 @@ beforeEach(() => {
           })
         );
       }
+      // The empty thread's "Add to your agent" block reads the live status
+      // (SCRUM-503); it is not a chat post.
+      if (String(url).includes("/api/setup/status")) {
+        return Promise.resolve(new Response("{}", { status: 200, headers: { "content-type": "application/json" } }));
+      }
       chatPosts += 1;
       const encoder = new TextEncoder();
       const body = new ReadableStream<Uint8Array>({

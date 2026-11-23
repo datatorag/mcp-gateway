@@ -299,12 +299,17 @@ describe("the empty state and the unknown connection state (SCRUM-114)", () => {
     // claim ("get started", the lock) waits for the answer.
     expect(text()).toContain("Checking your accounts");
     expect(text()).not.toContain(INSTRUCTION);
+    // SCRUM-503: the client step waits for the answer too, which decides
+    // where it goes; one mount per page view, so one shown event.
+    expect(container.querySelectorAll("[data-add-to-agent]").length).toBe(0);
 
     await act(async () => {
       gate.resolve({ accounts: [], connections: [] });
       await Promise.resolve();
     });
     await flush();
+    expect(container.querySelectorAll("[data-add-to-agent]").length).toBe(1);
+    expect(container.querySelector('[data-testid="empty-step-agent"]')).not.toBeNull();
     expect(text()).toContain("Connect Google Workspace");
     // Resolved unconnected on a login landing: greeting and instruction
     // both, because zero connections is what makes a user new.
@@ -603,11 +608,11 @@ describe("server-supplied connection state and the signup landing (SCRUM-206)", 
     expect(connectionsFetches()).toBe(0);
   });
 
-  it("numbers the two steps, connect first (SCRUM-410)", async () => {
+  it("numbers the three steps: connect, add to your agent, then ask (SCRUM-410, SCRUM-503)", async () => {
     mountWith(neverResolves, [], null, { initialConnections: UNCONNECTED });
     const step = (id: string) => container.querySelector(`[data-testid="${id}"]`);
     expect(step("empty-step-connect")?.textContent).toBe("1. Connect an account");
-    expect(step("empty-step-ask")?.textContent).toBe("2. Once you connect, ask for something like:");
+    expect(step("empty-step-ask")?.textContent).toBe("3. Once you connect, ask for something like:");
     // In that order on the page, with the connect control between them.
     const connect = Array.from(container.querySelectorAll("a")).find((a) =>
       (a.textContent ?? "").includes("Connect Google Workspace")
@@ -615,12 +620,26 @@ describe("server-supplied connection state and the signup landing (SCRUM-206)", 
     const FOLLOWING = Node.DOCUMENT_POSITION_FOLLOWING;
     expect(step("empty-step-connect")!.compareDocumentPosition(connect) & FOLLOWING).toBeTruthy();
     expect(connect.compareDocumentPosition(step("empty-step-ask")!) & FOLLOWING).toBeTruthy();
+    // The client step sits between them, as step 2, with the block under it
+    // and above the example prompts (SCRUM-503: "move it up").
+    const agentStep = step("empty-step-agent")!;
+    expect(agentStep.textContent).toBe("2. Add DataToRAG to your own agent");
+    const block = container.querySelector('[data-add-to-agent="agent"]')!;
+    expect(block.getAttribute("data-layout")).toBe("compact");
+    expect(connect.compareDocumentPosition(agentStep) & FOLLOWING).toBeTruthy();
+    expect(agentStep.compareDocumentPosition(block) & FOLLOWING).toBeTruthy();
+    expect(block.compareDocumentPosition(step("empty-step-ask")!) & FOLLOWING).toBeTruthy();
   });
 
   it("does not number steps for a user who is already connected", async () => {
     mountWith(neverResolves, [], null, { initialConnections: CONNECTED });
     expect(container.querySelector('[data-testid="empty-step-connect"]')).toBeNull();
     expect(container.querySelector('[data-testid="empty-step-ask"]')).toBeNull();
+    expect(container.querySelector('[data-testid="empty-step-agent"]')).toBeNull();
+    // The client step is still there, above the prompts, with its own title.
+    expect(container.querySelector('[data-add-to-agent="agent"] h2')?.textContent).toBe(
+      "Add DataToRAG to your agent"
+    );
   });
 
   it("says what using the product agrees to, on the first screen after sign-in (SCRUM-408)", async () => {

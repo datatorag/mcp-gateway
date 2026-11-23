@@ -32,7 +32,7 @@ vi.mock("./lifecycle", () => ({
 vi.mock("./signup-alert", () => ({
   notifySignup: vi.fn(async () => undefined),
 }));
-vi.mock("./discovery-join", () => ({ trackOauthAuthorized: vi.fn() }));
+vi.mock("./discovery-join", () => ({ trackOauthAuthorized: vi.fn(), trackAuthorizeStarted: vi.fn() }));
 
 import { createAuthRouter } from "./auth";
 import { createAuthorizeRouter } from "./oauth/authorize";
@@ -41,7 +41,7 @@ import { trackLogin, trackSignup } from "./track";
 import { persistAcquisition } from "./attribution";
 import { sendWelcomeEmail } from "./lifecycle";
 import { notifySignup } from "./signup-alert";
-import { trackOauthAuthorized } from "./discovery-join";
+import { trackAuthorizeStarted, trackOauthAuthorized } from "./discovery-join";
 
 const NEW_USER = { id: "user-new", email: "new@example.com", name: "New", plan: "free", createdAt: new Date() };
 const OLD_USER = { id: "user-old", email: "new@example.com", name: "Old", plan: "free", createdAt: new Date() };
@@ -186,6 +186,27 @@ describe("a new user from the dashboard", () => {
     await dashboardCallback();
     expect(sideEffectCounts()).toEqual(NEVER);
     expect(trackLogin).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("a client's sign-in starting (SCRUM-503)", () => {
+  const authorize = (q: string) => get(`/oauth/authorize?${q}`, "");
+
+  it("records the start, with the client, before sending the browser to Google", async () => {
+    const res = await authorize(
+      `response_type=code&client_id=client-1&redirect_uri=${encodeURIComponent(REDIRECT)}&code_challenge=c`
+    );
+    expect(res.status).toBe(302);
+    expect(res.headers.get("location")).toMatch(/^https:\/\/accounts\.google\.com\//);
+    expect(vi.mocked(trackAuthorizeStarted)).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(trackAuthorizeStarted).mock.calls[0][1]).toBe("a-salt");
+    expect(vi.mocked(trackAuthorizeStarted).mock.calls[0][2]).toEqual({ clientId: "client-1", clientName: "Claude" });
+  });
+
+  it("records nothing for a request it refuses", async () => {
+    const res = await authorize("response_type=code&client_id=client-1");
+    expect(res.status).toBe(400);
+    expect(vi.mocked(trackAuthorizeStarted)).not.toHaveBeenCalled();
   });
 });
 

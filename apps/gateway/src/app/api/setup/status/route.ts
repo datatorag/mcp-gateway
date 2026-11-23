@@ -20,7 +20,7 @@ export const dynamic = "force-dynamic";
 //                          the OAuth flow and holds an access token
 //   3. firstToolCallAt   — the agent has made a successful tool call
 export const GET = withRoute(async (userId) => {
-  const [accounts, legacy, agentToken, [user]] = await Promise.all([
+  const [accounts, legacy, agentToken, [user], clientNames] = await Promise.all([
     db
       .select({ n: sql<number>`count(*)::int` })
       .from(connectedAccounts)
@@ -56,6 +56,20 @@ export const GET = withRoute(async (userId) => {
       .select({ firstToolCallAt: users.firstToolCallAt })
       .from(users)
       .where(eq(users.id, userId)),
+    // SCRUM-503: every client holding a live token, by its registered name,
+    // for the "Add to your agent" block's connected marks. The same rows as
+    // the one above, not just the newest.
+    db
+      .selectDistinct({ clientName: oauthClients.clientName })
+      .from(oauthAccessTokens)
+      .innerJoin(oauthClients, eq(oauthClients.clientId, oauthAccessTokens.clientId))
+      .where(
+        and(
+          eq(oauthAccessTokens.userId, userId),
+          ne(oauthAccessTokens.clientId, "web"),
+          ...liveTokenConditions()
+        )
+      ),
   ]);
 
   const agent = agentToken[0] ?? null;
@@ -65,6 +79,9 @@ export const GET = withRoute(async (userId) => {
     agentConnected: agent !== null,
     agentClientName: agent?.clientName ?? null,
     agentConnectedAt: agent?.createdAt ?? null,
+    agentClientNames: clientNames
+      .map((r) => r.clientName)
+      .filter((name): name is string => typeof name === "string" && name !== ""),
     firstToolCallAt: user?.firstToolCallAt ?? null,
   });
 });

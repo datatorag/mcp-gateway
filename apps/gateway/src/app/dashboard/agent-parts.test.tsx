@@ -29,11 +29,11 @@ import type { ScopeStatus } from "./connections/types";
 const { capture } = vi.hoisted(() => ({ capture: vi.fn() }));
 vi.mock("posthog-js", () => ({ default: { capture } }));
 
-vi.mock("@/components/setup-instructions", () => ({
-  // The config block is a large component with its own analytics; this suite
-  // is about whether the part REACHES a renderer, not about that component.
-  SetupInstructions: ({ surface }: { surface?: string }) => (
-    <div data-testid="mcp-config">config surface={surface}</div>
+vi.mock("@/components/add-to-agent", () => ({
+  // The block is a large component with its own analytics and tests; this
+  // suite is about whether the part REACHES a renderer, not about the block.
+  AddToAgent: ({ placement }: { placement: string }) => (
+    <div data-testid="mcp-config">placement={placement}</div>
   ),
 }));
 
@@ -156,13 +156,13 @@ describe("agent data parts render in the thread", () => {
     expect(text).toContain("me@datatorag.com");
   });
 
-  it("renders the config block tagged as the agent surface", () => {
+  it("renders the Add to your agent block tagged as the agent's own answer", () => {
     renderParts([{ type: "data-mcp-config", data: {} }]);
 
     // A config the agent offered mid-conversation and one found on a settings
     // page are different user states, and the copy event has to tell them apart.
     expect(container.querySelector('[data-testid="mcp-config"]')?.textContent).toContain(
-      "surface=agent"
+      "placement=agent_chat"
     );
   });
 

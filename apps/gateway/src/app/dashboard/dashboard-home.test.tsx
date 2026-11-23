@@ -98,13 +98,12 @@ afterEach(() => {
 });
 
 describe("dashboard home sections (SCRUM-482)", () => {
-  it("renders the headline, prompts, client cards, full steps, MCP card and status strip, in that order", async () => {
+  it("renders the headline, prompts, client step, MCP card and status strip, in that order", async () => {
     await render();
     expect(qa("[data-section]").map((s) => s.getAttribute("data-section"))).toEqual([
       "hero",
       "prompts",
       "clients",
-      "steps",
       "mcp",
       "status",
     ]);
@@ -115,7 +114,7 @@ describe("dashboard home sections (SCRUM-482)", () => {
     expect(q("[data-connection-cards]")).toBeNull();
   });
 
-  it("has one call to action, Connect my agent, pointing at the client cards", async () => {
+  it("has one call to action, Connect my agent, pointing at the client step", async () => {
     await render();
     const hero = q('[data-section="hero"]')!;
     const cta = hero.querySelector("a")!;
@@ -160,90 +159,62 @@ describe("prompt cards", () => {
   });
 });
 
-describe("client cards", () => {
-  it("lists every client, grouped Claude, ChatGPT and Codex, Cursor", async () => {
+describe("the client step (SCRUM-503)", () => {
+  it("is the Add to your agent block, full, signed in, with every client, and the live check under it", async () => {
     await render();
-    expect(qa("[data-client-group]").map((g) => g.getAttribute("data-client-group"))).toEqual([
-      "claude",
-      "openai",
-      "cursor",
-    ]);
-    expect(qa("[data-client-card]").map((c) => c.getAttribute("data-client-card"))).toEqual(
-      MCP_CLIENTS.map((c) => c.id)
-    );
-    expect(
-      qa('[data-client-group="claude"] [data-client-card]').map((c) => c.getAttribute("data-client-card"))
-    ).toEqual(["claude-web", "claude-desktop", "claude-code"]);
+    const section = q('[data-section="clients"]')!;
+    expect(section.id).toBe("connect-your-agent");
+    const block = section.querySelector('[data-add-to-agent="home"]')!;
+    expect(block.getAttribute("data-layout")).toBe("full");
+    expect(qa("[data-client]").map((b) => b.getAttribute("data-client"))).toEqual(MCP_CLIENTS.map((c) => c.id));
+    // Signed in: no "account later" line.
+    expect(block.querySelector("[data-signed-out]")).toBeNull();
+    // The live check follows the block, in the same section.
+    const status = Array.from(section.querySelectorAll("*")).find((el) => el.textContent === "Connection status")!;
+    expect(block.compareDocumentPosition(status) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 
-  it("links each card to its full steps on this page (SCRUM-487)", async () => {
+  it("replaces the per-client cards and the step-by-step picker: neither is left on the page", async () => {
     await render();
-    for (const c of MCP_CLIENTS) {
-      const link = q(`[data-client-card="${c.id}"] a[href^="/dashboard#"]`);
-      expect(link?.getAttribute("href")).toBe(`/dashboard#${c.id}`);
-    }
+    expect(q("[data-client-card]")).toBeNull();
+    expect(q('[data-section="steps"]')).toBeNull();
+    expect(qa("[data-add-to-agent]").length).toBe(1);
   });
 
-  it("copies the client's exact config with this origin's URL, and reports it under both events", async () => {
+  it("copies on the home placement, under both events", async () => {
     await render();
-    const url = `${window.location.origin}/mcp`;
-    const button = Array.from(
-      q('[data-client-card="claude-code"]')!.querySelectorAll("button")
-    ).find((b) => b.textContent?.includes("Copy"))!;
+    const copy = q('[data-add-to-agent="home"] [data-action="copy"]') as HTMLButtonElement;
     await act(async () => {
-      button.click();
+      copy.click();
     });
-    expect(clipboard.writeText).toHaveBeenCalledWith(clientConfig("claude-code", url));
-    expect(state.capture).toHaveBeenCalledWith(EVENTS.CLIENT_CARD_INSTALL_CLICKED, {
-      client: "claude-code",
+    expect(clipboard.writeText).toHaveBeenCalledWith(clientConfig("claude-web", `${window.location.origin}/mcp`));
+    expect(state.capture).toHaveBeenCalledWith(EVENTS.ADD_TO_AGENT_ACTION, {
+      placement: "home",
+      client: "claude-web",
       action: "copy",
     });
     expect(state.capture).toHaveBeenCalledWith(EVENTS.COPY_MCP_CONFIG, {
-      source: "home_claude-code",
+      source: "home_claude-web",
       surface: "home",
     });
-  });
-
-  it("reports nothing when the clipboard refuses the write", async () => {
-    clipboard.writeText.mockRejectedValueOnce(new Error("denied"));
-    await render();
-    const button = q('[data-client-card="chatgpt"] button')!as HTMLButtonElement;
-    await act(async () => {
-      button.click();
-    });
-    expect(state.capture).not.toHaveBeenCalled();
-  });
-
-  it("gives Cursor its install deep link, and the click carries the client", async () => {
-    await render();
-    const install = q('[data-client-card="cursor"] a[href^="cursor://"]') as HTMLAnchorElement;
-    expect(install.textContent).toBe("Install");
-    install.addEventListener("click", (e) => e.preventDefault());
-    act(() => install.click());
-    expect(state.capture).toHaveBeenCalledWith(EVENTS.CLIENT_CARD_INSTALL_CLICKED, {
-      client: "cursor",
-      action: "deep_link",
-    });
-    // No other client claims a deep link it does not have.
-    expect(qa('[data-client-card] a[href^="cursor://"]').length).toBe(1);
   });
 });
 
 describe("the order rule", () => {
-  it("with nothing connected, shows the client cards AND the connect step, saying one account comes first", async () => {
+  it("with nothing connected, shows the client step AND the connect step, saying one account comes first", async () => {
     await render();
-    expect(qa("[data-client-card]").length).toBe(MCP_CLIENTS.length);
+    expect(q('[data-add-to-agent="home"]')).not.toBeNull();
     const note = q("[data-connect-first]")!;
     expect(note.textContent).toMatch(/at least one account before/);
     expect(note.querySelector('a[href="/dashboard/connections"]')).not.toBeNull();
     expect(qa("[data-status-chip]").length).toBeGreaterThan(0);
   });
 
-  it("drops the note once an account is connected, and keeps the client cards", async () => {
+  it("drops the note once an account is connected, and keeps the client step", async () => {
     state.accounts = [account()];
     await render();
     expect(q("[data-connect-first]")).toBeNull();
-    expect(qa("[data-client-card]").length).toBe(MCP_CLIENTS.length);
+    expect(q('[data-add-to-agent="home"]')).not.toBeNull();
   });
 });
 
@@ -290,42 +261,11 @@ describe("status strip", () => {
 /* SCRUM-487: the MCP config page's two parts, the per-client steps and the
  * live connection status, live on Home, and its copy event fires from here
  * with the properties it carried there. */
-describe("step-by-step setup", () => {
-  it("offers every client's full steps and the connection status", async () => {
-    await render();
-    const steps = q('[data-section="steps"]')!;
-    expect(steps.id).toBe("setup-steps");
-    const tabs = Array.from(steps.querySelectorAll("button")).map((b) => b.textContent);
-    for (const c of MCP_CLIENTS) expect(tabs).toContain(c.label);
-    expect(steps.textContent).toContain("Connection status");
-  });
-
-  it("copy_mcp_config keeps the wizard source and settings surface the MCP config page sent", async () => {
-    await render();
-    const steps = q('[data-section="steps"]')!;
-    const tab = Array.from(steps.querySelectorAll("button")).find((b) => b.textContent === "Claude Code")!;
-    await act(async () => {
-      tab.click();
-    });
-    const copy = Array.from(steps.querySelectorAll("button")).find((b) => b.textContent === "Copy")!;
-    await act(async () => {
-      copy.click();
-    });
-    expect(clipboard.writeText).toHaveBeenCalledWith(clientConfig("claude-code", `${window.location.origin}/mcp`));
-    expect(state.capture).toHaveBeenCalledWith(EVENTS.COPY_MCP_CONFIG, {
-      source: "wizard_claude-code",
-      surface: "settings",
-    });
-  });
-
-  it("a card's Full steps link opens that client's steps on the same page", async () => {
-    await render();
+describe("an old link to a client's steps", () => {
+  it("opens that client in the block: /dashboard/mcp-config#cursor still lands on Cursor", async () => {
     window.location.hash = "#cursor";
-    await act(async () => {
-      window.dispatchEvent(new HashChangeEvent("hashchange"));
-    });
-    const panel = q('[data-section="steps"] #cursor');
-    expect(panel?.textContent).toContain("Cursor");
+    await render();
+    expect(q('[data-add-to-agent="home"] [aria-pressed="true"]')?.getAttribute("data-client")).toBe("cursor");
     window.location.hash = "";
   });
 });

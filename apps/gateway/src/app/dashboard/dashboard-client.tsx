@@ -4,22 +4,15 @@ import { useState, useEffect } from "react";
 import Link from "next/link";
 import posthog from "posthog-js";
 import { Play, Copy, Check, ArrowRight } from "lucide-react";
+import { AddToAgent } from "@/components/add-to-agent";
 import { useRouter } from "next/navigation";
 import { EVENTS } from "@/lib/analytics";
 import { ServiceIcon } from "@/components/service-icon";
 import { ClientIcon } from "@/components/client-icon";
 import { Button } from "@/components/ui/button";
 import { useCopyToClipboard } from "@/lib/use-copy-to-clipboard";
-import {
-  CLIENT_GROUPS,
-  DEFAULT_MCP_URL,
-  MCP_CLIENTS,
-  clientConfig,
-  clientDeepLink,
-  clientDetailHref,
-  type ClientId,
-  type McpClient,
-} from "@/lib/mcp-clients";
+import { MCP_CLIENTS } from "@/lib/mcp-clients";
+import { useMcpUrl } from "@/lib/use-mcp-url";
 import type { Suggestion } from "@/gateway/agent/suggestion-generator";
 import {
   PROMPT_CARDS_STANDFIRST,
@@ -29,7 +22,6 @@ import { PREVIEW_SUGGESTIONS, suggestionServiceIcons } from "./agent-prompts";
 import { useSignupConversion } from "./use-signup-conversion";
 import { useConnections } from "./use-connections";
 import { ConnectionStatus } from "./connection-status";
-import { SetupInstructions } from "@/components/setup-instructions";
 import { SERVICES } from "./connections/services";
 import { offeredServices } from "./connections/service-registry";
 import type { ConnectedAccount, LegacyConnection } from "./connections/types";
@@ -43,8 +35,6 @@ import {
   HOME_PROMPTS_HEADING,
   HOME_STANDFIRST,
   HOME_STATUS_HEADING,
-  HOME_STEPS_HEADING,
-  HOME_STEPS_STANDFIRST,
   PROMPT_CARD_LOCKED_TITLE,
   STATUS_LABEL,
   type ServiceStatus,
@@ -52,16 +42,16 @@ import {
 
 /**
  * The dashboard home (SCRUM-482): a connect-your-client page. Top to bottom:
- * the headline with one call to action, example prompts, the client install
- * cards, each client's full steps with the live connection status, the MCP
- * server URL, and a strip saying which accounts are connected. The
+ * the headline with one call to action, example prompts, the client step (the
+ * "Add to your agent" block, SCRUM-503) with the live connection status, the
+ * MCP server URL, and a strip saying which accounts are connected. The
  * connection cards themselves live on `/dashboard/connections`.
  *
  * The full steps and the status were the MCP config page until SCRUM-487,
  * which retired that page into this one: `/dashboard/mcp-config` redirects
  * here, and a `#<client id>` hash still opens that client's steps.
  *
- * Order rule: a user with nothing connected sees the client cards AND the
+ * Order rule: a user with nothing connected sees the client step AND the
  * connect step, with a note that one account is needed before the first
  * call. Neither hides or gates the other.
  */
@@ -76,26 +66,14 @@ export function DashboardClient() {
     <div className="space-y-10" data-home="">
       <Hero />
       <PromptCards hasConnectedAccount={hasConnectedAccount} />
-      <ClientCards mcpUrl={mcpUrl} hasConnectedAccount={hasConnectedAccount} />
-      <SetupSteps />
+      <ClientStep hasConnectedAccount={hasConnectedAccount} />
       <McpCard mcpUrl={mcpUrl} />
       <StatusStrip connections={connections} />
     </div>
   );
 }
 
-/** The server URL for this origin. Seeded with production's, corrected after
- * mount, the same as `SetupInstructions`. */
-function useMcpUrl(): string {
-  const [mcpUrl, setMcpUrl] = useState(DEFAULT_MCP_URL);
-  useEffect(() => {
-    setMcpUrl(`${window.location.origin}/mcp`);
-  }, []);
-  return mcpUrl;
-}
-
 const CLIENTS_ANCHOR = "connect-your-agent";
-const STEPS_ANCHOR = "setup-steps";
 
 function Hero() {
   function scrollToClients(e: React.MouseEvent) {
@@ -225,34 +203,13 @@ function PromptCards({ hasConnectedAccount }: { hasConnectedAccount: boolean }) 
   );
 }
 
-function ClientCards({
-  mcpUrl,
-  hasConnectedAccount,
-}: {
-  mcpUrl: string;
-  hasConnectedAccount: boolean;
-}) {
-  const { copied, copy } = useCopyToClipboard<ClientId>();
-
-  async function copyConfig(client: McpClient) {
-    // A refused clipboard write is not a copy (use-copy-to-clipboard).
-    if (!(await copy(clientConfig(client.id, mcpUrl), client.id))) return;
-    posthog.capture(EVENTS.CLIENT_CARD_INSTALL_CLICKED, {
-      client: client.id,
-      action: "copy",
-    });
-    posthog.capture(EVENTS.COPY_MCP_CONFIG, {
-      source: `home_${client.id}`,
-      surface: "home",
-    });
-  }
-
+/** The client step (SCRUM-503): the "Add to your agent" block, the same one
+ * the Agent page, the docs and the site render, in its full layout. It took
+ * the place of SCRUM-482's per-client cards and the step-by-step picker
+ * under them. Below it, the live check says whether pasting worked. */
+function ClientStep({ hasConnectedAccount }: { hasConnectedAccount: boolean }) {
   return (
-    <section
-      id={CLIENTS_ANCHOR}
-      data-section="clients"
-      className="scroll-mt-4"
-    >
+    <section id={CLIENTS_ANCHOR} data-section="clients" className="scroll-mt-4">
       <h2 className="font-display text-base font-bold text-foreground">
         {HOME_CLIENTS_HEADING}
       </h2>
@@ -273,102 +230,7 @@ function ClientCards({
           </Link>
         </p>
       )}
-      <div className="mt-4 space-y-5">
-        {CLIENT_GROUPS.map((group) => (
-          <div key={group.id} data-client-group={group.id}>
-            <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-              {group.label}
-            </h3>
-            <div className="mt-2 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-              {MCP_CLIENTS.filter((c) => c.group === group.id).map((client) => {
-                const deepLink = clientDeepLink(client.id, mcpUrl);
-                const copyLabel =
-                  copied === client.id
-                    ? "Copied"
-                    : client.payload === "url"
-                      ? "Copy URL"
-                      : client.payload === "command"
-                        ? "Copy command"
-                        : "Copy JSON";
-                return (
-                  <div
-                    key={client.id}
-                    data-client-card={client.id}
-                    className="flex flex-col gap-3 rounded-xl border border-border bg-card p-4"
-                  >
-                    <div className="flex items-center gap-2.5">
-                      <ClientIcon icon={client.icon} size={18} />
-                      <span className="text-sm font-semibold text-foreground">
-                        {client.label}
-                      </span>
-                    </div>
-                    <p className="flex-1 text-xs leading-relaxed text-muted-foreground">
-                      {client.step}
-                    </p>
-                    <div className="flex flex-wrap items-center gap-2">
-                      {deepLink && (
-                        <Button
-                          size="sm"
-                          render={
-                            <a
-                              href={deepLink}
-                              onClick={() =>
-                                posthog.capture(
-                                  EVENTS.CLIENT_CARD_INSTALL_CLICKED,
-                                  { client: client.id, action: "deep_link" }
-                                )
-                              }
-                            />
-                          }
-                        >
-                          Install
-                        </Button>
-                      )}
-                      <Button
-                        size="sm"
-                        variant={deepLink ? "outline" : "default"}
-                        onClick={() => void copyConfig(client)}
-                      >
-                        {copied === client.id ? <Check /> : <Copy />}
-                        {copyLabel}
-                      </Button>
-                      {/* A plain anchor: the steps are on this page, and a
-                          hash change is what opens the client there. */}
-                      <a
-                        href={clientDetailHref(client.id)}
-                        className="ml-auto text-xs font-medium text-primary hover:underline"
-                      >
-                        Full steps
-                      </a>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        ))}
-      </div>
-    </section>
-  );
-}
-
-/** Each client's full steps, and below them whether pasting worked. The
- * copy events keep the `wizard_<client>` source and `settings` surface they
- * carried on the MCP config page, so the activation series stays one series. */
-function SetupSteps() {
-  return (
-    <section
-      id={STEPS_ANCHOR}
-      data-section="steps"
-      className="scroll-mt-4"
-    >
-      <h2 className="font-display text-base font-bold text-foreground">
-        {HOME_STEPS_HEADING}
-      </h2>
-      <p className="mb-3 mt-0.5 text-xs text-muted-foreground">
-        {HOME_STEPS_STANDFIRST}
-      </p>
-      <SetupInstructions sourcePrefix="wizard" />
+      <AddToAgent placement="home" signedIn heading={false} className="mt-4" />
       <ConnectionStatus />
     </section>
   );
@@ -384,7 +246,9 @@ function McpCard({ mcpUrl }: { mcpUrl: string }) {
     });
   }
   // One mark per client family, in the order the cards list them.
-  const icons = [...new Set(MCP_CLIENTS.map((c) => c.icon))];
+  const icons = [
+    ...new Set(MCP_CLIENTS.flatMap((c) => (c.icon ? [c.icon] : []))),
+  ];
   return (
     <section
       data-section="mcp"

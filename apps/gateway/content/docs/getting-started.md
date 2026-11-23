@@ -64,10 +64,10 @@ Prefer video? This two-minute walkthrough covers the sign-in flow, account conne
 
 <iframe src="https://www.youtube.com/embed/2UQvZJcuRy0" title="DataToRAG setup walkthrough" style="width:100%;aspect-ratio:16/9;border:0;border-radius:12px;" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
 
-Setup is two connections, and both are required before your agent can do anything:
+Setup is two connections, and both are required before your agent can do anything. They can happen in either order:
 
 1. **Connect your accounts.** Sign in at [datatorag.com/dashboard](https://datatorag.com/dashboard), open [Connections](https://datatorag.com/dashboard/connections) and connect your Google account (and Atlassian or Notion, if you use them).
-2. **Connect your client.** This is the step most people miss: connecting an account in the dashboard does not connect your agent. Your client (Claude, ChatGPT, Codex or Cursor) has to be pointed at the DataToRAG MCP endpoint separately. Pick your client below for exact steps:
+2. **Connect your client.** This is the step most people miss: connecting an account in the dashboard does not connect your agent. Your client (Claude, ChatGPT, Codex, Cursor, or any MCP client) has to be pointed at the DataToRAG MCP endpoint separately. It can come first: the client asks you to sign in when it connects, and your DataToRAG account is made then. Pick your client below for its step, or open [Add DataToRAG to your agent](/add-to-your-agent):
 
 <!--setup-instructions-->
 

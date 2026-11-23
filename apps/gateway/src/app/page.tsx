@@ -13,6 +13,7 @@ import { DEMO_HEADING, DEMO_STANDFIRST } from "@/components/demo/demo-copy";
 import { ComparisonHero } from "@/components/comparison-hero";
 import { REPOSITORY_URL } from "@/components/github-mark";
 import { HomeHero } from "@/components/home-hero";
+import { AddToAgent } from "@/components/add-to-agent";
 import { PromoChip } from "@/components/promo-banner";
 import { TrustedBy } from "@/components/trusted-by";
 import { SLIDES_VERIFIED_ON, VERIFIED_ON } from "@/lib/connector-verification";
@@ -202,6 +203,15 @@ export default async function HomePage() {
             it used to. Retiring the term is about the words a user READS; an
             id is plumbing. If it ever matters, the move is a new id plus an
             empty legacy anchor, not a rename. */}
+        {/* The client step (SCRUM-503), for a visitor who already has an
+            agent: add DataToRAG to it, and sign in when the client asks.
+            The same block the dashboard and the docs render. */}
+        <section id="add-to-your-agent" className="scroll-mt-28 bg-background">
+          <div className="mx-auto max-w-3xl px-6 pt-16 sm:pt-20">
+            <AddToAgent placement="site_home" signedIn={signedIn} />
+          </div>
+        </section>
+
         <section id="playground" className="scroll-mt-28 bg-background">
           <div className="mx-auto max-w-6xl px-6 py-16 sm:py-20">
             {/* One closing call to action, not two: this replaced a plain
