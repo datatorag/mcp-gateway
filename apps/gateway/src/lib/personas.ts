@@ -24,6 +24,10 @@ export interface Persona {
   /** The reader's own situation, in their words — same voice as a skill's
    * `situation`. Headlines the card. */
   situation: string;
+  /** One short line for the site's menu, under the title (SCRUM-506). Its
+   * own field: `situation` is a sentence for the card and the page, and too
+   * long for a menu. `personas.test.ts` fails on a persona without one. */
+  menuLine: string;
   /** Query-shaped, for metadata. */
   metaTitle: string;
   order: number;
@@ -77,6 +81,7 @@ function parsePersona({ slug, data, content }: ParsedFile): Persona | null {
     slug,
     title: field.string(data.title, slug),
     situation: field.string(data.situation),
+    menuLine: field.string(data.menuLine),
     metaTitle: field.string(data.metaTitle, field.string(data.title, slug)),
     order: field.number(data.order, 99),
     skillSlugs,

@@ -2,6 +2,7 @@
 title: "Jira and Confluence beside Workspace"
 metaTitle: "Use Jira and Google Workspace in the same prompt"
 situation: "The decision is in a doc, the work is in Jira, and I am the one carrying items between them."
+menuLine: "Move decisions from a doc into Jira"
 order: 3
 skills:
   - retro-page-to-jira-tickets

@@ -74,6 +74,11 @@ export const EVENTS = {
   ADD_TO_AGENT_SHOWN: "add_to_agent_shown",
   ADD_TO_AGENT_CLIENT_PICKED: "add_to_agent_client_picked",
   ADD_TO_AGENT_ACTION: "add_to_agent_action",
+  /** SCRUM-506: a press on any item of the site's main navigation, on a
+   * desktop or in the phone sheet. Props: `group` (`product`, `solutions`,
+   * `resources`, `top` for the plain links, `account` for Log in and the
+   * call to action) and `item` (the item's id in `lib/site-nav.ts`). */
+  NAV_ITEM_CLICKED: "nav_item_clicked",
   SKILL_COPIED: "skill_copied",
   /** SCRUM-223: the campaign funnel, one event per hop, every one carrying
    * `skill` (the slug). The public page's CTA, the dashboard list's Run, and
