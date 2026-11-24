@@ -164,6 +164,21 @@ describe("the navbar's links", () => {
     expect(queried).toEqual(full);
   });
 
+  it("ring a stacked mark in the row's own background, at rest and hovered, so no outline shows on hover", () => {
+    const row = desktop().querySelector<HTMLAnchorElement>('[data-nav-item="for-two-accounts"]')!;
+    const front = row.querySelector<HTMLElement>("[data-service-marks]")!.children[1];
+    // The row sets one variable; its hover background and the ring both read it.
+    expect(front.className).toContain("ring-[var(--nav-row)]");
+    expect(row.className).toContain("[--nav-row:#0b1220]");
+    expect(row.className).toContain("hover:[--nav-row:#232a36]");
+    expect(row.className).toContain("hover:bg-[var(--nav-row)]");
+    expect(row.className).toContain("focus-visible:[--nav-row:#232a36]");
+    expect(row.className).toContain("focus-visible:bg-[var(--nav-row)]");
+    // No second, fixed color for either.
+    expect(row.className).not.toMatch(/hover:bg-white/);
+    expect(front.className).not.toMatch(/ring-\[#/);
+  });
+
   it("show Log in and Get Started to a visitor, both starting sign-in, and never link to the login page", () => {
     const end = [...desktop().querySelectorAll<HTMLAnchorElement>("a")].filter((a) => !a.dataset.navItem);
     expect(end.map((a) => [a.textContent, a.getAttribute("href")])).toEqual([

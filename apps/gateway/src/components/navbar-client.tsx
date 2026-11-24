@@ -78,8 +78,16 @@ function track(group: string, item: string) {
   posthog.capture(EVENTS.NAV_ITEM_CLICKED, { group, item });
 }
 
-/** The panel's and the sheet's surface, as the ring between stacked marks. */
-const SURFACE_RING = "ring-[#0b1220]";
+/**
+ * A row's background, as one variable the row sets and two things read: the
+ * row's own hover and focus background, and the ring between stacked marks,
+ * which has to be the color of whatever is behind it. At rest that is the
+ * panel's and the sheet's surface (#0b1220); hovered or focused it is that
+ * surface with a tenth of white over it (#232a36).
+ */
+const ROW_SURFACE =
+  "[--nav-row:#0b1220] hover:[--nav-row:#232a36] focus-visible:[--nav-row:#232a36] hover:bg-[var(--nav-row)] focus-visible:bg-[var(--nav-row)]";
+const SURFACE_RING = "ring-[var(--nav-row)]";
 /** The space a line icon's tile takes; a mark's tile is centered in it. */
 const ICON_SLOT = 26;
 
@@ -114,7 +122,7 @@ function ItemIcon({ item, wide = 1 }: { item: NavItem; wide?: number }) {
  * a router link on it. */
 function ItemLink({ group, item, wide, onNavigate }: { group: string; item: NavItem; wide?: number; onNavigate: () => void }) {
   const className =
-    "flex items-start gap-3 rounded-lg p-2 transition-colors hover:bg-white/10 focus-visible:bg-white/10";
+    `flex items-start gap-3 rounded-lg p-2 transition-colors ${ROW_SURFACE}`;
   const body = (
     <>
       <ItemIcon item={item} wide={wide} />
