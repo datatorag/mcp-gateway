@@ -217,7 +217,6 @@ describe.skipIf(!isDockerAvailable())(
         id,
         userId,
         service: GWS,
-        accessToken: token,
         ...sealedColumns("service_connections", { userId, rowId: id }, { accessToken: token }),
         scopes,
         connectedAt,

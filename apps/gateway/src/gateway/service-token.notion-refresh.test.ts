@@ -32,6 +32,7 @@ import { upsertServiceAccount } from "./connected-accounts";
 import { resolveServiceToken, revokeUpstream } from "./service-token";
 import { refreshNotionToken } from "./connectors/notion/tokens";
 import { sealedColumns } from "./token-crypto";
+import { storedTokens } from "../test-utils/stored-tokens";
 
 const TOKEN_URL = "https://api.notion.com/v1/oauth/token";
 const REVOKE_URL = "https://api.notion.com/v1/oauth/revoke";
@@ -138,17 +139,7 @@ describe.skipIf(!isDockerAvailable())("SCRUM-366: refreshNotionToken", () => {
     return { userId, connId: row.id };
   }
 
-  async function stored(connId: string) {
-    const [row] = await db
-      .select({
-        access: serviceConnections.accessToken,
-        refresh: serviceConnections.refreshToken,
-        expires: serviceConnections.tokenExpiresAt,
-      })
-      .from(serviceConnections)
-      .where(eq(serviceConnections.id, connId));
-    return row;
-  }
+  const stored = (connId: string) => storedTokens(db, { id: connId });
 
   it("rotates and persists the new pair before returning, with Basic auth and no invented expiry", async () => {
     const { connId, userId } = await connected();
@@ -198,10 +189,8 @@ describe.skipIf(!isDockerAvailable())("SCRUM-366: refreshNotionToken", () => {
     notion.beforeAnswer = async () => {
       rotation = db
         .update(serviceConnections)
-        .set({
-          ...reconnected,
-          ...sealedColumns("service_connections", { userId, rowId: connId }, reconnected),
-        })
+        // Written the way the gateway writes a reconnect: sealed only.
+        .set(sealedColumns("service_connections", { userId, rowId: connId }, reconnected))
         .where(eq(serviceConnections.id, connId))
         .then(() => undefined);
       // Answer only once that UPDATE is genuinely queued on the row lock.

@@ -2,6 +2,21 @@
 
 Status: spec, written from the code at `bcbb89a`. Nothing here is built.
 
+**Amended by SCRUM-505 (2026-11-23).** Release 3 is done in three steps of
+its own, and without `restore`:
+1. Code only: nothing reads or writes `service_connections.access_token` or
+   `refresh_token` (a guard test, `plain-token-columns.guard.test.ts`, holds
+   that), migration A makes `access_token` nullable, and the `backfill` and
+   `restore` commands are removed. Every row already had a sealed copy of
+   each token it held, checked by a counts-only query before the change.
+2. Data: the two columns are emptied on every row, by HQ.
+3. Migration B drops them.
+
+`restore` existed so a rollback could reach an image that read the plain
+columns. Every image since reads moved reads only the sealed ones, so a
+rollback from any of the three steps needs nothing restored: an older image
+still finds every token sealed.
+
 ## What this changes
 
 The access and refresh tokens the gateway holds for a user's connected

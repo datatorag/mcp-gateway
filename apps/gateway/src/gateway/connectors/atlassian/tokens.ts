@@ -60,7 +60,6 @@ export async function refreshAtlassianToken(
     await db
       .update(serviceConnections)
       .set({
-        ...rotated,
         ...sealedFor(conn, rotated),
         tokenExpiresAt: expiresAt,
         updatedAt: new Date(),

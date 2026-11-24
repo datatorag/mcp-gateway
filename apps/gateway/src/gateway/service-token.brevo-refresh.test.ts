@@ -15,6 +15,7 @@ import { getTestDb, stopTestDb, insertTestUser, isDockerAvailable } from "../tes
 import { upsertServiceAccount } from "./connected-accounts";
 import { refreshBrevoToken } from "./connectors/brevo/tokens";
 import { BREVO_TOKEN_URL } from "./connectors/brevo/oauth";
+import { storedTokens } from "../test-utils/stored-tokens";
 
 /** Brevo's token endpoint as its guide describes it: a new access token, and
  * a new refresh token that replaces the old. The old one is refused after. */
@@ -80,13 +81,7 @@ describe.skipIf(!isDockerAvailable())("SCRUM-468: refreshBrevoToken", () => {
     return { userId, connId: row.id };
   }
 
-  async function stored(connId: string) {
-    const [row] = await db
-      .select({ access: serviceConnections.accessToken, refresh: serviceConnections.refreshToken, expires: serviceConnections.tokenExpiresAt })
-      .from(serviceConnections)
-      .where(eq(serviceConnections.id, connId));
-    return row;
-  }
+  const stored = (connId: string) => storedTokens(db, { id: connId });
 
   it("stores no expiry unless Brevo answers a positive number of seconds", async () => {
     for (const expiresIn of [0, -5, "3600", null]) {

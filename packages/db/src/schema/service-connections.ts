@@ -9,10 +9,13 @@ export const serviceConnections = pgTable(
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),
     service: text("service").notNull(), // e.g. "google-workspace"
-    accessToken: text("access_token").notNull(),
+    // SCRUM-505: the plain copies. No code reads or writes them since
+    // release 1 (nullable so a new row can leave them empty); release 2
+    // empties them on every row and release 3 drops them. Never use them.
+    accessToken: text("access_token"),
     refreshToken: text("refresh_token"),
-    // SCRUM-442: the same tokens sealed (apps/gateway token-crypto.ts),
-    // written beside the plain ones until reads move to them.
+    // SCRUM-442: the tokens, sealed (apps/gateway token-crypto.ts). The only
+    // copy the gateway reads and writes.
     accessTokenSealed: text("access_token_sealed"),
     refreshTokenSealed: text("refresh_token_sealed"),
     scopes: text("scopes"),

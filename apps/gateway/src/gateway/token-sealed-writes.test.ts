@@ -1,10 +1,11 @@
 /**
- * SCRUM-442, release 1: every write of a provider token also writes it
- * sealed.
+ * SCRUM-442 and SCRUM-505: every write of a provider token writes it sealed,
+ * and only sealed: the plain columns stay empty.
  *
  * Real Postgres with the migrations applied, because what is under test is
  * what reaches the row: each sealed value must open, bound to that row's
- * user and id, to exactly the token written beside it.
+ * user and id, to exactly the token written, and `storedTokens` refuses a
+ * row whose plain columns hold anything.
  */
 
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
@@ -20,9 +21,9 @@ import { serviceConnections, type Database } from "@datatorag-mcp/db";
 import { getTestDb, stopTestDb, insertTestUser, isDockerAvailable } from "../test-utils/db";
 import { upsertServiceAccount } from "./connected-accounts";
 import { resolveServiceToken } from "./service-token";
-import { openToken, type SealContext } from "./token-crypto";
+import { storedTokens } from "../test-utils/stored-tokens";
 
-describe.skipIf(!isDockerAvailable())("SCRUM-442: provider tokens are written sealed", () => {
+describe.skipIf(!isDockerAvailable())("SCRUM-442, SCRUM-505: provider tokens are written sealed, and only sealed", () => {
   let db: Database;
   const savedEnv = { ...process.env };
 
@@ -39,30 +40,15 @@ describe.skipIf(!isDockerAvailable())("SCRUM-442: provider tokens are written se
     process.env = { ...savedEnv };
   });
 
-  /** A service_connections row's tokens, with each sealed value opened under
-   * the row's own binding. */
+  /** A service_connections row's tokens, each sealed value opened under the
+   * row's own binding; it throws if a plain column was written. */
   async function serviceRow(rowId: string) {
     const [row] = await db
-      .select({
-        userId: serviceConnections.userId,
-        accessToken: serviceConnections.accessToken,
-        refreshToken: serviceConnections.refreshToken,
-        accessTokenSealed: serviceConnections.accessTokenSealed,
-        refreshTokenSealed: serviceConnections.refreshTokenSealed,
-      })
+      .select({ refreshTokenSealed: serviceConnections.refreshTokenSealed })
       .from(serviceConnections)
       .where(eq(serviceConnections.id, rowId));
-    const at = (column: SealContext["column"]): SealContext => ({
-      table: "service_connections",
-      column,
-      userId: row.userId,
-      rowId,
-    });
-    return {
-      ...row,
-      openedAccess: row.accessTokenSealed && openToken(row.accessTokenSealed, at("access_token")),
-      openedRefresh: row.refreshTokenSealed && openToken(row.refreshTokenSealed, at("refresh_token")),
-    };
+    const tokens = await storedTokens(db, { id: rowId });
+    return { openedAccess: tokens.access, openedRefresh: tokens.refresh, refreshTokenSealed: row.refreshTokenSealed };
   }
 
   async function connect(userId: string, service: string, tokens: { access_token: string; refresh_token?: string }, expiresAt: Date | null = null) {
@@ -75,12 +61,10 @@ describe.skipIf(!isDockerAvailable())("SCRUM-442: provider tokens are written se
   }
 
   describe("upsertServiceAccount", () => {
-    it("a new connection writes both tokens plain and sealed, bound to its own row", async () => {
+    it("a new connection writes both tokens sealed, bound to its own row, and no plain copy", async () => {
       const userId = await insertTestUser(db);
       const rowId = await connect(userId, "google-workspace", { access_token: "at-1", refresh_token: "rt-1" });
       expect(await serviceRow(rowId)).toMatchObject({
-        accessToken: "at-1",
-        refreshToken: "rt-1",
         openedAccess: "at-1",
         openedRefresh: "rt-1",
       });
@@ -98,7 +82,6 @@ describe.skipIf(!isDockerAvailable())("SCRUM-442: provider tokens are written se
       const userId = await insertTestUser(db);
       const rowId = await connect(userId, "notion", { access_token: "at-1" });
       expect(await serviceRow(rowId)).toMatchObject({
-        refreshToken: null,
         refreshTokenSealed: null,
         openedAccess: "at-1",
       });
@@ -128,7 +111,6 @@ describe.skipIf(!isDockerAvailable())("SCRUM-442: provider tokens are written se
       provider({ access_token: "at-2", expires_in: 3600 });
       expect(await resolveServiceToken(db, userId, "google-workspace")).toMatchObject({ token: "at-2" });
       expect(await serviceRow(rowId)).toMatchObject({
-        accessToken: "at-2",
         openedAccess: "at-2",
         openedRefresh: "rt-1",
       });
@@ -140,7 +122,6 @@ describe.skipIf(!isDockerAvailable())("SCRUM-442: provider tokens are written se
       provider({ access_token: "at-2", refresh_token: "rt-2", expires_in: 3600 });
       await resolveServiceToken(db, userId, "atlassian");
       expect(await serviceRow(rowId)).toMatchObject({
-        refreshToken: "rt-2",
         openedAccess: "at-2",
         openedRefresh: "rt-2",
       });

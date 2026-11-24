@@ -1,0 +1,1 @@
+ALTER TABLE "service_connections" ALTER COLUMN "access_token" DROP NOT NULL;

@@ -14,6 +14,7 @@ import { serviceConnections, type Database } from "@datatorag-mcp/db";
 import { getTestDb, stopTestDb, insertTestUser, isDockerAvailable } from "../test-utils/db";
 import { upsertServiceAccount } from "./connected-accounts";
 import { resolveServiceToken } from "./service-token";
+import { storedTokens } from "../test-utils/stored-tokens";
 
 type Sent = { url: string; contentType: string | null; body: Record<string, string> };
 
@@ -89,13 +90,7 @@ describe.skipIf(!isDockerAvailable())("the Google and Atlassian refreshes", () =
       return userId;
     }
 
-    async function stored(userId: string) {
-      const [row] = await db
-        .select({ access: serviceConnections.accessToken, refresh: serviceConnections.refreshToken, expires: serviceConnections.tokenExpiresAt })
-        .from(serviceConnections)
-        .where(eq(serviceConnections.userId, userId));
-      return row;
-    }
+    const stored = (userId: string) => storedTokens(db, { userId });
 
     it("sends the refresh token with the app's credentials, in the provider's own encoding", async () => {
       const userId = await expiredConnection();

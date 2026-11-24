@@ -239,6 +239,13 @@
       "when": 1794942976775,
       "tag": "0033_lead_source_and_service",
       "breakpoints": true
+    },
+    {
+      "idx": 34,
+      "version": "7",
+      "when": 1795475291143,
+      "tag": "0034_service_connections_plain_tokens_nullable",
+      "breakpoints": true
     }
   ]
 }
