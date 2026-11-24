@@ -1,5 +1,6 @@
 import { REPOSITORY_URL } from "@/components/github-mark";
 import { MCP_CLIENTS, type McpClient } from "./mcp-clients";
+import type { PersonaMark } from "./persona-marks";
 import type { Persona } from "./personas";
 
 /**
@@ -19,11 +20,12 @@ import type { Persona } from "./personas";
  * the item's), so they do not change spelling.
  */
 
-/** A lucide icon by name, or a client's own mark. The component maps the
+/** A lucide icon by name, a client's own mark, or a persona's product marks. The component maps the
  * name; data stays serializable, since it crosses from server to client. */
 export type NavIcon =
   | { kind: "icon"; name: NavIconName }
-  | { kind: "client"; icon: McpClient["icon"] };
+  | { kind: "client"; icon: McpClient["icon"] }
+  | { kind: "marks"; marks: PersonaMark[] };
 
 export type NavIconName =
   | "plug"
@@ -56,6 +58,10 @@ export interface NavItem {
 
 export interface NavColumn {
   heading: string;
+  /** The widest icon in the column, in marks: a column with a two-mark
+   * stack keeps that much room before every row's text, so the titles
+   * share one left edge. Unset: one icon wide. */
+  iconsWide?: number;
   items: NavItem[];
 }
 
@@ -72,7 +78,7 @@ export interface SiteNav {
 }
 
 /** What the menu needs of a persona page. */
-export type NavPersona = Pick<Persona, "slug" | "title" | "menuLine">;
+export type NavPersona = Pick<Persona, "slug" | "title" | "menuLine" | "marks">;
 
 const icon = (name: NavIconName): NavIcon => ({ kind: "icon", name });
 
@@ -179,6 +185,7 @@ export function buildSiteNav(personas: readonly NavPersona[]): SiteNav {
           },
           {
             heading: "Built for",
+            iconsWide: Math.max(1, ...personas.map((p) => p.marks.length)),
             items: [
               ...personas.map(
                 (p): NavItem => ({
@@ -186,7 +193,8 @@ export function buildSiteNav(personas: readonly NavPersona[]): SiteNav {
                   label: p.title,
                   href: `/skills/for/${p.slug}`,
                   description: p.menuLine,
-                  icon: icon("user"),
+                  // Its products' marks; the generic person only if the file names none.
+                  icon: p.marks.length > 0 ? { kind: "marks", marks: p.marks } : icon("user"),
                 })
               ),
               { id: "all-skills", label: "All skills", href: "/skills", icon: icon("library") },

@@ -12,7 +12,7 @@ vi.mock("@/lib/use-current-user", () => ({ useCurrentUser: () => user }));
 
 const { NavbarClient } = await import("./navbar-client");
 
-const nav = buildSiteNav([{ slug: "two-accounts", title: "Two accounts, one prompt", menuLine: "A summary." }]);
+const nav = buildSiteNav([{ slug: "two-accounts", title: "Two accounts, one prompt", menuLine: "A summary.", marks: ["gmail", "gmail"] }]);
 
 let container: HTMLDivElement;
 let root: Root;

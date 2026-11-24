@@ -17,6 +17,8 @@ import { getSkillBySlug, type Skill } from "./skills";
  * Personas are their own route (`/skills/for/<slug>`) rather than anchors on
  * one page, so which audience actually reads is answerable from pageviews.
  */
+import { personaMarks, type PersonaMark } from "./persona-marks";
+
 export interface Persona {
   slug: string;
   /** Short, for the card heading and the page title. */
@@ -28,6 +30,12 @@ export interface Persona {
    * own field: `situation` is a sentence for the card and the page, and too
    * long for a menu. `personas.test.ts` fails on a persona without one. */
   menuLine: string;
+  /** The persona's icon in the site's menu (SCRUM-508): the mark, or the
+   * two marks, of the products it is about, by the names in
+   * `persona-marks.ts`. Empty when the file names none, too many, or one
+   * that is not a mark; the menu then shows the generic person, and
+   * `personas.test.ts` fails, so that never ships. */
+  marks: PersonaMark[];
   /** Query-shaped, for metadata. */
   metaTitle: string;
   order: number;
@@ -82,6 +90,7 @@ function parsePersona({ slug, data, content }: ParsedFile): Persona | null {
     title: field.string(data.title, slug),
     situation: field.string(data.situation),
     menuLine: field.string(data.menuLine),
+    marks: personaMarks(field.stringArray(data.marks)),
     metaTitle: field.string(data.metaTitle, field.string(data.title, slug)),
     order: field.number(data.order, 99),
     skillSlugs,

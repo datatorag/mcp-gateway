@@ -3,6 +3,7 @@ title: "Two accounts, one prompt"
 metaTitle: "Search work and personal Google accounts in one prompt"
 situation: "The receipt is in one account and the thread about it is in the other, and I am the integration between them."
 menuLine: "Search work and personal together"
+marks: ["gmail", "gmail"]
 order: 2
 skills:
   - work-and-personal-gmail

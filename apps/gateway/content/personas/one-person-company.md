@@ -3,6 +3,7 @@ title: "No IT department"
 metaTitle: "Google Workspace automation with no admin to ask"
 situation: "It's just me. Work and personal live in the same inbox, and nobody administers my account but me."
 menuLine: "One person, one inbox, no admin"
+marks: ["gmail"]
 order: 1
 skills:
   - inbox-triage

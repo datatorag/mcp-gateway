@@ -3,6 +3,7 @@ title: "You run it out of a spreadsheet"
 metaTitle: "Let an agent read and update the spreadsheet you run on"
 situation: "The spreadsheet is the system. Everything real about how we operate is in it, and it is getting away from me."
 menuLine: "Let your agent read and update the sheet"
+marks: ["sheets"]
 order: 4
 skills:
   - sheet-as-knowledge-base
