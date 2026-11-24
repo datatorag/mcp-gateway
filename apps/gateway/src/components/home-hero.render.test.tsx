@@ -6,7 +6,7 @@
  * the "Trusted by" row.
  */
 
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
@@ -101,6 +101,25 @@ describe("the home hero", () => {
   it("uses no dash as punctuation and says agent, never assistant", () => {
     expect(hero.body.textContent).not.toMatch(/[\u2013\u2014]/);
     expect(hero.body.textContent).not.toMatch(/assistant/i);
+  });
+});
+
+describe("the hero's height (SCRUM-507)", () => {
+  it("comes from its content, never from the window: nothing in the first section sizes itself by the viewport's height", () => {
+    // A `min-h-screen` on the background wrapper once made the section as
+    // tall as the window, which on a tall window left an empty band under the
+    // Trusted by row. The class names are read from the source, because the
+    // background is a WebGL component that does not render in this DOM.
+    const read = (rel: string) => readFileSync(join(import.meta.dirname, rel), "utf8");
+    const page = read("../app/page.tsx");
+    const section = page.slice(page.indexOf("<ShaderBackground>"), page.indexOf("</ShaderBackground>"));
+    expect(section).toContain("<HomeHero");
+    const sources = { "shader-background.tsx": read("shader-background.tsx"), "page.tsx hero": section, "home-hero.tsx": read("home-hero.tsx"), "trusted-by.tsx": read("trusted-by.tsx") };
+    for (const [name, text] of Object.entries(sources)) {
+      const classes = [...text.matchAll(/className=(?:"([^"]*)"|\{[^}]*\})/g)].map((m) => m[0]).join(" ");
+      expect(classes, name).not.toMatch(/\b(min-h-screen|h-screen|min-h-dvh|h-dvh|min-h-svh|h-svh)\b/);
+      expect(classes, name).not.toMatch(/\[[^\]]*\d(vh|dvh|svh|lvh)\b/);
+    }
   });
 });
 
