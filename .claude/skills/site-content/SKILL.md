@@ -362,8 +362,8 @@ be measured.
   cover the heading when jumped to), plus a self-link `<a href="#${slug}">` on the
   heading itself (changelog entries do; home-page sections don't need one). Used by
   changelog entries (`app/changelog/page.tsx`) and the home page's hash-targeted
-  sections (`id="platform"`, `id="services"`, `id="integrations"` in `app/page.tsx`,
-  linked from navbar `/#platform`-style hrefs) — all carry `scroll-mt-28`. Any new
+  sections (`id="platform"`, `id="services"`, `id="integrations"` in `app/page.tsx`;
+  the navbar no longer links to them since SCRUM-506, the ids still resolve) — all carry `scroll-mt-28`. Any new
   hash-link target must get `scroll-mt-28` too.
 - **Metadata/OG shape**: export `metadata: Metadata` (static pages, e.g. changelog) or
   `generateMetadata()` (dynamic, e.g. blog `[slug]`) with `title` (suffixed
@@ -398,12 +398,11 @@ same commit:
 1. The page itself, self-rendering `<Navbar />` (root layout has none — every top-level
    page includes its own; `/docs` and `/dashboard` are the exception, with their own
    nested `layout.tsx` and no `<Navbar>`).
-2. `flatItems` in `apps/gateway/src/components/navbar.tsx` — the single array rendered
-   into both desktop nav and the mobile menu. One entry covers both; there's no lint or
-   test enforcing this, so a route that's live but missing from `flatItems` is the most
-   common way a page ships with no nav visibility. Deliberate exceptions, footer-only by
-   design like `/privacy` and `/terms`: `/faq` (reference page, reached from docs, footer
-   and search rather than the nav; promote it to `flatItems` only as an explicit call).
+2. An item in `apps/gateway/src/lib/site-nav.ts`, the one file the navbar renders on a
+   desktop and in the phone sheet (SCRUM-506): three groups (Product, Solutions,
+   Resources) of columns, then plain links. `site-nav.test.ts` fails on an item whose
+   address has no page. A route that is live but has no item there has no nav
+   visibility. Deliberate exceptions, footer-only by design: `/privacy` and `/terms`.
 3. `apps/gateway/src/app/sitemap.ts` — add the static route, and map the collection's
    entries if it has detail pages (blog/docs/skills all do).
 4. The footer links row in `apps/gateway/src/app/page.tsx` (the home page's `<footer>`,
