@@ -12,7 +12,7 @@ vi.mock("@/lib/use-current-user", () => ({ useCurrentUser: () => user }));
 
 const { NavbarClient } = await import("./navbar-client");
 
-const nav = buildSiteNav([{ slug: "two-accounts", title: "Two accounts, one prompt", menuLine: "A summary." }]);
+const nav = buildSiteNav([{ slug: "two-accounts", title: "Two accounts, one prompt", menuLine: "A summary.", marks: ["gmail", "gmail"] }]);
 
 let container: HTMLDivElement;
 let root: Root;
@@ -162,6 +162,21 @@ describe("the navbar's links", () => {
     expect(full.every((a) => a.getAttribute("href")!.startsWith("/add-to-your-agent?client="))).toBe(true);
     const queried = [...desktop().querySelectorAll<HTMLAnchorElement>("a[data-nav-item]")].filter((a) => a.getAttribute("href")!.includes("?"));
     expect(queried).toEqual(full);
+  });
+
+  it("ring a stacked mark in the row's own background, at rest and hovered, so no outline shows on hover", () => {
+    const row = desktop().querySelector<HTMLAnchorElement>('[data-nav-item="for-two-accounts"]')!;
+    const front = row.querySelector<HTMLElement>("[data-service-marks]")!.children[1];
+    // The row sets one variable; its hover background and the ring both read it.
+    expect(front.className).toContain("ring-[var(--nav-row)]");
+    expect(row.className).toContain("[--nav-row:#0b1220]");
+    expect(row.className).toContain("hover:[--nav-row:#232a36]");
+    expect(row.className).toContain("hover:bg-[var(--nav-row)]");
+    expect(row.className).toContain("focus-visible:[--nav-row:#232a36]");
+    expect(row.className).toContain("focus-visible:bg-[var(--nav-row)]");
+    // No second, fixed color for either.
+    expect(row.className).not.toMatch(/hover:bg-white/);
+    expect(front.className).not.toMatch(/ring-\[#/);
   });
 
   it("show Log in and Get Started to a visitor, both starting sign-in, and never link to the login page", () => {

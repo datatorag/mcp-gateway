@@ -30,6 +30,7 @@ import { useDismissable } from "@/lib/use-dismissable";
 import { signInHref } from "@/lib/sign-in";
 import { CtaLink } from "@/components/cta-link";
 import { ClientIcon } from "@/components/client-icon";
+import { ServiceMarks, serviceMarksWidth } from "@/components/service-marks";
 import type { NavGroup, NavIconName, NavItem, SiteNav } from "@/lib/site-nav";
 
 /**
@@ -77,24 +78,54 @@ function track(group: string, item: string) {
   posthog.capture(EVENTS.NAV_ITEM_CLICKED, { group, item });
 }
 
-function ItemIcon({ item }: { item: NavItem }) {
+/**
+ * A row's background, as one variable the row sets and two things read: the
+ * row's own hover and focus background, and the ring between stacked marks,
+ * which has to be the color of whatever is behind it. At rest that is the
+ * panel's and the sheet's surface (#0b1220); hovered or focused it is that
+ * surface with a tenth of white over it (#232a36).
+ */
+const ROW_SURFACE =
+  "[--nav-row:#0b1220] hover:[--nav-row:#232a36] focus-visible:[--nav-row:#232a36] hover:bg-[var(--nav-row)] focus-visible:bg-[var(--nav-row)]";
+const SURFACE_RING = "ring-[var(--nav-row)]";
+/** The space a line icon's tile takes; a mark's tile is centered in it. */
+const ICON_SLOT = 26;
+
+function ItemIcon({ item, wide = 1 }: { item: NavItem; wide?: number }) {
+  // A column that holds a stack of marks keeps the stack's width before
+  // every row, so all its titles start at one left edge.
+  const slot = wide > 1 ? ICON_SLOT - serviceMarksWidth(1, 16) + serviceMarksWidth(wide, 16) : ICON_SLOT;
+  let icon;
   if (item.icon.kind === "client") return <ClientIcon icon={item.icon.icon} size={16} />;
-  const Icon = ICONS[item.icon.name];
+  if (item.icon.kind === "marks") {
+    icon = (
+      <span className="flex items-center justify-center" style={{ minWidth: ICON_SLOT, height: ICON_SLOT }}>
+        <ServiceMarks marks={item.icon.marks} size={16} separatorClassName={SURFACE_RING} />
+      </span>
+    );
+  } else {
+    const Icon = ICONS[item.icon.name];
+    icon = (
+      <span className="flex size-[26px] shrink-0 items-center justify-center rounded-md bg-white/10 text-white/80">
+        <Icon aria-hidden="true" className="size-4" />
+      </span>
+    );
+  }
   return (
-    <span className="flex size-[26px] shrink-0 items-center justify-center rounded-md bg-white/10 text-white/80">
-      <Icon aria-hidden="true" className="size-4" />
+    <span className="flex shrink-0 items-center" style={{ width: slot }}>
+      {icon}
     </span>
   );
 }
 
 /** One item: its mark, its name, and its line. A plain anchor off the site,
  * a router link on it. */
-function ItemLink({ group, item, onNavigate }: { group: string; item: NavItem; onNavigate: () => void }) {
+function ItemLink({ group, item, wide, onNavigate }: { group: string; item: NavItem; wide?: number; onNavigate: () => void }) {
   const className =
-    "flex items-start gap-3 rounded-lg p-2 transition-colors hover:bg-white/10 focus-visible:bg-white/10";
+    `flex items-start gap-3 rounded-lg p-2 transition-colors ${ROW_SURFACE}`;
   const body = (
     <>
-      <ItemIcon item={item} />
+      <ItemIcon item={item} wide={wide} />
       <span className="min-w-0">
         <span className="block text-sm font-medium text-white">{item.label}</span>
         {item.description && (
@@ -148,7 +179,7 @@ function Columns({ group, onNavigate, stacked }: { group: NavGroup; onNavigate: 
           <ul className="space-y-0.5">
             {column.items.map((item) => (
               <li key={item.id}>
-                <ItemLink group={group.id} item={item} onNavigate={onNavigate} />
+                <ItemLink group={group.id} item={item} wide={column.iconsWide} onNavigate={onNavigate} />
               </li>
             ))}
           </ul>
