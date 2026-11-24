@@ -9,7 +9,11 @@ interface ShaderBackgroundProps {
 
 export function ShaderBackground({ children }: ShaderBackgroundProps) {
   return (
-    <div className="relative min-h-screen overflow-hidden bg-[#0a1628]">
+    // The height is the content's (SCRUM-507). It used to carry `min-h-screen`,
+    // which made the section as tall as the window: on a tall window that left
+    // an empty band of background under the last thing in it. The shaders are
+    // `absolute inset-0`, so they fill whatever height the content gives.
+    <div className="relative overflow-hidden bg-[#0a1628]">
       {/* Background Shaders */}
       <MeshGradient
         className="absolute inset-0 w-full h-full"
