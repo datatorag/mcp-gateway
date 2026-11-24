@@ -10,7 +10,7 @@ import type { Persona } from "./personas";
  *
  * Two columns are not typed by hand. "For agents" is the clients the "Add to
  * your agent" block lists (`lib/mcp-clients.ts`), and "Built for" is the
- * persona pages (`content/personas`, passed in by the server component that
+ * persona pages (`content/personas`, each with its own `menuLine`, passed in by the server component that
  * can read them). A new client or persona appears in the menu without an
  * edit here.
  *
@@ -72,7 +72,7 @@ export interface SiteNav {
 }
 
 /** What the menu needs of a persona page. */
-export type NavPersona = Pick<Persona, "slug" | "title" | "situation">;
+export type NavPersona = Pick<Persona, "slug" | "title" | "menuLine">;
 
 const icon = (name: NavIconName): NavIcon => ({ kind: "icon", name });
 
@@ -185,7 +185,7 @@ export function buildSiteNav(personas: readonly NavPersona[]): SiteNav {
                   id: `for-${p.slug}`,
                   label: p.title,
                   href: `/skills/for/${p.slug}`,
-                  description: p.situation,
+                  description: p.menuLine,
                   icon: icon("user"),
                 })
               ),

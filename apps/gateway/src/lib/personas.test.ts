@@ -37,6 +37,10 @@ describe("personas", () => {
       // intro, and metadata needs metaTitle. A blank one ships an empty card.
       expect(persona.title).not.toBe("");
       expect(persona.situation).not.toBe("");
+      // The site's menu shows this under the title on every public page
+      // (SCRUM-506). A persona without one cannot ship: short, one line.
+      expect(persona.menuLine, "menuLine").not.toBe("");
+      expect(persona.menuLine.length, "menuLine is a short line").toBeLessThanOrEqual(48);
       expect(persona.metaTitle).not.toBe("");
       expect(persona.introHtml).not.toBe("");
     }
