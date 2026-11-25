@@ -11,13 +11,17 @@ import { refreshBrevoToken, revokeBrevoGrant } from "./brevo/tokens";
 import { refreshSlackToken, revokeSlackGrant } from "./slack/tokens";
 import { refreshPostHogToken, revokePostHogGrant } from "./posthog/tokens";
 import { refreshNotionToken, revokeNotionGrant } from "./notion/tokens";
-import { refreshAtlassianToken } from "./atlassian/tokens";
+import { attemptAtlassianRevoke, refreshAtlassianToken } from "./atlassian/tokens";
 import { refreshGoogleToken, revokeGoogleGrant } from "./google/tokens";
 
 export interface ConnectorTokenCalls {
   refresh(db: Database, conn: ConnectionRef, refreshToken: string): Promise<RefreshOutcome>;
   /** Absent for a connector whose provider is not told to drop a grant. */
   revoke?(tokens: RevokeTokens): Promise<boolean>;
+  /** A revoke request the provider does not document: sent on disconnect,
+   * its status recorded, and never taken as the grant having ended. Its
+   * connector stays `revokes: false` in the registry. */
+  attemptRevoke?(tokens: RevokeTokens): Promise<string>;
 }
 
 export const CONNECTOR_TOKENS = {
@@ -25,6 +29,6 @@ export const CONNECTOR_TOKENS = {
   slack: { refresh: refreshSlackToken, revoke: revokeSlackGrant },
   posthog: { refresh: refreshPostHogToken, revoke: revokePostHogGrant },
   notion: { refresh: refreshNotionToken, revoke: revokeNotionGrant },
-  atlassian: { refresh: refreshAtlassianToken },
+  atlassian: { refresh: refreshAtlassianToken, attemptRevoke: attemptAtlassianRevoke },
   "google-workspace": { refresh: refreshGoogleToken, revoke: revokeGoogleGrant },
 } satisfies Record<ConnectorId, ConnectorTokenCalls>;

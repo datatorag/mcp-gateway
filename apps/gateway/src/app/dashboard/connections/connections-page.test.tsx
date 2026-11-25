@@ -84,4 +84,21 @@ describe("/dashboard/connections (SCRUM-482)", () => {
     expect(titles).toEqual(["Google Workspace", "Atlassian"]);
     expect(cards!.querySelector('a[href^="/auth/google/connect"]')).not.toBeNull();
   });
+
+  it("lists the apps the user approved in a section below the connected accounts, not on a page of its own", async () => {
+    await act(async () => {
+      root.render(<ConnectionsClient />);
+    });
+    for (let i = 0; i < 4; i++) {
+      await act(async () => {
+        await new Promise((r) => setTimeout(r, 0));
+      });
+    }
+    const cards = container.querySelector("[data-connection-cards]")!;
+    const section = container.querySelector("[data-approved-apps]");
+    expect(section?.querySelector("h2")?.textContent).toBe("Apps you approved");
+    expect(cards.compareDocumentPosition(section!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    const fetched = vi.mocked(fetch).mock.calls.map((c) => String(c[0]));
+    expect(fetched).toContain("/api/approved-apps");
+  });
 });

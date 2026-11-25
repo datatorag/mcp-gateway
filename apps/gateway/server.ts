@@ -31,6 +31,7 @@ import {
 import {
   classifyMcpRequest,
   closeSessionsForUser,
+  registerSessionCloser,
   notifyToolsChangedForUser,
 } from "./src/gateway/mcp-session";
 import { createRegisterRouter } from "./src/gateway/oauth/register";
@@ -247,6 +248,10 @@ async function main() {
       userId: string;
     }
   >();
+
+  // The Connections page's Remove runs in the app bundle and cannot reach
+  // this map, so it closes a user's sessions through this.
+  registerSessionCloser((userId) => closeSessionsForUser(sessions, userId));
 
   // OAuth2 authorization server routes (MCP clients only)
   app.use(createMetadataRouter(baseUrl));

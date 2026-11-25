@@ -717,6 +717,10 @@ export interface DisconnectedConnection {
    * `reportDisconnected` for what that cannot tell apart. */
   toolCallsMade: boolean;
   revokeSkippedShared: boolean;
+  /** An Atlassian disconnect only: what became of its one revoke request,
+   * a status code or a fixed word (`AtlassianRevokeOutcome`). Absent for
+   * every other provider, whose event is unchanged. */
+  atlassianRevokeOutcome?: string;
 }
 
 /** SCRUM-500: a connection was removed, after its rows are gone. The
@@ -741,8 +745,15 @@ export async function trackAccountDisconnected(
         conn.connectedAt === null ? null : Math.max(0, Math.round((Date.now() - conn.connectedAt.getTime()) / 1000)),
       tool_calls_made: conn.toolCallsMade,
       revoke_skipped_shared: conn.revokeSkippedShared,
+      ...(conn.atlassianRevokeOutcome !== undefined ? { atlassian_revoke_outcome: conn.atlassianRevokeOutcome } : {}),
     };
   });
+}
+
+/** A user removed an app they approved (the Connections page). The client
+ * id only: the registration's id, never the name the app gave. Never throws. */
+export async function trackApprovedAppRemoved(db: Database, userId: string, clientId: string): Promise<void> {
+  return captureForUser(db, userId, EVENTS.APPROVED_APP_REMOVED, { client_id: clientId });
 }
 
 /** The connect found the account already held by another DataToRAG user

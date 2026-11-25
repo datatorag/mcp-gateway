@@ -26,8 +26,9 @@ faqs:
       Disconnecting an account on the Connections page of the DataToRAG
       dashboard deletes the account record and its stored tokens. For Google
       and Notion, DataToRAG first asks the provider to revoke the access. For
-      Atlassian it does not, so remove the app in your Atlassian account as
-      well to end the grant there. Usage records and dashboard Agent conversations are not deleted
+      Atlassian, DataToRAG sends a revoke request too, but Atlassian does not
+      document what that request does, so remove the app in your Atlassian
+      account as well to end the grant there. Usage records and dashboard Agent conversations are not deleted
       by a disconnect.
   - q: What can a client do after I approve it?
     a: >-
@@ -38,10 +39,12 @@ faqs:
       again.
   - q: Can I see or revoke the clients I approved in the dashboard?
     a: >-
-      Not today. The DataToRAG dashboard has no page that lists approved clients
-      or revokes one. A client can revoke its own access, and disconnecting an
-      account on the Connections page removes that account from every client
-      at once.
+      Yes. The Connections page of the DataToRAG dashboard lists the clients
+      you approved under "Apps you approved". Remove ends that client's access
+      and deletes its approval, so it can no longer use DataToRAG as you until
+      you add it again and approve it. A client can also revoke its own
+      access, and disconnecting an account on the Connections page removes
+      that account from every client at once.
 ---
 
 DataToRAG is an MCP server that connects your agent to Google Workspace, Atlassian, and Notion through OAuth. This page says where your tokens are kept and how they are encrypted, how to cut off access, what approving a client grants, and what is stored about each call.
@@ -84,14 +87,14 @@ When a provider permanently refuses a refresh, DataToRAG records a reason code. 
 
 Open [Connections](https://datatorag.com/dashboard/connections) and click **Disconnect** on the account. This is what happens:
 
-1. **The provider is asked to revoke the access, for Google and Notion.** For Google, DataToRAG sends the refresh token to Google's revoke endpoint, or the access token when there is no refresh token. For Notion, it revokes both tokens.
+1. **A revoke request is sent to the provider.** For Google, DataToRAG sends the refresh token to Google's revoke endpoint, or the access token when there is no refresh token. For Notion, it revokes both tokens. For Atlassian, it sends one revoke request with the refresh token, or the access token when there is no refresh token.
 2. **The account record and its stored tokens are deleted** from the DataToRAG database.
 3. **Your open download and upload links are canceled.**
 4. **If the account was the default, another account of the same service becomes the default.** [Using several accounts](/docs/multiple-accounts) explains which one.
 
 Three things to know:
 
-- **Atlassian is not asked to revoke.** DataToRAG deletes its copy of the tokens, so remove the app in your Atlassian account as well to end the grant there.
+- **Atlassian does not document what its revoke request does.** DataToRAG sends the request and deletes its copy of the tokens, but it cannot confirm that the request ends the grant, so remove the app in your Atlassian account as well to end the grant there.
 - **The revoke request is best effort.** If the provider cannot be reached, the disconnect still completes and DataToRAG no longer holds the tokens. You can remove the app on the provider's side to be sure.
 - **A shared account is not revoked.** If another DataToRAG login holds the same provider account, only your copy of the tokens is deleted, so the other login keeps working.
 
@@ -123,8 +126,9 @@ A client's token does not open the dashboard, and a dashboard session does not w
 
 ## Revoke a client's access
 
-The dashboard has no page today that lists the clients you approved or revokes one. These are the ways access ends:
+The [Connections](https://datatorag.com/dashboard/connections) page lists the clients you approved, under **Apps you approved**. Each one is shown with the name it gave, the host its sign-in returns to, the day you approved it, and the day DataToRAG last issued it a token. A client that registered with DataToRAG more than once is listed once for each registration, and a client added before DataToRAG showed an approval page is listed without an approval day. These are the ways access ends:
 
+- **You remove it.** Click **Remove** on the client and confirm. DataToRAG revokes every refresh token and access token that client holds for your login, cancels any sign-in of that client that has not finished, deletes the approval, closes your open MCP sessions, and cancels your open download links, upload links, and connect links. The client can no longer use DataToRAG as you until you add it again and approve it. Your other clients keep their access.
 - **The client revokes it.** DataToRAG has a standard OAuth revocation endpoint. When a client sends its refresh token there, DataToRAG revokes that refresh token and the ones it was exchanged from, revokes the client's live access tokens, closes your open MCP sessions, and cancels your open download and upload links. Whether removing the DataToRAG MCP server from a client does this depends on the client.
 - **The tokens expire.** An access token stops working 24 hours after it was issued. A refresh token stops working 60 days after it was issued if it was not used.
 - **You disconnect the accounts.** Disconnecting an account on Connections removes it for every client at once, because no client holds the provider's tokens.
