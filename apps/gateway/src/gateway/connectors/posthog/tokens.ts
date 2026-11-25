@@ -12,7 +12,7 @@ import {
   type RefreshOutcome,
   type RevokeTokens,
 } from "../../service-token";
-import { posthogClientId, posthogEndpoints, posthogHost } from "./oauth";
+import { posthogClientId, posthogOAuthEndpoints } from "./oauth";
 
 /**
  * Refresh a PostHog access token (SCRUM-471), under the rotating-token lock.
@@ -31,7 +31,7 @@ export async function refreshPostHogToken(
   return refreshRotatingToken(db, conn, presentedRefreshToken, {
     label: "posthog",
     call: (refreshToken, signal) =>
-      fetch(posthogEndpoints(posthogHost()).token, {
+      fetch(posthogOAuthEndpoints().token, {
         method: "POST",
         headers: { "Content-Type": "application/x-www-form-urlencoded" },
         body: new URLSearchParams({
@@ -54,7 +54,7 @@ export async function revokePostHogGrant(tokens: RevokeTokens): Promise<boolean>
   const token = tokens.refreshToken ?? tokens.accessToken;
   if (!baseUrl || !token) return false;
   try {
-    const res = await fetch(posthogEndpoints(posthogHost()).revoke, {
+    const res = await fetch(posthogOAuthEndpoints().revoke, {
       method: "POST",
       headers: { "Content-Type": "application/x-www-form-urlencoded" },
       body: new URLSearchParams({ token, client_id: posthogClientId(baseUrl) }),

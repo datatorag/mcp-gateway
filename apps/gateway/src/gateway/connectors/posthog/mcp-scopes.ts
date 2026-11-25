@@ -1,0 +1,53 @@
+/**
+ * The scopes PostHog's own MCP server supports (SCRUM-511), as its protected
+ * resource metadata listed them on 2026-11-24:
+ *
+ *   https://mcp.posthog.com/.well-known/oauth-protected-resource/mcp
+ *
+ * The connector asks for all of them: the pass-through serves PostHog's
+ * tools as PostHog ships them, reads and writes, and PostHog refuses a tool
+ * whose scope the grant lacks. A scope PostHog adds later is missing here
+ * until this list is refreshed from that address, and the tools that need
+ * it are refused by PostHog, in its words, until the user reconnects.
+ */
+export const POSTHOG_MCP_SCOPE_LIST = [
+  "openid", "profile", "email", "introspection", "action:read", "action:write",
+  "access_control:read", "access_control:write", "account:read", "account:write",
+  "account_note:read", "account_note:write", "activity_log:read", "alert:read", "alert:write",
+  "annotation:read", "annotation:write", "approvals:read", "approvals:write", "autoresearch:read",
+  "autoresearch:write", "batch_export:read", "batch_export:write", "billing:read",
+  "business_knowledge:read", "business_knowledge:write", "canvas:read", "canvas:write",
+  "code_review:read", "code_review:write", "code_review_approval:read",
+  "code_review_approval:write", "cohort:read", "cohort:write", "comment:read", "comment:write",
+  "conversation:read", "cross_project_dashboard:read", "customer_analytics:read",
+  "customer_analytics:write", "customer_task:read", "customer_task:write", "data_catalog:read",
+  "data_catalog:write", "data_catalog_approval:write", "dashboard:read", "dashboard:write",
+  "dashboard_template:read", "dataset:read", "dataset:write", "early_access_feature:read",
+  "early_access_feature:write", "endpoint:read", "endpoint:write", "engineering_analytics:read",
+  "error_tracking:read", "error_tracking:write", "evaluation:read", "evaluation:write",
+  "element:read", "event_definition:read", "event_definition:write", "experiment:read",
+  "experiment:write", "experiment_holdout:read", "experiment_holdout:write",
+  "experiment_saved_metric:read", "experiment_saved_metric:write", "external_data_source:read",
+  "external_data_source:write", "feature_flag:read", "feature_flag:write", "file_system:read",
+  "file_system:write", "group:read", "health_issue:read", "heatmap:read", "heatmap:write",
+  "hog_flow:read", "hog_flow:write", "hog_function:read", "hog_function:write", "inbox:read",
+  "inbox:write", "insight:read", "insight:write", "insight_variable:write", "integration:read",
+  "integration:write", "llm_analytics:read", "llm_analytics:write",
+  "ai_observability_clusters:read", "ai_observability_clusters:write", "llm_prompt:read",
+  "llm_prompt:write", "llm_provider_key:read", "llm_skill:read", "llm_skill:write", "logs:read",
+  "logs:write", "marketing_analytics:read", "marketing_analytics:write", "mcp_analytics:read",
+  "mcp_analytics:write", "metrics:read", "notebook:read", "notebook:write",
+  "offline_evaluation_ingestion:write", "organization:read", "organization:write",
+  "organization_member:read", "person:read", "person:write", "product_enablement:write",
+  "project:read", "project:write", "property_definition:read", "property_definition:write",
+  "query:read", "replay_scanner:read", "replay_scanner:write", "session_recording:read",
+  "session_recording:write", "session_recording_playlist:read", "session_recording_playlist:write",
+  "signal_scout:read", "signal_scout:write", "signal_usage:read", "streamlit_app:read",
+  "streamlit_app:write", "subscription:read", "subscription:write", "survey:read", "survey:write",
+  "ticket:read", "ticket:write", "task:read", "task:write", "tracing:read",
+  "transactional_email:write", "field_note:read", "field_note:write", "uploaded_media:read",
+  "uploaded_media:write", "usage_metric:read", "usage_metric:write", "user:read", "user:write",
+  "vision_alert:read", "vision_alert:write", "visual_review:read", "visual_review:write",
+  "warehouse_objects:write", "warehouse_table:read", "warehouse_table:write",
+  "warehouse_view:read", "warehouse_view:write", "web_analytics:read", "web_analytics:write",
+] as const;

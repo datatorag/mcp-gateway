@@ -421,17 +421,18 @@ export const SCENARIOS: Scenario[] = [
   },
   {
     key: "posthog",
-    title: "PostHog, read-only: the project, a trend and web analytics, HogQL and events, insights, people and errors",
+    title: "PostHog, read-only, through PostHog's own server: a tool described, the project, a query",
     steps: [
-      /* SCRUM-471. Admin-only and read-only, on HQ's own project: nothing is
-       * written, so nothing is restored and no send-guard rule is needed.
-       * PH1 needs no fixture beyond the account, so a red PH1 says the token
-       * or the project is the problem. Every range ends on an explicit date. */
-      "PH1", // the project answers as the connection's, without its API token
-      "PH2", // a closed-range trend answers one series; web analytics answers
-      "PH3", // a HogQL LIMIT over the cap is lowered; events answer
-      "PH4", // the fixture insight reads back; insights and dashboards list
-      "PH5", // people search and error issues answer in their shape
+      /* SCRUM-511. Admin-only, on HQ's own project. PostHog's own server is
+       * passed through, so every step is one tool, `posthog__exec`, and what
+       * differs is the command. That tool can change data in PostHog, so the
+       * send guard reads each command: the describing verbs, and a call of
+       * project-get or execute-sql, and nothing else. Nothing is written, so
+       * nothing is restored. PH1 reads nothing of the project, so a red PH1
+       * says the token or the pass-through is the problem. */
+      "PH1", // info answers with the description of the tool it was asked about
+      "PH2", // the project answers as the connection's project
+      "PH3", // a query that reads no table answers with its one row
     ],
   },
 ];

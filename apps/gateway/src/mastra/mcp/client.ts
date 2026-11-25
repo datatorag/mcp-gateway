@@ -8,6 +8,7 @@ import { NAMESPACE_SEPARATOR } from "@/gateway/plugin-manager";
 import { getSkillBySlug } from "@/lib/skills";
 import { ConnectionPool } from "@/gateway/pool";
 import { classifyWrite } from "@/gateway/playground/tools";
+import { hasUpstreamCallRule, upstreamCallMayChangeData } from "@/gateway/upstream-tools";
 import { capToolOutput } from "@/gateway/playground/cap";
 import { EPHEMERAL_CACHE_OPTIONS } from "@/mastra/agents/datatorag";
 import { getDb } from "@/lib/db";
@@ -113,6 +114,21 @@ export function requireApprovalFor(name: string): boolean {
   return classifyWrite(name);
 }
 
+/**
+ * The approval a tool is wrapped with (SCRUM-511): the name's answer, or,
+ * for a vendor tool whose one name covers both describing and changing
+ * (PostHog's `exec`), a per-call answer from the call's own arguments. A
+ * call it cannot read as harmless needs approval, and a tool the name gate
+ * already lets through is never made stricter or looser here.
+ */
+function approvalOf(name: string, byName: (name: string) => boolean): boolean | ((input: unknown) => boolean) {
+  const needed = byName(name);
+  // Every other tool keeps the plain answer its name gives.
+  if (!needed || !hasUpstreamCallRule(name)) return needed;
+  return (input: unknown) =>
+    upstreamCallMayChangeData(name, input !== null && typeof input === "object" ? (input as Record<string, unknown>) : {}) ?? true;
+}
+
 /** The MCP tool-definition fields the wrapper consumes. */
 type McpToolDef = {
   name: string;
@@ -146,7 +162,7 @@ export function wrapMcpTools(
     resolved[def.name] = {
       description: def.description ?? "",
       inputSchema: jsonSchema(def.inputSchema as JSONSchema7),
-      requireApproval: approvalFor(def.name),
+      requireApproval: approvalOf(def.name, approvalFor),
       // The result is returned as the MCP server shaped it — including its
       // worded scope refusals and error rewrites — capped for context size.
       // No metering, no rewriting, no account handling here: the server did

@@ -34,6 +34,7 @@ import { missingCheckouts, pluginShasFor } from "./plugin-sha";
 import { mcpServers, serviceConnections } from "@datatorag-mcp/db";
 import { PLUGIN_SERVICE_MAP } from "../service-token";
 import { CONNECTOR_REGISTRY } from "../connectors/registry";
+import { vendorConnectors } from "../upstream-tools";
 import { eq } from "drizzle-orm";
 
 /**
@@ -84,6 +85,19 @@ export const PLUGIN_ROLES: Record<string, readonly AccountRole[]> = Object.fromE
   CONNECTOR_REGISTRY.map((c) => [c.pluginSlug, c.runnerRoles])
 );
 
+/** A vendor's own tools (SCRUM-511) are named by the vendor's prefix, not by
+ * a plugin's slug, so that prefix has its connector's roles. */
+const VENDOR_ROLES: Record<string, readonly AccountRole[]> = Object.fromEntries(
+  vendorConnectors().map((c) => [c.upstream.slug, c.runnerRoles])
+);
+
+/** The roles that may run the tools named `<prefix>__<tool>`: a plugin's, or
+ * a vendor's. Undefined for a prefix that is neither, which no role may run. */
+export function rolesFor(prefix: string): readonly AccountRole[] | undefined {
+  if (Object.hasOwn(PLUGIN_ROLES, prefix)) return PLUGIN_ROLES[prefix];
+  return Object.hasOwn(VENDOR_ROLES, prefix) ? VENDOR_ROLES[prefix] : undefined;
+}
+
 /** The plugin a namespaced tool belongs to, or null for a built-in. */
 function pluginOf(tool: string): string | null {
   const at = tool.indexOf(NAMESPACE_SEPARATOR);
@@ -110,7 +124,7 @@ export function unmappedProbeRole(
 ): AccountRole | null {
   const slug = pluginOf(tool);
   if (slug === null) return null;
-  const role = PLUGIN_ROLES[slug]?.[0];
+  const role = rolesFor(slug)?.[0];
   if (!role) return null;
   return fixtures.account(role) ? null : role;
 }
@@ -123,7 +137,7 @@ export function accountArgs(
 ): Record<string, unknown> {
   const slug = pluginOf(tool);
   if (slug === null) return { ...args };
-  const allowed = PLUGIN_ROLES[slug];
+  const allowed = rolesFor(slug);
   if (!allowed) throw new Error(`${tool}: no role is allowed to run ${slug} tools, so it is not called`);
   if (!allowed.includes(role)) {
     throw new Error(`${tool}: runs as ${allowed.join(" or ")}, never as ${role}`);
@@ -633,7 +647,7 @@ async function driveRun(opts: {
              * required argument would otherwise run on the default account. */
             // A probe runs as the first role its plugin accepts. An unknown
             // plugin gets no role and `accountArgs` refuses it.
-            const probeRole = PLUGIN_ROLES[pluginOf(name) ?? ""]?.[0] ?? "sender";
+            const probeRole = rolesFor(pluginOf(name) ?? "")?.[0] ?? "sender";
             const result = await client.callTool(name, accountArgs(fixtures, name, {}, probeRole));
             return { content: result.content, isError: result.isError };
           });
@@ -745,6 +759,12 @@ export async function unusablePlugins(
     if (out.has(slug)) continue;
     if (!connected.has(service)) {
       out.set(slug, `this identity has no ${service} connection on this database`);
+    }
+  }
+  // A vendor's own tools need no checkout here, only the connection.
+  for (const vendor of vendorConnectors()) {
+    if (!connected.has(vendor.id)) {
+      out.set(vendor.upstream.slug, `this identity has no ${vendor.id} connection on this database`);
     }
   }
   return out;

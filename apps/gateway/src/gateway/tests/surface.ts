@@ -8,6 +8,7 @@ import { listConnectedServiceIds } from "../connected-services";
 import { classifyWrite } from "../playground/tools";
 import { isUuid } from "./read";
 import { visibleBuiltins, findVisibleBuiltin, BUILT_IN_TOOLS } from "../mcp-server";
+import { supersededPlugin } from "../upstream-tools";
 
 /**
  * Three questions a case asks of the gateway it is running inside (SCRUM-303).
@@ -54,7 +55,7 @@ export async function registrySurface(
   userId?: string
 ): Promise<{ plugins: PluginSurface[] }> {
   const connected = userId ? await listConnectedServiceIds(db, userId) : null;
-  const servers = await db
+  const active = await db
     .select({
       slug: mcpServers.slug,
       id: mcpServers.id,
@@ -63,6 +64,10 @@ export async function registrySurface(
     })
     .from(mcpServers)
     .where(eq(mcpServers.status, "active"));
+  // A plugin the vendor's own server has superseded (SCRUM-511) is not
+  // started and none of its rows is listed, so there is no process to ask
+  // and nothing of its registry to compare. Every other plugin is asked.
+  const servers = active.filter((server) => !supersededPlugin(server.slug));
 
   const plugins = await Promise.all(
     servers.map(async (server) => {

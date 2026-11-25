@@ -3,7 +3,15 @@ import type { Database } from "@datatorag-mcp/db";
 import { tools, mcpServers, connectedAccounts } from "@datatorag-mcp/db";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
-import { PLUGIN_SERVICE_MAP } from "./service-token";
+import { PLUGIN_SERVICE_MAP, resolveServiceToken } from "./service-token";
+import { NAMESPACE_SEPARATOR } from "./plugin-manager";
+import {
+  listUpstreamTools,
+  supersededPlugin,
+  upstreamListingKey,
+  vendorConnectors,
+  type VendorConnector,
+} from "./upstream-tools";
 import { listConnectedServiceIds } from "./connected-services";
 import { gwsRunHiddenFrom, publiclyListedTool } from "./gws-run-access";
 import { envValue } from "@datatorag-mcp/config";
@@ -76,6 +84,9 @@ export async function listUserToolRows(
 
   const result: UserToolRow[] = [];
   for (const t of registeredTools) {
+    // SCRUM-511: a plugin whose connector the vendor's own server serves
+    // lists nothing, whatever rows it still has in the registry.
+    if (supersededPlugin(t.serverSlug)) continue;
     const requiredService = PLUGIN_SERVICE_MAP[t.serverSlug];
 
     // Skip tools for services the user hasn't connected.
@@ -98,7 +109,41 @@ export async function listUserToolRows(
     });
   }
 
+  // SCRUM-511: the tools a vendor's own MCP server lists to this user, for
+  // each such connector they have connected. Read with their token, cached,
+  // and in the vendor's words; a vendor that cannot be reached lists
+  // nothing here and holds nothing else up.
+  const vendorRows = await Promise.all(
+    vendorConnectors()
+      .filter((c) => connectedServices.has(c.id))
+      .map((c) => upstreamToolRows(db, userId, c))
+  );
+  result.push(...vendorRows.flat());
+
   return result;
+}
+
+/** One connector's vendor tools as tool rows, or none when the user's token
+ * cannot be resolved or the vendor does not answer. The account is the
+ * user's default for the service, as for any call that names none. Every
+ * row says the tool can change data and cannot be undone, whatever the
+ * vendor's own listing says: a vendor's tool is not one we have reviewed. */
+export async function upstreamToolRows(db: Database, userId: string, connector: VendorConnector): Promise<UserToolRow[]> {
+  const resolved = await resolveServiceToken(db, userId, connector.id).catch(() => null);
+  if (!resolved || !("token" in resolved) || typeof resolved.token !== "string") return [];
+  const listed = await listUpstreamTools({
+    key: upstreamListingKey(userId, connector.id, resolved.accountEmail ?? null),
+    url: connector.upstream.url,
+    token: resolved.token,
+  });
+  return (listed ?? []).map((t) => ({
+    namespacedName: `${connector.upstream.slug}${NAMESPACE_SEPARATOR}${t.name}`,
+    description: t.description,
+    schema: t.inputSchema,
+    requiredService: connector.id,
+    readOnlyHint: false,
+    destructiveHint: true,
+  }));
 }
 
 /**
@@ -154,9 +199,39 @@ export function buildPluginServerUrl(server: PluginServerRow): string {
   return `http://dtrmcp-server-${server.slug}:${server.containerPort}/mcp`;
 }
 
+/** One MCP tool call on a fresh client: connect, call, close. The client is
+ * closed whatever happens, and a failure to close never replaces the call's
+ * own result or error. `signal` bounds the connect and the call together.
+ * The plugin call and the vendor call (`upstream-call.ts`) are both this,
+ * with their own URL and headers. */
+export async function callMcpToolOnce(opts: {
+  url: URL | string;
+  headers: Record<string, string>;
+  toolName: string;
+  args: Record<string, unknown>;
+  clientName: string;
+  signal?: AbortSignal;
+}): Promise<Awaited<ReturnType<Client["callTool"]>>> {
+  const transport = new StreamableHTTPClientTransport(new URL(opts.url), {
+    requestInit: { headers: opts.headers },
+  });
+  const client = new Client({ name: opts.clientName, version: "0.1.0" }, { capabilities: {} });
+  const params = { name: opts.toolName, arguments: opts.args };
+  try {
+    if (!opts.signal) {
+      await client.connect(transport);
+      return await client.callTool(params);
+    }
+    await client.connect(transport, { signal: opts.signal });
+    return await client.callTool(params, undefined, { signal: opts.signal });
+  } finally {
+    await client.close().catch(() => undefined);
+  }
+}
+
 /** One-shot per-user-token plugin call: fresh StreamableHTTP client with the
- * X-User-Token header, connect → callTool → close-in-finally. (Tokenless
- * calls use the shared ConnectionPool instead — see pool.ts.) */
+ * X-User-Token header. (Tokenless calls use the shared ConnectionPool
+ * instead, see pool.ts.) */
 export async function callPluginToolOnce(opts: {
   serverUrl: string;
   userToken: string;
@@ -167,20 +242,11 @@ export async function callPluginToolOnce(opts: {
    * `pluginContextHeaders`). The token is set last, so none replaces it. */
   contextHeaders?: Record<string, string>;
 }): Promise<Awaited<ReturnType<Client["callTool"]>>> {
-  const transport = new StreamableHTTPClientTransport(new URL(opts.serverUrl), {
-    requestInit: { headers: { ...opts.contextHeaders, "X-User-Token": opts.userToken } },
+  return callMcpToolOnce({
+    url: opts.serverUrl,
+    headers: { ...opts.contextHeaders, "X-User-Token": opts.userToken },
+    toolName: opts.toolName,
+    args: opts.args,
+    clientName: opts.clientName,
   });
-  const client = new Client(
-    { name: opts.clientName, version: "0.1.0" },
-    { capabilities: {} }
-  );
-  try {
-    await client.connect(transport);
-    return await client.callTool({
-      name: opts.toolName,
-      arguments: opts.args,
-    });
-  } finally {
-    await client.close();
-  }
 }

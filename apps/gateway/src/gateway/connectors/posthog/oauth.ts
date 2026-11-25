@@ -1,15 +1,23 @@
 /**
- * PostHog's OAuth (SCRUM-471): the endpoints, the scopes the connector asks
- * for, the client metadata document, and its connect for the shared flow.
- * The refresh and revoke are in `tokens.ts`.
+ * PostHog's OAuth (SCRUM-471, SCRUM-511): the endpoints, the scopes the
+ * connector asks for, the client metadata document, and its connect for the
+ * shared flow. The refresh and revoke are in `tokens.ts`.
  *
  * PostHog takes a Client ID Metadata Document: the client id is the URL of a
  * JSON document we serve, there is no client secret and no registration, and
- * every code exchange proves itself with PKCE (S256). One regional host,
- * never `oauth.posthog.com`: that host's proxy remembers a user's region under
- * the client id alone, and a metadata-document client has one id for everyone.
+ * every code exchange proves itself with PKCE (S256).
+ *
+ * The authorization server is the one PostHog's own MCP server names in its
+ * protected resource metadata, `oauth.posthog.com` (SCRUM-511): the
+ * connector's tools are that server's now, so the grant is made where that
+ * server says to make it. It stands in front of the regional hosts and the
+ * token it hands back belongs to one of them, named in the token response.
+ * Known and accepted while the connector is for our own project: that host
+ * remembers a user's region under the client id, and a metadata-document
+ * client has one id for everyone.
  */
 import { envValue } from "@datatorag-mcp/config";
+import { POSTHOG_MCP_SCOPE_LIST } from "./mcp-scopes";
 import { cleanWorkspaceName } from "../../untrusted-text";
 import type { ConnectorOAuth } from "../../connect/connector-oauth";
 
@@ -41,17 +49,24 @@ export function posthogEndpoints(host: string) {
   };
 }
 
-/** What the ten read tools need, and the identity: no write scope at all. */
-export const POSTHOG_SCOPE_LIST = [
-  "openid",
-  "email",
-  "project:read",
-  "query:read",
-  "insight:read",
-  "dashboard:read",
-  "person:read",
-  "error_tracking:read",
-] as const;
+/** The authorization server PostHog's MCP server names (SCRUM-511). A
+ * constant in reviewed code, because it is where a user's code and refresh
+ * token are sent. */
+export const POSTHOG_AUTHORIZATION_SERVER = "https://oauth.posthog.com";
+
+/** The authorize, token, revoke, and userinfo endpoints of that server. */
+export function posthogOAuthEndpoints() {
+  return posthogEndpoints(POSTHOG_AUTHORIZATION_SERVER);
+}
+
+/** Whether a base URL a token response names is one of PostHog's two
+ * regional hosts: the only places the token is then used. */
+export function isPostHogHost(value: unknown): value is PostHogHost {
+  return typeof value === "string" && (POSTHOG_HOSTS as readonly string[]).includes(value);
+}
+
+/** Everything PostHog's MCP server supports, reads and writes (SCRUM-511). */
+export const POSTHOG_SCOPE_LIST = POSTHOG_MCP_SCOPE_LIST;
 export const POSTHOG_SCOPES = POSTHOG_SCOPE_LIST.join(" ");
 
 export const POSTHOG_CLIENT_METADATA_PATH = "/auth/posthog/client.json";
@@ -85,8 +100,8 @@ export function posthogClientMetadata(baseUrl: string) {
 /** The fields of PostHog's token response the connect reads. */
 type PostHogTokenResponse = { posthog_base_url?: unknown; scoped_teams?: unknown };
 
-// One PostHog regional host, a client metadata document for a client id and
-// PKCE in place of a secret. One connection is one project: the consent
+// PostHog's authorization server, a client metadata document for a client id
+// and PKCE in place of a secret. One connection is one project: the consent
 // screen asks for projects, and a grant of none or several is refused. The
 // project id is the account's external id; its name is the label.
 export const POSTHOG_CONNECT: ConnectorOAuth = {
@@ -113,7 +128,7 @@ export const POSTHOG_CONNECT: ConnectorOAuth = {
   },
 
   authorizeUrl(ctx, nonce, codeChallenge) {
-    const url = new URL(posthogEndpoints(posthogHost()).authorize);
+    const url = new URL(posthogOAuthEndpoints().authorize);
     url.searchParams.set("client_id", posthogClientId(ctx.config.baseUrl));
     url.searchParams.set("redirect_uri", ctx.redirectUri);
     url.searchParams.set("response_type", "code");
@@ -126,7 +141,7 @@ export const POSTHOG_CONNECT: ConnectorOAuth = {
   },
 
   async exchange(code, ctx, codeVerifier) {
-    const res = await fetch(posthogEndpoints(posthogHost()).token, {
+    const res = await fetch(posthogOAuthEndpoints().token, {
       method: "POST",
       headers: { "Content-Type": "application/x-www-form-urlencoded" },
       body: new URLSearchParams({
@@ -141,11 +156,13 @@ export const POSTHOG_CONNECT: ConnectorOAuth = {
   },
 
   async identify(tokens) {
-    const host = posthogHost();
     const raw = tokens.raw as PostHogTokenResponse;
-    // A token is valid only on its own region's host, so one that says it
-    // belongs elsewhere is refused, not stored.
-    if (raw.posthog_base_url !== undefined && raw.posthog_base_url !== host) return { error: "region_not_allowed" };
+    // A token is valid only on its own region's host. The response names
+    // it; a name that is not one of PostHog's two hosts is refused, not
+    // stored, since the token is sent there next. A response that names
+    // none is read on the configured host.
+    if (raw.posthog_base_url !== undefined && !isPostHogHost(raw.posthog_base_url)) return { error: "region_not_allowed" };
+    const host = isPostHogHost(raw.posthog_base_url) ? raw.posthog_base_url : posthogHost();
     // One connection is one project.
     const teams = raw.scoped_teams;
     if (!Array.isArray(teams) || teams.length !== 1 || !Number.isSafeInteger(teams[0]) || teams[0] <= 0) {
@@ -158,7 +175,7 @@ export const POSTHOG_CONNECT: ConnectorOAuth = {
     const endpoints = posthogEndpoints(host);
     const auth = { Authorization: `Bearer ${tokens.accessToken}` };
     const [userInfoRes, projectRes] = await Promise.all([
-      fetch(endpoints.userinfo, { headers: auth }),
+      fetch(posthogOAuthEndpoints().userinfo, { headers: auth }),
       fetch(endpoints.project(projectId), { headers: { ...auth, Accept: "application/json" } }),
     ]);
     if (!userInfoRes.ok) return null;

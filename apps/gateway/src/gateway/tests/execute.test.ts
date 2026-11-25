@@ -703,3 +703,81 @@ describe("a contract probe with no account mapped is skipped, not failed (SCRUM-
     expect(unmappedProbeRole(none, "echo")).toBeNull();
   });
 });
+
+/* SCRUM-511: a vendor's own tool has the vendor's prefix, not a plugin's
+ * slug, and no registry row. It still runs only as its connector's role, and
+ * still goes through the send guard. */
+describe("a vendor's own tool (SCRUM-511)", () => {
+  const fixtures = parseFixtureMap(
+    JSON.stringify({ accounts: { sender: "sender@example.test", reader: "reader@example.test", posthog: "4242" } })
+  );
+  const makeClient = () => ({
+    listTools: vi.fn().mockResolvedValue([{ name: "posthog__exec" }]),
+    callTool: vi.fn().mockResolvedValue({ content: [{ type: "text", text: "{}" }] }),
+    close: vi.fn(),
+  });
+  const context = "an automated read-only smoke test";
+
+  it("runs as the connector's role, with that role's account", async () => {
+    const client = makeClient();
+    const parts = makeContextParts({ client, fixtures, called: [] });
+    await parts.call("posthog__exec", { command: "info project-get", context }, { as: "posthog" });
+    expect(client.callTool).toHaveBeenCalledWith("posthog__exec", { command: "info project-get", context, account: "4242" });
+  });
+
+  it("never runs as another connector's role", async () => {
+    const client = makeClient();
+    const parts = makeContextParts({ client, fixtures, called: [] });
+    await expect(parts.call("posthog__exec", { command: "info project-get", context }, { as: "sender" })).rejects.toThrow(
+      /runs as posthog, never as sender/
+    );
+    expect(client.callTool).not.toHaveBeenCalled();
+  });
+
+  it("refuses a command the guard rejects, before it reaches PostHog", async () => {
+    const client = makeClient();
+    const parts = makeContextParts({ client, fixtures, called: [] });
+    await expect(
+      parts.call("posthog__exec", { command: 'call dashboard-delete {"id":1}', context }, { as: "posthog" })
+    ).rejects.toThrow(/send refused/);
+    expect(client.callTool).not.toHaveBeenCalled();
+  });
+
+  it("is a write to the contract check, so it is never probed with empty arguments", () => {
+    expect(contractSubjectFor({ name: "posthog__exec", inputSchema: { type: "object" } }).isRead).toBe(false);
+  });
+
+  it("skips its probe, not fails it, when the role has no account", () => {
+    const none = parseFixtureMap(JSON.stringify({ accounts: { sender: "s@example.test" } }));
+    expect(unmappedProbeRole(none, "posthog__exec")).toBe("posthog");
+    expect(unmappedProbeRole(fixtures, "posthog__exec")).toBeNull();
+  });
+
+  it("gives a vendor's prefix its connector's roles, a plugin its own, and an unknown prefix none", async () => {
+    const { rolesFor, PLUGIN_ROLES } = await import("./execute");
+    const { CONNECTOR_REGISTRY } = await import("../connectors/registry");
+    const { vendorConnectors } = await import("../upstream-tools");
+    for (const c of CONNECTOR_REGISTRY) expect(rolesFor(c.pluginSlug), c.pluginSlug).toEqual(c.runnerRoles);
+    for (const v of vendorConnectors()) expect(rolesFor(v.upstream.slug), v.upstream.slug).toEqual(v.runnerRoles);
+    expect(rolesFor("posthog")).toEqual(["posthog"]);
+    expect(rolesFor("mystery-mcp")).toBeUndefined();
+    expect(rolesFor("constructor")).toBeUndefined();
+    // The plugin map itself is the plugins' alone, as before.
+    expect(Object.keys(PLUGIN_ROLES).sort()).toEqual(CONNECTOR_REGISTRY.map((c) => c.pluginSlug).sort());
+  });
+
+  it("blocks a vendor's case when the identity has not connected the service, as it does a plugin's", async () => {
+    const { unusablePlugins } = await import("./execute");
+    const dbWith = (services: string[]) =>
+      ({ select: () => ({ from: () => ({ where: async () => services.map((service) => ({ service })) }) }) }) as never;
+    const without = await unusablePlugins(dbWith(["google-workspace"]), "u1", []);
+    expect(pluginsBlocking({ covers: ["posthog__exec"] }, without)).toEqual([
+      ["posthog", "this identity has no posthog connection on this database"],
+    ]);
+    const connected = await unusablePlugins(dbWith(["google-workspace", "posthog"]), "u1", []);
+    expect(pluginsBlocking({ covers: ["posthog__exec"] }, connected)).toEqual([]);
+    // A plugin's own rule is unchanged.
+    expect(without.get("atlassian-mcp")).toBe("this identity has no atlassian connection on this database");
+    expect(without.has("gws-mcp")).toBe(false);
+  });
+});

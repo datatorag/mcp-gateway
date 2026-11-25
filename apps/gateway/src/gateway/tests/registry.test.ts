@@ -144,6 +144,53 @@ describe("the Slack connector's coverage", () => {
   });
 });
 
+/**
+ * A connector whose vendor serves the tools (SCRUM-511) has no rows of ours
+ * to count: its tools are the vendor's list, read at run time. What holds
+ * without a database is the other half. No case may still call a tool of
+ * the plugin the vendor superseded, since the gateway refuses every one as
+ * unknown; and the connector keeps a scenario of cases on the vendor's own
+ * tools, run as its role. Read from the connector registry, so the next
+ * vendor-served connector is held to it with no list to edit here.
+ */
+describe("a vendor-served connector's coverage", () => {
+  const slugOf = (tool: string) => (tool.includes("__") ? tool.slice(0, tool.indexOf("__")) : null);
+
+  it("has no case that calls a tool of a superseded plugin", async () => {
+    const { supersededPlugin } = await import("../upstream-tools");
+    const stale = CASES.flatMap((c) =>
+      [...c.covers, ...(c.cleanupCalls ?? [])].filter((t) => supersededPlugin(slugOf(t) ?? "")).map((t) => `${c.id}: ${t}`)
+    );
+    expect(stale).toEqual([]);
+  });
+
+  it("has cases on the vendor's own tools, in one scenario, run as the connector's role and nothing else", async () => {
+    const { vendorConnectors } = await import("../upstream-tools");
+    const { scenarioOf } = await import("./scenarios");
+    expect(vendorConnectors().length).toBeGreaterThan(0);
+    for (const vendor of vendorConnectors()) {
+      const cases = CASES.filter((c) => c.covers.some((t) => slugOf(t) === vendor.upstream.slug));
+      expect(cases.length, vendor.id).toBeGreaterThan(0);
+      expect(new Set(cases.map((c) => scenarioOf(c.id)?.key)).size, vendor.id).toBe(1);
+      for (const c of cases) {
+        expect(c.accounts.length, c.id).toBeGreaterThan(0);
+        expect(c.accounts.every((r) => vendor.runnerRoles.includes(r)), c.id).toBe(true);
+      }
+    }
+  });
+
+  it("covers PostHog's one tool, posthog__exec, in the posthog scenario", async () => {
+    const { scenarioOf } = await import("./scenarios");
+    const cases = CASES.filter((c) => c.covers.includes("posthog__exec"));
+    expect(cases.map((c) => c.id).sort()).toEqual(["PH1", "PH2", "PH3"]);
+    for (const c of cases) {
+      expect(c.covers, c.id).toEqual(["posthog__exec"]);
+      expect(c.accounts, c.id).toEqual(["posthog"]);
+      expect(scenarioOf(c.id)?.key, c.id).toBe("posthog");
+    }
+  });
+});
+
 describe("what it rejects", () => {
   it("accepts a well-formed set, so the rejections below are not blanket", () => {
     expect(checkRegistry([c({ id: "D10" }), c({ id: "D11", needs: ["D10"] })])).toEqual([]);

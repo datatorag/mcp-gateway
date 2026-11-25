@@ -24,7 +24,7 @@ import { join } from "node:path";
 import ts from "typescript";
 import { CASES_DIR } from "./registry";
 import { isCaseFile } from "./case-arguments";
-import { PLUGIN_ROLES } from "./execute";
+import { rolesFor } from "./execute";
 
 const RUNNER_DIR = join(CASES_DIR, "..");
 
@@ -161,7 +161,7 @@ describe("every plugin call carries a mapped account", () => {
         }
 
         const slug = tool.slice(0, tool.indexOf("__"));
-        const allowed = PLUGIN_ROLES[slug] ?? [];
+        const allowed = rolesFor(slug) ?? [];
         if (!allowed.includes(role as never)) offenders.push(`${at}: ${tool} as ${role}`);
         if (!declared || !(declared as string[]).includes(role)) {
           offenders.push(`${at}: ${tool} as ${role}, which the case does not declare`);
