@@ -110,6 +110,25 @@ export async function endGrantForClient(db: Database, userId: string, clientId: 
     // the revoke and finds its token revoked. Ordered by id so two removals of
     // the same grant cannot deadlock. The bound only stops a client that
     // refreshes without pause from holding Remove open.
+    // Codes first. An exchange in flight claims its code and issues the
+    // tokens in one transaction, holding the code's row until they are
+    // committed; waiting on that row here means the token reads below see
+    // what it issued. An exchange that comes after this lock waits for the
+    // revoke and finds its code spent. No expiry filter on this lock: a code
+    // claimed in its last moments may expire before this runs, and the lock
+    // must still wait on the exchange holding it.
+    await tx
+      .select({ id: oauthAuthorizationCodes.id })
+      .from(oauthAuthorizationCodes)
+      .where(
+        and(
+          eq(oauthAuthorizationCodes.userId, userId),
+          eq(oauthAuthorizationCodes.clientId, clientId),
+          isNull(oauthAuthorizationCodes.usedAt)
+        )
+      )
+      .orderBy(oauthAuthorizationCodes.id)
+      .for("update");
     const liveRefresh = and(
       eq(oauthRefreshTokens.userId, userId),
       eq(oauthRefreshTokens.clientId, clientId),

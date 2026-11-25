@@ -8,7 +8,7 @@ import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { createServer, type Server } from "node:http";
 import express from "express";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq, isNull, sql } from "drizzle-orm";
 import type { Database } from "@datatorag-mcp/db";
 import { oauthAccessTokens, oauthAuthorizationCodes, oauthClients, oauthConsents, oauthRefreshTokens } from "@datatorag-mcp/db";
 import { hashToken } from "@datatorag-mcp/auth";
@@ -467,6 +467,116 @@ describe.skipIf(!isDockerAvailable())("approved apps (real db)", () => {
         body: new URLSearchParams({ grant_type: "refresh_token", refresh_token: newRefresh, client_id: clientId }),
       });
       expect(res.status).toBe(400);
+    });
+
+    /** How many backends of this database are waiting on a row lock. */
+    async function lockWaiters(): Promise<number> {
+      const rows = (await db.execute(
+        sql`select count(*)::int as n from pg_stat_activity
+            where datname = current_database() and wait_event_type = 'Lock'`
+      )) as unknown as { n: number }[];
+      return rows[0]?.n ?? 0;
+    }
+
+    async function untilLockWaiters(n: number): Promise<void> {
+      const deadline = Date.now() + 10_000;
+      while ((await lockWaiters()) < n) {
+        if (Date.now() > deadline) throw new Error(`fewer than ${n} backends ever waited on a lock`);
+        await new Promise((r) => setTimeout(r, 25));
+      }
+    }
+
+    it("two exchanges of one code that both got past the read issue one sign-in", async () => {
+      const userId = await insertTestUser(db);
+      const clientId = await client();
+      const issued = await issueCode(userId, clientId);
+      const [row] = await db
+        .select({ id: oauthAuthorizationCodes.id })
+        .from(oauthAuthorizationCodes)
+        .where(eq(oauthAuthorizationCodes.codeHash, hashToken(issued.code)));
+
+      let release!: () => void;
+      const gate = new Promise<void>((r) => (release = r));
+      let held!: () => void;
+      const holding = new Promise<void>((r) => (held = r));
+      const holder = db.transaction(async (tx) => {
+        await tx.select().from(oauthAuthorizationCodes).where(eq(oauthAuthorizationCodes.id, row.id)).for("update");
+        held();
+        await gate;
+      });
+      await holding;
+
+      const first = exchange(issued);
+      const second = exchange(issued);
+      try {
+        await untilLockWaiters(2);
+      } finally {
+        release();
+        await holder;
+      }
+      const statuses = [(await first).status, (await second).status].sort();
+
+      expect(statuses).toEqual([200, 400]);
+      const families = await db
+        .select({ id: oauthRefreshTokens.id })
+        .from(oauthRefreshTokens)
+        .where(and(eq(oauthRefreshTokens.userId, userId), eq(oauthRefreshTokens.clientId, clientId)));
+      expect(families).toHaveLength(1);
+    });
+
+    it("a code exchange already past its read when Remove commits leaves no working token", async () => {
+      const userId = await insertTestUser(db);
+      const clientId = await client();
+      await approve(userId, clientId);
+      const issued = await issueCode(userId, clientId);
+      const [row] = await db
+        .select({ id: oauthAuthorizationCodes.id })
+        .from(oauthAuthorizationCodes)
+        .where(eq(oauthAuthorizationCodes.codeHash, hashToken(issued.code)));
+
+      // Hold the code's row so both sides queue on it: the exchange first,
+      // once it has read the code and checked it, then Remove.
+      let release!: () => void;
+      const gate = new Promise<void>((r) => (release = r));
+      let held!: () => void;
+      const holding = new Promise<void>((r) => (held = r));
+      const holder = db.transaction(async (tx) => {
+        await tx.select().from(oauthAuthorizationCodes).where(eq(oauthAuthorizationCodes.id, row.id)).for("update");
+        held();
+        await gate;
+      });
+      await holding;
+
+      const exchanging = exchange(issued);
+      let removing: Promise<unknown> = Promise.resolve();
+      try {
+        await untilLockWaiters(1);
+        removing = endGrantForClient(db, userId, clientId);
+        await untilLockWaiters(2);
+      } finally {
+        release();
+        await holder;
+      }
+      const exchanged = await exchanging;
+      await removing;
+
+      // Whichever way the race went, the app holds nothing that works.
+      const liveRefresh = await db
+        .select({ id: oauthRefreshTokens.id })
+        .from(oauthRefreshTokens)
+        .where(
+          and(
+            eq(oauthRefreshTokens.userId, userId),
+            eq(oauthRefreshTokens.clientId, clientId),
+            isNull(oauthRefreshTokens.revokedAt)
+          )
+        );
+      expect(liveRefresh).toEqual([]);
+      if (exchanged.status === 200) {
+        expect((await resolveBearer(db, String(exchanged.body.access_token))).ok).toBe(false);
+      } else {
+        expect(exchanged.status).toBe(400);
+      }
     });
   });
 

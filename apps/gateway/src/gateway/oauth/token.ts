@@ -1,7 +1,7 @@
 import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { Router } from "express";
 import type { Request, Response } from "express";
-import { eq, and, isNull } from "drizzle-orm";
+import { eq, and, gt, isNull } from "drizzle-orm";
 import type { Database } from "@datatorag-mcp/db";
 import {
   oauthAuthorizationCodes,
@@ -120,18 +120,31 @@ export function createTokenRouter(db: Database): Router {
       return;
     }
 
-    await db
-      .update(oauthAuthorizationCodes)
-      .set({ usedAt: new Date() })
-      .where(eq(oauthAuthorizationCodes.id, authCode.id));
-
     const accessToken = randomBytes(32).toString("base64url");
     const refreshToken = randomBytes(32).toString("base64url");
     const refreshTokenHash = hashToken(refreshToken);
     const now = Date.now();
     const familyId = randomUUID();
 
-    await db.transaction(async (tx) => {
+    // Claim the code and issue its tokens in one transaction. The claim is
+    // conditional, so a code spent since it was read above (a second
+    // exchange, or Remove on the Connections page) is refused here, and it
+    // holds the code's row until the tokens are committed, so a Remove that
+    // waits on that row sees them and revokes them.
+    const claimed = await db.transaction(async (tx) => {
+      const [claim] = await tx
+        .update(oauthAuthorizationCodes)
+        .set({ usedAt: new Date() })
+        .where(
+          and(
+            eq(oauthAuthorizationCodes.id, authCode.id),
+            isNull(oauthAuthorizationCodes.usedAt),
+            gt(oauthAuthorizationCodes.expiresAt, new Date())
+          )
+        )
+        .returning({ id: oauthAuthorizationCodes.id });
+      if (!claim) return false;
+
       await tx.insert(oauthAccessTokens).values({
         token: accessToken,
         // SCRUM-443 release 1: the hash beside the raw value.
@@ -149,7 +162,16 @@ export function createTokenRouter(db: Database): Router {
         expiresAt: new Date(now + REFRESH_TOKEN_TTL_MS),
         familyId,
       });
+      return true;
     });
+
+    if (!claimed) {
+      res.status(400).json({
+        error: "invalid_grant",
+        error_description: "Invalid or already used authorization code",
+      });
+      return;
+    }
 
     res.json({
       access_token: accessToken,
