@@ -239,13 +239,3 @@ export function useCaseSearchTitle(useCase: UseCase): string {
 export function shortTool(tool: string): string {
   return tool.slice(tool.indexOf("__") + 2);
 }
-
-/** The result as plain text lines, for the replay's answer and for metadata. */
-export function resultAsMarkdown(result: UseCaseResult): string {
-  if (result.kind === "text") return result.lines.map((l) => `- ${l}`).join("\n");
-  if (result.kind === "table") {
-    const row = (cells: string[]) => `| ${cells.join(" | ")} |`;
-    return [row(result.columns), row(result.columns.map(() => "---")), ...result.rows.map(row)].join("\n");
-  }
-  return [`**${result.what}: ${result.title}**`, "", ...result.lines.map((l) => `- ${l}`)].join("\n");
-}

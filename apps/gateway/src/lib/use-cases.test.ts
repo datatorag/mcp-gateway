@@ -12,7 +12,6 @@ import {
   getAllUseCases,
   readUseCase,
   relatedUseCases,
-  resultAsMarkdown,
   serviceNames,
   shortTool,
   useCasePassage,
@@ -170,11 +169,5 @@ describe("what a record gives the page", () => {
     }
     const email = useCases.find((u) => u.slug === "turn-an-email-thread-into-a-jira-issue")!;
     expect(relatedUseCases(email)[0].slug).toBe("morning-brief-across-every-inbox");
-  });
-
-  it("the result in each of its three shapes", () => {
-    expect(resultAsMarkdown({ kind: "text", lines: ["a", "b"] })).toBe("- a\n- b");
-    expect(resultAsMarkdown({ kind: "table", columns: ["A", "B"], rows: [["1", "2"]] })).toBe("| A | B |\n| --- | --- |\n| 1 | 2 |");
-    expect(resultAsMarkdown({ kind: "created", what: "Draft", title: "Hello", lines: ["a"] })).toBe("**Draft: Hello**\n\n- a");
   });
 });
