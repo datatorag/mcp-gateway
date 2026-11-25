@@ -2,8 +2,8 @@
 title: "You Can Self-Host a Google Workspace MCP for Free. The OAuth Verification Is the Catch."
 excerpt: "The open-source Google Workspace MCP servers are genuinely good. The cost isn't the code. It's the Google Cloud project, the consent screen, and the verification that comes after."
 date: "2026-06-29"
-updated: "2026-11-17"
-updatedNote: "November 17, 2026: the post said to run our code yourself with Docker Compose and Postgres. There is no packaged self-host guide; the source is open, and the post now names what you would supply: a Postgres database, your own Google OAuth clients and an encryption key for the stored tokens. Notion added to what comes built in. August 26, 2026: narrowed an overbroad privacy claim. The pass-through statement implied nothing is stored anywhere; the gateway keeps nothing, but the hosted agent on our own site stores its conversation threads. The privacy policy is now linked from the paragraph."
+updated: "2026-11-25"
+updatedNote: "November 25, 2026: the comparison row on where data lives said the gateway stores nothing; it stores each connection's sign-in tokens, encrypted, and passes your Workspace content through without keeping it. The row now says that. November 17, 2026: the post said to run our code yourself with Docker Compose and Postgres. There is no packaged self-host guide; the source is open, and the post now names what you would supply: a Postgres database, your own Google OAuth clients and an encryption key for the stored tokens. Notion added to what comes built in. August 26, 2026: narrowed an overbroad privacy claim. The pass-through statement implied nothing is stored anywhere; the gateway keeps nothing, but the hosted agent on our own site stores its conversation threads. The privacy policy is now linked from the paragraph."
 author: "Manuel Yang"
 category: "Comparison"
 coverImage: "/blog/open-source-google-workspace-mcp-alternative.png"
@@ -65,7 +65,7 @@ This isn't open versus closed, and I want to be straight about that. We open-sou
 | Multi-account under one endpoint | Yes, you wire it up | Yes | Yes |
 | Token storage and rotation on you | Yes | No | Yes, on your infra |
 | Hosting and uptime on you | Yes | No | Yes |
-| Data never leaves your servers | Yes | No (pass-through; the gateway stores nothing, [see privacy](/privacy)) | Yes |
+| Data never leaves your servers | Yes | No (your content is passed through and not kept; your sign-in tokens are stored, encrypted; [see privacy](/privacy)) | Yes |
 | Open source (MIT) | Yes | Yes (same code) | Yes |
 
 Notice the OSS server actually covers more Google surface than we do. It has Forms and Apps Script. We don't. I'm not going to spin that. If raw Google service count is your metric, the OSS project wins. Our argument was never tool count.

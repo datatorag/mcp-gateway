@@ -1,9 +1,9 @@
 ---
-title: "Building a Usage Dashboard Without Logging User Data"
+title: "Building a Usage Dashboard Without Logging Arguments or Response Bodies"
 excerpt: "How we show users exactly what their agent is doing (calls, latency, errors) without storing a single argument or response body."
 date: "2026-04-20"
-updated: "2026-11-17"
-updatedNote: "November 17, 2026: the row now lists every field it holds (the account, client, argument size and cost units, and for the raw gws_run call its service, resource, method and parameter names, never values); a redacted copy of each event goes to our analytics provider; and hosted agent calls count, since plans are billed on this meter. Corrected the error-message claim. The post said stored error messages are redacted, which was true when it was written and is no longer. The redaction protected against sending user content to a third-party analytics provider, and that still happens; it was never a reason to censor the copy stored for the user in a row only they can see, quoting an error they had already received in full. The stored copy is now raw."
+updated: "2026-11-25"
+updatedNote: "November 25, 2026: retitled. The title said the dashboard logs no user data. The row holds no arguments and no response bodies, but a stored error message is kept as received and can quote the user's own data, as the post itself says, so the title now says what is true. November 17, 2026: the row now lists every field it holds (the account, client, argument size and cost units, and for the raw gws_run call its service, resource, method and parameter names, never values); a redacted copy of each event goes to our analytics provider; and hosted agent calls count, since plans are billed on this meter. Corrected the error-message claim. The post said stored error messages are redacted, which was true when it was written and is no longer. The redaction protected against sending user content to a third-party analytics provider, and that still happens; it was never a reason to censor the copy stored for the user in a row only they can see, quoting an error they had already received in full. The stored copy is now raw."
 author: "Manuel Yang"
 category: "Engineering"
 coverImage: "/blog/usage-dashboard.png"

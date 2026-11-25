@@ -2,8 +2,8 @@
 title: "Looking for an Open-Source Composio Alternative? Check Which Part Is Actually Open."
 excerpt: "Composio's SDKs are open source. The runtime that holds your tokens and executes your calls is not, and self-hosting it is an enterprise-plan conversation. If 'open source' means 'I can run the whole thing myself', the license on the SDK isn't the license that matters."
 date: "2026-07-23"
-updated: "2026-11-17"
-updatedNote: "November 17, 2026: the self-hosting steps said `docker compose up` with your own Postgres. That command does not work as written and there is no packaged self-host guide, so the post now says the source is open and lists what you would supply instead of printing a command. The scope paragraph now counts Notion, connected since October 2026. The comparison table said our client SDKs are open source; we ship no client SDK, because any MCP client connects to the gateway, so the row now says that. August 24, 2026: narrowed an overbroad privacy claim. The pass-through statement used to end 'there's no copy at all'; the gateway keeps nothing, but the hosted agent on our own site stores its conversation threads. The privacy policy is now linked from the paragraph."
+updated: "2026-11-25"
+updatedNote: "November 25, 2026: two corrections. The table and the closing section said hosted DataToRAG stores nothing; it stores each connection's sign-in tokens, encrypted, in our database, and the rows now say so. Your Workspace content is still passed through and not kept. The post also said Composio had no Google Slides or Contacts toolkit; its own pages list both today, so that sentence is removed. November 17, 2026: the self-hosting steps said `docker compose up` with your own Postgres. That command does not work as written and there is no packaged self-host guide, so the post now says the source is open and lists what you would supply instead of printing a command. The scope paragraph now counts Notion, connected since October 2026. The comparison table said our client SDKs are open source; we ship no client SDK, because any MCP client connects to the gateway, so the row now says that. August 24, 2026: narrowed an overbroad privacy claim. The pass-through statement used to end 'there's no copy at all'; the gateway keeps nothing, but the hosted agent on our own site stores its conversation threads. The privacy policy is now linked from the paragraph."
 author: "Manuel Yang"
 category: "Comparison"
 coverImage: "/blog/open-source-composio-alternative.png"
@@ -28,7 +28,7 @@ DataToRAG's core is MIT-licensed, so running it yourself is a matter of the code
 
 And in either mode, hosted or self-hosted, the gateway is pass-through. When Claude calls `gmail_search`, the request goes to Google on your behalf and the result comes straight back. We don't retain your messages, files, or calendar, and there's no copy of your inbox in anyone's database to leak later.
 
-Corrected August 24, 2026: this paragraph used to end "because there's no copy at all", which overstated it. The gateway itself keeps nothing, but the **hosted agent on our site** stores its own conversation threads, including anything the agent quoted into them. Connect your own client to the gateway and that does not apply. The [privacy policy](/privacy) has the specifics.
+Corrected August 24, 2026: this paragraph used to end "because there's no copy at all", which overstated it. The gateway itself keeps none of your Workspace content. On the hosted service it does store each connection's sign-in tokens, encrypted, and the **hosted agent on our site** stores its own conversation threads, including anything the agent quoted into them. Connect your own client to the gateway and that does not apply. The [privacy policy](/privacy) has the specifics.
 
 So the layering works out like this:
 
@@ -37,8 +37,8 @@ So the layering works out like this:
 | Client SDKs | Open source | None needed: any MCP client connects |
 | The runtime executing calls | Closed | MIT, same repo |
 | Self-hosting | Enterprise plans | Source open (MIT); you supply the database, OAuth clients and keys |
-| Where tokens live (self-serve) | Composio's cloud | Pass-through hosted, or your own Postgres self-hosted |
-| Your data at rest with the vendor | Tokens, yes | Nothing stored either way |
+| Where tokens live (self-serve) | Composio's cloud | Our database, encrypted, on hosted; your own Postgres self-hosted |
+| Your data at rest with the vendor | Tokens, yes | Tokens on hosted (encrypted); no Workspace content either way |
 | Attestations | SOC 2 Type II, ISO 27001 | CASA Tier 2 passed, Google-verified (June 2026) |
 
 That last row cuts both ways and I want to keep it honest. If your procurement checklist says SOC 2 and ISO 27001, Composio has shipped those and we haven't. What we finished instead is CASA Tier 2, the Google-specific security review required for restricted Gmail and Drive scopes: a zero-findings scan and Google's verification of the app in June 2026. Different credential, aimed at a different question. For Google Workspace data specifically, it's the relevant one.
@@ -47,7 +47,7 @@ That last row cuts both ways and I want to keep it honest. If your procurement c
 
 Composio's catalog is over 1,000 toolkits. Ours is 8 Google services, Jira and Confluence, and Notion. If your agent needs Salesforce, Slack and a dozen niche APIs, an open-source Workspace gateway doesn't answer that, and I'd rather say so in the third section than have you find out after a migration.
 
-What you get for the narrower scope is depth. Hand-built Google tools, including the ones platforms tend to skip: `docs_batch_update` for restructuring a document in place, `slides_create` and `slides_batch_update` for building decks, full `contacts_*` and `tasks_*` sets, `gmail_send` and `gmail_reply` so workflows finish instead of stopping at a draft. Composio, for all its breadth, had no standalone Slides toolkit and no standalone Contacts toolkit at the time of writing. Multi-account is built in too: a work Google account, a personal one, and a shared inbox behind one endpoint, addressable in a single prompt.
+What you get for the narrower scope is depth. Hand-built Google tools, including the ones platforms tend to skip: `docs_batch_update` for restructuring a document in place, `slides_create` and `slides_batch_update` for building decks, full `contacts_*` and `tasks_*` sets, `gmail_send` and `gmail_reply` so workflows finish instead of stopping at a draft. (As of November 25, 2026, Composio has Google Slides and Contacts toolkits too; an earlier version of this paragraph said it did not.) Multi-account is built in too: a work Google account, a personal one, and a shared inbox behind one endpoint, addressable in a single prompt.
 
 There's also a quieter self-hosting benefit. Because you run the gateway, the responses stay tuned for tokens (Claude gets content, not API wrapper), and there's no per-call meter or credit budget between your agent and Google. The economics are your server bill.
 
@@ -69,6 +69,6 @@ Two paths, same code:
 
 Self-host: the source is MIT at [github.com/datatorag/mcp-gateway](https://github.com/datatorag/mcp-gateway). There is no packaged guide yet; you would bring your own Postgres database, Google OAuth clients and token encryption key, and point Claude at your own endpoint. Tokens live in a database you control, and nothing ever transits us.
 
-Hosted: sign in at [datatorag.com/dashboard](https://datatorag.com/dashboard) and you're running in about two minutes. Same pass-through architecture, nothing stored either way. Try it hosted first if you want to see what you're deploying before you deploy it.
+Hosted: sign in at [datatorag.com/dashboard](https://datatorag.com/dashboard) and you're running in about two minutes. Same pass-through architecture: none of your Workspace content is kept, and on hosted we store each connection's sign-in tokens, encrypted. Try it hosted first if you want to see what you're deploying before you deploy it.
 
 For the broader field, including native Claude connectors, the [Google Workspace MCP alternatives roundup](/blog/claude-google-workspace-mcp-alternatives) lines everything up side by side.

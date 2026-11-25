@@ -2,8 +2,8 @@
 title: "Composio vs Pipedream Connect: Same Pitch, Different Plumbing"
 excerpt: "Both sell developers a way to wire their users' apps into an agent product. Composio leans on per-user MCP URLs, Pipedream on external user IDs and Connect Links. Here's how they differ, and the question to ask before you pick either."
 date: "2026-07-23"
-updated: "2026-08-26"
-updatedNote: "August 26, 2026: narrowed an overbroad privacy claim. The pass-through statement implied nothing is stored anywhere; the gateway keeps nothing, but the hosted agent on our own site stores its conversation threads. The privacy policy is now linked from the paragraph. EARLIER: Corrected as pricing firmed up. The tool count is gone rather than restated, since every figure we publish eventually rots. The claim that there is no per-call meter no longer holds: tiers carry a monthly allowance of tool calls, so the honest contrast with prepaid credits is that there is nothing to buy up front, not that nothing is counted. And the pricing page now carries published numbers, so this post points there instead of describing tiers that have since been renamed."
+updated: "2026-11-25"
+updatedNote: "November 25, 2026: three corrections. The post said Composio had no Google Slides or Contacts toolkit, and that both platforms skipped Slides, Contacts, and Tasks; Composio's own pages list Slides and Contacts toolkits today, and the claim about Pipedream is removed because it was not checked against Pipedream's own pages. It said you could self-host DataToRAG on Docker and Postgres as a clone; that was never one command, and the post now lists what you would supply. And where it said the gateway keeps nothing, it now says what is stored: each connection's sign-in tokens, encrypted. August 26, 2026: narrowed an overbroad privacy claim. The pass-through statement implied nothing is stored anywhere; the gateway keeps nothing, but the hosted agent on our own site stores its conversation threads. The privacy policy is now linked from the paragraph. EARLIER: Corrected as pricing firmed up. The tool count is gone rather than restated, since every figure we publish eventually rots. The claim that there is no per-call meter no longer holds: tiers carry a monthly allowance of tool calls, so the honest contrast with prepaid credits is that there is nothing to buy up front, not that nothing is counted. And the pricing page now carries published numbers, so this post points there instead of describing tiers that have since been renamed."
 author: "Manuel Yang"
 category: "Comparison"
 coverImage: "/blog/composio-vs-pipedream.png"
@@ -24,9 +24,9 @@ faqs:
       is dozens of actions and genuinely deep. Pipedream's Google coverage is
       wide and thin: a small set of pre-built actions per app plus a generic
       make-an-API-request fallback that pushes the work of shaping the Google
-      API onto your agent. Both share a gap as of the July 2026 comparison
-      behind this post: neither ships standalone Slides or Contacts coverage
-      worth the name.
+      API onto your agent. As of November 25, 2026, Composio also has Google
+      Slides and Google Contacts toolkits; an earlier version of this answer
+      said it did not.
   - q: How are Composio and Pipedream Connect priced?
     a: >-
       On different axes, as of the July 2026 comparison behind this post.
@@ -56,9 +56,10 @@ faqs:
     a: >-
       Not on a standard plan, as of the July 2026 comparison behind this post.
       Composio's runtime is closed and self-hosting is an enterprise-plan
-      conversation; Pipedream Connect is cloud only. DataToRAG's core is
-      MIT-licensed and runs on Docker Compose with your own Postgres, so
-      self-hosting is a clone rather than a contract.
+      conversation; Pipedream Connect is cloud only. DataToRAG's source is
+      MIT-licensed. Running it yourself means your own Postgres database, your
+      own OAuth clients, and a token encryption key; there is no packaged
+      self-host guide yet.
 ---
 
 Composio and Pipedream Connect are the two platforms you'll shortlist if you're building an agent product and don't want to write OAuth for forty apps. They're similar enough that the comparison pages blur together: both hold your users' tokens, both run the handshakes, both hand your agent an MCP endpoint per user.
@@ -81,14 +82,14 @@ Same job, two idioms: Composio mints URLs, Pipedream routes headers.
 |---|---|---|
 | Per-user wiring | Generate per-user MCP URLs in code | `x-pd-external-user-id` header + Connect Links |
 | Catalog | 1,000+ toolkits | Thousands of apps, tens of thousands of tools |
-| Google depth | Deep Gmail; no standalone Slides or Contacts toolkits at the time of writing | Broad but shallow, with a generic API-request fallback |
+| Google depth | Deep Gmail; Slides and Contacts toolkits too (as of November 25, 2026) | Broad but shallow, with a generic API-request fallback |
 | Billing | Platform pricing | Compute-metered credits |
 | Self-hosting | Enterprise plans, closed runtime | No, cloud only |
 | Attestations | SOC 2 Type II, ISO 27001 | SOC 2 Type II, HIPAA BAA available |
 
 Three of those rows tend to decide it.
 
-Google depth. Composio's Gmail coverage is dozens of actions and genuinely deep. Pipedream's Google coverage is wide and thin: a small set of pre-built actions per app, with a generic "make an API request" fallback that pushes the work of shaping the Gmail API onto your agent. If your product's core loop lives in Google Workspace, that difference compounds. Though note what both are missing: neither ships standalone Slides or Contacts coverage worth the name (Composio has no standalone toolkit for either at the time of writing).
+Google depth. Composio's Gmail coverage is dozens of actions and genuinely deep. Pipedream's Google coverage is wide and thin: a small set of pre-built actions per app, with a generic "make an API request" fallback that pushes the work of shaping the Gmail API onto your agent. If your product's core loop lives in Google Workspace, that difference compounds. One correction: an earlier version of this paragraph said neither platform had Slides or Contacts coverage. As of November 25, 2026, Composio's own toolkit pages list both.
 
 Billing. Pipedream meters compute credits, and agents are chatty: polls, retries, chained calls. Model your real usage. Composio's platform pricing charges on a different axis. Neither is wrong, but a conversational agent leans hard on the one Pipedream meters.
 
@@ -106,17 +107,17 @@ That's the case DataToRAG was built for.
 
 DataToRAG is the assembled thing these platforms give you a kit to build. No app, no API keys, no per-user wiring: you sign in at the dashboard, connect Google and Atlassian, and Claude is working in your accounts.
 
-What's behind the endpoint is the part I'd stack against either platform's Google coverage. Hand-built tools across all eight Workspace services, with real write verbs: `gmail_send`, `gmail_reply`, and `gmail_forward` so email workflows finish, `docs_batch_update` for restructuring a document in place, `slides_create` and `slides_batch_update` for decks, `sheets_update` at the cell and range level, and the full `contacts_*` and `tasks_*` sets both platforms skip. Jira and Confluence ride behind the same sign-in.
+What's behind the endpoint is the part I'd stack against either platform's Google coverage. Hand-built tools across all eight Workspace services, with real write verbs: `gmail_send`, `gmail_reply`, and `gmail_forward` so email workflows finish, `docs_batch_update` for restructuring a document in place, `slides_create` and `slides_batch_update` for decks, `sheets_update` at the cell and range level, and the full `contacts_*` and `tasks_*` sets. Jira and Confluence ride behind the same sign-in.
 
-Then the parts that are hard to bolt on later. Multi-account: a work Gmail, a personal one, and a shared inbox behind one endpoint, addressable in a single prompt. Pass-through architecture: requests go to Google on your behalf and results come straight back, so the gateway keeps no copy of your data. An MIT-licensed core, so self-hosting on Docker and Postgres is a clone, not an enterprise contract. And on the Google-specific security bar, we passed CASA Tier 2 with zero findings, and Google verified the app in June 2026, which is why you see a normal consent screen instead of an "unverified app" warning.
+Then the parts that are hard to bolt on later. Multi-account: a work Gmail, a personal one, and a shared inbox behind one endpoint, addressable in a single prompt. Pass-through architecture: requests go to Google on your behalf and results come straight back, so the gateway keeps no copy of your Workspace content. An MIT-licensed core, so self-hosting is a matter of the code, not an enterprise contract: it is not one command, and you supply the database, your own OAuth clients, and the encryption key. And on the Google-specific security bar, we passed CASA Tier 2 with zero findings, and Google verified the app in June 2026, which is why you see a normal consent screen instead of an "unverified app" warning.
 
-One honest caveat, because this paragraph used to stop at the pass-through claim. The gateway keeps nothing, but if you use the **hosted agent** on our own site, that conversation is stored so the thread persists, and whatever the agent quoted into it is stored with it. The [privacy policy](/privacy) is the full statement.
+One honest caveat, because this paragraph used to stop at the pass-through claim. The gateway keeps none of your Workspace content. It does store each connection's sign-in tokens, encrypted, and if you use the **hosted agent** on our own site, that conversation is stored so the thread persists, and whatever the agent quoted into it is stored with it. The [privacy policy](/privacy) is the full statement.
 
 There's no prepaid credit pack to model or top up. Every tier includes a monthly allowance of tool calls, so a chatty Claude session draws on an allowance rather than burning credits you bought in advance. The [pricing page](/pricing) carries the current numbers.
 
 ## How I'd choose
 
-Shipping an agent product with a Google-heavy core loop? Composio, and go in with eyes open on the Slides and Contacts gaps.
+Shipping an agent product with a Google-heavy core loop? Composio.
 
 Shipping an agent product across a long tail of SaaS, or one that needs a HIPAA BAA? Pipedream Connect, and model the credit burn.
 

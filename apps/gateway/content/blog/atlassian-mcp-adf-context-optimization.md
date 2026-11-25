@@ -2,8 +2,8 @@
 title: "Confluence Pages Are 40KB of Markup. Your AI Gets 2KB."
 excerpt: "Confluence storage format is verbose XML that destroys context windows. We convert it to clean text by default, with a format switch for when you need the raw markup back."
 date: "2026-04-06"
-updated: "2026-08-12"
-updatedNote: "Corrected the context arithmetic, which was wrong by roughly ten times and contradicted its own next sentence: it capped a 200K-token window at 60KB of text, then said two 40KB reads cost a third of it, which cannot both be true. The cost is now stated in tokens spent, which does not go stale as window sizes change. Also corrected the Jira field list, which named comments where the response carries a comment count, and omitted several fields it does return."
+updated: "2026-11-25"
+updatedNote: "November 25, 2026: the Jira section said issue descriptions are trimmed the way Confluence pages are. They are not: `jira_get_issue` returns the description as Jira sends it, and the section now says so. EARLIER, August 12, 2026: corrected the context arithmetic, which was wrong by roughly ten times and contradicted its own next sentence: it capped a 200K-token window at 60KB of text, then said two 40KB reads cost a third of it, which cannot both be true. The cost is now stated in tokens spent, which does not go stale as window sizes change. Also corrected the Jira field list, which named comments where the response carries a comment count, and omitted several fields it does return."
 author: "Manuel Yang"
 category: "Engineering"
 coverImage: "/blog/adf-context-optimization.png"
@@ -60,7 +60,7 @@ Storage mode: updating specific sections, changing formatted elements (status ba
 
 ## Jira is cleaner, but not clean
 
-Jira issue descriptions also use Atlassian's structured format, though they tend to be shorter. A typical issue description might be 5-10KB for a few paragraphs of text. We apply similar trimming.
+Jira issue descriptions use Atlassian Document Format (ADF), a JSON tree, and `jira_get_issue` returns the description as Jira sends it. We do not convert or trim it the way we do a Confluence page; an earlier version of this section said we did. Descriptions tend to be short, so the cost is smaller than a page's.
 
 The bigger win on the Jira side is cutting the issue metadata. A full Jira issue response includes changelog history, rendered fields, schema definitions, edit metadata, and the full project configuration. We return the fields people actually ask about: key, summary, status, priority, assignee, reporter, description, labels, created and updated dates, a comment count, and attachments. Comment bodies are a separate call, so a summary of an issue does not drag every thread on it into context. The rest is noise.
 

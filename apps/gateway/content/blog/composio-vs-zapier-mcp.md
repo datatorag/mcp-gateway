@@ -2,8 +2,8 @@
 title: "Composio vs Zapier MCP: Two Different Bets (and the Question Neither Answers)"
 excerpt: "Composio is integration infrastructure for developers shipping agents. Zapier MCP is automation breadth for people who already live in Zaps. If the actual question is 'how do I get Claude working deep in my Google Workspace', both answers come up short."
 date: "2026-07-23"
-updated: "2026-08-26"
-updatedNote: "August 26, 2026: narrowed an overbroad privacy claim. The pass-through statement implied nothing is stored anywhere; the gateway keeps nothing, but the hosted agent on our own site stores its conversation threads. The privacy policy is now linked from the paragraph."
+updated: "2026-11-25"
+updatedNote: "November 25, 2026: three corrections. The post said Google Slides, Contacts, and Tasks were not on Zapier's MCP, and that Composio had no Slides or Contacts toolkit; both companies' own pages list them today, so the table, the FAQ, and the worked example are corrected and dated. It said you could self-host DataToRAG by running Docker Compose with your own Postgres; that was never one command, and the post now lists what you would supply. And a paragraph headed Nothing stored now says what is stored: each connection's sign-in tokens, encrypted. August 26, 2026: narrowed an overbroad privacy claim. The pass-through statement implied nothing is stored anywhere; the gateway keeps nothing, but the hosted agent on our own site stores its conversation threads. The privacy policy is now linked from the paragraph."
 author: "Manuel Yang"
 category: "Comparison"
 coverImage: "/blog/composio-vs-zapier-mcp.png"
@@ -22,10 +22,12 @@ faqs:
       comparison.
   - q: Does Zapier MCP support Google Slides, Contacts or Tasks?
     a: >-
-      No. Slides, Contacts and Tasks are not on Zapier's MCP surface as of the
-      mid-2026 check behind this comparison. Its Google coverage there is Gmail,
-      Docs, Sheets, Drive and Calendar, exposed as Zap-shaped actions, which are
-      coarser than the underlying API.
+      Yes, in part. As of November 25, 2026, Zapier's own app pages list Google
+      Slides, Contacts, and Tasks actions as available over its MCP: for Slides,
+      creating a presentation from a template, refreshing linked charts, and
+      finding a presentation; for Contacts and Tasks, create, update, and find.
+      None of the Slides actions edits a slide's content. An earlier version of
+      this answer said these three were not on Zapier's MCP at all.
   - q: Can Zapier MCP restructure a Google Doc?
     a: >-
       Not structurally. Zapier exposes append, insert and find-and-replace for
@@ -44,8 +46,7 @@ faqs:
     a: >-
       Not on a standard plan. Composio's runtime is closed and self-hosting is
       an enterprise-plan conversation. Zapier MCP is cloud only. Both statements
-      reflect the mid-2026 check behind this comparison. DataToRAG's core is
-      MIT-licensed and runs on Docker Compose with your own Postgres, so self-hosting there is a clone rather than a contract.
+      reflect the mid-2026 check behind this comparison. DataToRAG's source is MIT-licensed. Running it yourself means your own Postgres database, your own OAuth clients, and a token encryption key; there is no packaged self-host guide yet.
   - q: Which is more secure, Composio or Zapier MCP?
     a: >-
       Both hold general-purpose security attestations, and both are ahead of
@@ -82,14 +83,14 @@ So: one is an SDK you build on, the other is a switchboard you plug into.
 | Integration count | 1,000+ toolkits | 9,000+ apps |
 | Depth per app | Deep where it invests (Gmail especially) | Shallow by design: discrete Zap actions |
 | Docs structural editing | Via its toolkits, where exposed | No `batchUpdate`; append and find-and-replace only |
-| Slides / Contacts / Tasks | No standalone Slides or Contacts toolkits at the time of writing | Not on the MCP surface (mid-2026) |
+| Slides / Contacts / Tasks | Toolkits for all three (as of November 25, 2026) | Contacts and Tasks create, update, and find; Slides from a template, with no slide editing (as of November 25, 2026) |
 | Billing shape | Platform pricing | Every call draws down your plan's shared task budget |
 | Self-hosting | Enterprise plans only, closed runtime | No, cloud only |
 | Attestations | SOC 2 Type II, ISO 27001 | SOC 2 Type II |
 
 A few of those rows deserve unpacking.
 
-Depth. Zapier's Google actions are automation primitives: send an email, add a row, create a draft. Good Zap steps, thin editing tools. Google's own APIs expose `batchUpdate` for Docs and Slides, the call that lets you restructure a document or lay out a deck, and Zapier doesn't surface it. Composio goes deeper where it has invested (its Gmail coverage is dozens of actions, honestly impressive), but at the time of writing it still has no standalone Slides toolkit and no standalone Contacts toolkit.
+Depth. Zapier's Google actions are automation primitives: send an email, add a row, create a draft. Good Zap steps, thin editing tools. Google's own APIs expose `batchUpdate` for Docs and Slides, the call that lets you restructure a document or lay out a deck, and Zapier doesn't surface it. Composio goes deeper where it has invested (its Gmail coverage is dozens of actions, honestly impressive), and as of November 25, 2026 it has Google Slides and Contacts toolkits too; an earlier version of this post said it did not.
 
 Cost. Zapier meters tasks against the same budget your Zaps use. An agent that fires a dozen calls to finish one request draws that budget down faster than a human clicking ever would. Composio's cost is different in kind: it's platform pricing plus the engineering time to build and maintain the integration layer. Neither is wrong. They just charge on different axes, and you should model your actual usage before committing to either.
 
@@ -103,23 +104,23 @@ You're an ops lead, a founder, or a senior IC. Your week lives in Google Workspa
 
 With Composio, someone has to build an app before you can start. You're not Composio's user, you're Composio's user's user, and for an audience of one that's a sprint of scaffolding to read your own email.
 
-With Zapier MCP, you can start right now, and then you hit the ceiling partway through. The doc gets a paragraph appended instead of restructured. The deck doesn't happen, because Slides isn't on the MCP surface. Neither are Tasks. You get half a job and a to-do list.
+With Zapier MCP, you can start right now, and then you hit the ceiling partway through. The doc gets a paragraph appended instead of restructured. The deck is a copy of a template, not five slides laid out from the summary, because none of Zapier's Slides actions edits a slide (as of November 25, 2026). The tasks it can file. You get part of the job and finish the rest by hand.
 
 This is the gap DataToRAG sits in, and it's why we built it.
 
 ## What DataToRAG is
 
-DataToRAG is a Google-verified MCP gateway you sign into, not a platform you build on. One endpoint, one Google sign-in, and Claude gets hand-built tools across all eight Google Workspace services: `gmail_send` and `gmail_reply` so email workflows finish instead of stopping at a draft, `docs_batch_update` for restructuring documents in place, `slides_create` for building decks, `sheets_update` at the cell and range level, and the full `contacts_*` and `tasks_*` sets that both platforms above skip. Jira and Confluence ride behind the same endpoint, so "summarize these tickets into a Confluence page" is one conversation.
+DataToRAG is a Google-verified MCP gateway you sign into, not a platform you build on. One endpoint, one Google sign-in, and Claude gets hand-built tools across all eight Google Workspace services: `gmail_send` and `gmail_reply` so email workflows finish instead of stopping at a draft, `docs_batch_update` for restructuring documents in place, `slides_create` for building decks, `sheets_update` at the cell and range level, and the full `contacts_*` and `tasks_*` sets. Jira and Confluence ride behind the same endpoint, so "summarize these tickets into a Confluence page" is one conversation.
 
 Three things you can't easily bolt onto either alternative:
 
 Multi-account in one prompt. A work Gmail, a personal one, and a shared team inbox all connect under one endpoint, and Claude can target one or search across all of them.
 
-Nothing stored. The gateway is pass-through: requests go to Google on your behalf and results come straight back. There's no copy of your inbox on our servers. And it's Google-verified: we passed CASA Tier 2, the security review Google requires for restricted Gmail and Drive scopes, with zero findings, verified June 2026.
+No copy of your Workspace. The gateway is pass-through for your content: requests go to Google on your behalf and results come straight back, and there's no copy of your inbox on our servers. What we do store is each connection's sign-in tokens, encrypted, which is what keeps a connection working. And it's Google-verified: we passed CASA Tier 2, the security review Google requires for restricted Gmail and Drive scopes, with zero findings, verified June 2026.
 
-One honest caveat, because this paragraph used to stop at the pass-through claim. The gateway keeps nothing, but if you use the **hosted agent** on our own site, that conversation is stored so the thread persists, and whatever the agent quoted into it is stored with it. The [privacy policy](/privacy) is the full statement.
+One honest caveat, because this paragraph used to stop at the pass-through claim. The gateway keeps none of your Workspace content. It does store each connection's sign-in tokens, encrypted, and if you use the **hosted agent** on our own site, that conversation is stored so the thread persists, and whatever the agent quoted into it is stored with it. The [privacy policy](/privacy) is the full statement.
 
-Self-hosting that isn't an enterprise upsell. The core is MIT-licensed and runs on Docker Compose with your own Postgres. If your security team wants the data on infrastructure they control, that's a clone, not a contract.
+Self-hosting that isn't an enterprise upsell. The core is MIT-licensed, so running it yourself is a matter of the code, not a contract. It is not one command, and there is no packaged self-host guide yet: you supply a Postgres database, your own Google OAuth clients (and Google's verification for the restricted Gmail and Drive scopes), and an encryption key for the stored tokens.
 
 We will never have 9,000 apps, and we're not trying to. Depth over breadth is the whole bet.
 
