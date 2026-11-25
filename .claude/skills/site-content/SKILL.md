@@ -364,7 +364,8 @@ by renumbering them.
 
 `content/docs/security.md` is the page people quote about tokens and storage.
 Every sentence in it is a statement about the code as it is (`token-crypto.ts`,
-`connected-accounts.ts`, `oauth/consent.ts`, `oauth/token.ts`, `oauth/revoke.ts`,
+`connected-accounts.ts`, `connectors/atlassian/tokens.ts`, `oauth/consent.ts`, `oauth/token.ts`, `oauth/revoke.ts`,
+`oauth/grants.ts`, `oauth/approved-apps.ts`,
 `usage.ts` in the schema); a change to any of those re-reads the page in the
 same pull request.
 

@@ -55,6 +55,40 @@ export async function closeSessionsForUser(
 }
 
 /**
+ * The way to close a user's live sessions from code that cannot hold the
+ * session map. The map is a local of the Express server (`server.ts`), and a
+ * dashboard API route runs in the app bundle of the same process, which loads
+ * its own copy of every module. So the server registers a closer here, on
+ * `globalThis` under `Symbol.for(...)` as the download-link store does, and
+ * either bundle's copy of this file finds the same one.
+ */
+type SessionCloser = (userId: string) => Promise<number>;
+const SESSION_CLOSER = Symbol.for("datatorag.mcp-session.closer");
+const closerSlot = globalThis as unknown as Record<symbol, SessionCloser | null | undefined>;
+
+/** Called once by the server that owns the session map; null clears it. */
+export function registerSessionCloser(closer: SessionCloser | null): void {
+  closerSlot[SESSION_CLOSER] = closer;
+}
+
+/**
+ * Closes every live MCP session of a user through the registered closer.
+ * Returns how many were closed, or null when nothing in this process owns
+ * sessions (a test, a script), so a caller can say what it did not do. Never
+ * throws: a closer that fails is logged and reads as null.
+ */
+export async function closeLiveSessionsForUser(userId: string): Promise<number | null> {
+  const closer = closerSlot[SESSION_CLOSER];
+  if (!closer) return null;
+  try {
+    return await closer(userId);
+  } catch (err) {
+    console.warn(`[mcp-session] closing sessions failed for user=${userId}: ${err instanceof Error ? err.message : "unknown error"}`);
+    return null;
+  }
+}
+
+/**
  * Tells each of a user's live MCP sessions that its tool list changed
  * (SCRUM-466): a provider's tools are listed only once it is connected, so a
  * connect that completes mid-conversation changes the list. A client that

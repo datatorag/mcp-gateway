@@ -3,7 +3,8 @@ import { eq, and, ne, sql, desc, gte } from "drizzle-orm";
 import type { Database } from "@datatorag-mcp/db";
 import { connectedAccounts, serviceConnections, usageEvents, users } from "@datatorag-mcp/db";
 import { randomUUID } from "node:crypto";
-import { revokeUpstream } from "./service-token";
+import { attemptAtlassianRevokeUpstream, revokeUpstream } from "./service-token";
+import type { AtlassianRevokeOutcome } from "./connectors/atlassian/tokens";
 import { trackAccountDisconnected, type DisconnectedConnection, type DisconnectTrigger } from "./track";
 import { getPosthog } from "../lib/posthog-server";
 import { sealedColumns } from "./token-crypto";
@@ -478,7 +479,8 @@ export async function disconnectAccount(
     account.accountEmail,
     account.externalAccountId
   );
-  // Sealed, and handed on unopened: only revokeUpstream opens them.
+  // Sealed, and handed on unopened: only revokeUpstream opens them (and,
+  // for Atlassian, the revoke attempt beside it in service-token.ts).
   const [conn] = await db
     .select({
       accessTokenSealed: serviceConnections.accessTokenSealed,
@@ -501,6 +503,10 @@ export async function disconnectAccount(
   if (conn && !keptForOthers) {
     await revokeUpstream(account.connectorType, conn, { userId, rowId: account.serviceConnectionId });
   }
+  const atlassianRevokeOutcome = await atlassianRevokeAttempt(account.connectorType, keptForOthers, conn ?? null, {
+    userId,
+    rowId: account.serviceConnectionId,
+  });
 
   await db.transaction(async (tx) => {
     // Delete connected_accounts row
@@ -518,7 +524,7 @@ export async function disconnectAccount(
   if (account.isDefault) {
     await promoteNextDefault(db, userId, account.connectorType);
   }
-  await report();
+  await report({ atlassianRevokeOutcome });
   return keptForOthers ? { note: keptForOthersNote(account.connectorType) } : {};
 }
 
@@ -576,7 +582,8 @@ export async function disconnectService(
         revokeSkippedShared: shared,
       });
       if (!shared) await revokeUpstream(service, row, { userId, rowId: row.id });
-      return { shared, report };
+      const atlassianRevokeOutcome = await atlassianRevokeAttempt(service, shared, row, { userId, rowId: row.id });
+      return { shared, report: () => report({ atlassianRevokeOutcome }) };
     })
   );
   const kept = outcomes.map((o) => o.shared);
@@ -600,6 +607,36 @@ export async function disconnectService(
 }
 
 /**
+ * The one revoke request an Atlassian disconnect sends, and its outcome;
+ * undefined for every other provider, which this does not touch.
+ *
+ * Atlassian documents no revoke, so this is an attempt and not a revoke:
+ * the registry keeps `revokes: false` for it, and nothing here decides
+ * anything. The outcome (a status code or a fixed word, never a token, a
+ * secret, or anything Atlassian answered) is written to one log line of a
+ * fixed shape and handed to the disconnect event, so what the address does
+ * can be read after a deploy. Skipped when another user holds the account,
+ * as every revoke is. Never throws, and takes at most the
+ * request's timeout: the caller deletes the rows whatever this returns.
+ */
+async function atlassianRevokeAttempt(
+  service: string,
+  shared: boolean,
+  sealed: Parameters<typeof attemptAtlassianRevokeUpstream>[0] | null,
+  row: Parameters<typeof attemptAtlassianRevokeUpstream>[1]
+): Promise<AtlassianRevokeOutcome | undefined> {
+  if (service !== "atlassian") return undefined;
+  let outcome: AtlassianRevokeOutcome;
+  try {
+    outcome = shared ? "skipped_shared" : sealed ? await attemptAtlassianRevokeUpstream(sealed, row) : "no_token";
+  } catch {
+    outcome = "network_error";
+  }
+  console.log(`[disconnect] atlassian revoke outcome=${outcome}`);
+  return outcome;
+}
+
+/**
  * SCRUM-500: the `account_disconnected` event for one removed connection,
  * sent after its rows are gone. Whether a tool call ever used the connection
  * is read from `usage_events`: a row for this user, this connector, and this
@@ -620,8 +657,8 @@ function startDisconnectReport(
   db: Database,
   userId: string,
   trigger: DisconnectTrigger,
-  conn: Omit<DisconnectedConnection, "toolCallsMade">
-): () => Promise<void> {
+  conn: Omit<DisconnectedConnection, "toolCallsMade" | "atlassianRevokeOutcome">
+): (after?: Pick<DisconnectedConnection, "atlassianRevokeOutcome">) => Promise<void> {
   // With analytics off nothing is sent, so nothing is read either. Reading
   // the policy reads the config, which cannot stand between a user and their
   // disconnect either.
@@ -638,9 +675,10 @@ function startDisconnectReport(
     console.warn(`[disconnect] account_disconnected not sent for user=${userId}: ${err instanceof Error ? err.message : "unknown error"}`);
     return undefined;
   });
-  return async () => {
+  // `after` is what only the revoke knows, which finishes after this starts.
+  return async (after = {}) => {
     const toolCallsMade = await used;
-    if (toolCallsMade !== undefined) await trackAccountDisconnected(db, userId, trigger, { ...conn, toolCallsMade });
+    if (toolCallsMade !== undefined) await trackAccountDisconnected(db, userId, trigger, { ...conn, ...after, toolCallsMade });
   };
 }
 

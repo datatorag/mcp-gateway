@@ -21,7 +21,10 @@ export const EVENTS = {
    * and `missing_scopes` as `account_connected` reads them,
    * `connected_for_seconds`, `tool_calls_made`, and
    * `revoke_skipped_shared`, with the same identity fields as
-   * `account_connected`. */
+   * `account_connected`. An Atlassian disconnect also carries
+   * `atlassian_revoke_outcome`: the HTTP status of the one revoke request
+   * sent, as a string, or `timeout`, `network_error`, `skipped_shared`,
+   * `no_token`, or `not_configured`. Never a token or the response. */
   ACCOUNT_DISCONNECTED: "account_disconnected",
   /** SCRUM-480: the answer to "How did you find DataToRAG?" on the signup
    * landing, or its skip, beside the measured `acquisition_*` fields. */
@@ -169,6 +172,12 @@ export const EVENTS = {
   OAUTH_REFRESH_REPLAY: "oauth_refresh_replay",
   OAUTH_REFRESH_EXPIRED: "oauth_refresh_expired",
   OAUTH_TOKEN_REVOKED: "oauth_token_revoked",
+  /** A user removed an app they approved, on the Connections page: its
+   * tokens revoked and its approval deleted. Sent once per removal that
+   * changed something, from the server. `client_id` only (the registration's
+   * id, as `oauth_token_revoked` carries); never the name the app gave
+   * itself, and never a token. */
+  APPROVED_APP_REMOVED: "approved_app_removed",
   /** SCRUM-190: a provider (Google, Atlassian, Notion) refused to refresh a
    * connection's token. Not `oauth_refresh_expired`, which is our own grant
    * to an MCP client. `service`, `reason` (a fixed code), `kind` (permanent

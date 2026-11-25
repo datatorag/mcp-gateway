@@ -5,6 +5,7 @@ import { CasaBadge } from "@/components/casa-badge";
 import { ConnectOutcomeNotice } from "../connect-outcome-notice";
 import { useConnections } from "../use-connections";
 import { ConnectionCards } from "./connection-cards";
+import { ApprovedApps } from "./approved-apps";
 
 /** `/dashboard/connections` (SCRUM-482): the connection card list, on its own
  * page with its own nav item. It was the dashboard home until the home became
@@ -36,6 +37,9 @@ export function ConnectionsClient() {
       <ConnectOutcomeNotice />
 
       <ConnectionCards connections={connections} />
+
+      {/* Below the accounts: the apps (MCP clients) this user approved. */}
+      <ApprovedApps />
     </div>
   );
 }

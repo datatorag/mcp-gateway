@@ -2,6 +2,7 @@ import { eq, and, desc, sql } from "drizzle-orm";
 import type { Database } from "@datatorag-mcp/db";
 import { serviceConnections, connectedAccounts } from "@datatorag-mcp/db";
 import { CONNECTOR_TOKENS } from "./connectors/token-calls";
+import type { AtlassianRevokeOutcome } from "./connectors/atlassian/tokens";
 import { posthogHost } from "./connectors/posthog/oauth";
 import { accountMatches, choiceFor, type AmbiguousAccount, type AccountRow } from "./account-choice";
 import { CONNECTOR_REGISTRY, isConnectorId, type ConnectorId, type ContextConnectorId, type RevokingConnectorId } from "./connectors/registry";
@@ -282,6 +283,23 @@ export async function revokeUpstream(
     return false;
   }
   return revoke(tokens);
+}
+
+/** Send Atlassian the one revoke request a disconnect makes, and return
+ * its outcome (see `attemptAtlassianRevoke`). Apart from `revokeUpstream`
+ * because the registry does not say Atlassian revokes: nothing documents
+ * that the request ends the grant. The sealed pair is opened here and
+ * nowhere on the way, as there; a value that does not open is not sent.
+ * Never throws. */
+export async function attemptAtlassianRevokeUpstream(sealed: SealedPair, row: TokenRow): Promise<AtlassianRevokeOutcome> {
+  let tokens: RevokeTokens;
+  try {
+    tokens = openPair(row, sealed);
+  } catch (e) {
+    console.warn(`[service-token] ${e instanceof TokenOpenError ? e.message : "a stored token could not be opened"}; not revoked upstream`);
+    return "no_token";
+  }
+  return CONNECTOR_TOKENS.atlassian.attemptRevoke(tokens);
 }
 
 /** A token together with the ACCOUNT it belongs to.

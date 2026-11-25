@@ -1,13 +1,21 @@
 /**
  * Atlassian's OAuth (Jira and Confluence): the scopes the connector asks
- * for, and its connect for the shared flow. The refresh is in `tokens.ts`;
- * Atlassian is not told to drop a grant on disconnect.
+ * for, and its connect for the shared flow. The refresh and the revoke
+ * request a disconnect sends are in `tokens.ts`.
  */
 import type { ConnectorOAuth } from "../../connect/connector-oauth";
 
 export const ATLASSIAN_AUTHORIZE_URL = "https://auth.atlassian.com/authorize";
 export const ATLASSIAN_TOKEN_URL = "https://auth.atlassian.com/oauth/token";
 export const ATLASSIAN_ME_URL = "https://api.atlassian.com/me";
+/** Where a disconnect sends its one revoke request. Source: the
+ * `revocation_endpoint` of Atlassian's discovery document,
+ * https://auth.atlassian.com/.well-known/openid-configuration, which lists
+ * `client_secret_basic` and `client_secret_post` for it. Atlassian's OAuth
+ * guides document no revoke endpoint, its parameters, or what it does. A
+ * constant, read from that document by a person: it is never fetched at
+ * runtime, so nothing an answer says can change where a token is sent. */
+export const ATLASSIAN_REVOKE_URL = "https://auth.atlassian.com/oauth/revoke";
 
 /** Jira stays on classic scopes; Confluence must be granular.
  *
