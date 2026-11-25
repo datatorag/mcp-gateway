@@ -2,7 +2,8 @@
 title: "We Published Our Inbox Triage Routine. Then It Quietly Stopped Running."
 excerpt: "The scheduled job missed three of the next ten days and every check passed. Firing and noticing are different jobs, and a check you write cannot verify a run that never happened."
 date: "2026-09-03"
-updated: "2026-11-17"
+updated: "2026-11-25"
+updatedNote: "November 25, 2026: since October 31, 2026 our digest is a direct message in our team chat and no longer an email, the job that fires the run waits an hour for the record that the message posted, and the schedule runs from a systemd timer; the section on the schedule now says so. The principle is unchanged."
 author: "Manuel Yang"
 category: "Engineering"
 coverImage: "/blog/the-job-that-was-armed-and-inert.png"
@@ -84,6 +85,8 @@ that did not happen cannot produce it. A file on disk proves that something wrot
 delivered email proves the work reached the person it was for.
 
 ## What the schedule looks like now
+
+*This section describes September 2026. Since October 31, 2026 the digest is a direct message in our team chat, not an email. The job that fires the run now waits an hour for the timestamp the chat service returns once the message has posted, and it runs from a systemd timer on a Linux machine. The principle is the same: success is a message that reached the person, not our own bookkeeping.*
 
 One job, not two. It fires once, hands the work to the assistant session that holds the mail
 connections, and then polls every fifteen minutes for an hour.

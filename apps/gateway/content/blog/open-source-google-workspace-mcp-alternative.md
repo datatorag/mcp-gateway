@@ -3,14 +3,14 @@ title: "You Can Self-Host a Google Workspace MCP for Free. The OAuth Verificatio
 excerpt: "The open-source Google Workspace MCP servers are genuinely good. The cost isn't the code. It's the Google Cloud project, the consent screen, and the verification that comes after."
 date: "2026-06-29"
 updated: "2026-11-25"
-updatedNote: "November 25, 2026: the comparison row on where data lives said the gateway stores nothing; it stores each connection's sign-in tokens, encrypted, and passes your Workspace content through without keeping it. The row now says that. November 17, 2026: the post said to run our code yourself with Docker Compose and Postgres. There is no packaged self-host guide; the source is open, and the post now names what you would supply: a Postgres database, your own Google OAuth clients and an encryption key for the stored tokens. Notion added to what comes built in. August 26, 2026: narrowed an overbroad privacy claim. The pass-through statement implied nothing is stored anywhere; the gateway keeps nothing, but the hosted agent on our own site stores its conversation threads. The privacy policy is now linked from the paragraph."
+updatedNote: "November 25, 2026: the star and tool counts for the open-source server were from when I first cloned it. Its repo now shows 3.6k stars and 120+ tools across twelve services, including Chat and Custom Search, so the opening says both and the table uses today's count. November 25, 2026: the comparison row on where data lives said the gateway stores nothing; it stores each connection's sign-in tokens, encrypted, and passes your Workspace content through without keeping it. The row now says that. November 17, 2026: the post said to run our code yourself with Docker Compose and Postgres. There is no packaged self-host guide; the source is open, and the post now names what you would supply: a Postgres database, your own Google OAuth clients and an encryption key for the stored tokens. Notion added to what comes built in. August 26, 2026: narrowed an overbroad privacy claim. The pass-through statement implied nothing is stored anywhere; the gateway keeps nothing, but the hosted agent on our own site stores its conversation threads. The privacy policy is now linked from the paragraph."
 author: "Manuel Yang"
 category: "Comparison"
 coverImage: "/blog/open-source-google-workspace-mcp-alternative.png"
 tags: ["self-hosting", "google-workspace", "mcp", "open-source", "oauth", "alternative"]
 ---
 
-A few months ago I cloned `taylorwilsdon/google_workspace_mcp` to see how it compared to what we'd built. It's a good project. MIT licensed, somewhere north of 2,700 stars, 70-plus tools covering Gmail, Drive, Calendar, Docs, Sheets, Slides, Tasks, Contacts, and a couple we don't even touch like Forms and Apps Script. Read and write across all of it. If you've decided to self-host an open-source Google Workspace MCP server, this is the one I'd start with, and I mean that.
+A few months ago I cloned `taylorwilsdon/google_workspace_mcp` to see how it compared to what we'd built. It's a good project. MIT licensed, and at the time somewhere north of 2,700 stars and 70-plus tools covering Gmail, Drive, Calendar, Docs, Sheets, Slides, Tasks, Contacts, and a couple we don't even touch like Forms and Apps Script. Reads and writes, not just reads. It has grown since: as of November 25, 2026, the repo shows 3.6k stars and describes itself as 120+ tools across twelve Google Workspace services, with Chat and Custom Search on the list. If you've decided to self-host an open-source Google Workspace MCP server, this is the one I'd start with, and I mean that.
 
 The clone took ten seconds. `uvx workspace-mcp` and the server was running. Then it asked for a Google OAuth client ID, and that's where the real project starts.
 
@@ -58,7 +58,7 @@ This isn't open versus closed, and I want to be straight about that. We open-sou
 
 | Capability | Self-host an OSS server | DataToRAG (hosted) | DataToRAG (self-hosted) |
 |---|---|---|---|
-| Google Workspace tools | Broad: 70+ across 12 services | Deep across 8 services | Deep across 8 services |
+| Google Workspace tools | Broad: 120+ across 12 services (as of November 25, 2026) | Deep across 8 services | Deep across 8 services |
 | Atlassian (Jira + Confluence) | No | Yes | Yes |
 | You run a Google Cloud project | Yes | No | Yes |
 | OAuth consent and verification on you | Yes | No, we handle it (Google-verified, CASA Tier 2) | Yes |

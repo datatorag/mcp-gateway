@@ -2,8 +2,8 @@
 title: "Your agent can now run your Gmail drafts end to end"
 excerpt: "Two new tools complete the draft lifecycle, and Gmail reads got a compact mode that cuts a typical email to 2% of its former size."
 date: "2026-07-18"
-updated: "2026-11-17"
-updatedNote: "November 17, 2026: dropped 'threaded into the right conversation' from the first paragraph. gmail_create_draft takes no thread id, so a draft it writes is a standalone draft, not a reply inside the conversation."
+updated: "2026-11-25"
+updatedNote: "November 25, 2026: the pointer to the April post no longer lists drafts as a review surface for your manager, which that post dropped because a draft link opens only in the mailbox that owns the draft, and no longer says every pattern there still applies. November 17, 2026: dropped 'threaded into the right conversation' from the first paragraph. gmail_create_draft takes no thread id, so a draft it writes is a standalone draft, not a reply inside the conversation."
 author: "Manuel Yang"
 category: "Product"
 coverImage: "/blog/gmail-drafts-and-leaner-reads.png"
@@ -22,7 +22,7 @@ The flow we care about hasn't changed, it just got shorter. The AI drafts. You r
 
 `gmail_delete_draft` handles the other outcome. Sometimes a draft is wrong enough that editing isn't worth it. Previously the dead draft just sat in your folder until you cleaned it up by hand. Now "scrap that one" actually scraps it.
 
-If you want the deeper workflow patterns (batch drafting ten replies at once, follow-up sequences, drafts as a review surface for your manager), the [April post](/blog/ai-powered-email-workflows-gmail-draft-tool) covers those and they all still apply. This post is just the missing last step.
+If you want the deeper workflow patterns (batch drafting ten replies at once, follow-up sequences, drafts for sensitive mail), the [April post](/blog/ai-powered-email-workflows-gmail-draft-tool) covers those. This post is just the missing last step.
 
 ## Gmail reads went on a diet
 

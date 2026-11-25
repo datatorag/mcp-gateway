@@ -2,8 +2,8 @@
 title: "AI-Powered Email Workflows with the Gmail Draft Tool"
 excerpt: "Most AI email tools generate and send in one shot. We built a draft workflow instead, because anything that matters deserves a second look before it leaves your outbox."
 date: "2026-04-04"
-updated: "2026-11-17"
-updatedNote: "November 17, 2026: dropped sharing a draft link with your manager. A Gmail draft link opens only in the mailbox that owns the draft, so nobody else can open it. Dropped a threading claim that a live test disproved. gmail_create_draft takes recipients, subject and body and has no thread parameter; a draft written as a reply lands as its own draft rather than inside the original conversation. The recipients-and-subject half was always true and stays."
+updated: "2026-11-25"
+updatedNote: "November 25, 2026: the section on why update matters no longer gives threading as the reason, since a draft gmail_create_draft writes is not in a thread; it now says what gmail_update_draft does (same draft id, a thread kept only when the draft already has one, attachments passed again), and the follow-up pattern says the draft is a new message. November 17, 2026: dropped sharing a draft link with your manager. A Gmail draft link opens only in the mailbox that owns the draft, so nobody else can open it. Dropped a threading claim that a live test disproved. gmail_create_draft takes recipients, subject and body and has no thread parameter; a draft written as a reply lands as its own draft rather than inside the original conversation. The recipients-and-subject half was always true and stays."
 author: "Manuel Yang"
 category: "Product"
 coverImage: "/blog/gmail-draft-workflow.png"
@@ -34,11 +34,11 @@ When it reads right, hit send from Gmail. Done.
 
 ## Why update matters more than you'd think
 
-The easy version of this feature would have been: delete the old draft, create a new one. We tried that first. The problem is threading.
+The easy version of this feature would have been: delete the old draft, create a new one. We tried that first. It works, but every revision is then a different draft with a new id, and the one you had open in Gmail is gone.
 
-Gmail threads are tied to message headers. When you delete a draft and create a fresh one, the new draft can lose its association with the original conversation. Your carefully threaded reply becomes a standalone email sitting in drafts with no context.
+`gmail_update_draft` replaces the content of the existing draft instead, so the draft id stays the same through as many revisions as you need. Three rounds of edits, five rounds, doesn't matter. If the draft already belongs to a conversation, such as a reply you started in Gmail yourself, the tool reads the draft's thread ID when you don't pass one and keeps the draft there. A draft that `gmail_create_draft` wrote has no thread to keep.
 
-`gmail_update_draft` solves this by modifying the existing draft in place. It reads the current draft's thread ID automatically if you don't pass one, so the thread stays intact through as many revisions as you need. Three rounds of edits, five rounds, doesn't matter. Same draft, same thread.
+One thing to know: an update replaces the whole message. A file attached to the draft has to be passed again, or it is dropped.
 
 ## Where this gets interesting
 
@@ -48,7 +48,7 @@ The obvious use case is one-off emails that need a human eye. But the draft work
 
 **Review before sending.** Draft an email, read it in Gmail, paste in your manager's feedback and ask Claude to incorporate it. The draft stays in your mailbox until you send it.
 
-**Follow-up sequences.** "Draft a follow-up to the partnership email I sent last Tuesday. Reference the pricing doc I shared." Claude finds the thread, reads the context, and drafts something that sounds like a continuation of the conversation. Because it is one.
+**Follow-up sequences.** "Draft a follow-up to the partnership email I sent last Tuesday. Reference the pricing doc I shared." Claude finds the thread, reads the context, and drafts something that sounds like a continuation of the conversation. The draft itself is a new message, not a reply inside the thread.
 
 **Sensitive communications.** Legal, HR, client escalations. Anything where the cost of getting it wrong is high. The draft workflow is a forcing function for human review without adding friction.
 

@@ -3,7 +3,7 @@ title: "Confluence Pages Are 40KB of Markup. Your AI Gets 2KB."
 excerpt: "Confluence storage format is verbose XML that destroys context windows. We convert it to clean text by default, with a format switch for when you need the raw markup back."
 date: "2026-04-06"
 updated: "2026-11-25"
-updatedNote: "November 25, 2026: the Jira section said issue descriptions are trimmed the way Confluence pages are. They are not: `jira_get_issue` returns the description as Jira sends it, and the section now says so. EARLIER, August 12, 2026: corrected the context arithmetic, which was wrong by roughly ten times and contradicted its own next sentence: it capped a 200K-token window at 60KB of text, then said two 40KB reads cost a third of it, which cannot both be true. The cost is now stated in tokens spent, which does not go stale as window sizes change. Also corrected the Jira field list, which named comments where the response carries a comment count, and omitted several fields it does return."
+updatedNote: "November 25, 2026: text mode keeps the body text of a panel or an expand section but drops a status badge entirely, because a badge carries its label in a parameter and has no body; the post said badges were reduced to their text. Read with format storage when a badge value matters. Also November 25, 2026: the Jira section said issue descriptions are trimmed the way Confluence pages are. They are not: `jira_get_issue` returns the description as Jira sends it, and the section now says so. EARLIER, August 12, 2026: corrected the context arithmetic, which was wrong by roughly ten times and contradicted its own next sentence: it capped a 200K-token window at 60KB of text, then said two 40KB reads cost a third of it, which cannot both be true. The cost is now stated in tokens spent, which does not go stale as window sizes change. Also corrected the Jira field list, which named comments where the response carries a comment count, and omitted several fields it does return."
 author: "Manuel Yang"
 category: "Engineering"
 coverImage: "/blog/adf-context-optimization.png"
@@ -34,7 +34,7 @@ We saw this in testing. A workflow that read three Confluence pages and summariz
 
 The `confluence_get_page` tool accepts a `format` parameter with two modes:
 
-**`format: "text"`** (the default) converts the XHTML storage format to clean, readable text. Headings become `## Heading Text`. Tables become markdown tables. Mentions become `@Display Name`. Code blocks keep their content. Images are noted as `[image: filename]` so the AI knows something was there without eating context. Confluence macros (panels, expand sections, status badges) get stripped to their text content.
+**`format: "text"`** (the default) converts the XHTML storage format to clean, readable text. Headings become `## Heading Text`. Tables become markdown tables. Mentions become `@Display Name`. Code blocks keep their content. Images are noted as `[image: filename]` so the AI knows something was there without eating context. Confluence macros with a body (panels, expand sections) are reduced to that body's text. A macro without one is dropped: a status badge carries its label in a parameter, so text mode leaves nothing of it. Read with `format: "storage"` when a badge's value matters.
 
 The result: a 40KB storage response becomes 1-2KB of readable text. That's a 95%+ reduction.
 
@@ -48,7 +48,7 @@ This gives you the best of both worlds. Reading costs almost nothing. Editing pr
 
 To be clear about what each mode costs:
 
-**Text mode** is lossy. You can't round-trip it. If you read as text and tried to reconstruct the storage format, you'd lose panel types, status badge colors, macro configurations, and table column widths. That's fine for 90% of interactions (reading, summarizing, searching, extracting data) and it's why text is the default.
+**Text mode** is lossy. You can't round-trip it. If you read as text and tried to reconstruct the storage format, you'd lose panel types, status badges, macro configurations, and table column widths. That's fine for 90% of interactions (reading, summarizing, searching, extracting data) and it's why text is the default.
 
 **Storage mode** preserves everything but costs context. A heavily formatted page will consume 30-50KB of your context window. For a focused edit (change one date in a table, update a status badge), that's an acceptable trade. For reading five pages and writing a summary, it's wasteful.
 

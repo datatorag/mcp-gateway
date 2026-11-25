@@ -2,8 +2,8 @@
 title: "Pipedream Wants You to Build the Integration. DataToRAG Is the Integration."
 excerpt: "Pipedream Connect is excellent infrastructure for embedding tool access into your own product. But if you just want Claude to use your Google Workspace, you'd be building a product to do it. DataToRAG is the one you sign into."
 date: "2026-06-29"
-updated: "2026-11-17"
-updatedNote: "November 17, 2026: the billing row now states the plans: Free up to 250 tool calls a month, Pro $20 a month for 10,000. The self-host row said Docker and PostgreSQL; there is no packaged self-host guide, so it now says the source is open (MIT)."
+updated: "2026-11-25"
+updatedNote: "November 25, 2026: the worked example still said you could run the gateway yourself with Docker and Postgres. It now says what self-hosting takes: the code is MIT-licensed, it is not one command, and you supply a Postgres database, your own Google OAuth clients, and an encryption key. November 17, 2026: the billing row now states the plans: Free up to 250 tool calls a month, Pro $20 a month for 10,000. The self-host row said Docker and PostgreSQL; there is no packaged self-host guide, so it now says the source is open (MIT)."
 author: "Manuel Yang"
 category: "Comparison"
 coverImage: "/blog/pipedream-mcp-alternative.png"
@@ -64,7 +64,7 @@ Here's the scenario that makes it concrete. You run ops at a mid-size company. Y
 
 With Pipedream you'd build the Connect integration, manage external user IDs (even just for yourself and the shared inbox), watch credit burn as a triage agent fires call after call, and accept that credentials and execution run through Pipedream's cloud, because the platform itself doesn't self-host. None of that is a dealbreaker. It's just a project, and you have a day job.
 
-With DataToRAG you open the dashboard, connect the three Google accounts, and prompt across them. `gmail_search` runs against all of them or just one, your choice. `sheets_append` updates the tracker. `docs_batch_update` edits the doc. If the security team wants the data on their own servers, you run the same MIT-licensed gateway with Docker and Postgres, and nothing transits us at all.
+With DataToRAG you open the dashboard, connect the three Google accounts, and prompt across them. `gmail_search` runs against all of them or just one, your choice. `sheets_append` updates the tracker. `docs_batch_update` edits the doc. If the security team wants the data on their own servers, the same gateway code is MIT-licensed and can be self-hosted. It is not one command, and there is no packaged self-host guide yet: you supply a Postgres database, your own Google OAuth clients (and Google's verification for the restricted Gmail and Drive scopes), and an encryption key for the stored tokens. Run that way, nothing transits us at all.
 
 That last point is the one I'd weigh hardest for regulated Google data. Pipedream's compliance posture is strong, but strong vendor compliance and "the data never touches a vendor" are different guarantees. Self-hosting gives you the second one.
 

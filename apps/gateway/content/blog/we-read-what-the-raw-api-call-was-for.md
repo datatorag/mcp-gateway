@@ -6,8 +6,8 @@ author: "Manuel Yang"
 category: "Product"
 coverImage: "/blog/raw-call-to-named-tool.png"
 tags: ["gws-mcp", "sheets", "gmail", "drive", "mcp"]
-updated: "2026-11-17"
-updatedNote: "November 17, 2026: the claim that nothing was left for the raw call was wrong. Reading a whole Gmail thread still went through it; gmail_read_thread now covers that."
+updated: "2026-11-25"
+updatedNote: "November 25, 2026: the body now says what the note below says, that reading a whole Gmail thread still needed the raw call until gmail_read_thread. A count of our tools is replaced by a link to the list, and a count of the tools in Anthropic's Sheets connector, which Anthropic's help page does not give, is removed. November 17, 2026: the claim that nothing was left for the raw call was wrong. Reading a whole Gmail thread still went through it; gmail_read_thread now covers that."
 ---
 
 Every connector has a gap somewhere, and ours has had the same answer to every gap since the first week: a tool called `gws_run` that sends one raw request to a Google API and gives back whatever Google says. Service, resource, method, parameters. If we had not built a tool for something, the model could still get there.
@@ -39,10 +39,10 @@ So the nameable gaps became tools, live today:
 
 Two existing tools changed too. `calendar_list_events` takes a page token now, which is probably what some of those raw calendar calls were about. And the raw tool's own description finally says which eight Google APIs it reaches, instead of promising ones it refuses.
 
-That takes the connector to 70+ named tools for Google Workspace, plus the raw one, which as of today you will not see (more below). That is a high number. Anthropic's own Sheets connector has nine. The rule from here is that a tool gets added when the record shows people reaching for it, and a parameter gets added when the tool already exists. The record is what makes that a rule instead of a guess.
+That adds to an already long list of named tools for Google Workspace (the current list is at [/docs/tools](/docs/tools)), plus the raw one, which as of today you will not see (more below). The rule from here is that a tool gets added when the record shows people reaching for it, and a parameter gets added when the tool already exists. The record is what makes that a rule instead of a guess.
 
 ## The escape hatch goes behind a door
 
-With the gaps filled, there is nothing left that an outside user needs the raw call for, and every time the model picks it over a named tool it is a worse call for them and a blind spot for us. So from today `gws_run` is hidden from every account except our own and a few we have talked to. It still exists, and a client that calls it anyway gets a one-line answer naming the tools to use instead. If you use it today for something these nine do not cover, tell me what. That is the next tool. The full list of what changed is in the [changelog](/changelog).
+With these gaps filled, we believed there was nothing left that an outside user needed the raw call for (reading a whole Gmail thread still was; `gmail_read_thread` now covers it), and every time the model picks it over a named tool it is a worse call for them and a blind spot for us. So from today `gws_run` is hidden from every account except our own and a few we have talked to. It still exists, and a client that calls it anyway gets a one-line answer naming the tools to use instead. If you use it today for something these nine do not cover, tell me what. That is the next tool. The full list of what changed is in the [changelog](/changelog).
 
 Everything here went out the same way: the registry rows first, approved from my phone, then the build that serves them, then the test suite against production, with seven new cases for the seven new behaviors. All seven green on the first run against production.

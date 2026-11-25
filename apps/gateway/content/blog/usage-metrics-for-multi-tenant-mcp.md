@@ -3,7 +3,7 @@ title: "Building a Usage Dashboard Without Logging Arguments or Response Bodies"
 excerpt: "How we show users exactly what their agent is doing (calls, latency, errors) without storing a single argument or response body."
 date: "2026-04-20"
 updated: "2026-11-25"
-updatedNote: "November 25, 2026: retitled. The title said the dashboard logs no user data. The row holds no arguments and no response bodies, but a stored error message is kept as received and can quote the user's own data, as the post itself says, so the title now says what is true. November 17, 2026: the row now lists every field it holds (the account, client, argument size and cost units, and for the raw gws_run call its service, resource, method and parameter names, never values); a redacted copy of each event goes to our analytics provider; and hosted agent calls count, since plans are billed on this meter. Corrected the error-message claim. The post said stored error messages are redacted, which was true when it was written and is no longer. The redaction protected against sending user content to a third-party analytics provider, and that still happens; it was never a reason to censor the copy stored for the user in a row only they can see, quoting an error they had already received in full. The stored copy is now raw."
+updatedNote: "November 25, 2026: corrected which table the dashboard reads. The post said the 30d and 90d views read the daily rollup table; every range reads the raw events table, which holds 90 days, and no dashboard view reads the daily table. The closing promise is also reworded to match what the row holds, since a stored error message can quote your data. Also November 25, 2026: retitled. The title said the dashboard logs no user data. The row holds no arguments and no response bodies, but a stored error message is kept as received and can quote the user's own data, as the post itself says, so the title now says what is true. November 17, 2026: the row now lists every field it holds (the account, client, argument size and cost units, and for the raw gws_run call its service, resource, method and parameter names, never values); a redacted copy of each event goes to our analytics provider; and hosted agent calls count, since plans are billed on this meter. Corrected the error-message claim. The post said stored error messages are redacted, which was true when it was written and is no longer. The redaction protected against sending user content to a third-party analytics provider, and that still happens; it was never a reason to censor the copy stored for the user in a row only they can see, quoting an error they had already received in full. The stored copy is now raw."
 author: "Manuel Yang"
 category: "Engineering"
 coverImage: "/blog/usage-dashboard.png"
@@ -85,7 +85,7 @@ ON CONFLICT (day, user_id, tool_name) DO UPDATE SET ...;
 DELETE FROM usage_events WHERE created_at < now() - INTERVAL '90 days';
 ```
 
-The rollup is idempotent. If the job runs twice, the `ON CONFLICT` clause just overwrites. The prune drops anything older than 90 days. The dashboard's 30d and 90d views read from `usage_events_daily`. The 24h and 7d views read from the raw `usage_events` table.
+The rollup is idempotent. If the job runs twice, the `ON CONFLICT` clause just overwrites. The prune drops anything older than 90 days. Every range on the dashboard, 24h through 90d, reads the raw `usage_events` table, which holds 90 days. No dashboard view reads `usage_events_daily`; the daily rows are what is left of older usage after the raw events are pruned. (An earlier version of this paragraph said the 30d and 90d views read the daily table. They never did.)
 
 We picked `node-cron` over Postgres's `pg_cron` extension because the gateway already owns a long-running process. Adding a dependency on a Postgres extension to run one query per day felt like overkill. If the gateway is up, the cron runs. If the gateway is down, nothing is happening anyway and there's no metrics to roll up.
 
@@ -111,7 +111,7 @@ Two choices worth naming.
 
 ## What it's worth
 
-A usage dashboard in a multi-tenant service isn't a feature. It's a trust signal. The promise is that you can see what your agent is doing without us seeing what you're doing.
+A usage dashboard in a multi-tenant service isn't a feature. It's a trust signal. The promise is that you can see what your agent is doing, and that what we keep to show you is a record of the call, not its contents: no argument values, no response bodies, and an error message that can quote your own data, kept in a row only you can see.
 
 We got there by being disciplined about the row schema: what was called, by which account and client, the outcome, latency and sizes, and the error message. No argument values and no response body.
 

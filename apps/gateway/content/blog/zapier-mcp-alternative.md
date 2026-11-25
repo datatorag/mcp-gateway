@@ -3,7 +3,7 @@ title: "Zapier MCP Connects 9,000 Apps. We Went Deep on Google Workspace Instead
 excerpt: "Zapier MCP is the widest way to hand Claude tools. Its Google Workspace actions stay shallow, though. Here's the tradeoff, and where a focused gateway wins."
 date: "2026-06-29"
 updated: "2026-11-25"
-updatedNote: "November 25, 2026: the post said Google Slides, Contacts, and Tasks were not on Zapier's MCP. Zapier's own app pages list actions for all three today, so the coverage rows, the paragraph above them, and the worked example are corrected and dated. Where the post said the gateway keeps nothing, it now says what is stored: each connection's sign-in tokens, encrypted. November 17, 2026: the cost section said DataToRAG has no per-call meter, and its chart said the same. Hosted DataToRAG counts tool calls against your plan, so the chart is replaced with the numbers. The comparison table now includes Notion, connected since October 2026, and says the self-hosted route is open source without a packaged guide. August 27, 2026: narrowed an overbroad privacy claim. The pass-through statement said we do not store your data, unqualified. The gateway keeps nothing, but the hosted agent on our own site stores its conversation threads. The privacy policy is now linked from the paragraph."
+updatedNote: "November 25, 2026: two more corrections. Zapier's pages say MCP tool calls are free until January 5, 2027 and use plan tasks after that; the cost section now says so. And the table said Zapier's Google Docs actions were append and find-and-replace only; its app page also lists inserting text, formatting text, and images, still with no batch update. November 25, 2026: the post said Google Slides, Contacts, and Tasks were not on Zapier's MCP. Zapier's own app pages list actions for all three today, so the coverage rows, the paragraph above them, and the worked example are corrected and dated. Where the post said the gateway keeps nothing, it now says what is stored: each connection's sign-in tokens, encrypted. November 17, 2026: the cost section said DataToRAG has no per-call meter, and its chart said the same. Hosted DataToRAG counts tool calls against your plan, so the chart is replaced with the numbers. The comparison table now includes Notion, connected since October 2026, and says the self-hosted route is open source without a packaged guide. August 27, 2026: narrowed an overbroad privacy claim. The pass-through statement said we do not store your data, unqualified. The gateway keeps nothing, but the hosted agent on our own site stores its conversation threads. The privacy policy is now linked from the paragraph."
 author: "Manuel Yang"
 category: "Comparison"
 coverImage: "/blog/zapier-mcp-alternative.png"
@@ -32,7 +32,7 @@ Coverage is wider than this post used to say. Gmail, Docs, Sheets, Drive, and Ca
 |---|---|---|
 | Total apps reachable | 9,000+ | Google Workspace, Atlassian and Notion |
 | Gmail: send / reply / forward | Yes | Yes |
-| Docs: structural editing (batch update) | No (append, find-and-replace only) | Yes |
+| Docs: structural editing (batch update) | No batch update; single-purpose edits such as append, insert, find and replace, format text, and images (as of November 25, 2026) | Yes |
 | Sheets: read / update / append | Yes (row-level) | Yes (cell and range) |
 | Slides: create / edit decks | Create from a template only; no slide editing (as of November 25, 2026) | Yes |
 | Contacts: search / create / update | Yes: create, update, find (as of November 25, 2026) | Yes |
@@ -76,7 +76,7 @@ Here's the workflow that made the difference concrete for me.
 
 Take a 2,000-word meeting-notes doc. Restructure it into sections with proper headings. Pull the decisions into a summary at the top. Build a five-slide deck from that summary. Then file a follow-up task for each owner mentioned in the notes.
 
-On Zapier MCP, Claude reads the doc (fine) and appends a summary to the bottom (fine). Then it runs short. It can't restructure the document, and the deck it can make is a copy of a template, not five slides laid out from the summary, because none of Zapier's Slides actions edits a slide (as of November 25, 2026). The tasks it can file. You get part of the job and finish the rest by hand.
+On Zapier MCP, Claude reads the doc (fine) and appends a summary to the bottom (fine). Then it runs short. It has no batch update to restructure the document in one pass, only single edits like insert text and format text (as of November 25, 2026), and the deck it can make is a copy of a template, not five slides laid out from the summary, because none of Zapier's Slides actions edits a slide (as of November 25, 2026). The tasks it can file. You get part of the job and finish the rest by hand.
 
 On DataToRAG, the same prompt runs end to end. `docs_batch_update` restructures the document. `slides_create` builds the deck. `tasks_create` files one task per owner. One conversation, no clicking through three apps afterward.
 
@@ -86,7 +86,7 @@ The tell is what happens at the handoff. With Zapier MCP, Claude does the thinki
 
 ## The cost that hides in chatty agents
 
-There's a quieter difference worth naming. Every successful Zapier MCP call spends tasks from your plan's shared budget. For a person clicking through Zaps now and then, that's a non-issue. For an agent that fires a dozen tool calls to finish one request, it adds up faster than you'd guess, and it draws down the same budget your other automations use.
+There's a quieter difference worth naming. As of November 25, 2026, Zapier's MCP page says tool calls use tasks from your Zapier plan's quota, and that they are free through noon Eastern time on January 5, 2027. Its pricing page describes tasks as a single allowance shared across your whole account. So once the free period ends, think about the shape: for a person clicking through Zaps now and then, that's a non-issue. For an agent that fires a dozen tool calls to finish one request, it adds up faster than you'd guess, and it draws down the same allowance your other automations use.
 
 DataToRAG passes requests straight through to Google on your behalf, and the gateway keeps none of your Workspace content on the way. It does store each connection's sign-in tokens, encrypted. One more caveat, because the unqualified version of this line was too broad: if you use the **hosted agent** on our own site, that conversation is stored so the thread persists, and whatever the agent quoted into it is stored with it. Connect your own client straight to the gateway and that does not apply. The [privacy policy](/privacy) states what is kept and for how long. The economics are different because the architecture is different.
 

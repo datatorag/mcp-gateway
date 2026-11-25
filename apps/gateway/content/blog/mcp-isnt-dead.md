@@ -2,8 +2,8 @@
 title: "MCP Isn't Dead. You're Just Building for Yourself."
 excerpt: "The 'just use CLIs' crowd has a point. But it only holds if every user of your tool is a developer with a terminal open."
 date: "2026-04-02"
-updated: "2026-11-17"
-updatedNote: "November 17, 2026: the post said Google Workspace has no CLI. Google publishes one, gws; it needs a Cloud project and local credentials."
+updated: "2026-11-25"
+updatedNote: "November 25, 2026: the earlier note called gws Google's own. Its repository calls it a community project and names gwscli as the official Google Workspace CLI, so the note and the CLI paragraph now say that. Notion has a CLI now, so the line that its API is REST-only is replaced, and the lines about gcloud, Figma, and Salesforce, which we did not confirm on those companies' pages, are removed. Two figures that had no primary source, how much cheaper a CLI call is and the share of workers who are non-technical, are removed. November 17, 2026: the post said Google Workspace has no CLI. There is one, gws; it needs a Cloud project and local credentials."
 author: "Manuel Yang"
 category: "Opinion"
 coverImage: "/blog/mcp-vs-cli.png"
@@ -16,7 +16,7 @@ For developers building tools for themselves, this is a reasonable position. I d
 
 ## The CLI argument, and why it's half right
 
-A CLI tool call is 10-32x more token-efficient than an MCP tool call. No schema negotiation, no JSON-RPC framing, no capability exchange. You describe the command, the model runs it, you get stdout. For a developer sitting in a terminal with credentials already configured, this is genuinely better for many tasks.
+A CLI tool call usually costs fewer tokens than an MCP tool call. No schema negotiation, no JSON-RPC framing, no capability exchange. You describe the command, the model runs it, you get stdout. For a developer sitting in a terminal with credentials already configured, this is genuinely better for many tasks.
 
 If you're a solo dev who wants Claude to run `git log` or `kubectl get pods`, you don't need MCP. You need a shell.
 
@@ -28,7 +28,7 @@ So why does MCP still exist?
 
 Your marketing director doesn't have `gcloud` installed. Your account manager has never seen a command line. Your CEO uses a Chromebook.
 
-72% of knowledge workers in a typical company are non-technical. They use Google Workspace, Salesforce, Jira, and Slack through web interfaces. They interact with AI through chat UIs like Claude.ai or Microsoft Copilot. There is no shell. There is no local environment.
+Most people in a typical company are not developers. They use Google Workspace, Salesforce, Jira, and Slack through web interfaces. They interact with AI through chat UIs like Claude.ai or Microsoft Copilot. There is no shell. There is no local environment.
 
 MCP with StreamableHTTP gives these users authenticated access to enterprise tools through a web interface. They click "Connect Google Workspace," go through an OAuth flow they already understand from every other web app, and they're done. No install, no config files, no PATH variables.
 
@@ -50,9 +50,9 @@ This also means updates are instant. When we add a new tool to the Google Worksp
 
 ## Some services don't have CLIs
 
-Google Workspace has a CLI, `gws`, but it is a developer tool that needs a Cloud project and local credentials, which is the point of this post. `gcloud` is for GCP infrastructure. Notion's API is REST-only. Figma has no CLI. Salesforce has SFDX, but it's for developers managing metadata, not for an account exec pulling pipeline numbers.
+When this post went up in April 2026 this section said Google Workspace and Notion had no CLI. Both have one now, and neither changes the argument. As of November 25, 2026, the `gws` repository describes it as a community project, not an officially supported Google product, and points to an official Google Workspace CLI, `gwscli`. Using `gws` needs a Google Cloud project for its OAuth credentials. Notion's developer docs describe `ntn`, a CLI for authenticating with Notion, deploying and managing Notion Workers, and making API requests from a terminal.
 
-For these services, the choice isn't "MCP vs CLI." It's "MCP vs nothing."
+Those are developer tools, which is the point of this post. For an account exec who wants the pipeline numbers, the choice isn't "MCP vs CLI." It's "MCP vs nothing."
 
 ## Skills are complementary, not competing
 
