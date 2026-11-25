@@ -62,6 +62,32 @@ describe("what a cover animation's file may hold", () => {
     ["a font from elsewhere", GOOD.replace("url(data:font/woff2;base64,AAAA)", "url(https://x.test/f.woff2)"), "has a url( outside the file: https://x.test/f.woff2"],
     ["a quoted image from the site", GOOD.replace("fill: url(#g)", 'background: url("/blog/a.png")'), "has a url( outside the file: /blog/a.png"],
     ["an imported stylesheet", GOOD.replace("<style>", "<style>@import 'x.css';"), "has an @import"],
+    // Ways to hide one of the above from a match on the text.
+    [
+      "a script under a prefix, in another namespace",
+      GOOD.replace("<rect", '<x:script xmlns:x="http://www.w3.org/1999/xhtml">alert(1)</x:script><rect'),
+      "has a prefixed element",
+    ],
+    [
+      "a namespace that is not SVG or xlink",
+      GOOD.replace("<rect", '<g xmlns:x="http://www.w3.org/1999/xhtml"/><rect'),
+      "declares a namespace that is not SVG or xlink: http://www.w3.org/1999/xhtml",
+    ],
+    ["a DOCTYPE", `<!DOCTYPE svg [<!ENTITY x "&#60;script&#62;">]>${GOOD}`, "has a DOCTYPE"],
+    ["an entity that expands into markup", `<!DOCTYPE svg [<!ENTITY x "&#60;script&#62;">]>${GOOD}`, "has an entity declaration"],
+    ["an external script or frame source", GOOD.replace("<rect", '<rect src="https://x.test/x.js"'), "has a src= attribute"],
+    [
+      "an animation that writes a link",
+      GOOD.replace("<rect", '<a><set attributeName="href" to="https://x.test/"/></a><rect'),
+      "animates a link or an event handler",
+    ],
+    [
+      "an animation that writes a handler",
+      GOOD.replace("<rect", '<set attributeName="onclick" to="x()"/><rect'),
+      "animates a link or an event handler",
+    ],
+    ["an escaped at-rule", GOOD.replace("<style>", '<style>@\\69mport "https://x.test/x.css";'), "has a backslash"],
+    ["an image-set", GOOD.replace("fill: url(#g)", 'background: image-set("https://x.test/a.png" 1x)'), "has an image-set("],
   ])("names %s", (_what, svg, problem) => {
     expect(coverAnimationProblems(svg, svg.length)).toContain(problem);
   });

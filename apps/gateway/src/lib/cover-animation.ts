@@ -25,12 +25,24 @@ export function coverAnimationPath(coverAnimation: string | undefined): string |
 /** The largest file a cover animation may be. */
 export const MAX_COVER_ANIMATION_BYTES = 300 * 1024;
 
+/** The only namespaces a cover animation declares. Another one (XHTML, say)
+ * is how an HTML script or frame gets into an SVG under a prefix. */
+const ALLOWED_NAMESPACES = new Set(["http://www.w3.org/2000/svg", "http://www.w3.org/1999/xlink"]);
+
 /**
  * What a cover animation's file holds that it may not, in words; empty when
- * nothing. The page's <img> already stops a script in the file from running;
- * this keeps the file honest wherever else it is opened, and keeps it from
- * fetching anything: a reference is to something in the same file (`#id`) or
- * to data carried in it (`data:`).
+ * nothing. The page's <img> already stops anything in the file from running
+ * or fetching. This is for the file opened on its own, by its address, where
+ * an SVG is a document and can do both.
+ *
+ * It reads the text, it does not parse the XML, so it refuses the spellings
+ * it knows AND the ways a spelling can be hidden from a text match: a
+ * DOCTYPE or entity (markup that only exists after expansion), a prefixed
+ * element or a foreign namespace, a backslash (a CSS escape), and an
+ * animation that writes a link or a handler. A reference is to something in
+ * the same file (`#id`) or to data carried in it (`data:`). It is a
+ * reviewer's aid, not a sandbox: a file from outside the company still gets
+ * read by a person.
  */
 export function coverAnimationProblems(svg: string, bytes: number): string[] {
   const problems: string[] = [];
@@ -40,6 +52,19 @@ export function coverAnimationProblems(svg: string, bytes: number): string[] {
   if (/<foreignObject/i.test(svg)) problems.push("has a <foreignObject");
   if (/[\s"'/]on[a-z]+\s*=/i.test(svg)) problems.push("has an on*= event attribute");
   if (/@import/i.test(svg)) problems.push("has an @import");
+  if (/<!DOCTYPE/i.test(svg)) problems.push("has a DOCTYPE");
+  if (/<!ENTITY/i.test(svg)) problems.push("has an entity declaration");
+  if (/<\/?[a-z][\w.-]*:[a-z]/i.test(svg)) problems.push("has a prefixed element");
+  if (svg.includes("\\")) problems.push("has a backslash");
+  if (/image-set\s*\(/i.test(svg)) problems.push("has an image-set(");
+  if (/[\s"'/]src\s*=/i.test(svg)) problems.push("has a src= attribute");
+  if (/attributeName\s*=\s*["']\s*(?:xlink:)?(?:href|on[a-z]+)\s*["']/i.test(svg)) {
+    problems.push("animates a link or an event handler");
+  }
+  for (const m of svg.matchAll(/\bxmlns(?::[\w.-]+)?\s*=\s*(?:"([^"]*)"|'([^']*)')/gi)) {
+    const ns = m[1] ?? m[2] ?? "";
+    if (!ALLOWED_NAMESPACES.has(ns)) problems.push(`declares a namespace that is not SVG or xlink: ${ns.slice(0, 80)}`);
+  }
   const inside = (ref: string) => /^(#|data:)/i.test(ref.trim());
   for (const m of svg.matchAll(/\bhref\s*=\s*(?:"([^"]*)"|'([^']*)')/gi)) {
     const ref = m[1] ?? m[2] ?? "";
