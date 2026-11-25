@@ -1,13 +1,16 @@
 ---
 title: "Building a Usage Dashboard Without Logging Arguments or Response Bodies"
 excerpt: "How we show users exactly what their agent is doing (calls, latency, errors) without storing a single argument or response body."
+searchTitle: "MCP Usage Dashboard Without Logging Arguments | DataToRAG"
+searchDescription: "How DataToRAG's usage dashboard shows calls, latency, and errors per tool without storing argument values or response bodies. What is recorded."
 date: "2026-04-20"
 updated: "2026-11-25"
-updatedNote: "November 25, 2026: retitled. The title said the dashboard logs no user data. The row holds no arguments and no response bodies, but a stored error message is kept as received and can quote the user's own data, as the post itself says, so the title now says what is true. November 17, 2026: the row now lists every field it holds (the account, client, argument size and cost units, and for the raw gws_run call its service, resource, method and parameter names, never values); a redacted copy of each event goes to our analytics provider; and hosted agent calls count, since plans are billed on this meter. Corrected the error-message claim. The post said stored error messages are redacted, which was true when it was written and is no longer. The redaction protected against sending user content to a third-party analytics provider, and that still happens; it was never a reason to censor the copy stored for the user in a row only they can see, quoting an error they had already received in full. The stored copy is now raw."
+updatedNote: "November 25, 2026: the usage API launched with five endpoints and has had seven since September 11, 2026, when runs and sessions were added; and a range change refetches only the endpoints that take a range, since the summary cards and recent activity do not change with it, where the post said it refetched all five; corrected which table the dashboard reads. The post said the 30d and 90d views read the daily rollup table; every range reads the raw events table, which holds 90 days, and no dashboard view reads the daily table. The closing promise is also reworded to match what the row holds, since a stored error message can quote your data. Also retitled. The title said the dashboard logs no user data. The row holds no arguments and no response bodies, but a stored error message is kept as received and can quote the user's own data, as the post itself says, so the title now says what is true. November 17, 2026: the row now lists every field it holds (the account, client, argument size and cost units, and for the raw gws_run call its service, resource, method and parameter names, never values); a redacted copy of each event goes to our analytics provider; and hosted agent calls count, since plans are billed on this meter. Corrected the error-message claim. The post said stored error messages are redacted, which was true when it was written and is no longer. The redaction protected against sending user content to a third-party analytics provider, and that still happens; it was never a reason to censor the copy stored for the user in a row only they can see, quoting an error they had already received in full. The stored copy is now raw."
 author: "Manuel Yang"
 category: "Engineering"
 coverImage: "/blog/usage-dashboard.png"
 tags: ["mcp", "observability", "privacy", "architecture"]
+related: ["we-read-what-the-raw-api-call-was-for", "read-a-whole-gmail-thread", "why-your-mcp-server-is-eating-your-context-window"]
 ---
 
 Users kept asking the same thing. "Is it actually doing anything?" They'd wire their agent up to DataToRAG, kick off a workflow, and have no way to see what happened. Did Gmail even get called? Did a search fail silently? Was the slow response our fault or Anthropic's?
@@ -85,13 +88,13 @@ ON CONFLICT (day, user_id, tool_name) DO UPDATE SET ...;
 DELETE FROM usage_events WHERE created_at < now() - INTERVAL '90 days';
 ```
 
-The rollup is idempotent. If the job runs twice, the `ON CONFLICT` clause just overwrites. The prune drops anything older than 90 days. The dashboard's 30d and 90d views read from `usage_events_daily`. The 24h and 7d views read from the raw `usage_events` table.
+The rollup is idempotent. If the job runs twice, the `ON CONFLICT` clause just overwrites. The prune drops anything older than 90 days. Every range on the dashboard, 24h through 90d, reads the raw `usage_events` table, which holds 90 days. No dashboard view reads `usage_events_daily`; the daily rows are what is left of older usage after the raw events are pruned. (An earlier version of this paragraph said the 30d and 90d views read the daily table. They never did.)
 
 We picked `node-cron` over Postgres's `pg_cron` extension because the gateway already owns a long-running process. Adding a dependency on a Postgres extension to run one query per day felt like overkill. If the gateway is up, the cron runs. If the gateway is down, nothing is happening anyway and there's no metrics to roll up.
 
 ## Rate-limiting the dashboard's own APIs
 
-The dashboard has five API endpoints: summary, timeseries, by-tool, by-connector, recent. All of them run Postgres aggregations. All of them are cheap individually, but expensive if someone holds down F5.
+The dashboard launched with five API endpoints: summary, timeseries, by-tool, by-connector, recent. (Two more, runs and sessions, were added on September 11, 2026 for the agent sessions panel, and sit behind the same limiter.) All of them run Postgres aggregations. All of them are cheap individually, but expensive if someone holds down F5.
 
 We wrapped them in an in-memory sliding-window rate limiter: 120 requests per user per minute, returns a `429` with `Retry-After` when you blow through it. The limiter is a `Map<userId, number[]>` where each array holds timestamps of recent requests. Every 5 minutes, a sweep pass evicts empty buckets so the Map doesn't accumulate entries for users who have signed out.
 
@@ -99,7 +102,7 @@ This is deliberately simple. No Redis, no distributed state, no leaky-bucket mat
 
 ## The dashboard itself
 
-The UI is a Next.js server component with a client-side range toggle (24h / 7d / 30d / 90d). When the range changes, it refetches the five endpoints in parallel and updates the cards, chart, breakdown, and table.
+The UI is a Next.js server component with a client-side range toggle (24h / 7d / 30d / 90d). When the range changes, it refetches the endpoints that take a range (timeseries, by-tool, by-connector, and the two session endpoints) in parallel and updates the chart, the breakdown, the per-tool table, and the agent sessions. The summary cards and recent activity do not change with the range. (This paragraph used to say a range change refetched all five endpoints and updated the cards.)
 
 Two choices worth naming.
 
@@ -111,10 +114,10 @@ Two choices worth naming.
 
 ## What it's worth
 
-A usage dashboard in a multi-tenant service isn't a feature. It's a trust signal. The promise is that you can see what your agent is doing without us seeing what you're doing.
+A usage dashboard in a multi-tenant service isn't a feature. It's a trust signal. The promise is that you can see what your agent is doing, and that what we keep to show you is a record of the call, not its contents: no argument values, no response bodies, and an error message that can quote your own data, kept in a row only you can see.
 
 We got there by being disciplined about the row schema: what was called, by which account and client, the outcome, latency and sizes, and the error message. No argument values and no response body.
 
-Billing now runs on this meter, and the semantics held: success and user errors count, server errors don't.
+Billing now runs on this meter, and the semantics held: success and user errors count, server errors don't. The [usage docs](/docs/usage) say what the dashboard shows today, and [plans and limits](/docs/plans-and-limits) says what counts as a call.
 
 But that's a post for another day.

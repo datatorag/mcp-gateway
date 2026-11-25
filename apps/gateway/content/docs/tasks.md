@@ -1,6 +1,7 @@
 ---
 title: "Tasks"
-description: "List, create, update, complete, and delete Google Tasks."
+searchTitle: "Google Tasks MCP Server | DataToRAG Docs"
+description: "Let your agent list, create, update, complete, and delete Google Tasks through the DataToRAG MCP server, across a personal and a work account."
 order: 8
 section: "connectors"
 connector: "google-workspace"
@@ -27,9 +28,9 @@ faqs:
       in the same turn.
 ---
 
-The Tasks connector lets your AI agent manage your Google Tasks: listing task lists, creating items, marking them complete, and organizing your to-dos.
+DataToRAG is an MCP server whose Google Tasks tools let an agent manage your tasks: listing task lists, creating items, marking them complete, and organizing your to-dos.
 
-## Available operations
+## Google Tasks tools
 
 | Tool | Description |
 |------|-------------|
@@ -41,18 +42,18 @@ The Tasks connector lets your AI agent manage your Google Tasks: listing task li
 | `tasks_complete` | Mark a task as completed |
 | `tasks_delete` | Delete a task |
 
-## Required scopes
+## Scopes the Google Tasks tools need
 
 - `https://www.googleapis.com/auth/tasks`
 
-## Multiple accounts
+## Using Google Tasks on more than one account
 
 Every tool on this page takes an optional `account` argument: the email address
 of the connected Google account to act on. Omit it and the default account is
 used. Connect a personal and a work account and your agent can read from
 one and write to the other in the same turn, without you switching profiles.
 
-## Example prompts
+## Example prompts for Google Tasks
 
 - "Show me all tasks in my Work list that are due this week"
 - "Create a task to review the Q2 budget by Friday"

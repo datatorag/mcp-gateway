@@ -10,6 +10,7 @@ export function ZoomableImage({
   height,
   className,
   priority,
+  sizes,
 }: {
   src: string;
   alt: string;
@@ -17,6 +18,8 @@ export function ZoomableImage({
   height: number;
   className?: string;
   priority?: boolean;
+  /** How wide the image is drawn, as the `sizes` attribute says it. */
+  sizes?: string;
 }) {
   const [open, setOpen] = useState(false);
 
@@ -40,6 +43,10 @@ export function ZoomableImage({
         height={height}
         className={`${className ?? ""} cursor-zoom-in`}
         priority={priority}
+        // `priority` preloads the file; this also asks the browser to fetch
+        // it ahead of the page's other pictures.
+        fetchPriority={priority ? "high" : undefined}
+        sizes={sizes}
         onClick={() => setOpen(true)}
       />
       {open && (

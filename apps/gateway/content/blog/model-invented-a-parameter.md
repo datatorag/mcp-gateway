@@ -1,8 +1,10 @@
 ---
 title: "The Model Didn't Hallucinate. Our Tool Description Was Missing."
 excerpt: "We read the failed calls on a real account and found something uncomfortable: most of them were not the model getting it wrong. They were our tool descriptions failing to say what the tool could do, and in one case failing to offer something it should have offered."
+searchTitle: "When a Model Invents a Tool Parameter | DataToRAG"
+searchDescription: "Three failed tool calls on a real account traced to DataToRAG's own tool descriptions, and what changed in docs_get, docs_batch_update, and sheets_find_rows."
 date: "2026-08-31"
-updated: "2026-11-17"
+updated: "2026-11-25"
 author: "Manuel Yang"
 category: "Engineering"
 coverImage: "/blog/model-invented-a-parameter.png"
@@ -71,7 +73,7 @@ example you wrote carelessly is the example that ends up in production traffic.
 
 ## What changed
 
-- `docs_get` can now read part of a long document, using the same character indices that
+- `docs_get` ([Docs tools](/docs/docs)) can now read part of a long document, using the same character indices that
   `mode: "index"` reports and that `docs_batch_update` already consumes. One coordinate system
   across reads and writes, not two. It also reports the document's total length and whether
   what you got back was clipped, so a caller can tell a short document from a truncated one.

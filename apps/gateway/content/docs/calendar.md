@@ -1,6 +1,7 @@
 ---
 title: "Calendar"
-description: "List, create, update, and delete events. Check free/busy, suggest meeting times, answer invitations and list calendars."
+searchTitle: "Google Calendar MCP Server: Events and Free/Busy | DataToRAG"
+description: "Google Calendar tools in the DataToRAG MCP server: list, create, update, and delete events, check free/busy, suggest meeting times, and answer invitations."
 order: 2
 section: "connectors"
 connector: "google-workspace"
@@ -29,9 +30,9 @@ faqs:
       if you need it.
 ---
 
-The Calendar connector lets your AI agent manage your Google Calendar: viewing your schedule, creating events, and checking availability.
+DataToRAG is an MCP server whose Google Calendar tools let an agent manage your calendar: viewing your schedule, creating events, and checking availability.
 
-## Available operations
+## Google Calendar tools
 
 | Tool | Description |
 |------|-------------|
@@ -45,18 +46,18 @@ The Calendar connector lets your AI agent manage your Google Calendar: viewing y
 | `calendar_respond_to_event` | Answer an invitation with accepted, declined or tentative, with an optional comment. Only your own response changes; the organizer is notified unless `send_updates` says otherwise |
 | `calendar_list_calendars` | List the calendars on the account: ID, name, whether it is the primary one, your access role and its time zone. The ID feeds the other Calendar tools |
 
-## Required scopes
+## Scopes the Google Calendar tools need
 
 - `https://www.googleapis.com/auth/calendar`
 
-## Multiple accounts
+## Using Google Calendar on more than one account
 
 Every tool on this page takes an optional `account` argument: the email address
 of the connected Google account to act on. Omit it and the default account is
 used. Connect a personal and a work account and your agent can read from
 one and write to the other in the same turn, without you switching profiles.
 
-## Example prompts
+## Example prompts for Google Calendar
 
 - "What's on my calendar for tomorrow?"
 - "Schedule a 30-minute 1:1 with alex@company.com next Tuesday afternoon"

@@ -1,18 +1,22 @@
 ---
 title: "One Prompt, Jira and Confluence Both Move"
 excerpt: "The Atlassian connector isn't two separate integrations. It's the cross-product workflow that always lived in a Google Doc."
+searchTitle: "Claude for Jira and Confluence: Four MCP Workflows"
+searchDescription: "Four workflows for Claude with DataToRAG's Jira and Confluence tools: standup prep, tickets from context, retro notes to tickets, and status documents."
 date: "2026-04-20"
-updated: "2026-11-17"
-updatedNote: "November 17, 2026: Jira attachments are no longer read-only. jira_add_attachment puts a file on an issue from an email, Drive or an upload; Confluence attachments are still read-only. Issue links, worklogs and the delete tools were added to the list. Corrected two overstatements of our own surface. Attachments are read-only on both Jira and Confluence, so claiming we manage them promised a write we do not ship, and Confluence comments are add and read only, unlike Jira where they can also be edited and deleted. The status-update walkthrough also had jira_get_issue fetching epic links; a live call shows its response carries no epic or parent field, so the grouping step is now a per-epic search."
+updated: "2026-11-25"
+updatedNote: "November 25, 2026: the Connect step now points at the Connections page, where the Atlassian card is; the paragraph on several sites now says what happens (several accounts, named per call, and for one account with several sites the first site Atlassian lists); a sentence about a button in Jira that we could not confirm on Atlassian's own pages today is removed; and the earlier note below is reworded so it no longer says in the present tense that Jira attachments are read-only. November 17, 2026: Jira attachments are no longer read-only. jira_add_attachment puts a file on an issue from an email, Drive or an upload; Confluence attachments are still read-only. Issue links, worklogs and the delete tools were added to the list. An earlier correction fixed two overstatements of our own surface: attachments were read-only on both Jira and Confluence at the time, so claiming we managed them promised a write we did not ship then, and Confluence comments are add and read only, unlike Jira where they can also be edited and deleted. The status-update walkthrough also had jira_get_issue fetching epic links; a live call shows its response carries no epic or parent field, so the grouping step is now a per-epic search."
 author: "Manuel Yang"
 category: "Product"
 coverImage: "/blog/atlassian-fanout.png"
 tags: ["atlassian", "jira", "confluence", "workflows", "mcp"]
 ---
 
+With DataToRAG's Atlassian connector, one Claude prompt can read Jira issues and Confluence pages and write to both: `jira_search` finds the tickets, and `confluence_create_page` writes the page. This post walks through four workflows: standup prep, tickets from context, retro notes to tickets, and status documents.
+
 Every team I've watched use Jira and Confluence does the same thing. They open a Jira tab, scroll through their board, switch to Confluence, skim a page, tab back to Jira, copy a ticket key, tab to Confluence again, paste it into a new page.
 
-The pattern is so common that Atlassian shipped a "Confluence page from Jira issue" button to paper over it. It helps. It also doesn't change the underlying shape of the work: you are the integration.
+However many shortcuts you learn, the shape of the work stays the same: you are the integration.
 
 The Atlassian connector is about not being that anymore.
 
@@ -23,7 +27,7 @@ Two services, one OAuth flow:
 - **Jira**: search with JQL, read/create/update/delete issues, transition workflow states, add/edit/delete comments, read an attachment's details and add a file to an issue from an email, Drive or an upload, link issues, log and list work, look up users
 - **Confluence**: search with CQL, list/read/create/edit/delete pages, add and read comments, read an attachment's details
 
-Both are scoped to whichever Atlassian site you connect. You can connect more than one. See the [Jira](/docs/jira) and [Confluence](/docs/confluence) docs for the full tool surface.
+Both act on the Atlassian account you connect. You can connect more than one. See the [Jira](/docs/jira) and [Confluence](/docs/confluence) docs for the full tool surface.
 
 The interesting part isn't the individual tools. It's what happens when an agent has both at the same time.
 
@@ -95,8 +99,8 @@ We wrote about this problem and how we solve it in [a previous post](/blog/atlas
 
 ## Connecting
 
-Sign in at [datatorag.com/dashboard](https://datatorag.com/dashboard), click Connect on the Atlassian card, pick your site, approve the OAuth scopes. Both Jira and Confluence come online together.
+Sign in at [datatorag.com/dashboard](https://datatorag.com/dashboard), open [Connections](https://datatorag.com/dashboard/connections), click Connect on the Atlassian card, and approve the OAuth scopes. Both Jira and Confluence come online together. (When this was written the card was on the dashboard home; it has since moved to Connections.)
 
-If you have multiple Atlassian sites (common in companies with a few acquisitions), you can connect more than one and specify which to use per call. The [multi-account post](/blog/how-we-built-multi-account-for-mcp) covers how that works under the hood.
+If you work across more than one Atlassian account (common in companies with a few acquisitions), you can connect each one and name which to use per call with the `account` argument. If a single account can reach several sites, the tools act on the first one Atlassian lists for it. The [multi-account post](/blog/how-we-built-multi-account-for-mcp) covers how that works under the hood.
 
 Then try this as your first prompt: "What are my open Jira tickets and when was each last updated?" If your tickets are anything like mine, you'll get a surprise.

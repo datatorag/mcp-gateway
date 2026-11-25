@@ -1,6 +1,7 @@
 ---
 title: "Gmail"
-description: "Search, read messages and whole threads, send, reply, forward and draft with files attached, trash, report spam, and manage labels."
+searchTitle: "Gmail MCP Server: Search, Send, and Reply | DataToRAG"
+description: "Gmail tools in the DataToRAG MCP server: search, read whole threads, send, reply, forward, and draft with attachments, and manage labels, trash, and spam."
 order: 1
 section: "connectors"
 connector: "google-workspace"
@@ -87,11 +88,11 @@ faqs:
       reads it through Sheets.
 ---
 
-The Gmail connector gives your AI agent full access to your inbox: searching, reading messages and whole threads, composing with files attached, labeling, trashing, reporting spam, and organizing messages.
+DataToRAG is an MCP server whose Gmail tools let an agent work in your inbox: searching, reading messages and whole threads, composing with files attached, labeling, trashing, reporting spam, and organizing messages.
 
 ![A gmail_send call with its to, subject and body arguments, and the message id, thread id and SENT label it returned](/docs/gmail-send.png)
 
-## Available operations
+## Gmail tools
 
 | Tool | Description |
 |------|-------------|
@@ -110,7 +111,7 @@ The Gmail connector gives your AI agent full access to your inbox: searching, re
 | `gmail_mark_read` | Mark messages as read, for a single message or a batch of up to 1,000 IDs. With no labels given it removes UNREAD; with `add_labels` or `remove_labels` given it applies exactly those and nothing else. For label changes beyond read state, use `gmail_label_message` |
 | `gmail_label_message` | Label many messages in one call: `message_ids` (up to 1,000) with `add_labels` and `remove_labels`, one `batchModify` request, a per-message outcome in the result; `message_id` for a single message; `thread_id` for every message of one conversation. Removing INBOX archives a message; removing UNREAD marks it read |
 | `gmail_create_label` | Create a label. Nested labels use `/` in the name (e.g., `Alerts/Invoices`). Returns the created label, including its ID. If a label with that name already exists, it returns that label with `existed: true` instead of an error |
-| `gmail_list_filters` | List the mailbox's Gmail filters with their criteria and actions. Read-only; useful for seeing why a message was archived or labeled before anyone read it. Filters cannot be created or deleted here; see "Not supported" |
+| `gmail_list_filters` | List the mailbox's Gmail filters with their criteria and actions. Read-only; useful for seeing why a message was archived or labeled before anyone read it. Filters cannot be created or deleted here; see "What the Gmail tools cannot do" |
 | `gmail_list_labels` | List every label, system and user-created, with its ID, name, and type. Label IDs feed `gmail_label_message`, `gmail_update_label`, and `gmail_delete_label` |
 | `gmail_update_label` | Rename a label or change its visibility. Takes the label ID, not the name. Renaming keeps the label on already-labeled messages |
 | `gmail_delete_label` | Delete a label by ID. The label is removed from every message carrying it; the messages themselves are not deleted. System labels (INBOX, UNREAD, SENT) cannot be deleted |
@@ -123,7 +124,7 @@ The Gmail connector gives your AI agent full access to your inbox: searching, re
 | `gmail_mark_spam` | Report one message as spam: it moves to the Spam folder and leaves the inbox |
 | `gmail_unmark_spam` | Take one message out of Spam and back to the inbox |
 
-## Attachments
+## Attaching files to a Gmail message
 
 `gmail_send`, `gmail_reply`, `gmail_forward`, `gmail_create_draft` and `gmail_update_draft` take an `attachments` list: at most 10 entries per call and 25 MB per message in total. Each entry is a Drive file id, `{"file_id": "<id>", "as": "<format>"}` to send a Google Doc, Sheet or Slides deck as a file, or a [file reference](/docs/file-references) to an email, an email attachment, a file your agent holds or a file you uploaded.
 
@@ -150,7 +151,16 @@ The Gmail connector gives your AI agent full access to your inbox: searching, re
 
 Files can come from Drive or from a file reference: another email, one of its attachments, a file your agent already holds, or a file you send through an upload link. See [Moving files between services](/docs/file-references).
 
-## Who a reply goes to
+## Saving an email or an attachment
+
+A whole email, or one of its attachments, can be saved without its content entering the conversation. Both tools take a [file reference](/docs/file-references): `{"type": "gmail_message", "message_id": "<message id>"}` for the email as its original `.eml` file, or `{"type": "gmail_attachment", "message_id": "<message id>", "part_id": "1"}` for one attachment, by the part id `gmail_read` lists.
+
+- **To Drive.** `drive_upload_file` puts the file in Drive. Its receipt gives the SHA-256 of what was sent, the SHA-256 Drive reports for what it stored, and whether the two match.
+- **To your computer.** `file_download_link` answers with the file's name, size, and SHA-256, and a link that saves the file. The link works once and lasts ten minutes.
+
+Each takes one file per call, at most 25 MB. For a larger attachment, `gmail_save_attachment_to_drive` streams it into Drive.
+
+## How a Gmail reply chooses its recipients
 
 `gmail_reply` takes the message to answer and works out the recipients from that message's own headers, the way Gmail's Reply button does:
 
@@ -164,7 +174,7 @@ One reply takes at most 100 addresses. A reply that would go to more is refused 
 
 **`expected_to` is a guard for when it matters.** The recipients come from the original message's headers, and a Reply-To can name someone other than the sender you see. Pass `expected_to` with the address or addresses, comma separated, that you mean the reply to reach, and the reply is refused before anything is sent unless it would go to exactly those. Under `reply_all` that means every To and every Cc address. Order and letter case are ignored. The refusal lists who the reply would have gone to, so the next call can name them or go to someone else.
 
-## Signatures
+## How your Gmail signature is added
 
 Mail sent with `gmail_send`, `gmail_reply`, `gmail_forward` or `gmail_send_draft` ends with the signature set in Gmail for your default sending address. Nothing needs configuring. A draft written in Gmail from an alias is signed with that alias's signature when `gmail_send_draft` sends it.
 
@@ -192,25 +202,25 @@ Google refuses a request when one account has too many in flight at once, which 
 
 A send is never retried. `gmail_send`, `gmail_reply`, `gmail_forward`, `gmail_send_draft` and every other tool that changes something make one attempt and report what Google answered, so nothing can go out twice.
 
-## Required scopes
+## Scopes the Gmail tools need
 
 - `https://www.googleapis.com/auth/gmail.modify`
 
 Attaching Drive files and saving attachments to Drive also use the Drive access granted when you connect Google Workspace, and a Sheet sent as `csv` or `tsv` is read through Sheets.
 
-## Not supported
+## What the Gmail tools cannot do
 
 - Turning the vacation responder (out-of-office) on or off, or changing its message. That needs a Google scope DataToRAG does not request.
 - Creating or deleting Gmail filters. Filters can be listed with `gmail_list_filters`; changing them needs a Google scope DataToRAG does not request, so do that in Gmail's settings.
 
-## Multiple accounts
+## Using Gmail on more than one account
 
 Every tool on this page takes an optional `account` argument: the email address
 of the connected Google account to act on. Omit it and the default account is
 used. Connect a personal and a work account and your agent can read from
 one and write to the other in the same turn, without you switching profiles.
 
-## Example prompts
+## Example prompts for Gmail
 
 - "Search my inbox for emails from @acme.com in the last week and summarize the key asks"
 - "Read the whole thread with Acme about the renewal and tell me what we still owe them"

@@ -1,5 +1,6 @@
 ---
 title: "Moving files between services"
+searchTitle: "Move Files Between Gmail, Drive, and Jira | DataToRAG MCP"
 description: "Attach a file from one connected service to another without downloading it: how file references work and where the file is while it moves."
 order: 6
 section: "general"
@@ -18,7 +19,7 @@ faqs:
       with three attachments is three calls.
   - q: Where is my file while it is being moved?
     a: >-
-      The file is held in the gateway's memory only while the transfer runs,
+      The file is held in the DataToRAG MCP server's memory only while the transfer runs,
       and is never written to our disks. It goes from the service it lives in
       to the service you named, and is not copied to Drive or anywhere else on
       the way.
@@ -42,9 +43,9 @@ faqs:
       us. The receipt gives the SHA-256 and the size of what was sent.
 ---
 
-Some jobs need a file to go from one connected service to another: an email filed on a Jira issue, for example. Without a connector that means downloading the file and uploading it again by hand. With DataToRAG it is one tool call, and the file's content never passes through the conversation.
+DataToRAG is an MCP server, and some jobs for its tools need a file to go from one connected service to another: an email filed on a Jira issue, for example. By hand that means downloading the file and uploading it again. With DataToRAG it is one tool call, and the file's content never passes through the conversation.
 
-## File references
+## What a file reference is
 
 A tool that takes a file takes a **file reference**. Most references are a small object that says where the file lives in one of your connected services: a name for the file, not the file. A `content` reference is the exception: it carries a file your agent already holds, in the call itself.
 
@@ -75,11 +76,11 @@ An attachment is named by its **part id**, not its attachment id. Gmail issues a
 
 | Tool | What it does |
 |------|--------------|
-| `jira_add_attachment` | Adds the referenced file to a Jira issue as an attachment |
+| `jira_add_attachment` | Adds the referenced file to a [Jira](/docs/jira) issue as an attachment |
 | `file_download_link` | Makes a link that saves the referenced file to your own computer, once |
-| `drive_upload_file` | Puts the referenced file in Google Drive under its own name, and checks what Drive stored |
-| `notion_attach_file` | Puts the referenced file on a Notion page, at the end of the page |
-| `gmail_send`, `gmail_create_draft`, `gmail_reply`, `gmail_forward`, `gmail_update_draft` | Attach referenced files to an email, beside Drive files |
+| `drive_upload_file` | Puts the referenced file in [Google Drive](/docs/drive) under its own name, and checks what Drive stored |
+| `notion_attach_file` | Puts the referenced file on a [Notion](/docs/notion) page, at the end of the page |
+| `gmail_send`, `gmail_create_draft`, `gmail_reply`, `gmail_forward`, `gmail_update_draft` | Attach referenced files to a [Gmail](/docs/gmail) email, beside Drive files |
 
 ```json
 {
@@ -99,9 +100,9 @@ One attachment of that message, by its part id:
 
 Each call moves one file. To attach three PDFs from one email, make three calls, one part id each.
 
-## Sending a file you have
+## Sending a file your agent already holds
 
-When the file is already in the conversation, for example an image or a PDF you shared with your agent, a `content` reference carries it to `drive_upload_file` or `jira_add_attachment` directly:
+When the file is already in the conversation, for example an image or a PDF you shared with your agent, a `content` reference carries it to `drive_upload_file`, `jira_add_attachment`, or `notion_attach_file` directly:
 
 ```json
 {
@@ -117,7 +118,7 @@ When the file is already in the conversation, for example an image or a PDF you 
 
 The receipt is the same as for any other reference: the SHA-256 and byte count of what DataToRAG received and handed on, and, for Drive, whether what Drive stored matches it.
 
-A `content` reference cannot be used in the DataToRAG dashboard agent, and a download link cannot be made from one: the file is already on your side.
+A `content` reference cannot be used in the dashboard Agent, and a download link cannot be made from one: the file is already on your side.
 
 ## Uploading a file from your computer
 
@@ -137,12 +138,12 @@ The trailing slash lets the file keep its own name. Sending it answers a receipt
 { "type": "upload", "upload_id": "<id>" }
 ```
 
-Pass that reference as the file of `drive_upload_file` or `jira_add_attachment`, or as an entry of an email's `attachments`.
+Pass that reference as the file of `drive_upload_file`, `jira_add_attachment`, or `notion_attach_file`, or as an entry of an email's `attachments`.
 
 - The link takes one file, once, and stops working ten minutes after it is made.
 - The file can be at most 25 MB.
 - The uploaded file is kept for ten minutes after it arrives, for one call. After that it is gone, and you upload it again.
-- If the call stops before anything is sent on (the service is busy, or another reference in the same email is wrong), the uploaded file is kept and the reference still works. Once the call reaches Drive, Jira or Gmail, the file is used, even if that service then says no (a folder id that is not a folder, an issue you cannot see): upload it again.
+- If the call stops before anything is sent on (the service is busy, or another reference in the same email is wrong), the uploaded file is kept and the reference still works. Once the call reaches Drive, Jira, Notion, or Gmail, the file is used, even if that service then says no (a folder id that is not a folder, an issue you cannot see): upload it again.
 - You can have three upload links or uploaded files waiting at a time.
 - An upload link, like a download link, is for you: a call that carries one is refused, and the link is canceled.
 
@@ -169,7 +170,7 @@ The response lists every attachment: its name, how it went (attached, inline, li
 
 `gmail_update_draft` replaces a draft's attachments. Files attached by a reference have to be passed again on an update, or the draft loses them.
 
-## The receipt
+## What the receipt says
 
 A tool that moves a file answers with a receipt, so you can check what went where. `jira_add_attachment` answers with:
 
@@ -179,7 +180,7 @@ A tool that moves a file answers with a receipt, so you can check what went wher
 
 Check that the issue in the receipt is the one you meant. Jira does not return a hash of what it stored, so the receipt shows that the sizes agree, not that the stored bytes were compared.
 
-`notion_attach_file` answers with the new block's id and type, the file's name, size and type, the SHA-256 and byte count of what was sent, and the page's id, title and URL. The receipt for `drive_upload_file` is under "Saving a file to Drive" below.
+`notion_attach_file` answers with the new block's id and type, the file's name, size and type, the SHA-256 and byte count of what was sent, and the page's id, title and URL. The receipt for `drive_upload_file` is under "Saving a file to Google Drive" below.
 
 ## Saving a file to your computer
 
@@ -205,7 +206,7 @@ curl -f -X POST -OJ <link>
 
 It saves the file under the name the sender gave it, in the folder you run it in. Run it where you want the file to land.
 
-### Checking the copy
+### Checking your copy against the receipt
 
 The file is the unmodified original: a message exactly as Gmail returns it in raw form, or an attachment's own bytes. To confirm your copy is the same file, compare its SHA-256 with the one in the receipt:
 
@@ -217,7 +218,7 @@ The file is the unmodified original: a message exactly as Gmail returns it in ra
 
 Before the file is sent, it is read again and compared with the receipt. If it no longer matches, nothing is sent.
 
-### When a link does not work
+### When a download link does not work
 
 | What you see | Why |
 |--------------|-----|
@@ -230,11 +231,11 @@ Before the file is sent, it is read again and compared with the receipt. If it n
 
 In each case, ask for a new link in your conversation.
 
-### A link stays with you
+### A download link stays with you
 
 A download link is for you. A call to any DataToRAG tool that carries one of your unused links, for example an email with the link in its body, is refused, and the link is canceled. This covers a link carried as it is. It does not cover what another tool in your client does with a link, so treat a link like the file it leads to.
 
-## Saving a file to Drive
+## Saving a file to Google Drive
 
 `drive_upload_file` takes a file reference and, optionally, the folder to put it in:
 
@@ -260,19 +261,19 @@ A folder owned by someone else is reported in the receipt, not refused. Name the
 
 `gmail_save_attachment_to_drive` is still there. It streams the attachment, so it handles files over 25 MB, which a file reference does not.
 
-## Where the file is
+## Where the file is held during a transfer
 
-The file is held in the gateway's memory only while the transfer runs, and is never written to our disks. A file you upload is the one held longer, also in memory, as described below.
+The file is held in the DataToRAG MCP server's memory only while the transfer runs, and is never written to our disks. A file you upload is the one held longer, also in memory, as described below.
 
 It is read from the service it lives in and sent to the service you named, inside the one call. It is not copied to Google Drive or to any other place on the way.
 
-A file sent as a `content` reference is decoded in the gateway's memory and handed to the service you named inside the same call, and is never written to our disks.
+A file sent as a `content` reference is decoded in the server's memory and handed to the service you named inside the same call, and is never written to our disks.
 
-A file you upload through an upload link is kept in the gateway's memory from the moment it arrives until one call uses it, for ten minutes at most. Then it is gone. It is never written to our disks, and if the gateway restarts in those ten minutes, it is gone too and you upload it again.
+A file you upload through an upload link is kept in the server's memory from the moment it arrives until one call uses it, for ten minutes at most. Then it is gone. It is never written to our disks, and if the server restarts in those ten minutes, it is gone too and you upload it again.
 
-For a download link, the file is read into the gateway's memory twice, once to compute the receipt and once when the Save button on the link's page is used, is sent from memory to the browser that used it, and is never written to our disks. Between the two, and for up to twenty minutes after the link is made, we hold what identifies the file (the message it names and the account it is in, its name, size and SHA-256), and not its content.
+For a download link, the file is read into the server's memory twice, once to compute the receipt and once when the Save button on the link's page is used, is sent from memory to the browser that used it, and is never written to our disks. Between the two, and for up to twenty minutes after the link is made, we hold what identifies the file (the message it names and the account it is in, its name, size and SHA-256), and not its content.
 
-## Limits
+## Limits on moving files
 
 - One file per call for Jira, Drive, and Notion. At most 25 MB for Jira and Drive. At most 20 MB for Notion, and no more than the Notion workspace accepts (5 MB on a free workspace). A larger file is refused.
 - An email takes up to ten attachments, at most 25 MB together, counting Drive files and referenced files alike.
@@ -282,11 +283,11 @@ For a download link, the file is read into the gateway's memory twice, once to c
 - A download link or an upload link counts as one tool call when it is made, whether or not it is used, and is refused like any other call once your plan's calls are used up.
 - A transfer is never retried. If one fails, look at the destination before running it again, so a file is not attached twice.
 
-## Who is asked first
+## When you are asked before a file moves
 
-In a chat with the DataToRAG agent, attaching a file or making a download or upload link is treated as a write and you are asked before it runs. A skill run cannot make a download link or an upload link, because nobody is there to use it, and the agent does not take a `content` reference, because a chat keeps the arguments of every tool call. A skill run does not stop to ask, and other MCP clients apply their own approval rules, so in those the receipt is the check. Name the destination yourself: an agent should never take an issue key from the content of an email.
+In a chat with the dashboard Agent, attaching a file or making a download or upload link is treated as a write and you are asked before it runs. A skill run cannot make a download link or an upload link, because nobody is there to use it, and the dashboard Agent does not take a `content` reference, because a chat keeps the arguments of every tool call. A skill run does not stop to ask, and other MCP clients apply their own approval rules, so in those the receipt is the check. Name the destination yourself: an agent should never take an issue key from the content of an email.
 
-## Example prompts
+## Example prompts for moving files
 
 - "Attach the email from Dana about the Q3 renewal to PROJ-123 as the original file"
 - "File this message on OPS-88 and add a comment with the file's name and SHA-256"

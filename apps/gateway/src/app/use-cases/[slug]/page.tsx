@@ -10,6 +10,7 @@ import { UseCaseCard } from "@/components/use-cases/use-case-card";
 import { UseCaseReplay } from "@/components/use-cases/use-case-replay";
 import { UseCaseResultView } from "@/components/use-cases/use-case-result";
 import { breadcrumbNode, howToNode } from "@/lib/site-schema";
+import { markdownUrl } from "@/lib/markdown-copies";
 import { getSkillBySlug } from "@/lib/skills";
 import { SOCIAL_OPEN_GRAPH, SOCIAL_TWITTER } from "@/lib/social-card";
 import {
@@ -40,7 +41,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   return {
     title,
     description: useCase.description,
-    alternates: { canonical: url },
+    alternates: { canonical: url, types: { "text/markdown": markdownUrl(`/use-cases/${slug}`) } },
     openGraph: { ...SOCIAL_OPEN_GRAPH, title, description: useCase.description, type: "article", url },
     twitter: { ...SOCIAL_TWITTER, title, description: useCase.description },
   };

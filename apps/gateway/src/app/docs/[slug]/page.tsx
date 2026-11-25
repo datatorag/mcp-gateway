@@ -1,8 +1,10 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import Link from "next/link";
-import { getAllDocs, getDocBySlug, getDocNeighbors } from "@/lib/docs";
-import { faqPageNode } from "@/lib/site-schema";
+import { DOC_SETUP_MARKER, docSchemaNodes, docUrl, getAllDocs, getDocBySlug, getDocNeighbors } from "@/lib/docs";
+import { markdownUrl } from "@/lib/markdown-copies";
+import { SOCIAL_OPEN_GRAPH, SOCIAL_TWITTER } from "@/lib/social-card";
+import { formatContentDate } from "@/lib/utils";
 import { AddToAgent } from "@/components/add-to-agent";
 import { FaqSection } from "@/components/faq-section";
 import { JsonLd } from "@/components/json-ld";
@@ -17,13 +19,6 @@ function connectorTitleFor(doc: { connector: string | null; slug: string }): str
   return (getConnector(doc.connector ?? "") ?? getConnector(doc.slug))?.title;
 }
 
-// A doc's markdown can place `<!--setup-instructions-->` on its own line to
-// render the "Add to your agent" block (the one client picker and step the
-// dashboard and the site render too, SCRUM-24, SCRUM-503) at that exact
-// spot. marked passes HTML comments through untouched, so the
-// marker survives into doc.html for us to split on.
-const SETUP_MARKER = "<!--setup-instructions-->";
-
 interface Props {
   params: Promise<{ slug: string }>;
 }
@@ -37,10 +32,18 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const doc = getDocBySlug(slug);
   if (!doc) return { title: "Not Found" };
 
+  // The search title, never the visible one: the h1 stays the page's short
+  // name, the `<title>` carries the service's full name, "MCP", and the brand.
+  const title = doc.searchTitle;
+  const url = docUrl(slug);
   return {
-    title: `${doc.title} | DataToRAG Docs`,
+    title,
     description: doc.description,
-    alternates: { canonical: `https://datatorag.com/docs/${slug}` },
+    // The page stays the canonical address; its Markdown copy is offered as
+    // another form of it, for a reader that is a program.
+    alternates: { canonical: url, types: { "text/markdown": markdownUrl(`/docs/${slug}`) } },
+    openGraph: { ...SOCIAL_OPEN_GRAPH, title, description: doc.description, type: "article", url },
+    twitter: { ...SOCIAL_TWITTER, title, description: doc.description },
   };
 }
 
@@ -52,15 +55,14 @@ export default async function DocPage({ params }: Props) {
   const { prev, next } = getDocNeighbors(slug);
 
   // Without the marker, split returns [wholeDoc] and `after` is undefined.
-  const [before, after] = doc.html.split(SETUP_MARKER);
+  const [before, after] = doc.html.split(DOC_SETUP_MARKER);
 
   return (
     <div>
       <DocViewTracker slug={doc.slug} section={doc.section} />
-      {/* Only FAQPage for now. Organization, WebSite and BreadcrumbList belong
-          to SCRUM-205 and append to this same array rather than starting a
-          third convention. */}
-      <JsonLd nodes={doc.faqs.length > 0 ? [faqPageNode(doc.faqs)] : []} />
+      {/* What the page is, where it sits, and its questions. The
+          organization, the site, and the product are the root layout's. */}
+      <JsonLd nodes={docSchemaNodes(doc)} />
       <h1 className="flex items-center gap-3 font-display text-2xl font-bold text-foreground">
         {serviceFromSlug(doc.slug) && (
           <ServiceIcon service={doc.slug} size={28} />
@@ -70,6 +72,11 @@ export default async function DocPage({ params }: Props) {
       {doc.description && (
         <p className="mt-1.5 text-sm text-muted-foreground">
           {doc.description}
+        </p>
+      )}
+      {doc.updated && (
+        <p className="mt-2 text-xs text-muted-foreground">
+          Updated <time dateTime={doc.updated}>{formatContentDate(doc.updated)}</time>
         </p>
       )}
 
@@ -92,6 +99,17 @@ export default async function DocPage({ params }: Props) {
       {/* After the body and before the CTA, so it reads as part of the page
           rather than as part of the pitch. Same component the blog renders. */}
       <FaqSection faqs={doc.faqs} />
+      {/* The one pointer to the site's question page, under the page's own
+          questions, so no docs page needs a second question section. */}
+      {doc.faqs.length > 0 && (
+        <p className="mt-8 text-sm text-muted-foreground">
+          More answers are on the{" "}
+          <Link href="/faq" className="font-medium text-primary hover:underline">
+            FAQ page
+          </Link>
+          .
+        </p>
+      )}
 
       {/* The conversion moment: the reader has just finished the page. The
           sidebar CTA is always on screen and therefore easy to stop seeing;

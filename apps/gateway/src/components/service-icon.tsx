@@ -56,10 +56,15 @@ export function ServiceIcon({
   service,
   size = 16,
   className,
+  lazy = false,
 }: {
   service: string | null | undefined;
   size?: number;
   className?: string;
+  /** Fetch the icon only when it is near the screen. For a list that is
+   * hidden at some widths (the docs sidebar on a phone): an image that is not
+   * lazy is preloaded by the page's HTML whether or not it is ever shown. */
+  lazy?: boolean;
 }) {
   if (!service || !KNOWN_SERVICES.has(service)) {
     return (
@@ -80,6 +85,7 @@ export function ServiceIcon({
       aria-hidden
       width={size}
       height={size}
+      loading={lazy ? "lazy" : undefined}
       className={cn("shrink-0 select-none", className)}
     />
   );

@@ -1,7 +1,10 @@
 ---
 title: "You can now read our MCP server before you sign in"
 excerpt: "DataToRAG's MCP endpoint answers the handshake and the tool list to anyone. Calling a tool still needs an account. Here is why we changed it, what is open, and what we watch."
+searchTitle: "Read DataToRAG's MCP Tool List Without Signing In"
+searchDescription: "DataToRAG's MCP endpoint answers the handshake and the tool list without a token. Calling a tool still needs an account. What is open and why."
 date: "2026-11-09"
+updated: "2026-11-25"
 author: "Manuel Yang"
 coverImage: "/blog/read-the-tools-before-you-sign-in.png"
 category: "Product"
@@ -34,7 +37,7 @@ Without a token, the endpoint answers:
 
 - `initialize` and the client's `initialized` notification, the handshake
 - `ping`
-- `tools/list`, the public catalogue: the Google Workspace, Atlassian and Notion tools the site
+- `tools/list`, the public catalog: the Google Workspace, Atlassian and Notion tools the site
   lists, plus the gateway's own built-in tools, every one with a description, every argument
   described, every tool annotated
 - `prompts/list`, the published skills
@@ -46,7 +49,7 @@ nothing is metered.
 
 The open methods are rate-limited per address. The list they return is the same snapshot the
 site's tool pages are built from, plus the gateway's built-in tools, so there is no second
-catalogue to drift.
+catalog to drift.
 
 This is the shape the MCP spec allows and the one [Anthropic's connector guidance on lazy
 authentication](https://claude.com/docs/connectors/building/lazy-authentication) describes:
@@ -68,7 +71,7 @@ matters, instead of guessing.
 ## And once you sign in
 
 The dashboard home changed in the same release. It used to open on your connected accounts. It
-now opens on the thing a new account needs first: getting DataToRAG into the assistant you
+now opens on the thing a new account needs first: getting DataToRAG into the agent you
 already use. Cards for Claude.ai, Claude Desktop, Claude Code, ChatGPT, Codex and Cursor, each
 with the exact setup for that client. The server URL with a copy button. The example prompts,
 tagged with the services they use. One chip per provider showing what is connected. The
@@ -77,4 +80,4 @@ connection cards moved to their own page.
 ![The new dashboard home for a fresh account: the headline, three example prompts, and client cards for Claude, ChatGPT, Codex and Cursor](/blog/read-the-tools-before-you-sign-in-2.png)
 
 If you tried DataToRAG before and stopped at the sign-in, the tool list is one request away now,
-no account needed.
+no account needed. The same list is on the [tools page](/docs/tools).

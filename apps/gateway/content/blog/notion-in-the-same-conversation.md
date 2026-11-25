@@ -1,11 +1,16 @@
 ---
 title: "Notion, in the Same Conversation as Your Gmail, Drive and Jira"
-excerpt: "DataToRAG now connects Notion. The agent that reads your inbox and files Jira tickets can search, read and edit the Notion pages you share with it, with each workspace as its own account, and a tool list that costs about 6,700 tokens."
+excerpt: "DataToRAG now connects Notion. The agent that reads your inbox and files Jira tickets can search, read and edit the Notion pages you share with it, with each workspace as its own account, and a tool list that cost about 6,700 tokens at launch."
+searchTitle: "Notion MCP Tools Beside Gmail, Drive, and Jira | DataToRAG"
+searchDescription: "DataToRAG connects Notion: an agent can search, read, and edit the pages you share, with each workspace as its own account. Includes what it cannot do."
 date: "2026-10-22"
+updated: "2026-11-25"
+updatedNote: "November 25, 2026: the tool list figure is marked as the launch measurement, because the connector has gained tools since and its list is larger now. Notion's rate limit is restated from its documentation, which gives a higher limit on Business and Enterprise workspaces."
 author: "Manuel Yang"
 category: "Product"
 coverImage: "/blog/notion-in-the-agent.png"
 tags: ["notion", "notion-mcp", "connections", "agent", "context-window"]
+related: ["one-prompt-two-inboxes-multi-account-mcp", "atlassian-connector-jira-confluence-workflows", "claude-google-workspace-mcp-alternatives"]
 ---
 
 A customer asked for Notion in September. He already ran Gmail, Drive and Jira through DataToRAG and wanted the pages his team keeps in Notion in the same conversation, without a second connector doing its own thing. It is live today.
@@ -24,7 +29,7 @@ The full tool list, the limits and what is not possible are on the [Notion docs 
 
 ## What it does not do
 
-Notion's API searches titles, not page content, as of October 20, 2026. So `notion_search` matches titles only. To narrow rows by something other than a title, query the database with filters on its properties. Synced pages cannot be edited. A page that is not shared with the connection reads as not found, because Notion gives the same answer for both, and the connector says so and tells you how to share it.
+Notion's search endpoint finds pages and data sources by title, not by page content, as of November 25, 2026. So `notion_search` matches titles only. To narrow rows by something other than a title, query the database with filters on its properties. Synced pages cannot be edited. A page that is not shared with the connection reads as not found, because Notion gives the same answer for both, and the connector says so and tells you how to share it.
 
 ## The tool list, measured
 
@@ -38,10 +43,12 @@ Every tool a server advertises is read by the model on every turn, whether or no
 
 Tokens are bytes divided by four. The hosted server's list includes eight Notion Calendar tools and a set of agent and session tools that have no equivalent here, which is part of why it is larger, and its single `query-data-sources` tool alone is 80,116 bytes because its description carries three query modes and the full filter grammar. Ours covers pages, databases, comments and people, which is what the customer asked for, and the whole list fits in the space one of those descriptions takes.
 
+Those are the October 20, 2026 figures, for both servers. Our connector has gained tools since, so its list is larger today than the one measured here; the current tools are on the [Notion docs page](/docs/notion). Notion's hosted server has not been measured again.
+
 That matters because Notion is rarely the only server in a conversation. With Gmail, Drive, Jira and Notion all connected through DataToRAG, the combined tool list is what the agent pays for on every turn, and the gateway lists only the tools of the services you have connected.
 
 ## What happened on the way
 
-The connector ran against production for a day before this post with a test runner that exercises each tool as a connected user would: 14 Notion cases plus a contract probe per tool, all green on the run that cleared it. Two things from that day are worth knowing if you run Notion integrations yourself. Notion access tokens did not expire within a day of use, 48 calls at thirty-minute intervals all answered, so the connector stores no expiry and does not refresh them on a timer. And Notion's rate limit is about 180 requests a minute per workspace connection; when a read trips it and Notion asks for a short wait, the connector waits and tries again, otherwise it says how long to wait, and it never retries a write.
+The connector ran against production for a day before this post with a test runner that exercises each tool as a connected user would: 14 Notion cases plus a contract probe per tool, all green on the run that cleared it. Two things from that day are worth knowing if you run Notion integrations yourself. Notion access tokens did not expire within a day of use, 48 calls at thirty-minute intervals all answered, so the connector stores no expiry and does not refresh them on a timer. And Notion's documentation, as of November 25, 2026, gives the rate limit as 180 requests a minute per connection, or 600 on Business and Enterprise workspaces; when a read trips it and Notion asks for a short wait, the connector waits and tries again, otherwise it says how long to wait, and it never retries a write.
 
 If something does not behave the way this post says, write to support@datatorag.com, and I will look at it.

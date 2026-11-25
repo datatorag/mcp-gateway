@@ -44,7 +44,9 @@ Slug = filename without `.md`. Frontmatter fields, with fallback if omitted:
 | Field | Type | Fallback |
 |---|---|---|
 | `title` | string | `slug` |
-| `excerpt` | string | `""` |
+| `excerpt` | string: the teaser on the index card | `""` |
+| `searchTitle` | string, optional: the `<title>` and the link-preview title, never shown on the page. The words people search, then the brand, 60 characters at most | `<title> \| DataToRAG` for `<title>`, `title` for the preview (`postSearchTitle`) |
+| `searchDescription` | string, optional: the meta description, 120 to 160 characters that say what the post answers. Also the post's line in `/llms.txt`, the feed, its Markdown copy, and its structured data | `excerpt` (`postSearchDescription`) |
 | `date` | string (`YYYY-MM-DD`) | today's ISO date |
 | `author` | string | `"DataToRAG"` |
 | `authorImage` | string, optional | `undefined` |
@@ -55,12 +57,25 @@ Slug = filename without `.md`. Frontmatter fields, with fallback if omitted:
 | `coverAnimation` | string, optional: a `/blog/` path ending in `.svg`, one self-contained animated SVG (CSS keyframes inside, no script, nothing fetched). Shown over the cover on the post page through a plain `<img>`, never inlined (`components/cover-animation.tsx`). `coverImage` required with it; a post sets this OR `coverVideo`, never both. `blog-cover-animation.test.ts` fails on a missing file, 300 KB or more, a `<script`, an `on*=` attribute, a `<foreignObject`, an `@import`, an `href`/`url(` that is not `#...` or `data:`, or a way to hide one from a text match (a DOCTYPE, entity, or `&#` character reference, any prefixed element or prefix other than xlink, a namespace other than SVG and xlink, a backslash, a `src=`, `image-set(`, an `xml-stylesheet`, `data:` that is not an image or font, an animation of `href` or a handler). The check reads text and is a reviewer's aid, not a sandbox (SCRUM-509) | `undefined` |
 | `coverAlt` | string, optional: the cover's text alternative when the title does not describe it | the title |
 | `tags` | string array | `[]` (any non-array value is discarded, not coerced) |
+| `pillar` | boolean, optional: a main post for its topic. The index leads with a "Start here" group of these, rendered only when at least one post sets it | `false` |
+| `related` | string array, optional: slugs of the posts to show under this one, in order, before any chosen by shared tags. `blog.test.ts` fails a slug that names no post, or the post itself | `[]` |
 | `faqs` | list of `{q, a}` | `[]` (see **Per-page FAQs** below) |
+
+The visible heading and the index card always use `title` and `excerpt`. `blog.test.ts`
+holds a written `searchTitle` to 60 characters and a written `searchDescription` to 120
+to 160, and fails two posts that send the same `<title>`.
 
 `readTime` is **not** frontmatter — it's computed: word count from `content.split(/\s+/)`,
 then `` `${Math.max(1, Math.ceil(words / 230))} min read` ``. There's also a `postsBySlug`
-Map for O(1) `getPostBySlug` lookup, and `getRelatedPosts(slug, limit=3)` which ranks by
-tag overlap then recency — both built from the same cache.
+Map for O(1) `getPostBySlug` lookup, and `getRelatedPosts(slug, limit=3)`: the posts
+named in `related` first, then the rest ranked by tag overlap then recency. Both are
+built from the same cache.
+
+A post's body goes through `enhanceDocMedia` (`docs-media.ts`, shared with docs): each
+picture gets its real `width` and `height` and `loading="lazy"`. The cover is the
+picture at the top of a post, so a body picture stays eager only in a post with no
+`coverImage`. The cover itself (`components/post-cover.tsx`) is drawn in its file's own
+shape, with `sizes` for the article column and `fetchPriority="high"`.
 
 **A post can carry a scripted demo (SCRUM-398).** Put `<!-- demo:<id> -->` on its own
 line in the post's markdown, where `<id>` is a script id from
@@ -76,6 +91,39 @@ adding a new script is a script in `demo-scripts.ts`, a window in `demo-layout.t
 measured frame heights) and, for the home page, a row in `demo-bento.tsx`, whose
 problem line is a claim about someone else's product and needs a dated first-hand check
 of that product's tool list before it ships.
+
+**An edit to a post is disclosed in two tiers, and the note sits after the body.**
+Frontmatter `updated` alone moves `dateModified` and `modifiedTime` and shows only
+"Edited <date>" in the date line under the title, so the day a reader sees is always the
+modified date the structured data states. `updated` with `updatedNote` (a claim changed)
+also shows the note, and the date line links to it. The note renders at the END of the
+article body (`id="edit-note"`), never above it: above, the correction was the first
+hundred words a reader or an engine met.
+
+`updatedNote` is ONE line holding every edit, newest first, each opening with its day
+and a colon ("November 25, 2026: ... October 19, 2026: ..."). `src/lib/edit-note.ts`
+splits it: an entry opens at the start of the note or after the end of a sentence, with
+a day and a colon (a few words may sit between them: "November 25, 2026, second
+pass:"), or with "Earlier," / "EARLIER:"; a day in the middle of a sentence opens
+nothing; a note with no day is one entry. The page shows the newest entry in full after
+one "Edited <date>" (an entry opening with that same day gives it up, so the day is not
+printed twice) and puts every earlier entry inside a native `<details>` ("Earlier
+edits"), server-rendered. A note's links and inline code render; a raw tag shows as
+text. So: add a new edit at the FRONT of the line, open it with the same day as
+`updated`, and keep the older entries after it. `edit-note.test.ts` fails a note whose
+first day is not `updated`; `app/blog/[slug]/page.test.tsx` pins both tiers, the fold,
+the single day, and the date agreement on every post.
+
+**The index** (`app/blog/page.tsx`, strings in `app/blog/copy.ts`) has a written title
+and description, a `CollectionPage` with an `ItemList` of every post and a
+`BreadcrumbList`, and the "Start here" group above the grid when a post sets `pillar`.
+There are no tag pages.
+
+**The feed** is RSS 2.0 at `/blog/feed.xml` (`src/lib/blog-feed.ts`, route
+`app/blog/feed.xml/route.ts`): every post, newest first, with title, link, guid,
+pubDate, and description, built from the same records. The index and every post name
+it in `alternates.types`, and `/llms.txt` names it. It is not in the sitemap.
+`blog-feed.test.ts` parses it as XML.
 
 ### Changelog — `apps/gateway/src/lib/changelog.ts`
 
@@ -98,8 +146,9 @@ Slug = filename.
 
 | Field | Type | Fallback |
 |---|---|---|
-| `title` | string | `slug` |
-| `description` | string | `""` |
+| `title` | string: the page's short name, shown as the h1, in the sidebar, and on the index | `slug` |
+| `searchTitle` | string: the page's `<title>` and link-preview title, never shown on the page. The service's full name ("Google Sheets", not "Sheets"), "MCP", then the brand, 60 characters at most | `<title> \| DataToRAG MCP Docs` (a fallback for a page somebody forgot; the test fails a page that relies on it) |
+| `description` | string: the meta description AND the visible line under the h1 and on the index. Written, 120 to 160 characters, says what the page covers | `""` |
 | `order` | number | `99` (no explicit order sorts last, both top-level and per-connector) |
 | `section` | string | `"general"` (captured, sent in a PostHog `DOCS_VIEWED` event, but **not** used for sidebar grouping) |
 | `connector` | string \| null | `null` |
@@ -124,7 +173,118 @@ sidebar renders. `docs/[slug]/page.tsx` takes its links from `getDocNeighbors(sl
 names nothing in `CONNECTORS`) or appears twice. The sidebar shows a collapse control
 only for a connector that has child pages.
 
+**What a docs page says about itself** is held by `src/app/docs/docs-meta.test.ts`,
+over every markdown page plus the two route pages (`/docs` and `/docs/tools`, whose
+titles and descriptions live in `app/docs/copy.ts` and `app/docs/tools/copy.ts`):
+every title says "MCP" and "DataToRAG", no two are alike, none passes 60 characters;
+every description is 120 to 160 characters; each page states its canonical, its Open
+Graph `url` and `type` (`article` for a markdown page, `website` for the two route
+pages), and the social card. The same file holds the link rules: no docs page links an
+address that only redirects (its `REDIRECTS` list; add a route there when you make one
+a redirect), every `/docs/...` link names a page that exists, and every connector page
+is linked from another page's body, Getting Started linking all of them.
+
+**The last-updated date is one checked-in manifest, `apps/gateway/content/docs-dates.json`**
+(slug to `YYYY-MM-DD`), and three places read it through `DocPage.updated`: the
+"Updated <date>" line under the description, the sitemap's `lastmod`, and the
+`TechArticle`'s `dateModified`. The date is the day of the last commit that changed the
+page's file. It is a manifest and not a git call because the production image is built
+without `.git` and CI checks out one commit. Refresh it with **`pnpm docs:dates`** in
+`apps/gateway` (`apps/gateway/scripts/docs-dates.ts`, asking git through `src/lib/docs-dates.ts`)
+after editing a docs page, and commit the manifest with the page: a file holding
+changes that are not committed gets today's date. `src/lib/docs-dates.test.ts` fails on
+a page with no entry or an entry for no page, and, where git has the whole history, on
+an entry older than the file's last change (today, for an uncommitted change), so a
+forgotten refresh is red on the author's machine. That half skips on a shallow checkout
+or with no git. `docs-dates.ts` starts a process: nothing a page imports may import it.
+`/docs` and `/docs/tools` state no date anywhere (no line, no `lastmod`, no
+`dateModified`): the index is read from every page and the tool list from the registry
+on each request, so neither has a day of its own.
+
+**Structured data.** A markdown docs page emits `docSchemaNodes(doc)` (`src/lib/docs.ts`):
+a `TechArticle` (`headline` the visible title, `description`, `url`, `dateModified`,
+`author` and `publisher` the organization), a `BreadcrumbList` (DataToRAG, Docs, the
+connector's overview when the page has a `connector`, the page), and the `FAQPage` when
+it has `faqs`. `/docs` and `/docs/tools` emit a `CollectionPage` and a `BreadcrumbList`.
+The site-wide nodes are `siteNodes()` in `src/lib/site-schema.ts`, emitted ONCE by the
+root layout (`app/layout.tsx`) on every page: `Organization`, `WebSite`, and
+`SoftwareApplication`, each with an `@id` (`https://datatorag.com/#organization`,
+`#website`, `#software`), agreeing on the name and the address, with `sameAs` the
+source repository (`REPOSITORY_URL`). A page-level node names the organization by that
+`@id` and never declares a second one. No `offers`, rating, or review, and no `sameAs`
+that is not certainly ours; the tests in `site-schema.test.ts` pin all of it.
+
+**The docs' vocabulary: one name for each thing.** The terms are data,
+`DOCS_GLOSSARY` in `app/docs/copy.ts`, rendered by the index as its glossary
+section (`/docs#glossary`, each term a `<dt>` with a stable id, `term-client`,
+`term-dashboard-agent`, ...; an id is an address, so reword a term but never
+change its id). Every docs body and FAQ answer uses these words and no synonym:
+
+| Write | For | Never |
+|---|---|---|
+| DataToRAG | the product | "the hosted service" |
+| the DataToRAG MCP server ("the server" once a section has named it) | the server at `https://datatorag.com/mcp`, and the thing a person adds to a client | "the gateway", "our gateway", "the MCP endpoint", "a remote MCP server", "the DataToRAG connector", "plugin" |
+| client | Claude, ChatGPT, Codex, Cursor, or any MCP client | "app" |
+| agent | the model working in the client | "AI agent", "AI assistant" |
+| the dashboard Agent | the chat on the dashboard's Agent page | a bare "the Agent", "the DataToRAG agent", "the in-product agent", "built-in chat" |
+| provider | Google, Atlassian, Notion | |
+| service; "the Gmail tools", "the Google Sheets tools", "the Atlassian tools" | one product of a provider, and its tool set | "the Gmail connector", "connector" for any tool set |
+| connected account | an account at a provider connected to DataToRAG | |
+| built-in tool | a tool the server answers itself (`connect`, `list_connected_accounts`) | "the gateway's own tools" |
+
+"Connector" stays only where it is somebody's label, quoted as it is: Claude's
+"Add custom connector" and Connectors list, the usage dashboard's "By connector"
+chart, and the `connector` frontmatter key. "App" stays for the DataToRAG entry in
+a provider's own settings ("remove the app in your Atlassian account") and for the
+approval page's own words. Tool names, arguments, and UI labels are never renamed.
+A call to a tool that is not built-in is written out: "a call to a Google
+Workspace, Atlassian, or Notion tool".
+
+**How a docs page opens and how its headings read.** The first sentence names
+DataToRAG, says it is an MCP server, names the service in full ("Google Sheets",
+not "Sheets"), and says what an agent can do with it, in words the page's own tool
+table supports: "DataToRAG is an MCP server whose Google Sheets tools let an agent
+...". An h2 or h3 says the task or names the service ("Google Sheets tools",
+"Scopes the Gmail tools need", "Using Jira on more than one account", "Example
+prompts for Notion", "How a Gmail reply chooses its recipients"), never a bare
+label such as "Tools" or "Setup" that every page would share, and never a question
+(the rule below). Heading ids are derived from the heading's text, so renaming a
+heading moves its anchor: search the repo for the old name in quotes first. A
+provider overview's connect section stands alone: it states both steps, connecting
+the account on Connections and adding the DataToRAG MCP server to the client with
+its address, and links Getting Started for the walkthrough.
+
+**One question block per page.** A docs page's questions are its frontmatter `faqs`
+and nothing else: the body carries no heading that is a question section (the test
+fails on one), because a body section is on the page and in no `FAQPage`. The page
+renders one line under the block, "More answers are on the FAQ page", so no page needs
+its own pointer to `/faq`.
+
 Two docs-specific mechanisms added by SCRUM-24:
+
+- **Images and videos in a docs page** are rewritten when the page loads, by
+  `enhanceDocMedia` in `src/lib/docs-media.ts` (called from `parsePage`). Write
+  plain markdown: `![alt](/docs/file.png)` comes out with the file's real `width`
+  and `height` (read from `public/`), `loading="lazy"` and `decoding="async"`; the
+  page's first picture stays eager only when it is within the first 600 characters
+  of text. A YouTube `<iframe>` comes out as a link to the video drawn as its
+  poster with a "Play video" label, and `app/docs/videos.tsx` (mounted by the docs
+  layout) swaps in the player on click, so no page view loads the player. A new
+  video needs its poster at `public/docs/video-posters/<video id>.jpg`;
+  `docs-media.test.ts` fails without it.
+
+- **Every h2 and h3 on a docs page has an id and a link to itself**, added when the
+  page loads by `addHeadingAnchors` in `src/lib/docs-headings.ts` (called from
+  `parsePage`, after `enhanceDocMedia`). The id is the heading's words in lowercase
+  ASCII joined by hyphens (`## Who a reply goes to` is `#who-a-reply-goes-to`); a
+  heading repeated on a page gets `-2`, `-3` in page order. Ids are derived at
+  render and stored nowhere, so write plain markdown headings and never an id by
+  hand; rewording a heading moves its address. The link sits BESIDE the heading in
+  a `div.docs-heading` (styled in `globals.css`), not inside its text, the way
+  `FaqSection` does its permalink. To link a section from the same page write
+  `[text](#the-id)`; `docs-headings.test.ts` fails a page whose in-page link names
+  no section, a heading without an id, or an id used twice (the questions' `faq-`
+  anchors included).
 
 - **Component embed via marker**: a doc's markdown can place `<!--setup-instructions-->`
   on its own line; `docs/[slug]/page.tsx` splits `doc.html` on that comment (marked
@@ -150,6 +310,63 @@ Two docs-specific mechanisms added by SCRUM-24:
   (SCRUM-287). Docs mount no promo banner. The line is decided in a client effect,
   never on the server, since docs are prerendered; mobile and inline variants are
   unchanged.
+
+Two docs routes are NOT pages of the collection, and both are static routes
+beside `docs/[slug]`, rendered in the docs layout:
+
+- **`/docs` is the index**, a real page (`app/docs/page.tsx`), not a redirect:
+  every docs page with its frontmatter `description`, grouped as the sidebar
+  groups them (`getTopLevelDocs`, then `getConnectorGroups`). It reads the
+  collection, so a new markdown page is listed with no edit; its test holds
+  the links equal to `getDocsSequence()`. A page with an empty `description`
+  is listed bare, so write one.
+- **`/docs/tools` is the all-tools page** (`app/docs/tools/page.tsx`): every
+  tool an ordinary signed-in user is served once each public service is
+  connected, grouped by connector, each with the first sentence of its own
+  description. Generated, never typed: `loadAllTools` (`src/lib/all-tools.ts`)
+  is `listPublicToolRows`, the same read a signed-out `tools/list` on `/mcp`
+  is answered from, plus the built-ins with no audience on the MCP surface.
+  `groupServedTools` applies `isPublicTool` again by name, and its test hands
+  it an admin-only connector's row and `gws_run` and fails if either is
+  listed. The page is `force-dynamic` (the build has no database) and renders
+  a short notice when the read fails. Its address, title, and description are
+  `app/docs/tools/copy.ts` (with `ALL_TOOLS_SEARCH_TITLE`, its `<title>`), read
+  by the page, the index, the sidebar, and the sitemap. `/tools` alone is a permanent redirect to it and is in no sitemap.
+  No markdown file may be named `tools.md`: the static route would shadow it,
+  and the index test fails on one.
+
+Both are fixed links in `app/docs/sidebar.tsx` ("Overview" first, "All tools"
+after the general pages) and neither is in the Previous and Next reading
+order, which walks the collection only.
+
+**Value tokens: a number a docs page states is never typed.** A docs page writes
+`{{plan.free.calls}}` and the loader fills it before the markdown is rendered,
+from `docsValues()` in `src/lib/docs.ts`: `plan.free.calls`, `plan.free.runs`,
+`plan.pro.calls`, `plan.pro.runs` (all from `planLimits`, the function the
+pricing cards and the call gate read) and `run.steps.chat`, `run.steps.skill`
+(from `mastra/run-steps.ts`). `fillDocTokens(text, values, slug)` does the
+replacing, on the body, the `description` and every FAQ question and answer
+(not the `title`). A token that is not in `docsValues()` THROWS, naming the
+page, so the page does not load and the build and the tests fail. To state a
+new number, add a name to `docsValues()` from the module that decides the
+value, then use it; keep that module light, because `docs.ts` is in the module
+graph of every content guard. `docs.test.ts` pins the map against the plan
+table, that no page is left holding a brace pair, that `plans-and-limits`
+renders the plan table's numbers, and that its markdown holds no digit run of
+two or more, so a figure typed beside a token cannot stay behind. Dollar
+amounts have no token on purpose: link `/pricing`. Docs only: blog, changelog
+and skills do not fill tokens.
+
+The general pages read in this `order`: getting-started 0, multiple-accounts 1,
+skills 2, usage 5, plans-and-limits 5.5, file-references 6, security 7. `order`
+is any number, so a page goes between two neighbors with a fraction rather than
+by renumbering them.
+
+`content/docs/security.md` is the page people quote about tokens and storage.
+Every sentence in it is a statement about the code as it is (`token-crypto.ts`,
+`connected-accounts.ts`, `oauth/consent.ts`, `oauth/token.ts`, `oauth/revoke.ts`,
+`usage.ts` in the schema); a change to any of those re-reads the page in the
+same pull request.
 
 Docs screenshots live in `apps/gateway/public/docs/` and must be personally-scrubbed
 before commit (public repo). Pending-capture spots use HTML-comment placeholders
@@ -252,6 +469,53 @@ chat parts fed frames computed from the record (`replay-timeline.ts`): its serve
 finished conversation, it plays once when on screen, never loops, and does not move under reduced
 motion. The card's diagram is CSS only (`use-case-flow.module.css`), played while on screen. The
 list's filter hides cards in the browser and never removes one from the served page.
+
+### `/llms.txt` and the Markdown copies: `apps/gateway/src/lib/markdown-copies.ts`
+
+Every docs page, every use case, and every blog post is also served as Markdown at the
+page's own address plus `.md` (`/docs/gmail.md`, `/use-cases/<slug>.md`,
+`/blog/<slug>.md`), and so are the docs
+index (`/docs.md`) and the all-tools page (`/docs/tools.md`). `/llms.txt` lists them
+all in the llmstxt.org shape: the product's name, a blockquote summary, then sections
+of `- [title](markdown address): description`, the docs in the sidebar's order and
+groups, then the use cases, then a "Blog" section of every post, newest first. The
+feed's address is in the paragraph above the sections. There is no `/llms-full.txt`, on purpose: the pages together are about
+170 KB, the all-tools list is read from the database per request and cannot be part
+of a file built once, and the list already gives every page's own copy.
+
+- **Nothing is authored for a copy.** `docMarkdown(doc)` is the loaded `DocPage` (its
+  body with `{{values}}` already filled, description, `updated`, `faqs`);
+  `useCaseMarkdown` is the `UseCase` record; `postMarkdown` is the `BlogPost` record
+  (headline, description, `Published:` and `Updated:` days, the body, its questions,
+  and LAST its edits as an "Edit history" list, so the top of a copy is the post and
+  not its corrections); `docsIndexMarkdown` and `llmsTxt` read
+  `docsSections()`, the same top-level list and connector groups the sidebar reads.
+  A new docs page, use case file, or blog post gets its copy, its `/llms.txt` line, and its
+  `<link rel="alternate" type="text/markdown">` with no edit anywhere.
+- **A copy stands alone**: `absoluteLinks` rewrites every site-relative link, image,
+  and `href`/`src` to `https://datatorag.com/...` (a `#section` link becomes that
+  section of the HTML page), leaving fenced code as written. In a docs copy the
+  setup marker becomes the client steps from `MCP_CLIENTS`, a YouTube embed becomes
+  a link, and comments are dropped.
+- **Routing**: `[slug]` is a page, so `gmail.md` would be taken as a slug. The
+  addresses are rewritten by `MARKDOWN_REWRITES` in `next.config.ts` (`beforeFiles`)
+  to route handlers under `src/app/md/`; `/llms.txt` is `src/app/llms.txt/route.ts`.
+  A new kind of page with copies is one rewrite, one handler, and its entries in
+  `llmsTxt()`. `next.config.ts` must not import from `src/lib` (it would load the
+  whole docs loader at config time), which is why the list lives in the config.
+- **Headers**: `text/markdown; charset=utf-8` and `X-Robots-Tag: noindex` on every
+  copy (the HTML page stays canonical and names its copy in `alternates.types`);
+  never disallowed in `robots.ts`, since a refused crawler cannot read a noindex.
+  `/llms.txt` itself is `text/plain` and indexable. The copies are not in the sitemap.
+- **The all-tools copy answers 503**, with a short text and `Retry-After`, when the
+  registry cannot be read or answers no connector tool. Never an empty list: its
+  reader is a program, and an empty list reads as "there are no tools".
+- **Tests**: `markdown-copies.test.ts` (every copy: no unfilled `{{`, no
+  site-relative link, no admin-only service name; a post's copy is held to the link
+  and blank-line rules only, since a post is prose and may say any word; `/llms.txt`
+  lists each docs page, use case, and post exactly once) and `src/next-config.markdown.test.ts` (every listed
+  address goes through the config's rewrites, matched with the framework's own
+  matcher, to a handler that answers Markdown).
 
 ## Per-page FAQs
 
@@ -368,7 +632,10 @@ up nothing, which is the point at which a gap is cheapest to close.
 `site-faq.ts` is in the tool-count sweep's file list as well, alongside
 `hosted-google-workspace-mcp/page.tsx`, which was not in it despite its own header
 comment saying it kept no counts BECAUSE that guard would fail one. Any new hand-written
-copy surface has to be added to BOTH sweeps; neither globs `src/`.
+copy surface has to be added to BOTH sweeps; neither globs `src/`. The repository's
+`README.md` is in the tool-count sweep too, with two rules of its own (no count in a
+table cell, none in a badge): it cannot read the registry, so it states no count and
+links `https://datatorag.com/docs/tools`.
 
 The retention sweep reads `site-faq.ts` too, ONE ROUTE AT A TIME rather than as a file.
 Its qualification rule is per file because a file was a page; a module carrying several
@@ -416,7 +683,8 @@ be measured.
   plus `type` (`"article"` for posts, `"website"` for listing/static pages) and
   `url: "https://datatorag.com/<path>"` — always the absolute production URL, even in
   dev. Blog additionally emits a `schema.org` `Article` JSON-LD block
-  (`app/blog/[slug]/page.tsx`).
+  (`app/blog/[slug]/page.tsx`). Docs pages are the exception to the
+  title suffix: their `<title>` is the frontmatter `searchTitle` whole (see Docs).
 - **Social card (SCRUM-367)**: one site-wide link-preview image, `public/social-card.png`
   (1200x630, logo and name, no claim), named once in `src/lib/social-card.ts`. Next
   REPLACES `openGraph` and `twitter` whole when a page sets its own, so an image in the

@@ -1,6 +1,7 @@
 ---
 title: "Slides"
-description: "Read, create, batch update, and delete Google Slides presentations."
+searchTitle: "Google Slides MCP Server: Read and Edit Decks | DataToRAG"
+description: "Let your agent read, create, batch update, and delete Google Slides presentations through the DataToRAG MCP server for Google Workspace."
 order: 6
 section: "connectors"
 connector: "google-workspace"
@@ -28,11 +29,11 @@ faqs:
       read from one and write to the other in the same turn.
 ---
 
-The Slides connector lets your AI agent read presentation content, create new decks, and apply batch updates to slides.
+DataToRAG is an MCP server whose Google Slides tools let an agent read presentation content, create new decks, and apply batch updates to slides.
 
 ![A slides_batch_update call inserting text into an existing slide's body placeholder, with the revision id it returned](/docs/slides-batch-update.png)
 
-## Available operations
+## Google Slides tools
 
 | Tool | Description |
 |------|-------------|
@@ -41,19 +42,19 @@ The Slides connector lets your AI agent read presentation content, create new de
 | `slides_batch_update` | Insert or replace text, add slides, delete objects and other edits, in the Google Slides API `batchUpdate` format. One call, applied in order |
 | `slides_delete` | Delete a presentation. The delete is permanent, not a move to the trash; use `drive_trash_file` for one you may want back |
 
-## Required scopes
+## Scopes the Google Slides tools need
 
 - `https://www.googleapis.com/auth/presentations`
 - `https://www.googleapis.com/auth/drive` (for delete, which is a Drive operation)
 
-## Multiple accounts
+## Using Google Slides on more than one account
 
 Every tool on this page takes an optional `account` argument: the email address
 of the connected Google account to act on. Omit it and the default account is
 used. Connect a personal and a work account and your agent can read from
 one and write to the other in the same turn, without you switching profiles.
 
-## Example prompts
+## Example prompts for Google Slides
 
 - "Read my Q2 sales deck and summarize the key points from each slide"
 - "Create a new presentation called 'Team Update' with a title slide"

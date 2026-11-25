@@ -1,12 +1,17 @@
 ---
 title: "Claude Can File an Email on a Jira Issue Now, Without the Email Going Through Claude"
 excerpt: "One customer needed every email on a Jira issue as the original .eml, for compliance. He was doing it by driving Chrome. Now it is one tool call, the file goes from Gmail to Jira without touching the conversation, and the answer is a receipt with a hash. The design underneath is a file reference, and it is the shape every cross-service tool we build from here will take."
+searchTitle: "Attach a Gmail Email to a Jira Issue With Claude | DataToRAG"
+searchDescription: "DataToRAG's jira_add_attachment files a Gmail message on a Jira issue as the original .eml, and its attachments too, without the file passing through Claude."
 date: "2026-10-09"
+updated: "2026-11-25"
 author: "Manuel Yang"
 category: "Product"
 coverImage: "/blog/email-to-jira-flow.png"
 tags: ["jira", "gmail", "attachments", "file-references", "mcp"]
 ---
+
+DataToRAG's `jira_add_attachment` files a Gmail message on a Jira issue as its original `.eml`, or one of the attachments inside it, without the file passing through Claude's conversation ([Jira docs](/docs/jira)).
 
 A customer on the Pro plan has a compliance rule: every email that matters to a ticket has to sit on the Jira issue as the original message file, the raw `.eml`, not a summary and not a screenshot. Until last week his way of doing that was to have Claude drive Chrome: open the message, download it, open the issue, upload it. It worked, and it took a browser session for every single email.
 

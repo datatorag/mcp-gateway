@@ -3,6 +3,8 @@ import localFont from "next/font/local";
 import { PostHogProvider } from "@/components/posthog-provider";
 import { GoogleAds } from "@/components/google-ads";
 import { SOCIAL_OPEN_GRAPH, SOCIAL_TWITTER } from "@/lib/social-card";
+import { JsonLd } from "@/components/json-ld";
+import { siteNodes } from "@/lib/site-schema";
 import "./globals.css";
 
 /* The three typefaces are files in the repository (fonts/, each with its
@@ -65,6 +67,9 @@ export default function RootLayout({
             gtag stub exists before page effects (e.g. the dashboard's signup
             conversion) run. */}
         <GoogleAds />
+        {/* Who publishes the site, the site, and the product, once for every
+            page. A page adds its own nodes and names these by `@id`. */}
+        <JsonLd nodes={siteNodes()} />
         <PostHogProvider>{children}</PostHogProvider>
       </body>
     </html>

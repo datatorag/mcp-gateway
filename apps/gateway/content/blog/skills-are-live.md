@@ -1,6 +1,8 @@
 ---
 title: "Skills Are Live: The Routines I Kept Rebuilding by Hand, Now One Click"
 excerpt: "Published routines for Gmail, Calendar, Drive, Docs, Sheets and Jira. Copy one into Claude or press Run in the dashboard. Here is what the morning brief does, what it cost us to make it finish, and why it never asks you a question."
+searchTitle: "DataToRAG Skills: Published Routines for Gmail and Calendar"
+searchDescription: "DataToRAG skills are published routines for Gmail, Calendar, Drive, Docs, Sheets, and Jira. What the morning brief does in one run and what it cost."
 date: "2026-09-11"
 updated: "2026-11-17"
 updatedNote: "November 17, 2026: the post said there are eleven skills; that was the count at launch, and more have been published since."
@@ -25,7 +27,7 @@ accounts; the rest is the routine, written for the model in plain steps with the
 out. It's the actual file, not a description of what's possible, which is why you can read it
 before you run it.
 
-Two ways to use one. If you're in Claude, copy the skill in and it runs against your accounts
+Two ways to use one (the [skills docs](/docs/skills) have both in detail). If you're in Claude, copy the skill in and it runs against your accounts
 through the gateway, same tools, same permissions. If you'd rather not touch a config, sign in and
 press Run on the skill page. That opens the agent with the skill loaded and the run starts.
 

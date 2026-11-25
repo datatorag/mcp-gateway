@@ -19,8 +19,26 @@ export const LOCAL_IMAGE_PATTERNS = [
   { pathname: "/blog/**", search: "" },
 ];
 
+/**
+ * Where each page's Markdown copy is answered from. A page's copy is at the
+ * page's own address plus `.md` (`/docs/gmail.md`), and a `[slug]` page
+ * would take `gmail.md` as a slug and answer 404, so each such address is
+ * sent to a route handler under `app/md/` (`src/lib/markdown-copies.ts`
+ * builds what they answer). Checked before any page or file, since an
+ * address ending `.md` here is never anything else.
+ * `src/next-config.markdown.test.ts` walks every address `/llms.txt` lists
+ * through this list to a handler.
+ */
+export const MARKDOWN_REWRITES = [
+  { source: "/docs.md", destination: "/md/docs" },
+  { source: "/docs/:slug.md", destination: "/md/docs/:slug" },
+  { source: "/use-cases/:slug.md", destination: "/md/use-cases/:slug" },
+  { source: "/blog/:slug.md", destination: "/md/blog/:slug" },
+];
+
 const nextConfig: NextConfig = {
   images: { localPatterns: LOCAL_IMAGE_PATTERNS },
+  rewrites: async () => ({ beforeFiles: MARKDOWN_REWRITES, afterFiles: [], fallback: [] }),
 };
 
 export default nextConfig;

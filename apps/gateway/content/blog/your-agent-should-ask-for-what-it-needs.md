@@ -1,7 +1,11 @@
 ---
 title: "Your Agent Should Ask For What It Needs"
 excerpt: "An agent with nothing connected can still answer you. It just can't do anything. We shipped the fix: it notices what's missing, asks for it in the conversation, and finishes the job once you connect."
+searchTitle: "An Agent That Asks You to Connect an Account | DataToRAG"
+searchDescription: "When DataToRAG's dashboard Agent needs an account you have not connected, it says so, shows a connect card in the conversation, and finishes the request."
 date: "2026-08-16"
+updated: "2026-11-25"
+updatedNote: "November 25, 2026: added what changed in the connect flow since this was published. It is still a full redirect and not a popup, but since August 24, 2026 a short page of instructions sits in front of Google's consent screen, and since October 21, 2026 those steps open as a dialog on the dashboard. Four spellings changed."
 author: "Manuel Yang"
 category: "Product"
 # coverImage intentionally unset: /blog/agent-asks.png does not exist yet.
@@ -11,9 +15,11 @@ category: "Product"
 tags: ["agent", "mcp", "google-workspace", "onboarding", "product"]
 ---
 
+When DataToRAG's dashboard Agent is asked for something that needs an account you have not connected, it says what it needs, shows a connect card inside the conversation, and finishes the original request once you connect. In your own client, the `connect` tool says what is connected and gives you a link for anything that is not ([getting started](/docs/getting-started)).
+
 There is a failure mode in AI agents that looks exactly like success.
 
-You ask the agent to do something real. It replies. The reply is articulate, well-organised, and completely empty, because the agent has no connection to your data, so the only thing it can actually do is talk about what it would do if it did.
+You ask the agent to do something real. It replies. The reply is articulate, well-organized, and completely empty, because the agent has no connection to your data, so the only thing it can actually do is talk about what it would do if it did.
 
 Nothing errors. Nothing warns you. You get a confident paragraph instead of the work.
 
@@ -43,7 +49,7 @@ Now when the agent needs a connection it doesn't have, three things happen.
 
 Building a card that says "connect your account" is trivial. The difficulty is everything around it.
 
-**Google's consent screen is a full page navigation away from your app.** You leave, you authorise, you come back, and by default you come back to a fresh page with no memory of what you were doing. The request that triggered the whole thing is gone, and the user is left looking at an empty agent wondering whether it worked.
+**Google's consent screen is a full page navigation away from your app.** You leave, you authorize, you come back, and by default you come back to a fresh page with no memory of what you were doing. The request that triggered the whole thing is gone, and the user is left looking at an empty agent wondering whether it worked.
 
 So the interesting engineering is in the return trip:
 
@@ -53,14 +59,16 @@ So the interesting engineering is in the return trip:
 
 We chose a full redirect over a popup, deliberately. Popups get blocked, behave differently on mobile Safari, and can lose their handle to the opener depending on browser policy, all of which fail on a stranger's browser you cannot test. A redirect has none of those failure modes. It costs one page load, and the thread rehydrates on the other side.
 
+It is still a redirect and still not a popup, but since August 24, 2026 there is one more page on the way out. Google's screen brings its service checkboxes up unticked, and continuing without ticking them connects nothing, so a short page of instructions now sits in front of Google's screen. Since October 21, 2026 those steps open as a dialog over the page when you connect from the dashboard.
+
 ## What it does now
 
-Asked to summarise unread email and draft a status document, on an account with nothing connected:
+Asked to summarize unread email and draft a status document, on an account with nothing connected:
 
 1. The agent checked what was connected, found nothing, and said so.
 2. It rendered the connect card inline.
 3. On connecting, it resumed **the original request**, not a fresh one.
-4. It read the inbox, summarised it, created the document, and wrote the content.
+4. It read the inbox, summarized it, created the document, and wrote the content.
 
 **Both halves of a two-part request survived the OAuth round trip.** That was the acceptance test, and it is the part most likely to break quietly: it is easy to resume a conversation and lose what was actually being asked.
 

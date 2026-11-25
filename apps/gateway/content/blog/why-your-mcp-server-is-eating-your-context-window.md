@@ -2,15 +2,18 @@
 title: "Why Your MCP Server Is Eating Your Context Window"
 excerpt: "A Google Doc produces 50KB of JSON through the API. Your AI assistant doesn't need 98% of it. Most MCP servers send it all anyway."
 date: "2026-04-03"
+updated: "2026-11-25"
+updatedNote: "November 25, 2026: the context arithmetic no longer states 200K as the size of Claude's context window, which Anthropic's documentation now gives as up to 1M tokens depending on the model; the Sheets paragraph now covers reading several ranges in one call and sheets_get_metadata, which reads a spreadsheet's tabs and sizes by design; and one 'AI assistant' reads 'agent'."
 author: "Manuel Yang"
 category: "Engineering"
 coverImage: "/blog/context-window-optimization.png"
 tags: ["mcp", "context-window", "google-workspace", "performance"]
+related: ["atlassian-mcp-adf-context-optimization", "reading-a-spreadsheet-is-not-reading-data", "usage-metrics-for-multi-tenant-mcp"]
 ---
 
 Every tool call in an MCP conversation consumes tokens. The response goes into the context window, sits there for the rest of the conversation, and counts against the limit on every subsequent turn. This is obvious if you think about it. Most MCP server authors don't think about it.
 
-The result is what I've started calling context rot. Your AI assistant works fine for the first two or three tool calls, then starts losing track of the conversation, dropping details, or giving vague answers. The context window isn't full in the traditional sense. It's polluted.
+The result is what I've started calling context rot. Your agent works fine for the first two or three tool calls, then starts losing track of the conversation, dropping details, or giving vague answers. The context window isn't full in the traditional sense. It's polluted.
 
 ## The raw API problem
 
@@ -24,7 +27,7 @@ Sheets are the one exception where the raw API is reasonably sized, because `spr
 
 ## What 50KB of context pollution actually costs
 
-Let's do rough math. Claude's context window is 200K tokens. 50KB of JSON is roughly 15,000-20,000 tokens. Two Google Doc reads and a slides read later, you've burned 50,000+ tokens on data the model will never meaningfully use. That's 25% of the context gone.
+Let's do rough math on a 200K-token context window. 50KB of JSON is roughly 15,000-20,000 tokens. Two Google Doc reads and a slides read later, you've burned 50,000+ tokens on data the model will never meaningfully use. That's 25% of the context gone. (As of November 25, 2026, Anthropic's documentation lists a context window of up to 1M tokens, depending on the model, and 200K for its other models. On a larger window the share is smaller. The tokens spent are the same.)
 
 But it's not just about capacity. Dense JSON with deeply nested objects is hard for language models to parse efficiently. The model spends attention on structural tokens (braces, brackets, key names) that carry no semantic value. The signal-to-noise ratio tanks.
 
@@ -38,7 +41,9 @@ Three approaches, depending on the service.
 
 **Google Slides** runs through a `trimPresentation()` function that strips master slides, layouts, page element geometry, transform matrices, and text styling. What comes back is the slide structure with just the text content and object IDs you'd need for edits. 2-5KB from 100KB+ raw.
 
-**Google Sheets** hits `spreadsheets.values.get` directly, never fetching the full spreadsheet resource with formatting, conditional rules, and metadata. If you need cell values, that's what you get. Nothing else.
+**Google Sheets** reads cell values through the values API (`spreadsheets.values.get` for one range, one batched read for several), never fetching the full spreadsheet resource with formatting and conditional rules. If you need cell values, that's what you get. When the model needs the shape of a spreadsheet instead, `sheets_get_metadata` returns the tabs, their ids, and their sizes, and no cells.
+
+The read modes are listed in the [Docs](/docs/docs), [Slides](/docs/slides), and [Sheets](/docs/sheets) docs. Confluence has its own version of this problem, where a 500-word page is roughly 40KB of storage markup; that case is in [Confluence pages are 40KB of markup](/blog/atlassian-mcp-adf-context-optimization).
 
 Every response also has a 900KB safety cap. If something somehow produces a massive response (a Sheet with 50,000 rows, say), it gets truncated with a note rather than blowing out the context.
 

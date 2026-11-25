@@ -1,8 +1,11 @@
 ---
 title: "We Published Our Inbox Triage Routine. Then It Quietly Stopped Running."
 excerpt: "The scheduled job missed three of the next ten days and every check passed. Firing and noticing are different jobs, and a check you write cannot verify a run that never happened."
+searchTitle: "A Scheduled Agent Job That Silently Stopped Running"
+searchDescription: "Our scheduled inbox triage missed three of ten days while every check passed. Why firing a job and noticing it ran are different, and the fix."
 date: "2026-09-03"
-updated: "2026-11-17"
+updated: "2026-11-25"
+updatedNote: "November 25, 2026: the paragraph on the success signal is marked as September 2026 as well, and 'assistant session' reads 'agent session'; since October 31, 2026 our digest is a direct message in our team chat and no longer an email, the job that fires the run waits an hour for the record that the message posted, and the schedule runs from a systemd timer; the section on the schedule now says so. The principle is unchanged."
 author: "Manuel Yang"
 category: "Engineering"
 coverImage: "/blog/the-job-that-was-armed-and-inert.png"
@@ -24,7 +27,7 @@ was happening.
 
 ## Armed and inert
 
-The routine was scheduled by an in-session cron: a job held inside a long-running assistant
+The routine was scheduled by an in-session cron: a job held inside a long-running agent
 session. Asking the session to list its jobs showed the job. Asking the process manager showed the
 session alive. No error was raised anywhere, by anything.
 
@@ -81,11 +84,14 @@ If your check cannot fail, it is not a check, it is a decoration that reports gr
 routine mails you one message; the verifier goes and looks for that message in the inbox, through
 the same connector everything else runs on. If the mail is there, the run happened, because a run
 that did not happen cannot produce it. A file on disk proves that something wrote a file. A
-delivered email proves the work reached the person it was for.
+delivered email proves the work reached the person it was for. (That was September 2026. The
+message is no longer an email; the note at the top of the next section says what it is now.)
 
 ## What the schedule looks like now
 
-One job, not two. It fires once, hands the work to the assistant session that holds the mail
+*This section describes September 2026. Since October 31, 2026 the digest is a direct message in our team chat, not an email. The job that fires the run now waits an hour for the timestamp the chat service returns once the message has posted, and it runs from a systemd timer on a Linux machine. The principle is the same: success is a message that reached the person, not our own bookkeeping.*
+
+One job, not two. It fires once, hands the work to the agent session that holds the mail
 connections, and then polls every fifteen minutes for an hour.
 
 It notifies on exactly five events: the run was handed off, the handoff failed, the digest arrived,
@@ -103,7 +109,7 @@ question about our own bookkeeping and let us believe we had answered a question
 The job exists. The file exists. Neither says a single message got triaged.
 
 The routine itself did not change. The [decisions behind it](/blog/stop-reading-your-inbox) still
-hold, and the one I would still defend hardest is labelling before marking read: the labels are
+hold, and the one I would still defend hardest is labeling before marking read: the labels are
 what make a bad run auditable and reversible, and they are the reason none of these misses cost
 anything. A routine that skipped a day left yesterday's mail unread, which is exactly what mail
 does on its own.

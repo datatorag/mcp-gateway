@@ -1,13 +1,16 @@
 ---
 title: "Looking for an Open-Source Composio Alternative? Check Which Part Is Actually Open."
 excerpt: "Composio's SDKs are open source. The runtime that holds your tokens and executes your calls is not, and self-hosting it is an enterprise-plan conversation. If 'open source' means 'I can run the whole thing myself', the license on the SDK isn't the license that matters."
+searchTitle: "Open-Source Composio Alternative: Which Part Is Open?"
+searchDescription: "Which parts of Composio are open source and which are not, compared with DataToRAG, whose MIT-licensed code can be self-hosted with your own database."
 date: "2026-07-23"
 updated: "2026-11-25"
-updatedNote: "November 25, 2026: two corrections. The table and the closing section said hosted DataToRAG stores nothing; it stores each connection's sign-in tokens, encrypted, in our database, and the rows now say so. Your Workspace content is still passed through and not kept. The post also said Composio had no Google Slides or Contacts toolkit; its own pages list both today, so that sentence is removed. November 17, 2026: the self-hosting steps said `docker compose up` with your own Postgres. That command does not work as written and there is no packaged self-host guide, so the post now says the source is open and lists what you would supply instead of printing a command. The scope paragraph now counts Notion, connected since October 2026. The comparison table said our client SDKs are open source; we ship no client SDK, because any MCP client connects to the gateway, so the row now says that. August 24, 2026: narrowed an overbroad privacy claim. The pass-through statement used to end 'there's no copy at all'; the gateway keeps nothing, but the hosted agent on our own site stores its conversation threads. The privacy policy is now linked from the paragraph."
+updatedNote: "November 25, 2026: two corrections. The table and the closing section said hosted DataToRAG stores nothing; it stores each connection's sign-in tokens, encrypted, in our database, and the rows now say so. Your Workspace content is still passed through and not kept. The post also said Composio had no Google Slides or Contacts toolkit; its own pages list both today, so that sentence is removed. Composio's catalog figure is also updated from 1,000 toolkits to the 1,800+ apps its site states, its attestations are dated to its trust page, and Notion is named beside Jira and Confluence. November 17, 2026: the self-hosting steps said `docker compose up` with your own Postgres. That command does not work as written and there is no packaged self-host guide, so the post now says the source is open and lists what you would supply instead of printing a command. The scope paragraph now counts Notion, connected since October 2026. The comparison table said our client SDKs are open source; we ship no client SDK, because any MCP client connects to the gateway, so the row now says that. August 24, 2026: narrowed an overbroad privacy claim. The pass-through statement used to end 'there's no copy at all'; the gateway keeps nothing, but the hosted agent on our own site stores its conversation threads. The privacy policy is now linked from the paragraph."
 author: "Manuel Yang"
 category: "Comparison"
 coverImage: "/blog/open-source-composio-alternative.png"
 tags: ["composio", "open-source", "self-hosted", "mcp", "alternative"]
+related: ["composio-alternative", "open-source-google-workspace-mcp-alternative", "claude-google-workspace-mcp-alternatives"]
 ---
 
 There's a specific moment when "open source" stops being a nice-to-have and becomes the requirement. Usually it's a security review. Someone asks where the OAuth tokens live, you say "the vendor's cloud," and the room goes quiet.
@@ -20,11 +23,11 @@ Composio's SDKs are open source, and that's genuinely useful: you can read the c
 
 On self-serve plans, that's just where your tokens live. Self-hosting the runtime is an enterprise-plan conversation, not a `git clone`.
 
-None of this is a scandal. It's a normal commercial architecture, and Composio backs it with real attestations: SOC 2 Type II and ISO 27001, which is more than most of the field can say (us included, on those two). But if your requirement is "no vendor in the middle of my Google data," an attestation about the vendor isn't the same thing as removing the vendor. Strong compliance and "the data never touches a third party" are different guarantees. Only one of them survives the security review that started this search.
+None of this is a scandal. It's a normal commercial architecture, and Composio backs it with real attestations: its trust page lists SOC 2, with a Type II report, and ISO 27001 (as of November 25, 2026), which is more than most of the field can say (us included, on those two). But if your requirement is "no vendor in the middle of my Google data," an attestation about the vendor isn't the same thing as removing the vendor. Strong compliance and "the data never touches a third party" are different guarantees. Only one of them survives the security review that started this search.
 
 ## What actually self-hosting looks like
 
-DataToRAG's core is MIT-licensed, so running it yourself is a matter of the code, not an enterprise plan. It is not one command, though, and there is no packaged self-host guide yet. You would supply a Postgres database, your own Google OAuth clients (and Google's verification for the restricted Gmail and Drive scopes), and an encryption key for the stored tokens, then point Claude at your own endpoint. The tokens then sit in a database you control on a box you control.
+DataToRAG's core is MIT-licensed, so running it yourself is a matter of the code, not an enterprise plan. It is not one command, though, and the README's self-hosting section lists the steps. You would supply a Postgres database, your own Google OAuth clients (and Google's verification for the restricted Gmail and Drive scopes), and an encryption key for the stored tokens, then point Claude at your own endpoint. The tokens then sit in a database you control on a box you control.
 
 And in either mode, hosted or self-hosted, the gateway is pass-through. When Claude calls `gmail_search`, the request goes to Google on your behalf and the result comes straight back. We don't retain your messages, files, or calendar, and there's no copy of your inbox in anyone's database to leak later.
 
@@ -39,13 +42,13 @@ So the layering works out like this:
 | Self-hosting | Enterprise plans | Source open (MIT); you supply the database, OAuth clients and keys |
 | Where tokens live (self-serve) | Composio's cloud | Our database, encrypted, on hosted; your own Postgres self-hosted |
 | Your data at rest with the vendor | Tokens, yes | Tokens on hosted (encrypted); no Workspace content either way |
-| Attestations | SOC 2 Type II, ISO 27001 | CASA Tier 2 passed, Google-verified (June 2026) |
+| Attestations | SOC 2 Type II, ISO 27001 (as of November 25, 2026) | CASA Tier 2 passed, Google-verified (June 2026) |
 
 That last row cuts both ways and I want to keep it honest. If your procurement checklist says SOC 2 and ISO 27001, Composio has shipped those and we haven't. What we finished instead is CASA Tier 2, the Google-specific security review required for restricted Gmail and Drive scopes: a zero-findings scan and Google's verification of the app in June 2026. Different credential, aimed at a different question. For Google Workspace data specifically, it's the relevant one.
 
 ## The scope tradeoff, stated plainly
 
-Composio's catalog is over 1,000 toolkits. Ours is 8 Google services, Jira and Confluence, and Notion. If your agent needs Salesforce, Slack and a dozen niche APIs, an open-source Workspace gateway doesn't answer that, and I'd rather say so in the third section than have you find out after a migration.
+Composio's site counts 1,800+ apps as of November 25, 2026. Ours is 8 Google services, Jira and Confluence, and Notion. If your agent needs Salesforce, Slack and a dozen niche APIs, an open-source Workspace gateway doesn't answer that, and I'd rather say so in the third section than have you find out after a migration.
 
 What you get for the narrower scope is depth. Hand-built Google tools, including the ones platforms tend to skip: `docs_batch_update` for restructuring a document in place, `slides_create` and `slides_batch_update` for building decks, full `contacts_*` and `tasks_*` sets, `gmail_send` and `gmail_reply` so workflows finish instead of stopping at a draft. (As of November 25, 2026, Composio has Google Slides and Contacts toolkits too; an earlier version of this paragraph said it did not.) Multi-account is built in too: a work Google account, a personal one, and a shared inbox behind one endpoint, addressable in a single prompt.
 
@@ -53,13 +56,13 @@ There's also a quieter self-hosting benefit. Because you run the gateway, the re
 
 ## Who should pick what
 
-If you're a developer shipping an agent product that connects your customers to hundreds of apps, and enterprise self-hosting is within reach, Composio is a strong platform and its closed runtime may be a perfectly acceptable tradeoff. I compared the two products in full [here](/blog/composio-alternative).
+If you're a developer shipping an agent product that connects your customers to hundreds of apps, and enterprise self-hosting is within reach, Composio is a strong platform and its closed runtime may be a perfectly acceptable tradeoff. I compared the two products in full in [the Composio alternative post](/blog/composio-alternative).
 
 If the requirement that brought you here is the literal one, that the code executing against your Google account is code you can read, build, and run on your own infrastructure, then the SDK license was never the point. You need the runtime to be open.
 
 ## What you get with DataToRAG
 
-To be concrete about what's behind that MIT license: DataToRAG is an MCP gateway that connects Claude (or Cursor, or any MCP client) to your real work tools through one endpoint. Hand-built tools across all eight Google Workspace services, with the write verbs that make workflows finish: `gmail_send` and `gmail_reply`, `docs_batch_update` for editing documents in place, `slides_create` for decks, `sheets_update` and `sheets_append`, full `contacts_*` and `tasks_*` sets. Jira and Confluence ride behind the same endpoint. Multi-account is built in, so a work Google account, a personal one, and a shared inbox answer to a single prompt.
+To be concrete about what's behind that MIT license: DataToRAG is an MCP gateway that connects Claude (or Cursor, or any MCP client) to your real work tools through one endpoint. Hand-built tools across all eight Google Workspace services ([the full list](/docs/tools)), with the write verbs that make workflows finish: `gmail_send` and `gmail_reply`, `docs_batch_update` for editing documents in place, `slides_create` for decks, `sheets_update` and `sheets_append`, full `contacts_*` and `tasks_*` sets. Jira, Confluence, and [Notion](/blog/notion-in-the-same-conversation) ride behind the same endpoint. Multi-account is built in, so a work Google account, a personal one, and a shared inbox answer to a single prompt.
 
 And it's not open source instead of verified, it's both: the same code passed Google's CASA Tier 2 security review with zero findings, and Google verified the app in June 2026. Your users see a normal Google consent screen, not an "unverified app" warning.
 

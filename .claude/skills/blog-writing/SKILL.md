@@ -106,10 +106,16 @@ matter how small the change:
    Overwrite it on each subsequent edit; it always holds the latest edit date.
 2. **`updatedNote:` frontmatter** — one line saying *what* changed, not merely
    that something did ("Calendar comparison table updated for native connector
-   parity", not "updated for accuracy").
+   parity", not "updated for accuracy"). The line holds every edit the post has
+   had, newest first. Write the new edit at the FRONT, opening with the same day
+   as `updated` and a colon ("November 25, 2026: the table now says ..."), and
+   leave the earlier entries after it, each still opening with its own day. Do
+   not open an entry with the day twice, and do not start a sentence inside an
+   entry with a day and a colon: that is how the page tells where an entry begins.
 
-The blog template renders these as an "Edited <date>: <note>" block right
-after the post header, and feeds `updated` into the JSON-LD `dateModified`,
+The blog template prints "Edited <date>" in the date line under the title and,
+after the body, a note with the newest entry in full and the earlier ones folded
+under "Earlier edits". It feeds `updated` into the JSON-LD `dateModified`,
 the OpenGraph `modifiedTime`, and the sitemap `lastModified`. Why it matters:
 LLMs and crawlers judge how current a page is from structured data. A post
 whose body changed but whose `dateModified` still reads the publish date tells
@@ -118,6 +124,26 @@ comparison posts, where our capabilities and a competitor's both move.
 
 Never set `updated` on a brand-new post; absence means "never edited" and
 keeps `dateModified` equal to the publish date.
+
+## Search Title, Description, and Links Between Posts
+
+Four optional frontmatter fields, all read by `apps/gateway/src/lib/blog.ts` (the
+`site-content` skill has the table):
+
+- `searchTitle`: what a search result and a link preview show as the title. The
+  words someone would type, then the brand, 60 characters at most. The heading on
+  the page stays `title`, so the headline can stay a headline.
+- `searchDescription`: the meta description, 120 to 160 characters, answer first.
+  It is also the post's line in `/llms.txt` and the feed. The index card keeps
+  `excerpt`.
+- `related`: the slugs of up to three posts to show under this one, in order. Use
+  it to tie a topic's posts together; without it the posts sharing the most tags
+  are shown.
+- `pillar: true`: the main post for its topic. The index lists these first under
+  "Start here".
+
+Every post is also served as Markdown at `/blog/<slug>.md` and listed in the feed
+at `/blog/feed.xml`, with nothing to write for either.
 
 ## Pre-Publish Checklist
 

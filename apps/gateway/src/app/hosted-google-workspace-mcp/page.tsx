@@ -4,7 +4,15 @@ import { Navbar } from "@/components/navbar";
 import { FaqSection } from "@/components/faq-section";
 import { JsonLd } from "@/components/json-ld";
 import { faqPageNode } from "@/lib/site-schema";
-import { siteFaqGroups, siteFaqs } from "@/lib/site-faq";
+import {
+  BUILT_IN_CHECKED_ON,
+  BUILT_IN_DIFFERENCE,
+  BUILT_IN_HELP_URL,
+  SELF_HOSTING,
+  siteFaqGroups,
+  siteFaqs,
+} from "@/lib/site-faq";
+import { GithubMark, REPOSITORY_URL } from "@/components/github-mark";
 import { SOCIAL_OPEN_GRAPH, SOCIAL_TWITTER } from "@/lib/social-card";
 import { signInHref } from "@/lib/sign-in";
 import { AddToAgent } from "@/components/add-to-agent";
@@ -37,6 +45,16 @@ const faqs = siteFaqs("/hosted-google-workspace-mcp");
    - Claude's native Drive can CREATE files but its update_file changes title
      and parent only, never content. Keep every Drive row create-vs-change.
    - There is no official Tasks MCP.
+
+   2026-11-25: THE NATIVE COLUMN AND THE NATIVE ROUTE WERE REWRITTEN from
+   Anthropic's own help page (BUILT_IN_HELP_URL in lib/site-faq.ts), which that
+   day listed separate Docs, Sheets, and Slides connectors that create and edit
+   files. "No Sheets connector", "the whole Google surface", and the two Docs
+   and Slides "no" cells were false against it and are gone. A native cell now
+   says only what that page says. It does not say how many Google accounts can
+   be connected and does not mention Contacts or Tasks, so this page no longer
+   states a native limit on either. Google's own servers were NOT re-checked
+   that day; their row still rests on the 2026-08-24 check.
    No tool counts on this page on purpose: lib/tool-count-claims.test.ts fails
    a bare count, and every exact figure we have published has drifted. */
 
@@ -63,8 +81,8 @@ const ROUTES = [
   {
     name: "Claude's native connectors",
     setup: "None",
-    covers: "Gmail, Calendar, Drive. That is the whole Google surface.",
-    gap: "No Sheets, Docs, Slides, Contacts or Tasks connector at all. One Google account at a time.",
+    covers: `Gmail, Calendar, and Drive, plus separate Docs, Sheets, and Slides connectors that create and edit files (Anthropic's help page, ${BUILT_IN_CHECKED_ON}).`,
+    gap: "Available in Claude's own apps. The limits its help page lists include no charts in Slides.",
   },
   {
     name: "Google's official MCP servers",
@@ -78,19 +96,19 @@ const ROUTES = [
     setup: "One URL, one Google sign-in",
     covers:
       "Gmail, Drive, Sheets, Docs, Slides, Calendar, Contacts, Tasks, plus Jira, Confluence and Notion on the same endpoint.",
-    gap: "We are a third party in the path. No Google Chat tools. Self-host if that trade is wrong for you.",
+    gap: "We are a third party in the path. No Google Chat tools. The code is MIT-licensed if you would rather run it yourself, and the README's self-hosting section lists the steps.",
   },
 ];
 
 const WRITES = [
   ["Read a spreadsheet", "Native: yes", "Us: yes"],
-  ["Change a cell in it", "Native: no Sheets connector", "Us: yes"],
-  ["Create a Google Doc", "Native: yes, via Drive", "Us: yes"],
-  ["Write content into it", "Native: no", "Us: yes"],
-  ["Create a presentation", "Native: yes, and it arrives empty", "Us: yes"],
-  ["Put content on the slides", "Native: no", "Us: yes"],
-  ["Send an email", "Native: yes, since August", "Us: yes"],
-  ["Work across two Google accounts", "Native: no, one at a time", "Us: yes"],
+  ["Change a cell in it", "Native: yes, with the Sheets connector", "Us: yes"],
+  ["Create a Google Doc", "Native: yes", "Us: yes"],
+  ["Write content into it", "Native: yes, with the Docs connector", "Us: yes"],
+  ["Create a presentation", "Native: yes", "Us: yes"],
+  ["Put content on the slides", "Native: yes, with the Slides connector", "Us: yes"],
+  ["Send an email", "Native: yes", "Us: yes"],
+  ["Work across two Google accounts", "Native: not covered on the help page", "Us: yes"],
 ];
 
 export default function HostedGoogleWorkspaceMcpPage() {
@@ -106,7 +124,23 @@ export default function HostedGoogleWorkspaceMcpPage() {
           <h1 className="mt-3 font-display text-3xl font-bold text-foreground sm:text-4xl">
             A hosted Google Workspace MCP, with write access
           </h1>
-          <p className="mt-5 max-w-2xl text-base leading-relaxed text-muted-foreground">
+          {/* The answer to "what is the difference from Claude's built-in
+              Google connectors", in the first hundred words of the page. The
+              sentences are lib/site-faq.ts's, shared with the FAQ answer, and
+              the rules for the vendor half are in the comment there. */}
+          <p className="mt-5 max-w-2xl text-base leading-relaxed text-foreground">
+            {BUILT_IN_DIFFERENCE.ours} {BUILT_IN_DIFFERENCE.theirsLead}
+            <a
+              href={BUILT_IN_HELP_URL}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="underline underline-offset-2"
+            >
+              {BUILT_IN_DIFFERENCE.theirsSource}
+            </a>
+            {BUILT_IN_DIFFERENCE.theirsRest} {BUILT_IN_DIFFERENCE.close}
+          </p>
+          <p className="mt-4 max-w-2xl text-base leading-relaxed text-muted-foreground">
             Add one endpoint, sign in with Google, and your agent can edit the
             spreadsheet rather than describe it. No Google Cloud project, no
             OAuth client of your own, no per-product endpoints to wire up.
@@ -131,7 +165,17 @@ export default function HostedGoogleWorkspaceMcpPage() {
             <Link href="/blog/casa-tier-2-verified" className="underline underline-offset-2">
               CASA Tier 2 assessed
             </Link>{" "}
-            · Open source, self-host it if you prefer
+            ·{" "}
+            <a
+              href={REPOSITORY_URL}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="hover:opacity-80"
+            >
+              Open source
+              <GithubMark size={13} className="-mt-0.5 ml-1.5 inline" />
+              <span className="sr-only"> on GitHub</span>
+            </a>
           </p>
 
           {/* SCRUM-503: the client step, for a visitor who arrives with an
@@ -159,6 +203,13 @@ export default function HostedGoogleWorkspaceMcpPage() {
               </tbody>
             </table>
           </div>
+          <p className="mt-4 max-w-2xl text-sm leading-relaxed text-muted-foreground">
+            The native column is what Anthropic&apos;s help page says as of{" "}
+            {BUILT_IN_CHECKED_ON}. The built-in connectors write to Docs, Sheets,
+            and Slides now. What this gateway adds sits mostly outside the
+            table: several Google accounts in one request, Contacts and Tasks,
+            and Jira, Confluence, and Notion on the same endpoint.
+          </p>
 
           <h2 className="mt-16 font-display text-2xl font-bold text-foreground">
             The three routes, and when each one wins
@@ -204,8 +255,7 @@ export default function HostedGoogleWorkspaceMcpPage() {
               <span className="text-foreground">
                 A third party in the path is disqualifying.
               </span>{" "}
-              That is a real answer, and self-hosting this gateway is the version
-              of us that respects it.
+              That is a real answer. {SELF_HOSTING}
             </li>
           </ul>
 

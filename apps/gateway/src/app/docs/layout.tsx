@@ -4,6 +4,7 @@ import { getConnectorGroups, getTopLevelDocs } from "@/lib/docs";
 import { DocsSidebar } from "./sidebar";
 import { DocsNavClient } from "./nav-client";
 import { DocsCta } from "./cta";
+import { DocsVideos } from "./videos";
 
 // NOTE: deliberately no session read here — cookies() would force every
 // /docs/* page to render dynamically, and docs are a static, cacheable,
@@ -97,6 +98,8 @@ export default function DocsLayout({
           {children}
         </div>
       </main>
+      {/* Swaps a page's video link for its player on click. Renders nothing. */}
+      <DocsVideos />
     </div>
   );
 }

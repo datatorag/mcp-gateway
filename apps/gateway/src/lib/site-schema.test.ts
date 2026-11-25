@@ -1,5 +1,17 @@
 import { describe, expect, it } from "vitest";
-import { faqPageNode, serializeJsonLd } from "./site-schema";
+import { readFileSync } from "node:fs";
+import path from "node:path";
+import { REPOSITORY_URL } from "@/components/github-mark";
+import {
+  collectionPageNode,
+  faqPageNode,
+  organizationNode,
+  serializeJsonLd,
+  siteNodes,
+  softwareApplicationNode,
+  techArticleNode,
+  websiteNode,
+} from "./site-schema";
 
 /**
  * The FAQPage projection and the script-escape beneath it.
@@ -72,5 +84,103 @@ describe("faqPageNode", () => {
     const serialized = serializeJsonLd([faqPageNode([{ q: "Cost?", a: "See pricing." }])]);
     expect(serialized).not.toContain("offers");
     expect(serialized).not.toContain("priceCurrency");
+  });
+});
+
+/* The three nodes the root layout emits on every page: who publishes the
+   site, the site, and the product. They have to agree with each other, and
+   every page-level node has to name the same publisher. */
+describe("site-wide nodes", () => {
+  const SITE = "https://datatorag.com";
+  const ORG_ID = `${SITE}/#organization`;
+
+  it("an Organization with its name, address, logo, and the repository", () => {
+    const org = organizationNode();
+    expect(org["@context"]).toBe("https://schema.org");
+    expect(org["@type"]).toBe("Organization");
+    expect(org["@id"]).toBe(ORG_ID);
+    expect(org.name).toBe("DataToRAG");
+    expect(org.url).toBe(SITE);
+    expect(org.logo).toBe(`${SITE}/datatorag-logo-256.png`);
+    expect(org.sameAs).toEqual([REPOSITORY_URL]);
+  });
+
+  it("names a logo file the site serves", () => {
+    const logo = (organizationNode().logo as string).replace(SITE, "");
+    expect(() => readFileSync(path.join(process.cwd(), "public", logo))).not.toThrow();
+  });
+
+  it("a WebSite published by that organization", () => {
+    const site = websiteNode();
+    expect(site["@context"]).toBe("https://schema.org");
+    expect(site["@type"]).toBe("WebSite");
+    expect(site["@id"]).toBe(`${SITE}/#website`);
+    expect(site.name).toBe("DataToRAG");
+    expect(site.url).toBe(SITE);
+    expect(site.publisher).toEqual({ "@id": ORG_ID });
+  });
+
+  it("a SoftwareApplication for the product, published by that organization", () => {
+    const app = softwareApplicationNode();
+    expect(app["@context"]).toBe("https://schema.org");
+    expect(app["@type"]).toBe("SoftwareApplication");
+    expect(app.name).toBe("DataToRAG");
+    expect(app.url).toBe(SITE);
+    expect(app.applicationCategory).toBe("DeveloperApplication");
+    expect((app.description as string).length).toBeGreaterThan(20);
+    expect(app.publisher).toEqual({ "@id": ORG_ID });
+    expect(app.sameAs).toEqual([REPOSITORY_URL]);
+  });
+
+  it("the three agree on the name and the address, and each has its own id", () => {
+    const nodes = siteNodes();
+    expect(nodes.map((n) => n["@type"])).toEqual(["Organization", "WebSite", "SoftwareApplication"]);
+    expect(new Set(nodes.map((n) => n.name))).toEqual(new Set(["DataToRAG"]));
+    expect(new Set(nodes.map((n) => n.url))).toEqual(new Set([SITE]));
+    expect(new Set(nodes.map((n) => n["@id"])).size).toBe(3);
+  });
+
+  it("state no price, rating, or review", () => {
+    const serialized = serializeJsonLd(siteNodes());
+    for (const word of ["offers", "price", "aggregateRating", "ratingValue", "review"]) {
+      expect(serialized, word).not.toContain(word);
+    }
+  });
+
+  it("the root layout emits them once, and no page declares its own", () => {
+    const read = (file: string) => readFileSync(path.join(process.cwd(), file), "utf8");
+    expect(read("src/app/layout.tsx").match(/<JsonLd nodes=\{siteNodes\(\)\} \/>/g)).toHaveLength(1);
+    for (const file of ["src/app/page.tsx", "src/app/docs/page.tsx", "src/app/docs/[slug]/page.tsx", "src/app/docs/layout.tsx"]) {
+      expect(read(file), file).not.toMatch(/siteNodes|organizationNode|websiteNode|softwareApplicationNode/);
+    }
+  });
+});
+
+describe("page-level nodes name the same publisher", () => {
+  const org = { "@type": "Organization", "@id": "https://datatorag.com/#organization", name: "DataToRAG", url: "https://datatorag.com" };
+
+  it("a TechArticle carries its headline, description, address, date, author, and publisher", () => {
+    const node = techArticleNode({ headline: "Gmail", description: "What it covers.", url: "https://datatorag.com/docs/gmail", dateModified: "2026-11-25" });
+    expect(node).toMatchObject({
+      "@context": "https://schema.org",
+      "@type": "TechArticle",
+      headline: "Gmail",
+      description: "What it covers.",
+      url: "https://datatorag.com/docs/gmail",
+      dateModified: "2026-11-25",
+      author: org,
+      publisher: org,
+    });
+  });
+
+  it("a TechArticle with no known date states none", () => {
+    const node = techArticleNode({ headline: "Gmail", description: "What it covers.", url: "https://datatorag.com/docs/gmail", dateModified: null });
+    expect("dateModified" in node).toBe(false);
+  });
+
+  it("a CollectionPage carries its name, description, address, and publisher, and no date", () => {
+    const node = collectionPageNode({ name: "All tools", description: "Every tool.", url: "https://datatorag.com/docs/tools" });
+    expect(node).toMatchObject({ "@type": "CollectionPage", name: "All tools", description: "Every tool.", url: "https://datatorag.com/docs/tools", publisher: org });
+    expect(Object.keys(node).filter((k) => k.startsWith("date"))).toEqual([]);
   });
 });

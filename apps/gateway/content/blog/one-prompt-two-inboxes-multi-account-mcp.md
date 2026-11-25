@@ -1,13 +1,17 @@
 ---
 title: "One Prompt, Two Inboxes: Multi-Account Support for MCP"
 excerpt: "Most MCP servers assume one user means one account. We built multi-account support so you can query your work and personal Google accounts in the same conversation."
+searchTitle: "Multi-Account MCP: Two Gmail Accounts in One Claude Prompt"
+searchDescription: "DataToRAG connects several Google accounts to one MCP server. Every tool takes an optional account parameter, so one prompt can search two inboxes."
 date: "2026-04-05"
-updated: "2026-11-17"
-updatedNote: "November 17, 2026: Notion added to the services list and the table, and the account argument for Notion can be the workspace name. Three corrections. The services list omitted Slides, Contacts and Tasks. The 'about 30%' saving from lazy tool loading was a figure that moves every time a tool ships, so it is gone rather than restated. And the bar chart with tool counts printed on it is replaced by a table: the counts had gone stale, and a number inside an image cannot be caught by the tests that check the rest of our copy."
+updated: "2026-11-25"
+updatedNote: "November 25, 2026: with nothing connected the model sees all of the gateway's own tools (connecting a service, listing accounts, skills, and file links), not only the connect tool, and the table says so; the closing paragraph on the email-address parameter now says that for Notion the value can be a workspace name and that an ambiguous value is refused. November 17, 2026: Notion added to the services list and the table, and the account argument for Notion can be the workspace name. Three corrections. The services list omitted Slides, Contacts and Tasks. The 'about 30%' saving from lazy tool loading was a figure that moves every time a tool ships, so it is gone rather than restated. And the bar chart with tool counts printed on it is replaced by a table: the counts had gone stale, and a number inside an image cannot be caught by the tests that check the rest of our copy."
 author: "Manuel Yang"
 category: "Product"
 coverImage: "/blog/multi-account-mcp.png"
 tags: ["multi-account", "google-workspace", "mcp", "context-window"]
+pillar: true
+related: ["how-we-built-multi-account-for-mcp", "claude-google-calendar-vs-datatorag-multi-account", "notion-in-the-same-conversation"]
 ---
 
 Here's a scenario that kept coming up. You're in Claude, drafting a reply to a work email, and you need to find a receipt from your personal Gmail. You open a new browser tab, log into a different Google account, search for the receipt, copy the details, and paste them back into your conversation.
@@ -26,11 +30,13 @@ So we built the plumbing.
 
 DataToRAG now supports connecting multiple Google accounts per service. The connect flow uses Google's `select_account` prompt, so when you add a second account, Google asks which one you want to link. No confusion, no accidentally re-authorizing the same account.
 
-Every tool (search emails, list drafts, read documents) accepts an optional `account` parameter. For Google and Atlassian it's an email address; for Notion it can also be the workspace name. If you pass `account: "manuel@work.com"`, the tool hits that account's API. If you omit it, the default account is used.
+Every tool (search emails, list drafts, read documents) accepts an optional `account` parameter. For Google and Atlassian it's an email address; for [Notion](/blog/notion-in-the-same-conversation) it can also be the workspace name. If you pass `account: "manuel@work.com"`, the tool hits that account's API. If you omit it, the default account is used.
 
 Single-account users never notice the feature exists. There's no extra configuration, no "select your account" step on every call. You connect one account, you use the tools exactly like before.
 
 For multi-account users, the LLM figures it out from context. If you say "check my work email," Claude knows to use your work address. If you say "find that receipt in my personal Gmail," it passes your personal address. The `list_connected_accounts` tool lets the LLM discover which accounts are available at any point, so it doesn't have to guess.
+
+The current behavior, including how a call picks an account and how to set the default, is in the [docs on using several accounts](/docs/multiple-accounts). The engineering underneath is its own post: [how we built multi-account for MCP](/blog/how-we-built-multi-account-for-mcp).
 
 ## Keeping the context window lean
 
@@ -48,7 +54,7 @@ When you connect a new service, its tools appear automatically. Disconnect it, t
 | Atlassian only | Jira and Confluence tools |
 | Notion only | Notion tools |
 | More than one | The tools of each one connected |
-| Nothing yet | Only the tools that help you connect something |
+| Nothing yet | The gateway's own tools: connecting a service, listing accounts, skills, and file links |
 
 This used to be a bar chart with the tool counts printed on it. The counts went
 stale, the way every figure we have published eventually does, and a number
@@ -73,7 +79,7 @@ Other patterns we've seen: pulling company docs from a corporate Drive while ref
 
 ## The account parameter nobody talks about
 
-The MCP spec doesn't have an opinion on multi-account scenarios. There's no standard for how tools should accept account identifiers, and most server implementations don't bother. We chose a simple email-address parameter because it's unambiguous, human-readable, and something LLMs already understand from context.
+The MCP spec doesn't have an opinion on multi-account scenarios. There's no standard for how tools should accept account identifiers, and most server implementations don't bother. We chose a simple email-address parameter because it's unambiguous, human-readable, and something LLMs already understand from context. (Notion, added in November 2026, widened it: one email address can sit on two workspaces, so there the value can be the workspace name, and a value that matches more than one account is refused rather than guessed.)
 
 If you're building MCP tools and your users might have multiple accounts, consider this pattern. An optional `account` parameter with a sensible default covers both cases cleanly: single-account users get zero friction, multi-account users get full control.
 

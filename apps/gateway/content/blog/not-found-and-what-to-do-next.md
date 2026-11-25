@@ -1,12 +1,17 @@
 ---
 title: "When Google Says Not Found, Your Agent Now Gets Something to Act On"
 excerpt: "An agent that asked for an email Google could not find used to get Google's bare 404 back, and nothing to do next. Now the answer says which item, in which of your accounts, why that usually happens and which tool finds it again, across Gmail, Drive, Docs, Sheets, Slides, Calendar, Contacts and Tasks."
+searchTitle: "Google API 404 Not Found: What DataToRAG Tells Your Agent"
+searchDescription: "When Google answers 404, DataToRAG's Google Workspace tools say which id was not found, in which account, why that usually happens, and what to try next."
 date: "2026-11-17"
+updated: "2026-11-25"
 author: "Manuel Yang"
 category: "Product"
 coverImage: "/blog/not-found-and-what-to-do-next.png"
 tags: ["gws-mcp", "gmail", "drive", "mcp"]
 ---
+
+When Google answers 404 not found, DataToRAG's Google Workspace tools now say which id was asked for, in which connected account, why that usually happens, and which tool finds a current id, such as `gmail_search` or `drive_search` ([what the tools answer](/docs/google-workspace)). They used to pass Google's bare error through.
 
 I read our error record this week. Tool calls that failed on our side: none. Tool calls that failed because of something in the request: a handful, and most of them were the same one. An agent asked Gmail for a message, Google could not find it, and what we handed back was this:
 

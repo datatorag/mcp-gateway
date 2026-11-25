@@ -1,13 +1,16 @@
 ---
 title: "Composio vs Zapier MCP: Two Different Bets (and the Question Neither Answers)"
 excerpt: "Composio is integration infrastructure for developers shipping agents. Zapier MCP is automation breadth for people who already live in Zaps. If the actual question is 'how do I get Claude working deep in my Google Workspace', both answers come up short."
+searchTitle: "Composio vs Zapier MCP: Which One Fits You | DataToRAG"
+searchDescription: "Composio and Zapier MCP compared for giving an agent tools: who each is built for, what each does in Google Workspace, pricing, and self-hosting."
 date: "2026-07-23"
 updated: "2026-11-25"
-updatedNote: "November 25, 2026: three corrections. The post said Google Slides, Contacts, and Tasks were not on Zapier's MCP, and that Composio had no Slides or Contacts toolkit; both companies' own pages list them today, so the table, the FAQ, and the worked example are corrected and dated. It said you could self-host DataToRAG by running Docker Compose with your own Postgres; that was never one command, and the post now lists what you would supply. And a paragraph headed Nothing stored now says what is stored: each connection's sign-in tokens, encrypted. August 26, 2026: narrowed an overbroad privacy claim. The pass-through statement implied nothing is stored anywhere; the gateway keeps nothing, but the hosted agent on our own site stores its conversation threads. The privacy policy is now linked from the paragraph."
+updatedNote: "November 25, 2026: two more corrections to what the post said about Zapier. Zapier's pages say MCP tool calls are free until January 5, 2027 and use plan tasks after that, so the billing answer, the table, and the cost paragraph now say so, with Composio's monthly tool-call allowance beside it. And Zapier's Google Docs actions are more than append and find-and-replace: its app page also lists inserting text, formatting text, and images, still with no batch update. Also re-checked on each vendor's pages today and dated: Composio's catalog is the 1,800+ apps its site states, not 1,000+ toolkits; self-hosting Composio is an Enterprise arrangement, and Zapier's MCP pages describe no self-hosted option; Zapier's security page adds SOC 3 to SOC 2 Type II; Composio's site now describes a no-code product, Composio For You, which the post notes where it called Composio code-only; unchecked lines about Composio's tool routing are removed; and Notion is added to what DataToRAG covers. three corrections. The post said Google Slides, Contacts, and Tasks were not on Zapier's MCP, and that Composio had no Slides or Contacts toolkit; both companies' own pages list them today, so the table, the FAQ, and the worked example are corrected and dated. It said you could self-host DataToRAG by running Docker Compose with your own Postgres; that was never one command, and the post now lists what you would supply. And a paragraph headed Nothing stored now says what is stored: each connection's sign-in tokens, encrypted. August 26, 2026: narrowed an overbroad privacy claim. The pass-through statement implied nothing is stored anywhere; the gateway keeps nothing, but the hosted agent on our own site stores its conversation threads. The privacy policy is now linked from the paragraph."
 author: "Manuel Yang"
 category: "Comparison"
 coverImage: "/blog/composio-vs-zapier-mcp.png"
 tags: ["composio", "zapier", "mcp", "comparison", "ai-agents"]
+related: ["composio-alternative", "zapier-mcp-alternative", "claude-google-workspace-mcp-alternatives"]
 faqs:
   - q: What is the difference between Composio and Zapier MCP?
     a: >-
@@ -18,8 +21,10 @@ faqs:
       code at all: you point Claude at one server URL, setup takes about five
       minutes, and auth is zero-config because Zapier already holds your app
       connections. One is an SDK you build on, the other is a switchboard you
-      plug into. Both shapes reflect the mid-2026 check behind this
-      comparison.
+      plug into. Both shapes are on each vendor's own pages as of November 25,
+      2026. Composio's site now also describes Composio For You, a no-code
+      product for connecting Claude or ChatGPT, which this comparison does not
+      cover.
   - q: Does Zapier MCP support Google Slides, Contacts or Tasks?
     a: >-
       Yes, in part. As of November 25, 2026, Zapier's own app pages list Google
@@ -30,29 +35,37 @@ faqs:
       this answer said these three were not on Zapier's MCP at all.
   - q: Can Zapier MCP restructure a Google Doc?
     a: >-
-      Not structurally. Zapier exposes append, insert and find-and-replace for
-      Google Docs, but not Google's `batchUpdate` call, which is the one that
-      lets an agent restructure a whole document in a single pass. As of the
-      mid-2026 check behind this comparison, that call is not on Zapier's MCP
-      surface.
+      Not in a single pass. As of November 25, 2026, Zapier's Google Docs app
+      page lists single-purpose edits: append text, insert text, find and
+      replace, format text, insert or replace an image, and update document
+      properties. It lists nothing like Google's `batchUpdate` call, which is
+      the one that lets an agent restructure a whole document at once. An
+      earlier version of this answer left out the formatting and image actions.
   - q: How is Zapier MCP billed when an AI agent uses it?
     a: >-
-      Every successful tool call spends tasks from your Zapier plan's shared
-      budget, the same budget your Zaps draw on. An agent that fires a dozen
-      calls to finish one request draws that budget down faster than a person
-      clicking ever would, so model your real usage before committing. That
-      reflects the mid-2026 check behind this comparison.
+      As of November 25, 2026, Zapier's MCP page says tool calls use tasks from
+      your Zapier plan's quota, and that they are free through noon Eastern
+      time on January 5, 2027. Its pricing page describes tasks as a single
+      allowance shared across your whole account, so after the free period an
+      agent's calls and your Zaps draw on the same pool. An agent that fires a
+      dozen calls to finish one request draws that pool down faster than a
+      person clicking ever would, so model your real usage before committing.
   - q: Can I self-host Composio or Zapier MCP?
     a: >-
-      Not on a standard plan. Composio's runtime is closed and self-hosting is
-      an enterprise-plan conversation. Zapier MCP is cloud only. Both statements
-      reflect the mid-2026 check behind this comparison. DataToRAG's source is MIT-licensed. Running it yourself means your own Postgres database, your own OAuth clients, and a token encryption key; there is no packaged self-host guide yet.
+      Composio, only as an Enterprise arrangement, per its site as of November
+      25, 2026. Zapier's MCP pages describe no self-hosted option as of the
+      same date. DataToRAG's code is MIT-licensed and can be self-hosted. It is
+      not one command, and the README's self-hosting section lists the steps: you supply
+      a Postgres database, your own Google OAuth clients (and Google's
+      verification for the restricted Gmail and Drive scopes), and an
+      encryption key for the stored tokens.
   - q: Which is more secure, Composio or Zapier MCP?
     a: >-
       Both hold general-purpose security attestations, and both are ahead of
       DataToRAG on that axis, which we would rather say plainly than skip. As of
-      the mid-2026 check behind this comparison, Composio has SOC 2 Type II and
-      ISO 27001, and Zapier has SOC 2 Type II and years of trust-program work.
+      November 25, 2026, Composio's trust page lists SOC 2, with a Type II
+      report, and ISO 27001, and Zapier's security page says it is SOC 2 (Type
+      II) and SOC 3 certified.
       DataToRAG's credential is Google-specific: we passed CASA Tier 2, the
       review Google requires for restricted Gmail and Drive scopes, with zero
       findings, and Google verified the app in June 2026.
@@ -68,7 +81,7 @@ I've written up both individually ([Composio here](/blog/composio-alternative), 
 
 ## What each one actually is
 
-Composio is a builder's platform. Its quickstart has you calling `composio.mcp.generate(user_id, mcp_config_id)` from inside an application you write. You create server configs, generate per-user MCP URLs in code, and wire your end users to their accounts. The output is a hosted endpoint your product hands to an agent. The input is a development project. Over 1,000 toolkits, managed OAuth, an MCP Tool Router for dynamic tool discovery, and enterprise governance (RBAC, SSO, SCIM, audit logs). It's genuinely well engineered for that job.
+Composio is a builder's platform. Its quickstart has you calling `composio.mcp.generate(user_id, mcp_config_id)` from inside an application you write. You create server configs, generate per-user MCP URLs in code, and wire your end users to their accounts. The output is a hosted endpoint your product hands to an agent. The input is a development project. Its site counts 1,800+ apps (as of November 25, 2026) with managed authentication, and its pricing page lists SSO on the paid plans, and SCIM provisioning and audit logs on Enterprise. It's genuinely well engineered for that job. (Composio's site now also describes a no-code product, Composio For You. This post compares the developer platform.)
 
 Zapier MCP is the opposite shape. No code at all. You point Claude at one server URL and you can reach 9,000+ apps through the same actions Zapier built for Zaps. Setup takes about five minutes, and the auth is zero-config because Zapier already holds your app connections.
 
@@ -80,21 +93,21 @@ So: one is an SDK you build on, the other is a switchboard you plug into.
 |---|---|---|
 | Who it's for | Developers shipping agent products | Individuals and teams already on Zapier |
 | Setup | Write and deploy code (per-user URL generation) | Point Claude at a URL, done |
-| Integration count | 1,000+ toolkits | 9,000+ apps |
+| Integration count | 1,800+ apps (as of November 25, 2026) | 9,000+ apps (as of November 25, 2026) |
 | Depth per app | Deep where it invests (Gmail especially) | Shallow by design: discrete Zap actions |
-| Docs structural editing | Via its toolkits, where exposed | No `batchUpdate`; append and find-and-replace only |
+| Docs structural editing | A Google Docs toolkit that includes a batch-of-edits tool (as of November 25, 2026) | No `batchUpdate`; single-purpose edits such as append, insert, find and replace, format text, and images (as of November 25, 2026) |
 | Slides / Contacts / Tasks | Toolkits for all three (as of November 25, 2026) | Contacts and Tasks create, update, and find; Slides from a template, with no slide editing (as of November 25, 2026) |
-| Billing shape | Platform pricing | Every call draws down your plan's shared task budget |
-| Self-hosting | Enterprise plans only, closed runtime | No, cloud only |
-| Attestations | SOC 2 Type II, ISO 27001 | SOC 2 Type II |
+| Billing shape | A monthly tool-call allowance per plan (as of November 25, 2026) | Calls use your plan's shared task quota; free until January 5, 2027 (as of November 25, 2026) |
+| Self-hosting | An Enterprise arrangement (as of November 25, 2026) | None described on Zapier's MCP pages (as of November 25, 2026) |
+| Attestations | SOC 2 Type II, ISO 27001 (as of November 25, 2026) | SOC 2 Type II, SOC 3 (as of November 25, 2026) |
 
 A few of those rows deserve unpacking.
 
 Depth. Zapier's Google actions are automation primitives: send an email, add a row, create a draft. Good Zap steps, thin editing tools. Google's own APIs expose `batchUpdate` for Docs and Slides, the call that lets you restructure a document or lay out a deck, and Zapier doesn't surface it. Composio goes deeper where it has invested (its Gmail coverage is dozens of actions, honestly impressive), and as of November 25, 2026 it has Google Slides and Contacts toolkits too; an earlier version of this post said it did not.
 
-Cost. Zapier meters tasks against the same budget your Zaps use. An agent that fires a dozen calls to finish one request draws that budget down faster than a human clicking ever would. Composio's cost is different in kind: it's platform pricing plus the engineering time to build and maintain the integration layer. Neither is wrong. They just charge on different axes, and you should model your actual usage before committing to either.
+Cost. As of November 25, 2026, Zapier's MCP page says tool calls use tasks from your plan's quota, the same account-wide allowance your Zaps use, and that they are free through noon Eastern time on January 5, 2027. Once that period ends, an agent that fires a dozen calls to finish one request draws that allowance down faster than a human clicking ever would. Composio's pricing page counts tool calls too, as a monthly allowance per plan (10,000 a month on its free plan, as of November 25, 2026), and with Composio you also pay in the engineering time to build and maintain the integration layer. Neither is wrong. Model your actual usage before committing to either.
 
-Security. Both are ahead of most of the field here, and ahead of us on general-purpose attestations. Composio has SOC 2 Type II and ISO 27001. Zapier has SOC 2 Type II and years of trust-program work. Credit where due.
+Security. Both are ahead of most of the field here, and ahead of us on general-purpose attestations. As of November 25, 2026, Composio's trust page lists SOC 2, with a Type II report, and ISO 27001, and Zapier's security page says it is SOC 2 (Type II) and SOC 3 certified. Credit where due.
 
 ## The question neither answers well
 
@@ -102,15 +115,15 @@ Here's the scenario I keep hearing from actual users, and it's the one that sent
 
 You're an ops lead, a founder, or a senior IC. Your week lives in Google Workspace and maybe Jira. You want Claude to triage two inboxes in one prompt, restructure a messy meeting doc into sections, build a five-slide deck from the summary, update a tracking sheet, and file follow-up tasks for each owner.
 
-With Composio, someone has to build an app before you can start. You're not Composio's user, you're Composio's user's user, and for an audience of one that's a sprint of scaffolding to read your own email.
+With Composio's developer platform, someone has to build an app before you can start. You're not Composio's user, you're Composio's user's user, and for an audience of one that's a sprint of scaffolding to read your own email.
 
-With Zapier MCP, you can start right now, and then you hit the ceiling partway through. The doc gets a paragraph appended instead of restructured. The deck is a copy of a template, not five slides laid out from the summary, because none of Zapier's Slides actions edits a slide (as of November 25, 2026). The tasks it can file. You get part of the job and finish the rest by hand.
+With Zapier MCP, you can start right now, and then you hit the ceiling partway through. The doc gets edited one append, insert, or find-and-replace at a time instead of restructured in one pass. The deck is a copy of a template, not five slides laid out from the summary, because none of Zapier's Slides actions edits a slide (as of November 25, 2026). The tasks it can file. You get part of the job and finish the rest by hand.
 
 This is the gap DataToRAG sits in, and it's why we built it.
 
 ## What DataToRAG is
 
-DataToRAG is a Google-verified MCP gateway you sign into, not a platform you build on. One endpoint, one Google sign-in, and Claude gets hand-built tools across all eight Google Workspace services: `gmail_send` and `gmail_reply` so email workflows finish instead of stopping at a draft, `docs_batch_update` for restructuring documents in place, `slides_create` for building decks, `sheets_update` at the cell and range level, and the full `contacts_*` and `tasks_*` sets. Jira and Confluence ride behind the same endpoint, so "summarize these tickets into a Confluence page" is one conversation.
+DataToRAG is a Google-verified MCP gateway you sign into, not a platform you build on. One endpoint, one Google sign-in, and Claude gets hand-built tools across all eight Google Workspace services ([the full list](/docs/tools)): `gmail_send` and `gmail_reply` so email workflows finish instead of stopping at a draft, `docs_batch_update` for restructuring documents in place, `slides_create` for building decks, `sheets_update` at the cell and range level, and the full `contacts_*` and `tasks_*` sets. Jira, Confluence, and Notion ride behind the same endpoint, so "summarize these tickets into a Confluence page" is one conversation.
 
 Three things you can't easily bolt onto either alternative:
 
@@ -120,7 +133,7 @@ No copy of your Workspace. The gateway is pass-through for your content: request
 
 One honest caveat, because this paragraph used to stop at the pass-through claim. The gateway keeps none of your Workspace content. It does store each connection's sign-in tokens, encrypted, and if you use the **hosted agent** on our own site, that conversation is stored so the thread persists, and whatever the agent quoted into it is stored with it. The [privacy policy](/privacy) is the full statement.
 
-Self-hosting that isn't an enterprise upsell. The core is MIT-licensed, so running it yourself is a matter of the code, not a contract. It is not one command, and there is no packaged self-host guide yet: you supply a Postgres database, your own Google OAuth clients (and Google's verification for the restricted Gmail and Drive scopes), and an encryption key for the stored tokens.
+Self-hosting that isn't an enterprise upsell. The core is MIT-licensed, so running it yourself is a matter of the code, not a contract. It is not one command, and the README's self-hosting section lists the steps: you supply a Postgres database, your own Google OAuth clients (and Google's verification for the restricted Gmail and Drive scopes), and an encryption key for the stored tokens.
 
 We will never have 9,000 apps, and we're not trying to. Depth over breadth is the whole bet.
 
@@ -130,7 +143,7 @@ Building an agent product that connects your customers to hundreds of apps? Comp
 
 Living across a long tail of SaaS tools, already paying for Zapier, and mostly need discrete actions triggered? Zapier MCP. Nothing reaches as far, as fast.
 
-Wanting Claude to do deep, finished work in your own Google Workspace and Atlassian, without building anything first? That's us.
+Wanting Claude to do deep, finished work in your own Google Workspace, Atlassian, and Notion, without building anything first? That's us.
 
 ## Try it
 

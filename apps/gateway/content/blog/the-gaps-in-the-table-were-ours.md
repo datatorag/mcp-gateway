@@ -1,11 +1,16 @@
 ---
 title: "The Gaps in the Comparison Table Were Ours. They Are Closed."
 excerpt: "Our home page compares Claude's built-in Google and Atlassian connectors with ours, row by row. Ten of those rows said the built-in connector could do something we could not. As of October 19 they say Yes on both sides, and the table now only shows what is left: what we do that they do not, and three things that are still theirs."
+searchTitle: "Claude's Google and Atlassian Connectors vs DataToRAG"
+searchDescription: "On October 19, 2026 DataToRAG added Calendar, Gmail, Drive, Jira, and Confluence tools that its table showed only on the built-in connectors' side."
 date: "2026-10-20"
+updated: "2026-11-25"
+updatedNote: "November 25, 2026: the section on what the table says is now dated to October 20, 2026. The home page table has since added custom reminders as a fourth thing the built-in calendar connector does and ours does not. The statement that the built-in connectors are one account each is removed, because Anthropic's help page does not say how many accounts can be connected, and the list of things only ours does now notes that the same page says Claude edits Google Slides and finds mutual availability across attendees."
 author: "Manuel Yang"
 category: "Product"
 coverImage: "/blog/suggest-a-time.png"
 tags: ["gws-mcp", "atlassian-mcp", "calendar", "gmail", "drive", "jira", "confluence", "comparison"]
+related: ["claude-google-workspace-mcp-alternatives", "claude-gmail-connector-vs-datatorag-send-reply", "claude-google-calendar-vs-datatorag-multi-account", "claude-google-drive-vs-datatorag-editing"]
 ---
 
 The comparison table on our home page is the first thing a visitor sees now. It lists what Claude's own Gmail, Calendar, Drive and Atlassian connectors do, next to what ours does, one row per capability. When I moved it into the hero last week, ten rows read Yes for them and No for us. That is a bad thing to lead with, so I closed them.
@@ -26,17 +31,19 @@ On the Google side, ten tools; on the Atlassian side, four Jira tools, two Confl
 
 **Drive files move like email does.** A Drive file, or a Google Doc exported as a PDF, is now a file reference. The same reference that moves an email attachment to your computer, onto a Jira issue, or into another account's Drive takes a Drive file too, and the content never enters the conversation.
 
+Each group has its docs page: [Calendar](/docs/calendar), [Gmail](/docs/gmail), [Drive](/docs/drive), [Jira](/docs/jira), [Confluence](/docs/confluence), and [file references](/docs/file-references). The connector-by-connector comparisons are separate posts, for [Gmail](/blog/claude-gmail-connector-vs-datatorag-send-reply), [Calendar](/blog/claude-google-calendar-vs-datatorag-multi-account), and [Drive, Docs, and Sheets](/blog/claude-google-drive-vs-datatorag-editing), and [every way to connect Claude to Google Workspace](/blog/claude-google-workspace-mcp-alternatives) is the overview.
+
 ## Why parity and not "tools on demand"
 
 Until last week the rule was that a tool gets built when someone's usage shows they need it. That rule still stands for everything outside the table. For the table it was wrong. A comparison that you put at the top of the page is a promise about what you do, and a row that says No for us is a reason to pick the other connector that I was printing myself.
 
-There is a second reason. The built-in connectors are one account each. Ours take an account on every call, so a person with a work and a personal Google account uses both in one conversation. Someone who switches to us for that should not lose RSVP, spam, sharing or worklogs on the way.
+There is a second reason. Ours take an account on every call, so a person with a work and a personal Google account uses both in one conversation. Someone who switches to us for that should not lose RSVP, spam, sharing or worklogs on the way.
 
 ## What the table says now
 
-What ours does that the built-in connectors do not: filtered queries on a sheet, two Google accounts in one request, content in a Slides deck rather than an empty one, a free/busy lookup, an email or one of its attachments saved to Drive or to your computer, Google Contacts, Google Tasks, an email attached to a Jira issue, and a work and a personal account at the same time.
+On October 20, 2026 the table listed these on our side only: filtered queries on a sheet, two Google accounts in one request, content in a Slides deck rather than an empty one, a free/busy lookup, an email or one of its attachments saved to Drive or to your computer, Google Contacts, Google Tasks, an email attached to a Jira issue, and a work and a personal account at the same time. That was our reading of the built-in connectors' tools on that date, and parts of it have aged. As of November 25, 2026, Anthropic's help page says Claude edits Google Slides (it cannot add charts) and can "find mutual availability across attendees." The page says nothing about how many Google accounts can be connected, or about Contacts or Tasks. Every item on that list is something ours does. For what the built-in connectors do today, read Anthropic's page.
 
-What is still theirs: recurring events, rooms, and attachments on a calendar event. Those three are on the list.
+What was still theirs on that date: recurring events, rooms, and attachments on a calendar event. Those three were on the list. The home page table has since added a fourth, custom reminders. As of November 25, 2026, Anthropic's help page names "recurring meetings" and events "with full customization"; it does not list rooms, attachments, or reminders one by one.
 
 The five comparison posts on this blog that made claims the other way carry a dated edit note from October 19 saying which rows flipped. The table on the home page and the posts are checked against the tool code, not against each other.
 

@@ -3,18 +3,34 @@ import { notFound } from "next/navigation";
 import { AddToAgent } from "@/components/add-to-agent";
 import Link from "next/link";
 import Image from "next/image";
-import { getAllPosts, getPostBySlug, getRelatedPosts } from "@/lib/blog";
-import { faqPageNode } from "@/lib/site-schema";
+import {
+  getAllPosts,
+  getPostBySlug,
+  getRelatedPosts,
+  postModified,
+  postSearchDescription,
+  postSearchTitle,
+  postUrl,
+  type BlogPost,
+} from "@/lib/blog";
+import { SITE_NAME, SITE_URL, blogPostingNode, breadcrumbNode, faqPageNode } from "@/lib/site-schema";
 import { Navbar } from "@/components/navbar";
 import { FaqSection } from "@/components/faq-section";
 import { JsonLd } from "@/components/json-ld";
 import { PostCover } from "@/components/post-cover";
 import { formatContentDate } from "@/lib/utils";
-import { SOCIAL_OPEN_GRAPH, SOCIAL_TWITTER } from "@/lib/social-card";
+import { SOCIAL_CARD, SOCIAL_OPEN_GRAPH, SOCIAL_TWITTER } from "@/lib/social-card";
+import { markdownUrl } from "@/lib/markdown-copies";
+import { BLOG_FEED_URL } from "@/lib/blog-feed";
+import { afterEditedDate, editNoteHtml, splitEditNote } from "@/lib/edit-note";
+import { BLOG_FEED_TYPE, BLOG_PATH } from "../copy";
 import { postCardImage } from "@/lib/post-card-image";
 import { splitDemoMarkers } from "@/lib/demo-embed";
 import { DemoEmbed, EMBEDDABLE_DEMO_IDS } from "@/components/demo/demo-embed";
 import { signInHref } from "@/lib/sign-in";
+
+/** Where a post's edit note sits on its page, for the link beside the date. */
+const EDIT_NOTE_ID = "edit-note";
 
 interface Props {
   params: Promise<{ slug: string }>;
@@ -24,11 +40,54 @@ export async function generateStaticParams() {
   return getAllPosts().map((p) => ({ slug: p.slug }));
 }
 
-/** The absolute URL of the picture shown in the article's structured data:
- * the post's own image, whatever its shape. */
-function postImageUrl(post: { ogImage?: string; coverImage?: string }): string | undefined {
+/** The absolute URL of the picture named in the article's structured data:
+ * the post's own image, whatever its shape, and the site's card for a post
+ * with none, so every post's markup carries a picture. */
+function postImageUrl(post: { ogImage?: string; coverImage?: string }): string {
   const imagePath = post.ogImage ?? post.coverImage;
-  return imagePath ? new URL(imagePath, "https://datatorag.com").toString() : undefined;
+  return imagePath ? new URL(imagePath, SITE_URL).toString() : SOCIAL_CARD.url;
+}
+
+/**
+ * The note at the end of an edited post. Two tiers, decided by the post:
+ * an edit that changed what the post says wrote `updatedNote`, and the note
+ * shows; any other edit shows only its day, in the date line.
+ *
+ * The note's newest entry is shown in full, after the one "Edited <day>"
+ * the box prints (an entry opening with that same day gives it up, so the
+ * day is not printed twice). Every earlier entry is inside a `<details>`,
+ * in the page as served and opened without a script.
+ */
+function EditNote({ post }: { post: BlogPost }) {
+  if (!post.updated || !post.updatedNote) return null;
+  const [latest, ...earlier] = splitEditNote(post.updatedNote);
+  if (!latest) return null;
+  const shown = formatContentDate(post.updated);
+  return (
+    <div
+      id={EDIT_NOTE_ID}
+      className="mt-10 scroll-mt-28 rounded-xl border border-border bg-secondary/50 px-4 py-3 text-sm text-muted-foreground"
+    >
+      <p data-edit-latest="">
+        <span className="font-medium text-foreground">
+          Edited <time dateTime={post.updated}>{shown}</time>
+        </span>
+        <span dangerouslySetInnerHTML={{ __html: editNoteHtml(afterEditedDate(latest, shown)) }} />
+      </p>
+      {earlier.length > 0 && (
+        <details className="mt-3">
+          <summary className="cursor-pointer font-medium text-foreground">
+            Earlier edits
+          </summary>
+          <ul className="mt-2 space-y-2">
+            {earlier.map((entry, i) => (
+              <li key={i} dangerouslySetInnerHTML={{ __html: editNoteHtml(entry.text) }} />
+            ))}
+          </ul>
+        </details>
+      )}
+    </div>
+  );
 }
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
@@ -41,26 +100,35 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const card = postCardImage(post);
   const images = card ? { images: [{ ...card, alt: post.title }] } : {};
 
+  // What a search result and a link preview show: the post's search title
+  // and description when it wrote them, else what it always sent. The
+  // heading on the page stays the post's own headline.
+  const description = postSearchDescription(post);
+  const shareTitle = post.searchTitle ?? post.title;
+
   return {
-    title: `${post.title} | DataToRAG`,
-    description: post.excerpt,
+    title: postSearchTitle(post),
+    description,
     authors: [{ name: post.author }],
-    alternates: { canonical: `https://datatorag.com/blog/${slug}` },
+    alternates: {
+      canonical: postUrl(slug),
+      types: { "text/markdown": markdownUrl(`${BLOG_PATH}/${slug}`), [BLOG_FEED_TYPE]: BLOG_FEED_URL },
+    },
     openGraph: {
       ...SOCIAL_OPEN_GRAPH,
-      title: post.title,
-      description: post.excerpt,
+      title: shareTitle,
+      description,
       type: "article",
       publishedTime: post.date,
       ...(post.updated ? { modifiedTime: post.updated } : {}),
       authors: [post.author],
-      url: `https://datatorag.com/blog/${slug}`,
+      url: postUrl(slug),
       ...images,
     },
     twitter: {
       ...SOCIAL_TWITTER,
-      title: post.title,
-      description: post.excerpt,
+      title: shareTitle,
+      description,
       ...images,
     },
   };
@@ -104,64 +172,30 @@ export default async function BlogArticlePage({ params }: Props) {
   const post = getPostBySlug(slug);
   if (!post) notFound();
 
-  const postUrl = `https://datatorag.com/blog/${slug}`;
-  const image = postImageUrl(post);
+  const url = postUrl(slug);
   const jsonLd = [
-    {
-      "@context": "https://schema.org",
-      "@type": "BlogPosting",
+    blogPostingNode({
       headline: post.title,
-      description: post.excerpt,
+      description: postSearchDescription(post),
+      url,
       datePublished: post.date,
-      dateModified: post.updated ?? post.date,
-      inLanguage: "en",
-      isAccessibleForFree: true,
-      url: postUrl,
-      ...(image ? { image } : {}),
-      ...(post.tags.length > 0 ? { keywords: post.tags.join(", ") } : {}),
-      ...(post.category ? { articleSection: post.category } : {}),
-      author: {
-        "@type": "Person",
-        name: post.author,
-        ...(post.authorImage
-          ? { image: `https://datatorag.com${post.authorImage}` }
-          : {}),
-      },
-      publisher: {
-        "@type": "Organization",
-        name: "DataToRAG",
-        url: "https://datatorag.com",
-        logo: {
-          "@type": "ImageObject",
-          url: "https://datatorag.com/datatorag-logo-256.png",
-        },
-      },
-      mainEntityOfPage: { "@type": "WebPage", "@id": postUrl },
-    },
+      dateModified: postModified(post),
+      image: postImageUrl(post),
+      keywords: post.tags,
+      section: post.category,
+      author: { name: post.author, image: post.authorImage ? `${SITE_URL}${post.authorImage}` : undefined },
+    }),
     // FAQPage, when the post authored questions. Built by `faqPageNode` rather
     // than inlined, because docs emit the same node and two hand-written copies
     // of one projection is how they drift. That module carries the standing
     // caveat: the rich result is retired, this has NO VERIFIED CONSUMER, and the
     // on-page block below is the half that actually pays.
     ...(post.faqs.length > 0 ? [faqPageNode(post.faqs)] : []),
-    {
-      "@context": "https://schema.org",
-      "@type": "BreadcrumbList",
-      itemListElement: [
-        {
-          "@type": "ListItem",
-          position: 1,
-          name: "Blog",
-          item: "https://datatorag.com/blog",
-        },
-        {
-          "@type": "ListItem",
-          position: 2,
-          name: post.title,
-          item: postUrl,
-        },
-      ],
-    },
+    breadcrumbNode([
+      { name: SITE_NAME, url: SITE_URL },
+      { name: "Blog", url: `${SITE_URL}${BLOG_PATH}` },
+      { name: post.title, url },
+    ]),
   ];
 
   return (
@@ -217,25 +251,27 @@ export default async function BlogArticlePage({ params }: Props) {
                 </time>
                 <span className="text-border">·</span>
                 <span className="text-muted-foreground">{post.readTime}</span>
+                {/* Every edited post says so here, with the day the
+                    structured data states as its modified date. A post with
+                    a note links to it; the note itself is after the body, so
+                    a post opens with its own words. */}
+                {post.updated && (
+                  <>
+                    <span className="text-border">·</span>
+                    {post.updatedNote ? (
+                      <a href={`#${EDIT_NOTE_ID}`} data-edited="" className="text-muted-foreground underline underline-offset-2 hover:text-foreground">
+                        Edited <time dateTime={post.updated}>{formatContentDate(post.updated)}</time>
+                      </a>
+                    ) : (
+                      <span data-edited="" className="text-muted-foreground">
+                        Edited <time dateTime={post.updated}>{formatContentDate(post.updated)}</time>
+                      </span>
+                    )}
+                  </>
+                )}
               </div>
             </div>
           </header>
-
-          {/* Visible disclosure only when there is something to disclose:
-              `updated` alone still feeds dateModified/modifiedTime for
-              trivial edits, while `updatedNote` marks a correction worth a
-              reader-facing note. Edit notes mean less when spent on nothing. */}
-          {post.updated && post.updatedNote && (
-            <div className="mt-6 rounded-xl border border-border bg-secondary/50 px-4 py-3 text-sm text-muted-foreground">
-              <span className="font-medium text-foreground">
-                Edited{" "}
-                <time dateTime={post.updated}>
-                  {formatContentDate(post.updated)}
-                </time>
-              </span>
-              {post.updatedNote && <>: {post.updatedNote}</>}
-            </div>
-          )}
 
           <PostCover post={post} />
 
@@ -254,6 +290,14 @@ export default async function BlogArticlePage({ params }: Props) {
               />
             )
           )}
+
+          {/* A note only when there is something to disclose: `updated`
+              alone moves the stated date and shows the day above, while
+              `updatedNote` marks a correction worth a reader-facing note.
+              It sits at the end of the body, not above it: above, the note
+              was the first thing a reader, or a program quoting the post,
+              met. */}
+          <EditNote post={post} />
 
           {post.tags.length > 0 && (
             <div className="mt-10 flex flex-wrap gap-2">

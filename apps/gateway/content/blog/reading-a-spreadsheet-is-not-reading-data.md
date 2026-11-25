@@ -1,9 +1,11 @@
 ---
 title: "Reading a Spreadsheet Is Not Reading Data"
 excerpt: "An agent can read a rendering of your spreadsheet or it can read the cells. They look identical right up until they disagree, and you won't be watching when they do."
+searchTitle: "Reading Google Sheets With an Agent: Cells vs Renderings"
+searchDescription: "An agent can read a text rendering of a Google Sheet or read its cells with sheets_read. Where the two disagree, and a rule for which to trust."
 date: "2026-07-31"
-updated: "2026-11-17"
-updatedNote: "November 17, 2026: Claude has had its own Sheets connector since October 2026, and it reads a range. The distinction in this post is between the two kinds of reader, not between two vendors."
+updated: "2026-11-25"
+updatedNote: "November 25, 2026: the two column pairs in the paragraph on merged headers are written out, with no change of meaning; sheets_read now takes several ranges, across tabs, in one call, so the cost is no longer one tab per call. What the post says about Claude's built-in Drive connector is now limited to what Anthropic's help page says as of this date, and the earlier note's statement that Claude's Sheets connector reads a range, which that page does not say, is withdrawn. November 17, 2026: Claude has its own Sheets connector, separate from the Drive one. The distinction in this post is between the two kinds of reader, not between two vendors."
 author: "Manuel Yang"
 category: "Engineering"
 coverImage: "/blog/spreadsheet-rendering.png"
@@ -20,12 +22,14 @@ looking healthy.
 ## The two tools
 
 **A file-level reader** takes a file id and returns the whole document as text, usually
-markdown. Claude's built-in Google Drive connector works this way, via `read_file_content`.
-It is genuinely versatile: the same call handles Docs, Slides, PDFs, Office formats and
-images. For a spreadsheet, it renders every tab, concatenated.
+markdown. Claude's built-in Google Drive connector is one: as of November 25, 2026,
+Anthropic's help page says it reads "Sheets, Slides, PDFs, images, and MS Office files" and
+that when Claude reads a Drive file "it extracts text content only." That reach across
+formats is useful. For a spreadsheet, the reader we tested in July 2026 rendered every tab,
+concatenated.
 
 **A range reader** takes a spreadsheet id and an A1 range and returns structured data. That
-is what `sheets_read` does in our Google Workspace gateway:
+is what `sheets_read` does in our Google Workspace gateway ([Sheets docs](/docs/sheets)):
 
 ```json
 {
@@ -36,8 +40,10 @@ is what `sheets_read` does in our Google Workspace gateway:
 }
 ```
 
-The cost is real: one tab per call, spreadsheets only, and you need the tab's name for
-anything but the first. In exchange you get three things a rendering cannot give you.
+The cost is real: spreadsheets only, and you need the tab's name for anything but the
+first. When this was written it was also one tab per call. Since then `sheets_read` takes a
+`ranges` list, so several ranges, across tabs, come back in one call, each block with its own
+`range`, `rowCount`, and `columnCount`. In exchange you get three things a rendering cannot give you.
 
 **`range` echoes the tab that was actually read.** Not the one you meant, the one the API
 resolved. You find out you were pointed at the wrong sheet immediately, rather than after
@@ -81,8 +87,8 @@ groups) you are identifying them by content and hoping. Reading one tab is recov
 Reading one tab *without knowing it was one tab* is not.
 
 **Merged headers turn structure into inference.** Given `[merged] Web` twice, two blanks, and
-`[merged] App` twice, you can work out that the first block is columns A–B and the second is
-E–F. You will probably be right. You cannot know that you are right, and every row's pairing
+`[merged] App` twice, you can work out that the first block is columns A and B and the second is
+E and F. You will probably be right. You cannot know that you are right, and every row's pairing
 depends on that alignment holding. Add a third block or change the spacer width and every
 pair shifts silently.
 

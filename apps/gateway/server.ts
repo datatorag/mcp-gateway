@@ -9,6 +9,7 @@ import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/
 import { markInterruptedRuns } from "./src/gateway/tests/store";
 import {
   BUILT_IN_TOOLS,
+  isPublicBuiltin,
   MCP_SERVER_CAPABILITIES,
   MCP_SERVER_INFO,
   createMcpServer,
@@ -310,7 +311,7 @@ async function main() {
   // SCRUM-481: discovery before sign-in. The open list is what a new user
   // gets once each public service is connected, and nothing user-scoped;
   // read at most once a minute, since anyone can ask for it.
-  const publicBuiltins = BUILT_IN_TOOLS.filter((t) => !t.audience && (!t.surfaces || t.surfaces.includes("mcp")));
+  const publicBuiltins = BUILT_IN_TOOLS.filter(isPublicBuiltin);
   const openDiscovery = createOpenDiscovery({
     baseUrl,
     salt: env.LEADS_IP_SALT,

@@ -11,7 +11,8 @@
     "typecheck": "tsc --noEmit",
     "test:watch": "vitest",
     "test:e2e": "vitest run e2e/",
-    "setup:stripe": "node scripts/setup-stripe.mjs"
+    "setup:stripe": "node scripts/setup-stripe.mjs",
+    "docs:dates": "node --import tsx/esm scripts/docs-dates.ts"
   },
   "dependencies": {
     "@ai-sdk/anthropic": "^4",

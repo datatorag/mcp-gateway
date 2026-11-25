@@ -1,6 +1,7 @@
 ---
 title: "Docs"
-description: "Read, create, write, and batch update Google Docs."
+searchTitle: "Google Docs MCP Server: Read and Edit Docs | DataToRAG"
+description: "Let your agent read, create, and edit Google Docs, including documents that already exist, through the DataToRAG MCP server for Google Workspace."
 order: 4
 section: "connectors"
 connector: "google-workspace"
@@ -25,14 +26,14 @@ faqs:
       document, tables included.
   - q: Why does deleting a doc need Drive access?
     a: >-
-      Because deleting a file is a Drive operation. The Docs connector uses
+      Because deleting a file is a Drive operation. The Google Docs tools use
       the Google Docs scope for creating, reading and writing documents, plus
       the Google Drive scope specifically for deleting them.
 ---
 
-The Docs connector gives your AI agent the ability to read and write Google Docs: creating documents, inserting content, and applying batch formatting updates.
+DataToRAG is an MCP server whose Google Docs tools let an agent read and write documents: creating documents, inserting content, and applying batch formatting updates.
 
-## Available operations
+## Google Docs tools
 
 | Tool | Description |
 |------|-------------|
@@ -42,19 +43,19 @@ The Docs connector gives your AI agent the ability to read and write Google Docs
 | `docs_batch_update` | Apply multiple updates in a single request (insert text, add formatting, replace content) |
 | `docs_delete` | Delete a Google Doc. The delete is permanent, not a move to the trash |
 
-## Required scopes
+## Scopes the Google Docs tools need
 
 - `https://www.googleapis.com/auth/documents`
 - `https://www.googleapis.com/auth/drive` (for delete, which is a Drive operation)
 
-## Multiple accounts
+## Using Google Docs on more than one account
 
 Every tool on this page takes an optional `account` argument: the email address
 of the connected Google account to act on. Omit it and the default account is
 used. Connect a personal and a work account and your agent can read from
 one and write to the other in the same turn, without you switching profiles.
 
-## Example prompts
+## Example prompts for Google Docs
 
 - "Read the product spec doc and list all the open questions"
 - "Create a new doc called 'Weekly Standup Notes' and write today's agenda"

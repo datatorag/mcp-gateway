@@ -123,9 +123,9 @@ export default async function HomePage() {
       <Navbar />
 
       <main className="flex-1 overflow-x-hidden">
-        {/* First structured data on this page. An array, so SCRUM-205's
-            Organization and WebSite nodes append here rather than adding a
-            second script element. */}
+        {/* This page's own structured data. The Organization, WebSite, and
+            SoftwareApplication nodes are the root layout's, once for every
+            page, and are not repeated here. */}
         <JsonLd nodes={homeFaqs.length > 0 ? [faqPageNode(homeFaqs)] : []} />
 
         {/* Hero: the gateway and its circle of tools. The headline, the ask,

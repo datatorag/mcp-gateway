@@ -1,6 +1,8 @@
 ---
 title: "Claude Can Send Formatted Email Now. Here's What That Took."
 excerpt: "Until August 26, our Gmail tools sent every message as plain text, so asking Claude for a formatted email got you literal HTML tags in your inbox. Here's the fix, the one asymmetry to know about, and where the workflow builders stand."
+searchTitle: "Send Formatted HTML Email From Claude in Gmail | DataToRAG"
+searchDescription: "DataToRAG's gmail_send, gmail_create_draft, and gmail_update_draft take html_body, so Claude sends formatted email with a plain-text fallback."
 date: "2026-08-26"
 updated: "2026-11-17"
 updatedNote: "November 17, 2026: the section on replies and forwards described them as HTML only. They now send an HTML part with a plain-text part derived from it, the same as a fresh send."
@@ -24,7 +26,7 @@ rely on them.
 
 ## One parameter, sensible defaults
 
-`gmail_send`, `gmail_create_draft`, and `gmail_update_draft` now take `html_body`. Pass it and
+`gmail_send`, `gmail_create_draft`, and `gmail_update_draft` now take `html_body` ([Gmail docs](/docs/gmail)). Pass it and
 the message goes out as `multipart/alternative`: HTML clients render your formatting,
 plain-text clients get a readable fallback. If you also pass `body`, that text IS the
 fallback. If you don't, one gets derived from the HTML, so you can't accidentally send a
