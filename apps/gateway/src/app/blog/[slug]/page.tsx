@@ -8,7 +8,7 @@ import { faqPageNode } from "@/lib/site-schema";
 import { Navbar } from "@/components/navbar";
 import { FaqSection } from "@/components/faq-section";
 import { JsonLd } from "@/components/json-ld";
-import { ZoomableImage } from "@/components/zoomable-image";
+import { PostCover } from "@/components/post-cover";
 import { formatContentDate } from "@/lib/utils";
 import { SOCIAL_OPEN_GRAPH, SOCIAL_TWITTER } from "@/lib/social-card";
 import { postCardImage } from "@/lib/post-card-image";
@@ -237,18 +237,7 @@ export default async function BlogArticlePage({ params }: Props) {
             </div>
           )}
 
-          {post.coverImage && (
-            <div className="mt-8 overflow-hidden rounded-2xl border border-border">
-              <ZoomableImage
-                src={post.coverImage}
-                alt={post.title}
-                width={1200}
-                height={630}
-                className="w-full"
-                priority
-              />
-            </div>
-          )}
+          <PostCover post={post} />
 
           {/* A post may carry `<!-- demo:<id> -->` on its own line; the page
               puts that scripted demo there (lib/demo-embed.ts). A post with
