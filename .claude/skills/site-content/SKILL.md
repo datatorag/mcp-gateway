@@ -656,6 +656,22 @@ qualify an unqualified claim on `/pricing`. A route is qualified only by its own
 answers, which is stricter than the file rule and deliberately so: a link in the page
 footer is not a qualification a quoted answer carries with it.
 
+**Moving files is one copy, `FILE_MOVES` in `lib/site-faq.ts`.** The home page's
+"Move files between your tools" section (`components/file-moves.tsx`, `#files`, after
+the demo), the block under the first h2 of `/hosted-google-workspace-mcp`, and the home
+FAQ answer about a file on your computer all read it. Every clause is a statement on
+`content/docs/file-references.md`, so re-read that page before changing a word, and a
+job is described only by a tool that answers with a SHA-256 (`drive_upload_file`,
+`jira_add_attachment`, `notion_attach_file`, `file_download_link`, an email's
+`attachments`; `gmail_save_attachment_to_drive` answers with Drive's metadata and no
+hash). The copy names no other product and compares with nothing, and states one
+number, the upload link's limit; `site-faq.test.ts` holds all of that. On the hosted
+page the files clause sits in the SECOND paragraph: the first is the dated answer about
+the built-in connectors and has a hundred-word budget, and moving a file is not offered
+there as a difference. The `/docs` index names the capability in a box above its list,
+linking a SECTION of the file references page (`#tools-that-take-a-file`), because its
+test holds the page links to exactly one per docs page.
+
 **Do not describe any of this as earning a Google rich result.** Google retired the FAQ
 rich result for every site on 2026-05-07 and removed the documentation on 2026-06-15.
 The justification is answer-engine extraction; the on-page block is what pays and the

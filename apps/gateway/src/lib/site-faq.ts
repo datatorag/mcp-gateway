@@ -136,6 +136,70 @@ export const CUSTOM_INTEGRATION = {
   },
 } as const;
 
+/** Moving files, as the home page's section, the hosted landing page's block,
+ * and the home FAQ answer say it. One copy, so the three cannot drift.
+ *
+ * EVERY CLAUSE IS ON content/docs/file-references.md, and that page is the
+ * thing to re-read before changing a word here:
+ * - from your computer: "Uploading a file from your computer" (the upload
+ *   reference goes to drive_upload_file, jira_add_attachment,
+ *   notion_attach_file, or an email's attachments; the link takes one file,
+ *   once, of at most 25 MB);
+ * - from an email: the gmail_message and gmail_attachment references;
+ * - from Drive: the drive_file and drive_export references, and "Attaching
+ *   files to an email";
+ * - to your computer: "Saving a file to your computer" (a link works once).
+ * The receipt sentence is "What the receipt says" and the email response
+ * there: each of those tools answers with the file's name, size, and SHA-256.
+ * gmail_save_attachment_to_drive answers with Drive's metadata and no hash,
+ * so no job here is described by that tool.
+ *
+ * It says nothing about any other product, on purpose: what somebody else's
+ * tools do with a file is not ours to state here. One number only, the upload
+ * link's, which site-faq.test.ts holds to the docs page; every other limit is
+ * behind the link. */
+export const FILE_MOVES = {
+  eyebrow: "Files",
+  heading: "Move files between your tools",
+  standfirst:
+    "Ask your agent, and DataToRAG carries a file from where it is to where you need it, without its content passing through the conversation.",
+  jobs: [
+    {
+      id: "from-your-computer",
+      title: "From your computer",
+      body: "Send a file through an upload link that works once, and your agent puts it in Drive, on a Jira issue, on a Notion page, or in an email.",
+      from: ["computer"],
+      to: ["drive", "jira", "notion", "gmail"],
+    },
+    {
+      id: "from-an-email",
+      title: "From an email",
+      body: "Put an email's attachment, or the whole email as its original file, on a Jira issue, on a Notion page, or in Drive.",
+      from: ["gmail"],
+      to: ["jira", "notion", "drive"],
+    },
+    {
+      id: "from-drive",
+      title: "From Drive",
+      body: "Attach a Drive file to an email, a Jira issue, or a Notion page. A Google Doc, Sheet, or Slides deck can go as an exported file, such as a PDF.",
+      from: ["drive"],
+      to: ["gmail", "jira", "notion"],
+    },
+    {
+      id: "to-your-computer",
+      title: "To your computer",
+      body: "Save a whole email, one attachment, or a Drive file to your computer through a download link that works once.",
+      from: ["gmail", "drive"],
+      to: ["computer"],
+    },
+  ],
+  receipt:
+    "A file moved by an upload, an attachment, or a download link comes back on a receipt with its name, its size, and its SHA-256, so you can check what went where.",
+  limits: "An upload link takes a file of up to 25 MB, and each destination has its own limit.",
+  docsHref: "/docs/file-references",
+  docsLabel: "How moving files works",
+} as const;
+
 export const SITE_FAQ_PAGES: SiteFaqPage[] = [
   {
     route: "/faq",
@@ -246,6 +310,10 @@ export const SITE_FAQ_PAGES: SiteFaqPage[] = [
           {
             q: "Which AI clients can connect to it?",
             a: `Any client that speaks MCP. ${PUBLIC_CLIENTS_TEXT} have step-by-step setup in the dashboard, and any other MCP client, your own application included, connects the same way, with one URL covering every service you have connected and OAuth sign-in handling the rest. The gateway is hosted, so the same connection works from another machine without setting anything up again.`,
+          },
+          {
+            q: "Can my agent attach a file from my computer?",
+            a: `Yes. Ask your agent for an upload link, send the file through it, and DataToRAG puts the file in Drive, on a Jira issue, on a Notion page, or in an email. ${FILE_MOVES.limits} ${FILE_MOVES.receipt} [Moving files between services](${FILE_MOVES.docsHref}) has the limits and the steps.`,
           },
           {
             q: "What does DataToRAG connect to?",

@@ -43,7 +43,9 @@ faqs:
       us. The receipt gives the SHA-256 and the size of what was sent.
 ---
 
-DataToRAG is an MCP server, and some jobs for its tools need a file to go from one connected service to another: an email filed on a Jira issue, for example. By hand that means downloading the file and uploading it again. With DataToRAG it is one tool call, and the file's content never passes through the conversation.
+DataToRAG is an MCP server whose tools let an agent move a file from one place to another: an email or one of its attachments onto a Jira issue, onto a Notion page, or into Google Drive; a Google Drive file into an email; a file on your computer into any of those; and an email, an attachment, or a Drive file down to your computer. A file moved this way comes back on a receipt with its name, its size, and its SHA-256, and unless your agent already holds the file, its content never passes through the conversation. (`gmail_save_attachment_to_drive`, an older tool for one of these moves, answers with Drive's file details and no checksum.)
+
+By hand, each of these means downloading the file and uploading it again.
 
 ## What a file reference is
 
