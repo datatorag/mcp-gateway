@@ -8,6 +8,7 @@ import {
   BUILT_IN_CHECKED_ON,
   BUILT_IN_DIFFERENCE,
   BUILT_IN_HELP_URL,
+  FILE_MOVES,
   SELF_HOSTING,
   siteFaqGroups,
   siteFaqs,
@@ -29,6 +30,15 @@ const faqs = siteFaqs("/hosted-google-workspace-mcp");
    Google's official servers and four self-hosted GitHub projects and did not
    reach us until we were named. Nothing on the site matched the phrase outside
    one blog post, so there was nothing to find. Title, slug and h1 all carry it.
+
+   2026-11-25: THE H1 AND THE FIRST H2 NO LONGER SAY "WRITE ACCESS". The table
+   under that h2 now shows the built-in connectors writing to Docs, Sheets, and
+   Slides, so writing sets nothing apart here. The h1 says two things about
+   DataToRAG alone (several accounts, any MCP client), the description says the
+   same, and the section gained a block on moving files (FILE_MOVES in
+   lib/site-faq.ts). The files clause is in the SECOND paragraph on purpose:
+   the first is the answer to "what is the difference from the built-in
+   connectors", and moving a file is not offered here as a difference.
 
    IT ALSO ABSORBS THE "WRITE ACCESS" PAGE rather than shipping that separately.
    Two thin pages competing for adjacent queries is worse than one that answers
@@ -63,7 +73,7 @@ const faqs = siteFaqs("/hosted-google-workspace-mcp");
 
 const TITLE = "Hosted Google Workspace MCP - no Cloud project, no OAuth setup";
 const DESCRIPTION =
-  "A hosted MCP endpoint for Gmail, Sheets, Docs, Slides, Calendar, Contacts and Tasks. One URL, one sign-in, no Google Cloud project. Every write asks you first.";
+  "A hosted MCP endpoint for Gmail, Drive, Sheets, Docs, Slides, Calendar, Contacts, and Tasks, on several Google accounts, from any MCP client. One sign-in.";
 const URL = "https://datatorag.com/hosted-google-workspace-mcp";
 
 export const metadata: Metadata = {
@@ -125,7 +135,7 @@ export default function HostedGoogleWorkspaceMcpPage() {
             Hosted MCP
           </p>
           <h1 className="mt-3 font-display text-3xl font-bold text-foreground sm:text-4xl">
-            A hosted Google Workspace MCP, with write access
+            A hosted Google Workspace MCP for several accounts, in any MCP client
           </h1>
           {/* The answer to "what is the difference from Claude's built-in
               Google connectors", in the first hundred words of the page. The
@@ -145,7 +155,9 @@ export default function HostedGoogleWorkspaceMcpPage() {
           </p>
           <p className="mt-4 max-w-2xl text-base leading-relaxed text-muted-foreground">
             Add one endpoint, sign in with Google, and your agent can edit the
-            spreadsheet rather than describe it. No Google Cloud project, no
+            spreadsheet rather than describe it, and move a file from an
+            email, from Drive, or from your computer to where you need it. No
+            Google Cloud project, no
             OAuth client of your own, no per-product endpoints to wire up.
           </p>
 
@@ -186,7 +198,7 @@ export default function HostedGoogleWorkspaceMcpPage() {
           <AddToAgent placement="landing" className="mt-10" />
 
           <h2 className="mt-16 font-display text-2xl font-bold text-foreground">
-            Where the writes actually stop
+            Who writes what, and what this endpoint adds
           </h2>
           <p className="mt-3 max-w-2xl text-base leading-relaxed text-muted-foreground">
             Most comparisons argue about tool counts. The question that decides
@@ -212,6 +224,30 @@ export default function HostedGoogleWorkspaceMcpPage() {
             and Slides now. What this gateway adds sits mostly outside the
             table: several Google accounts in one request, Contacts and Tasks,
             and Jira, Confluence, and Notion on the same endpoint.
+          </p>
+
+          {/* Moving files, in this page's own type. The copy is the home
+              page's, from lib/site-faq.ts, and names no other product. */}
+          <h3 className="mt-10 font-display text-lg font-semibold text-foreground">
+            {FILE_MOVES.heading}
+          </h3>
+          <p className="mt-3 max-w-2xl text-base leading-relaxed text-muted-foreground">
+            {FILE_MOVES.standfirst}
+          </p>
+          <ul className="mt-4 max-w-2xl space-y-2 text-sm leading-relaxed text-muted-foreground">
+            {FILE_MOVES.jobs.map((job) => (
+              <li key={job.id}>
+                <span className="font-medium text-foreground">{job.title}.</span>{" "}
+                {job.body}
+              </li>
+            ))}
+          </ul>
+          <p className="mt-4 max-w-2xl text-sm leading-relaxed text-muted-foreground">
+            {FILE_MOVES.receipt} {FILE_MOVES.limits}{" "}
+            <Link href={FILE_MOVES.docsHref} className="underline underline-offset-2">
+              {FILE_MOVES.docsLabel}
+            </Link>
+            .
           </p>
 
           <h2 className="mt-16 font-display text-2xl font-bold text-foreground">

@@ -81,6 +81,25 @@ export default function DocsIndexPage() {
         to connect a client and what each tool does.
       </p>
 
+      {/* Moving files, named: it is a thing the server does across services,
+          so no single service's page says it. The link goes to a section of
+          the page, which the list below links whole. */}
+      <div className="mt-6 rounded-lg border border-border p-4">
+        <h2 className="font-display text-base font-bold text-foreground">Move files between services</h2>
+        <p className="mt-1.5 text-sm leading-relaxed text-muted-foreground">
+          The DataToRAG MCP server takes a file from an email, from Google Drive, or from your computer and puts
+          it on a Jira issue, on a Notion page, in Google Drive, or in an email. Each move answers with a receipt
+          that gives the file&apos;s name, size, and SHA-256.{" "}
+          <Link
+            href="/docs/file-references#tools-that-take-a-file"
+            className="font-medium text-foreground underline underline-offset-2 hover:text-primary"
+          >
+            See the tools that take a file
+          </Link>
+          .
+        </p>
+      </div>
+
       <section className="mt-8">
         <h2 className="font-display text-lg font-bold text-foreground">General</h2>
         <ul className="mt-4 space-y-4">

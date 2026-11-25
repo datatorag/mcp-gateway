@@ -168,6 +168,7 @@ describe("what a record gives the page", () => {
       expect(related.map((r) => r.slug)).not.toContain(u.slug);
     }
     const email = useCases.find((u) => u.slug === "turn-an-email-thread-into-a-jira-issue")!;
-    expect(relatedUseCases(email)[0].slug).toBe("morning-brief-across-every-inbox");
+    // Shares both Gmail and Jira with it; the morning brief shares Gmail alone.
+    expect(relatedUseCases(email)[0].slug).toBe("put-a-signed-pdf-from-an-email-on-a-jira-issue");
   });
 });
