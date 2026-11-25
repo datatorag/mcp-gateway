@@ -14,6 +14,7 @@ import {
 } from "@/lib/skills";
 import { FaqSection } from "@/components/faq-section";
 import { JsonLd } from "@/components/json-ld";
+import { getAllUseCases } from "@/lib/use-cases";
 import { faqPageNode } from "@/lib/site-schema";
 import { SOCIAL_OPEN_GRAPH, SOCIAL_TWITTER } from "@/lib/social-card";
 
@@ -48,6 +49,8 @@ export default async function SkillPage({ params }: Props) {
   if (!skill) notFound();
 
   const related = await getRelatedSkills(slug);
+  // The use cases that name this skill (SCRUM-514), linked from the body.
+  const useCases = getAllUseCases().filter((u) => u.skill === skill.slug);
   const connectors = connectorsFor(skill.tools);
   // From the files, by slug, never off the row: this page always renders the
   // PUBLISHED skill, and the answers are page copy about it rather than part
@@ -149,6 +152,21 @@ export default async function SkillPage({ params }: Props) {
               the deep link into the agent with this skill loaded (SCRUM-223),
               and the campaign's landing click. */}
           <RunSkillCta services={connectors} slug={skill.slug} />
+
+          {useCases.length > 0 && (
+            <p className="mt-8 text-sm leading-relaxed text-muted-foreground">
+              See it as a request, step by step:{" "}
+              {useCases.map((u, i) => (
+                <span key={u.slug}>
+                  {i > 0 && ", "}
+                  <Link href={`/use-cases/${u.slug}`} className="font-medium text-primary underline underline-offset-2">
+                    {u.title}
+                  </Link>
+                </span>
+              ))}
+              .
+            </p>
+          )}
 
           {related.length > 0 && (
             <div className="mt-14 border-t border-border pt-8">

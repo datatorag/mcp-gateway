@@ -6,6 +6,7 @@ import { getAllPosts } from "@/lib/blog";
 import { getAllDocs } from "@/lib/docs";
 import { getAllSkills } from "@/lib/skills";
 import { getAllPersonas } from "@/lib/personas";
+import { getAllUseCases } from "@/lib/use-cases";
 import { isPublicServerSlug } from "@/lib/public-tools";
 
 // Request-time so the tools query runs against the live DB, not at build.
@@ -60,6 +61,28 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
 
   // Personas are indexable routes on purpose: they exist so which audience
   // reads is answerable from traffic, and an unindexed page answers nothing.
+  // Use cases (SCRUM-514): each with the date its record was last changed,
+  // and the list with the newest of those.
+  const allUseCases = getAllUseCases();
+  const useCases: MetadataRoute.Sitemap = [
+    ...(allUseCases.length > 0
+      ? [
+          {
+            url: `${BASE}/use-cases`,
+            lastModified: new Date(`${allUseCases.map((u) => u.date).sort().at(-1)}T00:00:00`),
+            changeFrequency: "weekly" as const,
+            priority: 0.8,
+          },
+        ]
+      : []),
+    ...allUseCases.map((u) => ({
+      url: `${BASE}/use-cases/${u.slug}`,
+      lastModified: new Date(`${u.date}T00:00:00`),
+      changeFrequency: "monthly" as const,
+      priority: 0.7,
+    })),
+  ];
+
   const personas: MetadataRoute.Sitemap = getAllPersonas().map((p) => ({
     url: `${BASE}/skills/for/${p.slug}`,
     changeFrequency: "monthly",
@@ -86,5 +109,5 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   // `/r/<slug>` share links (src/lib/share-links.ts) are deliberately absent:
   // they are redirects, not content, and must not compete with their targets.
   // `sitemap.test.ts` pins this.
-  return [...staticRoutes, ...posts, ...docs, ...skills, ...personas, ...tools];
+  return [...staticRoutes, ...posts, ...docs, ...skills, ...useCases, ...personas, ...tools];
 }

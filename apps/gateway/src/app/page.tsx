@@ -792,6 +792,8 @@ export default async function HomePage() {
           {" "}&middot;{" "}
           <a href="/skills" className="underline hover:text-foreground">Skills</a>
           {" "}&middot;{" "}
+          <a href="/use-cases" className="underline hover:text-foreground">Use cases</a>
+          {" "}&middot;{" "}
           <a href="/faq" className="underline hover:text-foreground">FAQ</a>
           {" "}&middot;{" "}
           <a href="/privacy" className="underline hover:text-foreground">Privacy Policy</a>

@@ -59,3 +59,35 @@ export function faqPageNode(faqs: ContentFaq[]): SchemaNode {
     })),
   };
 }
+
+/** The trail to a page, from the home page down: each entry a name and its
+ * address. Every content page carries one (SCRUM-514). */
+export function breadcrumbNode(trail: { name: string; url: string }[]): SchemaNode {
+  return {
+    "@context": "https://schema.org",
+    "@type": "BreadcrumbList",
+    itemListElement: trail.map((entry, i) => ({ "@type": "ListItem", position: i + 1, name: entry.name, item: entry.url })),
+  };
+}
+
+/** A page that shows how a task is done, step by step (SCRUM-514). The steps
+ * are the same strings the page lists, never a second copy, and the dates
+ * are the record's own. */
+export function howToNode(page: {
+  name: string;
+  description: string;
+  url: string;
+  date: string;
+  steps: { name: string; text: string }[];
+}): SchemaNode {
+  return {
+    "@context": "https://schema.org",
+    "@type": "HowTo",
+    name: page.name,
+    description: page.description,
+    url: page.url,
+    datePublished: page.date,
+    dateModified: page.date,
+    step: page.steps.map((s, i) => ({ "@type": "HowToStep", position: i + 1, name: s.name, text: s.text })),
+  };
+}

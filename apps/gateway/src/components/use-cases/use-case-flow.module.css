@@ -1,0 +1,99 @@
+/* The small flow diagram on a use case card (SCRUM-514): the services' marks
+   move into the agent, and one result comes out. It plays while its card is
+   on screen (`data-playing="true"`, set by play-when-visible.tsx) and rests
+   otherwise. With reduced motion nothing moves: every part sits in its end
+   state. Loaded only by the use case routes. */
+
+.flow {
+  --flow-time: 4.2s;
+}
+
+.mark,
+.pulse,
+.result {
+  animation-duration: var(--flow-time);
+  animation-iteration-count: infinite;
+  animation-timing-function: ease-in-out;
+  animation-play-state: paused;
+}
+
+.flow[data-playing="true"] .mark,
+.flow[data-playing="true"] .pulse,
+.flow[data-playing="true"] .result {
+  animation-play-state: running;
+}
+
+.mark {
+  animation-name: mark-in;
+  animation-delay: calc(var(--i) * 0.22s);
+}
+
+.pulse {
+  animation-name: agent-pulse;
+}
+
+.result {
+  animation-name: result-out;
+}
+
+@keyframes mark-in {
+  0%,
+  8% {
+    transform: translateX(0);
+    opacity: 1;
+  }
+  34% {
+    transform: translateX(var(--travel));
+    opacity: 0;
+  }
+  35%,
+  88% {
+    transform: translateX(0);
+    opacity: 0;
+  }
+  100% {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+@keyframes agent-pulse {
+  0%,
+  30% {
+    box-shadow: 0 0 0 0 color-mix(in oklab, var(--primary) 0%, transparent);
+  }
+  42% {
+    box-shadow: 0 0 0 6px color-mix(in oklab, var(--primary) 28%, transparent);
+  }
+  60%,
+  100% {
+    box-shadow: 0 0 0 0 color-mix(in oklab, var(--primary) 0%, transparent);
+  }
+}
+
+@keyframes result-out {
+  0%,
+  48% {
+    transform: translateX(-10px);
+    opacity: 0;
+  }
+  62%,
+  90% {
+    transform: translateX(0);
+    opacity: 1;
+  }
+  100% {
+    transform: translateX(0);
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mark,
+  .pulse,
+  .result {
+    animation: none;
+    transform: none;
+    opacity: 1;
+  }
+}

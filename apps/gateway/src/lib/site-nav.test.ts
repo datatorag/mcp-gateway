@@ -63,14 +63,14 @@ describe("the site navigation's data", () => {
     expect(column.items.map((i) => i.href)).toEqual(MCP_CLIENTS.map((c) => `/add-to-your-agent?client=${c.id}`));
   });
 
-  it("lists every persona page with that page's own title and menu line, then all skills", () => {
+  it("lists every persona page with that page's own title and menu line, then all skills and the use cases", () => {
     const personas = getAllPersonas();
     expect(personas.length).toBeGreaterThan(0);
     const column = nav.groups[1].columns[1].items;
-    expect(column.slice(0, -1).map((i: NavItem) => [i.href, i.label, i.description])).toEqual(
+    expect(column.slice(0, -2).map((i: NavItem) => [i.href, i.label, i.description])).toEqual(
       personas.map((p) => [`/skills/for/${p.slug}`, p.title, p.menuLine])
     );
-    expect(column.at(-1)?.href).toBe("/skills");
+    expect(column.slice(-2).map((i: NavItem) => i.href)).toEqual(["/skills", "/use-cases"]);
   });
 
   it("gives every item an id that is its own within its group, since the click event carries the pair", () => {

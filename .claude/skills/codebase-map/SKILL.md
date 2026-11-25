@@ -246,6 +246,7 @@ edit means the design-time check was skipped.
 | Short share links `/r/<slug>` — the slug→target map (one line per link; targets pinned to real routes by its test) + resolver; the route is `src/app/r/[slug]/route.ts` (307, relative Location, noindex) | `apps/gateway/src/lib/share-links.ts` |
 | Tool detail page (DB + README fallback) | `apps/gateway/src/app/tools/[slug]/page.tsx` |
 | Home page (DB-driven integrations grid, footer links) | `apps/gateway/src/app/page.tsx` |
+| Use cases: one record per use case drives the list, the page, the diagram, and the replay (SCRUM-514; see `site-content`) | `apps/gateway/src/lib/use-cases.ts`, `apps/gateway/content/use-cases/`, `apps/gateway/src/components/use-cases/` |
 | Navbar: the menu is data in `apps/gateway/src/lib/site-nav.ts` (three groups of columns, then plain links; the agent column reads `MCP_CLIENTS`, the persona column reads `content/personas`). `components/navbar.tsx` is the server half that builds it, `components/navbar-client.tsx` the panels and the phone sheet (SCRUM-506) | `apps/gateway/src/lib/site-nav.ts` |
 | Per-service brand icons (`ServiceIcon`, `serviceFromToolName`/`serviceFromSlug`; assets + provenance in `public/icons/services/`) | `apps/gateway/src/components/service-icon.tsx` |
 | Hand-rolled `.prose` styles | `apps/gateway/src/app/globals.css` |

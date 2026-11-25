@@ -211,6 +211,39 @@ a reader pastes it in and it fails on them. Extend that list only after confirmi
 tool exists on the live wire, never to make a test pass. Note `tools` is the surface the
 skill operates over, not a strict call list.
 
+### Use cases: `apps/gateway/src/lib/use-cases.ts` (SCRUM-514)
+
+One record per use case, `apps/gateway/content/use-cases/<slug>.md`, frontmatter only. The record
+drives the card on `/use-cases`, its flow diagram, the page at `/use-cases/<slug>`, its chat
+replay, its title and description, its structured data (`BreadcrumbList` and `HowTo`), and its
+sitemap line. Adding a use case is one file: no component, asset, or route.
+
+| Field | Shape |
+|---|---|
+| `title` | The task as a person asks for it. The page's one heading |
+| `outcome` | One sentence. The card's text and the start of the page's passage |
+| `description` | The meta description, written, 120 to 160 characters |
+| `date` | `YYYY-MM-DD`, when the record last changed. Shown on the page, in the sitemap, and in the structured data |
+| `services` | A list from `USE_CASE_SERVICES` (`gmail`, `calendar`, `drive`, `docs`, `sheets`, `slides`, `tasks`, `contacts`, `jira`, `confluence`, `notion`): the marks in the diagram, the filter, and the docs links |
+| `accounts` | `single` or `multiple` |
+| `prompt` | What a person types |
+| `steps` | A list of `{ tool, label }`: the tool as served (`gws-mcp__gmail_search`) and what it does in plain words |
+| `answer` | The one line the agent says before the result |
+| `result` | `{ kind: text, lines }`, `{ kind: table, columns, rows }`, or `{ kind: created, what, title, lines }`. Sample content only |
+| `skill` | Optional: the slug of the matching skill |
+
+A record with anything missing or wrong is not loaded, and `use-cases.test.ts` fails with the slug
+and what is wrong. The same test holds the honesty rules: every tool is in the registry snapshot,
+none is an admin-only service's or `gws_run`, the skill and each service's docs page exist, and the
+record holds no address, link, or dash.
+
+The page's title is the task, the services by their full names, and MCP, then the brand
+(`useCaseSearchTitle`). The replay (`components/use-cases/use-case-replay.tsx`) is the site's own
+chat parts fed frames computed from the record (`replay-timeline.ts`): its served HTML is the
+finished conversation, it plays once when on screen, never loops, and does not move under reduced
+motion. The card's diagram is CSS only (`use-case-flow.module.css`), played while on screen. The
+list's filter hides cards in the browser and never removes one from the served page.
+
 ## Per-page FAQs
 
 Blog, docs, skill and persona pages can carry a `faqs:` list in frontmatter. Read through
