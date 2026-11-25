@@ -1,33 +1,34 @@
 ---
 title: "Claude's Calendar Connector Works. Unless You Have Two Calendars."
-excerpt: "On a single account, Claude's native Calendar connector does more than ours: it searches by meaning, and its events recur, book rooms and carry attachments. What it can't do is see two calendars at once."
+excerpt: "On a single account, Claude's native Calendar connector does something ours does not: as of November 25, 2026, Anthropic's help page lists recurring meetings, and we do not create them. What DataToRAG adds is two Google accounts behind one endpoint."
 date: "2026-04-21"
-updated: "2026-10-19"
-updatedNote: "October 19, 2026: three rows flip to Yes for us. We now RSVP to an invitation, list the calendars on an account and suggest meeting times, so the short answer, the table, our tool list and the section on when the native connector is the better choice are rewritten around what still differs: recurrence, rooms, attachments and meaning-based search on their side, two accounts on ours. Earlier, this post used to claim feature parity on Calendar. That is no longer true, and it is now wrong in our favour: re-enumerating both connectors on August 11, 2026 shows the native one has time suggestion, calendar listing and RSVP, none of which we ship, plus semantic event search where ours matches keywords. The comparison table and the parity paragraphs are rewritten around what each side actually does, and the RSVP row, which said Yes for us, now says No."
+updated: "2026-11-25"
+updatedNote: "November 25, 2026: re-read against Anthropic's help page. The post said the native connector holds one Google account and cannot see two calendars; the page does not say how many accounts you can connect, so that claim is withdrawn from the short answer, the table, and the dentist example, and what we add is stated as our own. The table's Claude column now follows the page, and the rows it does not describe (a Meet link, keyword search, rooms, attachments, and the account rows) say so. Search by meaning, rooms, and attachments are kept only as what we saw on August 11, 2026. The Claude Code line now quotes Claude Code's changelog, and our tool list points to the docs without a count. October 19, 2026: three rows flip to Yes for us. We now RSVP to an invitation, list the calendars on an account and suggest meeting times, so the short answer, the table, our tool list and the section on when the native connector is the better choice are rewritten around what still differs: recurrence, rooms, attachments and meaning-based search on their side, two accounts on ours. Earlier, this post used to claim feature parity on Calendar. That is no longer true, and it is now wrong in our favor: re-enumerating both connectors on August 11, 2026 shows the native one has time suggestion, calendar listing and RSVP, none of which we ship, plus semantic event search where ours matches keywords. The comparison table and the parity paragraphs are rewritten around what each side actually does, and the RSVP row, which said Yes for us, now says No."
 author: "Manuel Yang"
 category: "Comparison"
 coverImage: "/blog/calendar-comparison.png"
 tags: ["google-calendar", "claude", "multi-account", "comparison", "google-workspace"]
 ---
 
-**Short answer:** on one Google account, Claude's native Calendar connector is the better tool, and it is not close. It creates, updates and deletes events, suggests meeting times across attendees, lists your other calendars, and RSVPs to invitations. Since October 19, 2026 we do those last three as well, but its events can recur, book rooms and carry attachments, and where we both search, its search understands what you meant while ours matches the words you typed. What it cannot do is hold two accounts at once, which is the whole reason this post exists.
+**Short answer:** on one Google account, Claude's native Calendar connector does at least one thing ours does not. As of November 25, 2026, [Anthropic's help page](https://support.claude.com/en/articles/10166901-use-google-workspace-connectors) says it views events and calendars, including shared calendars you have access to, creates, updates, and deletes events, finds mutual availability across attendees, responds to invitations, and sets up recurring meetings. Since October 19, 2026 we suggest times, list calendars, and answer invitations as well, but we do not create recurring events. What DataToRAG adds is several Google accounts behind one endpoint, which is the whole reason this post exists. Anthropic's page does not say how many Google accounts you can connect.
 
-I'll give Claude credit, and more of it than this post gave when it went up. The native Google Calendar connector is the most feature-complete piece of the Workspace integration. Enumerating its tools on August 11, 2026: it creates events, updates them, deletes them, searches your calendar in plain language, suggests free slots across a set of attendees, lists every calendar you have access to, and responds to invitations with an accept, a decline or a maybe. Its event search is semantic, so it answers "the review with the design team" without you naming the event. Since Claude Code v2.1.46 (February 2026), the same connector works inside Claude Code too.
+I'll give Claude credit, and more of it than this post gave when it went up. When we enumerated the native Google Calendar connector's tools on August 11, 2026, it created events, updated them, deleted them, searched your calendar in plain language, suggested free slots across a set of attendees, listed every calendar you have access to, and responded to invitations with an accept, a decline, or a maybe. Its event search was semantic on that check, so it answered "the review with the design team" without you naming the event, and its events could book rooms and carry attachments. Anthropic's help page does not describe search by meaning, rooms, or attachments, so read those three as what we saw on that date and not as a claim about today. Claude Code's [changelog](https://github.com/anthropics/claude-code/blob/main/CHANGELOG.md) says v2.1.46 "Added support for using claude.ai MCP connectors in Claude Code."
 
-So what's the gap?
+So what is left for us?
 
-It's a one-calendar gap. It is the only one, and everything below is an honest account of what that costs on each side.
+Accounts. This post was built on the native connector seeing one Google account at a time, and it said so flatly. As of November 25, 2026, Anthropic's help page does not say how many Google accounts you can connect. What it says is that Claude can only access the data "for the Google account you've connected." So the flat claim is withdrawn. If you have two Google Calendars that you actually use (one work, one personal), check whether Claude sees both before you rely on it.
 
-Claude's Google Workspace connector authenticates to a single Google account per integration. If you're a person who has two Google Calendars that you actually use (one work, one personal), Claude sees one of them. Not both.
-
-That sounds niche. It isn't. Anyone who does freelance work while employed, anyone who runs a side project, anyone whose life is partitioned along work boundaries has two calendars. When they say "find a time next Tuesday," the correct answer is the one that considers both.
+Two calendars sounds niche. It isn't. Anyone who does freelance work while employed, anyone who runs a side project, anyone whose life is partitioned along work boundaries has two calendars. When they say "find a time next Tuesday," the correct answer is the one that considers both.
 
 ![DataToRAG dashboard: one user with five Google accounts connected at once](/blog/dashboard-home.png)
 
 ## Feature comparison
 
-Both tool surfaces enumerated August 11, 2026. Where a row says No for us, it means
-the tool is not on our wire today, not that it is impossible.
+The Claude column is [Anthropic's help page](https://support.claude.com/en/articles/10166901-use-google-workspace-connectors)
+as read on November 25, 2026, except the last row, which is Claude Code's changelog. "Not
+described" means the page does not mention it, which is not the same as Claude being unable to
+do it. Where a row says No for us, it means the tool is not on our wire today, not that it is
+impossible.
 
 | Capability | Claude native Google Calendar | DataToRAG Google Calendar |
 |---|---|---|
@@ -35,30 +36,30 @@ the tool is not on our wire today, not that it is impossible.
 | Create events | Yes | Yes |
 | Update events | Yes | Yes |
 | Delete events | Yes | Yes |
-| Add a Google Meet link | Yes | Yes |
-| Find when people are free | Yes, as suggested slots | Yes, as suggested slots or raw busy blocks |
-| Search your calendar by keyword | Yes | Yes |
+| Add a Google Meet link | Not described | Yes |
+| Find when people are free | Yes, mutual availability across attendees | Yes, as suggested slots or raw busy blocks |
+| Search your calendar by keyword | Not described | Yes |
 | RSVP to an invitation | Yes | Yes |
-| See which calendars you have | Yes | Yes |
+| See which calendars you have | Yes, including shared calendars | Yes |
 | Recurring events | Yes | No |
-| Book a room as a bookable resource | Yes | No, the room name goes in the location text |
-| Attachments, custom reminders, guest permissions | Yes | No |
-| Free / busy on work **and** personal, with no calendar sharing | No | Yes |
-| Create an event on a specific account | No | Yes |
-| Default account with per-call override | No | Yes |
-| Works inside Claude Code | Yes (v2.1.46+) | Yes |
+| Book a room as a bookable resource | Not described | No, the room name goes in the location text |
+| Attachments, custom reminders, guest permissions | Not described | No |
+| Free / busy on work **and** personal, with no calendar sharing | Not described | Yes |
+| Create an event on a specific account | Not described | Yes |
+| Default account with per-call override | Not described | Yes |
+| Works inside Claude Code | Yes, claude.ai connectors since v2.1.46 | Yes |
 
 That table used to read as a wall of matching Yeses with a multi-account section bolted
-on the end, which was wrong twice over: it claimed RSVP for us, which we have never
-shipped, and it flattened a real depth difference into parity. On one calendar the
-native connector is simply the richer tool. We would rather say so than have you find
-out by asking Claude to RSVP through us. Since October 19, 2026 that RSVP works, and so do
-suggested times and the calendar list; the depth difference that remains is recurrence,
-rooms, attachments and search by meaning.
+on the end, which was wrong twice over: it claimed RSVP for us, which we did not ship until
+October 19, 2026, and it flattened a real difference into parity. Since that date RSVP works
+through us, and so do suggested times and the calendar list. The difference on one calendar
+that we can source today is recurrence: Anthropic's page lists recurring meetings, and we do
+not create them. Rooms, attachments, and search by meaning were on the native side when we
+checked on August 11, 2026.
 
 ## What multi-account support looks like
 
-Our Calendar surface is nine tools:
+Our Calendar tools, as listed in [the Calendar docs](/docs/calendar):
 
 - `calendar_list_events`
 - `calendar_get_event`
@@ -83,27 +84,28 @@ The architecture behind this is described in a [previous post on multi-account f
 ## When Claude's native connector is the better choice
 
 If you have exactly one Google account that holds your whole calendar life, use the
-native connector. Not "it's fine" as a consolation: on that one account it does more
-than we do. It searches by meaning rather than by keyword, and handles recurrence, rooms and
-attachments we do not touch. Suggesting times and answering invitations, both of us do. The only
-question worth asking is whether your scheduling picture is complete with one account.
+native connector. Not "it's fine" as a consolation: it comes with Claude, and it sets up
+recurring meetings, which we do not. Suggesting times and answering invitations, both of us
+do. The only question worth asking is whether your scheduling picture is complete with one
+account.
 
 ## The edge case that isn't edge
 
-Run this exact prompt on the native connector: "Find a time next Thursday when I'm free on both my work and personal calendars, then book a dentist appointment at that time."
+Take this exact prompt: "Find a time next Thursday when I'm free on both my work and personal calendars, then book a dentist appointment at that time."
 
-The native connector answers from the one account it is connected to and misses conflicts
-on the other. The appointment gets booked on top of a conflict.
+Any agent that answers it from one account misses conflicts on the other, and the appointment
+gets booked on top of one. This post used to say the native connector does exactly that.
+Anthropic's page does not say how many accounts it reads, so run the prompt and see.
 
-One honest caveat, because it applies to a lot of people: the native connector lists every
-calendar the connected account can *see*, so if you have shared your personal calendar into
-your work account, it will find it there. That is a per-calendar arrangement you have to set
-up and that plenty of Workspace domains restrict, and it gives you the other calendar's
-events rather than the ability to act as the other account. If sharing covers your case, it
-covers it, and you do not need us for this.
+One honest caveat, because it applies to a lot of people: as of November 25, 2026, Anthropic's
+page says the native connector views "shared calendars you have access to," so if you have
+shared your personal calendar into your work account, it can find it there. That is a
+per-calendar arrangement you have to set up, and it gives you the other calendar's events
+rather than the ability to act as the other account. If sharing covers your case, it covers
+it, and you do not need us for this.
 
 With DataToRAG connected to both accounts, `calendar_freebusy` can be run against either
-one, and your assistant reads both answers together. The difference is not that one call
+one, and your agent reads both answers together. The difference is not that one call
 does the merge, it does not: it is that both accounts are reachable through a single
 endpoint, so neither has to share its calendar with the other to be seen.
 

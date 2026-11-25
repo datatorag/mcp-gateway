@@ -2,7 +2,7 @@
 title: "The Spreadsheet Was Correct. Nobody Could Read It."
 excerpt: "Writing values into Google Sheets gives you no formatting at all, and the failure is invisible to whoever caused it. Four new tools fix that: a one-call readable pass, targeted styling, a raw escape hatch, and row lookup that doesn't read the whole sheet."
 date: "2026-08-26"
-updated: "2026-11-17"
+updated: "2026-11-25"
 author: "Manuel Yang"
 category: "Product"
 coverImage: "/blog/claude-format-google-sheets.png"
@@ -38,7 +38,7 @@ rate was not zero.
 
 ## Specific styling, one atomic pass
 
-`sheets_format_range` handles the styling that's yours rather than generic: fonts, colours,
+`sheets_format_range` handles the styling that's yours rather than generic: fonts, colors,
 alignment, padding, number formats, merges. It takes a list of instructions and applies them
 in one atomic call.
 
@@ -75,7 +75,7 @@ row scrolling away as soon as you moved. To a reader it looked like a data expor
 forgot to finish.
 
 After one `sheets_format_table` call and one `sheets_format_range` pass for the header
-colours: sized columns, wrapped text, a frozen tinted header. It looks like a person laid it
+colors: sized columns, wrapped text, a frozen tinted header. It looks like a person laid it
 out. Nobody touched the sheet by hand at any point, which is the proof point I care about,
 because "Claude did most of it and then I fixed the layout myself" was the old workflow and
 it defeated the purpose.

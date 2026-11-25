@@ -3,7 +3,7 @@ title: "You Can Self-Host a Google Workspace MCP for Free. The OAuth Verificatio
 excerpt: "The open-source Google Workspace MCP servers are genuinely good. The cost isn't the code. It's the Google Cloud project, the consent screen, and the verification that comes after."
 date: "2026-06-29"
 updated: "2026-11-25"
-updatedNote: "November 25, 2026: the star and tool counts for the open-source server were from when I first cloned it. Its repo now shows 3.6k stars and 120+ tools across twelve services, including Chat and Custom Search, so the opening says both and the table uses today's count. November 25, 2026: the comparison row on where data lives said the gateway stores nothing; it stores each connection's sign-in tokens, encrypted, and passes your Workspace content through without keeping it. The row now says that. November 17, 2026: the post said to run our code yourself with Docker Compose and Postgres. There is no packaged self-host guide; the source is open, and the post now names what you would supply: a Postgres database, your own Google OAuth clients and an encryption key for the stored tokens. Notion added to what comes built in. August 26, 2026: narrowed an overbroad privacy claim. The pass-through statement implied nothing is stored anywhere; the gateway keeps nothing, but the hosted agent on our own site stores its conversation threads. The privacy policy is now linked from the paragraph."
+updatedNote: "November 25, 2026: the star and tool counts for the open-source server were from when I first cloned it. Its repo now shows 3.6k stars and 120+ tools across twelve services, including Chat and Custom Search, so the opening says both and the table uses today's count. Also today: the smaller repository's star count is updated to 492; the multi-account sentence now matches what the README lists (OAuth 2.1 multi-user auth, and impersonation through a service account with domain-wide delegation); a claim that another platform's Google OAuth had been blocked is removed because it had no primary source; and Notion is added to the comparison table. the comparison row on where data lives said the gateway stores nothing; it stores each connection's sign-in tokens, encrypted, and passes your Workspace content through without keeping it. The row now says that. November 17, 2026: the post said to run our code yourself with Docker Compose and Postgres. There is no packaged self-host guide; the source is open, and the post now names what you would supply: a Postgres database, your own Google OAuth clients and an encryption key for the stored tokens. Notion added to what comes built in. August 26, 2026: narrowed an overbroad privacy claim. The pass-through statement implied nothing is stored anywhere; the gateway keeps nothing, but the hosted agent on our own site stores its conversation threads. The privacy policy is now linked from the paragraph."
 author: "Manuel Yang"
 category: "Comparison"
 coverImage: "/blog/open-source-google-workspace-mcp-alternative.png"
@@ -20,7 +20,7 @@ This post is about that gap. The distance between "the code runs on my laptop" a
 
 Let me be fair to it, because the OSS servers earn it.
 
-You get the full tool surface. `taylorwilsdon/google_workspace_mcp` spans twelve Google services and supports writes, not just reads. It runs locally with `uvx`, in Docker, or on Kubernetes with the included Helm chart. It handles multiple accounts through per-call user impersonation. The license is MIT, so you can fork it, change it, ship it inside your own product, whatever you want. There's an older, narrower option too (`MarkusPfundstein/mcp-gsuite`, Gmail and Calendar only, around 487 stars) if you want something small enough to read end to end.
+You get the full tool surface. `taylorwilsdon/google_workspace_mcp` spans twelve Google services and supports writes, not just reads. It runs locally with `uvx`, in Docker, or on Kubernetes with the Helm chart in the repo. As of November 25, 2026, its README lists OAuth 2.1 multi-user auth, and per-request user impersonation through a service account with domain-wide delegation. The license is MIT, so you can fork it, change it, ship it inside your own product, whatever you want. There's a narrower option too (`MarkusPfundstein/mcp-gsuite`, Gmail and Calendar only, 492 stars as of November 25, 2026) if you want something small enough to read end to end.
 
 And the big one: your data never leaves your infrastructure. The server runs where you put it. Tokens live where you store them. For a security team that wants Google data to stay inside its own walls, that isn't a nice-to-have, it's the entire reason to self-host. I'm not going to pretend a hosted gateway beats that on data residency. It doesn't.
 
@@ -40,7 +40,7 @@ The scopes a useful Workspace MCP needs are the sensitive and restricted ones. `
 
 To clear the warning you submit your app for verification. Google wants a written justification for each restricted scope, and for some apps a demo video of the OAuth flow. For restricted scopes it also includes a security assessment called CASA. That part is not a weekend. It's a security questionnaire, a scan of your deployment, and back-and-forth with an assessor. We went through CASA Tier 2 and Google verified our app in June 2026, and I [documented the whole path](/blog/casa-tier-2-verified). When you self-host an OSS server, that work is yours, on your Cloud project, under your company's name.
 
-Here's a data point that makes the difficulty concrete. ACI.dev, a funded integration platform, reportedly had its Gmail and Calendar OAuth blocked by Google as of mid-2026, with no workaround at the time. These are people whose full-time job is integrations, and verified Google OAuth still bit them. The verification is the hard part. The tools were never the hard part.
+The verification is the hard part. The tools were never the hard part.
 
 ## And then you have to run it
 
@@ -60,6 +60,7 @@ This isn't open versus closed, and I want to be straight about that. We open-sou
 |---|---|---|---|
 | Google Workspace tools | Broad: 120+ across 12 services (as of November 25, 2026) | Deep across 8 services | Deep across 8 services |
 | Atlassian (Jira + Confluence) | No | Yes | Yes |
+| Notion | No | Yes | Yes |
 | You run a Google Cloud project | Yes | No | Yes |
 | OAuth consent and verification on you | Yes | No, we handle it (Google-verified, CASA Tier 2) | Yes |
 | Multi-account under one endpoint | Yes, you wire it up | Yes | Yes |
@@ -76,9 +77,9 @@ If you want total control, your data physically never leaving your infrastructur
 
 ## Who should use a gateway instead
 
-If you don't want to run the OAuth and verification gauntlet, if your work spans Google and Atlassian both, if you want several accounts working under one endpoint without configuring impersonation yourself, or if you just want the thing to stay up and stay maintained, that's what a gateway is for. We did the Cloud project, the consent screen, the verification track, and the token handling once, so a hosted user doesn't repeat any of it.
+If you don't want to run the OAuth and verification gauntlet, if your work spans Google and Atlassian or Notion, if you want several accounts working under one endpoint without configuring impersonation yourself, or if you just want the thing to stay up and stay maintained, that's what a gateway is for. We did the Cloud project, the consent screen, the verification track, and the token handling once, so a hosted user doesn't repeat any of it.
 
-And if you like the idea of a gateway but still want your data on your own servers, [our code is on GitHub](https://github.com/datatorag/mcp-gateway) under MIT. There is no packaged self-host guide yet: you would bring your own Postgres database, your own Google OAuth clients (and Google's verification for the restricted scopes, so that question is still yours), and an encryption key for the stored tokens. What you skip is writing the integrations from scratch, and you get Atlassian, Notion and multi-account built in.
+And if you like the idea of a gateway but still want your data on your own servers, [our code is on GitHub](https://github.com/datatorag/mcp-gateway) under MIT. The README has a self-hosting section: you would bring your own Postgres database, your own Google OAuth clients (and Google's verification for the restricted scopes, so that question is still yours), and an encryption key for the stored tokens. What you skip is writing the integrations from scratch, and you get Atlassian, Notion and multi-account built in.
 
 ## Try it
 

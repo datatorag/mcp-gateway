@@ -35,10 +35,10 @@ describe("the self-hosting answer", () => {
     expect(SELF_HOSTING).toContain("MIT-licensed");
   });
 
-  it("says what a person has to supply, and that there is no guide", () => {
+  it("says what a person has to supply, and where the steps are", () => {
     for (const part of [
       "It is not one command",
-      "no packaged self-host guide yet",
+      "the README's self-hosting section lists the steps",
       "a Postgres database",
       "your own Google OAuth clients",
       "an encryption key for the stored tokens",

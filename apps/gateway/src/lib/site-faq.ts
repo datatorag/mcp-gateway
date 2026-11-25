@@ -69,12 +69,13 @@ const INTEGRATION_ASK = "Tell us the service and what you want your agent to do 
  *
  * Three pages used to answer it three ways: a hero line offered self-hosting
  * as a preference, a pricing answer said "you can self-host it", and the blog
- * said there is no packaged guide. This is the blog's sentence, and every
+ * said there is no packaged guide. This sentence points at the README's
+ * self-hosting section, which exists, and every
  * answer and page line that mentions running the gateway yourself uses it, so
  * the next change to it is one edit. The license half is the repository's
  * LICENSE file (MIT); re-read that file before changing the word. */
 export const SELF_HOSTING =
-  "The DataToRAG gateway's code is MIT-licensed and can be self-hosted. It is not one command, and there is no packaged self-host guide yet: you supply a Postgres database, your own Google OAuth clients (and Google's verification for the restricted Gmail and Drive scopes), and an encryption key for the stored tokens.";
+  "The DataToRAG gateway's code is MIT-licensed and can be self-hosted. It is not one command, and the README's self-hosting section lists the steps: you supply a Postgres database, your own Google OAuth clients (and Google's verification for the restricted Gmail and Drive scopes), and an encryption key for the stored tokens.";
 
 /** What DataToRAG is next to Claude's built-in Google connectors, in the
  * opening of /hosted-google-workspace-mcp and as an answer on two routes.

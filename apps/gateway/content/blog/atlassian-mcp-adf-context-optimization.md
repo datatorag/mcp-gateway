@@ -3,7 +3,7 @@ title: "Confluence Pages Are 40KB of Markup. Your AI Gets 2KB."
 excerpt: "Confluence storage format is verbose XML that destroys context windows. We convert it to clean text by default, with a format switch for when you need the raw markup back."
 date: "2026-04-06"
 updated: "2026-11-25"
-updatedNote: "November 25, 2026: text mode keeps the body text of a panel or an expand section but drops a status badge entirely, because a badge carries its label in a parameter and has no body; the post said badges were reduced to their text. Read with format storage when a badge value matters. Also November 25, 2026: the Jira section said issue descriptions are trimmed the way Confluence pages are. They are not: `jira_get_issue` returns the description as Jira sends it, and the section now says so. EARLIER, August 12, 2026: corrected the context arithmetic, which was wrong by roughly ten times and contradicted its own next sentence: it capped a 200K-token window at 60KB of text, then said two 40KB reads cost a third of it, which cannot both be true. The cost is now stated in tokens spent, which does not go stale as window sizes change. Also corrected the Jira field list, which named comments where the response carries a comment count, and omitted several fields it does return."
+updatedNote: "November 25, 2026: a mention becomes @Display Name only when the stored link carries the name as its text, and a mention stored as a bare user reference is dropped, where the post said every mention keeps its name; 'the AI' and 'AI assistant' in the body now read 'the agent'; text mode keeps the body text of a panel or an expand section but drops a status badge entirely, because a badge carries its label in a parameter and has no body; the post said badges were reduced to their text. Read with format storage when a badge value matters. Also the Jira section said issue descriptions are trimmed the way Confluence pages are. They are not: `jira_get_issue` returns the description as Jira sends it, and the section now says so. EARLIER, August 12, 2026: corrected the context arithmetic, which was wrong by roughly ten times and contradicted its own next sentence: it capped a 200K-token window at 60KB of text, then said two 40KB reads cost a third of it, which cannot both be true. The cost is now stated in tokens spent, which does not go stale as window sizes change. Also corrected the Jira field list, which named comments where the response carries a comment count, and omitted several fields it does return."
 author: "Manuel Yang"
 category: "Engineering"
 coverImage: "/blog/adf-context-optimization.png"
@@ -12,7 +12,7 @@ tags: ["atlassian", "confluence", "jira", "mcp", "context-window", "performance"
 
 Pull a Confluence page through the REST API. What comes back is XHTML storage format: a verbose XML document with Confluence-specific macros, layout tags, and structural metadata baked in. A 500-word page with a table, a few headings, and an inline image produces roughly 40KB of markup.
 
-Your AI assistant doesn't need any of it. It needs the text.
+Your agent doesn't need any of it. It needs the text.
 
 ## What storage format looks like
 
@@ -34,15 +34,15 @@ We saw this in testing. A workflow that read three Confluence pages and summariz
 
 The `confluence_get_page` tool accepts a `format` parameter with two modes:
 
-**`format: "text"`** (the default) converts the XHTML storage format to clean, readable text. Headings become `## Heading Text`. Tables become markdown tables. Mentions become `@Display Name`. Code blocks keep their content. Images are noted as `[image: filename]` so the AI knows something was there without eating context. Confluence macros with a body (panels, expand sections) are reduced to that body's text. A macro without one is dropped: a status badge carries its label in a parameter, so text mode leaves nothing of it. Read with `format: "storage"` when a badge's value matters.
+**`format: "text"`** (the default) converts the XHTML storage format to clean, readable text. Headings become `## Heading Text`. Tables become markdown tables. A mention becomes `@Display Name` when the stored link carries the name as its text; a mention stored as a bare user reference has no name in the markup, and text mode drops it. Code blocks keep their content. Images are noted as `[image: filename]` so the agent knows something was there without eating context. Confluence macros with a body (panels, expand sections) are reduced to that body's text. A macro without one is dropped: a status badge carries its label in a parameter, so text mode leaves nothing of it. Read with `format: "storage"` when a badge's value matters.
 
 The result: a 40KB storage response becomes 1-2KB of readable text. That's a 95%+ reduction.
 
-**`format: "storage"`** returns the raw XHTML storage format, unchanged. Use this when the AI needs to edit the page with `confluence_edit_page`, because the edit tool requires XHTML storage format for write-back.
+**`format: "storage"`** returns the raw XHTML storage format, unchanged. Use this when the agent needs to edit the page with `confluence_edit_page`, because the edit tool requires XHTML storage format for write-back.
 
-The workflow for reading is simple: call `confluence_get_page` with no format parameter (or `format: "text"`) and get clean content. The workflow for editing: call with `format: "storage"` to get the full markup, have the AI modify it, then write it back with `confluence_edit_page`.
+The workflow for reading is simple: call `confluence_get_page` with no format parameter (or `format: "text"`) and get clean content. The workflow for editing: call with `format: "storage"` to get the full markup, have the agent modify it, then write it back with `confluence_edit_page`.
 
-This gives you the best of both worlds. Reading costs almost nothing. Editing preserves full fidelity because the AI works with the original markup structure, not a lossy round-trip through text conversion.
+This gives you the best of both worlds. Reading costs almost nothing. Editing preserves full fidelity because the agent works with the original markup structure, not a lossy round-trip through text conversion.
 
 ## The editing tradeoff
 
@@ -66,7 +66,7 @@ The bigger win on the Jira side is cutting the issue metadata. A full Jira issue
 
 ## The pattern
 
-This is the same approach we use across every connector. Raw API responses are designed for applications that need pixel-perfect rendering or full write-back capability. An AI assistant needs neither for most tasks.
+This is the same approach we use across every connector. Raw API responses are designed for applications that need pixel-perfect rendering or full write-back capability. An agent needs neither for most tasks.
 
 For Confluence: text mode by default for reading, storage mode on demand for editing. For Google Docs: text mode for reading, index mode for positional edits. The principle is the same: give the LLM the cheapest representation that gets the job done, and offer the full-fidelity version when it's actually needed.
 

@@ -3,7 +3,7 @@ title: "Building a Usage Dashboard Without Logging Arguments or Response Bodies"
 excerpt: "How we show users exactly what their agent is doing (calls, latency, errors) without storing a single argument or response body."
 date: "2026-04-20"
 updated: "2026-11-25"
-updatedNote: "November 25, 2026: corrected which table the dashboard reads. The post said the 30d and 90d views read the daily rollup table; every range reads the raw events table, which holds 90 days, and no dashboard view reads the daily table. The closing promise is also reworded to match what the row holds, since a stored error message can quote your data. Also November 25, 2026: retitled. The title said the dashboard logs no user data. The row holds no arguments and no response bodies, but a stored error message is kept as received and can quote the user's own data, as the post itself says, so the title now says what is true. November 17, 2026: the row now lists every field it holds (the account, client, argument size and cost units, and for the raw gws_run call its service, resource, method and parameter names, never values); a redacted copy of each event goes to our analytics provider; and hosted agent calls count, since plans are billed on this meter. Corrected the error-message claim. The post said stored error messages are redacted, which was true when it was written and is no longer. The redaction protected against sending user content to a third-party analytics provider, and that still happens; it was never a reason to censor the copy stored for the user in a row only they can see, quoting an error they had already received in full. The stored copy is now raw."
+updatedNote: "November 25, 2026: the usage API launched with five endpoints and has had seven since September 11, 2026, when runs and sessions were added; and a range change refetches only the endpoints that take a range, since the summary cards and recent activity do not change with it, where the post said it refetched all five; corrected which table the dashboard reads. The post said the 30d and 90d views read the daily rollup table; every range reads the raw events table, which holds 90 days, and no dashboard view reads the daily table. The closing promise is also reworded to match what the row holds, since a stored error message can quote your data. Also retitled. The title said the dashboard logs no user data. The row holds no arguments and no response bodies, but a stored error message is kept as received and can quote the user's own data, as the post itself says, so the title now says what is true. November 17, 2026: the row now lists every field it holds (the account, client, argument size and cost units, and for the raw gws_run call its service, resource, method and parameter names, never values); a redacted copy of each event goes to our analytics provider; and hosted agent calls count, since plans are billed on this meter. Corrected the error-message claim. The post said stored error messages are redacted, which was true when it was written and is no longer. The redaction protected against sending user content to a third-party analytics provider, and that still happens; it was never a reason to censor the copy stored for the user in a row only they can see, quoting an error they had already received in full. The stored copy is now raw."
 author: "Manuel Yang"
 category: "Engineering"
 coverImage: "/blog/usage-dashboard.png"
@@ -91,7 +91,7 @@ We picked `node-cron` over Postgres's `pg_cron` extension because the gateway al
 
 ## Rate-limiting the dashboard's own APIs
 
-The dashboard has five API endpoints: summary, timeseries, by-tool, by-connector, recent. All of them run Postgres aggregations. All of them are cheap individually, but expensive if someone holds down F5.
+The dashboard launched with five API endpoints: summary, timeseries, by-tool, by-connector, recent. (Two more, runs and sessions, were added on September 11, 2026 for the agent sessions panel, and sit behind the same limiter.) All of them run Postgres aggregations. All of them are cheap individually, but expensive if someone holds down F5.
 
 We wrapped them in an in-memory sliding-window rate limiter: 120 requests per user per minute, returns a `429` with `Retry-After` when you blow through it. The limiter is a `Map<userId, number[]>` where each array holds timestamps of recent requests. Every 5 minutes, a sweep pass evicts empty buckets so the Map doesn't accumulate entries for users who have signed out.
 
@@ -99,7 +99,7 @@ This is deliberately simple. No Redis, no distributed state, no leaky-bucket mat
 
 ## The dashboard itself
 
-The UI is a Next.js server component with a client-side range toggle (24h / 7d / 30d / 90d). When the range changes, it refetches the five endpoints in parallel and updates the cards, chart, breakdown, and table.
+The UI is a Next.js server component with a client-side range toggle (24h / 7d / 30d / 90d). When the range changes, it refetches the endpoints that take a range (timeseries, by-tool, by-connector, and the two session endpoints) in parallel and updates the chart, the breakdown, the per-tool table, and the agent sessions. The summary cards and recent activity do not change with the range. (This paragraph used to say a range change refetched all five endpoints and updated the cards.)
 
 Two choices worth naming.
 

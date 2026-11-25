@@ -3,14 +3,14 @@ title: "AI-Powered Email Workflows with the Gmail Draft Tool"
 excerpt: "Most AI email tools generate and send in one shot. We built a draft workflow instead, because anything that matters deserves a second look before it leaves your outbox."
 date: "2026-04-04"
 updated: "2026-11-25"
-updatedNote: "November 25, 2026: the section on why update matters no longer gives threading as the reason, since a draft gmail_create_draft writes is not in a thread; it now says what gmail_update_draft does (same draft id, a thread kept only when the draft already has one, attachments passed again), and the follow-up pattern says the draft is a new message. November 17, 2026: dropped sharing a draft link with your manager. A Gmail draft link opens only in the mailbox that owns the draft, so nobody else can open it. Dropped a threading claim that a live test disproved. gmail_create_draft takes recipients, subject and body and has no thread parameter; a draft written as a reply lands as its own draft rather than inside the original conversation. The recipients-and-subject half was always true and stays."
+updatedNote: "November 25, 2026: 'the AI' in the body reads 'the agent' where it means the agent; the section on why update matters no longer gives threading as the reason, since a draft gmail_create_draft writes is not in a thread; it now says what gmail_update_draft does (same draft id, a thread kept only when the draft already has one, attachments passed again), and the follow-up pattern says the draft is a new message. November 17, 2026: dropped sharing a draft link with your manager. A Gmail draft link opens only in the mailbox that owns the draft, so nobody else can open it. Dropped a threading claim that a live test disproved. gmail_create_draft takes recipients, subject and body and has no thread parameter; a draft written as a reply lands as its own draft rather than inside the original conversation. The recipients-and-subject half was always true and stays."
 author: "Manuel Yang"
 category: "Product"
 coverImage: "/blog/gmail-draft-workflow.png"
 tags: ["gmail", "google-workspace", "workflows", "mcp"]
 ---
 
-Most AI email integrations work the same way. You describe what you want, the AI writes it, and the email goes out. For quick replies, that's fine. For a message to your biggest client about a contract change? You probably want to read it first.
+Most AI email integrations work the same way. You describe what you want, the agent writes it, and the email goes out. For quick replies, that's fine. For a message to your biggest client about a contract change? You probably want to read it first.
 
 We've been using Claude with Gmail through the Google Workspace MCP for months now. The pattern that actually stuck wasn't "write and send." It was "write, review, revise, then send." That's why we built `gmail_create_draft` and `gmail_update_draft`.
 
@@ -18,7 +18,7 @@ We've been using Claude with Gmail through the Google Workspace MCP for months n
 
 Before drafts, the best you could do was ask Claude to write an email and then copy the output into Gmail yourself. People do this all the time.
 
-It works. Sort of. You lose threading. You have to manually add recipients, subject lines, CC fields. If the email is part of an ongoing conversation, you need to find the right thread and hit reply yourself. The AI did 80% of the work, then you spent five minutes on the last 20%.
+It works. Sort of. You lose threading. You have to manually add recipients, subject lines, CC fields. If the email is part of an ongoing conversation, you need to find the right thread and hit reply yourself. The agent did 80% of the work, then you spent five minutes on the last 20%.
 
 ## How the draft workflow actually works
 

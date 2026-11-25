@@ -174,7 +174,7 @@ Anthropic's help page nor Google's guide describes that as of November 25, 2026.
 
 Add Jira and Confluence through the same endpoint. And the code is MIT-licensed and can be
 self-hosted if you would rather not have a third party in the path at all. It is not one
-command, and there is no packaged self-host guide yet: you supply a Postgres database, your own Google OAuth clients (and Google's verification for the restricted Gmail and Drive scopes), and an encryption key for the stored tokens.
+command, and the README's self-hosting section lists the steps: you supply a Postgres database, your own Google OAuth clients (and Google's verification for the restricted Gmail and Drive scopes), and an encryption key for the stored tokens.
 
 ## Where you should not use us
 

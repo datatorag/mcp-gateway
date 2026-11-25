@@ -2,6 +2,8 @@
 title: "A File on Your Computer, Into Drive, Jira or an Email, Without Passing Through the Chat"
 excerpt: "Two ways to hand DataToRAG a file from your own machine: in the call for small files, or through a single-use upload link for anything up to 25 MB. Both come back with a byte count and a SHA-256, and the file is never written to our disks."
 date: "2026-10-25"
+updated: "2026-11-25"
+updatedNote: "November 25, 2026: the ten-attachment limit on one email is ours, not Gmail's, and the post now says so; the section on other connectors is cut back to what Anthropic's and Atlassian's own pages say on this date, which drops the 25 MB cap, the missing receipt, and the short-lived token that neither page states."
 author: "Manuel Yang"
 category: "Product"
 coverImage: "/blog/inbound-files-cover.png"
@@ -26,7 +28,7 @@ In a terminal, run the line. In a browser, open the link: a page with a drop zon
 
 ![The upload page at phone width after an upload, and the curl receipt](/blog/inbound-files-cover.png)
 
-Several files can ride one email: an email's attachments can mix Drive files, uploaded files and files sent in the call, up to Gmail's ten attachments and 25 MB.
+Several files can ride one email: an email's attachments can mix Drive files, uploaded files and files sent in the call, up to ten attachments and 25 MB together. Both limits are ours.
 
 ## What you get back
 
@@ -42,7 +44,7 @@ The gateway is a corridor, not a shelf. A file sent in the call is decoded in me
 
 ## What the other connectors do
 
-I checked this first-hand before building it. Claude's own Google connectors take the bytes in the call, Gmail capped at 25 MB, with no receipt. Claude's Atlassian connector does the opposite: it hands the agent a curl command with a short-lived token and the bytes go from the agent's shell to Atlassian. Neither serves a claude.ai user with a large file, and neither tells you what was stored. We built both shapes, and added the receipt.
+I looked at how other connectors take a file before building this, in October 2026. What follows is only what their own pages say as of November 25, 2026. Anthropic's help page for Claude's Google connectors says the Drive connector can "upload any file type"; it does not say how the bytes travel or give an upload size, and it does not mention a checksum. Atlassian's page for its own MCP server lists a Jira tool that will "attach a local file" to a work item and a Confluence tool that will "prepare an attachment upload and return a local curl command," so there the bytes go from the agent's shell to Atlassian. Those are the two shapes: in the call, or around it. We built both, and added the receipt.
 
 ## Limits
 

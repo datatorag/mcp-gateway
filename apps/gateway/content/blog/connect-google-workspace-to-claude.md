@@ -3,7 +3,7 @@ title: "Save Gmail Attachments to Drive with Claude"
 excerpt: "A team was running an Apps Script to save 6 daily report emails to Drive. We replaced it with one prompt."
 date: "2026-03-28"
 updated: "2026-11-25"
-updatedNote: "November 25, 2026: added a section near the top with the steps to connect Google Workspace to Claude, as Getting Started gives them. August 12, 2026: two corrections. The base64 arithmetic contradicted itself, calling 6.7MB of text 1.7 million characters when base64 is one byte per character, so the token figure derived from it was wrong too. And gmail_search results are no longer bare message ids: since the July 2026 flattening they carry sender, subject, date and a snippet, so step one now says what you actually get back."
+updatedNote: "November 25, 2026: gmail_save_attachment_to_drive streams the attachment from Gmail to Drive and writes nothing to disk, where the post described decoding in memory and cleaning up a temp file; added a section near the top with the steps to connect Google Workspace to Claude, as Getting Started gives them. August 12, 2026: two corrections. The base64 arithmetic contradicted itself, calling 6.7MB of text 1.7 million characters when base64 is one byte per character, so the token figure derived from it was wrong too. And gmail_search results are no longer bare message ids: since the July 2026 flattening they carry sender, subject, date and a snippet, so step one now says what you actually get back."
 author: "Manuel Yang"
 category: "Product"
 coverImage: "/blog/gmail-attachment-to-drive.png"
@@ -55,7 +55,7 @@ Before this tool existed, the workaround was: read the email, ask Claude to extr
 
 A 5MB CSV encoded in base64 is about 6.7MB of text, and since base64 is plain ASCII that is roughly 6.7 million characters. Base64 packs badly into tokens, so you are well over a million of them. Your context window is gone after one attachment.
 
-`gmail_save_attachment_to_drive` bypasses this entirely. The server fetches the attachment, decodes it in memory, uploads to Drive, and cleans up the temp file. The only thing that flows through the conversation is metadata: file IDs, names, and links.
+`gmail_save_attachment_to_drive` bypasses this entirely. The server streams the attachment from Gmail to Drive, decoding it as it arrives and uploading it in bounded chunks. Nothing is written to disk, so there is no temp file to clean up, which an earlier version of this sentence described. The only thing that flows through the conversation is metadata: file IDs, names, and links.
 
 ## Folder targeting
 

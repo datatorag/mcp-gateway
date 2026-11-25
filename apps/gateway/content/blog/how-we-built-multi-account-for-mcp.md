@@ -2,8 +2,8 @@
 title: "How We Built Multi-Account for MCP"
 excerpt: "The database changes, token routing, and tool schema tricks behind supporting multiple Google accounts in a single MCP server."
 date: "2026-04-05"
-updated: "2026-11-17"
-updatedNote: "November 17, 2026: dropped the 30% figure for lazy tool loading, which moves every time a tool ships, and dated the dashboard screenshot to April 2026; the dashboard home has changed since."
+updated: "2026-11-25"
+updatedNote: "November 25, 2026: the section on default promotion now says what changed on August 24, 2026: the remaining account that granted the most services is promoted, and the oldest only breaks a tie. November 17, 2026: dropped the 30% figure for lazy tool loading, which moves every time a tool ships, and dated the dashboard screenshot to April 2026; the dashboard home has changed since."
 author: "Manuel Yang"
 category: "Engineering"
 coverImage: "/blog/multi-account-architecture.png"
@@ -80,6 +80,8 @@ The first account connected for a given service gets `is_default = true` automat
 When you disconnect your default account, the oldest remaining account for that connector type gets auto-promoted. This runs inside a database transaction: delete the connected account row, delete the orphaned service connection, promote if needed. No window where a user has accounts but no default.
 
 We considered letting users pick the new default interactively, but that would require an extra round-trip in the disconnect flow. Auto-promoting the oldest account is predictable and matches what most people expect.
+
+That was the rule at launch. Since August 24, 2026 the promotion picks the remaining account that granted the most services, and the oldest only breaks a tie, so the default never lands on an account that granted nothing while a usable one is connected.
 
 ## What we shipped
 

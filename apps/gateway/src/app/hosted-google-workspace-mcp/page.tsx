@@ -96,7 +96,7 @@ const ROUTES = [
     setup: "One URL, one Google sign-in",
     covers:
       "Gmail, Drive, Sheets, Docs, Slides, Calendar, Contacts, Tasks, plus Jira, Confluence and Notion on the same endpoint.",
-    gap: "We are a third party in the path. No Google Chat tools. The code is MIT-licensed if you would rather run it yourself, and there is no packaged self-host guide yet.",
+    gap: "We are a third party in the path. No Google Chat tools. The code is MIT-licensed if you would rather run it yourself, and the README's self-hosting section lists the steps.",
   },
 ];
 

@@ -3,7 +3,7 @@ title: "Reading a Spreadsheet Is Not Reading Data"
 excerpt: "An agent can read a rendering of your spreadsheet or it can read the cells. They look identical right up until they disagree, and you won't be watching when they do."
 date: "2026-07-31"
 updated: "2026-11-25"
-updatedNote: "November 25, 2026: sheets_read now takes several ranges, across tabs, in one call, so the cost is no longer one tab per call. What the post says about Claude's built-in Drive connector is now limited to what Anthropic's help page says as of this date, and the earlier note's statement that Claude's Sheets connector reads a range, which that page does not say, is withdrawn. November 17, 2026: Claude has its own Sheets connector, separate from the Drive one. The distinction in this post is between the two kinds of reader, not between two vendors."
+updatedNote: "November 25, 2026: the two column pairs in the paragraph on merged headers are written out, with no change of meaning; sheets_read now takes several ranges, across tabs, in one call, so the cost is no longer one tab per call. What the post says about Claude's built-in Drive connector is now limited to what Anthropic's help page says as of this date, and the earlier note's statement that Claude's Sheets connector reads a range, which that page does not say, is withdrawn. November 17, 2026: Claude has its own Sheets connector, separate from the Drive one. The distinction in this post is between the two kinds of reader, not between two vendors."
 author: "Manuel Yang"
 category: "Engineering"
 coverImage: "/blog/spreadsheet-rendering.png"
@@ -85,8 +85,8 @@ groups) you are identifying them by content and hoping. Reading one tab is recov
 Reading one tab *without knowing it was one tab* is not.
 
 **Merged headers turn structure into inference.** Given `[merged] Web` twice, two blanks, and
-`[merged] App` twice, you can work out that the first block is columns A–B and the second is
-E–F. You will probably be right. You cannot know that you are right, and every row's pairing
+`[merged] App` twice, you can work out that the first block is columns A and B and the second is
+E and F. You will probably be right. You cannot know that you are right, and every row's pairing
 depends on that alignment holding. Add a third block or change the spacer width and every
 pair shifts silently.
 
