@@ -18,14 +18,21 @@
 #      packages/config and a short exempt list (scripts/env-reads-check.mjs).
 #   4. Runs typecheck and tests for the surfaces that changed, and nothing for
 #      a change that touches no surface.
+#   5. For the gateway, fails when a test did not run. The database-backed
+#      suites start their own Postgres in Docker; the gate sets
+#      GATE_REQUIRE_DB=1, so with no Docker daemon they fail and say so
+#      instead of skipping. To get a database: start Docker, run the gate
+#      again. Any other skipped test fails scripts/skipped-tests-check.mjs
+#      unless its suite is named there, with the reason, in EXPECTED_SKIPS.
 #
 # What it does NOT do, so a pass is not read as more than it is:
 #   - the security review and the leak scan. Those run on the whole range,
 #     never filtered by path, and they are separate steps.
 #   - the production build.
 #   - the pattern check. It is advisory by decision and has its own hook.
-#   - any suite gated on a live registry or a running plugin. Those report as
-#     skipped, and skipped is not passed.
+#   - the suites named in EXPECTED_SKIPS (scripts/skipped-tests-check.mjs):
+#     those gated on a live registry, a running server or a running plugin.
+#     They report as skipped, and skipped is not passed.
 #
 # A path the table does not know selects EVERYTHING. A new top-level directory
 # must not be able to slip through as "not a surface".
@@ -160,13 +167,31 @@ self_test() {
   expect "a plugin's documentation is still the plugin" "gateway gws-mcp" "plugins/gws-mcp/README.md"
   expect "an unknown root file selects everything" "$all" "Makefile"
   expect "a path that only looks like docs selects everything" "$all" "docs-private/x.md"
+  # The gateway run must ask for the database suites and must check what
+  # skipped. Either one dropped from run_gateway and a skip passes again.
+  local body
+  body=$(declare -f run_gateway)
+  case "$body" in
+    *"--reporter=json"*"GATE_REQUIRE_DB=1 "*"vitest run \$reporters"*"skipped-tests-check.mjs"*) ;;
+    *)
+      echo "gate self-test FAILED: run_gateway no longer sets GATE_REQUIRE_DB=1 on the test run and checks its report for skipped tests"
+      failed=1
+      ;;
+  esac
   if [ "$failed" = 1 ]; then
     exit 2
   fi
-  echo "gate self-test ok: the path table classifies every case, unknown paths included."
+  echo "gate self-test ok: the path table classifies every case, unknown paths included, and the gateway run cannot pass on skipped tests."
 }
 
 run_gateway() {
+  # Asked first, so a machine with Docker down hears it in a second and not
+  # after the whole run. The suites make the same demand themselves (see
+  # GATE_REQUIRE_DB below); this is only the short way to the same answer.
+  if ! docker info >/dev/null 2>&1; then
+    echo "gate: FAILED. No Docker daemon answered \`docker info\`. The gateway's database-backed suites start their own Postgres in Docker, and without it they would not run. Start Docker and run the gate again."
+    exit 1
+  fi
   echo "##### gateway: build the packages it imports"
   pnpm exec turbo run build --filter='@datatorag-mcp/gateway^...'
   echo "##### gateway: typecheck"
@@ -175,9 +200,29 @@ run_gateway() {
   # The config schema requires DATABASE_URL and exits the process without it,
   # which takes down suites that never open a connection. Where none is set
   # (CI, a fresh checkout) give it a placeholder that is a valid URL and names
-  # a host that does not exist. The suites that need a real
-  # database gate on their own, explicit variables and still report skipped.
-  (cd apps/gateway && DATABASE_URL="${DATABASE_URL:-$PLACEHOLDER_DATABASE_URL}" pnpm exec vitest run)
+  # a host that does not exist. No suite connects to it: the database-backed
+  # suites start their own Postgres in Docker, and GATE_REQUIRE_DB=1 makes
+  # them fail, not skip, when no Docker daemon answers.
+  #
+  # The run also writes a machine-readable report, and the check after it
+  # fails on any test that did not run and is not named in its list. Naming a
+  # reporter turns off the one vitest adds by itself on GitHub, so that one is
+  # named too.
+  local report reporters="--reporter=default --reporter=json"
+  [ "${GITHUB_ACTIONS:-}" = "true" ] && reporters="$reporters --reporter=github-actions"
+  report="$(mktemp "${TMPDIR:-/tmp}/gate-vitest.XXXXXX")"
+  # shellcheck disable=SC2086 # the reporter flags are separate words on purpose
+  # The report is removed whether the run passed or not, and the first
+  # failure is what the gate exits with.
+  local status=0
+  (cd apps/gateway && GATE_REQUIRE_DB=1 DATABASE_URL="${DATABASE_URL:-$PLACEHOLDER_DATABASE_URL}" \
+    pnpm exec vitest run $reporters --outputFile.json="$report") || status=$?
+  if [ "$status" -eq 0 ]; then
+    echo "##### gateway: every test ran, or is a named skip"
+    node scripts/skipped-tests-check.mjs "$report" || status=$?
+  fi
+  rm -f "$report"
+  [ "$status" -eq 0 ] || exit "$status"
 }
 
 # A plugin's own build and tests. Neither downloads anything.
@@ -199,6 +244,7 @@ run_scripts() {
   node --test scripts/registry-diff.test.mjs
   node --test scripts/doc-paths-check.test.mjs
   node --test scripts/env-reads-check.test.mjs
+  node --test scripts/skipped-tests-check.test.mjs
   node --test scripts/registry-file-check.test.mjs
   node --test scripts/registry-apply.test.mjs
   node --test scripts/hooks/review-gate.test.mjs
@@ -266,7 +312,7 @@ main() {
       *) is_plugin "$s" && run_plugin "$s" ;;
     esac
   done
-  echo "gate: ok for: $(echo $surfaces). Not covered: the security review, the leak scan, the production build, and any suite that reported skipped."
+  echo "gate: ok for: $(echo $surfaces). Not covered: the security review, the leak scan, the production build, and the suites named in EXPECTED_SKIPS (scripts/skipped-tests-check.mjs)."
 }
 
 main "$@"
