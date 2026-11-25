@@ -24,6 +24,17 @@ export interface BlogPost {
   category?: string;
   ogImage?: string;
   coverImage?: string;
+  /** A looping cover animation (SCRUM-509): a site path with no extension,
+   * with an .mp4 and a .webm at it. `coverImage` is its still. See
+   * `cover-video.ts`. */
+  coverVideo?: string;
+  /** An animated SVG cover (SCRUM-509): a /blog/ path ending in .svg.
+   * `coverImage` is its still; a post sets this or `coverVideo`, not both.
+   * See `cover-animation.ts`. */
+  coverAnimation?: string;
+  /** What the cover shows, for a screen reader, when the title does not say
+   * it. Used as the cover image's text alternative. */
+  coverAlt?: string;
   tags: string[];
   /** Per-post questions and answers, rendered on the page and emitted as
    * FAQPage JSON-LD from the same strings. Empty for most posts. */
@@ -87,6 +98,9 @@ function parsePost({ slug, data, content }: ParsedFile): BlogPost {
     category: data.category as string | undefined,
     ogImage: data.ogImage as string | undefined,
     coverImage: data.coverImage as string | undefined,
+    coverVideo: data.coverVideo as string | undefined,
+    coverAnimation: data.coverAnimation as string | undefined,
+    coverAlt: data.coverAlt as string | undefined,
     tags: field.stringArray(data.tags),
     faqs: field.faqList(data.faqs),
     content,
