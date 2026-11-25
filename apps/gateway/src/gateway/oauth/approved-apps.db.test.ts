@@ -8,7 +8,7 @@ import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { createServer, type Server } from "node:http";
 import express from "express";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
-import { and, eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import type { Database } from "@datatorag-mcp/db";
 import { oauthAccessTokens, oauthAuthorizationCodes, oauthClients, oauthConsents, oauthRefreshTokens } from "@datatorag-mcp/db";
 import { hashToken } from "@datatorag-mcp/auth";
@@ -378,6 +378,95 @@ describe.skipIf(!isDockerAvailable())("approved apps (real db)", () => {
 
       expect(result.removed).toBe(true);
       expect(result.sessionsClosed).toBeNull();
+    });
+
+    /** Resolves once some backend of this database is waiting on a row lock. */
+    async function someoneWaitsOnALock(): Promise<void> {
+      const deadline = Date.now() + 10_000;
+      for (;;) {
+        const rows = (await db.execute(
+          sql`select count(*)::int as n from pg_stat_activity
+              where datname = current_database() and wait_event_type = 'Lock'`
+        )) as unknown as { n: number }[];
+        if (rows[0]?.n > 0) return;
+        if (Date.now() > deadline) throw new Error("nothing ever waited on a lock");
+        await new Promise((r) => setTimeout(r, 25));
+      }
+    }
+
+    it("a refresh committing while Remove runs leaves no working token behind", async () => {
+      const userId = await insertTestUser(db);
+      const clientId = await client();
+      const familyId = randomUUID();
+      const presented = randomBytes(16).toString("base64url");
+      const [held] = await db
+        .insert(oauthRefreshTokens)
+        .values({
+          tokenHash: hashToken(presented),
+          clientId,
+          userId,
+          expiresAt: new Date(Date.now() + HOUR),
+          familyId,
+        })
+        .returning({ id: oauthRefreshTokens.id });
+
+      // A refresh mid-flight, doing what the token endpoint's refresh does:
+      // lock the presented token, write the new pair, retire the old one.
+      // It commits only once Remove is waiting behind its lock.
+      const newAccess = randomBytes(16).toString("base64url");
+      const newRefresh = randomBytes(16).toString("base64url");
+      let commitRefresh!: () => void;
+      const gate = new Promise<void>((r) => (commitRefresh = r));
+      let locked!: () => void;
+      const lockTaken = new Promise<void>((r) => (locked = r));
+      const refreshing = db.transaction(async (tx) => {
+        await tx.select().from(oauthRefreshTokens).where(eq(oauthRefreshTokens.id, held.id)).for("update");
+        locked();
+        await tx.insert(oauthAccessTokens).values({
+          token: newAccess,
+          tokenHash: hashToken(newAccess),
+          clientId,
+          userId,
+          expiresAt: new Date(Date.now() + HOUR),
+        });
+        const [next] = await tx
+          .insert(oauthRefreshTokens)
+          .values({
+            tokenHash: hashToken(newRefresh),
+            clientId,
+            userId,
+            expiresAt: new Date(Date.now() + HOUR),
+            familyId,
+          })
+          .returning({ id: oauthRefreshTokens.id });
+        await tx
+          .update(oauthRefreshTokens)
+          .set({ revokedAt: new Date(), replacedByTokenId: next.id })
+          .where(eq(oauthRefreshTokens.id, held.id));
+        await gate;
+      });
+      await lockTaken;
+
+      const removing = endGrantForClient(db, userId, clientId);
+      await someoneWaitsOnALock();
+      commitRefresh();
+      await refreshing;
+      await removing;
+
+      const [newRow] = await db
+        .select({ revokedAt: oauthRefreshTokens.revokedAt })
+        .from(oauthRefreshTokens)
+        .where(eq(oauthRefreshTokens.tokenHash, hashToken(newRefresh)));
+      expect(newRow.revokedAt).not.toBeNull();
+      expect((await resolveBearer(db, newAccess)).ok).toBe(false);
+
+      // And the token endpoint itself refuses the new refresh token.
+      const res = await fetch(`${base}/oauth/token`, {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: new URLSearchParams({ grant_type: "refresh_token", refresh_token: newRefresh, client_id: clientId }),
+      });
+      expect(res.status).toBe(400);
     });
   });
 

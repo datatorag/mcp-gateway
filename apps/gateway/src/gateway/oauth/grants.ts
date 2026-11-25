@@ -68,7 +68,9 @@ export type EndedGrant = {
 /**
  * End one user's grant to one client: the Connections page's Remove.
  *
- * In one transaction: every refresh token of (user, client) that is not
+ * In one transaction, after locking the client's live refresh tokens so a
+ * refresh in flight finishes first and its new token is revoked too: every
+ * refresh token of (user, client) that is not
  * already revoked, in every family (a client that signed in twice holds two),
  * every access token of (user, client) that is not already revoked, every
  * authorization code of (user, client) that is unused and unexpired, and the
@@ -89,10 +91,42 @@ export type EndedGrant = {
  * Refuses `INTERNAL_CLIENT_IDS` before anything is read: the dashboard's own
  * session must never be ended from here.
  */
+/** How many times Remove takes the grant's refresh token locks before it
+ * revokes regardless. One pass is enough unless a refresh lands meanwhile. */
+const LOCK_ATTEMPTS = 10;
+
 export async function endGrantForClient(db: Database, userId: string, clientId: string): Promise<EndedGrant> {
   if (INTERNAL_CLIENT_IDS.has(clientId)) throw new InternalClientError();
 
   const counts = await db.transaction(async (tx) => {
+    // Lock first, until every live refresh token of the grant is ours. A
+    // refresh in flight holds the lock on the token it was shown and inserts
+    // the next one; under read committed, a statement that waits on that
+    // lock still works from the snapshot it started with and never sees the
+    // new row. So the lock is taken again until a fresh read finds no live
+    // token that is not locked here. From then on no refresh can issue a
+    // token for this grant (each one must lock a live token first), and the
+    // revoke below sees everything. A refresh that arrives meanwhile waits for
+    // the revoke and finds its token revoked. Ordered by id so two removals of
+    // the same grant cannot deadlock. The bound only stops a client that
+    // refreshes without pause from holding Remove open.
+    const liveRefresh = and(
+      eq(oauthRefreshTokens.userId, userId),
+      eq(oauthRefreshTokens.clientId, clientId),
+      isNull(oauthRefreshTokens.revokedAt)
+    );
+    const held = new Set<string>();
+    for (let attempt = 0; attempt < LOCK_ATTEMPTS; attempt++) {
+      const locked = await tx
+        .select({ id: oauthRefreshTokens.id })
+        .from(oauthRefreshTokens)
+        .where(liveRefresh)
+        .orderBy(oauthRefreshTokens.id)
+        .for("update");
+      for (const row of locked) held.add(row.id);
+      const live = await tx.select({ id: oauthRefreshTokens.id }).from(oauthRefreshTokens).where(liveRefresh);
+      if (live.every((row) => held.has(row.id))) break;
+    }
     const now = new Date();
     const refresh = await tx
       .update(oauthRefreshTokens)
