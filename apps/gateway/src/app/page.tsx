@@ -56,11 +56,11 @@ export const dynamic = "force-dynamic";
    no longer sets the product apart on this page (the comparison below shows
    the built-in connectors editing Docs, Sheets, and Slides), so the title now
    says what the hosted landing page's h1 says: several accounts, any client.
-   Both statements are about DataToRAG alone. 60 characters, at the ~60 search
-   results truncate at, which left no room for the brand: the Open Graph site
-   name carries it. */
-const HOME_TITLE =
-  "Hosted Google Workspace MCP for several accounts, any client";
+   The brand comes first, by the owner's choice, and the title keeps the
+   several-accounts idea; "any client" gave up its place to the brand. It is a
+   statement about DataToRAG alone. 52 characters, under the ~60 search results
+   truncate at. */
+const HOME_TITLE = "DataToRAG: Google Workspace MCP for several accounts";
 /* Makes no quantity claim at all, which is why it cannot go stale. This string
    is static metadata, so unlike the body below it cannot read the live number,
    and every exact count we hard-coded drifted as the registry moved.
