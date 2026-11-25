@@ -2,8 +2,8 @@
 title: "Zapier MCP Connects 9,000 Apps. We Went Deep on Google Workspace Instead."
 excerpt: "Zapier MCP is the widest way to hand Claude tools. Its Google Workspace actions stay shallow, though. Here's the tradeoff, and where a focused gateway wins."
 date: "2026-06-29"
-updated: "2026-11-17"
-updatedNote: "November 17, 2026: the cost section said DataToRAG has no per-call meter, and its chart said the same. Hosted DataToRAG counts tool calls against your plan, so the chart is replaced with the numbers. The comparison table now includes Notion, connected since October 2026, and says the self-hosted route is open source without a packaged guide. August 27, 2026: narrowed an overbroad privacy claim. The pass-through statement said we do not store your data, unqualified. The gateway keeps nothing, but the hosted agent on our own site stores its conversation threads. The privacy policy is now linked from the paragraph."
+updated: "2026-11-25"
+updatedNote: "November 25, 2026: the post said Google Slides, Contacts, and Tasks were not on Zapier's MCP. Zapier's own app pages list actions for all three today, so the coverage rows, the paragraph above them, and the worked example are corrected and dated. Where the post said the gateway keeps nothing, it now says what is stored: each connection's sign-in tokens, encrypted. November 17, 2026: the cost section said DataToRAG has no per-call meter, and its chart said the same. Hosted DataToRAG counts tool calls against your plan, so the chart is replaced with the numbers. The comparison table now includes Notion, connected since October 2026, and says the self-hosted route is open source without a packaged guide. August 27, 2026: narrowed an overbroad privacy claim. The pass-through statement said we do not store your data, unqualified. The gateway keeps nothing, but the hosted agent on our own site stores its conversation threads. The privacy policy is now linked from the paragraph."
 author: "Manuel Yang"
 category: "Comparison"
 coverImage: "/blog/zapier-mcp-alternative.png"
@@ -24,7 +24,7 @@ Zapier MCP exposes the same actions Zapier built for Zaps, and Zaps are automati
 
 Google's own APIs expose a `batchUpdate` operation for Docs and Slides. It's the call that lets you make structural changes: insert a heading, move a block, restyle a range, build a table, lay out a slide. Zapier doesn't surface that. You get the coarse, prepackaged actions it chose to expose, and nothing underneath them. One comparison I read put it well: Zapier exposes only what it decides to expose, and you can't reach past it.
 
-There are coverage gaps too. Gmail, Docs, Sheets, Drive, and Calendar have genuine write actions on the MCP surface. Slides, Contacts, and Tasks don't, at least not as of mid-2026. So any workflow that ends in a deck, touches your contacts, or files follow-up tasks runs out of road partway through.
+Coverage is wider than this post used to say. Gmail, Docs, Sheets, Drive, and Calendar have genuine write actions on the MCP surface, and as of November 25, 2026, Zapier's own app pages list Google Contacts and Google Tasks actions there too (create, update, and find), plus three for Google Slides: create a presentation from a template, refresh linked charts, and find a presentation. None of the Slides actions edits a slide's content. So a workflow that ends in a deck laid out from your notes still runs out of road; one that touches your contacts or files follow-up tasks does not.
 
 ## Feature comparison
 
@@ -34,9 +34,9 @@ There are coverage gaps too. Gmail, Docs, Sheets, Drive, and Calendar have genui
 | Gmail: send / reply / forward | Yes | Yes |
 | Docs: structural editing (batch update) | No (append, find-and-replace only) | Yes |
 | Sheets: read / update / append | Yes (row-level) | Yes (cell and range) |
-| Slides: create / edit decks | Not on MCP surface (mid-2026) | Yes |
-| Contacts: search / create / update | Not on MCP surface (mid-2026) | Yes |
-| Tasks: create / complete / update | Not on MCP surface (mid-2026) | Yes |
+| Slides: create / edit decks | Create from a template only; no slide editing (as of November 25, 2026) | Yes |
+| Contacts: search / create / update | Yes: create, update, find (as of November 25, 2026) | Yes |
+| Tasks: create / complete / update | Yes: create, update, find (as of November 25, 2026) | Yes |
 | Multi-account in one prompt | Not documented | Yes |
 | Atlassian (Jira + Confluence) | Via separate Zaps | Same endpoint |
 | Token-optimized responses | No | Yes |
@@ -76,7 +76,7 @@ Here's the workflow that made the difference concrete for me.
 
 Take a 2,000-word meeting-notes doc. Restructure it into sections with proper headings. Pull the decisions into a summary at the top. Build a five-slide deck from that summary. Then file a follow-up task for each owner mentioned in the notes.
 
-On Zapier MCP, Claude reads the doc (fine) and appends a summary to the bottom (fine). Then it stops. It can't restructure the document, it can't build the deck because Slides isn't on the MCP surface, and it can't file the tasks because Tasks isn't either. You get a half-finished job and a checklist of things to do by hand.
+On Zapier MCP, Claude reads the doc (fine) and appends a summary to the bottom (fine). Then it runs short. It can't restructure the document, and the deck it can make is a copy of a template, not five slides laid out from the summary, because none of Zapier's Slides actions edits a slide (as of November 25, 2026). The tasks it can file. You get part of the job and finish the rest by hand.
 
 On DataToRAG, the same prompt runs end to end. `docs_batch_update` restructures the document. `slides_create` builds the deck. `tasks_create` files one task per owner. One conversation, no clicking through three apps afterward.
 
@@ -88,7 +88,7 @@ The tell is what happens at the handoff. With Zapier MCP, Claude does the thinki
 
 There's a quieter difference worth naming. Every successful Zapier MCP call spends tasks from your plan's shared budget. For a person clicking through Zaps now and then, that's a non-issue. For an agent that fires a dozen tool calls to finish one request, it adds up faster than you'd guess, and it draws down the same budget your other automations use.
 
-DataToRAG passes requests straight through to Google on your behalf, and the gateway keeps nothing on the way. One caveat, because the unqualified version of this line was too broad: if you use the **hosted agent** on our own site, that conversation is stored so the thread persists, and whatever the agent quoted into it is stored with it. Connect your own client straight to the gateway and that does not apply. The [privacy policy](/privacy) states what is kept and for how long. The economics are different because the architecture is different.
+DataToRAG passes requests straight through to Google on your behalf, and the gateway keeps none of your Workspace content on the way. It does store each connection's sign-in tokens, encrypted. One more caveat, because the unqualified version of this line was too broad: if you use the **hosted agent** on our own site, that conversation is stored so the thread persists, and whatever the agent quoted into it is stored with it. Connect your own client straight to the gateway and that does not apply. The [privacy policy](/privacy) states what is kept and for how long. The economics are different because the architecture is different.
 
 Hosted DataToRAG does count tool calls against your plan. As of November 2026 that is 250 calls a month on Free and 10,000 on Pro at $20 a month, counted per call and not shared with any other automations. The [pricing page](/pricing) has the current numbers.
 
