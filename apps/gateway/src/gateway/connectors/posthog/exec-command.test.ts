@@ -50,7 +50,17 @@ describe("whether an exec call can change something in PostHog", () => {
     for (const command of ["help", "tools", "search flags", "info project-get", "schema query-trends series"]) {
       expect(execMayChangeData({ command }), command).toBe(false);
     }
-    for (const command of ["call project-get {}", "call --confirm dashboard-delete {}", "drop everything", "", undefined, 3]) {
+    for (const command of [
+      "call project-get {}",
+      "call --confirm dashboard-delete {}",
+      "drop everything",
+      // A harmless first line does not vouch for a second.
+      "info project-get\ncall --confirm dashboard-delete {}",
+      "info project-get\r\ncall dashboard-delete {}",
+      "",
+      undefined,
+      3,
+    ]) {
       expect(execMayChangeData({ command }), String(command)).toBe(true);
     }
   });

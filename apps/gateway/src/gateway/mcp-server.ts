@@ -32,8 +32,9 @@ import { mcpServers, tools } from "@datatorag-mcp/db";
 import { argumentRefusalText, validateArguments } from "./argument-validation";
 import type { ConnectionPool } from "./pool";
 import { NAMESPACE_SEPARATOR } from "./plugin-manager";
-import { callUpstreamTool } from "./upstream-call";
+import { callUpstreamTool, upstreamErrorNote } from "./upstream-call";
 import {
+  hasUpstreamCallRule,
   listUpstreamTools,
   supersededPlugin,
   upstreamListingKey,
@@ -1540,15 +1541,17 @@ export function createMcpServer(
 
     // SCRUM-511: a vendor tool is callable only while the vendor lists it
     // to this account. The listing is the cached one the tool list was
-    // served from; when the vendor cannot be reached the call goes on and
-    // the forwarder says so.
+    // served from. When the vendor cannot be reached there is no listing to
+    // check against: the call goes on, and the forwarder says so, only for a
+    // tool we have a rule for. Any other name is the caller's own text, and
+    // is neither sent nor recorded.
     if (vendor && userToken) {
       const listed = await listUpstreamTools({
         key: upstreamListingKey(userId, vendor.id, accountEmail ?? null),
         url: serverUrl,
         token: userToken,
       });
-      if (listed && !listed.some((t) => t.name === toolName)) {
+      if (listed ? !listed.some((t) => t.name === toolName) : !hasUpstreamCallRule(name)) {
         const text = `${vendor.displayName} does not offer a tool named ${JSON.stringify(echoName(toolName))}.`;
         // Not recorded: the name is the caller's own text, not a tool's.
         return { content: [{ type: "text" as const, text }], isError: true };
@@ -1616,12 +1619,19 @@ export function createMcpServer(
       const responseText = JSON.stringify(result);
       const isError = !!(result as { isError?: boolean }).isError;
       const content = (result as { content?: Array<{ type: string; text?: string }> }).content;
-      const errorMessage = isError
-        ? content
-            ?.filter((c) => c.type === "text")
-            .map((c) => c.text)
-            .join(" ") ?? null
-        : null;
+      // What the usage row keeps of a failure. A plugin's error text is
+      // ours. A vendor's is not: it can repeat the call's own arguments, so
+      // for a vendor call the row keeps a fixed note of what kind of failure
+      // it was and none of the vendor's words (SCRUM-511). The caller still
+      // gets the vendor's answer whole.
+      const errorMessage = !isError
+        ? null
+        : vendor
+          ? upstreamErrorNote(vendor.displayName, result)
+          : content
+              ?.filter((c) => c.type === "text")
+              .map((c) => c.text)
+              .join(" ") ?? null;
 
       // SCRUM-136: the at-failure net behind the pre-call check. A Google
       // insufficient-scope 403 that slipped through (unmapped tool, stale

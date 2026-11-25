@@ -51,8 +51,10 @@ export function execUsageDetail(args: Record<string, unknown>): string {
 
 /** Whether a call to `exec` can change something in PostHog. Only `call`
  * runs a PostHog tool; a command this does not recognise is treated as one
- * that can. */
+ * that can, and so is a command of more than one line: this reads the first
+ * line only, and does not rely on PostHog refusing the rest. */
 export function execMayChangeData(args: Record<string, unknown>): boolean {
+  if (typeof args.command === "string" && /[\r\n]/.test(args.command.trim())) return true;
   const { verb } = parseExecCommand(args.command);
   return !(READ_VERBS as readonly string[]).includes(verb);
 }

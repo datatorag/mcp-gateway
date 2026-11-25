@@ -247,12 +247,31 @@ describe("a call to PostHog's tool", () => {
     expect(everything).not.toContain("ran call");
   });
 
-  it("passes on an error PostHog reports in PostHog's words, as the request's own", async () => {
+  it("passes on an error PostHog reports in PostHog's words, and keeps none of those words in the usage row", async () => {
     const result = await call("call broken-insight {}");
     expect(result.isError).toBe(true);
     expect(text(result)).toContain("no such insight");
     const [, props] = trackToolCall.mock.calls[0];
     expect(props.toolName).toBe("posthog__exec:call:broken-insight");
+    expect(props.errorMessage).toBe("PostHog reported an error for this call.");
+    expect(JSON.stringify(props)).not.toContain("no such insight");
+  });
+
+  it("when PostHog cannot be reached: a tool we know goes on to a fixed failure, and any other name is neither sent nor recorded", async () => {
+    fake.url = "http://127.0.0.1:9/mcp";
+    const known = await call("info project-get");
+    expect(known.isError).toBe(true);
+    const [, props] = trackToolCall.mock.calls[0];
+    expect(props.toolName).toBe("posthog__exec:info:project-get");
+    expect(props.errorMessage).toBe("PostHog's MCP server: unreachable.");
+    expect(classifyOutcome(props.outcome).meter).toBe(false);
+
+    trackToolCall.mockClear();
+    logged.length = 0;
+    const invented = await (await client()).callTool({ name: "posthog__a-private-name", arguments: {} });
+    expect(invented.isError).toBe(true);
+    expect(trackToolCall).not.toHaveBeenCalled();
+    expect(logged.join("\n")).not.toContain("a-private-name");
   });
 
   it("refuses a tool PostHog does not list to this account, before any call", async () => {

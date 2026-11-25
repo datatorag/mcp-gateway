@@ -1,7 +1,7 @@
 import { StreamableHTTPError } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 import { ErrorCode, McpError, type CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import { callMcpToolOnce } from "./user-tools";
-import { PLUGIN_ERROR_META_KEY, type PluginFailure } from "./usage/classify";
+import { PLUGIN_ERROR_META_KEY, pluginFailureOf, type PluginFailure } from "./usage/classify";
 
 /**
  * One call to a vendor's own MCP server (SCRUM-511; first written for the
@@ -67,6 +67,18 @@ function upstreamFailure(err: unknown, serviceName: string, timedOut: boolean): 
     return failed(`${serviceName}'s MCP server refused the call: ${err.message}`, { kind: "refused" });
   }
   return failed(`${serviceName}'s MCP server did not answer. Try again in a moment.`, { kind: "unreachable" });
+}
+
+/**
+ * What a usage row keeps of a failed vendor call: the kind of failure, in
+ * our words, and nothing the vendor said. A vendor's error text can repeat
+ * the call's arguments (a command, a query), and a usage row is behavior,
+ * not content.
+ */
+export function upstreamErrorNote(serviceName: string, result: unknown): string {
+  const failure = pluginFailureOf(result);
+  if (!failure) return `${serviceName} reported an error for this call.`;
+  return failure.kind === "http" ? `${serviceName}'s MCP server: HTTP ${failure.status}.` : `${serviceName}'s MCP server: ${failure.kind}.`;
 }
 
 /** Whether a result is the SDK's own answer to a call for a tool the server
