@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { cn } from "@/lib/utils";
+import { coverMotionWelcome } from "@/lib/cover-motion";
 import type { CoverVideoSources } from "@/lib/cover-video";
 
 /**
@@ -32,8 +33,7 @@ export function CoverVideo({ sources }: { sources: CoverVideoSources }) {
   useEffect(() => {
     const video = ref.current;
     if (!video || failed) return;
-    if (window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) return;
-    if ((navigator as Navigator & { connection?: { saveData?: boolean } }).connection?.saveData) return;
+    if (!coverMotionWelcome()) return;
     if (typeof IntersectionObserver === "undefined") return;
 
     const observer = new IntersectionObserver(

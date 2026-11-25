@@ -52,6 +52,7 @@ Slug = filename without `.md`. Frontmatter fields, with fallback if omitted:
 | `ogImage` | string, optional | `undefined` |
 | `coverImage` | string, optional | `undefined` |
 | `coverVideo` | string, optional: a `/blog/` path with NO extension; an `.mp4` (H.264) and a `.webm` (VP9) sit at it. A looping animation laid over the cover on the post page only (`components/post-cover.tsx`); `coverImage` is required with it and is its still, its fallback, and what cards, the index, and social images keep using. `blog-cover-video.test.ts` fails on a missing file (SCRUM-509) | `undefined` |
+| `coverAnimation` | string, optional: a `/blog/` path ending in `.svg`, one self-contained animated SVG (CSS keyframes inside, no script, nothing fetched). Shown over the cover on the post page through a plain `<img>`, never inlined (`components/cover-animation.tsx`). `coverImage` required with it; a post sets this OR `coverVideo`, never both. `blog-cover-animation.test.ts` fails on a missing file, 300 KB or more, a `<script`, an `on*=` attribute, a `<foreignObject`, an `@import`, or an `href`/`url(` that is not `#...` or `data:` (SCRUM-509) | `undefined` |
 | `coverAlt` | string, optional: the cover's text alternative when the title does not describe it | the title |
 | `tags` | string array | `[]` (any non-array value is discarded, not coerced) |
 | `faqs` | list of `{q, a}` | `[]` (see **Per-page FAQs** below) |

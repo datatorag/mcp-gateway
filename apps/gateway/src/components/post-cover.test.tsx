@@ -138,3 +138,71 @@ describe("a post's cover", () => {
     expect(video()!.getAttribute("tabindex")).toBe("-1");
   });
 });
+
+describe("a post's animated SVG cover", () => {
+  const ANIMATED = { title: "A post", coverImage: "/blog/a.png", coverAnimation: "/blog/a-cover.svg" };
+  const animation = () => container.querySelector<HTMLImageElement>("[data-cover-animation]");
+  const still = () => container.querySelector<HTMLImageElement>("img:not([data-cover-animation])")!;
+
+  it("is a plain image of the file, over the still, never the file's markup in the page", () => {
+    render(ANIMATED);
+    const a = animation()!;
+    expect(a.tagName).toBe("IMG");
+    expect(a.getAttribute("src")).toBe("/blog/a-cover.svg");
+    expect(a.className).toContain("absolute");
+    expect(container.querySelector("svg, object, embed, iframe")).toBeNull();
+    // The still is under it and still sizes the box.
+    expect(still().getAttribute("height")).toBe("630");
+    expect(video()).toBeNull();
+  });
+
+  it("has no element in the served HTML that loads the file, so nothing is requested before the page has painted", async () => {
+    const { renderToStaticMarkup } = await import("react-dom/server");
+    const html = renderToStaticMarkup(<PostCover post={ANIMATED} />);
+    expect(html).not.toContain("a-cover.svg");
+    expect(html).toContain("a.png");
+  });
+
+  it("is never requested for a visitor who asked for reduced motion, or for less data", () => {
+    reducedMotion = true;
+    render(ANIMATED);
+    expect(animation()).toBeNull();
+    expect(container.innerHTML).not.toContain("a-cover.svg");
+    act(() => root.unmount());
+    root = createRoot(container);
+    reducedMotion = false;
+    saveData = true;
+    render(ANIMATED);
+    expect(animation()).toBeNull();
+    expect(still()).not.toBeNull();
+  });
+
+  it("stays invisible until it has loaded, and leaves the still when it fails", () => {
+    render(ANIMATED);
+    expect(animation()!.className).toContain("opacity-0");
+    act(() => animation()!.dispatchEvent(new Event("load")));
+    expect(animation()!.className).toContain("opacity-100");
+    act(() => animation()!.dispatchEvent(new Event("error")));
+    expect(animation()).toBeNull();
+    expect(still()).not.toBeNull();
+  });
+
+  it("is described once, on the still, and is itself hidden from screen readers", () => {
+    render({ ...ANIMATED, coverAlt: "Three inboxes merging into one list" });
+    expect(still().getAttribute("alt")).toBe("Three inboxes merging into one list");
+    expect(animation()!.getAttribute("alt")).toBe("");
+    expect(animation()!.getAttribute("aria-hidden")).toBe("true");
+  });
+
+  it("shows the animation, not the video, if a post names both", () => {
+    render({ ...ANIMATED, coverVideo: "/blog/a-cover" });
+    expect(animation()).not.toBeNull();
+    expect(video()).toBeNull();
+  });
+
+  it("ignores a value that is not a /blog/ .svg path", () => {
+    render({ ...ANIMATED, coverAnimation: "https://x.test/a.svg" });
+    expect(animation()).toBeNull();
+    expect(container.innerHTML).not.toContain("x.test");
+  });
+});
