@@ -14,6 +14,7 @@ import {
   BUILT_IN_CHECKED_ON,
   BUILT_IN_DIFFERENCE,
   BUILT_IN_HELP_URL,
+  FILE_MOVES,
   SELF_HOSTING,
   SITE_FAQ_PAGES,
   siteFaqs,
@@ -100,12 +101,61 @@ describe("the difference from Claude's built-in Google connectors", () => {
   it("fits the answer in the page's first hundred words", () => {
     const words = (s: string) => s.trim().split(/\s+/).length;
     const opening =
-      words("Hosted MCP A hosted Google Workspace MCP, with write access") +
+      words("Hosted MCP A hosted Google Workspace MCP for several accounts, in any MCP client") +
       words(BUILT_IN_DIFFERENCE.ours) +
       words(BUILT_IN_DIFFERENCE.theirsLead) +
       words(BUILT_IN_DIFFERENCE.theirsSource) +
       words(BUILT_IN_DIFFERENCE.theirsRest);
     expect(opening).toBeLessThanOrEqual(100);
+  });
+});
+
+describe("moving files, as the home page, the hosted page, and the home FAQ say it", () => {
+  const docs = readFileSync(join(__dirname, "../../content/docs/file-references.md"), "utf8");
+  const home = readFileSync(join(__dirname, "../app/page.tsx"), "utf8");
+  const copy = [
+    FILE_MOVES.heading,
+    FILE_MOVES.standfirst,
+    FILE_MOVES.receipt,
+    FILE_MOVES.limits,
+    ...FILE_MOVES.jobs.flatMap((job) => [job.title, job.body]),
+  ];
+
+  it("states the one number the docs page states, and the tools the page lists", () => {
+    // The copy's only figure. If the upload link's limit moves, the docs page
+    // moves with the code and this goes red until the copy follows.
+    expect(docs).toContain("An upload link takes one file of at most 25 MB");
+    expect(FILE_MOVES.limits).toContain("up to 25 MB");
+    expect(copy.join(" ").match(/\d+/g)).toEqual(["256", "25"]);
+    for (const tool of ["drive_upload_file", "jira_add_attachment", "notion_attach_file", "file_download_link", "file_upload_link"]) {
+      expect(docs, tool).toContain(`\`${tool}\``);
+    }
+  });
+
+  it("links the docs page, which exists", () => {
+    expect(FILE_MOVES.docsHref).toBe("/docs/file-references");
+    expect(docs.length).toBeGreaterThan(0);
+  });
+
+  it("says nothing about another product, and compares with nothing", () => {
+    // What somebody else's tools do with a file is not stated in this copy.
+    const OTHERS = /\b(Claude|Anthropic|built-in|native|connectors?|unlike|the only|only one|competitors?|other products?|alternatives?)\b/i;
+    for (const line of copy) {
+      expect(line).not.toMatch(OTHERS);
+      expect(line).not.toMatch(/[\u2013\u2014]/);
+      expect(line).not.toMatch(/\bassistants?\b/i);
+    }
+    expect(OTHERS.test("Unlike Claude's built-in connectors, DataToRAG moves the file.")).toBe(true);
+  });
+
+  it("is rendered by the home page and the hosted page from this one copy, and asked in the home FAQ", () => {
+    expect(home).toContain("<FileMovesSection");
+    expect(landing).toContain("FILE_MOVES.jobs.map");
+    const faq = siteFaqs("/").find((f) => f.q === "Can my agent attach a file from my computer?");
+    expect(faq).toBeDefined();
+    expect(faq!.a).toContain(FILE_MOVES.limits);
+    expect(faq!.a).toContain(FILE_MOVES.receipt);
+    expect(faq!.a).toContain(`](${FILE_MOVES.docsHref})`);
   });
 });
 

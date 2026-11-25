@@ -9,6 +9,7 @@ import { CasaBadge } from "@/components/casa-badge";
 import { ConnectorComparison, heroGroups } from "@/components/connector-comparison";
 import { StartupBarOffset } from "@/components/startupbar-offset";
 import { DemoBento } from "@/components/demo/demo-bento";
+import { FileMovesSection } from "@/components/file-moves";
 import { DEMO_HEADING, DEMO_STANDFIRST } from "@/components/demo/demo-copy";
 import { ComparisonHero } from "@/components/comparison-hero";
 import { REPOSITORY_URL } from "@/components/github-mark";
@@ -49,9 +50,17 @@ export const dynamic = "force-dynamic";
    read by a search engine and by a model; an h1 is read by a person who
    already arrived. They do not have to be the same string, and trading a line
    that converts for a line that gets found would be the wrong half of the
-   trade. 57 characters, inside the ~60 search results truncate at. */
+   trade.
+
+   2026-11-25: IT ENDED "with write access - DataToRAG" UNTIL TODAY. Writing
+   no longer sets the product apart on this page (the comparison below shows
+   the built-in connectors editing Docs, Sheets, and Slides), so the title now
+   says what the hosted landing page's h1 says: several accounts, any client.
+   Both statements are about DataToRAG alone. 60 characters, at the ~60 search
+   results truncate at, which left no room for the brand: the Open Graph site
+   name carries it. */
 const HOME_TITLE =
-  "Hosted Google Workspace MCP with write access - DataToRAG";
+  "Hosted Google Workspace MCP for several accounts, any client";
 /* Makes no quantity claim at all, which is why it cannot go stale. This string
    is static metadata, so unlike the body below it cannot read the live number,
    and every exact count we hard-coded drifted as the registry moved.
@@ -229,6 +238,12 @@ export default async function HomePage() {
             />
           </div>
         </section>
+
+        {/* Moving files, named as a thing the product does. After the demo
+            and before the skills: the demo shows edits, this says a file can
+            go from one service to another. The copy is lib/site-faq.ts's
+            FILE_MOVES, shared with the hosted landing page and the FAQ. */}
+        <FileMovesSection />
 
         {/* Skills — the demo above shows the work being done; this is where a
             reader who now wants to do it themselves picks something up. Led by
