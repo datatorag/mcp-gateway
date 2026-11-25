@@ -19,6 +19,14 @@
 import type { ConnectorCredentialPrefix } from "@datatorag-mcp/config";
 import type { AccountRole } from "../tests/types";
 
+/** A vendor's own MCP server. */
+export interface UpstreamServer {
+  /** Its address. Sent the user's token, so it is a literal here. */
+  readonly url: string;
+  /** The prefix of its tools' names in our list: `<slug>__<tool>`. */
+  readonly slug: string;
+}
+
 export interface ConnectorRecord {
   /** The service name: the `service` column of a connection, the provider
    * id in analytics, and the key of every per-connector map. */
@@ -57,6 +65,13 @@ export interface ConnectorRecord {
   readonly revokes: boolean;
   /** Whether its plugin is handed context headers beside the token. */
   readonly contextHeaders: boolean;
+  /** Set when the vendor's own hosted MCP server serves the tools instead of
+   * a plugin we run (SCRUM-511). The gateway then starts no plugin process
+   * for `pluginSlug` and lists none of its registry rows; the tools are the
+   * vendor's own list, named `<slug>__<tool>`, and a call goes to `url` with
+   * the user's token as a bearer and nothing else. Declared here, in
+   * reviewed code, because it decides where a user's token is sent. */
+  readonly upstream?: UpstreamServer;
   /** The runner account roles its tools may be called as; the first is the
    * one a contract probe runs as. */
   readonly runnerRoles: readonly AccountRole[];
@@ -167,9 +182,13 @@ export const CONNECTOR_REGISTRY = [
     // Our own project first (SCRUM-471).
     audience: "admin",
     revokes: true,
-    // The regional host and the one granted project.
+    // The regional host and the one granted project: what the plugin was
+    // handed. PostHog's own server is handed the token alone.
     contextHeaders: true,
     runnerRoles: ["posthog"],
+    // PostHog's own MCP server serves the tools (SCRUM-511). The plugin's
+    // `mcp_servers` row stays, because `launch: "registry"` reads it.
+    upstream: { url: "https://mcp.posthog.com/mcp", slug: "posthog" },
   },
 ] as const satisfies readonly ConnectorRecord[];
 

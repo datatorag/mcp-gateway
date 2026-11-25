@@ -66,14 +66,17 @@ import { postConnectDestination, CONNECT_ERROR_NOT_CONFIGURED, CONNECT_ERROR_NOT
 import { GWS_SCOPE_LIST } from "./scope-grant";
 import { NOTION_TOKEN_URL } from "./connectors/notion/oauth";
 import { BREVO_ACCOUNT_URL, BREVO_TOKEN_URL, BREVO_USERINFO_URL } from "./connectors/brevo/oauth";
-import { posthogEndpoints } from "./connectors/posthog/oauth";
+import { posthogEndpoints, posthogOAuthEndpoints } from "./connectors/posthog/oauth";
 import { SLACK_TOKEN_URL, SLACK_USERS_INFO_URL } from "./connectors/slack/oauth";
 import { CONNECT_LINK_COPY } from "./connect-link-page";
 import { DUPLICATE_COPY } from "./connect-duplicate";
 import type { ConnectorId } from "./connectors/registry";
 
 const EMAIL = "owner@example.com";
-const POSTHOG = posthogEndpoints("https://us.posthog.com");
+// PostHog's authorize, token, and userinfo are its authorization server's
+// (SCRUM-511); the project is read on the regional host the grant names.
+const POSTHOG_REGION = "https://us.posthog.com";
+const POSTHOG = { ...posthogOAuthEndpoints(), project: posthogEndpoints(POSTHOG_REGION).project };
 
 type Row = {
   provider: ConnectorId;
@@ -190,7 +193,7 @@ const ROWS: Row[] = [
     extraCookies: { posthog_connect_pkce: "verifier-1" },
     respond: (u) =>
       u === POSTHOG.token
-        ? json({ access_token: "at", refresh_token: "rt", expires_in: 3600, scoped_teams: [42] })
+        ? json({ access_token: "at", refresh_token: "rt", expires_in: 3600, scoped_teams: [42], posthog_base_url: POSTHOG_REGION })
         : u === POSTHOG.userinfo
           ? json({ email: EMAIL, email_verified: true })
           : u === POSTHOG.project(42)
@@ -202,7 +205,13 @@ const ROWS: Row[] = [
       tokenUrl: POSTHOG.token,
       start: "/auth/posthog/connect",
       alwaysConfigured: true,
-      grant: (f) => ({ access_token: f.accessToken, refresh_token: "rt", expires_in: f.expiresIn, scoped_teams: [42] }),
+      grant: (f) => ({
+        access_token: f.accessToken,
+        refresh_token: "rt",
+        expires_in: f.expiresIn,
+        scoped_teams: [42],
+        posthog_base_url: POSTHOG_REGION,
+      }),
     },
   },
   {

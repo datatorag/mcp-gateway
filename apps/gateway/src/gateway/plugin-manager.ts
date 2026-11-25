@@ -1,4 +1,5 @@
 import { spawn, type ChildProcess } from "node:child_process";
+import { supersededPlugin } from "./upstream-tools";
 import { existsSync, readFileSync, mkdirSync } from "node:fs";
 import { join } from "node:path";
 import { eq } from "drizzle-orm";
@@ -183,6 +184,10 @@ export class PluginManager {
 
     await Promise.all(
       activeServers.map(async (server) => {
+        // A plugin whose connector the vendor's own server now serves
+        // (SCRUM-511) has nothing to start and is not down: that
+        // connector's health is the vendor's, not a child process's.
+        if (supersededPlugin(server.slug)) return;
         const pluginDir = join(PLUGINS_DIR, server.slug);
         if (!existsSync(pluginDir)) {
           console.warn(

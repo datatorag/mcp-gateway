@@ -117,6 +117,13 @@ write with no answer says it may have landed. Its service is admin-only
 public docs page, no changelog entry and no public `/tools` page; its
 Docker account is uid and gid 905 (904 is held for another plugin).
 
+**`posthog-mcp` is superseded (SCRUM-511).** The gateway no longer starts
+it or lists its tools: PostHog's own MCP server serves the connector (see
+`codebase-map`, "Vendor pass-through"). The directory, its registry rows,
+and its tests stay for one release, so the previous image is a complete
+rollback; removing them, with the registry pair that deletes the rows, is
+the follow-up. What follows describes the plugin as it was built.
+
 **`posthog-mcp` specifics** (SCRUM-471). Ten tools, all reads, in ONE
 project. It is the one plugin handed more than the token: the gateway's
 `pluginContextHeaders` (`service-token.ts`) adds `X-PostHog-Host` and

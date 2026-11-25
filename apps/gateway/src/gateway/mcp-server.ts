@@ -32,6 +32,15 @@ import { mcpServers, tools } from "@datatorag-mcp/db";
 import { argumentRefusalText, validateArguments } from "./argument-validation";
 import type { ConnectionPool } from "./pool";
 import { NAMESPACE_SEPARATOR } from "./plugin-manager";
+import { callUpstreamTool, upstreamErrorNote } from "./upstream-call";
+import {
+  hasUpstreamCallRule,
+  listUpstreamTools,
+  supersededPlugin,
+  upstreamListingKey,
+  upstreamUsageName,
+  vendorServed,
+} from "./upstream-tools";
 import {
   PLUGIN_SERVICE_MAP,
   ambiguousAccountMessage,
@@ -1287,6 +1296,20 @@ export function createMcpServer(
     const serverSlug = name.slice(0, separatorIndex);
     const toolName = name.slice(separatorIndex + NAMESPACE_SEPARATOR.length);
 
+    // SCRUM-511: a connector whose tools the vendor's own MCP server serves.
+    // Its tools are named `<vendor slug>__<tool>`; the plugin it replaced
+    // answers to nothing, whatever rows it still has in the registry.
+    const vendor = vendorServed(serverSlug);
+    if (supersededPlugin(serverSlug)) {
+      return {
+        content: [{ type: "text" as const, text: `Unknown tool: ${JSON.stringify(echoName(name))}` }],
+        isError: true,
+      };
+    }
+    // What the usage event calls this call. For a vendor tool with a rule,
+    // the name and what kind of call it was, never an argument's value.
+    const usageName = vendor ? upstreamUsageName(name, args) : name;
+
     const [mcpServer] = await db
       .select({
         id: mcpServers.id,
@@ -1295,7 +1318,8 @@ export function createMcpServer(
         githubRepoUrl: mcpServers.githubRepoUrl,
       })
       .from(mcpServers)
-      .where(eq(mcpServers.slug, serverSlug))
+      // A vendor's tools hang off the connector's own registry row.
+      .where(eq(mcpServers.slug, vendor ? vendor.pluginSlug : serverSlug))
       .limit(1);
 
     if (!mcpServer) {
@@ -1310,7 +1334,7 @@ export function createMcpServer(
       };
     }
 
-    const serverUrl = buildPluginServerUrl(mcpServer);
+    const serverUrl = vendor ? vendor.upstream.url : buildPluginServerUrl(mcpServer);
 
     // SCRUM-392: a call missing a required argument, or carrying one the
     // tool does not take, is refused HERE, by name, before a token is
@@ -1341,7 +1365,7 @@ export function createMcpServer(
           clientId,
           clientName: clientName(),
           testRunId,
-          toolName: name,
+          toolName: usageName,
           connectorType: PLUGIN_SERVICE_MAP[mcpServer.slug],
           accountEmail: typeof args.account === "string" ? args.account : undefined,
           ...runFields,
@@ -1380,7 +1404,7 @@ export function createMcpServer(
         clientId,
         clientName: clientName(),
         testRunId,
-        toolName: name,
+        toolName: usageName,
         connectorType: service,
         accountEmail,
         ...runFields,
@@ -1515,6 +1539,25 @@ export function createMcpServer(
       }
     }
 
+    // SCRUM-511: a vendor tool is callable only while the vendor lists it
+    // to this account. The listing is the cached one the tool list was
+    // served from. When the vendor cannot be reached there is no listing to
+    // check against: the call goes on, and the forwarder says so, only for a
+    // tool we have a rule for. Any other name is the caller's own text, and
+    // is neither sent nor recorded.
+    if (vendor && userToken) {
+      const listed = await listUpstreamTools({
+        key: upstreamListingKey(userId, vendor.id, accountEmail ?? null),
+        url: serverUrl,
+        token: userToken,
+      });
+      if (listed ? !listed.some((t) => t.name === toolName) : !hasUpstreamCallRule(name)) {
+        const text = `${vendor.displayName} does not offer a tool named ${JSON.stringify(echoName(toolName))}.`;
+        // Not recorded: the name is the caller's own text, not a tool's.
+        return { content: [{ type: "text" as const, text }], isError: true };
+      }
+    }
+
     console.log(
       `[route] ${name} → ${serverUrl} (tool: ${toolName}, token: ${userToken ? "yes" : "no"})`
     );
@@ -1538,6 +1581,19 @@ export function createMcpServer(
           ...sourceResolversFor(db, userId),
           surface,
           connectionsUrl,
+        });
+      } else if (vendor && userToken) {
+        // The vendor's server, with the user's token as a bearer and
+        // nothing else. A transport failure comes back as a result with
+        // the failure marker, so the tracking below reads it as it reads a
+        // plugin's.
+        result = await callUpstreamTool({
+          url: serverUrl,
+          serviceName: vendor.displayName,
+          token: userToken,
+          toolName,
+          args: args as Record<string, unknown>,
+          clientName: "datatorag-mcp",
         });
       } else if (userToken) {
         result = await callPluginToolOnce({
@@ -1563,12 +1619,19 @@ export function createMcpServer(
       const responseText = JSON.stringify(result);
       const isError = !!(result as { isError?: boolean }).isError;
       const content = (result as { content?: Array<{ type: string; text?: string }> }).content;
-      const errorMessage = isError
-        ? content
-            ?.filter((c) => c.type === "text")
-            .map((c) => c.text)
-            .join(" ") ?? null
-        : null;
+      // What the usage row keeps of a failure. A plugin's error text is
+      // ours. A vendor's is not: it can repeat the call's own arguments, so
+      // for a vendor call the row keeps a fixed note of what kind of failure
+      // it was and none of the vendor's words (SCRUM-511). The caller still
+      // gets the vendor's answer whole.
+      const errorMessage = !isError
+        ? null
+        : vendor
+          ? upstreamErrorNote(vendor.displayName, result)
+          : content
+              ?.filter((c) => c.type === "text")
+              .map((c) => c.text)
+              .join(" ") ?? null;
 
       // SCRUM-136: the at-failure net behind the pre-call check. A Google
       // insufficient-scope 403 that slipped through (unmapped tool, stale
@@ -1625,7 +1688,7 @@ export function createMcpServer(
         clientId,
         clientName: clientName(),
         testRunId,
-        toolName: name,
+        toolName: usageName,
         connectorType: requiredService ?? null,
         accountEmail,
         ...runFields,
@@ -1660,7 +1723,7 @@ export function createMcpServer(
         clientId,
         clientName: clientName(),
         testRunId,
-        toolName: name,
+        toolName: usageName,
         connectorType: requiredService ?? null,
         accountEmail,
         ...runFields,

@@ -138,6 +138,24 @@ describe("a plugin child's environment", () => {
   });
 });
 
+describe("a plugin whose connector the vendor's own server serves (SCRUM-511)", () => {
+  it("is not started and is not reported down, while a plugin beside it starts as always", async () => {
+    const started = `require("node:fs").writeFileSync("started", "x"); setInterval(() => {}, 1000);`;
+    const superseded = writePlugin("posthog-mcp", started);
+    const other = writePlugin("other-plugin", started);
+    manager = makeManager([
+      { id: "s1", slug: "posthog-mcp", containerPort: 40124 },
+      { id: "s2", slug: "other-plugin", containerPort: 40125 },
+    ]);
+
+    await manager.startAll();
+    await until(() => existsSync(join(other, "started")));
+
+    expect(existsSync(join(superseded, "started"))).toBe(false);
+    expect(Object.keys(manager.pluginStatus())).toEqual(["other-plugin"]);
+  });
+});
+
 describe("buildPluginEnv", () => {
   const parent = {
     PATH: "/bin",

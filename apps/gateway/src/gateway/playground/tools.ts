@@ -4,6 +4,8 @@ import { mcpServers } from "@datatorag-mcp/db";
 import { NAMESPACE_SEPARATOR } from "../plugin-manager";
 import { PLUGIN_SERVICE_MAP, getServiceToken } from "../service-token";
 import { buildPluginServerUrl, callPluginToolOnce } from "../user-tools";
+import { callUpstreamTool } from "../upstream-call";
+import { supersededPlugin, vendorServed } from "../upstream-tools";
 import { GWS_RUN_REFUSAL, gwsRunHiddenFrom } from "../gws-run-access";
 
 /**
@@ -317,6 +319,7 @@ export async function executeUserTool(
     throw new ToolCallError(GWS_RUN_REFUSAL, 403);
   }
 
+  const vendor = vendorServed(serverSlug);
   const [mcpServer] = await db
     .select({
       id: mcpServers.id,
@@ -324,14 +327,16 @@ export async function executeUserTool(
       githubRepoUrl: mcpServers.githubRepoUrl,
     })
     .from(mcpServers)
-    .where(eq(mcpServers.slug, serverSlug))
+    // SCRUM-511: a vendor's tools hang off the connector's own registry
+    // row, and the plugin it replaced answers to nothing.
+    .where(eq(mcpServers.slug, vendor ? vendor.pluginSlug : serverSlug))
     .limit(1);
 
-  if (!mcpServer) {
+  if (!mcpServer || supersededPlugin(serverSlug)) {
     throw new ToolCallError(`Unknown server: ${serverSlug}`, 400);
   }
 
-  const requiredService = PLUGIN_SERVICE_MAP[serverSlug];
+  const requiredService = vendor ? vendor.id : PLUGIN_SERVICE_MAP[serverSlug];
   if (!requiredService) {
     throw new ToolCallError(`No service mapping for ${serverSlug}`, 400);
   }
@@ -346,13 +351,22 @@ export async function executeUserTool(
     );
   }
 
-  const result = await callPluginToolOnce({
-    serverUrl: buildPluginServerUrl({ slug: serverSlug, ...mcpServer }),
-    userToken,
-    toolName,
-    args: cleanArgs,
-    clientName: "datatorag-playground",
-  });
+  const result = vendor
+    ? await callUpstreamTool({
+        url: vendor.upstream.url,
+        serviceName: vendor.displayName,
+        token: userToken,
+        toolName,
+        args: cleanArgs,
+        clientName: "datatorag-playground",
+      })
+    : await callPluginToolOnce({
+        serverUrl: buildPluginServerUrl({ slug: serverSlug, ...mcpServer }),
+        userToken,
+        toolName,
+        args: cleanArgs,
+        clientName: "datatorag-playground",
+      });
   return flattenToolResult(
     result as { content?: Array<{ type: string; text?: string }>; isError?: boolean }
   );

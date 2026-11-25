@@ -5,7 +5,7 @@
  */
 
 import { describe, expect, it } from "vitest";
-import { firstArray, namedToolHint, resultJson, resultText } from "./result-json";
+import { firstArray, firstBlockJson, firstTextBlock, namedToolHint, resultJson, resultText } from "./result-json";
 
 const ok = (text: string) => ({ content: [{ type: "text", text }] });
 
@@ -99,5 +99,36 @@ describe("named-tool line", () => {
     const error = { ...text("gmail_read covers this call: x.", "boom"), isError: true };
     expect(resultText(error)).toBe("gmail_read covers this call: x.boom");
     expect(namedToolHint(error)).toBeUndefined();
+  });
+});
+
+/* SCRUM-511: PostHog's `exec` answers in its first block and follows it with
+ * a notice and a conversation id, so the joined text is not the answer. */
+describe("the first text block alone", () => {
+  const blocks = (...parts: string[]) => ({ content: parts.map((t) => ({ type: "text", text: t })) });
+
+  it("parses the first block and leaves the blocks after it out", () => {
+    const result = blocks('{"id":7,"name":"fixture"}', "Pass conversation_id on the next call.", '{"conversation_id":"c1"}');
+    expect(firstBlockJson("exec", result)).toEqual({ id: 7, name: "fixture" });
+    expect(firstTextBlock("exec", result)).toBe('{"id":7,"name":"fixture"}');
+    // The joined text is not JSON, which is why resultJson cannot read it.
+    expect(() => resultJson("exec", result)).toThrow(/did not answer JSON/);
+  });
+
+  it("skips a block that is not text", () => {
+    expect(firstTextBlock("exec", { content: [{ type: "image" }, { type: "text", text: "name: project-get" }] })).toBe("name: project-get");
+  });
+
+  it("throws with the tool's own words on an error, and never reads an error's first block as the answer", () => {
+    const refused = { ...blocks('{"id":7}'), isError: true };
+    expect(() => firstBlockJson("exec", refused)).toThrow(/exec answered with an error/);
+    expect(() => firstTextBlock("exec", refused)).toThrow(/exec answered with an error/);
+  });
+
+  it("throws when there is no text, when the first block is prose, and when it is not an object", () => {
+    expect(() => firstTextBlock("exec", { content: [] })).toThrow(/no text at all/);
+    expect(() => firstTextBlock("exec", blocks("  "))).toThrow(/no text at all/);
+    expect(() => firstBlockJson("exec", blocks("name: project-get"))).toThrow(/did not answer JSON in its first block/);
+    expect(() => firstBlockJson("exec", blocks("[1]"))).toThrow(/did not answer a JSON object/);
   });
 });

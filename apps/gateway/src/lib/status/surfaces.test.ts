@@ -40,4 +40,10 @@ describe("the status page's surfaces (SCRUM-431)", () => {
     // A prefix match on the slug with its separator, not on the word.
     expect(isPublicTool("notion-mcp__notion_search")).toBe(true);
   });
+
+  it("leave out an admin-only service's tools when the vendor's own server serves them (SCRUM-511)", () => {
+    // Named by the vendor's prefix, with no plugin slug in the name.
+    expect(isPublicTool("posthog__exec")).toBe(false);
+    expect(isPublicTool("posthog-mcp__posthog_project_get")).toBe(false);
+  });
 });

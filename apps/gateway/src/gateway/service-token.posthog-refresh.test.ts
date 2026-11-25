@@ -4,6 +4,9 @@
  * lock (`refreshRotatingToken`), so two callers refreshing at once present
  * the refresh token once, and a later rotation on PostHog's side cannot lose
  * one. Real Postgres, because the lock is the thing under test.
+ *
+ * SCRUM-511: the refresh and the revoke go to PostHog's authorization server,
+ * never to a regional host, whichever region is configured.
  */
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -18,8 +21,8 @@ import { refreshPostHogToken } from "./connectors/posthog/tokens";
 import { sealedColumns } from "./token-crypto";
 import { storedTokens } from "../test-utils/stored-tokens";
 
-const TOKEN_URL = "https://us.posthog.com/oauth/token/";
-const REVOKE_URL = "https://us.posthog.com/oauth/revoke/";
+const TOKEN_URL = "https://oauth.posthog.com/oauth/token/";
+const REVOKE_URL = "https://oauth.posthog.com/oauth/revoke/";
 const CLIENT_ID = "https://gateway.example/auth/posthog/client.json";
 
 /** PostHog's token endpoint, rotating here so the lock is what is tested: a
@@ -70,6 +73,9 @@ describe.skipIf(!isDockerAvailable())("SCRUM-471: refreshPostHogToken", () => {
           revoked.push(Object.fromEntries(new URLSearchParams(String(init?.body))));
           return new Response("{}", { status: 200 });
         }
+        // A fixture never leaves the machine: a PostHog address this test
+        // did not expect is a failure, not a request.
+        if (new URL(String(url)).hostname.endsWith("posthog.com")) throw new Error(`unexpected PostHog fetch: ${String(url)}`);
         return realFetch(url, init);
       })
     );
@@ -106,6 +112,13 @@ describe.skipIf(!isDockerAvailable())("SCRUM-471: refreshPostHogToken", () => {
     expect(posthog.calls).toEqual([
       { grant_type: "refresh_token", client_id: CLIENT_ID, refresh_token: "refresh-1" },
     ]);
+  });
+
+  it("refreshes on the authorization server when the EU region is configured", async () => {
+    process.env.POSTHOG_CONNECTOR_BASE_URL = "https://eu.posthog.com";
+    const { connId, userId } = await connected();
+    expect(await refreshPostHogToken(db, { id: connId, userId }, "refresh-1")).toEqual({ token: "access-2" });
+    expect(posthog.calls).toHaveLength(1);
   });
 
   it("two refreshes at once present the refresh token once, and both callers get the same token", async () => {

@@ -170,14 +170,15 @@ const SERVICE_PRESENTATION: Record<
       </svg>
     ),
   },
-  // SCRUM-471: admins only, read-only, one project per connection. A plain
-  // chart glyph of our own, not PostHog's mark, as Brevo's.
+  // SCRUM-471, SCRUM-511: admins only, one project per connection, served
+  // by PostHog's own MCP server, reads and writes. A plain chart glyph of
+  // our own, not PostHog's mark, as Brevo's.
   posthog: {
-    description: "Product analytics for one project, read-only",
+    description: "PostHog's own tools for one project",
     capabilities: [
-      { text: "Run trends, web analytics and HogQL queries over a date range", services: ["posthog"] },
-      { text: "Read saved insights and dashboards", services: ["posthog"] },
-      { text: "Look up events, people and error tracking issues", services: ["posthog"] },
+      { text: "Everything PostHog's MCP server offers, as PostHog ships it", services: ["posthog"] },
+      { text: "Query trends, funnels, web analytics, and SQL", services: ["posthog"] },
+      { text: "Create and change insights, dashboards, flags, and more", services: ["posthog"] },
     ],
     icon: (
       <svg viewBox="0 0 24 24" className="h-8 w-8" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true">
