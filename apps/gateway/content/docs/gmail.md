@@ -150,6 +150,15 @@ The Gmail connector gives your AI agent full access to your inbox: searching, re
 
 Files can come from Drive or from a file reference: another email, one of its attachments, a file your agent already holds, or a file you send through an upload link. See [Moving files between services](/docs/file-references).
 
+## Saving an email or an attachment
+
+A whole email, or one of its attachments, can be saved without its content entering the conversation. Both tools take a [file reference](/docs/file-references): `{"type": "gmail_message", "message_id": "<message id>"}` for the email as its original `.eml` file, or `{"type": "gmail_attachment", "message_id": "<message id>", "part_id": "1"}` for one attachment, by the part id `gmail_read` lists.
+
+- **To Drive.** `drive_upload_file` puts the file in Drive. Its receipt gives the SHA-256 of what was sent, the SHA-256 Drive reports for what it stored, and whether the two match.
+- **To your computer.** `file_download_link` answers with the file's name, size, and SHA-256, and a link that saves the file. The link works once and lasts ten minutes.
+
+Each takes one file per call, at most 25 MB. For a larger attachment, `gmail_save_attachment_to_drive` streams it into Drive.
+
 ## Who a reply goes to
 
 `gmail_reply` takes the message to answer and works out the recipients from that message's own headers, the way Gmail's Reply button does:

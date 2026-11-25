@@ -60,7 +60,7 @@ The Sheets connector lets your AI agent read data from spreadsheets, write to ce
 | `sheets_get_metadata` | Describe a spreadsheet without reading a cell: its title, locale and time zone, and each tab's title, `sheetId`, position, grid size and frozen rows and columns. The title is what a range names a tab by; the `sheetId` is what `sheets_batch_update` addresses it by |
 | `sheets_create` | Create a new spreadsheet |
 | `sheets_update` | Update specific cells in a sheet |
-| `sheets_append` | Append rows to the end of a sheet |
+| `sheets_append` | Append rows after the last row of a tab. Name the tab in `range`, such as `Log!A1`. Without `range` the call targets a tab named `Sheet1`, and fails on a spreadsheet that has no tab of that name |
 | `sheets_delete` | Delete a spreadsheet. The delete is permanent, not a move to the trash; use `drive_trash_file` for one you may want back |
 | `sheets_add_tab` | Add a new tab to an existing spreadsheet, with an optional header row |
 | `sheets_rename_tab` | Rename a tab by its current title; data is untouched, but saved ranges that name the old title stop resolving |

@@ -1,4 +1,6 @@
 import { marked } from "marked";
+import { planLimits } from "@/gateway/billing/plans";
+import { CHAT_MAX_STEPS, SKILL_RUN_MAX_STEPS } from "@/mastra/run-steps";
 import { CONNECTORS, type Connector } from "./docs-connectors";
 import {
   defineCollection,
@@ -86,17 +88,63 @@ export function getDocNeighbors(slug: string): {
   return { prev: sequence[index - 1] ?? null, next: sequence[index + 1] ?? null };
 }
 
-function parsePage({ slug, data, content }: ParsedFile): DocPage {
+/** The values a docs page may state by name instead of typing them.
+ *
+ * A page writes `{{plan.free.calls}}` and the loader fills it from here, so a
+ * limit on a docs page is the number enforcement reads and cannot be left
+ * behind when it changes. The plan numbers come from `planLimits`, the same
+ * function the pricing cards and the call gate read; the step caps from the
+ * constants the agent runs under. Add a name here, from the module that
+ * decides the value, before a page uses it. */
+export function docsValues(): Record<string, string> {
+  const count = (n: number) => n.toLocaleString("en-US");
+  const free = planLimits("free");
+  const pro = planLimits("pro");
+  return {
+    "plan.free.calls": count(free.monthlyIncluded),
+    "plan.free.runs": count(free.agentRuns),
+    "plan.pro.calls": count(pro.monthlyIncluded),
+    "plan.pro.runs": count(pro.agentRuns),
+    "run.steps.chat": count(CHAT_MAX_STEPS),
+    "run.steps.skill": count(SKILL_RUN_MAX_STEPS),
+  };
+}
+
+const DOC_TOKEN = /\{\{\s*([^{}\s]+)\s*\}\}/g;
+
+/** Replace every `{{name}}` in `text` with its value. A name that is not in
+ * `values` throws, naming the page: a page that states a number nobody
+ * defined does not load, so it fails the build and the tests rather than
+ * showing braces, or nothing, to a reader. */
+export function fillDocTokens(
+  text: string,
+  values: Record<string, string>,
+  slug: string
+): string {
+  return text.replace(DOC_TOKEN, (token, name: string) => {
+    if (!Object.hasOwn(values, name)) {
+      throw new Error(
+        `content/docs/${slug}.md uses {{${name}}}, which is not a docs value. Known values: ${Object.keys(values).join(", ")}`
+      );
+    }
+    return values[name];
+  });
+}
+
+function parsePage({ slug, data, content: source }: ParsedFile): DocPage {
+  const values = docsValues();
+  const fill = (text: string) => fillDocTokens(text, values, slug);
+  const content = fill(source);
   const html = marked.parse(content) as string;
 
   return {
     slug,
     title: field.string(data.title, slug),
-    description: field.string(data.description),
+    description: fill(field.string(data.description)),
     order: field.number(data.order, 99),
     section: field.string(data.section, "general"),
     connector: field.string(data.connector) || null,
-    faqs: field.faqList(data.faqs),
+    faqs: field.faqList(data.faqs).map((f) => ({ q: fill(f.q), a: fill(f.a) })),
     content,
     html,
   };

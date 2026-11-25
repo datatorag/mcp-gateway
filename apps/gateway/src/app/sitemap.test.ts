@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+import path from "node:path";
 import { describe, expect, it, vi } from "vitest";
 
 // The tools query is best-effort; keep it off the network. Two active rows,
@@ -39,6 +41,16 @@ describe("sitemap", () => {
     }
     const list = entries.find((e) => e.url === "https://datatorag.com/use-cases");
     expect((list!.lastModified as Date).toISOString().slice(0, 10)).toBe(useCases.map((u) => u.date).sort().at(-1));
+  });
+
+  it("lists the docs index and the all-tools page, and never an address that only redirects", async () => {
+    const urls = (await sitemap()).map((e) => e.url);
+    expect(urls.filter((u) => u === "https://datatorag.com/docs")).toHaveLength(1);
+    expect(urls.filter((u) => u === "https://datatorag.com/docs/tools")).toHaveLength(1);
+    expect(urls).not.toContain("https://datatorag.com/tools");
+    // The index is a page: nothing in its source sends the reader elsewhere.
+    const source = readFileSync(path.resolve(process.cwd(), "src/app/docs/page.tsx"), "utf8");
+    expect(source).not.toMatch(/redirect\(/);
   });
 
   it("lists an active plugin's page, and never an admin-only service's (SCRUM-454)", async () => {

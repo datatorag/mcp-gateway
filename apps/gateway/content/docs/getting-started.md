@@ -169,13 +169,21 @@ DataToRAG currently supports these services:
 
 **Notion**
 
-- Search pages and databases by title, read pages as markdown, query databases, edit pages and properties, work with comments, and create databases and views
+- Search pages and databases by title, read pages as markdown, create, edit, move, and duplicate pages, query databases and edit properties, attach files to pages, read Notion AI meeting notes with their summary and action items, list the people in the workspace, work with comments, and create databases and views
 
 Each connector is documented on its own page with available operations, required scopes, and example prompts.
 
 ## Seeing what your agent is doing
 
 Every tool call shows up in your personal usage dashboard at [datatorag.com/dashboard/usage](https://datatorag.com/dashboard/usage): call volume, latency, error rates, and a per-tool breakdown. See the [Usage docs](/docs/usage) for what gets tracked and how retention works.
+
+## Checking what works today
+
+The [status page](/status) is public and needs no sign-in. It shows the latest full test run against production. The run calls the tools the way your agent would, with real accounts, and checks what comes back.
+
+The results are grouped by service. Each service shows its checks in plain words and whether each one worked, a strip of the 30 days before, and a list of its tools with the state of each. A tool that no check covers yet is listed as "Served, not yet exercised". A failed check is marked as failing in the latest check, and its service with it.
+
+If the latest full run finished more than 36 hours ago, a notice at the top says when it finished, and the states are grayed, because they are from then and not from now.
 
 ## Common questions
 

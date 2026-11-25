@@ -5,6 +5,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import type { DocPage, ConnectorGroup } from "@/lib/docs";
 import { ServiceIcon, serviceFromSlug } from "@/components/service-icon";
+import { ALL_TOOLS_PATH, ALL_TOOLS_TITLE } from "./tools/copy";
 
 interface Props {
   topLevel: Pick<DocPage, "slug" | "title">[];
@@ -21,15 +22,22 @@ export function DocsSidebar({ topLevel, groups, onNavigate }: Props) {
 
   const isActive = (slug: string) => pathname === `/docs/${slug}`;
 
-  const itemClass = (slug: string) =>
+  const linkClass = (active: boolean) =>
     `flex items-center gap-2 rounded-lg px-3 py-1.5 text-sm transition-colors ${
-      isActive(slug)
+      active
         ? "bg-secondary font-medium text-foreground"
         : "text-muted-foreground hover:bg-secondary hover:text-foreground"
     }`;
+  const itemClass = (slug: string) => linkClass(isActive(slug));
 
   return (
     <>
+      {/* The docs index: every page with its description. Not a page of the
+          collection, so it is outside the Previous and Next reading order. */}
+      <Link href="/docs" onClick={onNavigate} className={linkClass(pathname === "/docs")}>
+        Overview
+      </Link>
+
       {topLevel.map((doc) => (
         <Link
           key={doc.slug}
@@ -40,6 +48,11 @@ export function DocsSidebar({ topLevel, groups, onNavigate }: Props) {
           {doc.title}
         </Link>
       ))}
+
+      {/* Generated from the tool registry, not a page of the collection. */}
+      <Link href={ALL_TOOLS_PATH} onClick={onNavigate} className={linkClass(pathname === ALL_TOOLS_PATH)}>
+        {ALL_TOOLS_TITLE}
+      </Link>
 
       {/* Not a docs page: the latest end-to-end check, as a status page
           (SCRUM-431). Listed here so a reader of the docs can see what

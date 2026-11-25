@@ -47,24 +47,30 @@ faqs:
       provider.
   - q: What does the usage dashboard show?
     a: >-
-      Six things. Summary cards for total calls this month, success rate and
+      The DataToRAG usage dashboard shows your plan with a link to Billing, and
+      a range toggle of 24h, 7d, 30d, or 90d. Below those are summary cards for
+      total calls this month, success rate and
       slow-end latency; call volume over time; your most-called tools; a by-connector
       breakdown across Google Workspace, Atlassian, Notion and anything else
       connected; a per-tool table you can click into for the last 50 calls of a
-      single tool; and recent activity.
+      single tool; agent sessions with their runs, steps, tokens, and cost; and
+      recent activity.
 ---
 
 Every tool call your AI agent makes through DataToRAG is logged to your personal usage dashboard at [datatorag.com/dashboard/usage](https://datatorag.com/dashboard/usage). You can see what ran, how fast it was, and where errors are happening.
 
 ## What you see
 
-The dashboard shows six things:
+From top to bottom, the dashboard shows:
 
+- **Billing**: the plan you are on, with a Billing details link to the Billing page
+- **Range**: a toggle of 24h, 7d, 30d, or 90d. It sets the period for the charts, the per-tool table, and agent sessions. The summary cards and recent activity do not change with it
 - **Summary cards**: total calls this month, success rate, and slow-end latency (the p95, the speed you get on a bad day)
 - **Call volume over time**: hourly buckets for the 24h range, daily for 7d, 30d and 90d
 - **Most-called tools**: the tools you call most, in a chart
 - **By connector**: stacked breakdown of calls across Google Workspace, Atlassian, Notion and anything else you've connected
 - **Per-tool table**: every tool you've called, with calls, success rate, median and slow-end latency, and average response size. Click a row to drill down
+- **Agent sessions**: what the dashboard Agent and skill runs used in the range. Four totals (runs, steps, tokens, and cost), then one row per session with the skills it ran, or "chat". Each row links to its conversation
 - **Recent activity**: the latest calls, as of when you opened the page
 
 The drill-down page shows the last 50 calls for a single tool: when it ran, the status, latency, and any error message.
@@ -82,6 +88,8 @@ Not every call is counted the same way:
 - **Successful calls**: counted. Your agent asked Gmail to search, Gmail returned results, you got what you wanted.
 - **User errors**: counted. You asked for a message that doesn't exist, a query with bad JQL, a file you don't have access to. The request reached the API and came back with a legitimate "no."
 - **Server errors**: *not* counted. If our gateway is down, a plugin crashes, an upstream API has a 5xx outage or refuses for rate, or a request never reaches the service, that's not your problem and we don't meter it. The same goes for a Google refusal for access we never asked you for, when you granted everything we did ask for.
+- **Calls refused for a missing connection**: *not* counted. That covers a service you have not connected, an `account` that is not one of yours, an account that needs reconnecting, and a Google service you did not grant on the consent screen.
+- **DataToRAG's own tools**: *not* counted. `connect`, `list_connected_accounts`, and the `skills_` tools are free to call. The two exceptions are `file_download_link` and `file_upload_link`: making a link counts as one call.
 
 Calls you make from the dashboard are counted under the same rules as calls from an MCP client.
 

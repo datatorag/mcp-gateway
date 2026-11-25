@@ -101,7 +101,7 @@ Each call moves one file. To attach three PDFs from one email, make three calls,
 
 ## Sending a file you have
 
-When the file is already in the conversation, for example an image or a PDF you shared with your agent, a `content` reference carries it to `drive_upload_file` or `jira_add_attachment` directly:
+When the file is already in the conversation, for example an image or a PDF you shared with your agent, a `content` reference carries it to `drive_upload_file`, `jira_add_attachment`, or `notion_attach_file` directly:
 
 ```json
 {
@@ -137,12 +137,12 @@ The trailing slash lets the file keep its own name. Sending it answers a receipt
 { "type": "upload", "upload_id": "<id>" }
 ```
 
-Pass that reference as the file of `drive_upload_file` or `jira_add_attachment`, or as an entry of an email's `attachments`.
+Pass that reference as the file of `drive_upload_file`, `jira_add_attachment`, or `notion_attach_file`, or as an entry of an email's `attachments`.
 
 - The link takes one file, once, and stops working ten minutes after it is made.
 - The file can be at most 25 MB.
 - The uploaded file is kept for ten minutes after it arrives, for one call. After that it is gone, and you upload it again.
-- If the call stops before anything is sent on (the service is busy, or another reference in the same email is wrong), the uploaded file is kept and the reference still works. Once the call reaches Drive, Jira or Gmail, the file is used, even if that service then says no (a folder id that is not a folder, an issue you cannot see): upload it again.
+- If the call stops before anything is sent on (the service is busy, or another reference in the same email is wrong), the uploaded file is kept and the reference still works. Once the call reaches Drive, Jira, Notion, or Gmail, the file is used, even if that service then says no (a folder id that is not a folder, an issue you cannot see): upload it again.
 - You can have three upload links or uploaded files waiting at a time.
 - An upload link, like a download link, is for you: a call that carries one is refused, and the link is canceled.
 

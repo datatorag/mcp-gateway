@@ -220,6 +220,13 @@ function missingRunId(value: unknown, tool: string): BuiltinResult | null {
   };
 }
 
+/** Whether a built-in is one an ordinary user's MCP client is served: it
+ * declares no audience and is not kept off the MCP surface. The open tool
+ * list and the docs' all-tools page both ask this, so they cannot differ. */
+export function isPublicBuiltin(t: { audience?: unknown; surfaces?: readonly string[] }): boolean {
+  return !t.audience && (!t.surfaces || t.surfaces.includes("mcp"));
+}
+
 /**
  * Gateway built-in tools — served by this process, no plugin behind them.
  *

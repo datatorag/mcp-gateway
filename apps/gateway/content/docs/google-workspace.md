@@ -13,9 +13,10 @@ faqs:
   - q: Do I need a separate connection for each Google service?
     a: >-
       No. DataToRAG requests all the scopes it needs in a single OAuth flow, so
-      connecting Google Workspace once gives your AI agent Gmail, Calendar,
-      Drive, Docs, Sheets, Slides, Contacts and Tasks together rather than eight
-      separate hookups.
+      one Google Workspace connection covers Gmail, Calendar, Drive, Docs,
+      Sheets, Slides, Contacts, and Tasks rather than eight separate hookups.
+      Google's consent screen has a box for each service, all unchecked at
+      first, and only the services you tick are connected.
   - q: Can I connect more than one Google account?
     a: >-
       Yes. DataToRAG lets you connect several Google accounts side by side,
@@ -63,6 +64,8 @@ Google Workspace is DataToRAG's flagship connector. One OAuth flow gives your AI
 ## Connecting
 
 Sign in, open [Connections](https://datatorag.com/dashboard/connections) and click Connect on the Google Workspace card. The OAuth flow requests all required scopes in one step.
+
+Requesting is not granting. Google's consent screen arrives with every box unchecked, and Continue works anyway. Tick "Select all", or the services you want: a tool for a service left unticked is refused. [Getting Started](/docs/getting-started), under "Connect your Google account", shows the screen and what to tick.
 
 You can connect multiple Google accounts, including personal, work and shared inboxes. Each tool call acts on one account, the one named by the `account` argument or the default, so your agent searches several accounts by making one call for each.
 

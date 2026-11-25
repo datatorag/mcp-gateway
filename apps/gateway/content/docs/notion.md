@@ -72,7 +72,7 @@ The `account` argument takes the email, or, when one email has several workspace
 
 ### Meeting notes
 
-`notion_list_meeting_notes` reads the Notion AI meeting notes the DataToRAG connection can read, with the newest at the top. A note on a private page comes back only once that page is shared with the connection (the page's ••• menu, then Connections). Give it a start date (`since`, a date such as `2026-11-18`, or `yesterday`, `today`, or `one_week_ago`; the default is yesterday), and optionally an end date (`until`) and text the title contains (`title`).
+`notion_list_meeting_notes` reads the Notion AI meeting notes the DataToRAG connection can read, with the newest at the top. Notion returns only the notes of meetings where the person who connected is an attendee. A note on a private page comes back only once that page is shared with the connection (the page's ••• menu, then Connections). Give it a start date (`since`, a date such as `2026-11-18`, or `yesterday`, `today`, or `one_week_ago`; the default is yesterday), and optionally an end date (`until`) and text the title contains (`title`).
 
 Each note comes back with its title, the meeting's start and end, how many attended (`attendee_count`), its status, the AI summary and the notes as text, and `action_items`. Notion has no separate field for action items, so the connector collects every to-do in the summary and notes, with whether it is checked, and every list item under an "Action items" or "Next steps" heading. Notion AI writes action items as to-dos in the summary, one per item, with the person's name first.
 
@@ -124,7 +124,7 @@ These are missing from Notion's REST API as of 20 October 2026, so the connector
 
 The connection holds these Notion capabilities: read content, update content, insert content, read comments, insert comments, and user information including email addresses.
 
-To change the pages you chose when connecting, reconnect. To end access, remove the connection in Notion's settings.
+To change the pages you chose when connecting, reconnect. To end access, click Disconnect on the workspace's row on the [Connections](https://datatorag.com/dashboard/connections) page, or remove the connection in Notion's settings.
 
 ## Example prompts
 

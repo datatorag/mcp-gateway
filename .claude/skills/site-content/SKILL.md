@@ -151,6 +151,63 @@ Two docs-specific mechanisms added by SCRUM-24:
   never on the server, since docs are prerendered; mobile and inline variants are
   unchanged.
 
+Two docs routes are NOT pages of the collection, and both are static routes
+beside `docs/[slug]`, rendered in the docs layout:
+
+- **`/docs` is the index**, a real page (`app/docs/page.tsx`), not a redirect:
+  every docs page with its frontmatter `description`, grouped as the sidebar
+  groups them (`getTopLevelDocs`, then `getConnectorGroups`). It reads the
+  collection, so a new markdown page is listed with no edit; its test holds
+  the links equal to `getDocsSequence()`. A page with an empty `description`
+  is listed bare, so write one.
+- **`/docs/tools` is the all-tools page** (`app/docs/tools/page.tsx`): every
+  tool an ordinary signed-in user is served once each public service is
+  connected, grouped by connector, each with the first sentence of its own
+  description. Generated, never typed: `loadAllTools` (`src/lib/all-tools.ts`)
+  is `listPublicToolRows`, the same read a signed-out `tools/list` on `/mcp`
+  is answered from, plus the built-ins with no audience on the MCP surface.
+  `groupServedTools` applies `isPublicTool` again by name, and its test hands
+  it an admin-only connector's row and `gws_run` and fails if either is
+  listed. The page is `force-dynamic` (the build has no database) and renders
+  a short notice when the read fails. Its address, title, and description are
+  `app/docs/tools/copy.ts`, read by the page, the index, the sidebar, and the
+  sitemap. `/tools` alone is a permanent redirect to it and is in no sitemap.
+  No markdown file may be named `tools.md`: the static route would shadow it,
+  and the index test fails on one.
+
+Both are fixed links in `app/docs/sidebar.tsx` ("Overview" first, "All tools"
+after the general pages) and neither is in the Previous and Next reading
+order, which walks the collection only.
+
+**Value tokens: a number a docs page states is never typed.** A docs page writes
+`{{plan.free.calls}}` and the loader fills it before the markdown is rendered,
+from `docsValues()` in `src/lib/docs.ts`: `plan.free.calls`, `plan.free.runs`,
+`plan.pro.calls`, `plan.pro.runs` (all from `planLimits`, the function the
+pricing cards and the call gate read) and `run.steps.chat`, `run.steps.skill`
+(from `mastra/run-steps.ts`). `fillDocTokens(text, values, slug)` does the
+replacing, on the body, the `description` and every FAQ question and answer
+(not the `title`). A token that is not in `docsValues()` THROWS, naming the
+page, so the page does not load and the build and the tests fail. To state a
+new number, add a name to `docsValues()` from the module that decides the
+value, then use it; keep that module light, because `docs.ts` is in the module
+graph of every content guard. `docs.test.ts` pins the map against the plan
+table, that no page is left holding a brace pair, that `plans-and-limits`
+renders the plan table's numbers, and that its markdown holds no digit run of
+two or more, so a figure typed beside a token cannot stay behind. Dollar
+amounts have no token on purpose: link `/pricing`. Docs only: blog, changelog
+and skills do not fill tokens.
+
+The general pages read in this `order`: getting-started 0, multiple-accounts 1,
+skills 2, usage 5, plans-and-limits 5.5, file-references 6, security 7. `order`
+is any number, so a page goes between two neighbors with a fraction rather than
+by renumbering them.
+
+`content/docs/security.md` is the page people quote about tokens and storage.
+Every sentence in it is a statement about the code as it is (`token-crypto.ts`,
+`connected-accounts.ts`, `oauth/consent.ts`, `oauth/token.ts`, `oauth/revoke.ts`,
+`usage.ts` in the schema); a change to any of those re-reads the page in the
+same pull request.
+
 Docs screenshots live in `apps/gateway/public/docs/` and must be personally-scrubbed
 before commit (public repo). Pending-capture spots use HTML-comment placeholders
 (`<!-- screenshot placeholder: name.png -->`) which render nothing.

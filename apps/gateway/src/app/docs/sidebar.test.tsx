@@ -4,7 +4,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 
-vi.mock("next/navigation", () => ({ usePathname: () => "/docs/gmail" }));
+const location = vi.hoisted(() => ({ pathname: "/docs/gmail" }));
+vi.mock("next/navigation", () => ({ usePathname: () => location.pathname }));
 
 const { DocsSidebar } = await import("./sidebar");
 
@@ -59,5 +60,39 @@ describe("DocsSidebar connector groups", () => {
     act(() => toggle.dispatchEvent(new MouseEvent("click", { bubbles: true })));
     expect(toggle.getAttribute("aria-label")).toBe("Expand");
     expect(container.querySelector('a[href="/docs/gmail"]')).toBeNull();
+  });
+});
+
+describe("DocsSidebar fixed links", () => {
+  const render = (pathname: string) => {
+    location.pathname = pathname;
+    act(() => {
+      root.render(<DocsSidebar topLevel={[{ slug: "getting-started", title: "Getting Started" }]} groups={GROUPS} />);
+    });
+  };
+  const link = (href: string) => container.querySelector(`a[href="${href}"]`);
+  const active = (href: string) => link(href)?.className.includes("font-medium") ?? false;
+
+  afterEach(() => {
+    location.pathname = "/docs/gmail";
+  });
+
+  it("links the docs index first and the all-tools page, beside the pages", () => {
+    render("/docs/gmail");
+    expect(container.querySelector("a")?.getAttribute("href")).toBe("/docs");
+    expect(link("/docs/tools")?.textContent).toBe("All tools");
+    expect(active("/docs")).toBe(false);
+    expect(active("/docs/tools")).toBe(false);
+  });
+
+  it("marks the index and the all-tools page as the current page only on their own address", () => {
+    render("/docs");
+    expect(active("/docs")).toBe(true);
+    expect(active("/docs/tools")).toBe(false);
+    expect(active("/docs/getting-started")).toBe(false);
+
+    render("/docs/tools");
+    expect(active("/docs/tools")).toBe(true);
+    expect(active("/docs")).toBe(false);
   });
 });

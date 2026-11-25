@@ -81,6 +81,15 @@ scanned or rendered pages. To read a PDF or an image, copy it with
 `drive_copy_file` and `target_mime_type: "application/vnd.google-apps.document"`.
 Drive recognizes the text, and the copy is a Google Doc the tools can read.
 
+## Downloading a file
+
+`drive_read_file` returns text. To get the file itself, name it with a [file reference](/docs/file-references):
+
+- `{"type": "drive_file", "file_id": "<file id>"}` is a Drive file as stored, such as a PDF or an image.
+- `{"type": "drive_export", "file_id": "<file id>", "format": "pdf"}` is a Google Doc, Sheet, or Slides file exported to a format. These have no stored file, so they need `drive_export`.
+
+`file_download_link` takes either reference and answers with the file's name, size, and SHA-256, and a link that saves the file to your computer. The link works once and lasts ten minutes. `jira_add_attachment` and `notion_attach_file` take the same references, to put a Drive file on a Jira issue or a Notion page. In each case the file's content never enters the conversation. One file per call, at most 25 MB, or 20 MB for Notion.
+
 ## Required scopes
 
 - `https://www.googleapis.com/auth/drive`

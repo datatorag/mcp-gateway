@@ -8,6 +8,7 @@ import { getAllSkills } from "@/lib/skills";
 import { getAllPersonas } from "@/lib/personas";
 import { getAllUseCases } from "@/lib/use-cases";
 import { isPublicServerSlug } from "@/lib/public-tools";
+import { ALL_TOOLS_PATH } from "./docs/tools/copy";
 
 // Request-time so the tools query runs against the live DB, not at build.
 export const dynamic = "force-dynamic";
@@ -25,7 +26,10 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       priority: 0.9,
     },
     { url: `${BASE}/blog`, changeFrequency: "weekly", priority: 0.8 },
+    // The docs index, a page of its own, and the generated list of every
+    // tool beside it. `/tools` alone only redirects there and is not listed.
     { url: `${BASE}/docs`, changeFrequency: "weekly", priority: 0.8 },
+    { url: `${BASE}${ALL_TOOLS_PATH}`, changeFrequency: "weekly", priority: 0.7 },
     { url: `${BASE}/skills`, changeFrequency: "weekly", priority: 0.8 },
     { url: `${BASE}/changelog`, changeFrequency: "weekly", priority: 0.6 },
     { url: `${BASE}/status`, changeFrequency: "daily", priority: 0.5 },
