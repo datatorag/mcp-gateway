@@ -40,11 +40,11 @@ const faqs = siteFaqs("/hosted-google-workspace-mcp");
    Google's published MCP reference. Re-check before editing any of them:
    - Google's official MCP servers WRITE, and deeply. Never claim otherwise.
    - Google's own Gmail MCP has no send, reply or forward.
-   - Claude's native Gmail connector DOES send, reply and forward. It gained
-     those verbs in August; two of our posts said otherwise and were wrong.
-   - Claude's native Drive can CREATE files but its update_file changes title
-     and parent only, never content. Keep every Drive row create-vs-change.
    - There is no official Tasks MCP.
+   (Two bullets about Claude's native connectors stood here until 2026-11-25.
+   One said its Drive connector never changes a file's content, which
+   Anthropic's help page no longer supports. What this page may say about the
+   native connectors is the next paragraph, not a list kept in a comment.)
 
    2026-11-25: THE NATIVE COLUMN AND THE NATIVE ROUTE WERE REWRITTEN from
    Anthropic's own help page (BUILT_IN_HELP_URL in lib/site-faq.ts), which that
@@ -53,7 +53,10 @@ const faqs = siteFaqs("/hosted-google-workspace-mcp");
    and Slides "no" cells were false against it and are gone. A native cell now
    says only what that page says. It does not say how many Google accounts can
    be connected and does not mention Contacts or Tasks, so this page no longer
-   states a native limit on either. Google's own servers were NOT re-checked
+   states a native limit on either. The "use something else when" item and two
+   FAQ answers followed the same day: "cover both better than we do, and they
+   are free" and "in beta" were ours, not the page's. The page and the date
+   are lib/connector-verification.ts. Google's own servers were NOT re-checked
    that day; their row still rests on the 2026-08-24 check.
    No tool counts on this page on purpose: lib/tool-count-claims.test.ts fails
    a bare count, and every exact figure we have published has drifted. */
@@ -82,7 +85,7 @@ const ROUTES = [
     name: "Claude's native connectors",
     setup: "None",
     covers: `Gmail, Calendar, and Drive, plus separate Docs, Sheets, and Slides connectors that create and edit files (Anthropic's help page, ${BUILT_IN_CHECKED_ON}).`,
-    gap: "Available in Claude's own apps. The limits its help page lists include no charts in Slides.",
+    gap: "Available on Claude and Claude Desktop. The limits its help page lists include no charts in Slides.",
   },
   {
     name: "Google's official MCP servers",
@@ -243,9 +246,12 @@ export default function HostedGoogleWorkspaceMcpPage() {
           </h2>
           <ul className="mt-4 max-w-2xl list-disc space-y-2 pl-5 text-base leading-relaxed text-muted-foreground">
             <li>
-              <span className="text-foreground">Calendars or file management are the whole job.</span>{" "}
-              Claude&apos;s native connectors cover both better than we do, and
-              they are free.
+              <span className="text-foreground">Your work stays in Google and in Claude.</span>{" "}
+              As of {BUILT_IN_CHECKED_ON}, Anthropic&apos;s help page says
+              Claude&apos;s Gmail, Google Calendar, and Google Drive connectors
+              are available for all users on Claude and Claude Desktop, and
+              that Claude creates and edits Docs, Sheets, and Slides files.
+              They may be all you need.
             </li>
             <li>
               <span className="text-foreground">You need Google Chat.</span> Google

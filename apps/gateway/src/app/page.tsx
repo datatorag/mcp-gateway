@@ -16,7 +16,7 @@ import { HomeHero } from "@/components/home-hero";
 import { AddToAgent } from "@/components/add-to-agent";
 import { PromoChip } from "@/components/promo-banner";
 import { TrustedBy } from "@/components/trusted-by";
-import { SLIDES_VERIFIED_ON, VERIFIED_ON } from "@/lib/connector-verification";
+import { BUILT_IN_CHECKED_ON } from "@/lib/connector-verification";
 import { SkillCard } from "@/components/skill-card";
 import { getAllSkills } from "@/lib/skills";
 import { getAllPersonas } from "@/lib/personas";
@@ -146,9 +146,11 @@ export default async function HomePage() {
           </div>
         </ShaderBackground>
 
-        {/* The comparison follows the hero directly: all the gaps at once
-            (SCRUM-425, SCRUM-426), on the hero's own dark ground so the two
-            read as one opening. It was the hero's right column until the
+        {/* The comparison follows the hero directly, on the hero's own dark
+            ground so the two read as one opening. The h2 predates the
+            November 25, 2026 rewrite of the table beneath it: a built-in
+            cell there now says "Not described" (on Anthropic's help page),
+            never No, and the caption and footer of the table say so. It was the hero's right column until the
             wheel took the top of the page. Its rows come from the full table
             at #comparison and nowhere else; see heroGroups(). The heading is
             the table's own caption, said aloud. */}
@@ -183,8 +185,7 @@ export default async function HomePage() {
             <div className="mx-auto w-full max-w-md lg:w-[520px] lg:max-w-[520px]">
               <ComparisonHero
                 groups={heroGroups()}
-                verifiedOn={VERIFIED_ON}
-                slidesVerifiedOn={SLIDES_VERIFIED_ON}
+                checkedOn={BUILT_IN_CHECKED_ON}
               />
             </div>
           </div>

@@ -5,7 +5,7 @@ searchTitle: "How Files Should Move Through an MCP Server | DataToRAG"
 searchDescription: "Why DataToRAG's Gmail attachments take a Drive file id and not base64: the token cost of bytes through the model, and where the MCP spec is heading."
 date: "2026-09-28"
 updated: "2026-11-25"
-updatedNote: "November 25, 2026: the limits section and the plan at the end now carry dated notes saying what shipped (a file the agent holds, up to 1 MB in the call; a single-use upload link, up to 25 MB, that returns an upload reference and not a Drive id). The two spec proposals are restated from their own pull requests as read today: SEP-2356 was closed on June 26, 2026, and SEP-2631 on October 14, 2026, in favor of an extension. A sentence about the built-in Drive connector's upload tool and two comparisons to Gmail's internals that we could not confirm on the vendors' pages are removed, and what the Claude clients did with a dropped file is stated as what we saw in September 2026. November 17, 2026: this post says a file has to be in Drive and that bytes in the call are a dead end. Since late October 2026 we take both: a file Claude already holds in the call, capped at 1 MB for the token reasons given here, and a file on your computer through a single-use upload link up to 25 MB. The reasoning stands; the limits section does not. See /blog/a-file-on-your-computer-into-drive-jira-or-an-email."
+updatedNote: "November 25, 2026: the limits section and the plan at the end now carry dated notes saying what shipped (a file the agent holds, up to 1 MB in the call; a single-use upload link, up to 25 MB, that returns an upload reference and not a Drive id). The two spec proposals are restated from their own pull requests as read today: SEP-2356 was closed on June 26, 2026, and SEP-2631 on October 14, 2026, in favor of an extension. A sentence about the built-in Drive connector's upload tool and two comparisons to Gmail's internals that we could not confirm on the vendors' pages are removed. The statements about how Claude's clients handle a file a person attaches, including the closing line that asked for a client that passes attached bytes to a tool, are removed because we could not re-test them, and the base64 cost is restated as character arithmetic with no figure for any vendor's tokenizer. November 17, 2026: this post says a file has to be in Drive and that bytes in the call are a dead end. Since late October 2026 we take both: a file Claude already holds in the call, capped at 1 MB for the token reasons given here, and a file on your computer through a single-use upload link up to 25 MB. The reasoning stands; the limits section does not. See /blog/a-file-on-your-computer-into-drive-jira-or-an-email."
 author: "Manuel Yang"
 category: "Engineering"
 coverImage: "/blog/attachments-three-designs.png"
@@ -28,15 +28,13 @@ The reasons are below. None of them is "it was easier". Design 1 would have been
 
 ## Why base64 through the model is a dead end
 
-Two facts, one from arithmetic and one from how the clients work.
+Two facts, one from arithmetic and one from what the field asks the model to do.
 
-**The arithmetic.** Base64 is high-entropy text, so it does not compress into tokens the way English does. On Claude's tokenizer it lands at roughly one token per two raw bytes, sometimes worse. A 200 KB screenshot is about 100,000 output tokens. Most clients stop a model's turn well before that, and output tokens are the expensive kind. A 2 MB photo is a million tokens, which is not a cost, it is a refusal. The customer whose ask started this mostly sends documents and zip files. A zip is exactly the file base64 handles worst.
+**The arithmetic.** Base64 turns every three bytes into four characters, so a file is a third bigger before it goes anywhere. A 200 KB screenshot is about 267,000 characters. A 2 MB photo is about 2.7 million. In a `content_base64` field every one of those characters is model output. The customer whose ask started this mostly sends documents and zip files. A zip is already compressed, so there is nothing left to squeeze.
 
 The result is a path that works in the demo and fails in the first real week, which is worse than no path. A user who hits it once does not try attachments again.
 
-**The clients.** This is what we saw when we tested in September 2026. When you dropped a PDF into claude.ai or pasted a screenshot into Claude Code, the file came back to the model as content: extracted text, or a rendered image the model could look at. The model had no handle to the original. There was nothing it could put in a tool call except its memory of what it saw. So design 1 does not just cost too much, it asks the model to retype two megabytes of base64 from recollection. Every byte it gets wrong corrupts the file silently, and a zip with one wrong byte is not a zip.
-
-We checked this against the clients our users actually ran at the time, and have not re-checked it since.
+**The copying.** A base64 field also turns the model into a copier. Whatever the model has of a file, the field wants all of it written back out exactly, character for character. So design 1 does not just cost too much, it asks a model to reproduce two megabytes of base64 without one slip, and our server would have no way to tell a good copy from a bad one. Every character it gets wrong corrupts the file silently, and a zip with one wrong byte is not a zip.
 
 ## What the spec is doing about it
 
@@ -44,7 +42,7 @@ The MCP spec has been working through the same question in public, and the timel
 
 The first proposal was SEP-2356: a tool declares a file-typed argument, the client fills it with a data URI, and the bytes ride inside the tool call. As of November 25, 2026, its pull request shows it closed on June 26, 2026, with the note "Closing in favor of #2631 which will likely be the more durable solution." That is our design 1, and it did not go forward.
 
-The replacement was SEP-2631, "File Objects and Transfer". The shape: a `files/authorizeUpload` request returns a transfer descriptor, the bytes go over HTTPS directly, and the tool gets a file URI. Its summary says the methods "authorize HTTPS transfer descriptors while keeping bytes out of JSON-RPC payloads." As of November 25, 2026, that pull request is closed as well: it was closed on October 14, 2026, in favor of a file-uploads extension. Until clients ship a mechanism like it, a server that wants files has to find a handle the model can already produce.
+The replacement was SEP-2631, "File Objects and Transfer". The shape: a `files/authorizeUpload` request returns a transfer descriptor, the bytes go over HTTPS directly, and the tool gets a file URI. Its summary says the methods "authorize HTTPS transfer descriptors while keeping bytes out of JSON-RPC payloads." As of November 25, 2026, that pull request is closed as well: it was closed on October 14, 2026, in favor of a file-uploads extension. Whatever comes of that, a server that wants files today has to find a handle the model can already produce.
 
 ## A Drive id is already an opaque handle
 
@@ -62,7 +60,7 @@ Total bytes through the model for a 9 MB attachment: the length of a Drive id, a
 
 *Since late October 2026 this section is no longer the limit. A file the agent already holds goes in the call, up to 1 MB, and a file on your computer goes through a single-use upload link, up to 25 MB. See [a file on your computer into Drive, Jira, or an email](/blog/a-file-on-your-computer-into-drive-jira-or-an-email). What follows is the limit as it stood in September.*
 
-Honesty section. The file has to be in Drive. A screenshot pasted into the chat cannot reach an email through any MCP client today, ours included, and our docs say so rather than implying otherwise. The workaround is one step: drop it in Drive, tell Claude the name. For that customer's docs and zips, which live in Drive already, there is no step.
+Honesty section. The file had to be in Drive. A screenshot pasted into the chat could not reach an email through our tools, and our docs said so rather than implying otherwise. The workaround was one step: put it in Drive, tell Claude the name. For that customer's docs and zips, which live in Drive already, there is no step.
 
 The other cost is that we depend on Drive's export renderer for native files. A Doc exported as md is Google's markdown, and a Sheet exported as csv is one tab. Both are documented, neither is something we can fix.
 
@@ -72,4 +70,4 @@ The other cost is that we depend on Drive's export renderer for native files. A 
 
 An upload endpoint shaped like SEP-2631: post a file to the gateway with your token, get a Drive id back, attach by id. In Claude Code that is one `curl -F` in a skill, and it covers the 20 MB PDF on your disk that was never in Drive. When the spec lands and clients implement it, the endpoint becomes the standard mechanism and the Gmail tools do not change, because they only ever wanted a handle.
 
-If you run an MCP server and are about to add a `content_base64` field, this is the post I wish had existed before we did. Reply if you have found a client that passes user-attached bytes to a tool. We have not.
+If you run an MCP server and are about to add a `content_base64` field, this is the post I wish had existed before we did.

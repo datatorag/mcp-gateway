@@ -1,6 +1,6 @@
 import type { ContentFaq } from "./content-collection";
 import { planLimits } from "@/gateway/billing/plans";
-import { SLIDES_VERIFIED_ON, VERIFIED_ON } from "./connector-verification";
+import { BUILT_IN_CHECKED_ON, BUILT_IN_HELP_URL } from "./connector-verification";
 import { PUBLIC_CLIENTS_TEXT, PUBLIC_CONNECTORS_TEXT, PUBLIC_SERVICES_TEXT } from "./public-integrations";
 
 /** Numbers and dates are IMPORTED, never retyped.
@@ -8,7 +8,7 @@ import { PUBLIC_CLIENTS_TEXT, PUBLIC_CONNECTORS_TEXT, PUBLIC_SERVICES_TEXT } fro
  * An answer is the most quotable surface we publish, so a hand-written copy of
  * a figure is the copy that outlives the change to it. The free allowance comes
  * from the constant the gateway enforces, and the comparison date from the
- * table that was actually retested, so neither can say one thing here and
+ * module that names the vendor page it was read from, so neither can say one thing here and
  * another where it is decided. Dollar amounts are deliberately absent for the
  * same reason in reverse: they are hand-written on the pricing page today and
  * live in no constant, so quoting one here would add a fourth copy in the one
@@ -78,35 +78,46 @@ export const SELF_HOSTING =
   "The DataToRAG gateway's code is MIT-licensed and can be self-hosted. It is not one command, and the README's self-hosting section lists the steps: you supply a Postgres database, your own Google OAuth clients (and Google's verification for the restricted Gmail and Drive scopes), and an encryption key for the stored tokens.";
 
 /** What DataToRAG is next to Claude's built-in Google connectors, in the
- * opening of /hosted-google-workspace-mcp and as an answer on two routes.
+ * opening of /hosted-google-workspace-mcp and in every answer that compares
+ * the two.
  *
- * OURS FIRST, and every clause of it is on our own docs pages: several Google
- * accounts (docs/google-workspace), Contacts and Tasks, Jira, Confluence, and
- * Notion (docs/getting-started, "Available connectors").
+ * OURS FIRST, and every clause of it is on our own docs pages: the clients
+ * (lib/mcp-clients.ts), several Google accounts (docs/multiple-accounts, the
+ * `account` argument), Contacts and Tasks (docs/contacts, docs/tasks), and
+ * Jira, Confluence, and Notion (docs/getting-started, "Available connectors").
+ * `ours` is `oursWhat` then `oursAdds`, so an answer that already said what
+ * DataToRAG is can use the second sentence alone.
  *
  * THEIRS is only what Anthropic's own help page said on the day in
  * BUILT_IN_CHECKED_ON, and only what it says the connectors DO. It states no
  * limit on purpose. That page does not say how many Google accounts a person
  * can connect, and does not mention Contacts or Tasks either way, so neither
  * is claimed here: a page being silent is not the vendor stating a limit.
+ * The page and the date live in lib/connector-verification.ts with the rule.
  * Re-read BUILT_IN_HELP_URL before changing a word of `theirs`, and move the
  * date only when you have. */
-export const BUILT_IN_HELP_URL =
-  "https://support.claude.com/en/articles/10166901-use-google-workspace-connectors";
-export const BUILT_IN_CHECKED_ON = "November 25, 2026";
+export { BUILT_IN_CHECKED_ON, BUILT_IN_HELP_URL };
+const OURS_WHAT = `DataToRAG is one MCP endpoint that your agent uses from ${PUBLIC_CLIENTS_TEXT}, or any other MCP client.`;
+const OURS_ADDS =
+  "It reaches several Google accounts through one connection, includes Contacts and Tasks, and puts Jira, Confluence, and Notion on the same endpoint.";
 export const BUILT_IN_DIFFERENCE = {
   question: "What is the difference between DataToRAG and Claude's built-in Google connectors?",
-  ours: `DataToRAG is one MCP endpoint that your agent uses from ${PUBLIC_CLIENTS_TEXT}, or any other MCP client. It reaches several Google accounts through one connection, includes Contacts and Tasks, and puts Jira, Confluence, and Notion on the same endpoint.`,
+  ours: `${OURS_WHAT} ${OURS_ADDS}`,
+  oursAdds: OURS_ADDS,
   theirsLead: `Claude's built-in Google connectors are a feature of Claude itself. As of ${BUILT_IN_CHECKED_ON}, `,
   theirsSource: "Anthropic's help page",
   theirsRest:
-    " lists them for Gmail, Google Calendar, Google Drive, Docs, Sheets, and Slides, and says they send email and edit Docs, Sheets, and Slides files.",
+    " lists them for Gmail, Google Calendar, Google Drive, Docs, Sheets, and Slides, and says they send email and create and edit Docs, Sheets, and Slides files.",
   close: "If your work stays in Google and in Claude, the built-in connectors may be all you need.",
 } as const;
 
+/** The dated sentence about the built-in connectors, as an answer writes it:
+ * the same three parts the landing page renders around its own anchor. */
+const THEIRS = `${BUILT_IN_DIFFERENCE.theirsLead}[${BUILT_IN_DIFFERENCE.theirsSource}](${BUILT_IN_HELP_URL})${BUILT_IN_DIFFERENCE.theirsRest}`;
+
 const BUILT_IN_DIFFERENCE_FAQ: ContentFaq = {
   q: BUILT_IN_DIFFERENCE.question,
-  a: `${BUILT_IN_DIFFERENCE.ours} ${BUILT_IN_DIFFERENCE.theirsLead}[${BUILT_IN_DIFFERENCE.theirsSource}](${BUILT_IN_HELP_URL})${BUILT_IN_DIFFERENCE.theirsRest} ${BUILT_IN_DIFFERENCE.close}`,
+  a: `${BUILT_IN_DIFFERENCE.ours} ${THEIRS} ${BUILT_IN_DIFFERENCE.close}`,
 };
 
 export const CUSTOM_INTEGRATION = {
@@ -134,7 +145,7 @@ export const SITE_FAQ_PAGES: SiteFaqPage[] = [
         faqs: [
           {
             q: "What is DataToRAG?",
-            a: `One hosted MCP server that connects Claude and other AI clients to your ${PUBLIC_CONNECTORS_TEXT} tools, with the write actions the native connectors stopped short of when we last checked their tool lists on ${VERIFIED_ON}. You connect your accounts once, paste one URL into your client, and your agent can read and change things in ${PUBLIC_SERVICES_TEXT}, with your approval on every write. [Getting started](/docs/getting-started) has the two minute version.`,
+            a: `One hosted MCP server that connects Claude and other AI clients to your ${PUBLIC_CONNECTORS_TEXT} tools. You connect your accounts once, paste one URL into your client, and your agent can read and change things in ${PUBLIC_SERVICES_TEXT}, with your approval on every write. [Getting started](/docs/getting-started) has the two minute version.`,
           },
           {
             q: "How do I set it up?",
@@ -160,13 +171,14 @@ export const SITE_FAQ_PAGES: SiteFaqPage[] = [
           BUILT_IN_DIFFERENCE_FAQ,
           {
             q: "Claude already connects to Gmail, Calendar and Drive. Why would I need this?",
-            // Mail came OUT of this answer on 18 September 2026. The native
-            // Gmail connector gained send, reply and forward in August 2026,
-            // and this answer said the opposite for three weeks after our own
-            // blog post had been rewritten to say so. The Gmail post IS linked,
-            // and it is the strongest link in the set: it is the one that
-            // carries the correction, title and all.
-            a: `For reading, you often don't, and mail is nearly settled: the native Gmail connector sends, replies and forwards, which it gained in August 2026 and we re-checked on ${VERIFIED_ON}. What is left in mail is small and worth naming rather than inflating: it cannot file an attachment into Drive. Docs and Sheets have their own connectors since October 2026, in beta, and they edit a file you already have (enumerated ${VERIFIED_ON}). Slides, as of the ${SLIDES_VERIFIED_ON} check, gets as far as an empty deck: nothing native could put a slide or a word into it. It also works one Google account at a time, where connecting a work and a personal account here is one endpoint and one prompt. Native Calendar is genuinely strong, with full create, update and delete, and if calendars on one account are your whole job the native connector is the answer. We publish claim by claim comparisons and re-test them when the connectors change, including when the change goes against us: [we said Claude could not send email, and it can](/blog/claude-gmail-connector-vs-datatorag-send-reply), plus [Drive and Docs](/blog/claude-google-drive-vs-datatorag-editing), [Calendar](/blog/claude-google-calendar-vs-datatorag-multi-account), and [the full map of your options](/blog/claude-google-workspace-mcp-alternatives).`,
+            // Rewritten on November 25, 2026. This answer listed limits of
+            // the built-in connectors from our own enumeration (a beta label,
+            // an empty Slides deck, one Google account at a time), and
+            // Anthropic's help page said otherwise or said nothing. It now
+            // leads with what DataToRAG adds and says about the built-in
+            // connectors only the shared, dated sentence. The comparison
+            // posts are linked by subject, with no claim in the link text.
+            a: `For what DataToRAG adds to them. ${BUILT_IN_DIFFERENCE.oursAdds} It also works from any MCP client, not only Claude. ${THEIRS} ${BUILT_IN_DIFFERENCE.close} Our comparison posts each carry the date they were checked: [Gmail](/blog/claude-gmail-connector-vs-datatorag-send-reply), [Drive and Docs](/blog/claude-google-drive-vs-datatorag-editing), [Calendar](/blog/claude-google-calendar-vs-datatorag-multi-account), and [the full map of your options](/blog/claude-google-workspace-mcp-alternatives).`,
           },
           {
             q: "Can it work across multiple accounts?",
@@ -174,7 +186,7 @@ export const SITE_FAQ_PAGES: SiteFaqPage[] = [
           },
           {
             q: "Can it edit existing files, not just create new ones?",
-            a: "Yes. Cell level edits in Sheets, in place edits in Docs and Slides, replies inside existing email threads. Creating a new file is the easy half; changing the one you already have is the half we built this for.",
+            a: "Yes. DataToRAG makes cell level edits in Sheets, in place edits in Docs and Slides, and replies inside existing email threads, and each change waits for your approval.",
           },
         ],
       },
@@ -222,17 +234,14 @@ export const SITE_FAQ_PAGES: SiteFaqPage[] = [
         faqs: [
           {
             q: "Can my AI agent actually edit my files, or only read them?",
-            // NOT the email example, deliberately. Claude's native Gmail
-            // connector gained send, reply and forward in August 2026, which
-            // our own three-way comparison enumerated on 24 August 2026.
-            //
-            // NOT "files and updates Jira issues" either, which this answer
-            // said until 9 October 2026. Claude has an Atlassian connector
-            // that creates and edits issues, so that was not a place the
-            // built-in connectors stop. What it has no tool for is a file,
-            // which is the fourth item now. Every item here must be a row
-            // the comparison table on the home page marks No for built-in.
-            a: `Edit them, and move them. Claude's own Google connectors read and create files, and since October 2026 its Docs and Sheets connectors, in beta on claude.ai, edit them in place too. Where they stop is the edge of one service on one account. Nothing built in takes an attachment out of an email and puts it on a Jira issue, into Drive or onto your computer with a checksum you can verify. Nothing built in works two Google accounts in one request, or runs a query over a sheet, or gives Claude Code, Cursor or your own application the same tools. DataToRAG does those, with your approval on every write. Verified by enumerating each connector's tool surface on ${VERIFIED_ON}, and Slides on ${SLIDES_VERIFIED_ON}.`,
+            // Rewritten on November 25, 2026. This answer said the built-in
+            // Docs and Sheets connectors were in beta and listed things
+            // "nothing built in" does. Anthropic's help page has no beta
+            // label and is silent on most of that list, and a page being
+            // silent is not a limit. Our half says what our own docs prove
+            // (docs/sheets, docs/docs, docs/slides, docs/file-references);
+            // their half is the shared, dated sentence.
+            a: `Edit them, with your approval on every write. DataToRAG changes cells in a sheet you already have, writes into an existing doc, builds slides onto a deck, runs a query over a sheet, and moves an email's attachment into Drive or onto a Jira issue. ${BUILT_IN_DIFFERENCE.oursAdds} It gives the same tools to any MCP client, your own application included. ${THEIRS} ${BUILT_IN_DIFFERENCE.close}`,
           },
           {
             q: "Which AI clients can connect to it?",
@@ -313,11 +322,11 @@ export const SITE_FAQ_PAGES: SiteFaqPage[] = [
           },
           {
             q: "Can it change a file, or only create new ones?",
-            a: `Change them. On 24 August 2026 changing a cell, writing into an existing doc and putting content onto slides were where the built-in connectors stopped. Since October 2026 Claude's own Docs and Sheets connectors, in beta, do the first two (enumerated ${VERIFIED_ON}); slides, as of the ${SLIDES_VERIFIED_ON} check, still arrived empty. What stays ours is the work across services and accounts: an email's attachment onto a Jira issue or into Drive, two Google accounts in one request, and a query over a sheet.`,
+            a: `Change them. DataToRAG updates cells in an existing sheet, writes into an existing doc, and puts content on the slides of an existing deck, and each write asks you first. Editing is not what separates it from Claude's built-in connectors. ${THEIRS} What DataToRAG adds is elsewhere. ${BUILT_IN_DIFFERENCE.oursAdds}`,
           },
           {
             q: "When are Claude's native connectors the better answer?",
-            a: `When calendars or file management are the whole job. The native connectors cover both better than DataToRAG does and they are free, and their Google surface is Gmail, Calendar and Drive, and since October 2026 Docs and Sheets connectors in beta (enumerated ${VERIFIED_ON}), with no Contacts or Tasks connector and one Google account at a time.`,
+            a: `When you do not need what DataToRAG adds. ${BUILT_IN_DIFFERENCE.oursAdds} ${THEIRS} The same page says the Gmail, Google Calendar, and Google Drive connectors are available for all users on Claude and Claude Desktop. ${BUILT_IN_DIFFERENCE.close}`,
           },
           {
             q: "What if having a third party in the path is not acceptable?",

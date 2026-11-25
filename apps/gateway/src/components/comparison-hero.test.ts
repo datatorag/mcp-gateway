@@ -4,55 +4,48 @@ import { describe, expect, it } from "vitest";
 import { GROUPS, heroGroups, unmappedHeroGaps } from "./connector-comparison";
 
 /**
- * The hero (SCRUM-425) is the comparison table's short claim, and it may hold
- * nothing the table does not: every row in it is a row of GROUPS, word for
- * word, that we have and the built-in connectors do not. These hold that it
- * is derived, not retyped, by changing the source and watching the hero
- * follow.
+ * The hero is the comparison table's short form, and it may hold nothing the
+ * table does not: every row in it is a row of GROUPS, word for word, that we
+ * have and Anthropic's help page does not describe (`builtIn: false`, which
+ * is a statement about the page and never "the connectors cannot"). These
+ * hold that it is derived, not retyped, by changing the source and watching
+ * the hero follow.
  */
 
 const sourceRows = GROUPS.flatMap((g) => g.rows.map((r) => ({ ...r, service: g.service })));
 const clone = () => GROUPS.map((g) => ({ ...g, rows: g.rows.map((r) => ({ ...r })) }));
 
 describe("the comparison hero's rows", () => {
-  it("are exactly the rows of the table that are No for built-in and Yes for us", () => {
+  it("are exactly the rows of the table that the help page does not describe and we have", () => {
     const hero = heroGroups().flatMap((g) => g.rows.map((r) => r.capability));
     const expected = sourceRows.filter((r) => !r.builtIn && r.ours).map((r) => r.capability);
     expect([...hero].sort()).toEqual([...expected].sort());
-    expect(hero).toHaveLength(10);
+    expect(hero).toHaveLength(6);
   });
 
   it("places every gap row: none falls outside the map", () => {
     expect(unmappedHeroGaps()).toEqual([]);
-    // A row newly flipped to No/Yes that the map does not place is caught,
-    // not silently left out of the hero.
+    // A row newly of this kind that the map does not place is caught, not
+    // silently left out of the hero.
     const groups = clone();
-    groups.find((g) => g.service === "Google Drive")!.rows.find((r) => r.capability === "Download a file to your computer")!.builtIn = false;
-    groups.find((g) => g.service === "Google Drive")!.rows.find((r) => r.capability === "Download a file to your computer")!.ours = true;
-    expect(unmappedHeroGaps(groups)).toEqual(["Download a file to your computer"]);
+    groups.find((g) => g.service === "Google Drive")!.rows.find((r) => r.capability === "Upload a file")!.builtIn = false;
+    expect(unmappedHeroGaps(groups)).toEqual(["Upload a file"]);
   });
 
-  it("sits in Manuel's five groups, in his order", () => {
+  it("sits in three groups, in order", () => {
+    // Five until November 25, 2026. The Slides and Calendar groups held one
+    // row each ("Put content in it", "Free/busy lookup"), both of which the
+    // vendor's page contradicts, and a group with no row is not shown.
     expect(heroGroups().map((g) => [g.label, g.rows.map((r) => r.capability)])).toEqual([
-      ["Sheets", ["Query a sheet with a filter", "Two Google accounts in one request"]],
+      ["Sheets", ["Query a sheet with a filter"]],
       [
         "Gmail attachments",
-        [
-          "Save an email or an attachment to Drive",
-          "Save an email or an attachment to your computer",
-          "Jira, attach an email or one of its attachments to an issue",
-        ],
+        ["Save an email or an attachment to Drive", "Save an email or an attachment to your computer"],
       ],
-      ["Slides", ["Put content in it"]],
-      ["Calendar", ["Free/busy lookup"]],
-      ["Beyond Google", ["Google Contacts", "Google Tasks", "Work and personal account at the same time"]],
-    ]);
-  });
-
-  it("tags only the Jira row, whose group does not name its service", () => {
-    const tagged = heroGroups().flatMap((g) => g.rows).filter((r) => r.tag !== null);
-    expect(tagged.map((r) => [r.capability, r.tag])).toEqual([
-      ["Jira, attach an email or one of its attachments to an issue", "Jira"],
+      [
+        "Contacts, Tasks, and accounts",
+        ["Google Contacts", "Google Tasks", "Several Google accounts behind one connection"],
+      ],
     ]);
   });
 
@@ -80,34 +73,28 @@ describe("the comparison hero's rows", () => {
 
   it("never holds a row we lose either", () => {
     const groups = clone();
-    const freeBusy = groups.flatMap((g) => g.rows).find((r) => r.capability === "Free/busy lookup")!;
-    freeBusy.ours = false;
-    expect(heroGroups(groups).flatMap((g) => g.rows).map((r) => r.capability)).not.toContain("Free/busy lookup");
+    const contacts = groups.flatMap((g) => g.rows).find((r) => r.capability === "Google Contacts")!;
+    contacts.ours = false;
+    expect(heroGroups(groups).flatMap((g) => g.rows).map((r) => r.capability)).not.toContain("Google Contacts");
   });
 
-  it("carries, under each group, every Yes/Yes row of its source groups, in the table's order (SCRUM-427)", () => {
+  it("carries, under each group, every Yes/Yes row of its source groups, in the table's order", () => {
     const sources: Record<string, string[]> = {
       Sheets: ["Google Sheets"],
       "Gmail attachments": ["Gmail"],
-      Slides: ["Google Slides"],
-      Calendar: ["Google Calendar"],
-      "Beyond Google": ["Beyond Google"],
+      "Contacts, Tasks, and accounts": [],
     };
     for (const g of heroGroups()) {
       const expected = sources[g.label].flatMap((s) =>
         GROUPS.find((x) => x.service === s)!.rows.filter((r) => r.builtIn && r.ours).map((r) => r.short ?? r.capability)
       );
       expect(g.ties, g.label).toEqual(expected);
-      expect(g.ties.length, g.label).toBeGreaterThan(0);
     }
-    // Beyond Google's ties are the Jira and Confluence rows, and only those
-    // (the last two since SCRUM-428).
-    expect(heroGroups().find((g) => g.label === "Beyond Google")!.ties).toEqual([
-      "Jira basics",
-      "Confluence basics",
-      "worklogs and links",
-      "comment threads",
-    ]);
+    expect(heroGroups().find((g) => g.label === "Sheets")!.ties).toEqual(["read", "create", "edit"]);
+    // The last group draws from no source group. Its ties were the Jira and
+    // Confluence rows, which left the table with the enumeration they rested
+    // on: the vendor page the table is read from covers Google only.
+    expect(heroGroups().find((g) => g.label === "Contacts, Tasks, and accounts")!.ties).toEqual([]);
   });
 
   it("names every tie by its short label, or its full label when it has none", () => {
@@ -144,15 +131,8 @@ describe("the comparison hero's rows", () => {
 
   it("drops a group whose every row is conceded, rather than showing an empty one", () => {
     const groups = clone();
-    groups.find((g) => g.service === "Google Calendar")!.rows.forEach((r) => (r.builtIn = true));
-    expect(heroGroups(groups).map((g) => g.label)).toEqual(["Sheets", "Gmail attachments", "Slides", "Beyond Google"]);
-  });
-
-  it("flags the Slides group for its own date, and stops when the Slides row goes", () => {
-    expect(heroGroups().map((g) => g.slides)).toEqual([false, false, true, false, false]);
-    const noSlides = clone();
-    noSlides.find((g) => g.service === "Google Slides")!.rows.forEach((r) => (r.builtIn = true));
-    expect(heroGroups(noSlides).some((g) => g.slides)).toBe(false);
+    groups.find((g) => g.service === "Google Sheets")!.rows.forEach((r) => (r.builtIn = true));
+    expect(heroGroups(groups).map((g) => g.label)).toEqual(["Gmail attachments", "Contacts, Tasks, and accounts"]);
   });
 
   it("the landing page no longer types rows of its own", () => {

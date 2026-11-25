@@ -1,11 +1,9 @@
 /**
  * The demo section's frame copy: heading, standfirst, closing call to action.
  *
- * THE FRAME, NEVER THE ROWS. The demo rows are claim-checked against a
- * first-hand tool-surface audit, their problem/solution pairs are deliberately
- * unparallel, and each names the specific connector that has the limit rather
- * than "Claude" in general. Rewriting one is a different job needing that
- * audit, not this file. Rows live in `demo-bento.tsx` and stay there.
+ * THE FRAME, NEVER THE ROWS. The demo rows say what a reader wants and what
+ * DataToRAG does, and name no limit in anyone else's product (see the header
+ * of `demo-bento.tsx` for why). Rows live in `demo-bento.tsx` and stay there.
  *
  * The disclosure is NOT here either. It is owned by `demo-bento.tsx` and
  * rendered unconditionally, because a caller that could forget it once did.

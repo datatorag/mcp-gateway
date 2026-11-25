@@ -1,84 +1,65 @@
 import { CircleCheckIcon, CircleMinusIcon } from "lucide-react";
-import { SLIDES_VERIFIED_ON, VERIFIED_ON } from "@/lib/connector-verification";
+import { BUILT_IN_CHECKED_ON, BUILT_IN_HELP_URL } from "@/lib/connector-verification";
+import { BUILT_IN_DIFFERENCE } from "@/lib/site-faq";
 
 /**
- * The full capability comparison against Claude's built-in Google connectors.
+ * The comparison against Claude's built-in Google connectors.
  *
- * THE ROWS AND THE PROSE ARE NOT THIS FILE'S TO INVENT. They are supplied, and
- * every cell was established by enumerating each connector's complete tool
- * surface on a stated date and, where a capability was contested, running the
- * operation. Nothing here is reasoned from documentation. If a row seems
- * obviously true and is not here, it has not been tested: ask, do not add it.
+ * THE BUILT-IN COLUMN IS ANTHROPIC'S HELP PAGE, AND NOTHING ELSE. Until
+ * November 25, 2026 every cell came from our own enumeration of the
+ * connectors' tool lists. That could not be shown to a reader, and it went
+ * stale without anyone touching it: this table said a built-in Slides deck
+ * arrived empty and that Docs and Sheets editing was in beta after the
+ * vendor's own page said otherwise. The rules now:
  *
- * The rules that govern the table, all of which survived a draft that broke
- * several of them:
+ * 1. A BUILT-IN CELL SAYS ONLY WHAT THE VENDOR'S PAGE SAYS, ON THE DATE IN
+ *    BUILT_IN_CHECKED_ON, NO MORE STRONGLY THAN THE PAGE. `builtIn: true`
+ *    means the page (BUILT_IN_HELP_URL) describes it. `builtIn: false` means
+ *    the page does not describe it, and renders as "Not described". It never
+ *    means the connectors cannot do it: a page being silent is not the vendor
+ *    stating a limit. The one limit the page states for a file type (no
+ *    charts in Slides) is quoted in that group's note.
  *
- * 1. CLAIM FROM THE ENUMERATED TOOL SURFACE, NEVER FROM A SCOPE. A scope is
- *    inferred, invisible from outside, and changes without announcement. The
- *    public issue documenting one connector's missing scope also lists a
- *    capability as granted that the connector exposes no tool for. Scope does
- *    not predict capability in either direction.
+ * 2. A ROW EXISTS ONLY IF THE PAGE SPEAKS TO IT, OR IF IT IS SOMETHING OF
+ *    OURS WORTH A "NOT DESCRIBED" CELL. A capability both products may well
+ *    have, which the page happens not to list (copy a file, trash a message),
+ *    gets no row: a "Not described" cell beside our tick would read as a gap
+ *    we cannot show. The notes name what was left out and why.
  *
- * 2. STALE BY DEFAULT, NOT TRUE BY DEFAULT. This is a claim about someone
- *    else's moving product, so the verified-on date is rendered, not just
- *    recorded. Once it is more than a quarter old this section is a liability
- *    rather than an asset.
+ * 3. STALE BY DEFAULT, NOT TRUE BY DEFAULT. This is a claim about someone
+ *    else's moving product, so the date is rendered in the table's caption
+ *    and in every note, from the one constant. Re-read the page before moving
+ *    the date.
  *
- * 3. CONCEDE GENEROUSLY, AND DO NOT TRIM THE CONCESSIONS. The Drive group is
- *    the most credible thing on the page precisely because we lose it and
- *    win no row of it. A reader who sees that believes the Sheets rows. A table
- *    that wins everything reads as an ad and gets discounted whole.
- *
- * 4. CALENDAR IS NOT A TIE. IT IS FOUR CONCESSIONS. This section called it
- *    parity until 10 August 2026, and that was wrong in the built-in
- *    connector's favour: it does rich event creation, RSVP, meeting-time
- *    suggestions and calendar listing, and we do none of those. We DO search
- *    events - calendar_list_events takes a `query` that reaches the API as
- *    `q` - and an earlier draft of this correction conceded that row by
- *    mistake. Check our own column against the registry before conceding it;
- *    a wrong concession is as disprovable as a wrong boast. The rule the old
- *    note was reaching for still holds and is why the correction went the way
- *    it did: a claim anyone can disprove by testing retroactively discredits
- *    every row that is true.
+ * 4. CONCEDE GENEROUSLY, AND DO NOT TRIM THE CONCESSIONS. Most rows are ties,
+ *    and the recurring-meeting row is theirs. A table that wins everything
+ *    reads as an ad and gets discounted whole.
  *
  * 5. NAME SERVICES, NEVER COUNTS. Every hard-coded tool count we have shipped
  *    went stale without anyone touching it.
  *
- * 6. THERE ARE THREE BUILT-IN GOOGLE CONNECTORS: Drive, Gmail and Calendar.
- *    Sheets, Docs and Slides have no connector of their own and come through
- *    Drive. The groups below are named by service because that is how a reader
- *    thinks about them, and the notes carry the correction.
- *
- *    "Built-in" is the whole of what Claude offers, not only its Google
- *    connectors. It also has an Atlassian connector, and until 9 October 2026
- *    the Jira and Confluence rows said No for it, while a row on the same
- *    page named that connector. A column header is a claim about everything
- *    under it: before a row outside Google says No, look for a connector.
+ * 6. GOOGLE ONLY. The page this rests on covers Claude's Google connectors.
+ *    Jira, Confluence, and Notion are on our address, and the table makes no
+ *    comparison for them; rows that did were removed with the enumeration
+ *    they rested on. Before a comparison for another service comes back, read
+ *    that vendor's page and date it the same way.
  *
  * 7. OUR OWN COLUMN NEEDS THE SAME EVIDENCE AS THEIRS, AND A TICK MEANS LIVE.
- *    Not "exists in the repo" — a tool that has been pushed but not rolled out
- *    with tool re-discovery is invisible to every user, so it is not a Yes
- *    here. An earlier draft of this file asserted "copy a file" and "file
- *    metadata" for us; we ship neither, and it also called free/busy a tie
- *    when it is ours alone. Guessing about our own side is the same failure as
- *    guessing about theirs and is easier to make, because it does not feel
- *    like a claim.
- *
- *    A capability reachable only through the generic API-passthrough tool is
- *    also not a Yes. That tool can reach anything, so counting it would make
- *    every row Yes and the table meaningless.
+ *    Each `ours: true` is a tool on a docs page under content/docs. A
+ *    capability reachable only through the generic API-passthrough tool is
+ *    not a Yes: that tool can reach anything, so counting it would make every
+ *    row Yes and the table meaningless.
  */
-
-// The date lives in `lib/connector-verification.ts`, because the home
-// page's FAQ makes the same claim in prose and must carry the same date. See
-// rule 2 there and here: rendered, not just recorded.
 
 type Row = {
   capability: string;
-  /** A shorter name for the hero's "Both:" line only (SCRUM-427); the
-   * full table always shows `capability`. A shortening, never a new claim.
-   * A Yes/Yes row without one falls back to its full label. */
+  /** A shorter name for the hero's "Both:" line only; the full table always
+   * shows `capability`. A shortening, never a new claim. A Yes/Yes row
+   * without one falls back to its full label. */
   short?: string;
+  /** true: Anthropic's help page describes it as of BUILT_IN_CHECKED_ON.
+   * false: the page does not describe it ("Not described"), which is NOT a
+   * statement that the connectors cannot do it. See rule 1. */
   builtIn: boolean;
   ours: boolean;
   /** Draws the eye to the rows the section exists for. Used sparingly. */
@@ -88,213 +69,174 @@ type Row = {
 type Group = {
   service: string;
   rows: Row[];
-  /** The line that makes the group's rows mean something. Not decoration. */
-  /** One paragraph, or several. Arrays render as separate paragraphs; a plain
-   * string stays a single one, so existing entries are untouched. */
+  /** The line that makes the group's rows mean something. Not decoration.
+   * One paragraph, or several. Arrays render as separate paragraphs. */
   note?: string | string[];
 };
+
+/** How a note opens its sentence about the vendor's page. */
+const PAGE = `As of ${BUILT_IN_CHECKED_ON}, Anthropic's help page`;
 
 export const GROUPS: Group[] = [
   {
     service: "Google Sheets",
     rows: [
+      // "Read Sheets, Slides, PDFs, images, and MS Office files."
       { capability: "Read a sheet", short: "read", builtIn: true, ours: true },
+      // "Create new Google Docs, Sheets, and Slides files."
       { capability: "Create a new sheet", short: "create", builtIn: true, ours: true },
-      // Conceded on 15 October 2026: the Sheets connector (beta on claude.ai
-      // since October 2026) writes values and formulas, appends, clears and
-      // runs the full batch update. It reads one range per call and has no
-      // query language, which is why the query row stays ours.
-      { capability: "Update a cell", short: "update cells", builtIn: true, ours: true },
-      { capability: "Append a row", short: "append rows", builtIn: true, ours: true },
-      { capability: "Add, rename or delete a tab", short: "tabs", builtIn: true, ours: true },
-      { capability: "Clear a range", short: "clear", builtIn: true, ours: true },
+      // "Claude can edit Google Docs, Sheets, and Slides live in a pane
+      // beside the chat." The page lists no operations, so this is one row
+      // where there were five (update a cell, append a row, tabs, clear a
+      // range, format).
+      { capability: "Edit an existing sheet", short: "edit", builtIn: true, ours: true },
+      // Ours: sheets_query (docs/sheets). The page describes no query.
       { capability: "Query a sheet with a filter", builtIn: false, ours: true, emphasis: true },
-      { capability: "Format cells and tables", short: "format", builtIn: true, ours: true },
-      { capability: "Two Google accounts in one request", builtIn: false, ours: true, emphasis: true },
     ],
-    note: `Google Sheets has its own connector since October 2026, in beta on claude.ai, on the Sheets API: values in and out, formulas, clearing, inserting rows and columns, and the full batch update for tabs, formatting and charts. It reads one range per call and has no query language. Enumerated ${VERIFIED_ON}.`,
+    note: `${PAGE} says Claude can read Sheets, create new Sheets files, and edit them live in a pane beside the chat. It does not list what an edit covers, so the table has one edit row. DataToRAG updates cells, appends rows, manages tabs, clears ranges, and formats, and it runs a query in the QUERY() language over a range. The page does not describe a query.`,
   },
   {
     service: "Google Docs",
     rows: [
-      { capability: "Read a doc", builtIn: true, ours: true },
-      { capability: "Create a new doc", builtIn: true, ours: true },
-      // Conceded on 15 October 2026: the Docs connector (beta on claude.ai
-      // since October 2026) edits a doc in place through the batch update.
-      { capability: "Edit an existing doc", builtIn: true, ours: true },
-      // Conceded on 9 October 2026: the Drive connector moves a file to the
-      // trash. Ours deletes. Either way the doc is gone from where it was.
-      { capability: "Delete or trash a doc", builtIn: true, ours: true },
+      // "Search and retrieve Google Docs from your Drive."
+      { capability: "Read a doc", short: "read", builtIn: true, ours: true },
+      { capability: "Create a new doc", short: "create", builtIn: true, ours: true },
+      { capability: "Edit an existing doc", short: "edit", builtIn: true, ours: true },
+      // "Share, move, and trash files in Google Drive." Ours deletes.
+      { capability: "Delete or trash a doc", short: "trash", builtIn: true, ours: true },
     ],
-    note: `Google Docs has its own connector since October 2026, in beta on claude.ai: one read and one batch update that inserts, deletes, replaces, styles, and can write as tracked suggestions. Enumerated ${VERIFIED_ON}.`,
+    note: `${PAGE} says Claude can retrieve Google Docs, create new ones, and edit them live, and that it can read and work with comments and suggestions in Google Docs.`,
   },
   {
     service: "Google Slides",
     rows: [
-      { capability: "Create a deck", short: "create a deck", builtIn: true, ours: true, emphasis: true },
-      { capability: "Put content in it", builtIn: false, ours: true, emphasis: true },
-      { capability: "Read an existing deck", short: "read a deck", builtIn: true, ours: true },
+      { capability: "Create a deck", short: "create", builtIn: true, ours: true },
+      // Replaced "Put content in it", which said No for built-in until
+      // November 25, 2026. The page says Claude edits Slides.
+      { capability: "Edit an existing deck", short: "edit", builtIn: true, ours: true },
+      { capability: "Read an existing deck", short: "read", builtIn: true, ours: true },
     ],
-    note: `The built-in connector does make a real Google Slides deck. It just arrives with one blank slide, an empty title and an empty subtitle, because a Google-native deck with content is refused. You get the container and you fill it in yourself. The connector will convert a .pptx you upload, if you have the file. Anthropic announced a Slides editing connector in beta on 6 October 2026, alongside the Docs and Sheets ones. We had not enumerated it by ${VERIFIED_ON}, so these rows are as we verified them on ${SLIDES_VERIFIED_ON}. We will re-test and correct this when we have.`,
+    note: `${PAGE} says Claude can read Slides, create new Slides files, and edit them. The limits it lists are that Claude can't add charts to Google Slides and that Slides edits may not appear live in the pane. This group said a built-in deck arrived empty until ${BUILT_IN_CHECKED_ON}. The page says otherwise, and that row is gone.`,
   },
   {
     service: "Gmail",
     rows: [
+      // "Search and read emails using natural language queries"
       { capability: "Read and search mail", short: "read and search", builtIn: true, ours: true },
+      // "Draft emails", "List saved drafts"
       { capability: "Write a draft", short: "drafts", builtIn: true, ours: true },
-      // Conceded on 18 September 2026 after re-enumerating the built-in
-      // connector's tool surface: send, reply with reply-all, and forward all
-      // exist. No emphasis on a row we lose; see rule 3.
+      { capability: "List saved drafts", short: "list drafts", builtIn: true, ours: true },
+      // "Send, reply to, and forward emails from Gmail."
       { capability: "Send it", short: "send", builtIn: true, ours: true },
       { capability: "Reply in thread", short: "reply", builtIn: true, ours: true },
       { capability: "Forward", short: "forward", builtIn: true, ours: true },
-      { capability: "Label, star, mark read, archive a message", short: "labels and archive", builtIn: true, ours: true },
-      // Ours with SCRUM-428: gmail_label_message takes a thread_id.
-      { capability: "Label or unlabel a whole thread at once", short: "label threads", builtIn: true, ours: true },
-      // Conceded on 9 October 2026. The note used to say nothing in the
-      // built-in surface deletes a draft it wrote; it has a tool that does.
-      { capability: "Delete a draft", short: "delete drafts", builtIn: true, ours: true },
-      // Ours since 16 October 2026: gmail_trash and gmail_untrash. They act on
-      // one message, so a thread is one call per message; the note says so.
-      // A whole thread again with SCRUM-428: gmail_trash_thread and
-      // gmail_untrash_thread move a conversation in one call.
-      { capability: "Trash a message or thread", short: "trash", builtIn: true, ours: true },
-      // Added with SCRUM-428, when gmail_mark_spam shipped: both mark spam.
-      { capability: "Mark as spam", short: "spam", builtIn: true, ours: true },
-      // Broadened on 18 October 2026: drive_upload_file (since 13 October
-      // 2026) stores a whole email as its .eml in Drive as well as one
-      // attachment, so the row says both.
+      // "Manage email organization with labels and threads". One row where
+      // there were two; star, mark read and archive are not on the page.
+      { capability: "Organize mail with labels", short: "labels", builtIn: true, ours: true },
+      // "Open email attachments so Claude can read or work with the file,
+      // up to about 12 MB each." Ours: gmail_get_attachment (docs/gmail).
+      { capability: "Open an email attachment", short: "open attachments", builtIn: true, ours: true },
+      // Ours: gmail_save_attachment_to_drive and drive_upload_file, and
+      // file_download_link (docs/gmail, docs/file-references). The page
+      // describes neither.
       { capability: "Save an email or an attachment to Drive", builtIn: false, ours: true },
-      // Ours since 13 October 2026 (file_download_link). The built-in
-      // connector's tool list, enumerated 15 October 2026, has no download
-      // to disk.
       { capability: "Save an email or an attachment to your computer", builtIn: false, ours: true },
     ],
-    note: `The built-in connector sends, replies and forwards. It gained those verbs in August 2026, and this table claimed otherwise until 18 September 2026: if you read the older version of this row anywhere, including here, it was wrong. It also deletes a draft, which this table denied until 9 October 2026. Both connectors now label a whole thread in one call, move a message or a whole thread to the trash and back, and mark a message as spam and take it back out. And it gained full label management earlier in 2026, so it can label, star, mark read and archive. Its tool list, enumerated ${VERIFIED_ON}, has no download to disk. What is left on our side is saving an email or an attachment straight to Drive or to your computer.`,
+    note: `${PAGE} says Claude can search and read mail, draft, send, reply to, and forward email, open attachments up to about 12 MB each, manage labels and threads, and list saved drafts. It does not describe saving an email or an attachment to Drive or to your computer, which DataToRAG does. DataToRAG also trashes messages, marks spam, and deletes drafts. The page does not mention those either way, so they have no row.`,
   },
   {
     service: "Google Calendar",
     rows: [
+      // "View events and calendars, including shared calendars you have
+      // access to"
       { capability: "Read and list events", short: "read and list", builtIn: true, ours: true },
+      // "Create, update, and delete events with full customization"
       { capability: "Create, update, delete an event", short: "create, update, delete", builtIn: true, ours: true },
-      {
-        capability:
-          "Rich event creation: recurrence, rooms, attachments, reminders",
-        builtIn: true,
-        ours: false,
-        emphasis: true,
-      },
-      // Both ours with SCRUM-428: calendar_respond_to_event and
-      // calendar_suggest_time, the latter built on our free/busy lookup.
+      // "Set up recurring meetings". calendar_create_event has no
+      // recurrence option, so this row is theirs.
+      { capability: "Set up a recurring meeting", builtIn: true, ours: false, emphasis: true },
+      // "respond to invitations (accept, decline, or tentative)"
       { capability: "RSVP to an invitation", short: "RSVP", builtIn: true, ours: true },
-      { capability: "Suggest a meeting time", short: "suggest a time", builtIn: true, ours: true },
-      { capability: "Search events by keyword", short: "search", builtIn: true, ours: true },
-      // Ours with SCRUM-428: calendar_list_calendars, five fields a calendar.
-      { capability: "List your other calendars", short: "list calendars", builtIn: true, ours: true },
-      { capability: "Free/busy lookup", builtIn: false, ours: true },
+      // "Find mutual availability across attendees". Ours:
+      // calendar_suggest_time and calendar_freebusy. A separate free/busy
+      // row said No for built-in until November 25, 2026; the page
+      // describes the job that row was about, so it is folded in here.
+      { capability: "Find a time across attendees' availability", short: "find a time", builtIn: true, ours: true },
+      { capability: "See your other calendars", short: "list calendars", builtIn: true, ours: true },
     ],
     note: [
-      `On a single account, the built-in connector still creates richer events: recurring events, room booking, attachments, and custom reminders, where ours creates plain events. Both of us answer invitations, suggest meeting times and list the other calendars on the account. Enumerated ${VERIFIED_ON}.`,
-      "What we add is span: both your calendars reachable in one request, without either account having to share anything with the other. Free/busy runs one lookup per account and the agent combines them.",
-      "One honest caveat: the built-in connector sees every calendar the connected account can see. If you already share your personal calendar with your work account, that covers the cross-account case for you. Our advantage is for calendars you'd rather not share.",
+      `${PAGE} says Claude can view events and calendars, create, update, and delete events with full customization, find mutual availability across attendees, respond to invitations, and set up recurring meetings. DataToRAG creates plain events with attendees, a location, and a Meet link, and has no recurrence option, so that row is theirs.`,
+      "What DataToRAG adds is span: the calendars of more than one Google account behind one connection, one call per account, without either account having to share anything with the other.",
+      "One honest caveat: the help page says the built-in connector views shared calendars you have access to. If you already share your personal calendar with your work account, that may cover the cross-account case for you.",
     ],
   },
   {
     service: "Google Drive",
     rows: [
-      { capability: "Search files", builtIn: true, ours: true },
-      { capability: "Read file content", builtIn: true, ours: true },
-      // Ours with SCRUM-428: file_download_link takes a drive_file or a
-      // drive_export reference. Renamed from "Download file content": what
-      // both do is get a file onto your computer, by different routes, and
-      // the note says how each one does it.
-      { capability: "Download a file to your computer", builtIn: true, ours: true },
-      // Ours since 16 October 2026: drive_get_file describes a file or folder
-      // without reading it.
-      { capability: "File metadata", builtIn: true, ours: true },
-      // Ours with SCRUM-428: drive_get_file_permissions.
-      { capability: "Sharing permissions", builtIn: true, ours: true },
-      // Reading who a file is shared with is the row above. This is the
-      // write: it grants someone access. We have no tool for either.
-      // Both ours with SCRUM-428: drive_share_file and drive_list_recent_files.
-      { capability: "Share a file with someone", builtIn: true, ours: true },
-      { capability: "Recently-opened files", builtIn: true, ours: true },
-      // Ours since 16 October 2026: drive_move_file.
-      { capability: "Move a file to another folder", builtIn: true, ours: true },
-      // A tie since 9 October 2026: we copy files now.
-      { capability: "Copy a file", builtIn: true, ours: true },
-      { capability: "Rename a file", builtIn: true, ours: true },
-      // Conceded on 9 October 2026. Its create tool takes the folder type,
-      // and our own Drive comparison post has said so since August.
-      { capability: "Create a folder", builtIn: true, ours: true },
+      { capability: "Search files", short: "search", builtIn: true, ours: true },
+      { capability: "Read file content", short: "read", builtIn: true, ours: true },
+      // "Look up file metadata"
+      { capability: "File metadata", short: "metadata", builtIn: true, ours: true },
+      // "View file permissions and list recent changes to your Drive."
+      { capability: "Sharing permissions", short: "permissions", builtIn: true, ours: true },
+      { capability: "Recent files", short: "recent files", builtIn: true, ours: true },
+      // "Share, move, and trash files in Google Drive."
+      { capability: "Share a file with someone", short: "share", builtIn: true, ours: true },
+      { capability: "Move a file to another folder", short: "move", builtIn: true, ours: true },
+      { capability: "Trash a file", short: "trash", builtIn: true, ours: true },
+      // "Upload any file type, with optional auto-convert to Google formats."
+      { capability: "Upload a file", short: "upload", builtIn: true, ours: true },
+      // "Create folders."
+      { capability: "Create a folder", short: "folders", builtIn: true, ours: true },
     ],
-    note: "Both connectors download a file. Ours hands you a single-use link with a checksum, or files the Drive file on a Jira issue; the built-in connector returns the content into the conversation. The rest of this group both of us do too: we read a file's metadata and move a file between folders since 16 October 2026, which this table denied until then, and we share a file, read who it is shared with and list recent files too. Our advantage was never Drive breadth. It is what we do with a file across services and accounts: an email's attachment onto a Jira issue or into Drive, and two Google accounts in one request.",
+    note: `${PAGE} says Claude can search and read files, look up metadata, view permissions, share, move, and trash files, upload any file type, create folders, and list recent changes. DataToRAG does each of those. It also copies and renames files and makes a single-use download link with a checksum. The page does not mention those either way, so they have no row. Drive breadth is not the difference between the two.`,
   },
   {
-    service: "Beyond Google",
+    service: "Contacts and Tasks",
     rows: [
+      // Ours: docs/contacts and docs/tasks.
       { capability: "Google Contacts", builtIn: false, ours: true },
       { capability: "Google Tasks", builtIn: false, ours: true },
-      // Both conceded on 9 October 2026. Claude has an Atlassian connector,
-      // and it does every verb these two rows name. See rule 6.
-      { capability: "Jira, read, create, comment, transition", short: "Jira basics", builtIn: true, ours: true },
-      { capability: "Confluence, read, create, edit pages", short: "Confluence basics", builtIn: true, ours: true },
-      // Added with SCRUM-428, when the worklog, link and comment-thread tools
-      // shipped: both connectors do these.
-      { capability: "Jira, log work and link issues", short: "worklogs and links", builtIn: true, ours: true },
-      { capability: "Confluence, comment threads and inline comments", short: "comment threads", builtIn: true, ours: true },
-      {
-        capability: "Jira, attach an email or one of its attachments to an issue",
-        builtIn: false,
-        ours: true,
-        emphasis: true,
-      },
     ],
-    note: "Claude has an Atlassian connector of its own, and for reading, creating, commenting and moving an issue through its workflow it does what ours does. Both of us log work, link issues, and reply in Confluence comment threads, inline comments included. This table said otherwise until 9 October 2026. Where it stops is files: it has no tool that takes one, so an email, or a PDF inside it, cannot be put on an issue. Contacts and Tasks have no built-in connector at all.",
+    note: `${PAGE} does not describe a Contacts or a Tasks connector. That is the page being silent, not Anthropic stating a limit. DataToRAG has tools for both. Jira, Confluence, and Notion are on the same DataToRAG address too. This table compares Google only and makes no comparison for them.`,
   },
   {
-    service: "The one that changes how you work",
+    service: "More than one Google account",
     rows: [
+      // Ours: docs/multiple-accounts, the `account` argument.
       {
-        capability: "Work and personal account at the same time",
+        capability: "Several Google accounts behind one connection",
         builtIn: false,
         ours: true,
         emphasis: true,
       },
     ],
-    note: `The built-in connectors handle one Google account, as enumerated ${VERIFIED_ON}. If you live in a work inbox and a personal one, you disconnect and reconnect to switch. Every DataToRAG tool takes an account, so checking both inboxes is one request.`,
+    note: `Every DataToRAG Google tool takes an optional account, so a work account and a personal account answer the same prompt, one call per account. ${PAGE} does not describe connecting more than one Google account.`,
   },
 ];
 
-/** The rows the landing page's hero shows (SCRUM-425, SCRUM-426): every row
- * of the table above that we have and the built-in connectors do not, and
- * nothing else. The filter decides WHICH rows; the map below only decides
- * WHERE each one sits, in Manuel's order. Text is never retyped, so a row
- * flipped in GROUPS leaves the hero on the same deploy.
+/** The rows the landing page's hero shows: every row of the table above that
+ * we have and Anthropic's help page does not describe, and nothing else. The
+ * filter decides WHICH rows; the map below only decides WHERE each one sits.
+ * Text is never retyped, so a row changed in GROUPS changes the hero on the
+ * same deploy.
  *
- * A gap row the map does not name is not shown, and a test fails on it
- * (`unmappedHeroGaps`), so a future flip to No/Yes cannot drop out silently.
- * A row the map names that is not a gap is simply absent, which is how a
- * concession leaves the hero.
+ * A hero row the map does not name is not shown, and a test fails on it
+ * (`unmappedHeroGaps`), so a future row of this kind cannot drop out
+ * silently. A row the map names that the page now describes is simply
+ * absent, which is how a tie leaves the hero.
  *
- * `tag` names a row's service where its group does not: only the Jira row,
- * which sits with the Gmail attachments it acts on but belongs to the
- * Atlassian group of the full table.
- *
- * TIES (SCRUM-427): under its gaps, each hero group carries one line of what
- * both connectors do, the Yes/Yes rows of the source groups named in
- * `tiesFrom`, in the full table's order. A Google group with gaps only read
- * thin. Rows where the built-in connector does more (built-in Yes, ours No)
- * appear nowhere in the hero; they stay conceded in the full table. Beyond
- * Google draws its ties from the Beyond Google source group, whose Yes/Yes
- * rows are the Jira and Confluence ones. */
-export type HeroRow = Row & { tag: string | null };
-export type HeroGroup = { label: string; rows: HeroRow[]; ties: string[]; slides: boolean };
+ * TIES: under its rows, each hero group carries one line of what both do, the
+ * Yes/Yes rows of the source groups named in `tiesFrom`, in the full table's
+ * order. Rows where the built-in connectors do more (built-in Yes, ours No)
+ * appear nowhere in the hero; they stay conceded in the full table. */
+export type HeroRow = Row;
+export type HeroGroup = { label: string; rows: HeroRow[]; ties: string[] };
 
 const HERO_MAP: { label: string; rows: string[]; tiesFrom: string[] }[] = [
   {
     label: "Sheets",
-    rows: ["Query a sheet with a filter", "Two Google accounts in one request"],
+    rows: ["Query a sheet with a filter"],
     tiesFrom: ["Google Sheets"],
   },
   {
@@ -303,31 +245,21 @@ const HERO_MAP: { label: string; rows: string[]; tiesFrom: string[] }[] = [
     rows: [
       "Save an email or an attachment to Drive",
       "Save an email or an attachment to your computer",
-      "Jira, attach an email or one of its attachments to an issue",
     ],
   },
-  { label: "Slides", rows: ["Put content in it"], tiesFrom: ["Google Slides"] },
-  { label: "Calendar", rows: ["Free/busy lookup"], tiesFrom: ["Google Calendar"] },
   {
-    label: "Beyond Google",
-    rows: ["Google Contacts", "Google Tasks", "Work and personal account at the same time"],
-    tiesFrom: ["Beyond Google"],
+    label: "Contacts, Tasks, and accounts",
+    rows: ["Google Contacts", "Google Tasks", "Several Google accounts behind one connection"],
+    tiesFrom: [],
   },
 ];
 
-const HERO_TAGS: Record<string, string> = {
-  "Jira, attach an email or one of its attachments to an issue": "Jira",
-};
-
-/** Every row we have and the built-in connectors do not, with its source
- * group's service. */
+/** Every row we have and the help page does not describe. */
 function heroGaps(groups: Group[]) {
-  return groups.flatMap((g) =>
-    g.rows.filter((r) => !r.builtIn && r.ours).map((r) => ({ ...r, service: g.service }))
-  );
+  return groups.flatMap((g) => g.rows.filter((r) => !r.builtIn && r.ours));
 }
 
-/** Gap rows the hero map does not place. Must be empty; a test holds it. */
+/** Hero rows the map does not place. Must be empty; a test holds it. */
 export function unmappedHeroGaps(groups: Group[] = GROUPS): string[] {
   const placed = new Set(HERO_MAP.flatMap((g) => g.rows));
   return heroGaps(groups)
@@ -337,32 +269,49 @@ export function unmappedHeroGaps(groups: Group[] = GROUPS): string[] {
 
 export function heroGroups(groups: Group[] = GROUPS): HeroGroup[] {
   const gaps = new Map(heroGaps(groups).map((r) => [r.capability, r]));
-  return HERO_MAP.map(({ label, rows, tiesFrom }) => {
-    const placed = rows.flatMap((capability) => {
+  return HERO_MAP.map(({ label, rows, tiesFrom }) => ({
+    label,
+    rows: rows.flatMap((capability) => {
       const gap = gaps.get(capability);
-      if (!gap) return [];
-      const { service, ...row } = gap;
-      return [{ ...row, tag: HERO_TAGS[capability] ?? null, service }];
-    });
-    return {
-      label,
-      rows: placed.map(({ service: _service, ...row }) => row),
-      ties: tiesFrom.flatMap((service) =>
-        (groups.find((g) => g.service === service)?.rows ?? [])
-          .filter((r) => r.builtIn && r.ours)
-          .map((r) => r.short ?? r.capability)
-      ),
-      slides: placed.some((r) => r.service === "Google Slides"),
-    };
-  }).filter((g) => g.rows.length > 0);
+      return gap ? [gap] : [];
+    }),
+    ties: tiesFrom.flatMap((service) =>
+      (groups.find((g) => g.service === service)?.rows ?? [])
+        .filter((r) => r.builtIn && r.ours)
+        .map((r) => r.short ?? r.capability)
+    ),
+  })).filter((g) => g.rows.length > 0);
 }
 
+/** What a built-in cell says when the help page does not describe the row.
+ * Words, not a mark: a minus sign reads as "cannot", which the page never
+ * said. The hero prints the same words from here. */
+export const NOT_DESCRIBED = "Not described";
+export const NOT_DESCRIBED_SUFFIX = " on Anthropic's help page";
+
+const Yes = () => (
+  <>
+    <CircleCheckIcon aria-hidden="true" className="inline-block size-4 text-primary" />
+    <span className="sr-only">Yes</span>
+  </>
+);
+
+/** The built-in column: a tick when the page describes it, the words when it
+ * does not. */
+const BuiltInMark = ({ described }: { described: boolean }) =>
+  described ? (
+    <Yes />
+  ) : (
+    <span className="text-[11px] leading-tight text-muted-foreground">
+      {NOT_DESCRIBED}
+      <span className="sr-only">{NOT_DESCRIBED_SUFFIX}</span>
+    </span>
+  );
+
+/** Our own column, where No is ours to say. */
 const Mark = ({ yes }: { yes: boolean }) =>
   yes ? (
-    <>
-      <CircleCheckIcon aria-hidden="true" className="inline-block size-4 text-primary" />
-      <span className="sr-only">Yes</span>
-    </>
+    <Yes />
   ) : (
     <>
       <CircleMinusIcon
@@ -384,21 +333,27 @@ export function ConnectorComparison() {
           What each one can actually do
         </h2>
         <p className="mx-auto mt-5 max-w-xl text-muted-foreground">
-          Claude&rsquo;s built-in connectors cover a lot, including reading,
-          writing and editing in Docs and Sheets. The rows below show where
-          each one stops. What they still cannot do: filtered sheet queries,
-          two accounts in one request, Slides content, saving mail and
-          attachments to Drive or your computer, free/busy, Contacts and
-          Tasks, and filing an email on a Jira issue.
+          DataToRAG reaches several Google accounts through one connection,
+          has Google Contacts and Google Tasks tools, puts Jira, Confluence,
+          and Notion on the same address, and works from any MCP client.
+          Claude&rsquo;s built-in Google connectors read, create, and edit
+          Docs, Sheets, and Slides files and send email, so most rows below
+          are ties.
         </p>
         <p className="mx-auto mt-3 max-w-xl text-sm text-muted-foreground">
-          Everything below was checked by hand against both products on{" "}
-          {VERIFIED_ON}, except Google Slides, last checked on{" "}
-          {SLIDES_VERIFIED_ON}. That check moved most of the Sheets rows and
-          the Docs edit row to the built-in connectors: Claude has Google
-          Docs and Sheets connectors of its own since October 2026, in beta,
-          and they edit files in place. Querying a sheet and working two
-          Google accounts in one request stay ours.
+          The Built-in column is what{" "}
+          <a
+            className="underline underline-offset-4 hover:text-foreground"
+            href={BUILT_IN_HELP_URL}
+            rel="noopener noreferrer"
+            target="_blank"
+          >
+            Anthropic&rsquo;s help page
+          </a>{" "}
+          says as of {BUILT_IN_CHECKED_ON}, and nothing more. A tick means the
+          page describes it. &ldquo;{NOT_DESCRIBED}&rdquo; means the page does
+          not mention it, which is not the same as Claude being unable to do
+          it. The DataToRAG column is our own tool list.
         </p>
       </div>
 
@@ -434,6 +389,10 @@ export function ConnectorComparison() {
             it can afford (longest is 27 characters). The 480px floor is kept
             from `sm` up, where it fits comfortably. */}
         <table className="w-full border-collapse text-left text-sm sm:min-w-[30rem]">
+          <caption className="sr-only">
+            Claude&rsquo;s built-in Google connectors as Anthropic&rsquo;s help
+            page describes them as of {BUILT_IN_CHECKED_ON}, beside DataToRAG
+          </caption>
           <thead>
             <tr className="border-b border-border text-xs uppercase tracking-wider text-muted-foreground">
               <th className="py-3 pr-4 font-medium" scope="col">
@@ -494,7 +453,7 @@ export function ConnectorComparison() {
                     {row.capability}
                   </th>
                   <td className="px-1 py-3 text-center sm:px-2">
-                    <Mark yes={row.builtIn} />
+                    <BuiltInMark described={row.builtIn} />
                   </td>
                   <td className="px-1 py-3 text-center sm:px-2">
                     <Mark yes={row.ours} />
@@ -523,13 +482,11 @@ export function ConnectorComparison() {
       </div>
 
       <p className="mt-14 border-t border-border pt-8 text-center text-base text-foreground">
-        <strong className="font-semibold">
-          If you mostly read, the built-in connectors are free and they&rsquo;re
-          good, so use them.
-        </strong>{" "}
+        <strong className="font-semibold">{BUILT_IN_DIFFERENCE.close}</strong>{" "}
         <span className="text-muted-foreground">
-          The moment you need Claude to change something that already exists, or
-          to work across more than one account, that is where we start.
+          DataToRAG is for more than one Google account, Contacts and Tasks,
+          Jira, Confluence, and Notion on the same address, and clients other
+          than Claude.
         </span>
       </p>
     </div>

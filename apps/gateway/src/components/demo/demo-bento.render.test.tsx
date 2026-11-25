@@ -139,11 +139,15 @@ describe("the demo disclosure reaches the DOM", () => {
     expect(headers).toContain("Gmail to Jira");
   });
 
-  it("names the connector that has the limit on the Jira row", () => {
+  it("says what the reader wants on the Jira row, and names no limit in anyone else's product", () => {
+    // The line named Claude's Atlassian connector and a limit read from its
+    // tool list on 2026-10-09. No vendor page read since supports it, so the
+    // row says what we do and nothing about anyone else.
     const text = render(<DemoBento heading={DEMO_HEADING} />);
     expect(text).toContain(
-      "Claude's Atlassian connector cannot attach a file to a Jira issue."
+      "You wanted the email and its PDF on the Jira issue, not downloaded and attached by hand."
     );
+    expect(text).not.toMatch(/Claude's \w+ connector (cannot|can't|is signed in|can make)/);
     expect(text).toContain(
       "DataToRAG puts the email and its PDF on the issue, once you approve."
     );
