@@ -100,25 +100,28 @@ function ConnectorGroupNav({
             {connector.title}
           </div>
         )}
-        <button
-          onClick={() => setExpanded((v) => !v)}
-          aria-label={expanded ? "Collapse" : "Expand"}
-          className="rounded-md p-1 text-muted-foreground/60 transition-colors hover:bg-secondary hover:text-foreground"
-        >
-          <svg
-            width="12"
-            height="12"
-            viewBox="0 0 16 16"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="1.5"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            className={`transition-transform ${expanded ? "" : "-rotate-90"}`}
+        {/* Only a connector with child pages has something to collapse. */}
+        {pages.length > 0 && (
+          <button
+            onClick={() => setExpanded((v) => !v)}
+            aria-label={expanded ? "Collapse" : "Expand"}
+            className="rounded-md p-1 text-muted-foreground/60 transition-colors hover:bg-secondary hover:text-foreground"
           >
-            <path d="M4 6l4 4 4-4" />
-          </svg>
-        </button>
+            <svg
+              width="12"
+              height="12"
+              viewBox="0 0 16 16"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.5"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              className={`transition-transform ${expanded ? "" : "-rotate-90"}`}
+            >
+              <path d="M4 6l4 4 4-4" />
+            </svg>
+          </button>
+        )}
       </div>
 
       {expanded && pages.length > 0 && (

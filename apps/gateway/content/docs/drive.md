@@ -14,7 +14,8 @@ faqs:
   - q: Which file types can the Drive reader handle?
     a: >-
       Three kinds. Google Docs, Sheets and Slides come back as extracted text,
-      using the same extraction the dedicated tools use; .docx, .xlsx and .pptx
+      using the same extraction the dedicated tools use; .docx, .xlsx and .pptx,
+      and the older .doc, .xls and .ppt,
       are converted to the matching Google format in a temporary copy that is
       read and then deleted; .txt and .csv are returned as they are. Anything
       else, PDFs included, returns an Unsupported file type error. A Sheet read
@@ -54,7 +55,7 @@ the conversation to be read.
 | Tool | Description |
 |------|-------------|
 | `drive_search` | Search files using Drive query syntax, e.g. `name contains 'report'` or `mimeType='application/vnd.google-apps.spreadsheet'`. Returns names, IDs, types and modification dates. `page_size` defaults to 20 |
-| `drive_read_file` | Read a file's text content by file ID. Handles Google Docs, Sheets and Slides, Office `.docx`/`.xlsx`/`.pptx` (converted automatically), and `.txt`/`.csv`. Returns the extracted text directly, with no local download |
+| `drive_read_file` | Read a file's text content by file ID. Handles Google Docs, Sheets and Slides, Office `.docx`/`.xlsx`/`.pptx` and the older `.doc`/`.xls`/`.ppt` (converted automatically), and `.txt`/`.csv`. Returns the extracted text directly, with no local download |
 | `drive_create_folder` | Create a new folder, optionally inside a parent folder |
 | `drive_rename_file` | Rename a file or folder by ID. Changes the name only: content, location and sharing are untouched. Works on any file or folder the account can edit |
 | `drive_upload_file` | Put a file into Drive, named by a [file reference](/docs/file-references): an email, one of its attachments, a file from another connected account's Drive (as stored, or a Google file exported, such as a Doc as a PDF), a file your agent already holds (up to 1 MB), or a file you send from your computer through an upload link (up to 25 MB). The receipt includes the SHA-256 Drive reports for what it stored and whether it matches what was sent, and the owners and sharing of the folder it went into |
@@ -71,7 +72,7 @@ the conversation to be read.
 | Type | Read as |
 |------|---------|
 | Google Docs, Sheets, Slides | Extracted text, the same extraction the dedicated tools use. A Sheet comes back as its first tab only, up to column Z and row 1000; use `sheets_read` for another tab or a larger range |
-| `.docx`, `.xlsx`, `.pptx` | Converted to the matching Google format in a temporary copy, read, and the copy deleted |
+| `.docx`, `.xlsx`, `.pptx`, and the older `.doc`, `.xls`, `.ppt` | Converted to the matching Google format in a temporary copy, read, and the copy deleted |
 | `.txt`, `.csv` | Returned as-is |
 | Anything else, **PDFs included** | An `Unsupported file type` error |
 

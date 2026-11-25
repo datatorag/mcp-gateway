@@ -62,6 +62,30 @@ export function getConnectorGroups(): ConnectorGroup[] {
   });
 }
 
+/** Every docs page once, in the order the sidebar lists them: the general
+ * pages, then each connector's overview followed by its pages. Previous and
+ * Next walk this, so they never leave a connector's group midway. Frontmatter
+ * `order` sorts within a list only; it is not a position among all pages. */
+export function getDocsSequence(): DocPage[] {
+  return [
+    ...getTopLevelDocs(),
+    ...getConnectorGroups().flatMap(({ overview, pages }) =>
+      overview ? [overview, ...pages] : pages
+    ),
+  ];
+}
+
+/** The pages before and after a page in the reading order. */
+export function getDocNeighbors(slug: string): {
+  prev: DocPage | null;
+  next: DocPage | null;
+} {
+  const sequence = getDocsSequence();
+  const index = sequence.findIndex((d) => d.slug === slug);
+  if (index === -1) return { prev: null, next: null };
+  return { prev: sequence[index - 1] ?? null, next: sequence[index + 1] ?? null };
+}
+
 function parsePage({ slug, data, content }: ParsedFile): DocPage {
   const html = marked.parse(content) as string;
 

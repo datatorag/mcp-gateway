@@ -40,7 +40,7 @@ The Atlassian connector gives your AI agent access to Jira and Confluence: searc
 
 ## Connecting
 
-Sign in, open [Connections](https://datatorag.com/dashboard/connections) and click Connect on the Atlassian card. One OAuth flow grants access to both Jira and Confluence in your chosen Atlassian site.
+Sign in, open [Connections](https://datatorag.com/dashboard/connections) and click Connect on the Atlassian card. One OAuth flow grants access to both Jira and Confluence. If your Atlassian account can reach several sites, the connector acts on the first one Atlassian lists for it.
 
 ## More than one account
 

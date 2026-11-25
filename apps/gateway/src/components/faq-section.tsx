@@ -29,13 +29,13 @@ const VARIANTS = {
   /** A block at the foot of a page about something else: blog, docs. */
   compact: {
     heading: "font-display text-lg font-bold text-foreground",
-    question: "group text-sm font-semibold text-foreground",
+    question: "text-sm font-semibold text-foreground",
     list: "mt-6 space-y-7",
   },
   /** A page whose whole subject is the questions. */
   page: {
     heading: "text-xl font-semibold text-foreground",
-    question: "group font-medium text-foreground",
+    question: "font-medium text-foreground",
     list: "mt-6 space-y-8",
   },
   /** A section of a marketing page, sitting among other sections at that
@@ -50,7 +50,7 @@ const VARIANTS = {
     // reads as a hierarchy error. One step small is invisible; one step large
     // is not.
     heading: "font-display text-2xl font-bold text-foreground",
-    question: "group font-medium text-foreground",
+    question: "font-medium text-foreground",
     list: "mt-8 space-y-8",
   },
 } as const;
@@ -83,16 +83,19 @@ export function FaqSection({
           const anchor = faqAnchor(faq.q);
           return (
             <div key={anchor} id={anchor} className="scroll-mt-28">
-              <h3 className={styles.question}>
-                {faq.q}{" "}
+              {/* The permalink sits beside the heading, not in it, so the
+                  heading's text is the question alone. Its mark is hidden from
+                  assistive technology; the label is the link's name. */}
+              <div className="group flex items-baseline gap-1.5">
+                <h3 className={styles.question}>{faq.q}</h3>
                 <a
                   href={`#${anchor}`}
                   className="text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100"
                   aria-label={`Link to: ${faq.q}`}
                 >
-                  #
+                  <span aria-hidden="true">#</span>
                 </a>
-              </h3>
+              </div>
               <div
                 className="mt-2 text-sm leading-relaxed text-muted-foreground [&_a]:underline [&_a]:underline-offset-2 [&_a:hover]:text-foreground [&_code]:rounded [&_code]:bg-secondary [&_code]:px-1 [&_code]:py-0.5 [&_code]:text-xs"
                 dangerouslySetInnerHTML={{ __html: faqAnswerHtml(faq.a) }}

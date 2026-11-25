@@ -6,12 +6,14 @@ section: "general"
 faqs:
   - q: I connected my Google account but none of the tools work. What went wrong?
     a: >-
-      Almost always the consent screen. Google presents it with every permission
-      box unchecked and the Continue button works anyway, so clicking straight
-      through completes the connection, shows DataToRAG as connected, and grants
-      permission to nothing. There is no error at any point. Open the Connections
-      page in the DataToRAG dashboard, look at what the account actually
-      granted, and reconnect, ticking "Select all" or the services you want.
+      Almost always the consent screen. When you connect a Google account to
+      DataToRAG, Google presents its consent screen with every permission box
+      unchecked, and the Continue button works anyway. Leave every box
+      unchecked and DataToRAG connects nothing and asks you to try again. Tick
+      only some and only those services are connected, so the tools for the
+      others are refused. Open the Connections page in the DataToRAG dashboard,
+      look at what the account actually granted, and reconnect, ticking "Select
+      all" or the services you want.
   - q: Is connecting my Google account in the dashboard enough to set up DataToRAG?
     a: >-
       No. Setup is two separate connections and both are required: connect your
@@ -66,12 +68,24 @@ Prefer video? This two-minute walkthrough covers the sign-in flow, account conne
 
 Setup is two connections, and both are required before your agent can do anything. They can happen in either order:
 
-1. **Connect your accounts.** Sign in at [datatorag.com/dashboard](https://datatorag.com/dashboard), open [Connections](https://datatorag.com/dashboard/connections) and connect your Google account (and Atlassian or Notion, if you use them).
+1. **Connect your accounts.** Sign in at [datatorag.com/dashboard](https://datatorag.com/dashboard), open [Connections](https://datatorag.com/dashboard/connections) and connect your Google account (and Atlassian or Notion, if you use them). For Google, read "Connect your Google account" below first: its consent screen has boxes you must tick.
 2. **Connect your client.** This is the step most people miss: connecting an account in the dashboard does not connect your agent. Your client (Claude, ChatGPT, Codex, Cursor, or any MCP client) has to be pointed at the DataToRAG MCP endpoint separately. It can come first: the client asks you to sign in when it connects, and your DataToRAG account is made then. Pick your client below for its step, or open [Add DataToRAG to your agent](/add-to-your-agent):
 
 <!--setup-instructions-->
 
 Once your client completes its sign-in, ask it something like "search my email for invoices from last month". The first successful tool call shows up in your [dashboard](https://datatorag.com/dashboard) within seconds.
+
+## Connect your Google account
+
+On [Connections](https://datatorag.com/dashboard/connections), click Connect on the Google Workspace card. DataToRAG first shows which boxes to tick, then sends you to Google's consent screen. A connect link from your agent leads to the same screen.
+
+**Google's consent screen arrives with every box unchecked, and the Continue button works anyway.** If you leave every box unchecked, nothing is connected: DataToRAG says so and offers Try again. If you tick only some services, only those are connected, and a tool for any other service is refused.
+
+**Tick "Select all"**, or tick just the services you want, then click Continue. Tick the ongoing access box in Google's notice as well. Without it, Google's notice says the access expires and has to be reviewed every six months.
+
+![Google's consent screen for DataToRAG MCP. Every permission checkbox is unchecked by default, including Select all at the top, and the Continue button is still clickable. Select all and Continue are both marked.](/docs/claude-web-oauth-consent.png)
+
+You can grant a subset and come back later, and connecting more services afterwards re-runs this same screen. If tools are missing in your client, this is the first thing to check: open [Connections](https://datatorag.com/dashboard/connections) in the dashboard, look at what your account granted, and reconnect if it is short.
 
 ## Connect accounts from your agent
 
@@ -99,17 +113,11 @@ https://datatorag.com/mcp
 
 ![Add custom connector dialog with the name DataToRAG and the URL https://datatorag.com/mcp filled in, advanced OAuth fields left empty](/docs/claude-web-connector-url.png)
 
-**3. Complete the sign-in, and tick the boxes.** Click Add, and Claude redirects you to sign in with the same Google account you used on the DataToRAG dashboard.
+**3. Sign in and approve the app.** Click Add, and Claude sends you to Google to sign in. Pick the same Google account you used on the DataToRAG dashboard. This step only signs you in to DataToRAG. It asks Google for your name, email address, and profile picture and nothing else, so no permission checkboxes appear here. Those belong to connecting your Google account, described above.
 
-**Google's consent screen arrives with every box unchecked, and the Continue button works anyway.** If you click straight through, the connection succeeds, DataToRAG shows as connected, and not one tool will work, because you granted permission to nothing. There is no error at any point. This is the single most common way a setup goes wrong.
+The first time an app connects, DataToRAG then shows a page that asks "Allow (the app's name) to use DataToRAG?". It names the app and the site it sends you back to, and has two buttons, Approve and Deny. Click Approve. If you approve, you won't be asked again for this app. Only approve an app you just added yourself.
 
-**Tick "Select all"**, or tick just the services you want, then click Continue.
-
-![Google's consent screen for DataToRAG MCP. Every permission checkbox is unchecked by default, including Select all at the top, and the Continue button is still clickable. Select all and Continue are both circled.](/docs/claude-web-oauth-consent.png)
-
-You can grant a subset and come back later, and connecting more services afterwards re-runs this same screen. If tools are missing in Claude, this is the first thing to check: open [Connections](https://datatorag.com/dashboard/connections) in the dashboard, look at what your account granted, and reconnect if it is short.
-
-**4. Check the tools are available.** Back in a chat, DataToRAG appears in Claude's connector list and its tools are available to the conversation. Clients show them with a prefix, such as `gws-mcp__gmail_search` and `atlassian-mcp__jira_search`; these docs use the short name.
+**4. Check the tools are available.** Back in a chat, DataToRAG appears in Claude's connector list. Each provider's tools are listed once you have connected an account for it. Until then the conversation has only the built-in tools, such as `connect`, which gives you a link to connect an account. Clients show them with a prefix, such as `gws-mcp__gmail_search` and `atlassian-mcp__jira_search`; these docs use the short name.
 
 ## Try it in the dashboard Agent
 
@@ -121,7 +129,9 @@ The dashboard Agent is for trying things out. For day-to-day use, connect your o
 
 ## How it works
 
-DataToRAG runs as a remote MCP server. When your AI agent calls a tool like `gmail_search`, the request flows through our gateway to your connected Google account. Your data never touches our storage. Every operation is a pass-through to the Google API on your behalf.
+DataToRAG runs as a remote MCP server. When your agent calls a tool like `gmail_search`, our gateway calls the Google API with your connected account's OAuth token and returns the answer.
+
+DataToRAG passes the content of your connected accounts through to your agent and does not keep it, but it does store each connection's OAuth tokens (encrypted), a usage record for each call (no arguments or response bodies), the error text of a failed call (which can quote your own data), and your conversations with the Agent on the dashboard (messages and tool results), and it holds a file you upload in memory for up to ten minutes. [Usage & Metrics](/docs/usage) covers what a usage record holds and how long it is kept, and the [privacy policy](/privacy) has the full picture.
 
 ## One account per sign-in email
 

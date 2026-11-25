@@ -53,7 +53,7 @@ The Jira tools let your AI agent search, create, update, and move issues through
 | `jira_update_issue` | Update an issue's summary, description, or arbitrary fields via `additional_fields` |
 | `jira_get_transitions` | Get available workflow transitions for an issue. Use returned IDs with `jira_transition_issue` |
 | `jira_transition_issue` | Move an issue to a new workflow status |
-| `jira_get_comments` | Get all comments on an issue |
+| `jira_get_comments` | Get the comments on an issue. It makes one request and does not page, so on an issue with many comments the answer is the first page Jira returns |
 | `jira_add_comment` | Add a comment to an issue |
 | `jira_edit_comment` | Edit an existing comment |
 | `jira_delete_comment` | Delete a comment |

@@ -71,6 +71,6 @@ on the first site Atlassian lists for it.
 
 - "Read the sprint retro Confluence page and summarize the top action items"
 - "Search Confluence for our on-call runbook and pull out the escalation steps"
-- "List all pages in the Engineering space updated in the last week"
+- "Search the Engineering space for pages updated in the last week"
 - "Create a new Confluence page in the Product space with this week's roadmap review notes"
 - "Add a comment on the launch plan page listing the open questions for the design team"

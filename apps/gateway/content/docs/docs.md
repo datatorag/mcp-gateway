@@ -18,9 +18,11 @@ faqs:
       than one call per change.
   - q: Does reading a Google Doc include its images?
     a: >-
-      It includes inline image metadata. The Docs read tool returns the full
-      content of a document along with metadata for its inline images, rather
-      than the image files themselves.
+      It includes inline image metadata. The Docs read tool returns a
+      document's paragraph text with each inline image marked, along with
+      metadata for those images, not the image files themselves. Text inside a
+      table is left out in text and index mode; mode full returns the raw
+      document, tables included.
   - q: Why does deleting a doc need Drive access?
     a: >-
       Because deleting a file is a Drive operation. The Docs connector uses
@@ -34,7 +36,7 @@ The Docs connector gives your AI agent the ability to read and write Google Docs
 
 | Tool | Description |
 |------|-------------|
-| `docs_get` | Read a Google Doc. `mode: "text"` (the default) returns plain text with inline images marked; `"index"` adds the character positions `docs_batch_update` takes; `"full"` returns the raw API response. `start_index` and `end_index` read part of a long document, and the answer says where the next part starts |
+| `docs_get` | Read a Google Doc. `mode: "text"` (the default) returns plain text with inline images marked; `"index"` adds the character positions `docs_batch_update` takes; `"full"` returns the raw API response. Text and index mode read paragraph text only, so text inside a table is left out; `"full"` includes it. `start_index` and `end_index` read part of a long document, and the answer says where the next part starts |
 | `docs_create` | Create a new, empty Google Doc with a title. Add content with `docs_write` or `docs_batch_update` |
 | `docs_write` | Insert text at the beginning of a document. It does not replace what is there; to replace or to insert elsewhere, use `docs_batch_update` |
 | `docs_batch_update` | Apply multiple updates in a single request (insert text, add formatting, replace content) |

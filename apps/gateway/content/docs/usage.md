@@ -56,8 +56,6 @@ faqs:
 
 Every tool call your AI agent makes through DataToRAG is logged to your personal usage dashboard at [datatorag.com/dashboard/usage](https://datatorag.com/dashboard/usage). You can see what ran, how fast it was, and where errors are happening.
 
-![Usage dashboard showing summary cards, call volume, by-connector breakdown, and the per-tool table](/blog/usage-dashboard.png)
-
 ## What you see
 
 The dashboard shows six things:
@@ -67,7 +65,7 @@ The dashboard shows six things:
 - **Most-called tools**: the tools you call most, in a chart
 - **By connector**: stacked breakdown of calls across Google Workspace, Atlassian, Notion and anything else you've connected
 - **Per-tool table**: every tool you've called, with calls, success rate, median and slow-end latency, and average response size. Click a row to drill down
-- **Recent activity**: the latest calls as they come in
+- **Recent activity**: the latest calls, as of when you opened the page
 
 The drill-down page shows the last 50 calls for a single tool: when it ran, the status, latency, and any error message.
 
@@ -116,11 +114,12 @@ DataToRAG makes one account per sign-in email. Each client asks you to sign in t
 
 If the app's call is refused with a message that the monthly free-plan limit is reached, that already answers it: the app is on a free account.
 
-**The fix, per app.** Three steps, in the app that is on the wrong account:
+**The fix, per app.** Four steps, in the app that is on the wrong account:
 
 1. Remove the DataToRAG connector.
 2. Add it back, with the same URL, `https://datatorag.com/mcp`.
 3. When Google's account chooser appears, sign in with the email that holds your plan.
+4. If DataToRAG asks whether to allow the app, check it is the app you just added and click Approve.
 
 In Claude on the web and Claude Desktop, go to Customize, then Connectors, open the menu next to DataToRAG and choose Remove, then add it again as a custom connector the way the [setup guide](/docs/getting-started) shows. In Claude Code:
 
