@@ -1,6 +1,7 @@
 ---
 title: "Notion"
-description: "Search, read and edit the Notion pages and databases you share, with comments and people."
+searchTitle: "Notion MCP Server: Search, Read, and Edit Pages | DataToRAG"
+description: "Notion tools in the DataToRAG MCP server: search, read, and edit the pages and databases you share, query databases, and work with comments."
 order: 30
 section: "general"
 faqs:
@@ -36,7 +37,7 @@ faqs:
       each of these asks for approval before it runs.
 ---
 
-The Notion connector gives your AI agent the Notion pages and databases you choose to share: searching titles, reading pages as markdown, querying databases, editing content and properties, and working with comments. It works in the same conversation as your Gmail, Drive and Jira connections, in the DataToRAG agent or any MCP client.
+The Notion connector gives your AI agent the Notion pages and databases you choose to share: searching titles, reading pages as markdown, querying databases, editing content and properties, and working with comments. It works in the same conversation as your [Gmail](/docs/gmail), [Drive](/docs/drive) and [Jira](/docs/jira) connections, in the DataToRAG agent or any MCP client.
 
 ## Connecting
 

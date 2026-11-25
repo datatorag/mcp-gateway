@@ -2,16 +2,29 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { getConnectorGroups, getTopLevelDocs, type DocPage } from "@/lib/docs";
 import { PUBLIC_CONNECTORS_TEXT } from "@/lib/public-integrations";
+import { SITE_NAME, SITE_URL, breadcrumbNode, collectionPageNode } from "@/lib/site-schema";
+import { SOCIAL_OPEN_GRAPH, SOCIAL_TWITTER } from "@/lib/social-card";
+import { JsonLd } from "@/components/json-ld";
 import { ServiceIcon, serviceFromSlug } from "@/components/service-icon";
 import { DocsCta } from "./cta";
+import { DOCS_INDEX_DESCRIPTION, DOCS_INDEX_PATH, DOCS_INDEX_SEARCH_TITLE } from "./copy";
 import { ALL_TOOLS_DESCRIPTION, ALL_TOOLS_PATH, ALL_TOOLS_TITLE } from "./tools/copy";
 
-const DESCRIPTION = `Documentation for DataToRAG, an MCP server for ${PUBLIC_CONNECTORS_TEXT}: connect a client, then see what every tool does.`;
+const PAGE_URL = `${SITE_URL}${DOCS_INDEX_PATH}`;
+const HEADING = "DataToRAG documentation";
 
 export const metadata: Metadata = {
-  title: "Documentation | DataToRAG Docs",
-  description: DESCRIPTION,
-  alternates: { canonical: "https://datatorag.com/docs" },
+  title: DOCS_INDEX_SEARCH_TITLE,
+  description: DOCS_INDEX_DESCRIPTION,
+  alternates: { canonical: PAGE_URL },
+  openGraph: {
+    ...SOCIAL_OPEN_GRAPH,
+    title: DOCS_INDEX_SEARCH_TITLE,
+    description: DOCS_INDEX_DESCRIPTION,
+    type: "website",
+    url: PAGE_URL,
+  },
+  twitter: { ...SOCIAL_TWITTER, title: DOCS_INDEX_SEARCH_TITLE, description: DOCS_INDEX_DESCRIPTION },
 };
 
 /** One page of the list: its title, linked, and its one-line description. */
@@ -46,7 +59,17 @@ export default function DocsIndexPage() {
 
   return (
     <div>
-      <h1 className="font-display text-2xl font-bold text-foreground">DataToRAG documentation</h1>
+      {/* No date: the list is read from every docs page, so no day is its own. */}
+      <JsonLd
+        nodes={[
+          collectionPageNode({ name: HEADING, description: DOCS_INDEX_DESCRIPTION, url: PAGE_URL }),
+          breadcrumbNode([
+            { name: SITE_NAME, url: SITE_URL },
+            { name: "Docs", url: PAGE_URL },
+          ]),
+        ]}
+      />
+      <h1 className="font-display text-2xl font-bold text-foreground">{HEADING}</h1>
       <p className="mt-1.5 text-sm text-muted-foreground">
         DataToRAG is an MCP server that gives your agent tools for {PUBLIC_CONNECTORS_TEXT}. These pages cover how
         to connect a client and what each tool does.

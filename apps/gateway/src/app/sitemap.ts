@@ -51,8 +51,12 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     priority: 0.7,
   }));
 
+  // Each docs page with the day its file last changed (content/docs-dates.json).
+  // The docs index and the all-tools page above carry no date on purpose:
+  // both are built from other sources, so no single day is theirs.
   const docs: MetadataRoute.Sitemap = getAllDocs().map((d) => ({
     url: `${BASE}/docs/${d.slug}`,
+    ...(d.updated ? { lastModified: new Date(`${d.updated}T00:00:00`) } : {}),
     changeFrequency: "monthly",
     priority: 0.6,
   }));

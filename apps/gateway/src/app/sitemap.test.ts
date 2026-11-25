@@ -15,6 +15,7 @@ vi.mock("@/lib/db", () => ({
 import sitemap from "./sitemap";
 import { SHARE_LINKS } from "@/lib/share-links";
 import { getAllUseCases } from "@/lib/use-cases";
+import { getAllDocs } from "@/lib/docs";
 
 describe("sitemap", () => {
   it("never lists a share link", async () => {
@@ -51,6 +52,25 @@ describe("sitemap", () => {
     // The index is a page: nothing in its source sends the reader elsewhere.
     const source = readFileSync(path.resolve(process.cwd(), "src/app/docs/page.tsx"), "utf8");
     expect(source).not.toMatch(/redirect\(/);
+  });
+
+  it("lists every docs page with the day its file last changed, and the two generated docs pages with none", async () => {
+    const entries = await sitemap();
+    const docs = getAllDocs();
+    expect(docs.length).toBeGreaterThan(10);
+    for (const d of docs) {
+      const entry = entries.find((e) => e.url === `https://datatorag.com/docs/${d.slug}`);
+      expect(entry, d.slug).toBeDefined();
+      expect(d.updated, d.slug).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+      const sent = entry!.lastModified as Date;
+      const two = (n: number) => String(n).padStart(2, "0");
+      expect(`${sent.getFullYear()}-${two(sent.getMonth() + 1)}-${two(sent.getDate())}`, d.slug).toBe(d.updated);
+    }
+    // The index is read from every docs page and the tool list from the
+    // registry on each request: neither has a day of its own to state.
+    for (const url of ["https://datatorag.com/docs", "https://datatorag.com/docs/tools"]) {
+      expect(entries.find((e) => e.url === url)!.lastModified, url).toBeUndefined();
+    }
   });
 
   it("lists an active plugin's page, and never an admin-only service's (SCRUM-454)", async () => {

@@ -1,6 +1,7 @@
 ---
 title: "Contacts"
-description: "Search, list, create, update, and delete Google Contacts."
+searchTitle: "Google Contacts MCP Server | DataToRAG Docs"
+description: "Let your agent search, list, create, update, and delete Google Contacts through the DataToRAG MCP server, on a personal or a work Google account."
 order: 7
 section: "connectors"
 connector: "google-workspace"

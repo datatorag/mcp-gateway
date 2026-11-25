@@ -1,6 +1,7 @@
 ---
 title: "Getting Started"
-description: "Connect your tools to AI agents through a single MCP endpoint."
+searchTitle: "Set Up DataToRAG: One MCP Server for Gmail, Jira, and Notion"
+description: "Connect Claude, ChatGPT, Cursor, or any MCP client to Gmail, Drive, Calendar, Jira, Confluence, and Notion through one DataToRAG MCP endpoint."
 order: 0
 section: "general"
 faqs:
@@ -151,27 +152,27 @@ Each user connects their own accounts through the provider's OAuth screen. For G
 
 DataToRAG currently supports these services:
 
-**Google Workspace**
+**[Google Workspace](/docs/google-workspace)**
 
-- **Gmail**: Search, read messages and whole threads, send, reply, forward, draft, attach files, trash, report spam, save attachments, and manage labels
-- **Calendar**: List, create, update and delete events, check availability, suggest meeting times, answer invitations, and list calendars
-- **Drive**: Search, read, upload, copy, move, rename, trash and share files, and create folders
-- **Docs**: Read, create, write, and batch update documents
-- **Sheets**: Read, query, find rows, create, update, append, format, and delete spreadsheets, and manage tabs
-- **Slides**: Read, create, batch update, and delete presentations
-- **Contacts**: Search, list, create, update, and delete contacts
-- **Tasks**: List task lists, list tasks, create, update, complete, and delete tasks
+- **[Gmail](/docs/gmail)**: Search, read messages and whole threads, send, reply, forward, draft, attach files, trash, report spam, save attachments, and manage labels
+- **[Calendar](/docs/calendar)**: List, create, update and delete events, check availability, suggest meeting times, answer invitations, and list calendars
+- **[Drive](/docs/drive)**: Search, read, upload, copy, move, rename, trash and share files, and create folders
+- **[Docs](/docs/docs)**: Read, create, write, and batch update documents
+- **[Sheets](/docs/sheets)**: Read, query, find rows, create, update, append, format, and delete spreadsheets, and manage tabs
+- **[Slides](/docs/slides)**: Read, create, batch update, and delete presentations
+- **[Contacts](/docs/contacts)**: Search, list, create, update, and delete contacts
+- **[Tasks](/docs/tasks)**: List task lists, list tasks, create, update, complete, and delete tasks
 
-**Atlassian**
+**[Atlassian](/docs/atlassian)**
 
-- **Jira**: Search issues with JQL, create, update, transition and delete issues, comment, log work, link issues, add attachments, and look up attachment details
-- **Confluence**: Search with CQL, read, create, edit and delete pages, read and add comments, look up attachment details
+- **[Jira](/docs/jira)**: Search issues with JQL, create, update, transition and delete issues, comment, log work, link issues, add attachments, and look up attachment details
+- **[Confluence](/docs/confluence)**: Search with CQL, read, create, edit and delete pages, read and add comments, look up attachment details
 
-**Notion**
+**[Notion](/docs/notion)**
 
 - Search pages and databases by title, read pages as markdown, create, edit, move, and duplicate pages, query databases and edit properties, attach files to pages, read Notion AI meeting notes with their summary and action items, list the people in the workspace, work with comments, and create databases and views
 
-Each connector is documented on its own page with available operations, required scopes, and example prompts.
+Each connector is documented on its own page, linked above, with available operations, required scopes, and example prompts. [All tools](/docs/tools) lists every tool on one page.
 
 ## Seeing what your agent is doing
 
@@ -184,7 +185,3 @@ The [status page](/status) is public and needs no sign-in. It shows the latest f
 The results are grouped by service. Each service shows its checks in plain words and whether each one worked, a strip of the 30 days before, and a list of its tools with the state of each. A tool that no check covers yet is listed as "Served, not yet exercised". A failed check is marked as failing in the latest check, and its service with it.
 
 If the latest full run finished more than 36 hours ago, a notice at the top says when it finished, and the states are grayed, because they are from then and not from now.
-
-## Common questions
-
-The [FAQ](/faq) covers the questions we hear most: setup order, what the gateway can and cannot do, the approval gate, and how it compares to Claude's native connectors.

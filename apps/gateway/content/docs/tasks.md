@@ -1,6 +1,7 @@
 ---
 title: "Tasks"
-description: "List, create, update, complete, and delete Google Tasks."
+searchTitle: "Google Tasks MCP Server | DataToRAG Docs"
+description: "Let your agent list, create, update, complete, and delete Google Tasks through the DataToRAG MCP server, across a personal and a work account."
 order: 8
 section: "connectors"
 connector: "google-workspace"

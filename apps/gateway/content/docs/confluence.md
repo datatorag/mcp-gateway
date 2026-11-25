@@ -1,6 +1,7 @@
 ---
 title: "Confluence"
-description: "Search with CQL, read and edit pages, read and add comments, look up attachments."
+searchTitle: "Confluence MCP Server: Search and Edit Pages | DataToRAG"
+description: "Confluence tools in the DataToRAG MCP server: search with CQL, read, create, and edit pages, read and add comments, and look up attachment details."
 order: 22
 section: "connectors"
 connector: "atlassian"

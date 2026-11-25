@@ -148,7 +148,7 @@ function ConnectorGroupNav({
                 onClick={onNavigate}
                 className={itemClass(page.slug)}
               >
-                {service && <ServiceIcon service={service} size={15} />}
+                {service && <ServiceIcon service={service} size={15} lazy />}
                 {page.title}
               </Link>
             );

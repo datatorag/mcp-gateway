@@ -1,17 +1,30 @@
 import { marked } from "marked";
 import { planLimits } from "@/gateway/billing/plans";
 import { CHAT_MAX_STEPS, SKILL_RUN_MAX_STEPS } from "@/mastra/run-steps";
-import { CONNECTORS, type Connector } from "./docs-connectors";
+import docsDates from "../../content/docs-dates.json";
+import { CONNECTORS, getConnector, type Connector } from "./docs-connectors";
+import { enhanceDocMedia } from "./docs-media";
 import {
   defineCollection,
   field,
   type ContentFaq,
   type ParsedFile,
 } from "./content-collection";
+import { SITE_NAME, SITE_URL, breadcrumbNode, faqPageNode, techArticleNode, type SchemaNode } from "./site-schema";
 
 export interface DocPage {
   slug: string;
+  /** The page's name as the page, the sidebar, and the index show it. */
   title: string;
+  /** The page's `<title>`: the words a person searches, with the service's
+   * full name, "MCP", and the brand. Frontmatter `searchTitle`; a page
+   * without one gets `<title> | DataToRAG MCP Docs`. Never shown on the page. */
+  searchTitle: string;
+  /** The day the page's file last changed, `YYYY-MM-DD`, from
+   * `content/docs-dates.json` (written by `pnpm docs:dates`); null when the
+   * manifest has no entry, which a test fails on. Shown on the page, sent as
+   * the sitemap's `lastmod`, and stated as `dateModified`. */
+  updated: string | null;
   description: string;
   order: number;
   section: string;
@@ -135,11 +148,14 @@ function parsePage({ slug, data, content: source }: ParsedFile): DocPage {
   const values = docsValues();
   const fill = (text: string) => fillDocTokens(text, values, slug);
   const content = fill(source);
-  const html = marked.parse(content) as string;
+  const html = enhanceDocMedia(marked.parse(content) as string);
+  const title = field.string(data.title, slug);
 
   return {
     slug,
-    title: field.string(data.title, slug),
+    title,
+    searchTitle: field.string(data.searchTitle) || `${title} | ${SITE_NAME} MCP Docs`,
+    updated: (docsDates as Record<string, string>)[slug] ?? null,
     description: fill(field.string(data.description)),
     order: field.number(data.order, 99),
     section: field.string(data.section, "general"),
@@ -148,4 +164,38 @@ function parsePage({ slug, data, content: source }: ParsedFile): DocPage {
     content,
     html,
   };
+}
+
+/** A docs page's own address, absolute, as its canonical and every node
+ * state it. */
+export function docUrl(slug: string): string {
+  return `${SITE_URL}/docs/${slug}`;
+}
+
+/** The trail to a docs page: the site, the docs index, the connector's
+ * overview page when the page belongs to a connector, then the page. A
+ * connector's own overview is not listed under itself. */
+export function docBreadcrumbTrail(doc: DocPage): { name: string; url: string }[] {
+  const group = doc.connector ? getConnector(doc.connector) : undefined;
+  return [
+    { name: SITE_NAME, url: SITE_URL },
+    { name: "Docs", url: `${SITE_URL}/docs` },
+    ...(group ? [{ name: group.title, url: docUrl(group.slug) }] : []),
+    { name: doc.title, url: docUrl(doc.slug) },
+  ];
+}
+
+/** The structured data of one docs page: what it is, where it sits, and its
+ * questions when it has any. Built from the strings the page shows. */
+export function docSchemaNodes(doc: DocPage): SchemaNode[] {
+  return [
+    techArticleNode({
+      headline: doc.title,
+      description: doc.description,
+      url: docUrl(doc.slug),
+      dateModified: doc.updated,
+    }),
+    breadcrumbNode(docBreadcrumbTrail(doc)),
+    ...(doc.faqs.length > 0 ? [faqPageNode(doc.faqs)] : []),
+  ];
 }

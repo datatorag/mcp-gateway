@@ -1,5 +1,6 @@
 ---
 title: "Plans and limits"
+searchTitle: "Free and Pro Plan Limits for MCP Tool Calls | DataToRAG"
 description: "What the DataToRAG Free and Pro plans include, what happens when you reach a tool-call or agent-run limit, and when the allowance resets."
 order: 5.5
 section: "general"

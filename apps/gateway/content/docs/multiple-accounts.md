@@ -1,5 +1,6 @@
 ---
 title: "Using several accounts"
+searchTitle: "Multiple Google Accounts in One MCP Server | DataToRAG"
 description: "Connect two or more Google, Atlassian, or Notion accounts to DataToRAG and choose which one each tool call uses from ChatGPT, Claude, or Cursor."
 order: 1
 section: "general"

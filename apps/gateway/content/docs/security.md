@@ -1,5 +1,6 @@
 ---
 title: "Security and privacy"
+searchTitle: "MCP Server Security: OAuth Tokens and Storage | DataToRAG"
 description: "Where DataToRAG stores OAuth tokens and how they are encrypted, what a disconnect removes, what approving a client grants, and what is kept per call."
 order: 7
 section: "general"

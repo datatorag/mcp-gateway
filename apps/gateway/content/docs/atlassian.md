@@ -1,6 +1,7 @@
 ---
 title: "Atlassian"
-description: "Jira and Confluence: issues, pages, comments, and search."
+searchTitle: "Atlassian MCP Server for Jira and Confluence | DataToRAG"
+description: "Connect Jira and Confluence to your agent with one OAuth flow: search issues with JQL, edit pages, add comments, and attach files through one MCP server."
 order: 20
 section: "general"
 faqs:

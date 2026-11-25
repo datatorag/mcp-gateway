@@ -1,6 +1,7 @@
 ---
 title: "Slides"
-description: "Read, create, batch update, and delete Google Slides presentations."
+searchTitle: "Google Slides MCP Server: Read and Edit Decks | DataToRAG"
+description: "Let your agent read, create, batch update, and delete Google Slides presentations through the DataToRAG MCP server for Google Workspace."
 order: 6
 section: "connectors"
 connector: "google-workspace"

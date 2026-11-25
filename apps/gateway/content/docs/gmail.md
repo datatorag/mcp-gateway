@@ -1,6 +1,7 @@
 ---
 title: "Gmail"
-description: "Search, read messages and whole threads, send, reply, forward and draft with files attached, trash, report spam, and manage labels."
+searchTitle: "Gmail MCP Server: Search, Send, and Reply | DataToRAG"
+description: "Gmail tools in the DataToRAG MCP server: search, read whole threads, send, reply, forward, and draft with attachments, and manage labels, trash, and spam."
 order: 1
 section: "connectors"
 connector: "google-workspace"

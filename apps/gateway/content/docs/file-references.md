@@ -1,5 +1,6 @@
 ---
 title: "Moving files between services"
+searchTitle: "Move Files Between Gmail, Drive, and Jira | DataToRAG MCP"
 description: "Attach a file from one connected service to another without downloading it: how file references work and where the file is while it moves."
 order: 6
 section: "general"
@@ -75,11 +76,11 @@ An attachment is named by its **part id**, not its attachment id. Gmail issues a
 
 | Tool | What it does |
 |------|--------------|
-| `jira_add_attachment` | Adds the referenced file to a Jira issue as an attachment |
+| `jira_add_attachment` | Adds the referenced file to a [Jira](/docs/jira) issue as an attachment |
 | `file_download_link` | Makes a link that saves the referenced file to your own computer, once |
-| `drive_upload_file` | Puts the referenced file in Google Drive under its own name, and checks what Drive stored |
-| `notion_attach_file` | Puts the referenced file on a Notion page, at the end of the page |
-| `gmail_send`, `gmail_create_draft`, `gmail_reply`, `gmail_forward`, `gmail_update_draft` | Attach referenced files to an email, beside Drive files |
+| `drive_upload_file` | Puts the referenced file in [Google Drive](/docs/drive) under its own name, and checks what Drive stored |
+| `notion_attach_file` | Puts the referenced file on a [Notion](/docs/notion) page, at the end of the page |
+| `gmail_send`, `gmail_create_draft`, `gmail_reply`, `gmail_forward`, `gmail_update_draft` | Attach referenced files to a [Gmail](/docs/gmail) email, beside Drive files |
 
 ```json
 {

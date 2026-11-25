@@ -1,6 +1,7 @@
 ---
 title: "Drive"
-description: "Search files, read content, create folders, and move, copy, rename or trash files in Google Drive."
+searchTitle: "Google Drive MCP Server: Search and Read Files | DataToRAG"
+description: "Google Drive tools in the DataToRAG MCP server: search and read files, upload, copy, move, rename, trash, and share them, and create folders."
 order: 3
 section: "connectors"
 connector: "google-workspace"

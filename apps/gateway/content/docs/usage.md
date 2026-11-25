@@ -1,6 +1,7 @@
 ---
 title: "Usage & Metrics"
-description: "See how your AI agent is using DataToRAG: calls, latency, errors, and per-tool breakdowns."
+searchTitle: "MCP Tool Call Usage, Latency, and Errors | DataToRAG Docs"
+description: "See how your agent uses the DataToRAG MCP server: call volume, latency, errors, and a per-tool breakdown, plus what is logged and what counts."
 order: 5
 section: "general"
 faqs:

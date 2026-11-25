@@ -1,6 +1,7 @@
 ---
 title: "Jira"
-description: "Search issues with JQL, create, update, transition, comment on, log work on and link tickets."
+searchTitle: "Jira MCP Server: Search, Create, and Edit Issues | DataToRAG"
+description: "Jira tools in the DataToRAG MCP server: search issues with JQL, create, update, and transition them, comment, log work, link issues, and attach files."
 order: 21
 section: "connectors"
 connector: "atlassian"

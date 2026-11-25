@@ -98,8 +98,9 @@ Slug = filename.
 
 | Field | Type | Fallback |
 |---|---|---|
-| `title` | string | `slug` |
-| `description` | string | `""` |
+| `title` | string: the page's short name, shown as the h1, in the sidebar, and on the index | `slug` |
+| `searchTitle` | string: the page's `<title>` and link-preview title, never shown on the page. The service's full name ("Google Sheets", not "Sheets"), "MCP", then the brand, 60 characters at most | `<title> \| DataToRAG MCP Docs` (a fallback for a page somebody forgot; the test fails a page that relies on it) |
+| `description` | string: the meta description AND the visible line under the h1 and on the index. Written, 120 to 160 characters, says what the page covers | `""` |
 | `order` | number | `99` (no explicit order sorts last, both top-level and per-connector) |
 | `section` | string | `"general"` (captured, sent in a PostHog `DOCS_VIEWED` event, but **not** used for sidebar grouping) |
 | `connector` | string \| null | `null` |
@@ -124,7 +125,65 @@ sidebar renders. `docs/[slug]/page.tsx` takes its links from `getDocNeighbors(sl
 names nothing in `CONNECTORS`) or appears twice. The sidebar shows a collapse control
 only for a connector that has child pages.
 
+**What a docs page says about itself** is held by `src/app/docs/docs-meta.test.ts`,
+over every markdown page plus the two route pages (`/docs` and `/docs/tools`, whose
+titles and descriptions live in `app/docs/copy.ts` and `app/docs/tools/copy.ts`):
+every title says "MCP" and "DataToRAG", no two are alike, none passes 60 characters;
+every description is 120 to 160 characters; each page states its canonical, its Open
+Graph `url` and `type` (`article` for a markdown page, `website` for the two route
+pages), and the social card. The same file holds the link rules: no docs page links an
+address that only redirects (its `REDIRECTS` list; add a route there when you make one
+a redirect), every `/docs/...` link names a page that exists, and every connector page
+is linked from another page's body, Getting Started linking all of them.
+
+**The last-updated date is one checked-in manifest, `apps/gateway/content/docs-dates.json`**
+(slug to `YYYY-MM-DD`), and three places read it through `DocPage.updated`: the
+"Updated <date>" line under the description, the sitemap's `lastmod`, and the
+`TechArticle`'s `dateModified`. The date is the day of the last commit that changed the
+page's file. It is a manifest and not a git call because the production image is built
+without `.git` and CI checks out one commit. Refresh it with **`pnpm docs:dates`** in
+`apps/gateway` (`apps/gateway/scripts/docs-dates.ts`, asking git through `src/lib/docs-dates.ts`)
+after editing a docs page, and commit the manifest with the page: a file holding
+changes that are not committed gets today's date. `src/lib/docs-dates.test.ts` fails on
+a page with no entry or an entry for no page, and, where git has the whole history, on
+an entry older than the file's last change (today, for an uncommitted change), so a
+forgotten refresh is red on the author's machine. That half skips on a shallow checkout
+or with no git. `docs-dates.ts` starts a process: nothing a page imports may import it.
+`/docs` and `/docs/tools` state no date anywhere (no line, no `lastmod`, no
+`dateModified`): the index is read from every page and the tool list from the registry
+on each request, so neither has a day of its own.
+
+**Structured data.** A markdown docs page emits `docSchemaNodes(doc)` (`src/lib/docs.ts`):
+a `TechArticle` (`headline` the visible title, `description`, `url`, `dateModified`,
+`author` and `publisher` the organization), a `BreadcrumbList` (DataToRAG, Docs, the
+connector's overview when the page has a `connector`, the page), and the `FAQPage` when
+it has `faqs`. `/docs` and `/docs/tools` emit a `CollectionPage` and a `BreadcrumbList`.
+The site-wide nodes are `siteNodes()` in `src/lib/site-schema.ts`, emitted ONCE by the
+root layout (`app/layout.tsx`) on every page: `Organization`, `WebSite`, and
+`SoftwareApplication`, each with an `@id` (`https://datatorag.com/#organization`,
+`#website`, `#software`), agreeing on the name and the address, with `sameAs` the
+source repository (`REPOSITORY_URL`). A page-level node names the organization by that
+`@id` and never declares a second one. No `offers`, rating, or review, and no `sameAs`
+that is not certainly ours; the tests in `site-schema.test.ts` pin all of it.
+
+**One question block per page.** A docs page's questions are its frontmatter `faqs`
+and nothing else: the body carries no heading that is a question section (the test
+fails on one), because a body section is on the page and in no `FAQPage`. The page
+renders one line under the block, "More answers are on the FAQ page", so no page needs
+its own pointer to `/faq`.
+
 Two docs-specific mechanisms added by SCRUM-24:
+
+- **Images and videos in a docs page** are rewritten when the page loads, by
+  `enhanceDocMedia` in `src/lib/docs-media.ts` (called from `parsePage`). Write
+  plain markdown: `![alt](/docs/file.png)` comes out with the file's real `width`
+  and `height` (read from `public/`), `loading="lazy"` and `decoding="async"`; the
+  page's first picture stays eager only when it is within the first 600 characters
+  of text. A YouTube `<iframe>` comes out as a link to the video drawn as its
+  poster with a "Play video" label, and `app/docs/videos.tsx` (mounted by the docs
+  layout) swaps in the player on click, so no page view loads the player. A new
+  video needs its poster at `public/docs/video-posters/<video id>.jpg`;
+  `docs-media.test.ts` fails without it.
 
 - **Component embed via marker**: a doc's markdown can place `<!--setup-instructions-->`
   on its own line; `docs/[slug]/page.tsx` splits `doc.html` on that comment (marked
@@ -170,8 +229,8 @@ beside `docs/[slug]`, rendered in the docs layout:
   it an admin-only connector's row and `gws_run` and fails if either is
   listed. The page is `force-dynamic` (the build has no database) and renders
   a short notice when the read fails. Its address, title, and description are
-  `app/docs/tools/copy.ts`, read by the page, the index, the sidebar, and the
-  sitemap. `/tools` alone is a permanent redirect to it and is in no sitemap.
+  `app/docs/tools/copy.ts` (with `ALL_TOOLS_SEARCH_TITLE`, its `<title>`), read
+  by the page, the index, the sidebar, and the sitemap. `/tools` alone is a permanent redirect to it and is in no sitemap.
   No markdown file may be named `tools.md`: the static route would shadow it,
   and the index test fails on one.
 
@@ -473,7 +532,8 @@ be measured.
   plus `type` (`"article"` for posts, `"website"` for listing/static pages) and
   `url: "https://datatorag.com/<path>"` — always the absolute production URL, even in
   dev. Blog additionally emits a `schema.org` `Article` JSON-LD block
-  (`app/blog/[slug]/page.tsx`).
+  (`app/blog/[slug]/page.tsx`). Docs pages are the exception to the
+  title suffix: their `<title>` is the frontmatter `searchTitle` whole (see Docs).
 - **Social card (SCRUM-367)**: one site-wide link-preview image, `public/social-card.png`
   (1200x630, logo and name, no claim), named once in `src/lib/social-card.ts`. Next
   REPLACES `openGraph` and `twitter` whole when a page sets its own, so an image in the

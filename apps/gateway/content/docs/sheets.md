@@ -1,6 +1,7 @@
 ---
 title: "Sheets"
-description: "Read, create, update, append and delete Google Sheets, find rows by value, and format a range into a readable table."
+searchTitle: "Google Sheets MCP Server: Read and Write Cells | DataToRAG"
+description: "Google Sheets tools in the DataToRAG MCP server: read, query, update, and append cells, find rows by value, manage tabs, and format a range as a table."
 order: 5
 section: "connectors"
 connector: "google-workspace"

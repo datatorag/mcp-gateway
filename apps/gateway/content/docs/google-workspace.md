@@ -1,6 +1,7 @@
 ---
 title: "Google Workspace"
-description: "Gmail, Calendar, Drive, Docs, Sheets, Slides, Contacts, and Tasks through one MCP connector."
+searchTitle: "Google Workspace MCP Server: Gmail, Drive, Docs | DataToRAG"
+description: "Gmail, Calendar, Drive, Docs, Sheets, Slides, Contacts, and Tasks through one DataToRAG MCP connector: one OAuth flow, several accounts side by side."
 order: 10
 section: "general"
 faqs:

@@ -1,6 +1,7 @@
 ---
 title: "Calendar"
-description: "List, create, update, and delete events. Check free/busy, suggest meeting times, answer invitations and list calendars."
+searchTitle: "Google Calendar MCP Server: Events and Free/Busy | DataToRAG"
+description: "Google Calendar tools in the DataToRAG MCP server: list, create, update, and delete events, check free/busy, suggest meeting times, and answer invitations."
 order: 2
 section: "connectors"
 connector: "google-workspace"

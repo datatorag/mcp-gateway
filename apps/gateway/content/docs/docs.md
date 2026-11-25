@@ -1,6 +1,7 @@
 ---
 title: "Docs"
-description: "Read, create, write, and batch update Google Docs."
+searchTitle: "Google Docs MCP Server: Read and Edit Docs | DataToRAG"
+description: "Let your agent read, create, and edit Google Docs, including documents that already exist, through the DataToRAG MCP server for Google Workspace."
 order: 4
 section: "connectors"
 connector: "google-workspace"

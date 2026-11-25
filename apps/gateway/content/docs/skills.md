@@ -1,5 +1,6 @@
 ---
 title: "Skills"
+searchTitle: "Skills for MCP Clients: Find, Run, and Edit | DataToRAG"
 description: "Find a DataToRAG skill in the public catalog, run it from the dashboard or your own client, make your own version, and see how a run counts."
 order: 2
 section: "general"
