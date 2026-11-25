@@ -1,13 +1,18 @@
 ---
 title: "Save the Email to Your Own Computer, With a Checksum You Can Check"
 excerpt: "The same customer who files emails on Jira issues asked for one more thing: the same file in his Downloads folder, and a way to prove the copy is the copy. An MCP server cannot write to your disk, so the answer is a link that works once, a page with one button, and a receipt with the SHA-256. Here is why it is shaped that way."
+searchTitle: "Save a Gmail Email to Your Computer With a Checksum"
+searchDescription: "DataToRAG's file_download_link turns a Gmail message or attachment into a link that works once, with a SHA-256 to check the copy you saved."
 date: "2026-10-16"
 author: "Manuel Yang"
 category: "Product"
 coverImage: "/blog/download-page.png"
 tags: ["gmail", "attachments", "file-references", "mcp"]
-updated: "2026-11-17"
+related: ["email-to-jira-file-references", "connect-google-workspace-to-claude", "a-file-on-your-computer-into-drive-jira-or-an-email"]
+updated: "2026-11-25"
 ---
+
+DataToRAG's `file_download_link` turns a Gmail message or one of its attachments into a download link that works once, with the file's size and SHA-256 in the receipt, so you can save the exact file to your computer and check the copy.
 
 Earlier this month I wrote about [filing an email on a Jira issue](/blog/email-to-jira-file-references) without the file going through the conversation. The customer who asked for that came back a few days later with the natural follow-up. He files those emails locally too, so could the same file land in his Downloads folder, and could he check that what he saved is byte for byte what Gmail has.
 
@@ -58,7 +63,7 @@ There is one more guard that is specific to how these links get made. A link is 
 
 ## And Drive, the day after
 
-He offered Drive as a second option, and that one shipped the next day as `drive_upload_file`. It takes the same file reference, an email or one of its attachments, and an optional folder, and it is the better receipt of the two. Drive reports a SHA-256 of what it stored, so the receipt can put our hash and Drive's side by side and say whether they match, which Jira cannot tell us and a browser download cannot either.
+He offered Drive as a second option, and that one shipped the next day as `drive_upload_file`. It takes the same file reference, an email or one of its attachments, and an optional folder, and it is the better receipt of the two. Drive reports a SHA-256 of what it stored, so the receipt can put our hash and Drive's side by side and say whether they match, which Jira cannot tell us and a browser download cannot either. (The older `gmail_save_attachment_to_drive`, which streams the attachment and so handles files over 25 MB, has [its own post](/blog/connect-google-workspace-to-claude).)
 
 ![The receipt of a 16 KB email uploaded into Drive: the hash we sent, the hash Drive stored, the folder's owner and sharing, and checksum_match true](/blog/drive-receipt.png)
 

@@ -1,25 +1,32 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import Image from "next/image";
-import { getAllPosts } from "@/lib/blog";
+import { getAllPosts, getPillarPosts, postUrl } from "@/lib/blog";
+import { BLOG_FEED_URL } from "@/lib/blog-feed";
 import { Navbar } from "@/components/navbar";
+import { JsonLd } from "@/components/json-ld";
+import { SITE_NAME, SITE_URL, blogIndexNode, breadcrumbNode } from "@/lib/site-schema";
 import { SOCIAL_OPEN_GRAPH, SOCIAL_TWITTER } from "@/lib/social-card";
+import { BLOG_DESCRIPTION, BLOG_FEED_TYPE, BLOG_HEADING, BLOG_PATH, BLOG_SEARCH_TITLE } from "./copy";
+
+const BLOG_URL = `${SITE_URL}${BLOG_PATH}`;
 
 export const metadata: Metadata = {
-  title: "Blog | DataToRAG",
-  description:
-    "Insights on connecting enterprise data to AI agents through the Model Context Protocol.",
-  alternates: { canonical: "https://datatorag.com/blog" },
-  twitter: SOCIAL_TWITTER,
+  title: BLOG_SEARCH_TITLE,
+  description: BLOG_DESCRIPTION,
+  alternates: { canonical: BLOG_URL, types: { [BLOG_FEED_TYPE]: BLOG_FEED_URL } },
+  twitter: { ...SOCIAL_TWITTER, title: BLOG_SEARCH_TITLE, description: BLOG_DESCRIPTION },
   openGraph: {
     ...SOCIAL_OPEN_GRAPH,
-    title: "Blog | DataToRAG",
-    description:
-      "Insights on connecting enterprise data to AI agents through the Model Context Protocol.",
+    title: BLOG_SEARCH_TITLE,
+    description: BLOG_DESCRIPTION,
     type: "website",
-    url: "https://datatorag.com/blog",
+    url: BLOG_URL,
   },
 };
+
+/** How wide a card's picture is drawn: one, two, or three columns. */
+const CARD_SIZES = "(min-width: 1024px) 352px, (min-width: 640px) 50vw, 100vw";
 
 function AuthorAvatar({
   author,
@@ -61,20 +68,59 @@ function AuthorAvatar({
 
 export default function BlogListingPage() {
   const posts = getAllPosts();
+  // The main post of each topic, listed first. Nothing renders until a post
+  // sets `pillar` in its frontmatter.
+  const pillars = getPillarPosts();
+  const jsonLd = [
+    blogIndexNode({
+      name: BLOG_HEADING,
+      description: BLOG_DESCRIPTION,
+      url: BLOG_URL,
+      posts: posts.map((p) => ({ name: p.title, url: postUrl(p.slug) })),
+    }),
+    breadcrumbNode([
+      { name: SITE_NAME, url: SITE_URL },
+      { name: "Blog", url: BLOG_URL },
+    ]),
+  ];
 
   return (
     <>
       <Navbar />
       <main className="flex-1">
         <div className="mx-auto max-w-6xl px-6 pb-16 pt-32 sm:pb-20 sm:pt-36">
+          <JsonLd nodes={jsonLd} />
           <div className="animate-fade-in-up">
             <h1 className="font-display text-3xl font-bold tracking-tight text-foreground sm:text-4xl">
-              Blog
+              {BLOG_HEADING}
             </h1>
-            <p className="mt-3 text-muted-foreground">
-              Insights on making your data AI-ready.
+            <p className="mt-3 max-w-2xl text-muted-foreground">
+              {BLOG_DESCRIPTION}
             </p>
           </div>
+
+          {pillars.length > 0 && (
+            <section aria-labelledby="start-here" className="mt-10 rounded-2xl border border-border bg-secondary/30 p-6">
+              <h2 id="start-here" className="font-display text-lg font-semibold text-foreground">
+                Start here
+              </h2>
+              <ul className="mt-3 grid grid-cols-1 gap-x-8 gap-y-3 sm:grid-cols-2">
+                {pillars.map((post) => (
+                  <li key={post.slug}>
+                    <Link
+                      href={`/blog/${post.slug}`}
+                      className="text-sm font-medium text-foreground underline-offset-2 hover:text-primary hover:underline"
+                    >
+                      {post.title}
+                    </Link>
+                    {post.excerpt && (
+                      <p className="mt-1 text-sm text-muted-foreground line-clamp-2">{post.excerpt}</p>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            </section>
+          )}
 
           {posts.length === 0 ? (
             <p className="mt-16 text-center text-muted-foreground">
@@ -96,6 +142,7 @@ export default function BlogListingPage() {
                         alt={post.title}
                         width={1200}
                         height={600}
+                        sizes={CARD_SIZES}
                         className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.02]"
                       />
                     </div>

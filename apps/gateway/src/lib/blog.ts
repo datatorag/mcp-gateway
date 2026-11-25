@@ -1,4 +1,6 @@
 import { marked } from "marked";
+import { enhanceDocMedia } from "./docs-media";
+import { SITE_NAME, SITE_URL } from "./site-schema";
 import {
   defineCollection,
   field,
@@ -10,13 +12,25 @@ export type BlogFaq = ContentFaq;
 
 export interface BlogPost {
   slug: string;
+  /** The post's headline: the page's heading and the index card. */
   title: string;
+  /** The teaser under the headline on the index card. */
   excerpt: string;
+  /** What a search result and a link preview show as the title: the words
+   * people search, then the brand, in 60 characters or fewer. Absent on a
+   * post that has not written one; `postSearchTitle` gives the fallback. */
+  searchTitle?: string;
+  /** What a search result shows under the title: 120 to 160 characters that
+   * say what the post answers. Absent on a post that has not written one;
+   * `postSearchDescription` falls back to the excerpt. */
+  searchDescription?: string;
   date: string;
   /** ISO date of the latest edit to a published post; absent = never edited.
    * Feeds JSON-LD dateModified and the rendered "Edited" note. */
   updated?: string;
-  /** One-line summary of what the latest edit changed, shown in the note. */
+  /** Every edit that changed what the post says, newest first, each opening
+   * with its day. The page shows the newest and folds the rest
+   * (`edit-note.ts`). */
   updatedNote?: string;
   readTime: string;
   author: string;
@@ -36,6 +50,13 @@ export interface BlogPost {
    * it. Used as the cover image's text alternative. */
   coverAlt?: string;
   tags: string[];
+  /** A main post for its topic. The index lists these first, under "Start
+   * here", when at least one post is marked. */
+  pillar: boolean;
+  /** Slugs of the posts to show as related, in order. They come before the
+   * posts chosen by shared tags. A slug that names no post is a mistake a
+   * test catches. */
+  related: string[];
   /** Per-post questions and answers, rendered on the page and emitted as
    * FAQPage JSON-LD from the same strings. Empty for most posts. */
   faqs: BlogFaq[];
@@ -61,26 +82,62 @@ export function getPostBySlug(slug: string): BlogPost | null {
   return collection.getBySlug(slug);
 }
 
+/** A post's own address. */
+export const postUrl = (slug: string): string => `${SITE_URL}/blog/${slug}`;
+
+/** The `<title>` of a post: its search title when it wrote one, else its
+ * headline and the brand. */
+export const postSearchTitle = (post: Pick<BlogPost, "title" | "searchTitle">): string =>
+  post.searchTitle ?? `${post.title} | ${SITE_NAME}`;
+
+/** The meta description of a post: its search description when it wrote
+ * one, else its excerpt. */
+export const postSearchDescription = (post: Pick<BlogPost, "excerpt" | "searchDescription">): string =>
+  post.searchDescription ?? post.excerpt;
+
+/** The day a post last changed: its latest edit, or the day it was
+ * published. The page's "Edited" date, the structured data, the sitemap,
+ * and the feed all read this one. */
+export const postModified = (post: Pick<BlogPost, "date" | "updated">): string => post.updated ?? post.date;
+
+/**
+ * The posts shown under a post as related: the ones it names in `related`,
+ * in the order it names them, then the posts that share the most tags with
+ * it, newest first among equals, up to `limit`.
+ */
 export function getRelatedPosts(slug: string, limit = 3): BlogPost[] {
   const post = getPostBySlug(slug);
-  if (!post || post.tags.length === 0) return [];
+  if (!post) return [];
+
+  const named = [...new Set(post.related)]
+    .filter((s) => s !== slug)
+    .flatMap((s) => getPostBySlug(s) ?? []);
+  const taken = new Set([slug, ...named.map((p) => p.slug)]);
 
   const tagSet = new Set(post.tags);
-  const all = getAllPosts();
-
-  return all
-    .filter((p) => p.slug !== slug && p.tags.some((t) => tagSet.has(t)))
+  const byTags = getAllPosts()
+    .filter((p) => !taken.has(p.slug) && p.tags.some((t) => tagSet.has(t)))
     .sort((a, b) => {
       const aOverlap = a.tags.filter((t) => tagSet.has(t)).length;
       const bOverlap = b.tags.filter((t) => tagSet.has(t)).length;
       if (bOverlap !== aOverlap) return bOverlap - aOverlap;
       return new Date(b.date).getTime() - new Date(a.date).getTime();
-    })
-    .slice(0, limit);
+    });
+
+  return [...named, ...byTags].slice(0, limit);
+}
+
+/** The main posts, newest first. Empty until a post sets `pillar`. */
+export function getPillarPosts(): BlogPost[] {
+  return getAllPosts().filter((p) => p.pillar);
 }
 
 function parsePost({ slug, data, content }: ParsedFile): BlogPost {
-  const html = marked.parse(content) as string;
+  const coverImage = data.coverImage as string | undefined;
+  // Pictures in the body get their real size and load when the reader nears
+  // them (`docs-media.ts`). The cover is the picture at the top of a post, so
+  // a body picture loads at once only in a post with no cover.
+  const html = enhanceDocMedia(marked.parse(content) as string, { eagerFirst: !coverImage });
 
   const words = content.split(/\s+/).length;
   const readTime = `${Math.max(1, Math.ceil(words / 230))} min read`;
@@ -89,6 +146,8 @@ function parsePost({ slug, data, content }: ParsedFile): BlogPost {
     slug,
     title: field.string(data.title, slug),
     excerpt: field.string(data.excerpt),
+    searchTitle: field.string(data.searchTitle).trim() || undefined,
+    searchDescription: field.string(data.searchDescription).trim() || undefined,
     date: field.string(data.date, new Date().toISOString().slice(0, 10)),
     updated: data.updated as string | undefined,
     updatedNote: data.updatedNote as string | undefined,
@@ -97,11 +156,13 @@ function parsePost({ slug, data, content }: ParsedFile): BlogPost {
     authorImage: data.authorImage as string | undefined,
     category: data.category as string | undefined,
     ogImage: data.ogImage as string | undefined,
-    coverImage: data.coverImage as string | undefined,
+    coverImage,
     coverVideo: data.coverVideo as string | undefined,
     coverAnimation: data.coverAnimation as string | undefined,
     coverAlt: data.coverAlt as string | undefined,
     tags: field.stringArray(data.tags),
+    pillar: data.pillar === true,
+    related: field.stringArray(data.related),
     faqs: field.faqList(data.faqs),
     content,
     html,

@@ -44,7 +44,9 @@ Slug = filename without `.md`. Frontmatter fields, with fallback if omitted:
 | Field | Type | Fallback |
 |---|---|---|
 | `title` | string | `slug` |
-| `excerpt` | string | `""` |
+| `excerpt` | string: the teaser on the index card | `""` |
+| `searchTitle` | string, optional: the `<title>` and the link-preview title, never shown on the page. The words people search, then the brand, 60 characters at most | `<title> \| DataToRAG` for `<title>`, `title` for the preview (`postSearchTitle`) |
+| `searchDescription` | string, optional: the meta description, 120 to 160 characters that say what the post answers. Also the post's line in `/llms.txt`, the feed, its Markdown copy, and its structured data | `excerpt` (`postSearchDescription`) |
 | `date` | string (`YYYY-MM-DD`) | today's ISO date |
 | `author` | string | `"DataToRAG"` |
 | `authorImage` | string, optional | `undefined` |
@@ -55,12 +57,25 @@ Slug = filename without `.md`. Frontmatter fields, with fallback if omitted:
 | `coverAnimation` | string, optional: a `/blog/` path ending in `.svg`, one self-contained animated SVG (CSS keyframes inside, no script, nothing fetched). Shown over the cover on the post page through a plain `<img>`, never inlined (`components/cover-animation.tsx`). `coverImage` required with it; a post sets this OR `coverVideo`, never both. `blog-cover-animation.test.ts` fails on a missing file, 300 KB or more, a `<script`, an `on*=` attribute, a `<foreignObject`, an `@import`, an `href`/`url(` that is not `#...` or `data:`, or a way to hide one from a text match (a DOCTYPE, entity, or `&#` character reference, any prefixed element or prefix other than xlink, a namespace other than SVG and xlink, a backslash, a `src=`, `image-set(`, an `xml-stylesheet`, `data:` that is not an image or font, an animation of `href` or a handler). The check reads text and is a reviewer's aid, not a sandbox (SCRUM-509) | `undefined` |
 | `coverAlt` | string, optional: the cover's text alternative when the title does not describe it | the title |
 | `tags` | string array | `[]` (any non-array value is discarded, not coerced) |
+| `pillar` | boolean, optional: a main post for its topic. The index leads with a "Start here" group of these, rendered only when at least one post sets it | `false` |
+| `related` | string array, optional: slugs of the posts to show under this one, in order, before any chosen by shared tags. `blog.test.ts` fails a slug that names no post, or the post itself | `[]` |
 | `faqs` | list of `{q, a}` | `[]` (see **Per-page FAQs** below) |
+
+The visible heading and the index card always use `title` and `excerpt`. `blog.test.ts`
+holds a written `searchTitle` to 60 characters and a written `searchDescription` to 120
+to 160, and fails two posts that send the same `<title>`.
 
 `readTime` is **not** frontmatter — it's computed: word count from `content.split(/\s+/)`,
 then `` `${Math.max(1, Math.ceil(words / 230))} min read` ``. There's also a `postsBySlug`
-Map for O(1) `getPostBySlug` lookup, and `getRelatedPosts(slug, limit=3)` which ranks by
-tag overlap then recency — both built from the same cache.
+Map for O(1) `getPostBySlug` lookup, and `getRelatedPosts(slug, limit=3)`: the posts
+named in `related` first, then the rest ranked by tag overlap then recency. Both are
+built from the same cache.
+
+A post's body goes through `enhanceDocMedia` (`docs-media.ts`, shared with docs): each
+picture gets its real `width` and `height` and `loading="lazy"`. The cover is the
+picture at the top of a post, so a body picture stays eager only in a post with no
+`coverImage`. The cover itself (`components/post-cover.tsx`) is drawn in its file's own
+shape, with `sizes` for the article column and `fetchPriority="high"`.
 
 **A post can carry a scripted demo (SCRUM-398).** Put `<!-- demo:<id> -->` on its own
 line in the post's markdown, where `<id>` is a script id from
@@ -78,12 +93,37 @@ problem line is a claim about someone else's product and needs a dated first-han
 of that product's tool list before it ships.
 
 **An edit to a post is disclosed in two tiers, and the note sits after the body.**
-Frontmatter `updated` alone moves `dateModified` and `modifiedTime` and shows nothing.
-`updated` with `updatedNote` (a claim changed) also shows the note, and it renders at the
-END of the article body (`id="edit-note"`), never above it: above, the correction was the
-first hundred words a reader or an engine met. The date line under the title carries
-"Edited <date>" as a link to the note. `app/blog/[slug]/page.test.tsx` pins both tiers and
-the order.
+Frontmatter `updated` alone moves `dateModified` and `modifiedTime` and shows only
+"Edited <date>" in the date line under the title, so the day a reader sees is always the
+modified date the structured data states. `updated` with `updatedNote` (a claim changed)
+also shows the note, and the date line links to it. The note renders at the END of the
+article body (`id="edit-note"`), never above it: above, the correction was the first
+hundred words a reader or an engine met.
+
+`updatedNote` is ONE line holding every edit, newest first, each opening with its day
+and a colon ("November 25, 2026: ... October 19, 2026: ..."). `src/lib/edit-note.ts`
+splits it: an entry opens at the start of the note or after the end of a sentence, with
+a day and a colon (a few words may sit between them: "November 25, 2026, second
+pass:"), or with "Earlier," / "EARLIER:"; a day in the middle of a sentence opens
+nothing; a note with no day is one entry. The page shows the newest entry in full after
+one "Edited <date>" (an entry opening with that same day gives it up, so the day is not
+printed twice) and puts every earlier entry inside a native `<details>` ("Earlier
+edits"), server-rendered. A note's links and inline code render; a raw tag shows as
+text. So: add a new edit at the FRONT of the line, open it with the same day as
+`updated`, and keep the older entries after it. `edit-note.test.ts` fails a note whose
+first day is not `updated`; `app/blog/[slug]/page.test.tsx` pins both tiers, the fold,
+the single day, and the date agreement on every post.
+
+**The index** (`app/blog/page.tsx`, strings in `app/blog/copy.ts`) has a written title
+and description, a `CollectionPage` with an `ItemList` of every post and a
+`BreadcrumbList`, and the "Start here" group above the grid when a post sets `pillar`.
+There are no tag pages.
+
+**The feed** is RSS 2.0 at `/blog/feed.xml` (`src/lib/blog-feed.ts`, route
+`app/blog/feed.xml/route.ts`): every post, newest first, with title, link, guid,
+pubDate, and description, built from the same records. The index and every post name
+it in `alternates.types`, and `/llms.txt` names it. It is not in the sitemap.
+`blog-feed.test.ts` parses it as XML.
 
 ### Changelog — `apps/gateway/src/lib/changelog.ts`
 
@@ -432,20 +472,25 @@ list's filter hides cards in the browser and never removes one from the served p
 
 ### `/llms.txt` and the Markdown copies: `apps/gateway/src/lib/markdown-copies.ts`
 
-Every docs page and every use case is also served as Markdown at the page's own
-address plus `.md` (`/docs/gmail.md`, `/use-cases/<slug>.md`), and so are the docs
+Every docs page, every use case, and every blog post is also served as Markdown at the
+page's own address plus `.md` (`/docs/gmail.md`, `/use-cases/<slug>.md`,
+`/blog/<slug>.md`), and so are the docs
 index (`/docs.md`) and the all-tools page (`/docs/tools.md`). `/llms.txt` lists them
 all in the llmstxt.org shape: the product's name, a blockquote summary, then sections
 of `- [title](markdown address): description`, the docs in the sidebar's order and
-groups. There is no `/llms-full.txt`, on purpose: the pages together are about
+groups, then the use cases, then a "Blog" section of every post, newest first. The
+feed's address is in the paragraph above the sections. There is no `/llms-full.txt`, on purpose: the pages together are about
 170 KB, the all-tools list is read from the database per request and cannot be part
 of a file built once, and the list already gives every page's own copy.
 
 - **Nothing is authored for a copy.** `docMarkdown(doc)` is the loaded `DocPage` (its
   body with `{{values}}` already filled, description, `updated`, `faqs`);
-  `useCaseMarkdown` is the `UseCase` record; `docsIndexMarkdown` and `llmsTxt` read
+  `useCaseMarkdown` is the `UseCase` record; `postMarkdown` is the `BlogPost` record
+  (headline, description, `Published:` and `Updated:` days, the body, its questions,
+  and LAST its edits as an "Edit history" list, so the top of a copy is the post and
+  not its corrections); `docsIndexMarkdown` and `llmsTxt` read
   `docsSections()`, the same top-level list and connector groups the sidebar reads.
-  A new docs page or use case file gets its copy, its `/llms.txt` line, and its
+  A new docs page, use case file, or blog post gets its copy, its `/llms.txt` line, and its
   `<link rel="alternate" type="text/markdown">` with no edit anywhere.
 - **A copy stands alone**: `absoluteLinks` rewrites every site-relative link, image,
   and `href`/`src` to `https://datatorag.com/...` (a `#section` link becomes that
@@ -466,8 +511,9 @@ of a file built once, and the list already gives every page's own copy.
   registry cannot be read or answers no connector tool. Never an empty list: its
   reader is a program, and an empty list reads as "there are no tools".
 - **Tests**: `markdown-copies.test.ts` (every copy: no unfilled `{{`, no
-  site-relative link, no admin-only service name; `/llms.txt` lists each docs page
-  and use case exactly once) and `src/next-config.markdown.test.ts` (every listed
+  site-relative link, no admin-only service name; a post's copy is held to the link
+  and blank-line rules only, since a post is prose and may say any word; `/llms.txt`
+  lists each docs page, use case, and post exactly once) and `src/next-config.markdown.test.ts` (every listed
   address goes through the config's rewrites, matched with the framework's own
   matcher, to a handler that answers Markdown).
 

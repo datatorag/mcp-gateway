@@ -60,7 +60,7 @@ This is the part of the debate that frustrates me most. Skills and MCP aren't th
 
 Skills teach the AI *how* to use tools well. "When reading a Google Doc, use text mode first. Only use index mode if you need to make edits." That's a skill. It makes the MCP tool call better.
 
-MCP gives the AI *access* to the tools. Without MCP (or something like it), the skill has nothing to call.
+MCP gives the AI *access* to the tools. Without MCP (or something like it), the skill has nothing to call. (We publish skills that run on our own MCP tools; the [skills docs](/docs/skills) describe them.)
 
 Saying "skills replace MCP" is like saying "recipes replace kitchens." You need both.
 

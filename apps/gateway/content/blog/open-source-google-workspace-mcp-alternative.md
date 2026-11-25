@@ -1,6 +1,8 @@
 ---
 title: "You Can Self-Host a Google Workspace MCP for Free. The OAuth Verification Is the Catch."
 excerpt: "The open-source Google Workspace MCP servers are genuinely good. The cost isn't the code. It's the Google Cloud project, the consent screen, and the verification that comes after."
+searchTitle: "Self-Host a Google Workspace MCP Server: The OAuth Catch"
+searchDescription: "Open-source Google Workspace MCP servers are free to run. The work is the Google Cloud project, the OAuth consent screen, and Google's verification."
 date: "2026-06-29"
 updated: "2026-11-25"
 updatedNote: "November 25, 2026: the star and tool counts for the open-source server were from when I first cloned it. Its repo now shows 3.6k stars and 120+ tools across twelve services, including Chat and Custom Search, so the opening says both and the table uses today's count. Also today: the smaller repository's star count is updated to 492; the multi-account sentence now matches what the README lists (OAuth 2.1 multi-user auth, and impersonation through a service account with domain-wide delegation); a claim that another platform's Google OAuth had been blocked is removed because it had no primary source; and Notion is added to the comparison table. the comparison row on where data lives said the gateway stores nothing; it stores each connection's sign-in tokens, encrypted, and passes your Workspace content through without keeping it. The row now says that. November 17, 2026: the post said to run our code yourself with Docker Compose and Postgres. There is no packaged self-host guide; the source is open, and the post now names what you would supply: a Postgres database, your own Google OAuth clients and an encryption key for the stored tokens. Notion added to what comes built in. August 26, 2026: narrowed an overbroad privacy claim. The pass-through statement implied nothing is stored anywhere; the gateway keeps nothing, but the hosted agent on our own site stores its conversation threads. The privacy policy is now linked from the paragraph."
@@ -8,6 +10,7 @@ author: "Manuel Yang"
 category: "Comparison"
 coverImage: "/blog/open-source-google-workspace-mcp-alternative.png"
 tags: ["self-hosting", "google-workspace", "mcp", "open-source", "oauth", "alternative"]
+related: ["claude-google-workspace-mcp-alternatives", "hosted-google-workspace-mcp", "open-source-composio-alternative"]
 ---
 
 A few months ago I cloned `taylorwilsdon/google_workspace_mcp` to see how it compared to what we'd built. It's a good project. MIT licensed, and at the time somewhere north of 2,700 stars and 70-plus tools covering Gmail, Drive, Calendar, Docs, Sheets, Slides, Tasks, Contacts, and a couple we don't even touch like Forms and Apps Script. Reads and writes, not just reads. It has grown since: as of November 25, 2026, the repo shows 3.6k stars and describes itself as 120+ tools across twelve Google Workspace services, with Chat and Custom Search on the list. If you've decided to self-host an open-source Google Workspace MCP server, this is the one I'd start with, and I mean that.
@@ -83,4 +86,4 @@ And if you like the idea of a gateway but still want your data on your own serve
 
 ## Try it
 
-Connect your Google account at [datatorag.com/dashboard](https://datatorag.com/dashboard) and see how far you get before you'd have had to open the Google Cloud console. If you'd rather self-host, start from [the repo](https://github.com/datatorag/mcp-gateway). Either way, it's worth weighing against [every other way to connect Claude to Google Workspace](/blog/claude-google-workspace-mcp-alternatives).
+Connect your Google account at [datatorag.com/dashboard](https://datatorag.com/dashboard) ([setup steps](/docs/getting-started)) and see how far you get before you'd have had to open the Google Cloud console. If you'd rather self-host, start from [the repo](https://github.com/datatorag/mcp-gateway). Either way, it's worth weighing against [every other way to connect Claude to Google Workspace](/blog/claude-google-workspace-mcp-alternatives). Google's official Workspace MCP servers are compared with a hosted gateway in [a separate post](/blog/hosted-google-workspace-mcp).

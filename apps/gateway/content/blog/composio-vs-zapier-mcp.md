@@ -1,6 +1,8 @@
 ---
 title: "Composio vs Zapier MCP: Two Different Bets (and the Question Neither Answers)"
 excerpt: "Composio is integration infrastructure for developers shipping agents. Zapier MCP is automation breadth for people who already live in Zaps. If the actual question is 'how do I get Claude working deep in my Google Workspace', both answers come up short."
+searchTitle: "Composio vs Zapier MCP: Which One Fits You | DataToRAG"
+searchDescription: "Composio and Zapier MCP compared for giving an agent tools: who each is built for, what each does in Google Workspace, pricing, and self-hosting."
 date: "2026-07-23"
 updated: "2026-11-25"
 updatedNote: "November 25, 2026: two more corrections to what the post said about Zapier. Zapier's pages say MCP tool calls are free until January 5, 2027 and use plan tasks after that, so the billing answer, the table, and the cost paragraph now say so, with Composio's monthly tool-call allowance beside it. And Zapier's Google Docs actions are more than append and find-and-replace: its app page also lists inserting text, formatting text, and images, still with no batch update. Also re-checked on each vendor's pages today and dated: Composio's catalog is the 1,800+ apps its site states, not 1,000+ toolkits; self-hosting Composio is an Enterprise arrangement, and Zapier's MCP pages describe no self-hosted option; Zapier's security page adds SOC 3 to SOC 2 Type II; Composio's site now describes a no-code product, Composio For You, which the post notes where it called Composio code-only; unchecked lines about Composio's tool routing are removed; and Notion is added to what DataToRAG covers. three corrections. The post said Google Slides, Contacts, and Tasks were not on Zapier's MCP, and that Composio had no Slides or Contacts toolkit; both companies' own pages list them today, so the table, the FAQ, and the worked example are corrected and dated. It said you could self-host DataToRAG by running Docker Compose with your own Postgres; that was never one command, and the post now lists what you would supply. And a paragraph headed Nothing stored now says what is stored: each connection's sign-in tokens, encrypted. August 26, 2026: narrowed an overbroad privacy claim. The pass-through statement implied nothing is stored anywhere; the gateway keeps nothing, but the hosted agent on our own site stores its conversation threads. The privacy policy is now linked from the paragraph."
@@ -8,6 +10,7 @@ author: "Manuel Yang"
 category: "Comparison"
 coverImage: "/blog/composio-vs-zapier-mcp.png"
 tags: ["composio", "zapier", "mcp", "comparison", "ai-agents"]
+related: ["composio-alternative", "zapier-mcp-alternative", "claude-google-workspace-mcp-alternatives"]
 faqs:
   - q: What is the difference between Composio and Zapier MCP?
     a: >-
@@ -120,7 +123,7 @@ This is the gap DataToRAG sits in, and it's why we built it.
 
 ## What DataToRAG is
 
-DataToRAG is a Google-verified MCP gateway you sign into, not a platform you build on. One endpoint, one Google sign-in, and Claude gets hand-built tools across all eight Google Workspace services: `gmail_send` and `gmail_reply` so email workflows finish instead of stopping at a draft, `docs_batch_update` for restructuring documents in place, `slides_create` for building decks, `sheets_update` at the cell and range level, and the full `contacts_*` and `tasks_*` sets. Jira, Confluence, and Notion ride behind the same endpoint, so "summarize these tickets into a Confluence page" is one conversation.
+DataToRAG is a Google-verified MCP gateway you sign into, not a platform you build on. One endpoint, one Google sign-in, and Claude gets hand-built tools across all eight Google Workspace services ([the full list](/docs/tools)): `gmail_send` and `gmail_reply` so email workflows finish instead of stopping at a draft, `docs_batch_update` for restructuring documents in place, `slides_create` for building decks, `sheets_update` at the cell and range level, and the full `contacts_*` and `tasks_*` sets. Jira, Confluence, and Notion ride behind the same endpoint, so "summarize these tickets into a Confluence page" is one conversation.
 
 Three things you can't easily bolt onto either alternative:
 

@@ -1,8 +1,10 @@
 ---
 title: "24-hour re-auth is over"
 excerpt: "DataToRAG MCP now issues OAuth refresh tokens. Your client refreshes silently in the background instead of dragging you back through the Google consent screen every day."
+searchTitle: "MCP OAuth Refresh Tokens: No More Daily Google Re-Auth"
+searchDescription: "DataToRAG's MCP server issues OAuth refresh tokens, so Claude Code, Claude Desktop, and Cursor renew access in the background, not every 24 hours."
 date: "2026-05-18"
-updated: "2026-08-12"
+updated: "2026-11-25"
 updatedNote: "Fixed three links. Two pointed at a spec and an implementation plan that were deliberately moved out of the public repo after this post went up, so both 404ed and the surrounding \"checked into the repo\" claim was false with them; they are replaced by the OAuth security model record, which is public. The third cited the OAuth 2.0 Security BCP as an Internet-Draft, and it was published as RFC 9700 before this post was written."
 author: "Manuel Yang"
 category: "Engineering"
@@ -44,7 +46,7 @@ Holding the access TTL at 24 hours for now lets us watch refresh telemetry under
 
 Nothing. If your client supports OAuth 2.1 refresh (Claude Code, Claude Desktop, Cursor all do), it will discover the new `refresh_token` grant type via our `/.well-known/oauth-authorization-server` metadata and start using it on its next token exchange.
 
-If you're still on a token issued before today, your client will re-auth one more time to pick up the new pair, then refreshes silently from there.
+If you're still on a token issued before today, your client will re-auth one more time to pick up the new pair, then refreshes silently from there. Adding the server to a client is covered in [getting started](/docs/getting-started).
 
 ## For developers
 

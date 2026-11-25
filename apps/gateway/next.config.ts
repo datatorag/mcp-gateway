@@ -33,6 +33,7 @@ export const MARKDOWN_REWRITES = [
   { source: "/docs.md", destination: "/md/docs" },
   { source: "/docs/:slug.md", destination: "/md/docs/:slug" },
   { source: "/use-cases/:slug.md", destination: "/md/use-cases/:slug" },
+  { source: "/blog/:slug.md", destination: "/md/blog/:slug" },
 ];
 
 const nextConfig: NextConfig = {

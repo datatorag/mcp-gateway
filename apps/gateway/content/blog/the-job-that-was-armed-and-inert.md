@@ -1,6 +1,8 @@
 ---
 title: "We Published Our Inbox Triage Routine. Then It Quietly Stopped Running."
 excerpt: "The scheduled job missed three of the next ten days and every check passed. Firing and noticing are different jobs, and a check you write cannot verify a run that never happened."
+searchTitle: "A Scheduled Agent Job That Silently Stopped Running"
+searchDescription: "Our scheduled inbox triage missed three of ten days while every check passed. Why firing a job and noticing it ran are different, and the fix."
 date: "2026-09-03"
 updated: "2026-11-25"
 updatedNote: "November 25, 2026: the paragraph on the success signal is marked as September 2026 as well, and 'assistant session' reads 'agent session'; since October 31, 2026 our digest is a direct message in our team chat and no longer an email, the job that fires the run waits an hour for the record that the message posted, and the schedule runs from a systemd timer; the section on the schedule now says so. The principle is unchanged."

@@ -1,6 +1,8 @@
 ---
 title: "Your Agent Can Attach Files to Email Now. The Interesting Part Is Where the Bytes Never Go."
 excerpt: "Gmail send, reply, forward and drafts take attachments from Drive: real files attached, Google Docs linked the way Gmail does it or exported as PDF and Word, images inline. The design question underneath is one the MCP spec itself hasn't settled yet, and we picked a side."
+searchTitle: "Attach Google Drive Files to Gmail With Claude | DataToRAG"
+searchDescription: "DataToRAG's Gmail send, reply, forward, and draft tools attach files from Google Drive, link or export Google Docs, and place images inline."
 date: "2026-09-28"
 updated: "2026-11-25"
 updatedNote: "November 25, 2026: the section on what it means for you today no longer says a screenshot from the chat cannot be attached, and the planned upload endpoint that would return a Drive id is now described as what shipped (a single-use upload link that returns an upload reference). The statement about how Gmail sends a Google Doc is dated and tied to Google's help page, a comparison to how Gmail builds inline images is removed, and what Claude does with a dropped file is stated as what we saw in September 2026. November 17, 2026: when this was written a file had to be in Drive first. Since late October 2026 a file Claude already holds (up to 1 MB) or a file on your computer (up to 25 MB, through a single-use upload link) can be attached too."
@@ -8,6 +10,7 @@ author: "Manuel Yang"
 category: "Product"
 coverImage: "/blog/gmail-draft-attachments.png"
 tags: ["gmail", "drive", "attachments", "mcp", "google-workspace"]
+related: ["connect-google-workspace-to-claude", "how-files-should-move-through-an-mcp-server", "a-file-on-your-computer-into-drive-jira-or-an-email"]
 ---
 
 A customer wrote in two weeks ago with two asks about the Gmail tools. Mail Claude sent was missing his signature, and drafts came out without attachments. The signature shipped on the 18th. This is the other one. His workflow is that Claude drafts the email, he opens it in Gmail, checks it, presses send. Half of what he sends has a file on it, and until this week the draft came out with no file, so he was fixing that by hand too.
@@ -37,6 +40,8 @@ A Drive id is already an opaque handle. So the model says "attach this id", our 
 ## What it means for you today
 
 *Since late October 2026 a file does not have to be in Drive first: a file Claude already holds (up to 1 MB) or a file on your computer (up to 25 MB, through a single-use upload link) can be attached too. See [a file on your computer into Drive, Jira or an email](/blog/a-file-on-your-computer-into-drive-jira-or-an-email).*
+
+Going the other way, from an email's attachment into a Drive folder, is an older tool with [its own post](/blog/connect-google-workspace-to-claude).
 
 If the file is in Drive, or already on an email you're forwarding, it works. When this was written, a screenshot you pasted into the chat did not, and the answer was "put it in Drive and tell me the name". That is the part that changed: your agent can now put a file it already holds into the call, up to 1 MB.
 

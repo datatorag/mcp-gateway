@@ -1,6 +1,8 @@
 ---
 title: "Your Agent Should Ask For What It Needs"
 excerpt: "An agent with nothing connected can still answer you. It just can't do anything. We shipped the fix: it notices what's missing, asks for it in the conversation, and finishes the job once you connect."
+searchTitle: "An Agent That Asks You to Connect an Account | DataToRAG"
+searchDescription: "When DataToRAG's dashboard Agent needs an account you have not connected, it says so, shows a connect card in the conversation, and finishes the request."
 date: "2026-08-16"
 updated: "2026-11-25"
 updatedNote: "November 25, 2026: added what changed in the connect flow since this was published. It is still a full redirect and not a popup, but since August 24, 2026 a short page of instructions sits in front of Google's consent screen, and since October 21, 2026 those steps open as a dialog on the dashboard. Four spellings changed."
@@ -12,6 +14,8 @@ category: "Product"
 # coverImage: "/blog/agent-asks.png"
 tags: ["agent", "mcp", "google-workspace", "onboarding", "product"]
 ---
+
+When DataToRAG's dashboard Agent is asked for something that needs an account you have not connected, it says what it needs, shows a connect card inside the conversation, and finishes the original request once you connect. In your own client, the `connect` tool says what is connected and gives you a link for anything that is not ([getting started](/docs/getting-started)).
 
 There is a failure mode in AI agents that looks exactly like success.
 

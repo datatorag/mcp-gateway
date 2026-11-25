@@ -16,6 +16,7 @@ import sitemap from "./sitemap";
 import { SHARE_LINKS } from "@/lib/share-links";
 import { getAllUseCases } from "@/lib/use-cases";
 import { getAllDocs } from "@/lib/docs";
+import { getAllPosts } from "@/lib/blog";
 
 describe("sitemap", () => {
   it("never lists a share link", async () => {
@@ -42,6 +43,21 @@ describe("sitemap", () => {
     }
     const list = entries.find((e) => e.url === "https://datatorag.com/use-cases");
     expect((list!.lastModified as Date).toISOString().slice(0, 10)).toBe(useCases.map((u) => u.date).sort().at(-1));
+  });
+
+  it("lists the blog index with the day of its newest post or edit, and every post with its own", async () => {
+    const entries = await sitemap();
+    const posts = getAllPosts();
+    expect(posts.length).toBeGreaterThan(40);
+    const days = posts.map((p) => p.updated ?? p.date);
+    for (const [i, p] of posts.entries()) {
+      const entry = entries.find((e) => e.url === `https://datatorag.com/blog/${p.slug}`);
+      expect((entry!.lastModified as Date).toISOString().slice(0, 10), p.slug).toBe(days[i]);
+    }
+    const index = entries.find((e) => e.url === "https://datatorag.com/blog");
+    expect((index!.lastModified as Date).toISOString().slice(0, 10)).toBe([...days].sort().at(-1));
+    // A feed and a Markdown copy are not pages a search result should show.
+    expect(entries.map((e) => e.url).filter((u) => /\.(xml|md)$/.test(u))).toEqual([]);
   });
 
   it("lists the docs index and the all-tools page, and never an address that only redirects", async () => {

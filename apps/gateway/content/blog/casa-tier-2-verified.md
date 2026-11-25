@@ -1,7 +1,10 @@
 ---
 title: "We passed: DataToRAG is now a Google-verified app"
 excerpt: "Google approved our verification on June 29, 2026. The 'unverified app' warning is gone. Here's how the CASA Tier 2 review actually went, and what changes for you."
+searchTitle: "DataToRAG Passed CASA Tier 2 and Is Google-Verified"
+searchDescription: "Google verified DataToRAG on June 29, 2026 after a CASA Tier 2 review. How the review went, the eight scopes approved, and what changes when you connect."
 date: "2026-07-10"
+updated: "2026-11-25"
 author: "Manuel Yang"
 category: "Security"
 coverImage: "/blog/casa-tier-2-verified.png"
@@ -36,7 +39,7 @@ That last one matters more than it looks. A verification only covers the scopes 
 
 If you're new: connecting is now the boring, normal flow. That's the whole point. The most aggressive thing in our onboarding is gone.
 
-If you already use DataToRAG: nothing about how we handle your access changed, because it didn't need to. Same encrypted, per-user, per-service tokens. Same "we don't sell, share, or train on your data." The verification didn't force a new data policy on us. It confirmed the one we already had.
+If you already use DataToRAG: nothing about how we handle your access changed, because it didn't need to. Same encrypted, per-user, per-service tokens (the [security docs](/docs/security) say where they are stored). Same "we don't sell, share, or train on your data." The verification didn't force a new data policy on us. It confirmed the one we already had.
 
 ## The part I didn't know going in
 

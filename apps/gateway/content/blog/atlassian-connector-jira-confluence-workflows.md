@@ -1,6 +1,8 @@
 ---
 title: "One Prompt, Jira and Confluence Both Move"
 excerpt: "The Atlassian connector isn't two separate integrations. It's the cross-product workflow that always lived in a Google Doc."
+searchTitle: "Claude for Jira and Confluence: Four MCP Workflows"
+searchDescription: "Four workflows for Claude with DataToRAG's Jira and Confluence tools: standup prep, tickets from context, retro notes to tickets, and status documents."
 date: "2026-04-20"
 updated: "2026-11-25"
 updatedNote: "November 25, 2026: the Connect step now points at the Connections page, where the Atlassian card is; the paragraph on several sites now says what happens (several accounts, named per call, and for one account with several sites the first site Atlassian lists); a sentence about a button in Jira that we could not confirm on Atlassian's own pages today is removed; and the earlier note below is reworded so it no longer says in the present tense that Jira attachments are read-only. November 17, 2026: Jira attachments are no longer read-only. jira_add_attachment puts a file on an issue from an email, Drive or an upload; Confluence attachments are still read-only. Issue links, worklogs and the delete tools were added to the list. An earlier correction fixed two overstatements of our own surface: attachments were read-only on both Jira and Confluence at the time, so claiming we managed them promised a write we did not ship then, and Confluence comments are add and read only, unlike Jira where they can also be edited and deleted. The status-update walkthrough also had jira_get_issue fetching epic links; a live call shows its response carries no epic or parent field, so the grouping step is now a per-epic search."
@@ -9,6 +11,8 @@ category: "Product"
 coverImage: "/blog/atlassian-fanout.png"
 tags: ["atlassian", "jira", "confluence", "workflows", "mcp"]
 ---
+
+With DataToRAG's Atlassian connector, one Claude prompt can read Jira issues and Confluence pages and write to both: `jira_search` finds the tickets, and `confluence_create_page` writes the page. This post walks through four workflows: standup prep, tickets from context, retro notes to tickets, and status documents.
 
 Every team I've watched use Jira and Confluence does the same thing. They open a Jira tab, scroll through their board, switch to Confluence, skim a page, tab back to Jira, copy a ticket key, tab to Confluence again, paste it into a new page.
 

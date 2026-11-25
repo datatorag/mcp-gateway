@@ -1,6 +1,8 @@
 ---
 title: "How to Stop Reading Your Inbox"
 excerpt: "Our inbox-triage skill sorts unread mail across every account you connect, labels and clears the noise, and mails you one digest. The four decisions that make it work, and the prompt-injection hole we caught before shipping the page."
+searchTitle: "AI Inbox Triage for Gmail Across Every Account | DataToRAG"
+searchDescription: "DataToRAG's inbox-triage skill sorts unread Gmail across every connected account, labels and clears the noise, and sends one digest. How it is built."
 date: "2026-08-26"
 updated: "2026-11-25"
 updatedNote: "November 25, 2026: the published skill still mails its digest, but since October 31, 2026 our own daily run delivers its digest as a direct message in our team chat, and the section on the emailed digest now says so; three spellings changed. Corrected the claim that this runs every morning. It did not: the scheduled job missed three of the ten days after this published, and every check we had passed while it happened. The routine and the four decisions below are unchanged and still what we run. The scheduling was the broken part, and it now has its own post."
@@ -23,7 +25,7 @@ and the reasons are what make the pattern work rather than merely run.
 ## Every mailbox in one pass
 
 Work Gmail, personal Gmail, a shared inbox. The skill takes a list of accounts and does the
-whole routine per account, passing `account` explicitly on every call. Triage that covers one
+whole routine per account, passing `account` explicitly on every call ([how a call picks an account](/docs/multiple-accounts)). Triage that covers one
 inbox while three others pile up isn't triage, it's moving the anxiety.
 
 The mechanical detail matters more than it looks: without an explicit `account`, a

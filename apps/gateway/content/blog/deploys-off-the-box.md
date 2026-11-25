@@ -1,6 +1,8 @@
 ---
 title: "We Stopped Building and Deploying on the Production Box"
 excerpt: "Since the start, the server that runs DataToRAG also built every release of DataToRAG, from a git checkout sitting next to the secrets. Now GitHub builds the image, a person approves the deploy, and the box can do exactly one thing when asked: pull a named image and swap it in. Here is what we built, what we found on the way, and what we decided not to build."
+searchTitle: "Moving Builds and Deploys Off the Production Server"
+searchDescription: "How DataToRAG stopped building releases on its production server: GitHub builds the image, a person approves the deploy, and the server only pulls it."
 date: "2026-10-09"
 author: "Manuel Yang"
 category: "Engineering"

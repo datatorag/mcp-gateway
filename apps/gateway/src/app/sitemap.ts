@@ -2,7 +2,7 @@ import type { MetadataRoute } from "next";
 import { eq } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { mcpServers } from "@datatorag-mcp/db";
-import { getAllPosts } from "@/lib/blog";
+import { getAllPosts, postModified } from "@/lib/blog";
 import { getAllDocs } from "@/lib/docs";
 import { getAllSkills } from "@/lib/skills";
 import { getAllPersonas } from "@/lib/personas";
@@ -16,6 +16,10 @@ export const dynamic = "force-dynamic";
 const BASE = "https://datatorag.com";
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
+  const allPosts = getAllPosts();
+  // The blog index changes when a post is published or edited: the newest of
+  // those days is its own.
+  const newestPostDay = allPosts.map(postModified).sort().at(-1);
   const staticRoutes: MetadataRoute.Sitemap = [
     { url: BASE, changeFrequency: "weekly", priority: 1 },
     {
@@ -25,7 +29,12 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       changeFrequency: "monthly",
       priority: 0.9,
     },
-    { url: `${BASE}/blog`, changeFrequency: "weekly", priority: 0.8 },
+    {
+      url: `${BASE}/blog`,
+      ...(newestPostDay ? { lastModified: new Date(`${newestPostDay}T00:00:00`) } : {}),
+      changeFrequency: "weekly",
+      priority: 0.8,
+    },
     // The docs index, a page of its own, and the generated list of every
     // tool beside it. `/tools` alone only redirects there and is not listed.
     { url: `${BASE}/docs`, changeFrequency: "weekly", priority: 0.8 },
@@ -44,9 +53,9 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     { url: `${BASE}/terms`, changeFrequency: "yearly", priority: 0.2 },
   ];
 
-  const posts: MetadataRoute.Sitemap = getAllPosts().map((p) => ({
+  const posts: MetadataRoute.Sitemap = allPosts.map((p) => ({
     url: `${BASE}/blog/${p.slug}`,
-    lastModified: new Date(`${p.updated ?? p.date}T00:00:00`),
+    lastModified: new Date(`${postModified(p)}T00:00:00`),
     changeFrequency: "monthly",
     priority: 0.7,
   }));

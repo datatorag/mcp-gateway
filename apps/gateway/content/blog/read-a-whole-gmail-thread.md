@@ -1,12 +1,17 @@
 ---
 title: "Read a Whole Gmail Thread in One Call, and How We Knew to Build It"
 excerpt: "An agent that wants a whole email conversation used to get it one message at a time, or by going around us to Google's raw API. Our usage record showed the second one happening, so there is now a tool for it: every message of a thread, oldest to newest, in one call."
+searchTitle: "Read a Whole Gmail Thread in One MCP Call | DataToRAG"
+searchDescription: "DataToRAG's gmail_read_thread returns every message in a Gmail conversation, oldest to newest, in one call. How the usage record showed the need."
 date: "2026-11-17"
+updated: "2026-11-25"
 author: "Manuel Yang"
 category: "Product"
 coverImage: "/blog/read-a-whole-gmail-thread.png"
 tags: ["gws-mcp", "gmail", "mcp"]
 ---
+
+`gmail_read_thread`, a DataToRAG [Gmail tool](/docs/gmail), returns every message in a Gmail conversation, oldest to newest, in one call, from the thread id that `gmail_search`, `gmail_list`, and `gmail_read` already return.
 
 A month ago I wrote that we had [read what people used the raw API call for](/blog/we-read-what-the-raw-api-call-was-for) and built nine tools from it. In that post I said there was nothing left that an outside user needed the raw call for. That was wrong, and the same record showed me where.
 

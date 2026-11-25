@@ -8,9 +8,10 @@ author: "Manuel Yang"
 category: "Engineering"
 coverImage: "/blog/multi-account-architecture.png"
 tags: ["multi-account", "mcp", "oauth", "architecture", "google-workspace"]
+related: ["one-prompt-two-inboxes-multi-account-mcp", "claude-google-calendar-vs-datatorag-multi-account", "oauth-refresh-tokens"]
 ---
 
-People kept asking for it. "I have a work Google account and a personal one. Can I search both?" The answer was no, because our entire auth model assumed one account per service per user. Fixing that touched every layer of the stack: database schema, token resolution, tool schemas, and the OAuth callback flow. Here's how we did it.
+People kept asking for it. "I have a work Google account and a personal one. Can I search both?" The answer was no, because our entire auth model assumed one account per service per user. Fixing that touched every layer of the stack: database schema, token resolution, tool schemas, and the OAuth callback flow. Here's how we did it. (What it looks like from the user's side is in [one prompt, two inboxes](/blog/one-prompt-two-inboxes-multi-account-mcp), and the [docs on using several accounts](/docs/multiple-accounts) have the current behavior.)
 
 ![The dashboard in April 2026: five Google accounts connected under one user, with an Atlassian account alongside](/blog/dashboard-home.png)
 

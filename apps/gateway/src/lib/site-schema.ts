@@ -106,7 +106,7 @@ export function howToNode(page: {
 /** The organization as a page-level node names it: the same `@id` the
  * site-wide Organization node carries, with the name and address repeated so
  * the reference still reads on its own. */
-function organizationRef(): SchemaNode {
+export function organizationRef(): SchemaNode {
   return { "@type": "Organization", "@id": ORGANIZATION_ID, name: SITE_NAME, url: SITE_URL };
 }
 
@@ -193,5 +193,61 @@ export function collectionPageNode(page: { name: string; description: string; ur
     url: page.url,
     isPartOf: { "@id": WEBSITE_ID },
     publisher: organizationRef(),
+  };
+}
+
+/** A list of pages, in the order given: each a name and its address. */
+export function itemListNode(items: { name: string; url: string }[]): SchemaNode {
+  return {
+    "@type": "ItemList",
+    numberOfItems: items.length,
+    itemListElement: items.map((item, i) => ({ "@type": "ListItem", position: i + 1, name: item.name, url: item.url })),
+  };
+}
+
+/** The blog's index: a page that lists every post, newest first. */
+export function blogIndexNode(page: {
+  name: string;
+  description: string;
+  url: string;
+  posts: { name: string; url: string }[];
+}): SchemaNode {
+  return {
+    ...collectionPageNode({ name: page.name, description: page.description, url: page.url }),
+    mainEntity: itemListNode(page.posts),
+  };
+}
+
+/** One blog post. The headline and the dates are the ones the page shows;
+ * the picture is always present (a post with none of its own passes the
+ * site's card); the publisher is the site-wide organization, by its `@id`. */
+export function blogPostingNode(post: {
+  headline: string;
+  description: string;
+  url: string;
+  datePublished: string;
+  dateModified: string;
+  image: string;
+  keywords: string[];
+  section?: string;
+  author: { name: string; image?: string };
+}): SchemaNode {
+  return {
+    "@context": "https://schema.org",
+    "@type": "BlogPosting",
+    headline: post.headline,
+    description: post.description,
+    datePublished: post.datePublished,
+    dateModified: post.dateModified,
+    inLanguage: "en",
+    isAccessibleForFree: true,
+    url: post.url,
+    image: post.image,
+    ...(post.keywords.length > 0 ? { keywords: post.keywords.join(", ") } : {}),
+    ...(post.section ? { articleSection: post.section } : {}),
+    author: { "@type": "Person", name: post.author.name, ...(post.author.image ? { image: post.author.image } : {}) },
+    publisher: { ...organizationRef(), logo: { "@type": "ImageObject", url: `${SITE_URL}/datatorag-logo-256.png` } },
+    isPartOf: { "@id": WEBSITE_ID },
+    mainEntityOfPage: { "@type": "WebPage", "@id": post.url },
   };
 }

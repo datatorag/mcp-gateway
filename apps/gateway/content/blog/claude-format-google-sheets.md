@@ -1,6 +1,8 @@
 ---
 title: "The Spreadsheet Was Correct. Nobody Could Read It."
 excerpt: "Writing values into Google Sheets gives you no formatting at all, and the failure is invisible to whoever caused it. Four new tools fix that: a one-call readable pass, targeted styling, a raw escape hatch, and row lookup that doesn't read the whole sheet."
+searchTitle: "How to Make Claude Format Google Sheets | DataToRAG"
+searchDescription: "DataToRAG's sheets_format_table makes a Google Sheet readable in one call: header styling, a frozen header row, column widths, and wrapped cells."
 date: "2026-08-26"
 updated: "2026-11-25"
 author: "Manuel Yang"
@@ -8,6 +10,8 @@ category: "Product"
 coverImage: "/blog/claude-format-google-sheets.png"
 tags: ["sheets", "claude", "mcp", "formatting", "google-workspace"]
 ---
+
+DataToRAG's `sheets_format_table` makes a Google Sheet readable in one call: header styling, a frozen header row, column widths, and wrapped cells. It is one of four [Sheets tools](/docs/sheets) this post covers, and what follows is the failure that made us build them.
 
 Here's a failure mode I didn't appreciate until it happened to us: you ask Claude to build a
 spreadsheet, it writes every value correctly, and the result is unreadable.

@@ -1,6 +1,8 @@
 ---
 title: "Building a Usage Dashboard Without Logging Arguments or Response Bodies"
 excerpt: "How we show users exactly what their agent is doing (calls, latency, errors) without storing a single argument or response body."
+searchTitle: "MCP Usage Dashboard Without Logging Arguments | DataToRAG"
+searchDescription: "How DataToRAG's usage dashboard shows calls, latency, and errors per tool without storing argument values or response bodies. What is recorded."
 date: "2026-04-20"
 updated: "2026-11-25"
 updatedNote: "November 25, 2026: the usage API launched with five endpoints and has had seven since September 11, 2026, when runs and sessions were added; and a range change refetches only the endpoints that take a range, since the summary cards and recent activity do not change with it, where the post said it refetched all five; corrected which table the dashboard reads. The post said the 30d and 90d views read the daily rollup table; every range reads the raw events table, which holds 90 days, and no dashboard view reads the daily table. The closing promise is also reworded to match what the row holds, since a stored error message can quote your data. Also retitled. The title said the dashboard logs no user data. The row holds no arguments and no response bodies, but a stored error message is kept as received and can quote the user's own data, as the post itself says, so the title now says what is true. November 17, 2026: the row now lists every field it holds (the account, client, argument size and cost units, and for the raw gws_run call its service, resource, method and parameter names, never values); a redacted copy of each event goes to our analytics provider; and hosted agent calls count, since plans are billed on this meter. Corrected the error-message claim. The post said stored error messages are redacted, which was true when it was written and is no longer. The redaction protected against sending user content to a third-party analytics provider, and that still happens; it was never a reason to censor the copy stored for the user in a row only they can see, quoting an error they had already received in full. The stored copy is now raw."
@@ -8,6 +10,7 @@ author: "Manuel Yang"
 category: "Engineering"
 coverImage: "/blog/usage-dashboard.png"
 tags: ["mcp", "observability", "privacy", "architecture"]
+related: ["we-read-what-the-raw-api-call-was-for", "read-a-whole-gmail-thread", "why-your-mcp-server-is-eating-your-context-window"]
 ---
 
 Users kept asking the same thing. "Is it actually doing anything?" They'd wire their agent up to DataToRAG, kick off a workflow, and have no way to see what happened. Did Gmail even get called? Did a search fail silently? Was the slow response our fault or Anthropic's?
@@ -115,6 +118,6 @@ A usage dashboard in a multi-tenant service isn't a feature. It's a trust signal
 
 We got there by being disciplined about the row schema: what was called, by which account and client, the outcome, latency and sizes, and the error message. No argument values and no response body.
 
-Billing now runs on this meter, and the semantics held: success and user errors count, server errors don't.
+Billing now runs on this meter, and the semantics held: success and user errors count, server errors don't. The [usage docs](/docs/usage) say what the dashboard shows today, and [plans and limits](/docs/plans-and-limits) says what counts as a call.
 
 But that's a post for another day.

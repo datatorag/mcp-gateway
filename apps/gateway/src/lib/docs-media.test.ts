@@ -110,6 +110,16 @@ describe("images in a docs page", () => {
     expect(html).toContain('<img src="/docs/wide.png" alt="x" width="300" loading="eager" decoding="async">');
   });
 
+  it("does not take a word inside a value for an attribute", () => {
+    const html = run(`${filler(NEAR_TOP_CHARS + 50)}<img src="/docs/wide.png" alt="The page at phone width, loading slowly">`);
+    expect(html).toContain('alt="The page at phone width, loading slowly" width="1200" height="630" loading="lazy" decoding="async">');
+  });
+
+  it("makes every image wait on a page that has its own picture above the body", () => {
+    const html = enhanceDocMedia(`<p>Short intro.</p><img src="/docs/wide.png" alt="one"><img src="/docs/tall.png" alt="two">`, { publicDir, eagerFirst: false });
+    expect(html.match(/loading="lazy"/g)).toHaveLength(2);
+  });
+
   it("leaves a page with no media untouched", () => {
     const html = "<h2>Title</h2><p>Text with <code>&lt;img&gt;</code> in it.</p>";
     expect(run(html)).toBe(html);

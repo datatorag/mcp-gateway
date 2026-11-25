@@ -1,12 +1,17 @@
 ---
 title: "An Excel File in Drive Is Not a Spreadsheet Yet"
 excerpt: "The Sheets tools could not open an .xlsx in Drive, and Google's error did not say why. Now they say what the file is and name the one call that converts it, and drive_copy_file does the conversion."
+searchTitle: "Open an Excel File in Google Drive With Claude | DataToRAG"
+searchDescription: "An .xlsx in Google Drive is not a Google Sheet. DataToRAG's tools now say so, and drive_copy_file with convert set to true makes the Google Sheet copy."
 date: "2026-10-29"
+updated: "2026-11-25"
 author: "Manuel Yang"
 category: "Product"
 coverImage: "/blog/convert-office-file-in-drive.png"
 tags: ["drive", "sheets", "docs", "slides", "gws-mcp", "errors"]
 ---
+
+An Excel file in Google Drive is not a Google Sheet, so the Sheets tools cannot open it until it is converted. DataToRAG's Sheets, Docs, and Slides tools now say so, and `drive_copy_file` with `convert` set to true makes the Google copy they work on.
 
 Last week one person hit the same wall four times in a row. They had an Excel file in Drive, asked for its contents, and every Sheets tool answered with the same Google 400. The error named neither the cause nor the fix. They worked it out themselves in the end, by copying the file through the Drive API with a Google mime type set by hand, which is the conversion. It should not take four tries and a workaround to learn that.
 

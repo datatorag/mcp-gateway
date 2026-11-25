@@ -8,6 +8,7 @@ author: "Manuel Yang"
 category: "Engineering"
 coverImage: "/blog/context-window-optimization.png"
 tags: ["mcp", "context-window", "google-workspace", "performance"]
+related: ["atlassian-mcp-adf-context-optimization", "reading-a-spreadsheet-is-not-reading-data", "usage-metrics-for-multi-tenant-mcp"]
 ---
 
 Every tool call in an MCP conversation consumes tokens. The response goes into the context window, sits there for the rest of the conversation, and counts against the limit on every subsequent turn. This is obvious if you think about it. Most MCP server authors don't think about it.
@@ -41,6 +42,8 @@ Three approaches, depending on the service.
 **Google Slides** runs through a `trimPresentation()` function that strips master slides, layouts, page element geometry, transform matrices, and text styling. What comes back is the slide structure with just the text content and object IDs you'd need for edits. 2-5KB from 100KB+ raw.
 
 **Google Sheets** reads cell values through the values API (`spreadsheets.values.get` for one range, one batched read for several), never fetching the full spreadsheet resource with formatting and conditional rules. If you need cell values, that's what you get. When the model needs the shape of a spreadsheet instead, `sheets_get_metadata` returns the tabs, their ids, and their sizes, and no cells.
+
+The read modes are listed in the [Docs](/docs/docs), [Slides](/docs/slides), and [Sheets](/docs/sheets) docs. Confluence has its own version of this problem, where a 500-word page is roughly 40KB of storage markup; that case is in [Confluence pages are 40KB of markup](/blog/atlassian-mcp-adf-context-optimization).
 
 Every response also has a 900KB safety cap. If something somehow produces a massive response (a Sheet with 50,000 rows, say), it gets truncated with a note rather than blowing out the context.
 

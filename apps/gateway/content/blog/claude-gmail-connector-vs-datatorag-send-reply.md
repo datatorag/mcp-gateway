@@ -1,6 +1,8 @@
 ---
 title: "We Said Claude Couldn't Send Email. It Can Now."
 excerpt: "This post used to argue that Claude's native Gmail connector drafts but never sends. As of August 24, 2026 that is wrong: it sends, replies, and forwards. Here is the corrected comparison, and what is left for us."
+searchTitle: "Claude Gmail Connector vs DataToRAG: Send, Reply, Labels"
+searchDescription: "A dated comparison of Claude's built-in Gmail connector and DataToRAG's Gmail tools: sending, replying, labels, and what DataToRAG adds across accounts."
 date: "2026-04-21"
 updated: "2026-11-25"
 updatedNote: "November 25, 2026: re-read against Anthropic's help page. The attachments row and paragraph said the native connector could only hand an attachment back through the conversation; the page says Claude opens attachments up to about 12 MB and uploads files to Drive, so that difference is narrowed. The multi-account row and paragraph said the native connector takes one Google account and makes you reconnect to switch; the page does not say how many accounts you can connect, so the row now says so and the reconnect sentence is removed. The section on Sheets, Slides, Docs, Contacts, and Tasks is dated: the page lists Docs, Sheets, and Slides connectors that create and edit files, with no beta label. October 19, 2026: two rows flip in our favor. We now label or unlabel a whole thread in one call, trash and untrash a whole thread, and mark and unmark spam, so 'Label or archive a whole thread in one call' and 'Trash, untrash, mark spam' read Yes for us as well. Earlier, October 15, later the same day: the Docs and Sheets lines and the closing line are corrected, and the Slides line carries its October 9 date. Claude's Google Docs connector, in beta since October 2026 and enumerated on 15 October 2026, edits an existing doc in place, and its Sheets connector edits cells and tabs. Earlier on October 15: the Docs line under 'what is left' now says 'as of our last check' and points to the dated note on the Drive post: Anthropic announced Docs, Sheets and Slides editing connectors on 6 October 2026, and they had not reached our account by 15 October. Fourth correction, October 9, in the same direction as the others: the native connector does delete a draft. It has a delete_draft tool, so the 'Delete a draft' row now reads Yes for both and the paragraph that said it had no way to remove one is rewritten. The trash row said Partial for us and now says No: we have no tool that trashes a message. The Docs line under 'what is left' said the native connector only reads; it also creates a new doc, and what it cannot do is edit one. Still standing from the MAJOR CORRECTION of August 24: the central claim of this post is no longer true. Claude's native Gmail connector now exposes send_message (including sending an existing draft), reply with reply-all, and forward. The original title was 'Claude Can Draft Your Email. It Can't Send It.' We have rewritten the post rather than retitling around the edges, because the gap it was built on has closed. Earlier corrections on August 7 and August 11 covered labelling and thread-level filing."
@@ -8,6 +10,7 @@ author: "Manuel Yang"
 category: "Comparison"
 coverImage: "/blog/gmail-comparison.png"
 tags: ["gmail", "claude", "mcp", "comparison", "google-workspace"]
+related: ["claude-google-workspace-mcp-alternatives", "claude-google-calendar-vs-datatorag-multi-account", "claude-google-drive-vs-datatorag-editing", "the-gaps-in-the-table-were-ours"]
 ---
 
 **Short answer, as of August 24, 2026:** Claude's native Gmail connector sends email. It also
@@ -143,3 +146,5 @@ now enough.
 Come to [DataToRAG](https://datatorag.com/dashboard) for what we add: several Google accounts
 in one request, an email's attachment sent on to a Jira issue or a Notion page, and the same
 tools in Cursor or an app of your own.
+
+Our Gmail tools are listed in the [Gmail docs](/docs/gmail). The tools we added on October 19, 2026 are in [the gaps in the table were ours](/blog/the-gaps-in-the-table-were-ours), the companion comparisons cover [Calendar](/blog/claude-google-calendar-vs-datatorag-multi-account) and [Drive, Docs, and Sheets](/blog/claude-google-drive-vs-datatorag-editing), and [every way to connect Claude to Google Workspace](/blog/claude-google-workspace-mcp-alternatives) is the overview.

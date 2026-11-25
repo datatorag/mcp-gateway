@@ -1,6 +1,8 @@
 ---
 title: "The Gaps in the Comparison Table Were Ours. They Are Closed."
 excerpt: "Our home page compares Claude's built-in Google and Atlassian connectors with ours, row by row. Ten of those rows said the built-in connector could do something we could not. As of October 19 they say Yes on both sides, and the table now only shows what is left: what we do that they do not, and three things that are still theirs."
+searchTitle: "Claude's Google and Atlassian Connectors vs DataToRAG"
+searchDescription: "On October 19, 2026 DataToRAG added Calendar, Gmail, Drive, Jira, and Confluence tools that its table showed only on the built-in connectors' side."
 date: "2026-10-20"
 updated: "2026-11-25"
 updatedNote: "November 25, 2026: the section on what the table says is now dated to October 20, 2026. The home page table has since added custom reminders as a fourth thing the built-in calendar connector does and ours does not. The statement that the built-in connectors are one account each is removed, because Anthropic's help page does not say how many accounts can be connected, and the list of things only ours does now notes that the same page says Claude edits Google Slides and finds mutual availability across attendees."
@@ -8,6 +10,7 @@ author: "Manuel Yang"
 category: "Product"
 coverImage: "/blog/suggest-a-time.png"
 tags: ["gws-mcp", "atlassian-mcp", "calendar", "gmail", "drive", "jira", "confluence", "comparison"]
+related: ["claude-google-workspace-mcp-alternatives", "claude-gmail-connector-vs-datatorag-send-reply", "claude-google-calendar-vs-datatorag-multi-account", "claude-google-drive-vs-datatorag-editing"]
 ---
 
 The comparison table on our home page is the first thing a visitor sees now. It lists what Claude's own Gmail, Calendar, Drive and Atlassian connectors do, next to what ours does, one row per capability. When I moved it into the hero last week, ten rows read Yes for them and No for us. That is a bad thing to lead with, so I closed them.
@@ -27,6 +30,8 @@ On the Google side, ten tools; on the Atlassian side, four Jira tools, two Confl
 **Confluence.** `confluence_add_comment` anchors an inline comment to a piece of the page's text and replies to inline comments as well as footer ones. `confluence_get_comments` returns each thread with its replies, which comment each one answers, and for an inline comment the text it sits on and whether it is resolved.
 
 **Drive files move like email does.** A Drive file, or a Google Doc exported as a PDF, is now a file reference. The same reference that moves an email attachment to your computer, onto a Jira issue, or into another account's Drive takes a Drive file too, and the content never enters the conversation.
+
+Each group has its docs page: [Calendar](/docs/calendar), [Gmail](/docs/gmail), [Drive](/docs/drive), [Jira](/docs/jira), [Confluence](/docs/confluence), and [file references](/docs/file-references). The connector-by-connector comparisons are separate posts, for [Gmail](/blog/claude-gmail-connector-vs-datatorag-send-reply), [Calendar](/blog/claude-google-calendar-vs-datatorag-multi-account), and [Drive, Docs, and Sheets](/blog/claude-google-drive-vs-datatorag-editing), and [every way to connect Claude to Google Workspace](/blog/claude-google-workspace-mcp-alternatives) is the overview.
 
 ## Why parity and not "tools on demand"
 

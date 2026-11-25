@@ -1,6 +1,8 @@
 ---
 title: "Pipedream Wants You to Build the Integration. DataToRAG Is the Integration."
 excerpt: "Pipedream Connect is excellent infrastructure for embedding tool access into your own product. But if you just want Claude to use your Google Workspace, you'd be building a product to do it. DataToRAG is the one you sign into."
+searchTitle: "Pipedream MCP Alternative for Claude and Google Workspace"
+searchDescription: "Pipedream Connect, a developer product, compared with DataToRAG, a hosted MCP server you sign into for Google Workspace, Atlassian, and Notion."
 date: "2026-06-29"
 updated: "2026-11-25"
 updatedNote: "November 25, 2026: the worked example still said you could run the gateway yourself with Docker and Postgres. It now says what self-hosting takes: the code is MIT-licensed, it is not one command, and you supply a Postgres database, your own Google OAuth clients, and an encryption key. Every statement about Pipedream was also re-checked on its own pages today: its docs now describe a hosted MCP server anyone can use with their own accounts without code, so the table and a note under the opening say so; the catalog is 3,000+ apps and 10,000+ tools, not tens of thousands; its Gmail page lists 24 actions with a proxy for the rest, where the post had called the set small; credits are 1 per 30 seconds of compute; the hosting and compliance statements are dated; and Notion is added to what DataToRAG covers. November 17, 2026: the billing row now states the plans: Free up to 250 tool calls a month, Pro $20 a month for 10,000. The self-host row said Docker and PostgreSQL; there is no packaged self-host guide, so it now says the source is open (MIT)."
@@ -8,7 +10,10 @@ author: "Manuel Yang"
 category: "Comparison"
 coverImage: "/blog/pipedream-mcp-alternative.png"
 tags: ["pipedream", "mcp", "comparison", "ai-agents", "alternative"]
+related: ["composio-vs-pipedream", "claude-google-workspace-mcp-alternatives", "composio-alternative"]
 ---
+
+DataToRAG is a hosted MCP server you connect your own Google Workspace, Atlassian, and Notion accounts to, and Claude or ChatGPT uses them directly, with no code to write ([setup steps](/docs/getting-started)). Pipedream Connect, the developer product this post compares it with, routes each request by an external user ID that your own application supplies; as of November 25, 2026, Pipedream's docs also describe a hosted MCP server anyone can add to their client for their own accounts, which this post does not compare.
 
 Someone in a Slack group I'm in swore Pipedream was the fastest way to give Claude access to Gmail and Google Sheets. So I spent an afternoon in the Pipedream MCP docs. They were half right. By the end I had a working setup, and a realization I hadn't expected: I never connected my own Google account to Claude. I'd built the start of a product that would let other people connect theirs.
 
@@ -16,7 +21,7 @@ That's the core of the Pipedream versus DataToRAG decision, and it's worth getti
 
 A dated note before the rest, because Pipedream moved after that afternoon. As of November 25, 2026, Pipedream's docs have a page for end users: sign in, select the apps you want, and add its hosted MCP server to Claude, ChatGPT, or Cursor from the client's settings. The docs say anyone can use those hosted servers for their own use for free. So you no longer have to build anything to connect your own account, and what follows describes Pipedream Connect, the developer product I used. I have not tested the end-user route, so I don't compare it here.
 
-## The external_user_id tell
+## Why does Pipedream Connect need an external user ID?
 
 The quickest way to see the difference is one parameter. Pipedream Connect routes every request with a header called `x-pd-external-user-id` (still a required header in its developer docs as of November 25, 2026). That value is the ID of one of your users, in your system. You generate a Connect Link, your user opens it and authorizes Google, and Pipedream stores that token keyed to the external user you named. From then on your backend, or an agent you run, makes MCP calls on that user's behalf, tagging each one with their ID and an app slug like `gmail` or `google_sheets`.
 
@@ -28,7 +33,7 @@ DataToRAG removes the scaffolding because it removes the abstraction. There's no
 
 ![Embed model versus sign-in model: Pipedream needs your app to pass a per-user external_user_id and build Connect Links, while DataToRAG is something you authorize directly with no code](/blog/embed-vs-signin-model.png)
 
-## Feature comparison
+## Pipedream and DataToRAG, feature by feature
 
 | Capability | Pipedream Connect / MCP | DataToRAG |
 |---|---|---|

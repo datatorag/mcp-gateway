@@ -2,7 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 
 /**
- * What a docs page's rendered markdown needs done to its images and videos
+ * What a docs page's rendered markdown (and a blog post's) needs done to its images and videos
  * before it is served, so they stop costing a reader who has not reached
  * them.
  *
@@ -23,6 +23,10 @@ import path from "node:path";
 export interface DocMediaOptions {
   /** Where local `src` paths resolve. Defaults to the app's `public/`. */
   publicDir?: string;
+  /** Whether the first picture may load at once when it is near the top.
+   * Defaults to true. A page with a picture of its own above the body (a
+   * blog post's cover) passes false, and every picture here waits. */
+  eagerFirst?: boolean;
 }
 
 /** How much text may come before a page's first picture for it to count as
@@ -90,7 +94,10 @@ function localImageSize(src: string, publicDir: string): ImageSize | null {
 const attribute = (tag: string, name: string): string | null =>
   tag.match(new RegExp(`\\s${name}="([^"]*)"`, "i"))?.[1] ?? null;
 
-const hasAttribute = (tag: string, name: string): boolean => new RegExp(`\\s${name}(=|\\s|/?>)`, "i").test(tag);
+/** Whether the tag has the attribute. Quoted values are set aside first, so
+ * a word inside one (an `alt` that says "width") is not taken for a name. */
+const hasAttribute = (tag: string, name: string): boolean =>
+  new RegExp(`\\s${name}(=|\\s|/?>)`, "i").test(tag.replace(/"[^"]*"|'[^']*'/g, '""'));
 
 /** The characters of text, tags and whitespace runs aside, in `html`. */
 const textLength = (html: string): number => html.replace(/<[^>]*>/g, "").replace(/\s+/g, " ").length;
@@ -151,7 +158,7 @@ const MEDIA = /<img\b[^>]*>|<iframe\b[^>]*>\s*<\/iframe>/gi;
  * at the top of the file. Anything it does not recognise is left as it is. */
 export function enhanceDocMedia(html: string, options: DocMediaOptions = {}): string {
   const publicDir = options.publicDir ?? path.join(process.cwd(), "public");
-  let first = true;
+  let first = options.eagerFirst ?? true;
   return html.replace(MEDIA, (tag: string, offset: number) => {
     // Only the page's first picture can stay eager, and only near the top.
     const eager = first && textLength(html.slice(0, offset)) <= NEAR_TOP_CHARS;

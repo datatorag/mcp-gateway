@@ -1,6 +1,8 @@
 ---
 title: "Reading a Spreadsheet Is Not Reading Data"
 excerpt: "An agent can read a rendering of your spreadsheet or it can read the cells. They look identical right up until they disagree, and you won't be watching when they do."
+searchTitle: "Reading Google Sheets With an Agent: Cells vs Renderings"
+searchDescription: "An agent can read a text rendering of a Google Sheet or read its cells with sheets_read. Where the two disagree, and a rule for which to trust."
 date: "2026-07-31"
 updated: "2026-11-25"
 updatedNote: "November 25, 2026: the two column pairs in the paragraph on merged headers are written out, with no change of meaning; sheets_read now takes several ranges, across tabs, in one call, so the cost is no longer one tab per call. What the post says about Claude's built-in Drive connector is now limited to what Anthropic's help page says as of this date, and the earlier note's statement that Claude's Sheets connector reads a range, which that page does not say, is withdrawn. November 17, 2026: Claude has its own Sheets connector, separate from the Drive one. The distinction in this post is between the two kinds of reader, not between two vendors."
@@ -27,7 +29,7 @@ formats is useful. For a spreadsheet, the reader we tested in July 2026 rendered
 concatenated.
 
 **A range reader** takes a spreadsheet id and an A1 range and returns structured data. That
-is what `sheets_read` does in our Google Workspace gateway:
+is what `sheets_read` does in our Google Workspace gateway ([Sheets docs](/docs/sheets)):
 
 ```json
 {

@@ -1,6 +1,8 @@
 ---
 title: "You can now read our MCP server before you sign in"
 excerpt: "DataToRAG's MCP endpoint answers the handshake and the tool list to anyone. Calling a tool still needs an account. Here is why we changed it, what is open, and what we watch."
+searchTitle: "Read DataToRAG's MCP Tool List Without Signing In"
+searchDescription: "DataToRAG's MCP endpoint answers the handshake and the tool list without a token. Calling a tool still needs an account. What is open and why."
 date: "2026-11-09"
 updated: "2026-11-25"
 author: "Manuel Yang"
@@ -78,4 +80,4 @@ connection cards moved to their own page.
 ![The new dashboard home for a fresh account: the headline, three example prompts, and client cards for Claude, ChatGPT, Codex and Cursor](/blog/read-the-tools-before-you-sign-in-2.png)
 
 If you tried DataToRAG before and stopped at the sign-in, the tool list is one request away now,
-no account needed.
+no account needed. The same list is on the [tools page](/docs/tools).

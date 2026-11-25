@@ -1,6 +1,8 @@
 ---
 title: "Save Gmail Attachments to Drive with Claude"
 excerpt: "A team was running an Apps Script to save 6 daily report emails to Drive. We replaced it with one prompt."
+searchTitle: "Save Gmail Attachments to Google Drive with Claude"
+searchDescription: "DataToRAG's gmail_save_attachment_to_drive lets Claude save email attachments to a Drive folder, replacing an Apps Script. Includes the connection steps."
 date: "2026-03-28"
 updated: "2026-11-25"
 updatedNote: "November 25, 2026: gmail_save_attachment_to_drive streams the attachment from Gmail to Drive and writes nothing to disk, where the post described decoding in memory and cleaning up a temp file; added a section near the top with the steps to connect Google Workspace to Claude, as Getting Started gives them. August 12, 2026: two corrections. The base64 arithmetic contradicted itself, calling 6.7MB of text 1.7 million characters when base64 is one byte per character, so the token figure derived from it was wrong too. And gmail_search results are no longer bare message ids: since the July 2026 flattening they carry sender, subject, date and a snippet, so step one now says what you actually get back."
@@ -8,6 +10,7 @@ author: "Manuel Yang"
 category: "Product"
 coverImage: "/blog/gmail-attachment-to-drive.png"
 tags: ["gmail", "google-drive", "google-workspace", "workflows", "context-window"]
+related: ["gmail-attachments-from-drive", "save-the-email-to-your-own-computer", "claude-google-workspace-mcp-alternatives"]
 ---
 
 Someone on our early access list had a workflow that looked like this: a colleague scheduled 6 Domo reports to arrive by email at 4am every weekday. Each email had a CSV attachment. An Apps Script would save those attachments to a specific Google Drive folder. Then a Claude skill would pick up the 6 CSVs, aggregate them into one Google Sheet, and write a summary. Another sheet pulled the summary via `IMPORTRANGE`.
@@ -18,7 +21,7 @@ We built `gmail_save_attachment_to_drive` so Claude can handle the entire chain.
 
 ## How to connect Google Workspace to Claude
 
-The tool needs your Google account connected first. With DataToRAG that is two connections, and they can happen in either order:
+The tool needs your Google account connected first. (Still choosing how to connect? [Every way to connect Claude to Google Workspace](/blog/claude-google-workspace-mcp-alternatives) compares the options.) With DataToRAG that is two connections, and they can happen in either order:
 
 1. **Connect your Google account.** Sign in at [datatorag.com/dashboard](https://datatorag.com/dashboard), open [Connections](https://datatorag.com/dashboard/connections), and click Connect on the Google Workspace card. Google's consent screen arrives with every box unchecked, so tick "Select all", or the services you want, before you click Continue.
 2. **Add the connector in Claude.** Go to Customize, then Connectors, click Add, and choose "Add custom connector". Give it any name and the URL `https://datatorag.com/mcp`, and leave the advanced OAuth fields empty.
@@ -75,6 +78,6 @@ The Domo example is one case. Here are others we've seen:
 
 ## Try it
 
-The `gmail_save_attachment_to_drive` tool is live now in the [Google Workspace MCP](https://datatorag.com). Connect your account and try: "Find my most recent email with an attachment and save it to Drive."
+The `gmail_save_attachment_to_drive` tool is live now in the [Google Workspace MCP](https://datatorag.com). It is listed with the other [Gmail tools](/docs/gmail), and the [Drive tools](/docs/drive) find or create the folder it saves into. Connect your account and try: "Find my most recent email with an attachment and save it to Drive."
 
 If you're running scheduled reports through email like the team above, you can replace the Apps Script today. One less thing to maintain.

@@ -1,6 +1,8 @@
 ---
 title: "How a File Should Move Through an MCP Server (and Why Ours Never Sees the Bytes)"
 excerpt: "We designed Gmail attachments three ways and built one. What we learned about base64 and tokens, what Claude actually hands a tool when you drop a PDF into the chat, and where the MCP spec is heading, is worth more than the feature."
+searchTitle: "How Files Should Move Through an MCP Server | DataToRAG"
+searchDescription: "Why DataToRAG's Gmail attachments take a Drive file id and not base64: the token cost of bytes through the model, and where the MCP spec is heading."
 date: "2026-09-28"
 updated: "2026-11-25"
 updatedNote: "November 25, 2026: the limits section and the plan at the end now carry dated notes saying what shipped (a file the agent holds, up to 1 MB in the call; a single-use upload link, up to 25 MB, that returns an upload reference and not a Drive id). The two spec proposals are restated from their own pull requests as read today: SEP-2356 was closed on June 26, 2026, and SEP-2631 on October 14, 2026, in favor of an extension. A sentence about the built-in Drive connector's upload tool and two comparisons to Gmail's internals that we could not confirm on the vendors' pages are removed, and what the Claude clients did with a dropped file is stated as what we saw in September 2026. November 17, 2026: this post says a file has to be in Drive and that bytes in the call are a dead end. Since late October 2026 we take both: a file Claude already holds in the call, capped at 1 MB for the token reasons given here, and a file on your computer through a single-use upload link up to 25 MB. The reasoning stands; the limits section does not. See /blog/a-file-on-your-computer-into-drive-jira-or-an-email."
@@ -10,7 +12,7 @@ coverImage: "/blog/attachments-three-designs.png"
 tags: ["mcp", "attachments", "files", "drive", "engineering"]
 ---
 
-Last week we shipped attachments for the Gmail tools. The announcement is its own post. This one is the design notebook underneath it, because the question "how does a file get from the user to the tool" turned out to have no settled answer in the MCP world, and we had to pick one.
+Last week we shipped attachments for the Gmail tools. [The announcement is its own post](/blog/gmail-attachments-from-drive). This one is the design notebook underneath it, because the question "how does a file get from the user to the tool" turned out to have no settled answer in the MCP world, and we had to pick one.
 
 ## Three designs, one survivor
 

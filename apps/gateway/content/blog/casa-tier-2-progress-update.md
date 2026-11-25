@@ -1,8 +1,10 @@
 ---
 title: "CASA Tier 2 update: step 1 of 6 cleared, lab scan starts next"
 excerpt: "A progress note from May 2026, partway through Google's CASA Tier 2 review: application scoping cleared, lab scan next. The review has since completed and DataToRAG is verified."
+searchTitle: "CASA Tier 2 Progress, May 2026: Step 1 of 6 | DataToRAG"
+searchDescription: "A May 2026 progress note from Google's CASA Tier 2 review of DataToRAG: application scoping cleared, lab scan next. The review has since been passed."
 date: "2026-05-26"
-updated: "2026-08-12"
+updated: "2026-11-25"
 updatedNote: "Anchored the status language to the moment this was written. The post already carried a banner saying the review completed, but the excerpt and several sentences were still in the present tense, so a reader arriving mid-page, or an AI lifting a passage, could read 'you will still see the unverified-app warning' as describing today. It does not. The account of what was submitted in May is left exactly as it was, because the point of the post is to be a record."
 author: "Manuel Yang"
 category: "Security"
@@ -46,7 +48,7 @@ Google's deadline for completion was August 3, 2026, which gave us ten weeks fro
 
 **This section describes May 2026 and is no longer true.** DataToRAG has been Google-verified since June 29, 2026, and you will not see an unverified-app warning when you connect.
 
-What it meant then: nothing changed yet. You still saw Google's unverified-app warning when connecting your Workspace, because the warning was tied to Google flipping verification at the end of step 6. Until then the three-click path through the warning was unchanged, and so was what we do with the access you grant.
+What it meant then: nothing changed yet. You still saw Google's unverified-app warning when connecting your Workspace, because the warning was tied to Google flipping verification at the end of step 6. Until then the three-click path through the warning was unchanged, and so was what we do with the access you grant (the [security docs](/docs/security) say what is stored).
 
 The reason we're posting this is accountability. We said we'd ship the assessment by August, and "we're going through it" is easier to say than to show. This is the show.
 

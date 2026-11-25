@@ -1,6 +1,8 @@
 ---
 title: "Zapier MCP Connects 9,000 Apps. We Went Deep on Google Workspace Instead."
 excerpt: "Zapier MCP is the widest way to hand Claude tools. Its Google Workspace actions stay shallow, though. Here's the tradeoff, and where a focused gateway wins."
+searchTitle: "Zapier MCP Alternative for Google Workspace | DataToRAG"
+searchDescription: "Zapier MCP's reach across thousands of apps compared with DataToRAG's Google Workspace tools for Docs, Slides, Sheets, and Gmail, with dated checks."
 date: "2026-06-29"
 updated: "2026-11-25"
 updatedNote: "November 25, 2026: two more corrections. Zapier's pages say MCP tool calls are free until January 5, 2027 and use plan tasks after that; the cost section now says so. And the table said Zapier's Google Docs actions were append and find-and-replace only; its app page also lists inserting text, formatting text, and images, still with no batch update. Also today: a paraphrase of another comparison that had no source is removed; the opening story now adds what Zapier's Docs and Slides pages list today; the multi-account row and paragraph now say only that Zapier's MCP pages do not mention it; a table row that said Zapier's responses are not token-optimized is removed because nothing on Zapier's pages speaks to it; the self-hosting and compliance statements are re-checked and dated; and Notion is named beside Jira and Confluence. the post said Google Slides, Contacts, and Tasks were not on Zapier's MCP. Zapier's own app pages list actions for all three today, so the coverage rows, the paragraph above them, and the worked example are corrected and dated. Where the post said the gateway keeps nothing, it now says what is stored: each connection's sign-in tokens, encrypted. November 17, 2026: the cost section said DataToRAG has no per-call meter, and its chart said the same. Hosted DataToRAG counts tool calls against your plan, so the chart is replaced with the numbers. The comparison table now includes Notion, connected since October 2026, and says the self-hosted route is open source without a packaged guide. August 27, 2026: narrowed an overbroad privacy claim. The pass-through statement said we do not store your data, unqualified. The gateway keeps nothing, but the hosted agent on our own site stores its conversation threads. The privacy policy is now linked from the paragraph."
@@ -8,7 +10,10 @@ author: "Manuel Yang"
 category: "Comparison"
 coverImage: "/blog/zapier-mcp-alternative.png"
 tags: ["zapier", "mcp", "comparison", "google-workspace", "alternative"]
+related: ["composio-vs-zapier-mcp", "claude-google-workspace-mcp-alternatives", "one-prompt-two-inboxes-multi-account-mcp"]
 ---
+
+DataToRAG is a hosted MCP server with tools for editing inside Google Workspace: `docs_batch_update` restructures a Google Doc in place and `slides_batch_update` edits a deck slide by slide, with Gmail, Sheets, Calendar, Contacts, and Tasks beside them and several Google accounts behind one endpoint ([the tool list](/docs/tools)). Zapier MCP reaches far more apps, 9,000+ as of November 25, 2026, and as of the same date its Google Docs and Google Slides pages list no batch update and no action that edits a slide.
 
 The pitch for Zapier MCP is hard to argue with. One connection, and your agent can touch nine thousand apps. Gmail, Slack, Notion, Salesforce, some CRM you forgot you signed up for in 2019. It's the widest set of tools you can hand Claude in about five minutes, and it works across Claude, ChatGPT, Cursor, and the rest.
 
@@ -18,7 +23,7 @@ That was June 2026. As of November 25, 2026, Zapier's Google Docs page lists mor
 
 The breadth was real. The depth wasn't there. That gap is the whole reason DataToRAG exists, so let me be specific about it instead of hand-waving.
 
-## Why Zapier's Google actions stay shallow
+## Why does Zapier MCP have no batch edit for Google Docs and Slides?
 
 This isn't Zapier being lazy. It's the shape of the product.
 
@@ -28,7 +33,7 @@ Google's own APIs expose a `batchUpdate` operation for Docs and Slides. It's the
 
 Coverage is wider than this post used to say. Gmail, Docs, Sheets, Drive, and Calendar have genuine write actions on the MCP surface, and as of November 25, 2026, Zapier's own app pages list Google Contacts and Google Tasks actions there too (create, update, and find), plus three for Google Slides: create a presentation from a template, refresh linked charts, and find a presentation. None of the Slides actions edits a slide's content. So a workflow that ends in a deck laid out from your notes still runs out of road; one that touches your contacts or files follow-up tasks does not.
 
-## Feature comparison
+## Zapier MCP and DataToRAG, feature by feature
 
 | Capability | Zapier MCP | DataToRAG |
 |---|---|---|
@@ -53,7 +58,7 @@ DataToRAG goes the other direction. Instead of one shallow action per app across
 - the `contacts_*` set for searching, creating and updating your contacts.
 - the full `tasks_*` set, so a workflow can file the follow-ups it just decided on instead of handing them back to you.
 
-And because it's one endpoint, the same prompt can spill over into Atlassian. Jira, Confluence, and Notion ride behind the same endpoint, so "turn these notes into a Confluence page and open three Jira tickets" is one conversation, not three.
+And because it's one endpoint, the same prompt can spill over into Atlassian. Jira, Confluence, and [Notion](/blog/notion-in-the-same-conversation) ride behind the same endpoint, so "turn these notes into a Confluence page and open three Jira tickets" is one conversation, not three.
 
 Depth has a hidden cost that's worth calling out: deep tools can return enormous payloads. A single Confluence page is tens of kilobytes of markup. A Google Sheet read can dump rows you didn't ask for. DataToRAG's responses are tuned for token efficiency, so Claude gets the content and not the wrapper, and you're not burning context window on API noise. Depth, without the bloat that usually rides along with it.
 

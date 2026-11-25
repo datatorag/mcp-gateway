@@ -1,18 +1,21 @@
 ---
 title: "We Read What People Used the Raw API Call For, and Built Nine Tools Instead"
 excerpt: "Our Google Workspace connector has always had an escape hatch: a tool that sends one raw request to any Google API. We looked at what it was actually being used for. Most of it was the same few jobs, and a third of it was jobs we already had a proper tool for. So nine of those jobs got a tool of their own, and the escape hatch has gone behind a door."
+searchTitle: "Nine Google Workspace Tools Built From Raw API Call Usage"
+searchDescription: "DataToRAG looked at what its raw Google API tool was used for, built nine named tools for those jobs, and hid the raw call from most accounts."
 date: "2026-10-16"
 author: "Manuel Yang"
 category: "Product"
 coverImage: "/blog/raw-call-to-named-tool.png"
 tags: ["gws-mcp", "sheets", "gmail", "drive", "mcp"]
+related: ["read-a-whole-gmail-thread", "usage-metrics-for-multi-tenant-mcp", "model-invented-a-parameter"]
 updated: "2026-11-25"
 updatedNote: "November 25, 2026: the body now says what the note below says, that reading a whole Gmail thread still needed the raw call until gmail_read_thread. A count of our tools is replaced by a link to the list, and a count of the tools in Anthropic's Sheets connector, which Anthropic's help page does not give, is removed. November 17, 2026: the claim that nothing was left for the raw call was wrong. Reading a whole Gmail thread still went through it; gmail_read_thread now covers that."
 ---
 
 Every connector has a gap somewhere, and ours has had the same answer to every gap since the first week: a tool called `gws_run` that sends one raw request to a Google API and gives back whatever Google says. Service, resource, method, parameters. If we had not built a tool for something, the model could still get there.
 
-It worked, in the sense that nobody was ever stuck. It also meant I had no idea what people were stuck on. For a while the record held only the service and the method of each raw call, and that is the record I read. Since this week it also holds the API resource and the parameter names, names only, never values, so a spreadsheet id or a search query never lands in our logs. The next read will be sharper than this one.
+It worked, in the sense that nobody was ever stuck. It also meant I had no idea what people were stuck on. For a while the record held only the service and the method of each raw call, and that is the record I read. (What that record holds, and what it leaves out, is in [the post on the usage dashboard](/blog/usage-metrics-for-multi-tenant-mcp).) Since this week it also holds the API resource and the parameter names, names only, never values, so a spreadsheet id or a search query never lands in our logs. The next read will be sharper than this one.
 
 ## What the raw call was doing
 
@@ -43,6 +46,6 @@ That adds to an already long list of named tools for Google Workspace (the curre
 
 ## The escape hatch goes behind a door
 
-With these gaps filled, we believed there was nothing left that an outside user needed the raw call for (reading a whole Gmail thread still was; `gmail_read_thread` now covers it), and every time the model picks it over a named tool it is a worse call for them and a blind spot for us. So from today `gws_run` is hidden from every account except our own and a few we have talked to. It still exists, and a client that calls it anyway gets a one-line answer naming the tools to use instead. If you use it today for something these nine do not cover, tell me what. That is the next tool. The full list of what changed is in the [changelog](/changelog).
+With these gaps filled, we believed there was nothing left that an outside user needed the raw call for (reading a whole Gmail thread still was; [`gmail_read_thread`](/blog/read-a-whole-gmail-thread) now covers it), and every time the model picks it over a named tool it is a worse call for them and a blind spot for us. So from today `gws_run` is hidden from every account except our own and a few we have talked to. It still exists, and a client that calls it anyway gets a one-line answer naming the tools to use instead. If you use it today for something these nine do not cover, tell me what. That is the next tool. The full list of what changed is in the [changelog](/changelog).
 
 Everything here went out the same way: the registry rows first, approved from my phone, then the build that serves them, then the test suite against production, with seven new cases for the seven new behaviors. All seven green on the first run against production.

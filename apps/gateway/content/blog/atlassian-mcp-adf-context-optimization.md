@@ -1,6 +1,8 @@
 ---
 title: "Confluence Pages Are 40KB of Markup. Your AI Gets 2KB."
 excerpt: "Confluence storage format is verbose XML that destroys context windows. We convert it to clean text by default, with a format switch for when you need the raw markup back."
+searchTitle: "Confluence MCP: Page Markup Cut From 40KB to 2KB | DataToRAG"
+searchDescription: "Confluence storage format is verbose XML. DataToRAG's confluence_get_page returns clean text by default, with a format switch for the raw markup."
 date: "2026-04-06"
 updated: "2026-11-25"
 updatedNote: "November 25, 2026: a mention becomes @Display Name only when the stored link carries the name as its text, and a mention stored as a bare user reference is dropped, where the post said every mention keeps its name; 'the AI' and 'AI assistant' in the body now read 'the agent'; text mode keeps the body text of a panel or an expand section but drops a status badge entirely, because a badge carries its label in a parameter and has no body; the post said badges were reduced to their text. Read with format storage when a badge value matters. Also the Jira section said issue descriptions are trimmed the way Confluence pages are. They are not: `jira_get_issue` returns the description as Jira sends it, and the section now says so. EARLIER, August 12, 2026: corrected the context arithmetic, which was wrong by roughly ten times and contradicted its own next sentence: it capped a 200K-token window at 60KB of text, then said two 40KB reads cost a third of it, which cannot both be true. The cost is now stated in tokens spent, which does not go stale as window sizes change. Also corrected the Jira field list, which named comments where the response carries a comment count, and omitted several fields it does return."
@@ -32,7 +34,7 @@ We saw this in testing. A workflow that read three Confluence pages and summariz
 
 ## How we handle it
 
-The `confluence_get_page` tool accepts a `format` parameter with two modes:
+The `confluence_get_page` tool ([Confluence docs](/docs/confluence)) accepts a `format` parameter with two modes:
 
 **`format: "text"`** (the default) converts the XHTML storage format to clean, readable text. Headings become `## Heading Text`. Tables become markdown tables. A mention becomes `@Display Name` when the stored link carries the name as its text; a mention stored as a bare user reference has no name in the markup, and text mode drops it. Code blocks keep their content. Images are noted as `[image: filename]` so the agent knows something was there without eating context. Confluence macros with a body (panels, expand sections) are reduced to that body's text. A macro without one is dropped: a status badge carries its label in a parameter, so text mode leaves nothing of it. Read with `format: "storage"` when a badge's value matters.
 

@@ -1,6 +1,8 @@
 ---
 title: "A File on Your Computer, Into Drive, Jira or an Email, Without Passing Through the Chat"
 excerpt: "Two ways to hand DataToRAG a file from your own machine: in the call for small files, or through a single-use upload link for anything up to 25 MB. Both come back with a byte count and a SHA-256, and the file is never written to our disks."
+searchTitle: "Upload a File From Your Computer to Drive or Jira via Claude"
+searchDescription: "DataToRAG takes a file from your computer through a single-use upload link, up to 25 MB, or in the call, up to 1 MB, and returns its size and SHA-256."
 date: "2026-10-25"
 updated: "2026-11-25"
 updatedNote: "November 25, 2026: the ten-attachment limit on one email is ours, not Gmail's, and the post now says so; the section on other connectors is cut back to what Anthropic's and Atlassian's own pages say on this date, which drops the 25 MB cap, the missing receipt, and the short-lived token that neither page states."
@@ -9,6 +11,8 @@ category: "Product"
 coverImage: "/blog/inbound-files-cover.png"
 tags: ["file-references", "drive", "jira", "gmail", "uploads", "claude-code"]
 ---
+
+DataToRAG takes a file from your own computer in two ways: `file_upload_link` makes a single-use link that accepts a file of up to 25 MB without it passing through the conversation, and a file your agent already holds goes in the call, up to 1 MB. Either can then go to `drive_upload_file`, to `jira_add_attachment`, or onto an email as an attachment.
 
 Every file tool on DataToRAG used to take a reference: an email, an attachment, a Drive file. The file had to already live in a connected service. A screenshot on your laptop, a PDF someone sent you on Slack, an export from a tool we do not connect, none of them had a way in. On October 22 I needed to put one image into two emails and the only route was to publish it somewhere with a URL first.
 

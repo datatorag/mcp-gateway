@@ -1,6 +1,8 @@
 ---
 title: "Claude's Calendar Connector Works. Unless You Have Two Calendars."
 excerpt: "On a single account, Claude's native Calendar connector does something ours does not: as of November 25, 2026, Anthropic's help page lists recurring meetings, and we do not create them. What DataToRAG adds is two Google accounts behind one endpoint."
+searchTitle: "Claude Google Calendar Connector vs DataToRAG, Compared"
+searchDescription: "A dated comparison of Claude's built-in Google Calendar connector and DataToRAG's Calendar tools, and how DataToRAG reads calendars on several accounts."
 date: "2026-04-21"
 updated: "2026-11-25"
 updatedNote: "November 25, 2026: re-read against Anthropic's help page. The post said the native connector holds one Google account and cannot see two calendars; the page does not say how many accounts you can connect, so that claim is withdrawn from the short answer, the table, and the dentist example, and what we add is stated as our own. The table's Claude column now follows the page, and the rows it does not describe (a Meet link, keyword search, rooms, attachments, and the account rows) say so. Search by meaning, rooms, and attachments are kept only as what we saw on August 11, 2026. The Claude Code line now quotes Claude Code's changelog, and our tool list points to the docs without a count. October 19, 2026: three rows flip to Yes for us. We now RSVP to an invitation, list the calendars on an account and suggest meeting times, so the short answer, the table, our tool list and the section on when the native connector is the better choice are rewritten around what still differs: recurrence, rooms, attachments and meaning-based search on their side, two accounts on ours. Earlier, this post used to claim feature parity on Calendar. That is no longer true, and it is now wrong in our favor: re-enumerating both connectors on August 11, 2026 shows the native one has time suggestion, calendar listing and RSVP, none of which we ship, plus semantic event search where ours matches keywords. The comparison table and the parity paragraphs are rewritten around what each side actually does, and the RSVP row, which said Yes for us, now says No."
@@ -8,6 +10,7 @@ author: "Manuel Yang"
 category: "Comparison"
 coverImage: "/blog/calendar-comparison.png"
 tags: ["google-calendar", "claude", "multi-account", "comparison", "google-workspace"]
+related: ["claude-google-workspace-mcp-alternatives", "claude-gmail-connector-vs-datatorag-send-reply", "claude-google-drive-vs-datatorag-editing", "the-gaps-in-the-table-were-ours"]
 ---
 
 **Short answer:** on one Google account, Claude's native Calendar connector does at least one thing ours does not. As of November 25, 2026, [Anthropic's help page](https://support.claude.com/en/articles/10166901-use-google-workspace-connectors) says it views events and calendars, including shared calendars you have access to, creates, updates, and deletes events, finds mutual availability across attendees, responds to invitations, and sets up recurring meetings. Since October 19, 2026 we suggest times, list calendars, and answer invitations as well, but we do not create recurring events. What DataToRAG adds is several Google accounts behind one endpoint, which is the whole reason this post exists. Anthropic's page does not say how many Google accounts you can connect.
@@ -112,3 +115,5 @@ endpoint, so neither has to share its calendar with the other to be seen.
 ## Try it
 
 If you only have one Google account, stay on Claude's native connector. If you have more than one and they both matter, connect them at [datatorag.com/dashboard](https://datatorag.com/dashboard).
+
+The companion comparisons cover [Gmail](/blog/claude-gmail-connector-vs-datatorag-send-reply) and [Drive, Docs, and Sheets](/blog/claude-google-drive-vs-datatorag-editing), the tools we added on October 19, 2026 are in [the gaps in the table were ours](/blog/the-gaps-in-the-table-were-ours), and [every way to connect Claude to Google Workspace](/blog/claude-google-workspace-mcp-alternatives) is the overview. Using two accounts in one prompt is in [one prompt, two inboxes](/blog/one-prompt-two-inboxes-multi-account-mcp) and in the [docs on using several accounts](/docs/multiple-accounts).

@@ -1,6 +1,8 @@
 ---
 title: "Hosted Google Workspace MCP: DataToRAG vs Google's Official Servers vs Claude's Native Connectors"
 excerpt: "Google publishes official Workspace MCP servers: eight when we counted on August 24, 2026, ten as of November 25, 2026. Claude's native connectors cover Gmail, Calendar, Drive, Docs, Sheets, and Slides. We host one endpoint. All three surfaces, with the date beside every count, including the surprise: Google's own Gmail MCP does not send email."
+searchTitle: "Google's Workspace MCP vs Claude Connectors vs DataToRAG"
+searchDescription: "Google's official Workspace MCP servers, Claude's built-in connectors, and DataToRAG's hosted endpoint compared, with the date beside every count."
 date: "2026-08-24"
 updated: "2026-11-25"
 updatedNote: "November 25, 2026: re-read against Google's configuration guide and MCP reference and Anthropic's help page. Google lists ten servers now, not eight (Classroom and Universal Search were added), its Gmail reference lists ten tools, not eleven, and the batch-operation counts for Sheets and Docs are restated. Claude's native column follows Anthropic's page: Docs, Sheets, and Slides connectors that create and edit files, with no beta label. The three-way table no longer carries tool counts for Claude's connectors or ours, since neither can be read off a public page, and its multi-account and Contacts and Tasks cells say what the vendor pages do and do not state. The self-hosting lines now say what running the code takes, and the note on data lists what we store. November 17, 2026: our own column re-counted from the registered tools: Gmail 27, Sheets more than 15, Tasks 7. The summary said Claude has three native connectors; it now names them as the body does, including Docs and Sheets since October 2026. October 19, 2026, later the same day: the Drive sentence said ours does not download a file. It does now, through a single-use link with a checksum, so that clause is corrected. Earlier on October 19, 2026: our own column is re-counted. We now ship suggest_time and respond_to_event, so the paragraph that said we ship neither is rewritten, and our Gmail, Calendar and Drive counts are now 26, 9 and 12. Earlier, October 15, later the same day: Claude's native column is re-enumerated for Docs and Sheets. Claude has Google Docs and Sheets connectors of its own since October 2026, in beta, and both write, so the native connectors section, the table's Sheets and Docs rows and the closing list are corrected. Everything else is as enumerated on August 24, 2026. Earlier on October 15: a dated note in the native connectors section. Anthropic announced Docs, Sheets and Slides editing connectors in beta on 6 October 2026. As of 15 October 2026 they were not available on our account, so what this post says about them is what we could verify ourselves. We will re-test and correct this the day they reach us. October 9: the three-way table said No for Jira and Confluence under Claude native, and the closing list called Jira alongside Workspace the one nobody else covers. Claude has an Atlassian connector of its own, separate from its Google ones, so both are corrected. What holds is narrower: here Jira, Confluence and Google Workspace sit behind one endpoint. Everything else in the post is as enumerated on August 24, 2026."
@@ -8,7 +10,10 @@ author: "Manuel Yang"
 category: "Comparison"
 coverImage: "/blog/hosted-google-workspace-mcp.png"
 tags: ["google-workspace", "mcp", "hosted-mcp", "claude", "comparison", "gmail", "sheets"]
+related: ["claude-google-workspace-mcp-alternatives", "open-source-google-workspace-mcp-alternative", "claude-gmail-connector-vs-datatorag-send-reply"]
 ---
+
+This post is the three-way comparison. For the product itself, see [DataToRAG's hosted Google Workspace MCP server](/hosted-google-workspace-mcp): one endpoint and one sign-in, with no Google Cloud project of your own.
 
 If you want an AI agent working inside your Google Workspace, there are now three real routes,
 and they are much further apart than the phrase "Google Workspace MCP" suggests.
@@ -213,6 +218,8 @@ has the specifics, and I would rather point you at them than assert a blanket ne
 
 [Connect a Google account at datatorag.com](https://datatorag.com/dashboard). It takes about as
 long as reading this section.
+
+The wider field, with Zapier MCP, Composio, Pipedream, and the open-source servers, is in [every way to connect Claude to Google Workspace](/blog/claude-google-workspace-mcp-alternatives), and running an open-source server yourself is in [the self-hosting write-up](/blog/open-source-google-workspace-mcp-alternative). Using several accounts is covered in the [docs on using several accounts](/docs/multiple-accounts).
 
 ---
 

@@ -38,7 +38,8 @@ vi.mock("@/lib/db", () => ({
 const { default: nextConfig, MARKDOWN_REWRITES } = await import("../next.config");
 const { getAllDocs } = await import("./lib/docs");
 const { getAllUseCases } = await import("./lib/use-cases");
-const { docMarkdown, llmsTxt, useCaseMarkdown } = await import("./lib/markdown-copies");
+const { getAllPosts } = await import("./lib/blog");
+const { docMarkdown, llmsTxt, postMarkdown, useCaseMarkdown } = await import("./lib/markdown-copies");
 
 const SRC = join(__dirname);
 
@@ -51,6 +52,7 @@ const ROUTES: { pattern: string; file: string; load: () => Promise<{ GET: Handle
   { pattern: "/md/docs/tools", file: "app/md/docs/tools/route.ts", load: () => import("./app/md/docs/tools/route") as never },
   { pattern: "/md/docs/:slug", file: "app/md/docs/[slug]/route.ts", load: () => import("./app/md/docs/[slug]/route") as never },
   { pattern: "/md/use-cases/:slug", file: "app/md/use-cases/[slug]/route.ts", load: () => import("./app/md/use-cases/[slug]/route") as never },
+  { pattern: "/md/blog/:slug", file: "app/md/blog/[slug]/route.ts", load: () => import("./app/md/blog/[slug]/route") as never },
 ];
 
 /** Where the config sends a path, or the path itself when no rewrite takes it. */
@@ -86,7 +88,8 @@ describe("the Markdown rewrites", () => {
     expect(rewritten("/docs/getting-started.md")).toBe("/md/docs/getting-started");
     expect(rewritten("/docs/tools.md")).toBe("/md/docs/tools");
     expect(rewritten("/use-cases/morning-brief-across-every-inbox.md")).toBe("/md/use-cases/morning-brief-across-every-inbox");
-    for (const page of ["/docs", "/docs/gmail", "/docs/tools", "/use-cases/a-b", "/docs/gmail.md/x", "/docs/a/b.md", "/blog/x.md"]) {
+    expect(rewritten("/blog/composio-alternative.md")).toBe("/md/blog/composio-alternative");
+    for (const page of ["/docs", "/docs/gmail", "/docs/tools", "/use-cases/a-b", "/docs/gmail.md/x", "/docs/a/b.md", "/blog", "/blog/composio-alternative", "/blog/feed.xml", "/blog.md", "/pricing.md"]) {
       expect(rewritten(page), page).toBe(page);
     }
   });
@@ -114,7 +117,7 @@ describe("the Markdown addresses", () => {
 
   it("every address /llms.txt lists resolves to a copy", async () => {
     registry.fail = false;
-    expect(listed.length).toBe(getAllDocs().length + getAllUseCases().length + 2);
+    expect(listed.length).toBe(getAllDocs().length + getAllUseCases().length + getAllPosts().length + 2);
     for (const pathname of listed) {
       const res = await get(pathname);
       expect(res.status, pathname).toBe(200);
@@ -135,10 +138,18 @@ describe("the Markdown addresses", () => {
       expect(res.status, useCase.slug).toBe(200);
       expect(await res.text(), useCase.slug).toBe(useCaseMarkdown(useCase));
     }
+    expect(getAllPosts().length).toBeGreaterThan(40);
+    for (const post of getAllPosts()) {
+      const res = await get(`/blog/${post.slug}.md`);
+      expect(res.status, post.slug).toBe(200);
+      expect(res.headers.get("content-type"), post.slug).toBe("text/markdown; charset=utf-8");
+      expect(res.headers.get("x-robots-tag"), post.slug).toBe("noindex");
+      expect(await res.text(), post.slug).toBe(postMarkdown(post));
+    }
   });
 
   it("an address that names no page answers 404, not another page's copy", async () => {
-    for (const pathname of ["/docs/no-such-page.md", "/use-cases/no-such-case.md"]) {
+    for (const pathname of ["/docs/no-such-page.md", "/use-cases/no-such-case.md", "/blog/no-such-post.md"]) {
       const res = await get(pathname);
       expect(res.status, pathname).toBe(404);
       expect(res.headers.get("x-robots-tag"), pathname).toBe("noindex");
@@ -180,7 +191,7 @@ describe("the Markdown addresses", () => {
 });
 
 describe("the pages advertise their copies", () => {
-  it("a docs page and a use case page name their Markdown copy, and stay the canonical address", async () => {
+  it("a docs page, a use case page, and a blog post name their Markdown copy, and stay the canonical address", async () => {
     vi.doMock("posthog-js", () => ({ default: { capture: vi.fn() } }));
     vi.doMock("@/components/navbar", () => ({ Navbar: () => null }));
     const docPage = await import("./app/docs/[slug]/page");
@@ -195,6 +206,23 @@ describe("the pages advertise their copies", () => {
     expect(meta.alternates).toEqual({
       canonical: `https://datatorag.com/use-cases/${useCase.slug}`,
       types: { "text/markdown": `https://datatorag.com/use-cases/${useCase.slug}.md` },
+    });
+    vi.doMock("@/components/add-to-agent", () => ({ AddToAgent: () => null }));
+    vi.doMock("@/components/demo/demo-embed", () => ({ DemoEmbed: () => null, EMBEDDABLE_DEMO_IDS: [] }));
+    const post = getAllPosts()[0];
+    const postPage = await import("./app/blog/[slug]/page");
+    const postMeta = await postPage.generateMetadata({ params: Promise.resolve({ slug: post.slug }) });
+    expect(postMeta.alternates).toEqual({
+      canonical: `https://datatorag.com/blog/${post.slug}`,
+      types: {
+        "text/markdown": `https://datatorag.com/blog/${post.slug}.md`,
+        "application/rss+xml": "https://datatorag.com/blog/feed.xml",
+      },
+    });
+    const blogIndex = await import("./app/blog/page");
+    expect(blogIndex.metadata.alternates).toEqual({
+      canonical: "https://datatorag.com/blog",
+      types: { "application/rss+xml": "https://datatorag.com/blog/feed.xml" },
     });
     const tools = await import("./app/docs/tools/page");
     expect(tools.metadata.alternates).toEqual({

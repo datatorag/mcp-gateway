@@ -1,21 +1,25 @@
 import { DOCS_GLOSSARY, DOCS_GLOSSARY_HEADING, DOCS_INDEX_DESCRIPTION, DOCS_INDEX_HEADING, DOCS_INDEX_PATH } from "@/app/docs/copy";
 import { ALL_TOOLS_DESCRIPTION, ALL_TOOLS_PATH, ALL_TOOLS_TITLE } from "@/app/docs/tools/copy";
+import { BLOG_FEED_PATH } from "@/app/blog/copy";
 import type { ToolGroup } from "./all-tools";
+import { getAllPosts, postSearchDescription, postUrl, type BlogPost } from "./blog";
 import { DOC_SETUP_MARKER, docUrl, getConnectorGroups, getTopLevelDocs, type DocPage } from "./docs";
+import { splitEditNote } from "./edit-note";
 import { DEFAULT_MCP_URL, MCP_CLIENTS, clientConfig } from "./mcp-clients";
 import { PUBLIC_CLIENTS_TEXT, PUBLIC_CONNECTORS_TEXT } from "./public-integrations";
 import { SITE_NAME, SITE_URL } from "./site-schema";
+import { formatContentDate } from "./utils";
 import { USE_CASE_SERVICES, getAllUseCases, useCasePassage, type UseCase } from "./use-cases";
 
 /**
  * The site's pages as Markdown, for an agent that reads a page instead of
- * rendering it: `/llms.txt` (the list), and a copy of every docs page and
- * every use case at the page's own address plus `.md`.
+ * rendering it: `/llms.txt` (the list), and a copy of every docs page,
+ * every use case, and every blog post at the page's own address plus `.md`.
  *
  * Nothing here is written twice. A docs page's copy is the same loaded
  * record the HTML page renders (`getAllDocs`: body with its values filled,
- * description, date, questions); a use case's copy is its record; the list
- * is the sidebar's reading order. So a copy cannot say something its page
+ * description, date, questions); a use case's copy is its record; a post's
+ * copy is its record; the list is the sidebar's reading order. So a copy cannot say something its page
  * does not.
  *
  * A copy stands alone: every link in it is absolute, because whoever reads
@@ -149,6 +153,48 @@ export function docMarkdown(doc: DocPage): string {
   return `${absoluteLinks(parts.filter(Boolean).join("\n\n"), url)}\n`;
 }
 
+/* -------------------------------------------------------------- blog post */
+
+export const EDIT_HISTORY_HEADING = "Edit history";
+
+/** A post's edits as a list, newest first, each opening with its day. The
+ * one note written with no day gets the day the post was last edited. */
+function editHistoryMarkdown(post: BlogPost): string[] {
+  if (!post.updated || !post.updatedNote) return [];
+  const entries = splitEditNote(post.updatedNote);
+  if (entries.length === 0) return [];
+  const lines = entries.map((entry, i) =>
+    i === 0 && entry.date === null ? `- ${formatContentDate(post.updated!)}: ${entry.text}` : `- ${entry.text}`
+  );
+  return [`## ${EDIT_HISTORY_HEADING}`, lines.join("\n")];
+}
+
+/** One post as Markdown: its headline, its description, the days it was
+ * published and last edited, where the page itself is, its body, its
+ * questions, and last its edit history, so a reader quoting the top of the
+ * copy quotes the post and not a list of corrections. */
+export function postMarkdown(post: BlogPost): string {
+  const url = postUrl(post.slug);
+  const body = post.content
+    .replace(/<!--[\s\S]*?-->/g, "")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+  const parts = [
+    `# ${post.title}`,
+    postSearchDescription(post),
+    [`Published: ${post.date}`, post.updated ? `Updated: ${post.updated}` : null, `Source: ${url}`].filter(Boolean).join("  \n"),
+    body,
+    ...(post.faqs.length > 0 ? [`## ${QUESTIONS_HEADING}`, ...post.faqs.flatMap((f) => [`### ${f.q}`, f.a.trim()])] : []),
+    ...editHistoryMarkdown(post),
+  ];
+  return `${absoluteLinks(parts.filter(Boolean).join("\n\n"), url)}\n`;
+}
+
+/** Every post, newest first, each with its description. */
+export function postEntries(): CopyEntry[] {
+  return getAllPosts().map((p) => ({ title: p.title, path: `/blog/${p.slug}`, description: postSearchDescription(p) }));
+}
+
 /* ------------------------------------------------------------ list of pages */
 
 export interface CopyEntry {
@@ -211,8 +257,9 @@ export function docsIndexMarkdown(): string {
 /**
  * `/llms.txt`, in the shape llmstxt.org describes: the product's name, a
  * summary in a blockquote, then sections of links, each with a description.
- * Every docs page and every use case is listed once, at its Markdown
- * address.
+ * Every docs page, every use case, and every blog post is listed once, at
+ * its Markdown address; the posts newest first, with the feed named above
+ * them.
  */
 export function llmsTxt(): string {
   const [general, ...connectors] = docsSections();
@@ -223,10 +270,11 @@ export function llmsTxt(): string {
   return `${[
     `# ${SITE_NAME}`,
     `> ${SITE_NAME} is a hosted MCP server at ${DEFAULT_MCP_URL} that gives an agent tools for ${PUBLIC_CONNECTORS_TEXT}, on every account you connect. It works with ${PUBLIC_CLIENTS_TEXT}, and with any other MCP client.`,
-    `Every link below is the Markdown copy of a page. Remove \`.md\` from an address for the page itself.`,
+    `Every link below is the Markdown copy of a page. Remove \`.md\` from an address for the page itself. New blog posts are also in the feed at ${SITE_URL}${BLOG_FEED_PATH}.`,
     sectionMarkdown(docs),
     ...connectors.map((s) => sectionMarkdown(s, `Docs: ${s.heading}`)),
     sectionMarkdown({ heading: "Use cases", entries: useCaseEntries() }),
+    sectionMarkdown({ heading: "Blog", entries: postEntries() }),
   ].join("\n\n")}\n`;
 }
 

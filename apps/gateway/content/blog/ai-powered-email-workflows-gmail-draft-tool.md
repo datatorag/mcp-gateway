@@ -1,6 +1,8 @@
 ---
 title: "AI-Powered Email Workflows with the Gmail Draft Tool"
 excerpt: "Most AI email tools generate and send in one shot. We built a draft workflow instead, because anything that matters deserves a second look before it leaves your outbox."
+searchTitle: "Claude Gmail Drafts: Write, Review, Then Send | DataToRAG"
+searchDescription: "How DataToRAG's gmail_create_draft and gmail_update_draft let Claude write an email as a real Gmail draft that you review and revise before it is sent."
 date: "2026-04-04"
 updated: "2026-11-25"
 updatedNote: "November 25, 2026: 'the AI' in the body reads 'the agent' where it means the agent; the section on why update matters no longer gives threading as the reason, since a draft gmail_create_draft writes is not in a thread; it now says what gmail_update_draft does (same draft id, a thread kept only when the draft already has one, attachments passed again), and the follow-up pattern says the draft is a new message. November 17, 2026: dropped sharing a draft link with your manager. A Gmail draft link opens only in the mailbox that owns the draft, so nobody else can open it. Dropped a threading claim that a live test disproved. gmail_create_draft takes recipients, subject and body and has no thread parameter; a draft written as a reply lands as its own draft rather than inside the original conversation. The recipients-and-subject half was always true and stays."
@@ -8,11 +10,12 @@ author: "Manuel Yang"
 category: "Product"
 coverImage: "/blog/gmail-draft-workflow.png"
 tags: ["gmail", "google-workspace", "workflows", "mcp"]
+related: ["gmail-drafts-and-leaner-reads", "claude-html-email-gmail", "claude-gmail-connector-vs-datatorag-send-reply"]
 ---
 
 Most AI email integrations work the same way. You describe what you want, the agent writes it, and the email goes out. For quick replies, that's fine. For a message to your biggest client about a contract change? You probably want to read it first.
 
-We've been using Claude with Gmail through the Google Workspace MCP for months now. The pattern that actually stuck wasn't "write and send." It was "write, review, revise, then send." That's why we built `gmail_create_draft` and `gmail_update_draft`.
+We've been using Claude with Gmail through the Google Workspace MCP for months now. The pattern that actually stuck wasn't "write and send." It was "write, review, revise, then send." That's why we built `gmail_create_draft` and `gmail_update_draft`. Both are in the [Gmail docs](/docs/gmail).
 
 ## The copy-paste workaround
 
@@ -31,6 +34,8 @@ Open Gmail. Read it. Maybe the tone is too soft, or you want to add a specific n
 Claude calls `gmail_update_draft`. Same draft, edited in place. Just better. You're not starting over, and you're not managing draft IDs yourself (Claude handles that).
 
 When it reads right, hit send from Gmail. Done.
+
+(Since July 2026 the agent can send the draft for you too. That is its own post: [your agent can now run your Gmail drafts end to end](/blog/gmail-drafts-and-leaner-reads).)
 
 ## Why update matters more than you'd think
 

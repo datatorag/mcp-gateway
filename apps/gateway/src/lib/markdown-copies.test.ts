@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
+import { getAllPosts, postSearchDescription, type BlogPost } from "./blog";
 import { docUrl, getAllDocs, getDocsSequence, type DocPage } from "./docs";
+import { splitEditNote } from "./edit-note";
 import {
   absoluteLinks,
   allToolsMarkdown,
@@ -7,18 +9,21 @@ import {
   docsIndexMarkdown,
   docsSections,
   llmsTxt,
+  postMarkdown,
   relativeLinksIn,
   useCaseMarkdown,
 } from "./markdown-copies";
 import { MCP_CLIENTS } from "./mcp-clients";
 import { getAllUseCases } from "./use-cases";
 
-/* The Markdown copies of the docs pages and the use cases, and `/llms.txt`,
-   which lists them. Each is built from the record its HTML page renders, so
+/* The Markdown copies of the docs pages, the use cases, and the blog posts,
+   and `/llms.txt`, which lists them. Each is built from the record its HTML page renders, so
    these rules read the real content. */
 
 const docs = getAllDocs();
 const useCases = getAllUseCases();
+const posts = getAllPosts();
+const postCopies = posts.map((p): [string, string] => [`/blog/${p.slug}.md`, postMarkdown(p)]);
 
 /** Services offered to admins only. No public page names one. */
 const ADMIN_ONLY = /\b(slack|brevo|posthog)\b/i;
@@ -42,7 +47,7 @@ describe("every Markdown copy", () => {
     expect(text).not.toMatch(/\{\{|\}\}/);
   });
 
-  it.each(copies)("%s holds no site-relative link", (_path, text) => {
+  it.each([...copies, ...postCopies])("%s holds no site-relative link", (_path, text) => {
     expect(relativeLinksIn(text)).toEqual([]);
   });
 
@@ -50,7 +55,7 @@ describe("every Markdown copy", () => {
     expect(text.match(ADMIN_ONLY)).toBeNull();
   });
 
-  it.each(copies)("%s ends with one newline and has no run of blank lines", (_path, text) => {
+  it.each([...copies, ...postCopies])("%s ends with one newline and has no run of blank lines", (_path, text) => {
     expect(text.endsWith("\n")).toBe(true);
     expect(text.endsWith("\n\n")).toBe(false);
     expect(text).not.toMatch(/\n{3,}/);
@@ -143,6 +148,37 @@ describe("a use case's Markdown copy", () => {
   });
 });
 
+describe("a blog post's Markdown copy", () => {
+  it("covers every post", () => {
+    expect(posts.length).toBeGreaterThan(40);
+    expect(postCopies.length).toBe(posts.length);
+  });
+
+  it.each(posts.map((p) => [p.slug, p] as const))("%s: its headline, description, days, address, body, and its edits last", (_slug, post: BlogPost) => {
+    const text = postMarkdown(post);
+    const lines = text.split("\n");
+    expect(lines[0]).toBe(`# ${post.title}`);
+    expect(lines[2]).toBe(postSearchDescription(post));
+    const updated = post.updated ? `Updated: ${post.updated}  \n` : "";
+    expect(text).toContain(`\n\nPublished: ${post.date}  \n${updated}Source: https://datatorag.com/blog/${post.slug}\n`);
+    // Every section of the post is in the copy, under the same words.
+    for (const heading of post.content.match(/^#{2,3} .*$/gm) ?? []) expect(text).toContain(`${heading}\n`);
+    for (const faq of post.faqs) expect(text.split(`\n### ${faq.q}\n`)).toHaveLength(2);
+    expect(text).not.toContain("<!--");
+
+    // The edits are the copy's last section, never its opening.
+    const history = "\n## Edit history\n\n";
+    expect(text.includes(history)).toBe(Boolean(post.updated && post.updatedNote));
+    if (!post.updatedNote) return;
+    const after = text.slice(text.indexOf(history) + history.length);
+    expect(after).not.toMatch(/^#{1,6} /m);
+    const entries = splitEditNote(post.updatedNote);
+    expect(after.trimEnd().split("\n")).toHaveLength(entries.length);
+    expect(after.split("\n").filter(Boolean).every((line) => line.startsWith("- "))).toBe(true);
+    expect(text.slice(0, text.indexOf(history))).not.toContain(entries[0].text.slice(0, 80));
+  });
+});
+
 describe("the all-tools page's Markdown copy", () => {
   it("lists each group's tools under its name, with absolute links", () => {
     const text = allToolsMarkdown([
@@ -171,7 +207,7 @@ describe("/llms.txt", () => {
     expect(lines[2]).toContain("Google Workspace, Atlassian, and Notion");
     const sections = text.match(/^## .+$/gm)!;
     expect(sections[0]).toBe("## Docs");
-    expect(sections.at(-1)).toBe("## Use cases");
+    expect(sections.at(-1)).toBe("## Blog");
     // Every line under a section is a link with a description.
     const listed = text.slice(text.indexOf("## Docs")).split("\n").filter((l) => l !== "" && !l.startsWith("## "));
     expect(listed.length).toBe(links.length);
@@ -190,7 +226,7 @@ describe("/llms.txt", () => {
   it("groups the docs as the sidebar groups them", () => {
     const sections = docsSections();
     expect(sections.map((s) => s.heading)).toEqual(["General", "Google Workspace", "Atlassian", "Notion"]);
-    expect(text.match(/^## .+$/gm)).toEqual(["## Docs", "## Docs: Google Workspace", "## Docs: Atlassian", "## Docs: Notion", "## Use cases"]);
+    expect(text.match(/^## .+$/gm)).toEqual(["## Docs", "## Docs: Google Workspace", "## Docs: Atlassian", "## Docs: Notion", "## Use cases", "## Blog"]);
     const gmail = docs.find((d) => d.slug === "gmail")!;
     expect(sections.find((s) => s.heading === "Google Workspace")!.entries.map((e) => e.path)).toContain(`/docs/${gmail.slug}`);
   });
@@ -206,11 +242,22 @@ describe("/llms.txt", () => {
     for (const u of useCases) expect(listed.find((l) => l.url.endsWith(`/${u.slug}.md`))).toMatchObject({ title: u.title, description: u.description });
   });
 
+  it("lists every blog post exactly once, newest first, with its description, and names the feed", () => {
+    const listed = links.filter((l) => l.url.includes("/blog/"));
+    expect(listed.map((l) => l.url)).toEqual(posts.map((p) => `https://datatorag.com/blog/${p.slug}.md`));
+    for (const p of posts) {
+      const link = listed.find((l) => l.url.endsWith(`/${p.slug}.md`))!;
+      expect(link.description, p.slug).toBe(postSearchDescription(p).replace(/\s+/g, " ").trim());
+      expect(link.description.length, p.slug).toBeGreaterThan(0);
+    }
+    expect(text.slice(0, text.indexOf("## Docs"))).toContain("https://datatorag.com/blog/feed.xml");
+  });
+
   it("lists nothing twice and nothing that is not a Markdown address of ours", () => {
     const urls = links.map((l) => l.url);
     expect(urls.filter((u, i) => urls.indexOf(u) !== i)).toEqual([]);
     expect(urls.filter((u) => !/^https:\/\/datatorag\.com\/[a-z0-9/-]+\.md$/.test(u))).toEqual([]);
-    expect(urls.length).toBe(docs.length + useCases.length + 2);
+    expect(urls.length).toBe(docs.length + useCases.length + posts.length + 2);
   });
 
   it("the docs index copy lists the same docs pages", () => {
