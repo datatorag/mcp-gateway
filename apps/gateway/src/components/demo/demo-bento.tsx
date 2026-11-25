@@ -21,13 +21,17 @@
  * deliberate: two accounts in one turn is the only claim here that rests on no
  * subtlety at all, which makes it the right closer. The Jira row sits beside
  * Gmail because it is the same kind of beat, a write you approve, and it
- * starts from an email. The problem/solution pairs are deliberately
- * unparallel: only sourced limitations are named, each names the connector
- * that has the limit rather than "Claude" in general, and a row with no such
- * limit to name (Gmail) names none.
+ * starts from an email. NO ROW NAMES A LIMIT IN SOMEONE ELSE'S PRODUCT, as of
+ * November 25, 2026. Three rows did (an empty Slides deck, no file on a Jira
+ * issue, one Gmail account), each from our own enumeration of a connector's
+ * tool list. The vendor's help page contradicted the first and says nothing
+ * on the other two, and a page being silent is not a limit. Every problem
+ * line now says what the reader wants, and every solution line what
+ * DataToRAG does. A line that names another product again needs that
+ * vendor's own page, read that day, and the date in the line.
  */
 
-import { SLIDES_VERIFIED_ON, VERIFIED_ON } from "@/lib/connector-verification";
+import { BUILT_IN_CHECKED_ON } from "@/lib/connector-verification";
 import Link from "next/link";
 import { CircleCheckIcon, CircleMinusIcon } from "lucide-react";
 import { DemoWindow } from "./demo-section";
@@ -90,11 +94,9 @@ export const CELLS: {
   solution: string;
 }[] = [
   {
-    // NOT A COMPARISON, as of 15 October 2026. This said Claude reads the
-    // sheet and hands you rows to paste. Claude's own Sheets connector, in
-    // beta since October 2026, edits a sheet in place, and the table on this
-    // page concedes it, so the line now says what the reader wants and
-    // nothing about anyone else, as the Gmail line below does.
+    // NOT A COMPARISON. This said Claude reads the sheet and hands you rows
+    // to paste. The line now says what the reader wants and nothing about
+    // anyone else, as every line below does.
     id: "sheets",
     weight: "lead",
     problem:
@@ -106,32 +108,24 @@ export const CELLS: {
     id: "slides",
     weight: "lead",
     problem:
-      "Claude's Drive connector can make you a deck, but it arrives empty. One slide, and the title is yours to type.",
+      "You wanted the slides added to the deck you already have, not a second deck to merge by hand.",
     solution:
       "DataToRAG writes into the deck you already have, after asking you first.",
   },
   {
     // NOT A COMPARISON, on purpose. This line used to say Claude writes the
-    // email and stops at the draft. The built-in Gmail connector has sent,
-    // replied and forwarded since August 2026, and the comparison table
-    // further down this same page concedes all three, so the row contradicted
-    // the page it sits on. It now says what the reader wants and what we do,
-    // and nothing about anyone else. Before a problem line names a limit in
-    // someone else's product, find the row in that table that agrees with it.
+    // email and stops at the draft, which contradicted the comparison table
+    // further down the same page. It now says what the reader wants and what
+    // we do, and nothing about anyone else.
     id: "gmail",
     weight: "supporting",
     problem: "You wanted the email sent, not a draft left for you to finish.",
     solution: "DataToRAG sends it from the account you name, once you approve.",
   },
   {
-    // The connector is named as its vendor names it. It covers Jira and
-    // Confluence, and the limit is in its Jira half: no tool takes a file.
-    // Read from the connector's own tool list on 2026-10-09. A claim about
-    // someone else's product goes stale on their schedule, so re-read the
-    // list before this line is reused anywhere.
     id: "jira",
     weight: "supporting",
-    problem: "Claude's Atlassian connector cannot attach a file to a Jira issue.",
+    problem: "You wanted the email and its PDF on the Jira issue, not downloaded and attached by hand.",
     solution:
       "DataToRAG puts the email and its PDF on the issue, once you approve.",
   },
@@ -139,7 +133,7 @@ export const CELLS: {
     id: "accounts",
     weight: "supporting",
     problem:
-      "Claude's Gmail connector is signed in to one account, so the other inbox isn't there to search.",
+      "You have a work inbox and a personal one, and the answer is split across both.",
     solution:
       "DataToRAG searches your work and personal accounts in the same turn.",
   },
@@ -277,15 +271,14 @@ export function DemoBento({
         })}
       </div>
 
-      {/* The rows that name Claude's built-in connectors are claims about
-          someone else's product, so they carry the date the comparison table
-          was checked on, read from the same constants, and point at that
-          table, on both surfaces this grid renders on. */}
+      {/* The rows above describe DataToRAG only. The comparison with
+          Claude's built-in Google connectors lives in one place, the table
+          this points at, with the date it was read from the one constant. */}
       <p className="mt-4 text-center text-xs text-muted-foreground">
-        Comparisons with Claude's built-in connectors as checked on{" "}
-        {VERIFIED_ON}, and Slides on {SLIDES_VERIFIED_ON}.{" "}
+        How this compares with Claude's built-in Google connectors, as of{" "}
+        {BUILT_IN_CHECKED_ON}:{" "}
         <a href="/#comparison" className="underline underline-offset-4 hover:text-foreground">
-          See the full table
+          see the full table
         </a>
         .
       </p>

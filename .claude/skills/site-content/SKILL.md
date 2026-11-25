@@ -583,11 +583,23 @@ made outside the artifact the rail lives in.
 **Figures and dates in an answer are IMPORTED, never retyped.** An answer is the most
 quotable thing we publish, so a hand-written copy of a number is the copy that outlives
 the change to it. The free allowance comes from `billing/plans.ts`, the constant
-enforcement reads. The built-in-connector comparison date comes from
-`lib/connector-verification.ts`, which exists because the home page's table and the FAQ
-answer beneath it make the same dated claim and a retest must move both (it lived in
-`connector-comparison.tsx` for an afternoon, which pulled the icon library into the
-guard's module graph and took a 0.5s test run to over two minutes). Dollar amounts are
+enforcement reads. The built-in-connector date and the vendor page it belongs to come
+from `lib/connector-verification.ts` (`BUILT_IN_CHECKED_ON`, `BUILT_IN_HELP_URL`), which
+exists because the home page's two tables, the demo caption, the hosted landing page and
+the FAQ answers all make the same dated claim and a re-read must move every one (the
+date lived in `connector-comparison.tsx` for an afternoon, which pulled the icon library
+into the guard's module graph and took a 0.5s test run to over two minutes).
+
+**A statement about Claude's built-in connectors says only what Anthropic's help page
+says on that date, no more strongly than the page.** Since 2026-11-25 the comparison
+no longer rests on our own enumeration of a connector's tool list: nobody can check
+that, and it went stale in public (an "empty Slides deck" and an "in beta" label
+outlived the product). In `connector-comparison.tsx`, `builtIn: false` means the page
+does not describe the row and renders as "Not described", never as No; a page being
+silent is not the vendor stating a limit. An FAQ answer about the built-in connectors
+leads with DataToRAG and uses the shared sentence in `BUILT_IN_DIFFERENCE`
+(`lib/site-faq.ts`); `connector-comparison.test.ts` holds both, plus a short list of
+phrases the page does not support. The demo rows name no other product. Dollar amounts are
 deliberately absent from every answer, for the same reason in reverse: they are
 hand-written on the pricing page and in the checkout and live in no constant, so quoting
 one in an answer would add a third copy in the format a machine repeats verbatim. Link

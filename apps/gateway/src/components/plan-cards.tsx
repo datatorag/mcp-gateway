@@ -64,7 +64,10 @@ export const TIERS: Tier[] = [
     features: [
       "Everything in Pro",
       "Committed volume at a negotiated rate",
-      "Hosted by us, or self-host the open-source gateway",
+      // Short on purpose, and no promise of an easy path: what running it
+      // takes is SELF_HOSTING in lib/site-faq.ts, which the pricing FAQ under
+      // these cards answers with ("Can I run the gateway myself instead?").
+      "Hosted by us, or self-hosted with setup on your side",
     ],
     price: { amount: "Custom" },
   },

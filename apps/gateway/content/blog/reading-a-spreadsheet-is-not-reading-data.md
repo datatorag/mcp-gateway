@@ -5,7 +5,7 @@ searchTitle: "Reading Google Sheets With an Agent: Cells vs Renderings"
 searchDescription: "An agent can read a text rendering of a Google Sheet or read its cells with sheets_read. Where the two disagree, and a rule for which to trust."
 date: "2026-07-31"
 updated: "2026-11-25"
-updatedNote: "November 25, 2026: the two column pairs in the paragraph on merged headers are written out, with no change of meaning; sheets_read now takes several ranges, across tabs, in one call, so the cost is no longer one tab per call. What the post says about Claude's built-in Drive connector is now limited to what Anthropic's help page says as of this date, and the earlier note's statement that Claude's Sheets connector reads a range, which that page does not say, is withdrawn. November 17, 2026: Claude has its own Sheets connector, separate from the Drive one. The distinction in this post is between the two kinds of reader, not between two vendors."
+updatedNote: "November 25, 2026: the two column pairs in the paragraph on merged headers are written out, with no change of meaning; sheets_read now takes several ranges, across tabs, in one call, so the cost is no longer one tab per call. What the post says about Claude's built-in Drive connector is now limited to what Anthropic's help page says as of this date, and the earlier note's statement that Claude's Sheets connector reads a range, which that page does not say, is withdrawn. The sentence about how a reader we tested in July 2026 rendered a spreadsheet's tabs is removed because we could not re-test it. November 17, 2026: Claude has its own Sheets connector, separate from the Drive one. The distinction in this post is between the two kinds of reader, not between two vendors."
 author: "Manuel Yang"
 category: "Engineering"
 coverImage: "/blog/spreadsheet-rendering.png"
@@ -25,8 +25,7 @@ looking healthy.
 markdown. Claude's built-in Google Drive connector is one: as of November 25, 2026,
 Anthropic's help page says it reads "Sheets, Slides, PDFs, images, and MS Office files" and
 that when Claude reads a Drive file "it extracts text content only." That reach across
-formats is useful. For a spreadsheet, the reader we tested in July 2026 rendered every tab,
-concatenated.
+formats is useful.
 
 **A range reader** takes a spreadsheet id and an A1 range and returns structured data. That
 is what `sheets_read` does in our Google Workspace gateway ([Sheets docs](/docs/sheets)):

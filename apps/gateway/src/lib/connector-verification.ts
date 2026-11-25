@@ -1,30 +1,33 @@
-/** When the built-in connector comparison was last established by testing.
+/** The one source for every statement the site makes about Claude's built-in
+ * Google connectors: the vendor page it rests on, and the day that page was
+ * last read.
  *
- * A module of its own, and NOT a constant inside the table component, because
- * two surfaces make the same dated claim: the table on the home page, and the
- * FAQ answer beneath it that says the same thing in prose. One of them having
- * its own copy of the date is how a retest moves the table and leaves an
- * answer asserting the old one, in the surface built to be quoted away from the
- * page. The component previously exported it directly; a content module
- * importing a component pulled the whole icon library into the guard's module
- * graph, which is its own kind of wrong.
+ * THE RULE. A sentence or a table cell about the built-in connectors says only
+ * what Anthropic's own help page says on BUILT_IN_CHECKED_ON, no more strongly
+ * than the page, and carries that date. What the page does not say is not
+ * asserted: not a limit, not a beta label, not a count of accounts. Where a
+ * table needs a cell for something the page is silent on, the cell says "Not
+ * described", which is a statement about the page and not about the product.
  *
- * ONE DATE AGAIN. From August to October 2026 there were three: the Gmail and
- * Calendar groups were each re-checked on a day of their own, and saying so
- * was the honest thing while the rest of the table had not been. On this date
- * every group was re-enumerated, both columns, so the section dates are gone.
- * If one group is re-checked alone again, give it its own constant again
- * rather than moving this one: claiming the whole table was re-verified when
- * one section was is the overclaim the separate dates existed to prevent.
+ * Until November 25, 2026 this module held two dates from our own enumeration
+ * of the connectors' tool lists (one for the table, one for Google Slides).
+ * Those statements outlived the product they described: the site said Slides
+ * decks arrived empty and Docs and Sheets editing was in beta for weeks after
+ * the vendor's page said otherwise. A tool list we enumerated cannot be shown
+ * to a reader; the vendor's page can, so that is what the claims rest on now.
  *
- * Rendered, not just recorded. Change it only when the rows have actually
- * been retested, and see the rules in `components/connector-comparison.tsx`.
+ * A module of its own, and NOT a constant inside the table component or the
+ * FAQ module, because several surfaces make the same dated claim: the home
+ * page's two tables, the demo caption, the hosted landing page, and the FAQ
+ * answers. One of them having its own copy of the date is how a re-read moves
+ * the table and leaves an answer asserting the old one. A content module
+ * importing a component would also pull the icon library into the FAQ guard's
+ * module graph.
  *
- * 15 October 2026: every group but Google Slides was re-enumerated that day,
- * including the new Docs and Sheets connectors. Slides was not, so by the
- * rule above it keeps the date it was last checked, in a constant of its own,
- * and the Slides section says so. When Slides is re-enumerated, fold it back. */
-export const VERIFIED_ON = "15 October 2026";
+ * Rendered, not just recorded. Move the date ONLY after re-reading
+ * BUILT_IN_HELP_URL and checking every built-in cell and sentence against it. */
+export const BUILT_IN_HELP_URL =
+  "https://support.claude.com/en/articles/10166901-use-google-workspace-connectors";
 
-/** The one group not re-enumerated on VERIFIED_ON. */
-export const SLIDES_VERIFIED_ON = "9 October 2026";
+/** The day BUILT_IN_HELP_URL was last read, as a sentence prints it. */
+export const BUILT_IN_CHECKED_ON = "November 25, 2026";

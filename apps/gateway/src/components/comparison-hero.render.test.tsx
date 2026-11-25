@@ -1,8 +1,9 @@
 // @vitest-environment jsdom
 
 /**
- * The comparison hero (SCRUM-426): every gap at once, from the first paint,
- * with one reveal that a reader who asked for less motion never gets.
+ * The comparison hero: every row we have that Anthropic's help page does not
+ * describe, at once, from the first paint, with one reveal that a reader who
+ * asked for less motion never gets.
  * Rendered to markup the way the server sends it.
  */
 
@@ -12,10 +13,9 @@ import { describe, expect, it } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
 import { ComparisonHero } from "./comparison-hero";
 import { GROUPS, heroGroups } from "./connector-comparison";
+import { BUILT_IN_CHECKED_ON } from "@/lib/connector-verification";
 
-const html = renderToStaticMarkup(
-  <ComparisonHero groups={heroGroups()} verifiedOn="15 October 2026" slidesVerifiedOn="9 October 2026" />
-);
+const html = renderToStaticMarkup(<ComparisonHero groups={heroGroups()} checkedOn={BUILT_IN_CHECKED_ON} />);
 const doc = new DOMParser().parseFromString(html, "text/html");
 /** The gap rows; the one muted "Both:" line per group is a tie row. */
 const rows = () => [...doc.querySelectorAll('tbody tr:not([data-tie]) th[scope="row"]')].map((th) => th.closest("tr")!);
@@ -25,7 +25,7 @@ describe("the comparison hero", () => {
   it("renders every gap at once, under every group heading", () => {
     const groups = heroGroups();
     const total = groups.reduce((n, g) => n + g.rows.length, 0);
-    expect(total).toBe(10);
+    expect(total).toBe(6);
     expect(rows()).toHaveLength(total);
     expect([...doc.querySelectorAll('th[scope="colgroup"]')].map((th) => th.textContent)).toEqual(groups.map((g) => g.label));
     for (const g of groups) {
@@ -33,10 +33,15 @@ describe("the comparison hero", () => {
     }
   });
 
-  it("every gap row reads No, then Yes; the only Yes/Yes rows are the Both lines", () => {
+  it("every row reads Not described, then Yes, and never No; the only Yes/Yes rows are the Both lines", () => {
+    // A built-in cell says what the vendor's page does not describe. It does
+    // not say No: the page being silent is not Anthropic stating a limit.
     for (const tr of rows()) {
-      expect([...tr.querySelectorAll(".sr-only")].map((s) => s.textContent), tr.textContent!).toEqual(["No", "Yes"]);
+      const [builtIn, ours] = [...tr.querySelectorAll("td")].map((td) => td.textContent);
+      expect(builtIn, tr.textContent!).toBe("Not described on Anthropic's help page");
+      expect(ours, tr.textContent!).toBe("Yes");
     }
+    expect([...doc.querySelectorAll("td .sr-only")].map((s) => s.textContent)).not.toContain("No");
     const groups = heroGroups();
     expect(ties()).toHaveLength(groups.filter((g) => g.ties.length > 0).length);
     for (const tr of ties()) {
@@ -73,10 +78,14 @@ describe("the comparison hero", () => {
     expect(Math.max(...delays)).toBeLessThanOrEqual(1);
   });
 
-  it("names both dates, because a Slides row is in it, and links to the full table", () => {
+  it("names the vendor page's date once, says what Not described means, and links to the full table", () => {
     const link = doc.querySelector<HTMLAnchorElement>('a[href="#comparison"]')!;
-    expect(link.textContent).toContain("15 October 2026");
-    expect(link.textContent).toContain("Google Slides on 9 October 2026");
+    expect(link.textContent).toContain(`Anthropic\u2019s help page as of ${BUILT_IN_CHECKED_ON}`);
+    expect(link.textContent).toContain("not that Claude cannot do it");
+    expect(doc.querySelector("caption")!.textContent).toContain(`as of ${BUILT_IN_CHECKED_ON}`);
+    // The page passes the one constant, not a date of its own.
+    const page = readFileSync(join(__dirname, "../app/page.tsx"), "utf8");
+    expect(page).toContain("checkedOn={BUILT_IN_CHECKED_ON}");
   });
 
   it("on the landing page follows the wheel hero directly, with the tool count line beside it", () => {
