@@ -17,7 +17,7 @@ export default function PrivacyPage() {
         <h1 className="font-display text-3xl font-bold tracking-tight sm:text-4xl">
           Privacy Policy
         </h1>
-        <p className="mt-2 text-sm text-gray-500">Last updated: October 26, 2026</p>
+        <p className="mt-2 text-sm text-gray-500">Last updated: November 25, 2026</p>
 
         <section className="mt-10 space-y-6 text-[15px] leading-relaxed">
           <h2 className="text-xl font-semibold">1. Information We Collect</h2>
@@ -42,7 +42,7 @@ export default function PrivacyPage() {
           <p>
             <strong>Usage records.</strong> For each tool call we record the tool name, the
             connected account it ran against, whether it succeeded, how long it took, and the size
-            of the request and response. We do not store the arguments or the response body in
+            of the response. We do not store the arguments or the response body in
             these records. When a call fails we store the error message the upstream service
             returned, as received and capped in length, so you can diagnose it. That message can
             quote your own data, and the record is visible only to you. Before any error message
