@@ -20,12 +20,26 @@ let db: Database | null = null;
 // of hard-failing when Docker isn't running — mirrors the env-gating
 // convention used by apps/gateway/e2e/mcp.e2e.test.ts for the e2e harness.
 export function isDockerAvailable(): boolean {
+  // The gate asks for the database suites to run (scripts/gate.sh sets
+  // this). There, a skip would read as a pass, so the probe throws with the
+  // cause instead. Unset, a file run by hand still skips.
+  const required = process.env.GATE_REQUIRE_DB === "1";
+  // timeout: a wedged Docker daemon must read as "unavailable", not hang
+  // the whole test run at collection time. Two seconds is too short to fail
+  // a gate on: a daemon that is up but busy (the first probe on a cold CI
+  // runner) can take longer, and a daemon that is down answers at once.
+  const timeoutSeconds = required ? 30 : 2;
   try {
-    // timeout: a wedged Docker daemon must read as "unavailable", not hang
-    // the whole test run at collection time.
-    execSync("docker info", { stdio: "ignore", timeout: 2000 });
+    execSync("docker info", { stdio: "ignore", timeout: timeoutSeconds * 1000 });
     return true;
   } catch {
+    if (required) {
+      throw new Error(
+        `GATE_REQUIRE_DB=1, and no Docker daemon answered \`docker info\` within ${timeoutSeconds} seconds, ` +
+          "so the database-backed suites cannot start their Postgres and did not run. " +
+          "Start Docker and run it again."
+      );
+    }
     return false;
   }
 }
