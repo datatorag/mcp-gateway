@@ -87,6 +87,27 @@ describe("what a cover animation's file may hold", () => {
       "animates a link or an event handler",
     ],
     ["an escaped at-rule", GOOD.replace("<style>", '<style>@\\69mport "https://x.test/x.css";'), "has a backslash"],
+    [
+      "a script under a prefix that is not ASCII",
+      GOOD.replace("<rect", '<\u00e9:script xmlns:\u00e9="http://www.w3.org/1999/xhtml">alert(1)</\u00e9:script><rect'),
+      "has a prefixed element",
+    ],
+    [
+      "a prefix other than xlink, even for an allowed namespace",
+      GOOD.replace("<rect", '<g xmlns:s="http://www.w3.org/2000/svg"/><rect'),
+      "declares a prefix other than xlink: s",
+    ],
+    ["an at-rule spelled with a character reference", GOOD.replace("<style>", '<style>&#64;import "https://x.test/x.css";'), "has a character reference (&#)"],
+    [
+      "a stylesheet instruction carrying its sheet as data",
+      `<?xml-stylesheet href="data:text/css;base64,AAAA"?>${GOOD}`,
+      "has an xml-stylesheet",
+    ],
+    [
+      "data that is not an image or a font",
+      GOOD.replace('<use href="#g"/>', '<use href="data:text/html;base64,AAAA"/>'),
+      "has an href outside the file: data:text/html;base64,AAAA",
+    ],
     ["an image-set", GOOD.replace("fill: url(#g)", 'background: image-set("https://x.test/a.png" 1x)'), "has an image-set("],
   ])("names %s", (_what, svg, problem) => {
     expect(coverAnimationProblems(svg, svg.length)).toContain(problem);
