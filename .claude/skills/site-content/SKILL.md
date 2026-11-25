@@ -77,6 +77,14 @@ measured frame heights) and, for the home page, a row in `demo-bento.tsx`, whose
 problem line is a claim about someone else's product and needs a dated first-hand check
 of that product's tool list before it ships.
 
+**An edit to a post is disclosed in two tiers, and the note sits after the body.**
+Frontmatter `updated` alone moves `dateModified` and `modifiedTime` and shows nothing.
+`updated` with `updatedNote` (a claim changed) also shows the note, and it renders at the
+END of the article body (`id="edit-note"`), never above it: above, the correction was the
+first hundred words a reader or an engine met. The date line under the title carries
+"Edited <date>" as a link to the note. `app/blog/[slug]/page.test.tsx` pins both tiers and
+the order.
+
 ### Changelog — `apps/gateway/src/lib/changelog.ts`
 
 Slug = filename. Terser than blog — no `excerpt`/`author`/`category`/`coverImage` at all:
@@ -166,6 +174,46 @@ source repository (`REPOSITORY_URL`). A page-level node names the organization b
 `@id` and never declares a second one. No `offers`, rating, or review, and no `sameAs`
 that is not certainly ours; the tests in `site-schema.test.ts` pin all of it.
 
+**The docs' vocabulary: one name for each thing.** The terms are data,
+`DOCS_GLOSSARY` in `app/docs/copy.ts`, rendered by the index as its glossary
+section (`/docs#glossary`, each term a `<dt>` with a stable id, `term-client`,
+`term-dashboard-agent`, ...; an id is an address, so reword a term but never
+change its id). Every docs body and FAQ answer uses these words and no synonym:
+
+| Write | For | Never |
+|---|---|---|
+| DataToRAG | the product | "the hosted service" |
+| the DataToRAG MCP server ("the server" once a section has named it) | the server at `https://datatorag.com/mcp`, and the thing a person adds to a client | "the gateway", "our gateway", "the MCP endpoint", "a remote MCP server", "the DataToRAG connector", "plugin" |
+| client | Claude, ChatGPT, Codex, Cursor, or any MCP client | "app" |
+| agent | the model working in the client | "AI agent", "AI assistant" |
+| the dashboard Agent | the chat on the dashboard's Agent page | a bare "the Agent", "the DataToRAG agent", "the in-product agent", "built-in chat" |
+| provider | Google, Atlassian, Notion | |
+| service; "the Gmail tools", "the Google Sheets tools", "the Atlassian tools" | one product of a provider, and its tool set | "the Gmail connector", "connector" for any tool set |
+| connected account | an account at a provider connected to DataToRAG | |
+| built-in tool | a tool the server answers itself (`connect`, `list_connected_accounts`) | "the gateway's own tools" |
+
+"Connector" stays only where it is somebody's label, quoted as it is: Claude's
+"Add custom connector" and Connectors list, the usage dashboard's "By connector"
+chart, and the `connector` frontmatter key. "App" stays for the DataToRAG entry in
+a provider's own settings ("remove the app in your Atlassian account") and for the
+approval page's own words. Tool names, arguments, and UI labels are never renamed.
+A call to a tool that is not built-in is written out: "a call to a Google
+Workspace, Atlassian, or Notion tool".
+
+**How a docs page opens and how its headings read.** The first sentence names
+DataToRAG, says it is an MCP server, names the service in full ("Google Sheets",
+not "Sheets"), and says what an agent can do with it, in words the page's own tool
+table supports: "DataToRAG is an MCP server whose Google Sheets tools let an agent
+...". An h2 or h3 says the task or names the service ("Google Sheets tools",
+"Scopes the Gmail tools need", "Using Jira on more than one account", "Example
+prompts for Notion", "How a Gmail reply chooses its recipients"), never a bare
+label such as "Tools" or "Setup" that every page would share, and never a question
+(the rule below). Heading ids are derived from the heading's text, so renaming a
+heading moves its anchor: search the repo for the old name in quotes first. A
+provider overview's connect section stands alone: it states both steps, connecting
+the account on Connections and adding the DataToRAG MCP server to the client with
+its address, and links Getting Started for the walkthrough.
+
 **One question block per page.** A docs page's questions are its frontmatter `faqs`
 and nothing else: the body carries no heading that is a question section (the test
 fails on one), because a body section is on the page and in no `FAQPage`. The page
@@ -184,6 +232,19 @@ Two docs-specific mechanisms added by SCRUM-24:
   layout) swaps in the player on click, so no page view loads the player. A new
   video needs its poster at `public/docs/video-posters/<video id>.jpg`;
   `docs-media.test.ts` fails without it.
+
+- **Every h2 and h3 on a docs page has an id and a link to itself**, added when the
+  page loads by `addHeadingAnchors` in `src/lib/docs-headings.ts` (called from
+  `parsePage`, after `enhanceDocMedia`). The id is the heading's words in lowercase
+  ASCII joined by hyphens (`## Who a reply goes to` is `#who-a-reply-goes-to`); a
+  heading repeated on a page gets `-2`, `-3` in page order. Ids are derived at
+  render and stored nowhere, so write plain markdown headings and never an id by
+  hand; rewording a heading moves its address. The link sits BESIDE the heading in
+  a `div.docs-heading` (styled in `globals.css`), not inside its text, the way
+  `FaqSection` does its permalink. To link a section from the same page write
+  `[text](#the-id)`; `docs-headings.test.ts` fails a page whose in-page link names
+  no section, a heading without an id, or an id used twice (the questions' `faq-`
+  anchors included).
 
 - **Component embed via marker**: a doc's markdown can place `<!--setup-instructions-->`
   on its own line; `docs/[slug]/page.tsx` splits `doc.html` on that comment (marked
@@ -369,6 +430,47 @@ finished conversation, it plays once when on screen, never loops, and does not m
 motion. The card's diagram is CSS only (`use-case-flow.module.css`), played while on screen. The
 list's filter hides cards in the browser and never removes one from the served page.
 
+### `/llms.txt` and the Markdown copies: `apps/gateway/src/lib/markdown-copies.ts`
+
+Every docs page and every use case is also served as Markdown at the page's own
+address plus `.md` (`/docs/gmail.md`, `/use-cases/<slug>.md`), and so are the docs
+index (`/docs.md`) and the all-tools page (`/docs/tools.md`). `/llms.txt` lists them
+all in the llmstxt.org shape: the product's name, a blockquote summary, then sections
+of `- [title](markdown address): description`, the docs in the sidebar's order and
+groups. There is no `/llms-full.txt`, on purpose: the pages together are about
+170 KB, the all-tools list is read from the database per request and cannot be part
+of a file built once, and the list already gives every page's own copy.
+
+- **Nothing is authored for a copy.** `docMarkdown(doc)` is the loaded `DocPage` (its
+  body with `{{values}}` already filled, description, `updated`, `faqs`);
+  `useCaseMarkdown` is the `UseCase` record; `docsIndexMarkdown` and `llmsTxt` read
+  `docsSections()`, the same top-level list and connector groups the sidebar reads.
+  A new docs page or use case file gets its copy, its `/llms.txt` line, and its
+  `<link rel="alternate" type="text/markdown">` with no edit anywhere.
+- **A copy stands alone**: `absoluteLinks` rewrites every site-relative link, image,
+  and `href`/`src` to `https://datatorag.com/...` (a `#section` link becomes that
+  section of the HTML page), leaving fenced code as written. In a docs copy the
+  setup marker becomes the client steps from `MCP_CLIENTS`, a YouTube embed becomes
+  a link, and comments are dropped.
+- **Routing**: `[slug]` is a page, so `gmail.md` would be taken as a slug. The
+  addresses are rewritten by `MARKDOWN_REWRITES` in `next.config.ts` (`beforeFiles`)
+  to route handlers under `src/app/md/`; `/llms.txt` is `src/app/llms.txt/route.ts`.
+  A new kind of page with copies is one rewrite, one handler, and its entries in
+  `llmsTxt()`. `next.config.ts` must not import from `src/lib` (it would load the
+  whole docs loader at config time), which is why the list lives in the config.
+- **Headers**: `text/markdown; charset=utf-8` and `X-Robots-Tag: noindex` on every
+  copy (the HTML page stays canonical and names its copy in `alternates.types`);
+  never disallowed in `robots.ts`, since a refused crawler cannot read a noindex.
+  `/llms.txt` itself is `text/plain` and indexable. The copies are not in the sitemap.
+- **The all-tools copy answers 503**, with a short text and `Retry-After`, when the
+  registry cannot be read or answers no connector tool. Never an empty list: its
+  reader is a program, and an empty list reads as "there are no tools".
+- **Tests**: `markdown-copies.test.ts` (every copy: no unfilled `{{`, no
+  site-relative link, no admin-only service name; `/llms.txt` lists each docs page
+  and use case exactly once) and `src/next-config.markdown.test.ts` (every listed
+  address goes through the config's rewrites, matched with the framework's own
+  matcher, to a handler that answers Markdown).
+
 ## Per-page FAQs
 
 Blog, docs, skill and persona pages can carry a `faqs:` list in frontmatter. Read through
@@ -484,7 +586,10 @@ up nothing, which is the point at which a gap is cheapest to close.
 `site-faq.ts` is in the tool-count sweep's file list as well, alongside
 `hosted-google-workspace-mcp/page.tsx`, which was not in it despite its own header
 comment saying it kept no counts BECAUSE that guard would fail one. Any new hand-written
-copy surface has to be added to BOTH sweeps; neither globs `src/`.
+copy surface has to be added to BOTH sweeps; neither globs `src/`. The repository's
+`README.md` is in the tool-count sweep too, with two rules of its own (no count in a
+table cell, none in a badge): it cannot read the registry, so it states no count and
+links `https://datatorag.com/docs/tools`.
 
 The retention sweep reads `site-faq.ts` too, ONE ROUTE AT A TIME rather than as a file.
 Its qualification rule is per file because a file was a page; a module carrying several

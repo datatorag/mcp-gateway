@@ -3,6 +3,7 @@ import { planLimits } from "@/gateway/billing/plans";
 import { CHAT_MAX_STEPS, SKILL_RUN_MAX_STEPS } from "@/mastra/run-steps";
 import docsDates from "../../content/docs-dates.json";
 import { CONNECTORS, getConnector, type Connector } from "./docs-connectors";
+import { addHeadingAnchors } from "./docs-headings";
 import { enhanceDocMedia } from "./docs-media";
 import {
   defineCollection,
@@ -123,6 +124,13 @@ export function docsValues(): Record<string, string> {
   };
 }
 
+/** A docs page's markdown can place this on its own line to put the "Add to
+ * your agent" block (the one client picker the dashboard and the site render
+ * too) at that spot. marked passes HTML comments through untouched, so the
+ * marker survives into `html` for the page to split on; the page's Markdown
+ * copy writes the same clients' steps there as a list. */
+export const DOC_SETUP_MARKER = "<!--setup-instructions-->";
+
 const DOC_TOKEN = /\{\{\s*([^{}\s]+)\s*\}\}/g;
 
 /** Replace every `{{name}}` in `text` with its value. A name that is not in
@@ -148,7 +156,7 @@ function parsePage({ slug, data, content: source }: ParsedFile): DocPage {
   const values = docsValues();
   const fill = (text: string) => fillDocTokens(text, values, slug);
   const content = fill(source);
-  const html = enhanceDocMedia(marked.parse(content) as string);
+  const html = addHeadingAnchors(enhanceDocMedia(marked.parse(content) as string));
   const title = field.string(data.title, slug);
 
   return {

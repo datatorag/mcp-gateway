@@ -65,6 +65,49 @@ export interface SiteFaqPage {
 const INTEGRATION_OFFER = "We build integrations for your own services on request.";
 const INTEGRATION_ASK = "Tell us the service and what you want your agent to do with it";
 
+/** The one answer to "Can I self-host DataToRAG?".
+ *
+ * Three pages used to answer it three ways: a hero line offered self-hosting
+ * as a preference, a pricing answer said "you can self-host it", and the blog
+ * said there is no packaged guide. This is the blog's sentence, and every
+ * answer and page line that mentions running the gateway yourself uses it, so
+ * the next change to it is one edit. The license half is the repository's
+ * LICENSE file (MIT); re-read that file before changing the word. */
+export const SELF_HOSTING =
+  "The DataToRAG gateway's code is MIT-licensed and can be self-hosted. It is not one command, and there is no packaged self-host guide yet: you supply a Postgres database, your own Google OAuth clients (and Google's verification for the restricted Gmail and Drive scopes), and an encryption key for the stored tokens.";
+
+/** What DataToRAG is next to Claude's built-in Google connectors, in the
+ * opening of /hosted-google-workspace-mcp and as an answer on two routes.
+ *
+ * OURS FIRST, and every clause of it is on our own docs pages: several Google
+ * accounts (docs/google-workspace), Contacts and Tasks, Jira, Confluence, and
+ * Notion (docs/getting-started, "Available connectors").
+ *
+ * THEIRS is only what Anthropic's own help page said on the day in
+ * BUILT_IN_CHECKED_ON, and only what it says the connectors DO. It states no
+ * limit on purpose. That page does not say how many Google accounts a person
+ * can connect, and does not mention Contacts or Tasks either way, so neither
+ * is claimed here: a page being silent is not the vendor stating a limit.
+ * Re-read BUILT_IN_HELP_URL before changing a word of `theirs`, and move the
+ * date only when you have. */
+export const BUILT_IN_HELP_URL =
+  "https://support.claude.com/en/articles/10166901-use-google-workspace-connectors";
+export const BUILT_IN_CHECKED_ON = "November 25, 2026";
+export const BUILT_IN_DIFFERENCE = {
+  question: "What is the difference between DataToRAG and Claude's built-in Google connectors?",
+  ours: `DataToRAG is one MCP endpoint that your agent uses from ${PUBLIC_CLIENTS_TEXT}, or any other MCP client. It reaches several Google accounts through one connection, includes Contacts and Tasks, and puts Jira, Confluence, and Notion on the same endpoint.`,
+  theirsLead: `Claude's built-in Google connectors are a feature of Claude itself. As of ${BUILT_IN_CHECKED_ON}, `,
+  theirsSource: "Anthropic's help page",
+  theirsRest:
+    " lists them for Gmail, Google Calendar, Google Drive, Docs, Sheets, and Slides, and says they send email and edit Docs, Sheets, and Slides files.",
+  close: "If your work stays in Google and in Claude, the built-in connectors may be all you need.",
+} as const;
+
+const BUILT_IN_DIFFERENCE_FAQ: ContentFaq = {
+  q: BUILT_IN_DIFFERENCE.question,
+  a: `${BUILT_IN_DIFFERENCE.ours} ${BUILT_IN_DIFFERENCE.theirsLead}[${BUILT_IN_DIFFERENCE.theirsSource}](${BUILT_IN_HELP_URL})${BUILT_IN_DIFFERENCE.theirsRest} ${BUILT_IN_DIFFERENCE.close}`,
+};
+
 export const CUSTOM_INTEGRATION = {
   heading: "Need a service that is not listed?",
   body: `${INTEGRATION_OFFER} ${INTEGRATION_ASK}.`,
@@ -113,6 +156,7 @@ export const SITE_FAQ_PAGES: SiteFaqPage[] = [
             q: "What can it actually do?",
             a: "Read and search across your connected services, and change things: [send and reply to email](/docs/gmail), [edit cells in an existing spreadsheet](/docs/sheets), [restructure a doc in place](/docs/docs), [build slides onto a deck](/docs/slides), [create and update calendar events](/docs/calendar), manage [contacts](/docs/contacts) and [tasks](/docs/tasks), [file and update Jira issues](/docs/jira), [edit Confluence pages](/docs/confluence), and [write Notion pages and database rows](/docs/notion). Every change goes through an approval step, so you see what is about to happen before it does. The hub pages list every action: [Google Workspace](/docs/google-workspace), [Atlassian](/docs/atlassian) and [Notion](/docs/notion).",
           },
+          BUILT_IN_DIFFERENCE_FAQ,
           {
             q: "Claude already connects to Gmail, Calendar and Drive. Why would I need this?",
             // Mail came OUT of this answer on 18 September 2026. The native
@@ -207,7 +251,7 @@ export const SITE_FAQ_PAGES: SiteFaqPage[] = [
           },
           {
             q: "Is it safe to connect a hosted gateway to my Google account?",
-            a: "It is the right question to ask of anything asking for Workspace access. DataToRAG has been Google-verified since June 2026 and passed the CASA Tier 2 security assessment that the restricted Workspace scopes require, so you will not see an unverified app warning when you connect. The gateway is also open source: you can read exactly what it does, and run it yourself instead. Here is [what the verification involved](/blog/casa-tier-2-verified).",
+            a: `It is the right question to ask of anything asking for Workspace access. DataToRAG has been Google-verified since June 2026 and passed the CASA Tier 2 security assessment that the restricted Workspace scopes require, so you will not see an unverified app warning when you connect. You can also read exactly what the gateway does, because its code is public. ${SELF_HOSTING} Here is [what the verification involved](/blog/casa-tier-2-verified).`,
           },
           {
             q: "What does it cost to start?",
@@ -241,7 +285,7 @@ export const SITE_FAQ_PAGES: SiteFaqPage[] = [
           },
           {
             q: "Can I run the gateway myself instead?",
-            a: "Yes. The DataToRAG gateway is open source and you can self-host it, which is also the Enterprise choice: hosted by us, or run by you, at a committed-volume rate either way.",
+            a: `Yes, with work on your side. ${SELF_HOSTING} Enterprise is a committed-volume rate either way, hosted by us or run by you.`,
           },
           {
             q: "How do I get an Enterprise quote?",
@@ -257,6 +301,7 @@ export const SITE_FAQ_PAGES: SiteFaqPage[] = [
       {
         title: "Questions about the hosted endpoint",
         faqs: [
+          BUILT_IN_DIFFERENCE_FAQ,
           {
             q: "Do I need a Google Cloud project to use a hosted Google Workspace MCP?",
             a: "Not for this one. You add one endpoint and sign in with Google, and there is no Cloud project, no OAuth client of your own and no per-product endpoint to wire up. Google's own official MCP servers are the other route and they do ask for that setup: a Cloud project, sixteen service enablements and your own OAuth client when we checked on 24 August 2026.",
@@ -275,7 +320,7 @@ export const SITE_FAQ_PAGES: SiteFaqPage[] = [
           },
           {
             q: "What if having a third party in the path is not acceptable?",
-            a: "Then run it yourself. The DataToRAG gateway is open source and self-hosting is the version of it that answers that objection honestly, rather than the one that argues you out of it.",
+            a: `Then running it yourself is the answer, and it takes work. ${SELF_HOSTING}`,
           },
         ],
       },

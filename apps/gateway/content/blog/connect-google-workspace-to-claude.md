@@ -2,8 +2,8 @@
 title: "Save Gmail Attachments to Drive with Claude"
 excerpt: "A team was running an Apps Script to save 6 daily report emails to Drive. We replaced it with one prompt."
 date: "2026-03-28"
-updated: "2026-08-12"
-updatedNote: "Two corrections. The base64 arithmetic contradicted itself, calling 6.7MB of text 1.7 million characters when base64 is one byte per character, so the token figure derived from it was wrong too. And gmail_search results are no longer bare message ids: since the July 2026 flattening they carry sender, subject, date and a snippet, so step one now says what you actually get back."
+updated: "2026-11-25"
+updatedNote: "November 25, 2026: added a section near the top with the steps to connect Google Workspace to Claude, as Getting Started gives them. August 12, 2026: two corrections. The base64 arithmetic contradicted itself, calling 6.7MB of text 1.7 million characters when base64 is one byte per character, so the token figure derived from it was wrong too. And gmail_search results are no longer bare message ids: since the July 2026 flattening they carry sender, subject, date and a snippet, so step one now says what you actually get back."
 author: "Manuel Yang"
 category: "Product"
 coverImage: "/blog/gmail-attachment-to-drive.png"
@@ -15,6 +15,17 @@ Someone on our early access list had a workflow that looked like this: a colleag
 It worked. But the Apps Script was a separate piece of infrastructure to maintain, debug when the email format changed, and explain to the next person who inherited the workflow.
 
 We built `gmail_save_attachment_to_drive` so Claude can handle the entire chain.
+
+## How to connect Google Workspace to Claude
+
+The tool needs your Google account connected first. With DataToRAG that is two connections, and they can happen in either order:
+
+1. **Connect your Google account.** Sign in at [datatorag.com/dashboard](https://datatorag.com/dashboard), open [Connections](https://datatorag.com/dashboard/connections), and click Connect on the Google Workspace card. Google's consent screen arrives with every box unchecked, so tick "Select all", or the services you want, before you click Continue.
+2. **Add the connector in Claude.** Go to Customize, then Connectors, click Add, and choose "Add custom connector". Give it any name and the URL `https://datatorag.com/mcp`, and leave the advanced OAuth fields empty.
+3. **Sign in and approve.** Click Add, and Claude sends you to Google to sign in. Pick the same Google account you used on the DataToRAG dashboard. The first time, DataToRAG asks whether to allow the app. Click Approve.
+4. **Check the tools.** Back in a chat, DataToRAG appears in Claude's connector list, and the Google tools are listed once the account is connected.
+
+[Getting Started](/docs/getting-started) has the full walkthrough, with screenshots.
 
 ## How it works
 

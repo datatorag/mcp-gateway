@@ -45,13 +45,13 @@ faqs:
       account can edit.
 ---
 
-The Drive connector lets your AI agent search across your Google Drive, read file contents, and organize files into folders.
+DataToRAG is an MCP server whose Google Drive tools let an agent search across your Drive, read file contents, and organize files into folders.
 
 Reading happens server-side: the text comes back in the response, so nothing is
 downloaded to a local filesystem and a large file does not have to pass through
 the conversation to be read.
 
-## Available operations
+## Google Drive tools
 
 | Tool | Description |
 |------|-------------|
@@ -82,7 +82,7 @@ scanned or rendered pages. To read a PDF or an image, copy it with
 `drive_copy_file` and `target_mime_type: "application/vnd.google-apps.document"`.
 Drive recognizes the text, and the copy is a Google Doc the tools can read.
 
-## Downloading a file
+## Downloading a file from Google Drive
 
 `drive_read_file` returns text. To get the file itself, name it with a [file reference](/docs/file-references):
 
@@ -91,25 +91,25 @@ Drive recognizes the text, and the copy is a Google Doc the tools can read.
 
 `file_download_link` takes either reference and answers with the file's name, size, and SHA-256, and a link that saves the file to your computer. The link works once and lasts ten minutes. `jira_add_attachment` and `notion_attach_file` take the same references, to put a Drive file on a Jira issue or a Notion page. In each case the file's content never enters the conversation. One file per call, at most 25 MB, or 20 MB for Notion.
 
-## Required scopes
+## Scopes the Google Drive tools need
 
 - `https://www.googleapis.com/auth/drive`
 
-## Multiple accounts
+## Using Google Drive on more than one account
 
 Every tool on this page takes an optional `account` argument: the email address
 of the connected Google account to act on. Omit it and the default account is
 used. Connect a personal and a work account and your agent can read from
 one and write to the other in the same turn, without you switching profiles.
 
-## Example prompts
+## Example prompts for Google Drive
 
 - "Find the latest Q2 revenue deck in my Drive"
 - "Read the contents of the onboarding checklist doc and summarize it"
 - "Create a new folder called 'April Reports' inside my Reports folder"
 - "Search Drive for all spreadsheets modified in the last week"
 
-## Copying beats rebuilding
+## Copy a template instead of rebuilding it
 
 `drive_copy_file` exists mainly for templates. Asking your agent to rebuild a document from
 scratch gives you something that looks close and drifts a little each time. Copying gives you
@@ -119,7 +119,7 @@ then fill in the copy.
 Drive refuses to copy a **folder**, answering with a 403 that reads like a permissions problem.
 It is not one, and retrying with wider access will not change it.
 
-## Excel, Word and PowerPoint files
+## Working with Excel, Word, and PowerPoint files in Drive
 
 An `.xlsx` stored in Drive opens in the browser like a spreadsheet, but it is still an Excel
 file, and the Sheets tools cannot open it. The same goes for `.docx` with the Docs tools and

@@ -9,7 +9,7 @@ faqs:
     a: >-
       In the DataToRAG database, encrypted. Each access token and refresh
       token from Google, Atlassian, or Notion is encrypted with AES-256-GCM
-      before it is written. The encryption key is held in the gateway's
+      before it is written. The encryption key is held in the DataToRAG MCP server's
       configuration and is not in the database. The
       [privacy policy](/privacy) covers everything else DataToRAG keeps.
   - q: Does DataToRAG keep my emails and files?
@@ -18,7 +18,7 @@ faqs:
       your agent and does not keep it. It does store each connection's OAuth
       tokens (encrypted), a usage record for each counted call with no argument
       values or response bodies, the error text of a failed call, and your
-      conversations with the Agent in the DataToRAG dashboard. A file you
+      conversations with the dashboard Agent. A file you
       upload is held in memory for up to ten minutes. The
       [privacy policy](/privacy) is the full statement.
   - q: What does disconnecting an account delete?
@@ -27,18 +27,18 @@ faqs:
       dashboard deletes the account record and its stored tokens. For Google
       and Notion, DataToRAG first asks the provider to revoke the access. For
       Atlassian it does not, so remove the app in your Atlassian account as
-      well to end the grant there. Usage records and Agent conversations are not deleted
+      well to end the grant there. Usage records and dashboard Agent conversations are not deleted
       by a disconnect.
   - q: What can a client do after I approve it?
     a: >-
       It can use the DataToRAG tools for every account you have connected,
       acting as your DataToRAG login. The approval is not limited to one
       account or one service, and it covers accounts you connect later.
-      DataToRAG remembers the approval, so the same app is not asked about
+      DataToRAG remembers the approval, so the same client is not asked about
       again.
-  - q: Can I see or revoke the apps I approved in the dashboard?
+  - q: Can I see or revoke the clients I approved in the dashboard?
     a: >-
-      Not today. The DataToRAG dashboard has no page that lists approved apps
+      Not today. The DataToRAG dashboard has no page that lists approved clients
       or revokes one. A client can revoke its own access, and disconnecting an
       account on the Connections page removes that account from every client
       at once.
@@ -53,7 +53,7 @@ DataToRAG passes the content of your connected accounts through to your agent an
 - each connection's OAuth tokens, encrypted;
 - a usage record for each counted call, with no argument values and no response bodies;
 - the error text of a failed call, which can quote your own data;
-- your conversations with the Agent on the dashboard, with their messages and tool results.
+- your conversations with the dashboard Agent, with their messages and tool results.
 
 It also holds a file you upload in memory for up to ten minutes.
 
@@ -65,18 +65,18 @@ When you connect an account, the provider gives DataToRAG an access token and, i
 
 - **Algorithm.** Each token is encrypted with AES-256-GCM, with a new random nonce for every value.
 - **Binding.** Each encrypted value is bound to its user, its row, and its column. A value copied to another user, row, or column does not decrypt there.
-- **Key.** The encryption key is not in the database. The gateway reads it from its own configuration.
-- **Writes and reads.** The gateway writes and reads tokens only in the encrypted form.
+- **Key.** The encryption key is not in the database. The DataToRAG MCP server reads it from its own configuration.
+- **Writes and reads.** The server writes and reads tokens only in the encrypted form.
 
-For a tool call, the gateway decrypts the access token of the account the call runs as and hands it to the connector for that one request. The gateway passes the connector that access token for the call. It does not pass the refresh token or the encryption key.
+For a tool call, the server decrypts the access token of the account the call runs as and hands it to the process that runs that provider's tools for that one request. The server passes that process the access token for the call. It does not pass the refresh token or the encryption key.
 
 Your client never receives a provider token. It holds a DataToRAG token instead, described under "What approving a client grants" below.
 
 ## How tokens are refreshed
 
-When a stored access token has expired at the time of a call, the gateway uses the refresh token to get a new one from the provider and stores it encrypted. Where the provider issues a new refresh token with each refresh, as Atlassian does, the new one replaces the old one.
+When a stored access token has expired at the time of a call, the DataToRAG MCP server uses the refresh token to get a new one from the provider and stores it encrypted. Where the provider issues a new refresh token with each refresh, as Atlassian does, the new one replaces the old one.
 
-If the provider refuses a token in the middle of a call, the gateway tries one refresh for that account. That call still answers with an error, and the next call uses the new token.
+If the provider refuses a token in the middle of a call, the server tries one refresh for that account. That call still answers with an error, and the next call uses the new token.
 
 When a provider permanently refuses a refresh, DataToRAG records a reason code. It does not record the token or the provider's reply. Once the connection is judged dead, the account is marked as needing a reconnect: `list_connected_accounts` shows `needs_reconnect`, and a call for that account answers with a reconnect link.
 
@@ -95,7 +95,7 @@ Three things to know:
 - **The revoke request is best effort.** If the provider cannot be reached, the disconnect still completes and DataToRAG no longer holds the tokens. You can remove the app on the provider's side to be sure.
 - **A shared account is not revoked.** If another DataToRAG login holds the same provider account, only your copy of the tokens is deleted, so the other login keeps working.
 
-A disconnect does not delete your usage records or your Agent conversations.
+A disconnect does not delete your usage records or your dashboard Agent conversations.
 
 You can also revoke from the provider's side, for example in your Google account's settings for third-party access. The stored tokens then stop working, and the next call for that account tells you to reconnect.
 
@@ -105,11 +105,11 @@ Signing out revokes that dashboard session and cancels your open download links,
 
 ## What approving a client grants
 
-When you add DataToRAG to a client such as Claude, ChatGPT, or Cursor, the client sends you to DataToRAG to sign in with Google. The first time a given app asks, DataToRAG shows an approval page titled "Allow (the app's name) to use DataToRAG?" with **Approve** and **Deny**.
+When you add DataToRAG to a client such as Claude, ChatGPT, or Cursor, the client sends you to DataToRAG to sign in with Google. The first time a given client asks, DataToRAG shows an approval page titled "Allow (the app's name) to use DataToRAG?" with **Approve** and **Deny**.
 
-- **What you grant.** The app can use the tools for the accounts you have connected, as your DataToRAG login. The approval is not limited to one account or one service, and it covers accounts you connect later.
-- **What the page shows.** The app's name and the host the approval sends you back to. The name is what the app reported about itself, and DataToRAG does not verify it. Only approve an app you just added yourself.
-- **Approve is remembered.** You are not asked again for the same app. An app that registers with DataToRAG again counts as a new app and is asked about again. **Deny** records no approval, so the app asks again next time.
+- **What you grant.** The client can use the tools for the accounts you have connected, as your DataToRAG login. The approval is not limited to one account or one service, and it covers accounts you connect later.
+- **What the page shows.** The client's name and the host the approval sends you back to. The name is what the client reported about itself, and DataToRAG does not verify it. Only approve a client you just added yourself.
+- **Approve is remembered.** You are not asked again for the same client. A client that registers with DataToRAG again counts as a new client and is asked about again. **Deny** records no approval, so the client asks again next time.
 - **The page expires.** An approval page that is not answered within ten minutes can no longer be used.
 
 After approval the client holds two DataToRAG tokens:
@@ -117,15 +117,15 @@ After approval the client holds two DataToRAG tokens:
 - an access token that is valid for 24 hours;
 - a refresh token that is valid for 60 days and is replaced each time it is used. DataToRAG stores the refresh token only as a SHA-256 hash. If a refresh token that was already used is presented again, DataToRAG revokes the refresh tokens in that chain and the client's live access tokens.
 
-The sign-in uses PKCE, and DataToRAG issues no client secret to the app.
+The sign-in uses PKCE, and DataToRAG issues no client secret to the client.
 
 A client's token does not open the dashboard, and a dashboard session does not work as a client token.
 
 ## Revoke a client's access
 
-The dashboard has no page today that lists the apps you approved or revokes one. These are the ways access ends:
+The dashboard has no page today that lists the clients you approved or revokes one. These are the ways access ends:
 
-- **The client revokes it.** DataToRAG has a standard OAuth revocation endpoint. When a client sends its refresh token there, DataToRAG revokes that refresh token and the ones it was exchanged from, revokes the client's live access tokens, closes your open MCP sessions, and cancels your open download and upload links. Whether removing the connector in a client does this depends on the client.
+- **The client revokes it.** DataToRAG has a standard OAuth revocation endpoint. When a client sends its refresh token there, DataToRAG revokes that refresh token and the ones it was exchanged from, revokes the client's live access tokens, closes your open MCP sessions, and cancels your open download and upload links. Whether removing the DataToRAG MCP server from a client does this depends on the client.
 - **The tokens expire.** An access token stops working 24 hours after it was issued. A refresh token stops working 60 days after it was issued if it was not used.
 - **You disconnect the accounts.** Disconnecting an account on Connections removes it for every client at once, because no client holds the provider's tokens.
 
@@ -133,7 +133,7 @@ The dashboard has no page today that lists the apps you approved or revokes one.
 
 For each tool call that counts, DataToRAG stores a usage record with:
 
-- the tool name and the connector;
+- the tool name and its provider;
 - the address of the connected account the call ran as;
 - the outcome, the latency, and the time;
 - the size of the response;
@@ -147,9 +147,9 @@ Raw usage records are kept for 90 days and are then replaced by daily totals. [U
 
 An event for each call also goes to our analytics provider. It carries your sign-in email and the address of the connected account, no argument values, and no response bodies. Its error text is shortened and redacted for emails, identifiers, and quoted content before it is sent.
 
-## Agent conversations
+## Dashboard Agent conversations
 
-Conversations with the [Agent](https://datatorag.com/dashboard/agent) on the dashboard are stored so that you can come back to them. The Agent runs on a model from Anthropic, which receives the conversation to answer it. The [privacy policy](/privacy) lists every company that receives data. A stored conversation holds your messages, the Agent's replies, and the tool results, and a tool result can contain content from your connected accounts. Deleting a conversation removes it.
+Conversations with the [dashboard Agent](https://datatorag.com/dashboard/agent) are stored so that you can come back to them. The dashboard Agent runs on a model from Anthropic, which receives the conversation to answer it. The [privacy policy](/privacy) lists every company that receives data. A stored conversation holds your messages, the dashboard Agent's replies, and the tool results, and a tool result can contain content from your connected accounts. Deleting a conversation removes it.
 
 For each run, DataToRAG also stores the number of steps, the token counts, and the cost. That record holds no content.
 

@@ -20,4 +20,4 @@ If the account you connect has a different email from your DataToRAG sign-in, an
 is not signed in to DataToRAG, you are asked to sign in first. That stops a link meant for
 someone else from adding your account to theirs.
 
-More in [Getting started](/docs/getting-started), under "Connect accounts from your assistant".
+More in [Getting started](/docs/getting-started), under "Connect accounts from your agent".

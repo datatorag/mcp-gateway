@@ -8,7 +8,7 @@ connector: "google-workspace"
 faqs:
   - q: If I write a value starting with an equals sign, does it become a formula?
     a: >-
-      Not unless that call asked for it. The DataToRAG Sheets connector writes
+      Not unless that call asked for it. The DataToRAG Google Sheets tools write
       values the way typing them would, so numbers and dates land as numbers and
       dates, but text that starts with = or + is kept literal, so a product
       named =1+1 stays that string. Evaluation is switched on per call with
@@ -49,11 +49,11 @@ faqs:
       ranges.
 ---
 
-The Sheets connector lets your AI agent read data from spreadsheets, write to cells, append rows, create new sheets, and manage the tabs inside them. Values are written the way typing them would: numbers, dates and booleans are stored as such. The exception is text beginning with `=` or `+`, which stays literal unless that call sets `parse_formulas`, which turns evaluation on for the whole call rather than for one cell. To store everything verbatim as text, pass `value_input_option: "RAW"`.
+DataToRAG is an MCP server whose Google Sheets tools let an agent read data from spreadsheets, write to cells, append rows, create new sheets, and manage the tabs inside them. Values are written the way typing them would: numbers, dates and booleans are stored as such. The exception is text beginning with `=` or `+`, which stays literal unless that call sets `parse_formulas`, which turns evaluation on for the whole call rather than for one cell. To store everything verbatim as text, pass `value_input_option: "RAW"`.
 
 ![A sheets_update call rewriting two existing rows in place, with the updated range and cell count it returned](/docs/sheets-update.png)
 
-## Available operations
+## Google Sheets tools
 
 | Tool | Description |
 |------|-------------|
@@ -101,19 +101,19 @@ Formatting calls report what was **sent**, not what the sheet now looks like.
 Empty reply objects mean the batch was accepted; only opening the sheet tells
 you the result is what you meant.
 
-## Required scopes
+## Scopes the Google Sheets tools need
 
 - `https://www.googleapis.com/auth/spreadsheets`
 - `https://www.googleapis.com/auth/drive` (for delete, which is a Drive operation)
 
-## Multiple accounts
+## Using Google Sheets on more than one account
 
 Every tool on this page takes an optional `account` argument: the email address
 of the connected Google account to act on. Omit it and the default account is
 used. Connect a personal and a work account and your agent can read from
 one and write to the other in the same turn, without you switching profiles.
 
-## Example prompts
+## Example prompts for Google Sheets
 
 - "Read the first 20 rows of my Sales Pipeline sheet and summarize the top deals"
 - "Create a new spreadsheet called 'Expense Tracker' with columns for date, category, amount, and notes"

@@ -30,6 +30,8 @@ const ROOT = path.join(process.cwd());
  * one covering the pages everybody watches. */
 const CONTENT_DIRS = ["content/blog", "content/docs", "content/changelog", "content/skills", "content/personas"];
 
+const README = "../../README.md";
+
 const COPY_FILES = [
   "src/app/page.tsx",
   "src/app/pricing/page.tsx",
@@ -45,6 +47,10 @@ const COPY_FILES = [
   // every time a page is added.
   "src/app/hosted-google-workspace-mcp/page.tsx",
   "src/lib/site-faq.ts",
+  // The repository's README: the page a stranger reads first on GitHub. It
+  // cannot read the registry, so it states no count and links the page that
+  // does.
+  README,
   ...CONTENT_DIRS.flatMap((dir) =>
     readdirSync(path.join(ROOT, dir))
       .filter((f) => f.endsWith(".md"))
@@ -86,5 +92,27 @@ describe("tool-count claims in site copy", () => {
     expect([..."48 hand-built tools".matchAll(BARE_COUNT)]).toHaveLength(1);
     expect([..."22 more tools".matchAll(BARE_COUNT)]).toHaveLength(1);
     expect([..."all 48 Google tools".matchAll(BARE_COUNT)]).toHaveLength(1);
+  });
+
+  /* The README once carried a count per connector in a table column and a
+     total in a badge, neither of which reads "N tools", so the pattern above
+     never saw them. */
+  const TABLE_COUNT = /^\|.*\|\s*\d+\s*\|/gm;
+  const BADGE_COUNT = /badge\/tools-\d/g;
+
+  it("the README states no count in a table cell or a badge, and links the page that lists every tool", () => {
+    const readme = readFileSync(path.join(ROOT, README), "utf-8");
+    expect([...readme.matchAll(TABLE_COUNT)].map((m) => m[0])).toEqual([]);
+    expect([...readme.matchAll(BADGE_COUNT)].map((m) => m[0])).toEqual([]);
+    expect(readme).toContain("https://datatorag.com/docs/tools");
+    // The connectors it does name, each with its real docs address.
+    for (const slug of ["google-workspace", "atlassian", "notion"]) expect(readme).toContain(`https://datatorag.com/docs/${slug}`);
+  });
+
+  it("those two rules can go red", () => {
+    expect([..."| Notion (`plugins/notion-mcp`) | 18 | Pages |".matchAll(TABLE_COUNT)]).toHaveLength(1);
+    expect([..."| Notion (`plugins/notion-mcp`) | Pages, databases | [docs](x) |".matchAll(TABLE_COUNT)]).toHaveLength(0);
+    expect([..."img.shields.io/badge/tools-140%2B-4f46e5".matchAll(BADGE_COUNT)]).toHaveLength(1);
+    expect([..."img.shields.io/badge/tools-full%20list-4f46e5".matchAll(BADGE_COUNT)]).toHaveLength(0);
   });
 });

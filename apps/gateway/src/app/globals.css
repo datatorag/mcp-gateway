@@ -249,6 +249,38 @@ body > iframe {
   color: var(--foreground);
 }
 
+/* A docs section's heading with the link to itself beside it
+ * (lib/docs-headings.ts). The heading keeps its own margins; the link shows
+ * on hover and on keyboard focus, and always where there is no hover. */
+.prose .docs-heading {
+  display: flex;
+  align-items: baseline;
+  gap: 0.375rem;
+}
+
+.prose .docs-heading h2,
+.prose .docs-heading h3 {
+  scroll-margin-top: 1.5rem;
+}
+
+.prose .docs-heading-link {
+  color: var(--muted-foreground);
+  text-decoration: none;
+  opacity: 0;
+  transition: opacity 150ms;
+}
+
+.prose .docs-heading:hover .docs-heading-link,
+.prose .docs-heading-link:focus-visible {
+  opacity: 1;
+}
+
+@media (hover: none) {
+  .prose .docs-heading-link {
+    opacity: 1;
+  }
+}
+
 .prose p {
   margin-top: 1.25rem;
   margin-bottom: 1.25rem;

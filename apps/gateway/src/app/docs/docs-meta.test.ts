@@ -84,13 +84,13 @@ describe("docs page descriptions", () => {
 describe("docs page addresses in metadata", () => {
   it("every docs page states its canonical, its Open Graph address and type, and the card", () => {
     const page = source("src/app/docs/[slug]/page.tsx");
-    expect(page).toMatch(/alternates: \{ canonical: url \}/);
+    expect(page).toMatch(/alternates: \{ canonical: url, /);
     expect(page).toMatch(/openGraph: \{ \.\.\.SOCIAL_OPEN_GRAPH, title, description: doc\.description, type: "article", url \}/);
     expect(page).toMatch(/const url = docUrl\(slug\);/);
     expect(docUrl("gmail")).toBe("https://datatorag.com/docs/gmail");
     for (const file of ["src/app/docs/page.tsx", "src/app/docs/tools/page.tsx"]) {
       const text = source(file);
-      expect(text, file).toMatch(/alternates: \{ canonical: PAGE_URL \}/);
+      expect(text, file).toMatch(/alternates: \{ canonical: PAGE_URL[,\s]/);
       expect(text, file).toMatch(/type: "website",\s+url: PAGE_URL,/);
     }
   });

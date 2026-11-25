@@ -7,16 +7,22 @@ import { SOCIAL_OPEN_GRAPH, SOCIAL_TWITTER } from "@/lib/social-card";
 import { JsonLd } from "@/components/json-ld";
 import { ServiceIcon, serviceFromSlug } from "@/components/service-icon";
 import { DocsCta } from "./cta";
-import { DOCS_INDEX_DESCRIPTION, DOCS_INDEX_PATH, DOCS_INDEX_SEARCH_TITLE } from "./copy";
+import {
+  DOCS_GLOSSARY,
+  DOCS_GLOSSARY_HEADING,
+  DOCS_INDEX_HEADING,
+  DOCS_INDEX_DESCRIPTION,
+  DOCS_INDEX_PATH,
+  DOCS_INDEX_SEARCH_TITLE,
+} from "./copy";
 import { ALL_TOOLS_DESCRIPTION, ALL_TOOLS_PATH, ALL_TOOLS_TITLE } from "./tools/copy";
 
 const PAGE_URL = `${SITE_URL}${DOCS_INDEX_PATH}`;
-const HEADING = "DataToRAG documentation";
 
 export const metadata: Metadata = {
   title: DOCS_INDEX_SEARCH_TITLE,
   description: DOCS_INDEX_DESCRIPTION,
-  alternates: { canonical: PAGE_URL },
+  alternates: { canonical: PAGE_URL, types: { "text/markdown": `${PAGE_URL}.md` } },
   openGraph: {
     ...SOCIAL_OPEN_GRAPH,
     title: DOCS_INDEX_SEARCH_TITLE,
@@ -62,14 +68,14 @@ export default function DocsIndexPage() {
       {/* No date: the list is read from every docs page, so no day is its own. */}
       <JsonLd
         nodes={[
-          collectionPageNode({ name: HEADING, description: DOCS_INDEX_DESCRIPTION, url: PAGE_URL }),
+          collectionPageNode({ name: DOCS_INDEX_HEADING, description: DOCS_INDEX_DESCRIPTION, url: PAGE_URL }),
           breadcrumbNode([
             { name: SITE_NAME, url: SITE_URL },
             { name: "Docs", url: PAGE_URL },
           ]),
         ]}
       />
-      <h1 className="font-display text-2xl font-bold text-foreground">{HEADING}</h1>
+      <h1 className="font-display text-2xl font-bold text-foreground">{DOCS_INDEX_HEADING}</h1>
       <p className="mt-1.5 text-sm text-muted-foreground">
         DataToRAG is an MCP server that gives your agent tools for {PUBLIC_CONNECTORS_TEXT}. These pages cover how
         to connect a client and what each tool does.
@@ -98,6 +104,24 @@ export default function DocsIndexPage() {
           </ul>
         </section>
       ))}
+
+      {/* The docs' vocabulary. Each term's id is an address a page can link. */}
+      <section id="glossary" className="mt-10 scroll-mt-28">
+        <h2 className="font-display text-lg font-bold text-foreground">{DOCS_GLOSSARY_HEADING}</h2>
+        <p className="mt-1.5 text-sm text-muted-foreground">
+          Every docs page uses one name for each of these.
+        </p>
+        <dl className="mt-4 space-y-4">
+          {DOCS_GLOSSARY.map(({ id, term, definition }) => (
+            <div key={id}>
+              <dt id={id} className="scroll-mt-28 text-sm font-medium text-foreground">
+                {term}
+              </dt>
+              <dd className="mt-1 text-sm leading-relaxed text-muted-foreground">{definition}</dd>
+            </div>
+          ))}
+        </dl>
+      </section>
 
       <DocsCta variant="inline" />
     </div>

@@ -9,24 +9,24 @@ faqs:
     a: >-
       Some do. Successful calls and user errors are both counted, because a
       request that reached the API and came back with a legitimate no still ran.
-      Server errors are not counted: if the DataToRAG gateway is down, a plugin
-      crashes, an upstream API has a 5xx outage or refuses for rate, a request
+      Server errors are not counted: if the DataToRAG MCP server is down, a tool's
+      process crashes, an upstream API has a 5xx outage or refuses for rate, a request
       never reaches the service, or Google refuses for access we never asked
       you for, that is not metered.
   - q: I pay for Pro, so why are my calls counting on the free plan?
     a: >-
       You most likely have two DataToRAG accounts. DataToRAG makes one account
       per sign-in email, and each client asks you to sign in to DataToRAG once,
-      when you add the connector. Pick a different Google login in one app and
-      that app is on a second account, usually a free one, and its calls count
+      when you add the DataToRAG MCP server. Pick a different Google login in
+      one client and that client is on a second account, usually a free one, and its calls count
       there. Nothing errors until the free limit. To fix it, remove the
-      DataToRAG connector in that app, add it back, and sign in with the email
-      that holds your plan. The section "Calls counting on the wrong account" on this page has the steps for each app.
+      DataToRAG MCP server from that client, add it back, and sign in with the email
+      that holds your plan. The section "Calls counting on the wrong account" on this page has the steps for each client.
   - q: What does DataToRAG record about each tool call?
     a: >-
-      The tool name, connector, outcome, latency and response size, plus the
+      The tool name, provider, outcome, latency and response size, plus the
       connected account. Arguments and response bodies are not recorded.
-      Conversations in the in-product agent are the exception and do include your
+      Conversations with the dashboard Agent are the exception and do include your
       messages and tool results, and deleting a thread removes it.
   - q: How long is my usage data kept?
     a: >-
@@ -38,7 +38,7 @@ faqs:
     a: >-
       On the dashboard, yes. Dashboard API requests are limited to 120 per minute
       per user, and going over returns a 429 with a Retry-After header saying how
-      long to wait. Tool calls through the DataToRAG MCP endpoint are not limited
+      long to wait. Tool calls through the DataToRAG MCP server are not limited
       by that; it applies only to the dashboard's own read APIs.
   - q: Can other people see my usage data?
     a: >-
@@ -51,16 +51,16 @@ faqs:
       The DataToRAG usage dashboard shows your plan with a link to Billing, and
       a range toggle of 24h, 7d, 30d, or 90d. Below those are summary cards for
       total calls this month, success rate and
-      slow-end latency; call volume over time; your most-called tools; a by-connector
-      breakdown across Google Workspace, Atlassian, Notion and anything else
+      slow-end latency; call volume over time; your most-called tools; a
+      breakdown by provider across Google Workspace, Atlassian, Notion and anything else
       connected; a per-tool table you can click into for the last 50 calls of a
       single tool; agent sessions with their runs, steps, tokens, and cost; and
       recent activity.
 ---
 
-Every tool call your AI agent makes through DataToRAG is logged to your personal usage dashboard at [datatorag.com/dashboard/usage](https://datatorag.com/dashboard/usage). You can see what ran, how fast it was, and where errors are happening.
+DataToRAG is an MCP server, and every tool call your agent makes through it is logged to your personal usage dashboard at [datatorag.com/dashboard/usage](https://datatorag.com/dashboard/usage). You can see what ran, how fast it was, and where errors are happening.
 
-## What you see
+## What the usage dashboard shows
 
 From top to bottom, the dashboard shows:
 
@@ -76,19 +76,19 @@ From top to bottom, the dashboard shows:
 
 The drill-down page shows the last 50 calls for a single tool: when it ran, the status, latency, and any error message.
 
-## What gets logged
+## What is logged for a tool call
 
-For every tool call we record the tool name, connector, outcome (success / user error / server error), latency, and response size. We log when a call happened but not what it did, and arguments and responses are never stored.
+For every tool call we record the tool name, provider, outcome (success / user error / server error), latency, and response size. We log when a call happened but not what it did, and arguments and responses are never stored.
 
 If a call fails, we store the error message the upstream service returned, as received and capped at 4,000 characters, so the reason a call failed is actually readable. That row is visible only to you, and it can quote your own data. Separately, before any error message is sent to our analytics provider it runs through a redactor that strips emails, Google Drive IDs, and long quoted strings.
 
-## What counts
+## Which tool calls are counted
 
 Not every call is counted the same way:
 
 - **Successful calls**: counted. Your agent asked Gmail to search, Gmail returned results, you got what you wanted.
 - **User errors**: counted. You asked for a message that doesn't exist, a query with bad JQL, a file you don't have access to. The request reached the API and came back with a legitimate "no."
-- **Server errors**: *not* counted. If our gateway is down, a plugin crashes, an upstream API has a 5xx outage or refuses for rate, or a request never reaches the service, that's not your problem and we don't meter it. The same goes for a Google refusal for access we never asked you for, when you granted everything we did ask for.
+- **Server errors**: *not* counted. If the DataToRAG MCP server is down, a tool's process crashes, an upstream API has a 5xx outage or refuses for rate, or a request never reaches the service, that's not your problem and we don't meter it. The same goes for a Google refusal for access we never asked you for, when you granted everything we did ask for.
 - **Calls refused for a missing connection**: *not* counted. That covers a service you have not connected, an `account` that is not one of yours, an account that needs reconnecting, and a Google service you did not grant on the consent screen.
 - **DataToRAG's own tools**: *not* counted. `connect`, `list_connected_accounts`, and the `skills_` tools are free to call. The two exceptions are `file_download_link` and `file_upload_link`: making a link counts as one call.
 
@@ -96,7 +96,7 @@ Calls you make from the dashboard are counted under the same rules as calls from
 
 A read that Google refuses for too many requests at once is tried again inside the same call. However many attempts that takes, it is one call here: one row, counted once.
 
-## Your plan, payment method and invoices
+## Where to find your plan, payment method, and invoices
 
 These live on the Billing page, [datatorag.com/dashboard/billing](https://datatorag.com/dashboard/billing), which is Billing in the dashboard's left rail.
 
@@ -111,24 +111,24 @@ The meters on Billing count against your allowance. The Usage page counts every 
 
 ## Calls counting on the wrong account
 
-The symptom: you pay for Pro, and an app tells you the free-plan limit is reached, or your usage dashboard looks emptier than it should. The usual cause is two DataToRAG accounts.
+The symptom: you pay for Pro, and a client tells you the free-plan limit is reached, or your usage dashboard looks emptier than it should. The usual cause is two DataToRAG accounts.
 
-DataToRAG makes one account per sign-in email. Each client asks you to sign in to DataToRAG once, when you add the connector. If you picked a different Google login in one app than the one that holds your plan, that app is on a second account, usually a free one, and every call it makes counts there.
+DataToRAG makes one account per sign-in email. Each client asks you to sign in to DataToRAG once, when you add the DataToRAG MCP server. If you picked a different Google login in one client than the one that holds your plan, that client is on a second account, usually a free one, and every call it makes counts there.
 
 **How to tell.** There is no setting inside the client that shows which DataToRAG login it uses, so check from the dashboard:
 
 1. Sign in at [datatorag.com/dashboard](https://datatorag.com/dashboard). Open the account menu at the bottom of the left rail; the email you are signed in with is shown inside it. The rail shows your avatar, and your name when it is expanded; both can be the same on two accounts. Billing shows that account's plan.
-2. Make one tool call from the app you are checking, for example "search my email for invoices".
-3. Open Usage. If the call is there, the app is on this account. If it is not, sign out, sign in with your other Google login, and look again. The account where the call appears is the one that app uses.
+2. Make one tool call from the client you are checking, for example "search my email for invoices".
+3. Open Usage. If the call is there, the client is on this account. If it is not, sign out, sign in with your other Google login, and look again. The account where the call appears is the one that client uses.
 
-If the app's call is refused with a message that the monthly free-plan limit is reached, that already answers it: the app is on a free account.
+If the client's call is refused with a message that the monthly free-plan limit is reached, that already answers it: the client is on a free account.
 
-**The fix, per app.** Four steps, in the app that is on the wrong account:
+**The fix, per client.** Four steps, in the client that is on the wrong account:
 
-1. Remove the DataToRAG connector.
+1. Remove the DataToRAG MCP server.
 2. Add it back, with the same URL, `https://datatorag.com/mcp`.
 3. When Google's account chooser appears, sign in with the email that holds your plan.
-4. If DataToRAG asks whether to allow the app, check it is the app you just added and click Approve.
+4. If DataToRAG asks whether to allow the client, check it is the client you just added and click Approve.
 
 In Claude on the web and Claude Desktop, go to Customize, then Connectors, open the menu next to DataToRAG and choose Remove, then add it again as a custom connector the way the [setup guide](/docs/getting-started) shows. In Claude Code:
 
@@ -139,24 +139,24 @@ claude mcp add --transport http datatorag https://datatorag.com/mcp
 
 Then run `/mcp` inside Claude Code and sign in when it sends you to the browser. Use the name you gave the server if it is not `datatorag`. Removing the server also deletes its saved sign-in, so Claude Code asks you to sign in again.
 
-**Re-adding the connector is the whole fix.** The unused account can simply be left alone. If you do disconnect your Google account under the login you are leaving, that only removes it for that login: the same account connected under your other login keeps working.
+**Re-adding the DataToRAG MCP server is the whole fix.** The unused account can simply be left alone. If you do disconnect your Google account under the login you are leaving, that only removes it for that login: the same account connected under your other login keeps working.
 
 Calls already made under the other account stay in that account's usage history. They are not moved.
 
-## Retention
+## How long usage records are kept
 
 Raw events are kept for 90 days. After that they're replaced by daily rollups: one row per day per tool with call count, error count, and latency percentiles. The rollup job runs every night at 02:00 UTC.
 
 This means you can always see the shape of your usage going back, but we're not holding onto per-call detail forever.
 
-## Rate limits
+## Rate limits on the dashboard
 
-Dashboard API requests are limited to 120 per minute per user. If you hit that, you'll get a 429 with a `Retry-After` header telling you how long to wait. Tool calls through the MCP endpoint aren't limited by this; the rate limit only applies to the dashboard's own read APIs.
+Dashboard API requests are limited to 120 per minute per user. If you hit that, you'll get a 429 with a `Retry-After` header telling you how long to wait. Tool calls through the DataToRAG MCP server aren't limited by this; the rate limit only applies to the dashboard's own read APIs.
 
-## Privacy
+## Privacy of your usage records
 
 - Usage records store the tool name, connected account, outcome, timing and request/response sizes. They do not store request arguments or response bodies.
 - Error messages are stored as received, capped at 4,000 characters, so you can debug them, in a row only you can see, and are redacted before they reach our analytics provider
 - Every row is scoped to your user ID, other users cannot see your data
-- Conversations in the in-product agent are stored separately and DO include your messages and tool results. Delete a thread to remove it.
+- Conversations with the dashboard Agent are stored separately and DO include your messages and tool results. Delete a thread to remove it.
 - To delete your account and everything with it, email support@datatorag.com

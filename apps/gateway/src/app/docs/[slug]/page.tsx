@@ -1,7 +1,8 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import Link from "next/link";
-import { docSchemaNodes, docUrl, getAllDocs, getDocBySlug, getDocNeighbors } from "@/lib/docs";
+import { DOC_SETUP_MARKER, docSchemaNodes, docUrl, getAllDocs, getDocBySlug, getDocNeighbors } from "@/lib/docs";
+import { markdownUrl } from "@/lib/markdown-copies";
 import { SOCIAL_OPEN_GRAPH, SOCIAL_TWITTER } from "@/lib/social-card";
 import { formatContentDate } from "@/lib/utils";
 import { AddToAgent } from "@/components/add-to-agent";
@@ -17,13 +18,6 @@ import { getConnector } from "@/lib/docs-connectors";
 function connectorTitleFor(doc: { connector: string | null; slug: string }): string | undefined {
   return (getConnector(doc.connector ?? "") ?? getConnector(doc.slug))?.title;
 }
-
-// A doc's markdown can place `<!--setup-instructions-->` on its own line to
-// render the "Add to your agent" block (the one client picker and step the
-// dashboard and the site render too, SCRUM-24, SCRUM-503) at that exact
-// spot. marked passes HTML comments through untouched, so the
-// marker survives into doc.html for us to split on.
-const SETUP_MARKER = "<!--setup-instructions-->";
 
 interface Props {
   params: Promise<{ slug: string }>;
@@ -45,7 +39,9 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   return {
     title,
     description: doc.description,
-    alternates: { canonical: url },
+    // The page stays the canonical address; its Markdown copy is offered as
+    // another form of it, for a reader that is a program.
+    alternates: { canonical: url, types: { "text/markdown": markdownUrl(`/docs/${slug}`) } },
     openGraph: { ...SOCIAL_OPEN_GRAPH, title, description: doc.description, type: "article", url },
     twitter: { ...SOCIAL_TWITTER, title, description: doc.description },
   };
@@ -59,7 +55,7 @@ export default async function DocPage({ params }: Props) {
   const { prev, next } = getDocNeighbors(slug);
 
   // Without the marker, split returns [wholeDoc] and `after` is undefined.
-  const [before, after] = doc.html.split(SETUP_MARKER);
+  const [before, after] = doc.html.split(DOC_SETUP_MARKER);
 
   return (
     <div>

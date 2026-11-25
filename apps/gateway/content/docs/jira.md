@@ -42,9 +42,9 @@ faqs:
       granular scopes instead.
 ---
 
-The Jira tools let your AI agent search, create, update, and move issues through their workflow, plus add, edit and delete comments, log and list time spent, link issues to each other, look up an attachment's details, and add a file as an attachment: from another connected service, a file your agent already holds, or a file you send from your computer through an upload link.
+DataToRAG is an MCP server whose Jira tools let an agent search, create, update, and move issues through their workflow, plus add, edit and delete comments, log and list time spent, link issues to each other, look up an attachment's details, and add a file as an attachment: from another connected service, a file your agent already holds, or a file you send from your computer through an upload link.
 
-## Available operations
+## Jira tools
 
 | Tool | Description |
 |------|-------------|
@@ -68,11 +68,11 @@ The Jira tools let your AI agent search, create, update, and move issues through
 | `jira_search_users` | Search users by name, username, or email. Returns display names and account IDs |
 | `jira_delete_issue` | Permanently delete an issue. See the warning below before using it |
 
-## Required scopes
+## Scopes the Jira tools need
 
 - `read:jira-work`, `write:jira-work`, `read:jira-user`
 
-## Deleting an issue
+## Deleting a Jira issue
 
 `jira_delete_issue` cannot be undone through the API. Deleted issues do not go
 to a trash or an archive, and Jira does not reuse the key, so every link,
@@ -85,7 +85,7 @@ If you do delete: an issue with subtasks is rejected outright unless
 `delete_subtasks` is true, and passing that destroys the subtasks along with
 the parent. Linked issues are not deleted, only subtasks.
 
-## Multiple accounts
+## Using Jira on more than one account
 
 Every tool on this page takes an optional `account` argument: the email address
 of the connected Atlassian account to act on. Omit it and the default account
@@ -93,7 +93,7 @@ is used. Connect more than one Atlassian account and a single request can reach
 whichever one the work belongs to. An account that can reach several sites acts
 on the first site Atlassian lists for it.
 
-## Example prompts
+## Example prompts for Jira
 
 - "Find all Jira tickets assigned to me that are in progress, sorted by priority"
 - "Create a bug ticket in PROJ from the error in this email with steps to reproduce"

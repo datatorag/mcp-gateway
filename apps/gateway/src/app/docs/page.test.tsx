@@ -6,6 +6,7 @@ vi.mock("next/navigation", () => ({ usePathname: () => "/docs" }));
 
 const { default: DocsIndexPage, metadata } = await import("./page");
 const { getAllDocs, getDocsSequence } = await import("@/lib/docs");
+const { DOCS_GLOSSARY } = await import("./copy");
 
 const html = renderToStaticMarkup(<DocsIndexPage />);
 
@@ -36,6 +37,35 @@ describe("the docs index", () => {
     expect(description.length).toBeGreaterThanOrEqual(120);
     expect(description.length).toBeLessThanOrEqual(160);
     expect(metadata.alternates?.canonical).toBe("https://datatorag.com/docs");
+  });
+
+  /* The docs' vocabulary: one name for each thing, written once here and
+     used on every docs page. Each term has an id so a page can link it. */
+  it("renders the glossary as a section, each term under an id of its own", () => {
+    expect(DOCS_GLOSSARY.length).toBeGreaterThanOrEqual(6);
+    expect(DOCS_GLOSSARY.length).toBeLessThanOrEqual(10);
+    expect(html).toMatch(/<section[^>]*id="glossary"[^>]*>\s*<h2/);
+    const ids = DOCS_GLOSSARY.map((entry) => entry.id);
+    expect(new Set(ids).size).toBe(ids.length);
+    for (const entry of DOCS_GLOSSARY) {
+      expect(entry.id, entry.term).toMatch(/^term-[a-z]+(-[a-z]+)*$/);
+      expect(html.split(`id="${entry.id}"`), entry.term).toHaveLength(2);
+      expect(html, entry.term).toContain(`<dt id="${entry.id}"`);
+      expect(entry.definition, entry.term).toMatch(/\.$/);
+    }
+  });
+
+  it("names the product, the server, the client, a connected account, and the dashboard Agent", () => {
+    const terms = DOCS_GLOSSARY.map((entry) => entry.term);
+    for (const term of ["DataToRAG", "DataToRAG MCP server", "Client", "Connected account", "Dashboard Agent"]) {
+      expect(terms).toContain(term);
+    }
+  });
+
+  it("keeps the glossary to the vocabulary it sets", () => {
+    for (const entry of DOCS_GLOSSARY) {
+      expect(entry.definition, entry.term).not.toMatch(/AI agent|AI assistant|gateway|\u2014|\u2013/i);
+    }
   });
 
   it("has no docs page whose address the all-tools page would shadow", () => {

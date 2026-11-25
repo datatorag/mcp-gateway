@@ -34,9 +34,9 @@ faqs:
       a page with its replies, its body content and version info.
 ---
 
-The Confluence tools let your AI agent search space content, read and author pages, read and add comments, and look up an attachment's details.
+DataToRAG is an MCP server whose Confluence tools let an agent search space content, read and author pages, read and add comments, and look up an attachment's details.
 
-## Available operations
+## Confluence tools
 
 | Tool | Description |
 |------|-------------|
@@ -50,7 +50,7 @@ The Confluence tools let your AI agent search space content, read and author pag
 | `confluence_add_comment` | Add a plain-text comment to a page: a footer comment, an inline comment anchored to text on the page with `inline_text`, or a reply to a footer or inline comment with `parent_comment_id` |
 | `confluence_get_attachment` | Get metadata for a page attachment by filename |
 
-## Required scopes
+## Scopes the Confluence tools need
 
 Granular scopes, not classic ones: every Confluence tool except search calls
 the v2 API, which rejects a classic grant with `scope does not match`.
@@ -60,7 +60,7 @@ the v2 API, which rejects a classic grant with `scope does not match`.
 - `read:comment:confluence`, `write:comment:confluence`
 - `read:attachment:confluence`, `search:confluence`
 
-## Multiple accounts
+## Using Confluence on more than one account
 
 Every tool on this page takes an optional `account` argument: the email address
 of the connected Atlassian account to act on. Omit it and the default account
@@ -68,7 +68,7 @@ is used. Connect more than one Atlassian account and a single request can reach
 whichever one the work belongs to. An account that can reach several sites acts
 on the first site Atlassian lists for it.
 
-## Example prompts
+## Example prompts for Confluence
 
 - "Read the sprint retro Confluence page and summarize the top action items"
 - "Search Confluence for our on-call runbook and pull out the escalation steps"

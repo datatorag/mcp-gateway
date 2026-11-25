@@ -16,13 +16,14 @@ faqs:
       Not when you run it from the Skills page of the DataToRAG dashboard. An
       ordinary conversation with the dashboard Agent pauses before a change and
       waits for your approval. A skill run does not pause, so clicking Run is
-      the approval. Of the connector tools, the run can call only the ones its
-      skill names.
+      the approval. Of the Google Workspace, Atlassian, and Notion tools, the run can call
+      only the ones its skill names.
       In your own client, the client's approval settings apply.
   - q: What does a skill run count as against my plan?
     a: >-
       A run from the DataToRAG dashboard counts as one agent run, and each
-      connector tool call it makes counts as a tool call. A skill you load into
+      call it makes to a Google Workspace, Atlassian, or Notion tool counts as
+      a tool call. A skill you load into
       your own client uses no agent run, only the tool calls it makes.
       [Plans and limits](/docs/plans-and-limits) has the numbers for each plan.
   - q: Can I edit a published skill?
@@ -51,10 +52,10 @@ You do not need an account to read the catalog. To use a skill, you need DataToR
 2. Each card shows the services the skill needs and whether you have them connected.
 3. Click **Run**. The Agent page opens and the run starts. If a service is missing, the button reads **Connect and run**, and you connect the service before the run starts.
 
-A run from this page differs from an ordinary Agent conversation in three ways:
+A run from this page differs from an ordinary dashboard Agent conversation in three ways:
 
-- **It does not pause for approval.** In an ordinary conversation the Agent stops before anything that changes your data and waits for you. A skill run does not, so read what the skill does before you click Run.
-- **It gets a short list of tools.** The run can call the connector tools its skill names and the gateway's read-only tools. It cannot create download or upload links, and it cannot create, change, or delete skills.
+- **It does not pause for approval.** In an ordinary conversation the dashboard Agent stops before anything that changes your data and waits for you. A skill run does not, so read what the skill does before you click Run.
+- **It gets a short list of tools.** The run can call the Google Workspace, Atlassian, and Notion tools its skill names and the read-only built-in tools. It cannot create download or upload links, and it cannot create, change, or delete skills.
 - **It has its own step limit.** A skill run can take up to {{run.steps.skill}} steps. [Plans and limits](/docs/plans-and-limits) explains the limits on a single run.
 
 Some skills work on several accounts. They still make one call per account. [Using several accounts](/docs/multiple-accounts) explains how a call picks its account.
@@ -97,8 +98,8 @@ Your agent can do the same from a conversation. DataToRAG serves six skills tool
 
 ## What a skill run counts as
 
-- **A run from the dashboard** counts as one agent run. Free includes {{plan.free.runs}} agent and skill runs per period and Pro includes {{plan.pro.runs}}. Each connector tool call the run makes also counts as a tool call.
-- **A skill in your own client** uses no agent run. The connector tool calls it makes count as tool calls, like any other.
+- **A run from the dashboard** counts as one agent run. Free includes {{plan.free.runs}} agent and skill runs per period and Pro includes {{plan.pro.runs}}. Each call the run makes to a Google Workspace, Atlassian, or Notion tool also counts as a tool call.
+- **A skill in your own client** uses no agent run. The calls it makes to Google Workspace, Atlassian, and Notion tools count as tool calls, like any other.
 - **The skills tools themselves** do not count as tool calls.
 
 When you have no runs left, a new run does not start until the allowance resets. [Plans and limits](/docs/plans-and-limits) says when that is.

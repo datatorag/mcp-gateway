@@ -16,6 +16,9 @@ import { splitDemoMarkers } from "@/lib/demo-embed";
 import { DemoEmbed, EMBEDDABLE_DEMO_IDS } from "@/components/demo/demo-embed";
 import { signInHref } from "@/lib/sign-in";
 
+/** Where a post's edit note sits on its page, for the link beside the date. */
+const EDIT_NOTE_ID = "edit-note";
+
 interface Props {
   params: Promise<{ slug: string }>;
 }
@@ -217,25 +220,20 @@ export default async function BlogArticlePage({ params }: Props) {
                 </time>
                 <span className="text-border">·</span>
                 <span className="text-muted-foreground">{post.readTime}</span>
+                {/* The date line says the post was edited and links to what
+                    changed; the note itself is after the body, so a post
+                    opens with its own words. */}
+                {post.updated && post.updatedNote && (
+                  <>
+                    <span className="text-border">·</span>
+                    <a href={`#${EDIT_NOTE_ID}`} className="text-muted-foreground underline underline-offset-2 hover:text-foreground">
+                      Edited <time dateTime={post.updated}>{formatContentDate(post.updated)}</time>
+                    </a>
+                  </>
+                )}
               </div>
             </div>
           </header>
-
-          {/* Visible disclosure only when there is something to disclose:
-              `updated` alone still feeds dateModified/modifiedTime for
-              trivial edits, while `updatedNote` marks a correction worth a
-              reader-facing note. Edit notes mean less when spent on nothing. */}
-          {post.updated && post.updatedNote && (
-            <div className="mt-6 rounded-xl border border-border bg-secondary/50 px-4 py-3 text-sm text-muted-foreground">
-              <span className="font-medium text-foreground">
-                Edited{" "}
-                <time dateTime={post.updated}>
-                  {formatContentDate(post.updated)}
-                </time>
-              </span>
-              {post.updatedNote && <>: {post.updatedNote}</>}
-            </div>
-          )}
 
           <PostCover post={post} />
 
@@ -253,6 +251,28 @@ export default async function BlogArticlePage({ params }: Props) {
                 key={`html-${i}`}
               />
             )
+          )}
+
+          {/* Visible disclosure only when there is something to disclose:
+              `updated` alone still feeds dateModified/modifiedTime for
+              trivial edits, while `updatedNote` marks a correction worth a
+              reader-facing note. Edit notes mean less when spent on nothing.
+              It sits at the end of the body, not above it: above, the note
+              was the first thing a reader, or a program quoting the post,
+              met. */}
+          {post.updated && post.updatedNote && (
+            <div
+              id={EDIT_NOTE_ID}
+              className="mt-10 scroll-mt-28 rounded-xl border border-border bg-secondary/50 px-4 py-3 text-sm text-muted-foreground"
+            >
+              <span className="font-medium text-foreground">
+                Edited{" "}
+                <time dateTime={post.updated}>
+                  {formatContentDate(post.updated)}
+                </time>
+              </span>
+              : {post.updatedNote}
+            </div>
           )}
 
           {post.tags.length > 0 && (

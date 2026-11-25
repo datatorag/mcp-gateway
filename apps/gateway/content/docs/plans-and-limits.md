@@ -13,7 +13,8 @@ faqs:
       runs.
   - q: What happens when I reach the free tool-call limit?
     a: >-
-      The next connector tool call is refused before it runs. The answer says
+      The next call to a Google Workspace, Atlassian, or Notion tool is refused
+      before it runs. The answer says
       the monthly free-plan limit is reached and that the allowance resets at
       the start of your next period. DataToRAG does not count the refused call,
       and the call never reaches Google, Atlassian, or Notion.
@@ -30,7 +31,7 @@ faqs:
       month. The Billing page in the DataToRAG dashboard shows the date.
   - q: Do tool calls from my own client use up agent runs?
     a: >-
-      No. Agent runs are used only by the Agent and by skill runs in the
+      No. Agent runs are used only by the dashboard Agent and by skill runs in the
       DataToRAG dashboard. A call from Claude, ChatGPT, Cursor, or another MCP
       client counts as a tool call only.
 ---
@@ -57,16 +58,16 @@ A call to a Google Workspace, Atlassian, or Notion tool counts when it succeeds,
 
 Calls from the dashboard Agent count the same way as calls from your own client.
 
-Tools the gateway answers itself do not count. These include `list_connected_accounts`, `connect`, and the `skills_*` tools. The two file link tools, `file_download_link` and `file_upload_link`, are the exception and do count.
+Built-in tools, the ones the DataToRAG MCP server answers itself, do not count. These include `list_connected_accounts`, `connect`, and the `skills_*` tools. The two file link tools, `file_download_link` and `file_upload_link`, are the exception and do count.
 
 ## When Free reaches its tool-call limit
 
-The check happens before a call runs. Once you have used {{plan.free.calls}} tool calls in the period, the next connector tool call is refused with this message:
+The check happens before a call runs. Once you have used {{plan.free.calls}} tool calls in the period, the next call to a Google Workspace, Atlassian, or Notion tool is refused with this message:
 
 > Monthly free-plan limit reached ({{plan.free.calls}} tool calls). Your allowance resets at the start of your next period, or upgrade to Pro from the dashboard for a higher allowance.
 
 - The refused call is not sent to the provider and is not counted.
-- The gateway's own tools that do not count, such as `list_connected_accounts`, keep answering. The two file link tools count, so they are refused as well.
+- The built-in tools that do not count, such as `list_connected_accounts`, keep answering. The two file link tools count, so they are refused as well.
 - The plan is read on every call. After you upgrade, the next call is checked against Pro.
 
 ## When Pro passes its included tool calls
@@ -75,7 +76,7 @@ Nothing is refused. {{plan.pro.calls}} is the number the plan includes and where
 
 ## When you run out of agent and skill runs
 
-A run is one message you send to the [Agent](https://datatorag.com/dashboard/agent) in the dashboard, or one skill run started there. Approving a change the Agent paused on does not use another run.
+A run is one message you send to the [dashboard Agent](https://datatorag.com/dashboard/agent), or one skill run started there. Approving a change the dashboard Agent paused on does not use another run.
 
 Free includes {{plan.free.runs}} runs per period and Pro includes {{plan.pro.runs}}. At that number, on either plan, a new run does not start until the allowance resets. A run that is already going is not cut off.
 
@@ -87,8 +88,8 @@ Runs are a dashboard allowance only. Work your agent does in Claude, ChatGPT, Cu
 
 Two limits apply to each run in the dashboard, on every plan.
 
-- **Steps.** A step is one call to the model, and one step can make several tool calls. A message to the Agent can take up to {{run.steps.chat}} steps and a skill run up to {{run.steps.skill}}. At the limit the run stops and says it reached its step limit.
-- **Size.** A run also has a size limit, which is the same on every plan. The step that reaches it finishes normally, and the run stops before the next step starts. The Agent says the run reached its size limit.
+- **Steps.** A step is one call to the model, and one step can make several tool calls. A message to the dashboard Agent can take up to {{run.steps.chat}} steps and a skill run up to {{run.steps.skill}}. At the limit the run stops and says it reached its step limit.
+- **Size.** A run also has a size limit, which is the same on every plan. The step that reaches it finishes normally, and the run stops before the next step starts. The dashboard Agent says the run reached its size limit.
 
 In both cases, everything the run already finished is saved. Nothing is cut off in the middle of a step.
 

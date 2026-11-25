@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { db } from "@/lib/db";
 import { loadAllTools, type ToolGroup } from "@/lib/all-tools";
+import { markdownUrl } from "@/lib/markdown-copies";
 import { SITE_NAME, SITE_URL, breadcrumbNode, collectionPageNode } from "@/lib/site-schema";
 import { SOCIAL_OPEN_GRAPH, SOCIAL_TWITTER } from "@/lib/social-card";
 import { JsonLd } from "@/components/json-ld";
@@ -17,7 +18,7 @@ const PAGE_URL = `${SITE_URL}${ALL_TOOLS_PATH}`;
 export const metadata: Metadata = {
   title: ALL_TOOLS_SEARCH_TITLE,
   description: ALL_TOOLS_DESCRIPTION,
-  alternates: { canonical: PAGE_URL },
+  alternates: { canonical: PAGE_URL, types: { "text/markdown": markdownUrl(ALL_TOOLS_PATH) } },
   openGraph: {
     ...SOCIAL_OPEN_GRAPH,
     title: ALL_TOOLS_SEARCH_TITLE,
