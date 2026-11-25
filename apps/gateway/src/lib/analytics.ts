@@ -80,6 +80,9 @@ export const EVENTS = {
    * call to action) and `item` (the item's id in `lib/site-nav.ts`). */
   NAV_ITEM_CLICKED: "nav_item_clicked",
   SKILL_COPIED: "skill_copied",
+  /** SCRUM-514: the prompt on a use case's page was copied. Prop:
+   * `use_case` (the record's slug). */
+  USE_CASE_PROMPT_COPIED: "use_case_prompt_copied",
   /** SCRUM-223: the campaign funnel, one event per hop, every one carrying
    * `skill` (the slug). The public page's CTA, the dashboard list's Run, and
    * the run starting in the agent. The login, connect and agent_run events

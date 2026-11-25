@@ -39,6 +39,7 @@ export type NavIconName =
   | "activity"
   | "user"
   | "library"
+  | "play"
   | "newspaper"
   | "history"
   | "book"
@@ -198,6 +199,7 @@ export function buildSiteNav(personas: readonly NavPersona[]): SiteNav {
                 })
               ),
               { id: "all-skills", label: "All skills", href: "/skills", icon: icon("library") },
+              { id: "use-cases", label: "Use cases", href: "/use-cases", icon: icon("play") },
             ],
           },
         ],

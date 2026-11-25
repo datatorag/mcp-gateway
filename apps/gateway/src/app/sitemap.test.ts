@@ -12,6 +12,7 @@ vi.mock("@/lib/db", () => ({
 
 import sitemap from "./sitemap";
 import { SHARE_LINKS } from "@/lib/share-links";
+import { getAllUseCases } from "@/lib/use-cases";
 
 describe("sitemap", () => {
   it("never lists a share link", async () => {
@@ -25,6 +26,19 @@ describe("sitemap", () => {
     for (const slug of Object.keys(SHARE_LINKS)) {
       expect(urls).not.toContain(`https://datatorag.com/r/${slug}`);
     }
+  });
+
+  it("lists the use case list and every use case, each with its record's date (SCRUM-514)", async () => {
+    const entries = await sitemap();
+    const useCases = getAllUseCases();
+    expect(useCases.length).toBeGreaterThan(0);
+    for (const u of useCases) {
+      const entry = entries.find((e) => e.url === `https://datatorag.com/use-cases/${u.slug}`);
+      expect(entry, u.slug).toBeDefined();
+      expect((entry!.lastModified as Date).toISOString().slice(0, 10)).toBe(u.date);
+    }
+    const list = entries.find((e) => e.url === "https://datatorag.com/use-cases");
+    expect((list!.lastModified as Date).toISOString().slice(0, 10)).toBe(useCases.map((u) => u.date).sort().at(-1));
   });
 
   it("lists an active plugin's page, and never an admin-only service's (SCRUM-454)", async () => {
