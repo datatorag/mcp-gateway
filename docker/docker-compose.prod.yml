@@ -110,6 +110,14 @@ services:
     networks:
       - dtrmcp
     restart: unless-stopped
+    # The container's log is kept to five files of 10 MB (SCRUM-465). The host
+    # has no daemon-wide limit, so without this the json-file log grows until
+    # the disk is full. Applies when the container is next created.
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
 
 networks:
   dtrmcp:
