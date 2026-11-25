@@ -115,6 +115,15 @@ re-sorted by `order` independently of the top-level list. URLs stay flat
 (`/docs/gmail`, not `/docs/google-workspace/gmail`) even though the sidebar nests —
 don't add a connector prefix to a doc's own slug/filename.
 
+**Previous and Next follow the sidebar, not `order` alone.** `getDocsSequence()` is the
+one reading order: the general pages, then each connector's overview followed by its
+pages, built from `getTopLevelDocs()` and `getConnectorGroups()`, the same two lists the
+sidebar renders. `docs/[slug]/page.tsx` takes its links from `getDocNeighbors(slug)`.
+`order` sorts within a list only, so two pages in different lists may share a value.
+`src/lib/docs.test.ts` fails when a page is missing from the sequence (its `connector`
+names nothing in `CONNECTORS`) or appears twice. The sidebar shows a collapse control
+only for a connector that has child pages.
+
 Two docs-specific mechanisms added by SCRUM-24:
 
 - **Component embed via marker**: a doc's markdown can place `<!--setup-instructions-->`

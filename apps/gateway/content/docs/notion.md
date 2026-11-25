@@ -66,7 +66,7 @@ The `account` argument takes the email, or, when one email has several workspace
 | `notion_get_page` | Get a page: properties as plain values and content as markdown. A very large page comes back with a `truncated` flag |
 | `notion_get_database` | Get a database with its data sources and their properties |
 | `notion_query_data_source` | Query a data source with filter and sort in Notion's JSON format, choose which properties come back, and page through results with a cursor. Or run a saved view with `view_id`, which returns page ids |
-| `notion_get_comments` | Get the unresolved comments on a page |
+| `notion_get_comments` | Get the unresolved comments on a page or a block |
 | `notion_list_users` | List the people in the workspace, or pass `"me"` for the connection itself |
 | `notion_list_meeting_notes` | List your Notion AI meeting notes by date, with each note's summary, notes, and action items. The transcript only when you ask |
 
@@ -76,7 +76,7 @@ The `account` argument takes the email, or, when one email has several workspace
 
 Each note comes back with its title, the meeting's start and end, how many attended (`attendee_count`), its status, the AI summary and the notes as text, and `action_items`. Notion has no separate field for action items, so the connector collects every to-do in the summary and notes, with whether it is checked, and every list item under an "Action items" or "Next steps" heading. Notion AI writes action items as to-dos in the summary, one per item, with the person's name first.
 
-The transcript is left out unless you set `include_transcript`, and the attendees' names unless you set `include_attendees`: then each note also carries `attendees` by name, the workspace's member list is read once, up to 100 attendees it does not hold are looked up one by one, and `attendees_unnamed` counts those still without a name, such as some guests. Without it, the tool reads no user at all, which keeps a daily run cheap. The text of one answer is held to 100,000 characters by default (`max_body_chars`, up to 200,000): when a range holds more, the newest notes keep their text and the oldest come back with their title and times only, listed in `left_out`. Notion returns at most 50 notes in one answer and no cursor; `has_more` says more match, and a narrower date range reads the rest.
+The transcript is left out unless you set `include_transcript`, and the attendees' names unless you set `include_attendees`: then each note also carries `attendees` by name, the workspace's member list is read once, up to 100 attendees it does not hold are looked up one by one, and `attendees_unnamed` counts those still without a name, such as some guests. Without it, the tool reads no user at all, which keeps a daily run cheap. The text of one answer is held to 100,000 characters by default (`max_body_chars`, up to 200,000): when a range holds more, the newest notes keep their text and the oldest come back with their title and times only, listed in `left_out`. Notion returns at most 50 notes in one answer and no cursor. The tool returns 10 by default; set `limit` (up to 50) for more. `has_more` says more match, and a narrower date range reads the rest.
 
 A note that is still being transcribed or summarized comes back with its status and no summary yet: a part the note does not have yet is `null`, and a part that exists with nothing in it is an empty string. Reading meeting notes through Notion's API needs a Notion plan with AI meeting notes enabled, which is not every plan that can record them; on a workspace whose plan lacks it, the tool answers with a sentence saying so. A daily run that reads each new note asks for `since: "yesterday"`.
 
@@ -85,7 +85,7 @@ A note that is still being transcribed or summarized comes back with its status 
 | Tool | Description |
 |------|-------------|
 | `notion_create_page` | Create a page under another page or as a database row, with markdown content, plain-value properties and an optional template |
-| `notion_update_page` | Change a page's title, properties, icon or cover. `in_trash: true` moves it to the trash and `false` restores it |
+| `notion_update_page` | Change a page's title, properties, icon or cover, or apply a template. `in_trash: true` moves it to the trash and `false` restores it |
 | `notion_update_page_content` | Edit passages, replace the content, or insert new content, in markdown. Child pages and databases are not deleted unless you ask. Synced pages cannot be edited |
 | `notion_move_page` | Move a page to a new parent. Pages only |
 | `notion_create_comment` | Comment on a page or a block, or reply to a comment. Not on a text selection |

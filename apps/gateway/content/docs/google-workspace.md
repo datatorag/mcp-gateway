@@ -18,9 +18,10 @@ faqs:
       separate hookups.
   - q: Can I connect more than one Google account?
     a: >-
-      Yes. DataToRAG supports multiple Google accounts on one connection,
-      including personal, work and shared inboxes, and your AI agent can
-      either target a specific account or search across all of them.
+      Yes. DataToRAG lets you connect several Google accounts side by side,
+      including personal, work and shared inboxes. Each tool call acts on one
+      account, the one named by the account argument or the default, so your
+      agent searches several accounts by making one call for each.
   - q: Can DataToRAG send email, or only read it?
     a: >-
       It sends. DataToRAG's Gmail tools cover search, reading messages and whole
@@ -35,10 +36,11 @@ faqs:
       [Sheets](/docs/sheets) pages list every operation.
   - q: How many tools does the Google Workspace connector have?
     a: >-
-      The live count is on the [pricing page](/pricing), which reads it from the
-      registry. DataToRAG deliberately does not restate the number in its docs,
-      because a tool count written into a page is wrong the next time a tool
-      ships.
+      The [Google Workspace connector page](/tools/gws-mcp) shows the live
+      count, read from the registry, and the [pricing page](/pricing) shows the
+      live total across all connectors. DataToRAG deliberately does not restate
+      a number in its docs, because a tool count written into a page is wrong
+      the next time a tool ships.
 ---
 
 Google Workspace is DataToRAG's flagship connector. One OAuth flow gives your AI agent access to all eight core services, with multi-account support and tools tuned for token efficiency.
@@ -62,14 +64,15 @@ Google Workspace is DataToRAG's flagship connector. One OAuth flow gives your AI
 
 Sign in, open [Connections](https://datatorag.com/dashboard/connections) and click Connect on the Google Workspace card. The OAuth flow requests all required scopes in one step.
 
-You can connect multiple Google accounts, including personal, work and shared inboxes, and your AI agent can target a specific one or search across all of them.
+You can connect multiple Google accounts, including personal, work and shared inboxes. Each tool call acts on one account, the one named by the `account` argument or the default, so your agent searches several accounts by making one call for each.
 
 ## Tools
 
 Each service's page lists its operations, required scopes, and example prompts.
-The live count is on the [pricing page](/pricing), which reads it from the
-registry rather than restating it here, because a number written into a docs
-page is wrong the next time a tool ships.
+The [Google Workspace connector page](/tools/gws-mcp) shows the live count of
+its tools, and the [pricing page](/pricing) shows the live total across all
+connectors. Both read the registry. The number is not restated here, because a
+number written into a docs page is wrong the next time a tool ships.
 
 A read that Google refuses for too many requests at once is tried again inside the same call, up to three requests in all; a write is never retried. The [Gmail page](/docs/gmail) has the details.
 

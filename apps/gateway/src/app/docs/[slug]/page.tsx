@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import Link from "next/link";
-import { getAllDocs, getDocBySlug } from "@/lib/docs";
+import { getAllDocs, getDocBySlug, getDocNeighbors } from "@/lib/docs";
 import { faqPageNode } from "@/lib/site-schema";
 import { AddToAgent } from "@/components/add-to-agent";
 import { FaqSection } from "@/components/faq-section";
@@ -49,11 +49,7 @@ export default async function DocPage({ params }: Props) {
   const doc = getDocBySlug(slug);
   if (!doc) notFound();
 
-  const allDocs = getAllDocs();
-  const currentIndex = allDocs.findIndex((d) => d.slug === slug);
-  const prev = currentIndex > 0 ? allDocs[currentIndex - 1] : null;
-  const next =
-    currentIndex < allDocs.length - 1 ? allDocs[currentIndex + 1] : null;
+  const { prev, next } = getDocNeighbors(slug);
 
   // Without the marker, split returns [wholeDoc] and `after` is undefined.
   const [before, after] = doc.html.split(SETUP_MARKER);

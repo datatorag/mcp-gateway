@@ -78,6 +78,7 @@ An attachment is named by its **part id**, not its attachment id. Gmail issues a
 | `jira_add_attachment` | Adds the referenced file to a Jira issue as an attachment |
 | `file_download_link` | Makes a link that saves the referenced file to your own computer, once |
 | `drive_upload_file` | Puts the referenced file in Google Drive under its own name, and checks what Drive stored |
+| `notion_attach_file` | Puts the referenced file on a Notion page, at the end of the page |
 | `gmail_send`, `gmail_create_draft`, `gmail_reply`, `gmail_forward`, `gmail_update_draft` | Attach referenced files to an email, beside Drive files |
 
 ```json
@@ -170,13 +171,15 @@ The response lists every attachment: its name, how it went (attached, inline, li
 
 ## The receipt
 
-A tool that moves a file answers with a receipt, so you can check what went where:
+A tool that moves a file answers with a receipt, so you can check what went where. `jira_add_attachment` answers with:
 
 - the attachment's id, name and size as the destination reports them,
 - the SHA-256 and byte count of what was sent,
 - the issue's key, project, summary and site.
 
 Check that the issue in the receipt is the one you meant. Jira does not return a hash of what it stored, so the receipt shows that the sizes agree, not that the stored bytes were compared.
+
+`notion_attach_file` answers with the new block's id and type, the file's name, size and type, the SHA-256 and byte count of what was sent, and the page's id, title and URL. The receipt for `drive_upload_file` is under "Saving a file to Drive" below.
 
 ## Saving a file to your computer
 
@@ -259,7 +262,7 @@ A folder owned by someone else is reported in the receipt, not refused. Name the
 
 ## Where the file is
 
-The file is held in the gateway's memory only while the transfer runs, and is never written to our disks. The one exception is a file you upload, described below.
+The file is held in the gateway's memory only while the transfer runs, and is never written to our disks. A file you upload is the one held longer, also in memory, as described below.
 
 It is read from the service it lives in and sent to the service you named, inside the one call. It is not copied to Google Drive or to any other place on the way.
 
@@ -271,7 +274,7 @@ For a download link, the file is read into the gateway's memory twice, once to c
 
 ## Limits
 
-- One file per call for Jira and Drive, at most 25 MB. A larger file is refused.
+- One file per call for Jira, Drive, and Notion. At most 25 MB for Jira and Drive. At most 20 MB for Notion, and no more than the Notion workspace accepts (5 MB on a free workspace). A larger file is refused.
 - An email takes up to ten attachments, at most 25 MB together, counting Drive files and referenced files alike.
 - A `content` reference carries at most 1 MB.
 - An upload link takes one file of at most 25 MB, within ten minutes. You can have three upload links or uploaded files waiting at a time.

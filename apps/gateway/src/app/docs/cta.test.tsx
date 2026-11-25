@@ -102,6 +102,15 @@ describe("DocsCta, the surfaces SCRUM-287 leaves alone", () => {
     expect(container.textContent).toContain("Connect a service once");
   });
 
+  it("the end-of-page CTA promises 'every tool on this page' only on a connector's page", () => {
+    render({ variant: "inline", now: BEFORE, connectorTitle: "Atlassian" });
+    expect(container.textContent).toContain("every tool on this page");
+    // A general page, such as the usage page, documents no tools.
+    render({ variant: "inline", now: BEFORE });
+    expect(container.textContent).not.toContain("on this page");
+    expect(container.textContent).toContain("your agent can use it against your real data");
+  });
+
   it("the end-of-page CTA carries no promo words and keeps its own event", () => {
     render({ variant: "inline", now: BEFORE });
     expect(container.textContent).not.toContain(HEADLINE);
