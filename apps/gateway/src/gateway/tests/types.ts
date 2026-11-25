@@ -105,9 +105,6 @@ export const FIXTURE_KEYS = [
    * send guard refuses a write anywhere else; its name is read from Slack
    * by SL2, never configured. */
   "slackChannel",
-  /** The short id of a saved insight in the `posthog` project (SCRUM-471),
-   * read and never changed. */
-  "posthogInsight",
 ] as const;
 export type FixtureKey = (typeof FIXTURE_KEYS)[number];
 

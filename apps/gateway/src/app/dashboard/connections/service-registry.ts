@@ -59,10 +59,16 @@ export const PUBLIC_SERVICE_IDS: readonly string[] = CONNECTABLE_SERVICES.filter
  * `launchPluginSlug` of every entry with an `audience` (Brevo, SCRUM-468;
  * Slack, SCRUM-454). The one list the public surfaces leave out (the status
  * page's tools, the public tool counts, `/tools/<slug>` and the sitemap), so
- * another admin-only service needs no edit there. */
-export const ADMIN_AUDIENCE_PLUGIN_SLUGS: readonly string[] = CONNECTABLE_SERVICES.filter(
-  (s) => s.audience && s.launchPluginSlug
-).map((s) => s.launchPluginSlug!);
+ * another admin-only service needs no edit there.
+ *
+ * Where the vendor's own server serves such a service's tools (SCRUM-511),
+ * they are named by the vendor's prefix and not by a plugin's slug, so that
+ * prefix is in the list too: an admin-only service stays off the public
+ * surfaces whoever serves its tools. */
+export const ADMIN_AUDIENCE_PLUGIN_SLUGS: readonly string[] = [
+  ...CONNECTABLE_SERVICES.filter((s) => s.audience && s.launchPluginSlug).map((s) => s.launchPluginSlug!),
+  ...CONNECTOR_REGISTRY.flatMap((c) => ("audience" in c && "upstream" in c ? [c.upstream.slug] : [])),
+];
 
 /** The entries of `services` a surface may offer, given the launched ids
  * (`launchedServiceIds` on the server, `launchedServices` in the connections

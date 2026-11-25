@@ -46,6 +46,37 @@ export function resultJson<T = unknown>(what: string, result: ToolResult): T {
   }
 }
 
+/**
+ * The first text block of an answer, alone (SCRUM-511).
+ *
+ * For a tool whose answer is its first block and whose later blocks are not
+ * part of it: PostHog's `exec` follows a result with a notice and a
+ * conversation id, each a block of its own, so the joined text is not JSON.
+ * Throws with the tool's own words when it errored or answered no text.
+ */
+export function firstTextBlock(what: string, result: ToolResult): string {
+  if (result.isError) throw new Error(`${what} answered with an error: ${clip(resultText(result).trim())}`);
+  const first = result.content.find((c) => c.type === "text" && typeof c.text === "string");
+  const text = first?.text?.trim() ?? "";
+  if (text === "") throw new Error(`${what} answered with no text at all`);
+  return text;
+}
+
+/** That first block, parsed as a JSON object. */
+export function firstBlockJson<T = Record<string, unknown>>(what: string, result: ToolResult): T {
+  const text = firstTextBlock(what, result);
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(text);
+  } catch {
+    throw new Error(`${what} did not answer JSON in its first block: ${clip(text)}`);
+  }
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+    throw new Error(`${what} did not answer a JSON object in its first block: ${clip(text)}`);
+  }
+  return parsed as T;
+}
+
 /** Long enough to diagnose, short enough that evidence stays readable. */
 function clip(text: string): string {
   return text.length > 300 ? `${text.slice(0, 300)}...` : text;

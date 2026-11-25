@@ -1,4 +1,6 @@
 import { AddressParseError, parseAddressList } from "./address-list";
+import { parseExecCommand } from "../connectors/posthog/exec-command";
+import { vendorServed } from "../upstream-tools";
 
 /**
  * The send guard (SCRUM-303): the one place that decides whether a case may
@@ -22,7 +24,8 @@ import { AddressParseError, parseAddressList } from "./address-list";
  * Notion writes have rules of their own, at the end of this file: the
  * fixtures and what the run created, and nothing else (SCRUM-366). So do
  * Slack writes, after them: the fixture channel and the test user's own DM
- * (SCRUM-454).
+ * (SCRUM-454). A vendor's own tools come last: PostHog's `exec` is read by
+ * its command (SCRUM-511).
  */
 
 export const SUBJECT_PREFIX = "[smoke]";
@@ -210,6 +213,11 @@ const THREAD_MOVING_TOOLS = new Set(["gmail_trash_thread", "gmail_untrash_thread
  * inbox, so a run may share only with a configured mailbox, and silently. */
 const SHARING_TOOLS = new Set(["drive_share_file"]);
 
+function toolPrefix(tool: string): string {
+  const i = tool.indexOf("__");
+  return i === -1 ? "" : tool.slice(0, i);
+}
+
 function toolSuffix(tool: string): string {
   const i = tool.indexOf("__");
   return i === -1 ? tool : tool.slice(i + 2);
@@ -344,7 +352,11 @@ export async function checkSend(
 ): Promise<SendCheck> {
   const name = toolSuffix(tool);
 
-  // Before anything keyed on the bare name: Brevo's names carry no prefix.
+  // Before anything keyed on the bare name: a vendor's own tools are known
+  // by their whole name, and one with no rule is refused.
+  if (vendorServed(toolPrefix(tool))) return checkVendorTool(tool, args);
+
+  // Brevo's names carry no prefix either.
   if (tool.startsWith("brevo-mcp__")) return checkBrevo(name, args, opts.brevo, opts.readerEmail);
 
   if (name.startsWith("notion_")) return checkNotion(name, args, opts.notion, opts.runStamp ?? "");
@@ -1253,4 +1265,75 @@ function checkSlack(name: string, args: Record<string, unknown>, scope: SlackSco
     default:
       return refuse("is a Slack tool the send guard has no rule for, so it is refused in a test run");
   }
+}
+
+/* ---------------------------------------------------------------------------
+ * A VENDOR'S OWN TOOLS (SCRUM-511)
+ *
+ * A connector whose vendor serves the tools has no registry rows of ours, so
+ * nothing here can know a vendor tool as a read by its name alone. Each one
+ * a test run may call has a rule below, keyed on its whole name; any other
+ * tool under a vendor's prefix is refused, so a tool the vendor adds fails
+ * closed until it has a rule.
+ *
+ * PostHog serves ONE tool, `exec`, which runs every PostHog command, reads
+ * and writes alike. So the rule reads the command, with the same parser the
+ * gateway uses to name the call (`parseExecCommand`):
+ *
+ *  - the verbs that only describe PostHog's tools pass: help, tools, search,
+ *    info, schema;
+ *  - `call` passes only for the PostHog tools listed in
+ *    `POSTHOG_CALLABLE`, each a read, and only with no flag but `--json`
+ *    ahead of the tool's name: a flag that took a value would move where
+ *    PostHog reads the name, and the guard would have checked another word;
+ *  - a command holding `--confirm` anywhere is refused, whatever its verb:
+ *    that flag is how PostHog is told to go ahead with a change;
+ *  - a command of more than one line is refused, because only the first
+ *    line is read here;
+ *  - anything else is refused: a command that is not a string, an unknown
+ *    verb, a call of any other tool.
+ *
+ * WHAT IT CANNOT SEE: what an allowed PostHog tool does with its input. The
+ * two allowed today change nothing in PostHog; a tool joins the list only
+ * once that is known of it. A refusal never repeats the command, which can
+ * hold a query or a person's data.
+ * ------------------------------------------------------------------------- */
+
+/** The `exec` verbs that change nothing: they describe PostHog's tools. */
+const POSTHOG_READ_VERBS: ReadonlySet<string> = new Set(["help", "tools", "search", "info", "schema"]);
+
+/** The PostHog tools a test run may `call`. Every other one is refused. */
+const POSTHOG_CALLABLE: ReadonlySet<string> = new Set(["project-get", "execute-sql"]);
+
+const VENDOR_TOOL_RULES: Record<string, (args: Record<string, unknown>) => SendCheck> = {
+  posthog__exec: checkPostHogExec,
+};
+
+function checkVendorTool(tool: string, args: Record<string, unknown>): SendCheck {
+  const rule = Object.hasOwn(VENDOR_TOOL_RULES, tool) ? VENDOR_TOOL_RULES[tool] : undefined;
+  if (!rule) {
+    return { ok: false, reason: `send refused: ${tool} is a vendor's tool the send guard has no rule for, so a test run may not call it` };
+  }
+  return rule(args);
+}
+
+function checkPostHogExec(args: Record<string, unknown>): SendCheck {
+  const refuse = (why: string): SendCheck => ({ ok: false, reason: `send refused: posthog__exec ${why}` });
+  const allowed = `a test run may send only the verbs ${[...POSTHOG_READ_VERBS].join(", ")}, or a call of ${[...POSTHOG_CALLABLE].join(" or ")}`;
+
+  const command = args.command;
+  if (typeof command !== "string") return refuse(`needs its command as a string; ${allowed}`);
+  if (command.includes("--confirm")) return refuse("may not carry --confirm in a test run, whatever the command");
+  if (/[\r\n]/.test(command.trim())) return refuse("takes one command on one line in a test run");
+
+  const { verb, tool } = parseExecCommand(command);
+  if (POSTHOG_READ_VERBS.has(verb)) return { ok: true };
+  if (verb !== "call") return refuse(`was sent a verb the send guard does not know; ${allowed}`);
+
+  // The words between the verb and the tool's name, which the parser skips.
+  const flags = command.trim().split(/\s+/).slice(1);
+  const ahead = flags.slice(0, Math.max(flags.findIndex((w) => !w.startsWith("--")), 0));
+  if (ahead.some((flag) => flag !== "--json")) return refuse("may carry no flag but --json ahead of the tool it calls");
+  if (tool === undefined || !POSTHOG_CALLABLE.has(tool)) return refuse(`was sent a call of a PostHog tool that is not on its list; ${allowed}`);
+  return { ok: true };
 }
