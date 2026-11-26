@@ -45,7 +45,7 @@ costs you nothing in context.
 
 ```markdown
 ---
-name: attachments-to-drive
+name: gmail-attachments-to-drive
 description: File recurring email attachments into Drive folders
 ---
 

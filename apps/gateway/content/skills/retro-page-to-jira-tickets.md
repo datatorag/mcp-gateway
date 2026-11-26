@@ -47,7 +47,7 @@ endpoint here, so one prompt can read the page and file the issues.
 
 ```markdown
 ---
-name: retro-page-to-jira
+name: retro-page-to-jira-tickets
 description: File agreed action items from a Confluence page as Jira issues
 ---
 
@@ -109,8 +109,8 @@ can open. To give a human a link, build it from your Jira site URL and the key.
 ## Rules
 
 1. **Ask before filing.** Show the list you are about to create and what each
-   will say. Filing is cheap; unfiling is not: there is no delete in this
-   connector, so a wrong ticket is cleaned up by hand.
+   will say. Filing is cheap; unfiling is not: deleting a Jira issue cannot be
+   undone and breaks every link to it, so a wrong ticket costs more than a question.
 2. **One issue per agreed action.** Never per sentence.
 3. **Owner from the page, not guessed.** If the notes name an owner, put it in
    the description. If they do not, leave it unassigned rather than inventing

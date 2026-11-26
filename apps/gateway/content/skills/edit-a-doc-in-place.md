@@ -40,7 +40,7 @@ before you write, and knowing that they move as you go.
 
 ```markdown
 ---
-name: edit-doc-in-place
+name: edit-a-doc-in-place
 description: Make targeted edits inside an existing Google Doc
 ---
 
