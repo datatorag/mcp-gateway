@@ -17,7 +17,7 @@
  * component: there is no state left to hold.
  */
 
-import { CircleCheckIcon, CircleMinusIcon } from "lucide-react";
+import { CheckMark, MinusMark } from "@/components/static-marks";
 import { NOT_DESCRIBED, NOT_DESCRIBED_SUFFIX, type HeroGroup } from "./connector-comparison";
 
 /** Delay of the first row's reveal, and the step between rows. Every line
@@ -28,12 +28,12 @@ export const REVEAL_STEP_S = 0.035;
 function Mark({ yes }: { yes: boolean }) {
   return yes ? (
     <>
-      <CircleCheckIcon aria-hidden="true" className="inline-block size-4 text-blue-200" />
+      <CheckMark className="inline-block size-4 text-blue-200" />
       <span className="sr-only">Yes</span>
     </>
   ) : (
     <>
-      <CircleMinusIcon aria-hidden="true" className="inline-block size-4 text-white/30" />
+      <MinusMark className="inline-block size-4 text-white/30" />
       <span className="sr-only">No</span>
     </>
   );

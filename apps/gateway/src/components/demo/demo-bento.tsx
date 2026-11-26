@@ -33,7 +33,7 @@
 
 import { BUILT_IN_CHECKED_ON } from "@/lib/connector-verification";
 import Link from "next/link";
-import { CircleCheckIcon, CircleMinusIcon } from "lucide-react";
+import { CheckMark, MinusMark } from "@/components/static-marks";
 import { DemoWindow } from "./demo-section";
 import {
   DEMO_CTA_ACTION,
@@ -236,8 +236,7 @@ export function DemoBento({
                 <p
                   className={`flex items-start gap-2.5 text-muted-foreground ${w.problem}`}
                 >
-                  <CircleMinusIcon
-                    aria-hidden="true"
+                  <MinusMark
                     className={`shrink-0 text-muted-foreground/60 ${w.icon} ${w.iconTop}`}
                   />
                   <span>{cell.problem}</span>
@@ -245,8 +244,7 @@ export function DemoBento({
                 <p
                   className={`mt-3 flex items-start gap-2.5 text-foreground ${w.solution}`}
                 >
-                  <CircleCheckIcon
-                    aria-hidden="true"
+                  <CheckMark
                     className={`shrink-0 text-primary ${w.icon} ${w.iconTop}`}
                   />
                   <span>{cell.solution}</span>

@@ -706,6 +706,17 @@ be measured.
   sections (`id="platform"`, `id="services"`, `id="integrations"` in `app/page.tsx`;
   the navbar no longer links to them since SCRUM-506, the ids still resolve) — all carry `scroll-mt-28`. Any new
   hash-link target must get `scroll-mt-28` too.
+- **A lucide icon in a server component costs twice.** lucide-react's base `Icon` is
+  a client component (`"use client"` since v1), so every icon a server component
+  renders is a client reference: the SVG in the HTML, and its props again in the
+  page's framework payload. One icon is nothing; a mark repeated down a table is
+  not (the home page drew about a hundred, ~28 KB of payload plus ~30 KB of SVG).
+  A yes/no mark that repeats in a server component is `CheckMark` / `MinusMark`
+  from `src/components/static-marks.tsx`: an empty span drawn by a CSS mask
+  (`icon-check`, `icon-minus` in `globals.css`), same shape, sized and colored by
+  the caller's classes. `static-marks.test.tsx` fails if a lucide icon returns to
+  the comparison table, the comparison hero or the demo rows. A one-off icon can
+  stay lucide.
 - **Metadata/OG shape**: export `metadata: Metadata` (static pages, e.g. changelog) or
   `generateMetadata()` (dynamic, e.g. blog `[slug]`) with `title` (suffixed
   `" | DataToRAG"`), `description`, and an `openGraph` block mirroring title/description
