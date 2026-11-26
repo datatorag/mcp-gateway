@@ -58,7 +58,8 @@ Work out Monday and Sunday of the week you are capturing. If the user did not sa
 week that just ended.
 
 **What you did:** `calendar_list_events` for that range, on every connected account (a
-subset only when the run message names one; never ask).
+subset only when the run message names one; never ask). With no run message, call
+`list_connected_accounts` and take every account that granted Calendar.
 Meetings are the skeleton of a week. Group them: recurring one-to-ones, external calls,
 anything that appears once and looks like an event rather than a habit.
 

@@ -56,7 +56,9 @@ description: Triage unread mail across every account, label and mark noise read,
 # Inbox triage
 
 This routine is shaped around multiple mailboxes. Triage every connected mailbox, in the
-order the run message lists them; a subset only when the run message names one. Never
+order the run message lists them; a subset only when the run message names one. With no run
+message, call `list_connected_accounts` and take every Gmail account, the one marked `is_default`
+first. Never
 ask which mailboxes to cover: the connected accounts are the answer, and the only thing
 that stops this routine before its first call is that nothing is connected, which you
 say plainly. Write that list at the top of the run, then do the per-account steps for
@@ -106,7 +108,8 @@ triages the wrong inbox.
    not skimmed as raw text:
 
    - **Lead with a real timestamp** so a stale run is obvious at a glance. The run
-     message carries the date and time; use it, do not guess. If a run was partial or an account failed, say so in
+     message carries the date and time; use it, do not guess. With no run message, use the current date and time
+     you were given, and say so. If a run was partial or an account failed, say so in
      that same header.
    - **A dated-items box at the top**, before anything else: every item that
      carries a date or deadline, so the first thing the digest answers is "is

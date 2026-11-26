@@ -52,14 +52,15 @@ is the point.
 ```markdown
 ---
 name: morning-brief
-description: One morning brief across every account: today's calendar with conflicts, the mail that needs you, and a task for everything you owe
+description: "One morning brief across every account: today's calendar with conflicts, the mail that needs you, and a task for everything you owe"
 ---
 
 # Morning brief
 
 This routine is shaped around multiple accounts. Cover every connected account of
 each service it needs, in the order the run message lists them; a subset only when the
-run message names one. Write that list at the top of the run, then do the per-account
+run message names one. With no run message, call `list_connected_accounts` and take every
+account that granted the service, the one marked `is_default` first. Write that list at the top of the run, then do the per-account
 steps for each one, then build ONE brief covering all of them. Never ask which accounts
 to cover or in what order: the connected accounts are the answer, and the only thing
 that stops this routine before its first call is that nothing is connected, which you
@@ -168,7 +169,8 @@ Decide three things before the first call, and write them at the top of the run:
    skimmed as raw text:
 
    - **Lead with a real timestamp** so a stale run is obvious at a glance. The run
-     message carries the date and time; use it, do not guess. If a run was partial, a search truncated, or an account failed,
+     message carries the date and time; use it, do not guess. With no run message, use the current date and time
+     you were given, and say so. If a run was partial, a search truncated, or an account failed,
      say so in that same header.
    - **Counts in the header**: found, cleared, left unread for you, and the tasks line:
      how many tasks this run created and how many in the list are still open. **Print

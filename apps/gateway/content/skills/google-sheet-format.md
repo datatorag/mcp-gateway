@@ -31,7 +31,7 @@ Use it on its own, or alongside any skill that writes a sheet.
 ```markdown
 ---
 name: google-sheet-format
-description: Format a Google Sheet so it can be read: widths, wrap, frozen header, bands and type
+description: "Format a Google Sheet so it can be read: widths, wrap, frozen header, bands and type"
 ---
 
 # Google Sheet formatting

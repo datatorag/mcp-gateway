@@ -14,6 +14,7 @@ import {
   runClockLine,
 } from "./skills";
 import { REGISTRY_TOOL_NAMES } from "@/gateway/playground/registry-snapshot";
+import matter from "gray-matter";
 
 /* SCRUM-223: the catalogue is the one source every surface reads, so the
  * pieces the deep link and the run depend on live here and are pinned here. */
@@ -343,3 +344,58 @@ describe("tasks are created in one call (SCRUM-250)", () => {
     }
   });
 });
+
+/* Each published skill's fenced block is a SKILL.md in its own right: a
+ * client that loads skills from a server reads that block alone, with no page
+ * around it and no run message in front of it. These hold the block to that.
+ * A skill that breaks one of them would load wrong, or not at all, once it is
+ * read that way. */
+describe("each published skill's SKILL.md stands on its own", () => {
+  const published = readSkillFiles();
+
+  it.each(published.map((s) => [s.slug, s] as const))(
+    "%s: its frontmatter parses, and its name is its slug",
+    (slug, skill) => {
+      let data: Record<string, unknown> = {};
+      expect(() => {
+        data = matter(skill.skillSource).data;
+      }, "the SKILL.md frontmatter does not parse as YAML (quote a value that holds a colon)").not.toThrow();
+      // The directory a skill is served from is its slug, and the skills
+      // format requires the directory and the name to agree.
+      expect(data.name, "name must equal the slug").toBe(slug);
+      expect(String(data.name)).toMatch(/^[a-z0-9]+(-[a-z0-9]+)*$/);
+      expect(String(data.name).length).toBeLessThanOrEqual(64);
+      expect(typeof data.description).toBe("string");
+      const description = String(data.description);
+      expect(description.length).toBeGreaterThan(0);
+      expect(description.length).toBeLessThanOrEqual(1024);
+    }
+  );
+
+  it.each(published.map((s) => [s.slug, s] as const))(
+    "%s: anything it takes from the run message has a fallback without one",
+    (_slug, skill) => {
+      // The run message, which our run wrapper writes, carries the account
+      // list, the order, and the date and time. A skill read on its own has
+      // none, so a skill that steers on it must say what to do instead.
+      if (!/run message/i.test(skill.skillSource)) return;
+      expect(skill.skillSource).toMatch(/with no run message/i);
+      expect(skill.skillSource).toContain("list_connected_accounts");
+    }
+  );
+
+  it.each(published.map((s) => [s.slug, s] as const))(
+    "%s: never says a connector cannot delete when it can",
+    (_slug, skill) => {
+      // A rule that rests on "there is no delete" goes stale the day a delete
+      // tool ships, and the skill then reasons from something false.
+      if (!/\bno delete\b|cannot delete|can't delete/i.test(skill.skillSource)) return;
+      const services = new Set(skill.tools.map((tool) => tool.split("_")[0]));
+      const deletes = [...REGISTRY_TOOL_NAMES].filter((name) =>
+        [...services].some((service) => name.startsWith(`${service}_delete`))
+      );
+      expect(deletes, "a delete tool ships for this skill's service").toEqual([]);
+    }
+  );
+});
+

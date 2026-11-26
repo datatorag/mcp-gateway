@@ -48,7 +48,7 @@ own company state this way.
 
 ```markdown
 ---
-name: sheet-knowledge-base
+name: sheet-as-knowledge-base
 description: Read and update a Google Sheet used as a shared knowledge base
 ---
 
