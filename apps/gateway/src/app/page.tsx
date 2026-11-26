@@ -4,7 +4,6 @@ import { publicToolCount } from "@/lib/public-tools";
 import { Navbar } from "@/components/navbar";
 import { ShaderBackground } from "@/components/shader-background";
 import { IntegrationCatalog } from "@/components/integration-catalog";
-import { CircleCheckIcon, CircleMinusIcon } from "lucide-react";
 import { CasaBadge } from "@/components/casa-badge";
 import { ConnectorComparison, heroGroups } from "@/components/connector-comparison";
 import { StartupBarOffset } from "@/components/startupbar-offset";
