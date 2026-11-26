@@ -1,4 +1,4 @@
-import { CircleCheckIcon, CircleMinusIcon } from "lucide-react";
+import { CheckMark, MinusMark } from "@/components/static-marks";
 import { BUILT_IN_CHECKED_ON, BUILT_IN_HELP_URL } from "@/lib/connector-verification";
 import { BUILT_IN_DIFFERENCE } from "@/lib/site-faq";
 
@@ -291,7 +291,7 @@ export const NOT_DESCRIBED_SUFFIX = " on Anthropic's help page";
 
 const Yes = () => (
   <>
-    <CircleCheckIcon aria-hidden="true" className="inline-block size-4 text-primary" />
+    <CheckMark className="inline-block size-4 text-primary" />
     <span className="sr-only">Yes</span>
   </>
 );
@@ -314,10 +314,7 @@ const Mark = ({ yes }: { yes: boolean }) =>
     <Yes />
   ) : (
     <>
-      <CircleMinusIcon
-        aria-hidden="true"
-        className="inline-block size-4 text-muted-foreground/40"
-      />
+      <MinusMark className="inline-block size-4 text-muted-foreground/40" />
       <span className="sr-only">No</span>
     </>
   );

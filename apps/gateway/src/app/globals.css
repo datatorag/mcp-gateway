@@ -468,3 +468,37 @@ a[data-signing-in] {
   transform-origin: 0% 50%;
   animation: clock-turn 24s linear infinite;
 }
+
+/* The yes and no marks the home page repeats (static-marks.tsx): lucide's
+   circle-check and circle-minus, same shape and stroke, drawn as a mask in
+   the text color. A lucide icon in a server component is a client component,
+   so each one cost its SVG in the HTML and its props again in the page's
+   framework payload; there are about a hundred of these on the home page.
+   vertical-align matches the SVG preflight these replaced. forced-color-adjust
+   keeps the mark visible in high-contrast mode, where a background color
+   would otherwise be replaced. */
+@utility icon-check {
+  display: inline-block;
+  vertical-align: middle;
+  background-color: currentColor;
+  forced-color-adjust: none;
+  -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='12' cy='12' r='10'/%3E%3Cpath d='m9 12 2 2 4-4'/%3E%3C/svg%3E");
+  mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='12' cy='12' r='10'/%3E%3Cpath d='m9 12 2 2 4-4'/%3E%3C/svg%3E");
+  -webkit-mask-size: 100% 100%;
+  mask-size: 100% 100%;
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+}
+
+@utility icon-minus {
+  display: inline-block;
+  vertical-align: middle;
+  background-color: currentColor;
+  forced-color-adjust: none;
+  -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='12' cy='12' r='10'/%3E%3Cpath d='M8 12h8'/%3E%3C/svg%3E");
+  mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='12' cy='12' r='10'/%3E%3Cpath d='M8 12h8'/%3E%3C/svg%3E");
+  -webkit-mask-size: 100% 100%;
+  mask-size: 100% 100%;
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+}
