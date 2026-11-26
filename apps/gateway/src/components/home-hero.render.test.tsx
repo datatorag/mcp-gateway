@@ -50,11 +50,11 @@ describe("the home hero", () => {
   it("builds the subtitle from the public connector list, with the serial comma, and sets the accounts claim in semibold", () => {
     const whole = HERO_SUBTITLE.join("");
     expect(whole).toBe(
-      "Connect Google Workspace, Atlassian, and Notion once. Your agent works across all of them, and across multiple accounts in the same request."
+      "Connect every Google, Atlassian, and Notion account once. Your agent works across all of them in the same request and moves files between them: an email attachment to Drive, a PDF onto a Jira issue."
     );
     expect(hero.body.textContent).toContain(whole);
     const strong = [...hero.querySelectorAll("p strong")];
-    expect(strong.map((s) => s.textContent)).toEqual(["multiple accounts in the same request"]);
+    expect(strong.map((s) => s.textContent)).toEqual(["across all of them in the same request"]);
     expect(strong[0].classList.contains("font-semibold")).toBe(true);
     // Full ink against the softer line around it: white on the dark hero, the page's ink on a light one.
     expect(strong[0].classList.contains("text-white")).toBe(true);
