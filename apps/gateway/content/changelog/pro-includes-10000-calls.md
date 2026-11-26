@@ -6,7 +6,7 @@ tags: ["pricing", "billing"]
 
 The Pro plan's monthly allowance of tool calls goes from 2,000 to 10,000. The price does not
 change, and neither does anything else on the plan: 100 agent runs a month, every connector and
-every tool, and an approval on every write.
+every tool, and approval before every write in the dashboard Agent.
 
 If you are already on Pro, the higher number applies to the period you are in now. There is
 nothing to do. The Billing page in the dashboard shows it against your usage.

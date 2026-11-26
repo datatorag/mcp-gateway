@@ -5,18 +5,19 @@ import { useState, type ReactNode } from "react";
 import { GithubMark, REPOSITORY_URL } from "@/components/github-mark";
 import { ToolWheel } from "@/components/ui/tool-wheel";
 import { WHEEL_TOOLS } from "@/lib/home-wheel";
-import { PUBLIC_CONNECTORS_TEXT } from "@/lib/public-integrations";
 import { cn } from "@/lib/utils";
 
 /** The headline's two sentences, each on a line of its own; the second is set in the lighter blue. */
 export const HERO_HEADLINE = ["One connection to your tools.", "Your AI agent moves the work."] as const;
-/** The subtitle in three parts; the middle one is the claim set in semibold and full ink. It holds for every public
- * service: each tool takes an `account`, a user can connect more than one account of a service, and one request can
- * make calls on several of them. */
+/** The subtitle in three parts; the middle one is the claim set in semibold and full ink. Both examples are shipped
+ * moves: an email attachment into Drive (`gmail_save_attachment_to_drive`, or `drive_upload_file` with an attachment
+ * reference), and a PDF onto a Jira issue (`jira_add_attachment` takes an attachment, a Drive file, or an upload). It
+ * holds for every public service: each tool takes an `account`, a user can connect more than one account of a
+ * service, and one request can make calls on several of them. */
 export const HERO_SUBTITLE = [
-  `Connect ${PUBLIC_CONNECTORS_TEXT} once. Your agent works across all of them, and across `,
-  "multiple accounts in the same request",
-  ".",
+  "Connect every Google, Atlassian, and Notion account once. Your agent works ",
+  "across all of them in the same request",
+  " and moves files between them: an email attachment to Drive, a PDF onto a Jira issue.",
 ] as const;
 
 /**

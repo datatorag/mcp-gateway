@@ -10,14 +10,14 @@ import { SOCIAL_OPEN_GRAPH, SOCIAL_TWITTER } from "@/lib/social-card";
 export const metadata: Metadata = {
   title: "FAQ | DataToRAG",
   description:
-    "Quick answers on setup, what the gateway can do, the approval gate on writes, Google verification, and how DataToRAG compares to Claude's native connectors.",
+    "Quick answers on setup, what the gateway can do, the Agent's approval gate, Google verification, and how DataToRAG compares to Claude's native connectors.",
   alternates: { canonical: "https://datatorag.com/faq" },
   twitter: SOCIAL_TWITTER,
   openGraph: {
     ...SOCIAL_OPEN_GRAPH,
     title: "FAQ | DataToRAG",
     description:
-      "Quick answers on setup, what the gateway can do, the approval gate on writes, Google verification, and how DataToRAG compares to Claude's native connectors.",
+      "Quick answers on setup, what the gateway can do, the Agent's approval gate, Google verification, and how DataToRAG compares to Claude's native connectors.",
     type: "website",
     url: "https://datatorag.com/faq",
   },

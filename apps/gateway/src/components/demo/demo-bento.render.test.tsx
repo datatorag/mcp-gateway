@@ -149,7 +149,7 @@ describe("the demo disclosure reaches the DOM", () => {
     );
     expect(text).not.toMatch(/Claude's \w+ connector (cannot|can't|is signed in|can make)/);
     expect(text).toContain(
-      "DataToRAG puts the email and its PDF on the issue, once you approve."
+      "DataToRAG puts the email and its PDF on the issue, once you approve it in the Agent."
     );
   });
 

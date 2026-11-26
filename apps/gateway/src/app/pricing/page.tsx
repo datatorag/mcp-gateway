@@ -43,7 +43,7 @@ const PRO_RUNS = planLimits("pro").agentRuns.toLocaleString("en-US");
 // Both allowances, like the cards and the answers below them. Naming only the
 // calls was complete until agent runs became the second dimension (SCRUM-290),
 // and the run cap is the one expected to bind first.
-const description = `Free tier with ${FREE_CALLS} tool calls and ${FREE_RUNS} agent runs a month, no card required. Pro is ${PRICE_LABEL.monthly.amount} a month or ${PRICE_LABEL.yearly.amount} a year with ${PRO_CALLS} calls and ${PRO_RUNS} runs included. Every tier gets all connectors, multi-account, and the approval gate on writes.`;
+const description = `Free tier with ${FREE_CALLS} tool calls and ${FREE_RUNS} agent runs a month, no card required. Pro is ${PRICE_LABEL.monthly.amount} a month or ${PRICE_LABEL.yearly.amount} a year with ${PRO_CALLS} calls and ${PRO_RUNS} runs included. Every tier gets all connectors, multi-account, and approval before every write in the dashboard Agent.`;
 
 export const metadata: Metadata = {
   title: "Pricing | DataToRAG",
@@ -117,7 +117,7 @@ export default async function PricingPage({
                 `${totalTools > 0 ? `${totalTools} tools` : "Tools"} across ${PUBLIC_CONNECTORS_TEXT}`,
                 "All connectors, no per-connector upsell",
                 "Multi-account",
-                "Approval gate on writes",
+                "Approval before every write in the Agent",
                 "Google-verified · CASA Tier 2",
                 "Open source",
               ].map((item) => (

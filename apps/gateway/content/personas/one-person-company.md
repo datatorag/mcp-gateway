@@ -35,8 +35,11 @@ faqs:
       guide](/docs/getting-started) is the two minute version.
   - q: Will it send mail or change my files without asking?
     a: >-
-      No. Every write is shown to you and waits for a yes, and these skills are
-      narrower again than that gate. Inbox triage labels the noise, marks it read,
+      Not in a conversation with the dashboard Agent, where every write is
+      shown to you and waits for a yes. A skill you start with Run does not
+      stop to ask, because clicking Run is the approval, and in your own client,
+      the client decides whether to ask before each call. These skills are
+      narrow on purpose. Inbox triage labels the noise, marks it read,
       and sends exactly one message, addressed to you, and nothing else: it never
       replies, forwards, deletes or archives, and it never mails anyone but you.
 ---

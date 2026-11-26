@@ -82,7 +82,7 @@ export const PUBLIC_TITLES: Readonly<Record<string, string>> = {
   "E18": "Querying a tab that does not exist is refused, naming the tabs that do",
   "E19": "Find a row in a spreadsheet by searching for one value",
   "E20": "Write text into a Google Doc however the agent names it",
-  "F1": "A change asks for your approval first, and a read does not",
+  "F1": "In the dashboard Agent, a change asks for your approval first, and a read does not",
   "F2": "Only the tools your connection allows are offered",
   "F7": "A sign-in we do not recognize is refused, with a way to sign in",
   "FD1": "Download an email to your computer through a one-time link with a checksum",
