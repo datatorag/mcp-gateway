@@ -83,7 +83,11 @@ describe("pricing page copy", () => {
     expect(page).toContain("Every tier gets the full gateway");
     expect(page).toContain("no per-connector upsell");
     expect(page).toContain("Multi-account");
-    expect(page).toContain("Approval gate");
+    // Kept, in the form that is true: the approval gate is the dashboard
+    // Agent's. A call from the reader's own client goes straight to the tool
+    // and that client decides whether to ask, so the claim names the Agent.
+    expect(page).toContain("Approval before every write in the Agent");
+    expect(page).toContain("approval before every write in the dashboard Agent");
   });
 
   /* SCRUM-290. "Runs included" with no number read as unmetered, and the

@@ -67,14 +67,19 @@ const HOME_TITLE = "DataToRAG: Google Workspace MCP for several accounts";
    `lib/tool-count-claims.test.ts` fails if a bare count comes back here.
 
    It is also the one piece of copy with a hard length budget: search results
-   truncate around 160 characters, and this is 148. An earlier version listed
+   truncate around 160 characters, and this is 157. An earlier version listed
    services to avoid naming a number, which was the right instinct in the wrong
    string — the list ran to 226 and cut off "every write asks you first", the
    differentiator the rest of the sentence exists to set up. Keep additions
    inside the budget, and check what falls off the end rather than what reads
-   well in the file. */
+   well in the file.
+
+   The last sentence names the dashboard Agent on purpose. Its approval gate is
+   real, but a call from the reader's own client (Claude, ChatGPT, Cursor) goes
+   straight to the tool, and that client decides whether to ask. "Every write
+   asks you first" with no subject claimed the gate for both paths. */
 const HOME_DESCRIPTION =
-  "Your agent works across Gmail, Docs, Sheets, Jira and Notion, on every account you connect, from any MCP client. Every write asks you first.";
+  "Your agent works across Gmail, Docs, Sheets, Jira and Notion, on every account you connect, from any MCP client. The dashboard Agent asks before every write.";
 
 /* Canonical is self-referencing and absolute, on the non-www origin: Search
    Console was reporting the four origin variants (http/https x www/non-www)

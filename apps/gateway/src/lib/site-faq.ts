@@ -209,7 +209,7 @@ export const SITE_FAQ_PAGES: SiteFaqPage[] = [
         faqs: [
           {
             q: "What is DataToRAG?",
-            a: `One hosted MCP server that connects Claude and other AI clients to your ${PUBLIC_CONNECTORS_TEXT} tools. You connect your accounts once, paste one URL into your client, and your agent can read and change things in ${PUBLIC_SERVICES_TEXT}, with your approval on every write. [Getting started](/docs/getting-started) has the two minute version.`,
+            a: `One hosted MCP server that connects Claude and other AI clients to your ${PUBLIC_CONNECTORS_TEXT} tools. You connect your accounts once, paste one URL into your client, and your agent can read and change things in ${PUBLIC_SERVICES_TEXT}. Your client decides whether to ask you before each call, and the dashboard Agent asks before every write. [Getting started](/docs/getting-started) has the two minute version.`,
           },
           {
             q: "How do I set it up?",
@@ -230,7 +230,7 @@ export const SITE_FAQ_PAGES: SiteFaqPage[] = [
         faqs: [
           {
             q: "What can it actually do?",
-            a: "Read and search across your connected services, and change things: [send and reply to email](/docs/gmail), [edit cells in an existing spreadsheet](/docs/sheets), [restructure a doc in place](/docs/docs), [build slides onto a deck](/docs/slides), [create and update calendar events](/docs/calendar), manage [contacts](/docs/contacts) and [tasks](/docs/tasks), [file and update Jira issues](/docs/jira), [edit Confluence pages](/docs/confluence), and [write Notion pages and database rows](/docs/notion). Every change goes through an approval step, so you see what is about to happen before it does. The hub pages list every action: [Google Workspace](/docs/google-workspace), [Atlassian](/docs/atlassian) and [Notion](/docs/notion).",
+            a: "Read and search across your connected services, and change things: [send and reply to email](/docs/gmail), [edit cells in an existing spreadsheet](/docs/sheets), [restructure a doc in place](/docs/docs), [build slides onto a deck](/docs/slides), [create and update calendar events](/docs/calendar), manage [contacts](/docs/contacts) and [tasks](/docs/tasks), [file and update Jira issues](/docs/jira), [edit Confluence pages](/docs/confluence), and [write Notion pages and database rows](/docs/notion). In the dashboard Agent, every change goes through an approval step, so you see what is about to happen before it does. In your own client, the client decides whether to ask before each call. The hub pages list every action: [Google Workspace](/docs/google-workspace), [Atlassian](/docs/atlassian) and [Notion](/docs/notion).",
           },
           BUILT_IN_DIFFERENCE_FAQ,
           {
@@ -250,7 +250,7 @@ export const SITE_FAQ_PAGES: SiteFaqPage[] = [
           },
           {
             q: "Can it edit existing files, not just create new ones?",
-            a: "Yes. DataToRAG makes cell level edits in Sheets, in place edits in Docs and Slides, and replies inside existing email threads, and each change waits for your approval.",
+            a: "Yes. DataToRAG makes cell level edits in Sheets, in place edits in Docs and Slides, and replies inside existing email threads. In the dashboard Agent, each change waits for your approval, and in your own client, the client decides whether to ask first.",
           },
         ],
       },
@@ -259,7 +259,7 @@ export const SITE_FAQ_PAGES: SiteFaqPage[] = [
         faqs: [
           {
             q: "Is giving an AI write access safe?",
-            a: "Our answer has structure behind it, not confidence. Reads flow, writes wait: before anything that changes your data runs, you see it and approve or deny it. The gate fails closed, so a tool we don't positively recognize as a read is treated as a write and asks first. And there is no shell and no arbitrary code execution anywhere in the gateway, so there is no path for a prompt injection to reach one. The [write access research post](/blog/reddit-mcp-write-access-research) walks through the whole design and the skepticism that shaped it.",
+            a: "Our answer has structure behind it, not confidence. In the dashboard Agent, reads flow and writes wait: before anything that changes your data runs, you see it and approve or deny it. That gate fails closed, so a tool the Agent does not positively recognize as a read is treated as a write and asks first. In your own client, such as Claude, ChatGPT, or Cursor, the client decides whether to ask before each call, and every DataToRAG tool tells it whether the tool only reads or changes something. And there is no shell and no arbitrary code execution anywhere in the gateway, so there is no path for a prompt injection to reach one. The [write access research post](/blog/reddit-mcp-write-access-research) walks through the whole design and the skepticism that shaped it.",
           },
           {
             q: "Is this Google verified?",
@@ -305,7 +305,7 @@ export const SITE_FAQ_PAGES: SiteFaqPage[] = [
             // silent is not a limit. Our half says what our own docs prove
             // (docs/sheets, docs/docs, docs/slides, docs/file-references);
             // their half is the shared, dated sentence.
-            a: `Edit them, with your approval on every write. DataToRAG changes cells in a sheet you already have, writes into an existing doc, builds slides onto a deck, runs a query over a sheet, and moves an email's attachment into Drive or onto a Jira issue. ${BUILT_IN_DIFFERENCE.oursAdds} It gives the same tools to any MCP client, your own application included. ${THEIRS} ${BUILT_IN_DIFFERENCE.close}`,
+            a: `Edit them. DataToRAG changes cells in a sheet you already have, writes into an existing doc, builds slides onto a deck, runs a query over a sheet, and moves an email's attachment into Drive or onto a Jira issue. In the dashboard Agent, every write asks you first, and in your own client, the client decides whether to ask. ${BUILT_IN_DIFFERENCE.oursAdds} It gives the same tools to any MCP client, your own application included. ${THEIRS} ${BUILT_IN_DIFFERENCE.close}`,
           },
           {
             q: "Which AI clients can connect to it?",
@@ -325,7 +325,7 @@ export const SITE_FAQ_PAGES: SiteFaqPage[] = [
           },
           {
             q: "What stops it doing something I did not want?",
-            a: "An approval step in front of every write. Reads flow, and anything that changes your data is shown to you and waits. The gate fails closed, so a tool DataToRAG does not positively recognize as a read is treated as a write and asks first, and there is no shell or arbitrary code execution anywhere in the gateway for a prompt injection to reach.",
+            a: "In the dashboard Agent, an approval step sits in front of every write. Reads flow, and anything that changes your data is shown to you and waits. That gate fails closed, so a tool the Agent does not positively recognize as a read is treated as a write and asks first. In your own client, the client decides whether to ask before each call, and you choose that in the client's settings. Either way, there is no shell or arbitrary code execution anywhere in the gateway for a prompt injection to reach.",
           },
           {
             q: "Is it safe to connect a hosted gateway to my Google account?",
@@ -359,7 +359,7 @@ export const SITE_FAQ_PAGES: SiteFaqPage[] = [
           },
           {
             q: "Is any connector or feature behind the paid tier?",
-            a: "No. Every tier gets every connector and every tool, several accounts side by side, and the approval gate on writes. What Pro and Enterprise buy is a larger monthly allowance, not a larger feature set, which is why there is no per-connector upsell anywhere on this page.",
+            a: "No. Every tier gets every connector and every tool, several accounts side by side, and the dashboard Agent's approval before every write. What Pro and Enterprise buy is a larger monthly allowance, not a larger feature set, which is why there is no per-connector upsell anywhere on this page.",
           },
           {
             q: "Can I run the gateway myself instead?",
@@ -390,7 +390,7 @@ export const SITE_FAQ_PAGES: SiteFaqPage[] = [
           },
           {
             q: "Can it change a file, or only create new ones?",
-            a: `Change them. DataToRAG updates cells in an existing sheet, writes into an existing doc, and puts content on the slides of an existing deck, and each write asks you first. Editing is not what separates it from Claude's built-in connectors. ${THEIRS} What DataToRAG adds is elsewhere. ${BUILT_IN_DIFFERENCE.oursAdds}`,
+            a: `Change them. DataToRAG updates cells in an existing sheet, writes into an existing doc, and puts content on the slides of an existing deck. In the dashboard Agent, each write asks you first, and in your own client, the client decides whether to ask. Editing is not what separates it from Claude's built-in connectors. ${THEIRS} What DataToRAG adds is elsewhere. ${BUILT_IN_DIFFERENCE.oursAdds}`,
           },
           {
             q: "When are Claude's native connectors the better answer?",

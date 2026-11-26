@@ -102,7 +102,7 @@ export const CELLS: {
     problem:
       "You wanted the rows in the sheet you already keep, not pasted in by hand.",
     solution:
-      "DataToRAG changes the rows in that same file, after asking you first.",
+      "DataToRAG changes the rows in that same file, after the Agent asks you first.",
   },
   {
     id: "slides",
@@ -110,7 +110,7 @@ export const CELLS: {
     problem:
       "You wanted the slides added to the deck you already have, not a second deck to merge by hand.",
     solution:
-      "DataToRAG writes into the deck you already have, after asking you first.",
+      "DataToRAG writes into the deck you already have, after the Agent asks you first.",
   },
   {
     // NOT A COMPARISON, on purpose. This line used to say Claude writes the
@@ -120,14 +120,14 @@ export const CELLS: {
     id: "gmail",
     weight: "supporting",
     problem: "You wanted the email sent, not a draft left for you to finish.",
-    solution: "DataToRAG sends it from the account you name, once you approve.",
+    solution: "DataToRAG sends it from the account you name, once you approve it in the Agent.",
   },
   {
     id: "jira",
     weight: "supporting",
     problem: "You wanted the email and its PDF on the Jira issue, not downloaded and attached by hand.",
     solution:
-      "DataToRAG puts the email and its PDF on the issue, once you approve.",
+      "DataToRAG puts the email and its PDF on the issue, once you approve it in the Agent.",
   },
   {
     id: "accounts",

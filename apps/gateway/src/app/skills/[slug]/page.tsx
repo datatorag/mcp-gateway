@@ -130,7 +130,8 @@ export default async function SkillPage({ params }: Props) {
             <p className="mt-3 text-xs text-muted-foreground">
               Paste this into your Claude client as a skill, then ask for it by
               name. It calls your connected accounts through the gateway, and
-              every write asks you first.
+              your client's approval settings decide whether it asks before a
+              write.
             </p>
           </div>
 

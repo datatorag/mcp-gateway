@@ -42,7 +42,7 @@ export const TIERS: Tier[] = [
     features: [
       "Every connector and every tool",
       "Multi-account: work and personal side by side",
-      "Approval gate on every write",
+      "Approval before every write in the Agent",
       freeAllowanceBullet(),
     ],
     price: { amount: "$0" },

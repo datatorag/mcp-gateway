@@ -182,10 +182,14 @@ describe("the surfaces that repeat the table agree with it", () => {
     expect(description).not.toMatch(/can't|cannot|can not|read-only|unable/i);
     // Since the built-in Docs and Sheets connectors edit in place too, the
     // sentence says what is ours (every account, any client, approval on each
-    // write) and names no built-in connector at all.
+    // write in the dashboard Agent) and names no built-in connector at all.
+    // The approval claim names the Agent: a call from the reader's own client
+    // reaches the tool directly, and that client decides whether to ask, so
+    // an unscoped "Every write asks you first" claimed a gate that path lacks.
     expect(description).not.toMatch(/Claude's/);
     expect(description).toMatch(/every account you connect/);
-    expect(description).toMatch(/Every write asks you first/);
+    expect(description).toMatch(/The dashboard Agent asks before every write\./);
+    expect(description).not.toMatch(/Every write asks you first/);
     // Search results cut around here.
     expect(description!.length).toBeLessThanOrEqual(160);
   });
